@@ -48,7 +48,7 @@ class PlanReceiverDagConf(PydanticModel):
     restatements: t.Set[str]
     notification_targets: t.List[NotificationTarget]
     ddl_concurrent_tasks: int
-    skip_backfill: bool
+    skip_backfill: bool = False
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):

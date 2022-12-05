@@ -189,7 +189,6 @@ class GithubPullRequestBot:
                     )
                 ],
             )
-            self._context.init()
         return self._context
 
     @property
