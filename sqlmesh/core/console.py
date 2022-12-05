@@ -234,7 +234,7 @@ class TerminalConsole(Console):
         self._show_options_after_categorization(plan)
 
     def _show_options_after_categorization(
-            self, plan: Plan, unbounded_end: bool = False
+        self, plan: Plan, unbounded_end: bool = False
     ) -> None:
         if not plan.skip_backfill:
             self._show_missing_dates(plan)

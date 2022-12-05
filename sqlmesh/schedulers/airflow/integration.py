@@ -213,7 +213,9 @@ def _plan_receiver_task(
             start=plan_conf.environment.start,
             end=end,
             latest=end,
-        ) if not plan_conf.skip_backfill else []
+        )
+        if not plan_conf.skip_backfill
+        else []
     )
     backfill_intervals_per_snapshot = [
         common.BackfillIntervalsPerSnapshot(
