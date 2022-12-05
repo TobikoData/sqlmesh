@@ -11,6 +11,7 @@ jobs:
       - checkout
       - setup_remote_docker:
           version: 20.10.14
+          docker_layer_caching: true
       - run:
           name: Install envsubst
           command: sudo apt-get update && sudo apt-get install gettext-base
@@ -19,7 +20,7 @@ jobs:
           command: make install-dev
       - run:
           name: Run integration and end-to-end tests
-          command: make airflow-it-test-with-env
+          command: make it-test
 
 
 workflows:

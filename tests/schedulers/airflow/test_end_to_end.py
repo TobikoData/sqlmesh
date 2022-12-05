@@ -17,9 +17,10 @@ def wait_for_airflow(airflow_client: AirflowClient):
 
 @pytest.mark.integration
 @pytest.mark.airflow_integration
-def test_sushi(mocker: MockerFixture):
+def test_sushi(mocker: MockerFixture, is_docker: bool):
     mocker.patch("sqlmesh.core.console.TerminalConsole._prompt_backfill")
 
-    context = Context(path="./example", config="airflow_config")
+    airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
+    context = Context(path="./example", config=airflow_config)
     plan = context.plan(start="2022-01-01", end="2022-01-01", skip_tests=True)
     context.apply(plan)

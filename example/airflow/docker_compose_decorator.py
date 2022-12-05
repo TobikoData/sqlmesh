@@ -69,6 +69,29 @@ docker_compose["services"]["provision-metastore-tables"] = {
     ],
 }
 
+docker_compose["services"]["sqlmesh-tests"] = {
+    "entrypoint": "/bin/bash",
+    "command": [
+        "-c",
+        "make install-dev && pytest -m 'airflow_integration'",
+    ],
+    "image": "airflow-sqlmesh",
+    "user": "airflow",
+    "volumes": [
+        "./spark_conf:/opt/spark/conf",
+        "./spark_conf:/opt/hive/conf",
+        "./warehouse:/opt/warehouse",
+    ],
+    "environment": {
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "postgresql+psycopg2://airflow:airflow@postgres/airflow",
+        "IS_DOCKER": "true",
+    },
+    "working_dir": "/opt/sqlmesh",
+    "profiles": [
+        "sqlmesh-tests",
+    ],
+}
+
 engine_operator = os.environ.get("AIRFLOW_ENGINE_OPERATOR", "spark").lower()
 for airflow_component in ["airflow-scheduler", "airflow-worker"]:
     environment_variables = {"AIRFLOW_ENGINE_OPERATOR": engine_operator}
