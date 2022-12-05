@@ -1,0 +1,23 @@
+version: 2.1
+
+orbs:
+  python: circleci/python@1.5.0
+
+jobs:
+  integration-and-end-to-end-tests:
+    docker:
+      - image: cimg/python:3.7
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run integration and end-to-end tests
+          command: make it-test     
+
+
+workflows:
+  main-pr-integration-and-end-to-end-tests:
+    jobs:
+      - integration-and-end-to-end-tests
