@@ -18,7 +18,9 @@ doc-test:
 core-it-test:
 	pytest -m "core_integration"
 
-it-test: core-it-test airflow-it-test-docker-with-env
+it-test: core-it-test airflow-it-test-with-env
+
+it-test-docker: core-it-test airflow-it-test-docker-with-env
 
 test: unit-test it-test doc-test
 
