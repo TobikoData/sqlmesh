@@ -1,0 +1,26 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 237895671,
+    "node_id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3MjM3ODk1Njcx",
+    "user": {
+      "login": "Codertocat",
+      "id": 21031067
+    },
+    "body": null,
+    "commit_id": "ec26c3e57ca3a959ca5aad62de7213c562f8c821",
+    "submitted_at": "2019-05-15T15:20:38Z",
+    "state": "commented",
+    "html_url": "https://github.com/Codertocat/Hello-World/pull/2#pullrequestreview-237895671",
+    "pull_request_url": "https://api.github.com/repos/Codertocat/Hello-World/pulls/2",
+    "author_association": "OWNER",
+    "_links": {
+      "html": {
+        "href": "https://github.com/Codertocat/Hello-World/pull/2#pullrequestreview-237895671"
+      },
+      "pull_request": {
+        "href": "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+      }
+    }
+  }
+}

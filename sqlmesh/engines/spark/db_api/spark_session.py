@@ -1,0 +1,85 @@
+import typing as t
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.types import Row
+
+from sqlmesh.engines.spark.db_api.errors import NotSupportedError, ProgrammingError
+
+
+class SparkSessionCursor:
+    def __init__(self, spark: SparkSession):
+        self._spark = spark
+        self._last_df: t.Optional[DataFrame] = None
+        self._last_output: t.Optional[t.List[t.Tuple]] = None
+        self._last_output_cursor: int = 0
+
+    def execute(self, query: str, parameters: t.Optional[t.Any] = None) -> None:
+        if parameters:
+            raise NotSupportedError("Parameterized queries are not supported")
+        self._last_df = self._spark.sql(query)
+        self._last_output = None
+        self._last_output_cursor = 0
+
+    def fetchone(self) -> t.Optional[t.Tuple]:
+        result = self._fetch(size=1)
+        return result[0] if result else None
+
+    def fetchmany(self, size: int = 1) -> t.List[t.Tuple]:
+        return self._fetch(size=size)
+
+    def fetchall(self) -> t.List[t.Tuple]:
+        return self._fetch()
+
+    def close(self):
+        pass
+
+    def fetchdf(self) -> t.Optional[DataFrame]:
+        return self._last_df
+
+    def _fetch(self, size: t.Optional[int] = None) -> t.List[t.Tuple]:
+        if size and size < 0:
+            raise ProgrammingError("The size argument can't be negative")
+
+        if self._last_df is None:
+            raise ProgrammingError("No call to .execute() has been issued")
+
+        if self._last_output is None:
+            self._last_output = _normalize_rows(self._last_df.collect())
+
+        if self._last_output_cursor >= len(self._last_output):
+            return []
+
+        if size is None:
+            size = len(self._last_output) - self._last_output_cursor
+
+        output = self._last_output[
+            self._last_output_cursor : self._last_output_cursor + size
+        ]
+        self._last_output_cursor += size
+
+        return output
+
+
+class SparkSessionConnection:
+    def __init__(self, spark: SparkSession):
+        self.spark = spark
+
+    def cursor(self) -> SparkSessionCursor:
+        return SparkSessionCursor(self.spark)
+
+    def commit(self) -> None:
+        raise NotSupportedError("Committing is not supported with Spark SQL")
+
+    def rollback(self) -> None:
+        raise NotSupportedError("Rollback is not supported with Spark SQL")
+
+    def close(self) -> None:
+        pass
+
+
+def connection(spark: SparkSession) -> SparkSessionConnection:
+    return SparkSessionConnection(spark)
+
+
+def _normalize_rows(rows: t.Sequence[Row]) -> t.List[t.Tuple]:
+    return [tuple(r) for r in rows]

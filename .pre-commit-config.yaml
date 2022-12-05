@@ -1,0 +1,33 @@
+repos:
+  - repo: local
+    hooks:
+      - id: autoflake
+        name: autoflake
+        entry: autoflake
+        language: system
+        "types": [ python ]
+        require_serial: true
+        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+      - id: isort
+        name: isort
+        entry: isort
+        language: system
+        "types": [ python ]
+        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+        require_serial: true
+      - id: black
+        name: black
+        language: system
+        entry: black
+        require_serial: true
+        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+        types_or:
+          - python
+          - pyi
+      - id: mypy
+        name: mypy
+        language: system
+        entry: mypy
+        "types": [ python ]
+        files: ^(sqlmesh/|tests/|web/|setup.py)
+        require_serial: true
