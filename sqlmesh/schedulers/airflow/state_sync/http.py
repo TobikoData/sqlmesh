@@ -33,7 +33,7 @@ class HttpStateReader(StateReader):
         self,
         table_info_cache: FileCache,
         client: AirflowClient,
-        max_concurrent_requests: int = 2,
+        max_concurrent_requests: int = 8,
         blocking_updates: bool = True,
         dag_run_poll_interval_secs: int = 2,
         console: t.Optional[Console] = None,

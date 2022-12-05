@@ -211,6 +211,18 @@ class EngineAdapter:
             )
         )
 
+    def drop_schema(
+        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
+    ) -> None:
+        self.execute(
+            exp.Drop(
+                this=exp.to_identifier(schema_name.split(".")[0]),
+                kind="SCHEMA",
+                exists=ignore_if_not_exists,
+                cascade=cascade,
+            )
+        )
+
     def drop_view(self, view_name: str, ignore_if_not_exists: bool = True) -> None:
         """Drop a view."""
         if_exists = " IF EXISTS" if ignore_if_not_exists else ""

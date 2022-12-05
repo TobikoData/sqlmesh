@@ -52,6 +52,7 @@ class AirflowClient:
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         ddl_concurrent_tasks: int = 1,
         timestamp: t.Optional[datetime] = None,
+        skip_backfill: bool = False,
     ) -> str:
         is_first_run = self._get_first_dag_run_id(common.PLAN_RECEIVER_DAG_ID) is None
         return self._trigger_dag_run(
@@ -64,6 +65,7 @@ class AirflowClient:
                 restatements=set(restatements or []),
                 notification_targets=notification_targets or [],
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
+                skip_backfill=skip_backfill,
             ),
             dag_run_id=common.INIT_RUN_ID if is_first_run else None,
             timestamp=timestamp,

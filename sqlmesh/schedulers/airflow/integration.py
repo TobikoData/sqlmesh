@@ -206,12 +206,14 @@ def _plan_receiver_task(
             ),
         )
 
-    backfill_batches = scheduler.compute_interval_params(
-        plan_conf.environment.snapshots,
-        snapshots=all_snapshots,
-        start=plan_conf.environment.start,
-        end=end,
-        latest=end,
+    backfill_batches = (
+        scheduler.compute_interval_params(
+            plan_conf.environment.snapshots,
+            snapshots=all_snapshots,
+            start=plan_conf.environment.start,
+            end=end,
+            latest=end,
+        ) if not plan_conf.skip_backfill else []
     )
     backfill_intervals_per_snapshot = [
         common.BackfillIntervalsPerSnapshot(

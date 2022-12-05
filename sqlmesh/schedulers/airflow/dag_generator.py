@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import typing as t
 
@@ -131,6 +132,8 @@ class SnapshotDagGenerator:
             start_date=now(),
             catchup=False,
             is_paused_upon_creation=False,
+            # TODO: Make this customizable
+            default_args=dict(retry_delay=datetime.timedelta(seconds=3), retries=10),
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.PLAN_AIRFLOW_TAG,

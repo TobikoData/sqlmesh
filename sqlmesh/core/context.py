@@ -389,6 +389,9 @@ class Context:
         skip_tests: bool = False,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        skip_backfill: bool = False,
+        auto_apply_logical: bool = False,
+        skip_console: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -409,6 +412,10 @@ class Context:
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            skip_backfill: If the plan is a logical plan that just requires a backfill this will skip the backfill
+                and do a logical update
+            auto_apply_logical: If the plan is a logical plan then this would skip any user prompts to apply
+            skip_console: Returns the plan without going to console if the plan had things that required user input
 
         Returns:
             The populated Plan object.
@@ -435,16 +442,19 @@ class Context:
             state_reader=self.state_reader,
             start=start,
             end=end,
+            skip_backfill=skip_backfill,
             apply=self.apply,
             restate_from=restate_from,
             no_gaps=no_gaps,
+            auto_apply_logical=auto_apply_logical,
         )
 
-        self.console.plan(plan)
+        if not skip_console:
+            self.console.plan(plan)
 
         return plan
 
-    def apply(self, plan: Plan) -> None:
+    def apply(self, plan: Plan, **kwargs) -> None:
         """Applies a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state sync and then uses the scheduler
@@ -453,7 +463,9 @@ class Context:
         Args:
             plan: The plan to apply.
         """
-        self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
+        self.config.scheduler_backend.create_plan_evaluator(self, **kwargs).evaluate(
+            plan
+        )
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.

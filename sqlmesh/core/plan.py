@@ -76,9 +76,11 @@ class Plan:
         state_reader: StateReader,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        skip_backfill: bool = False,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        auto_apply_logical: bool = False,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -86,8 +88,10 @@ class Plan:
         self.plan_id: str = random_id()
         self.restatements = set()
         self.no_gaps = no_gaps
+        self.auto_apply_logical = auto_apply_logical
         self._start = start
         self._end = end
+        self._skip_backfill = skip_backfill
         self._apply = apply
         self._dag = dag
         self._state_reader = state_reader
@@ -201,6 +205,10 @@ class Plan:
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
         )
+
+    @property
+    def skip_backfill(self) -> bool:
+        return self._skip_backfill or not self.missing_intervals
 
     def apply(self) -> None:
         """Runs apply if an apply function was passed in."""

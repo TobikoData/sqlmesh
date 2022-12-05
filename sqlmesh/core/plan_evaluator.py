@@ -51,6 +51,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
         console: t.Optional[Console] = None,
+        **kwargs,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
@@ -69,7 +70,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 ),
             )
 
-        if plan.missing_intervals:
+        if not plan.skip_backfill:
             snapshots = plan.snapshots
             scheduler = Scheduler(
                 {snapshot.name: snapshot for snapshot in snapshots},
@@ -81,7 +82,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self._promote(plan)
 
-        if not plan.missing_intervals:
+        if plan.skip_backfill:
             self.console.log_success("Logical Update executed successfully")
 
     def _push(self, plan: Plan) -> None:
@@ -162,6 +163,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            skip_backfill=plan.skip_backfill,
         )
 
         if self.blocking:

@@ -7,8 +7,10 @@ import uuid
 
 from hyperscript import h
 from rich.console import Console as RichConsole
+from rich.jupyter import _render_segments
 from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn
 from rich.prompt import Confirm, Prompt
+from rich.segment import Segments
 from rich.status import Status
 from rich.syntax import Syntax
 from rich.tree import Tree
@@ -232,9 +234,9 @@ class TerminalConsole(Console):
         self._show_options_after_categorization(plan)
 
     def _show_options_after_categorization(
-        self, plan: Plan, unbounded_end: bool = False
+            self, plan: Plan, unbounded_end: bool = False
     ) -> None:
-        if plan.missing_intervals:
+        if not plan.skip_backfill:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, unbounded_end=unbounded_end)
         elif plan.context_diff.has_differences:
@@ -285,7 +287,7 @@ class TerminalConsole(Console):
 
     def _show_missing_dates(self, plan: Plan) -> None:
         """Displays the models with missing dates"""
-        if not plan.missing_intervals:
+        if plan.skip_backfill:
             return
         backfill = Tree("[bold]Models needing backfill (missing dates):")
         for missing in plan.missing_intervals:
@@ -307,10 +309,13 @@ class TerminalConsole(Console):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
-        if Confirm.ask(
-            f"Apply - Logical Update",
-            console=self.console,
-        ):
+        if not plan.auto_apply_logical:
+            if Confirm.ask(
+                f"Apply - Logical Update",
+                console=self.console,
+            ):
+                plan.apply()
+        else:
             plan.apply()
 
     def log_test_results(
@@ -683,6 +688,52 @@ class NotebookMagicConsole(TerminalConsole):
                     children=[test_info, error_output], layout={"width": "100%"}
                 )
             )
+
+
+class RichToHTMLShim:
+    """
+    Rich has a bug where if you provide a StringIO object for the file in order to capture the printed output
+    it ignores that and displays it anyways. As a result we create this console, force rich into terminal mode,
+    and then manually render the HTML when we need it.
+    """
+
+    def __init__(self) -> None:
+        # once we support protocol this can by `str, RichConsole` where `RichConsole has `__rich_console__`
+        self.output: t.List[t.Any] = []
+
+    def print(self, *obj, **kwargs) -> None:
+        self.output.extend(obj)
+
+    def get_html(self) -> t.List[str]:
+        results = []
+        for value in self.output:
+            if isinstance(value, str):
+                results.append(widgets.HTML(value))
+                continue
+            segments = list(
+                value.__rich_console__(srich.console, srich.console.options)
+            )
+            if (
+                segments
+                and isinstance(segments, list)
+                and isinstance(segments[0], Segments)
+            ):
+                segments = list(
+                    segments[0].__rich_console__(srich.console, srich.console.options)
+                )
+            html = _render_segments(segments)
+            results.append(html)
+        self.output = []
+        return results
+
+
+class HTMLConsole(TerminalConsole):
+    def __init__(self):
+        self.shim_console = RichToHTMLShim()
+        super().__init__(console=shim_console)  # type: ignore
+
+    def get_html(self) -> t.List[str]:
+        return self.shim_console.get_html()
 
 
 def get_console() -> TerminalConsole:

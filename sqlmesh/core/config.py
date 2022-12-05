@@ -115,6 +115,7 @@ from sqlmesh.core.plan_evaluator import (
     PlanEvaluator,
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
+from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
 from sqlmesh.utils.pydantic import PydanticModel
@@ -127,7 +128,7 @@ class SchedulerBackend(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: Context, **kwargs) -> PlanEvaluator:
         """Creates a Plan Evaluator instance.
 
         Args:
@@ -168,11 +169,12 @@ class BuiltInSchedulerBackend(SchedulerBackend):
             context.engine_adapter, context.physical_schema, context.table_info_cache
         )
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: Context, **kwargs) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
             console=context.console,
+            **kwargs,
         )
 
 
@@ -209,7 +211,7 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
             console=context.console,
         )
 
-    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+    def create_plan_evaluator(self, context: Context, **kwargs) -> PlanEvaluator:
         return AirflowPlanEvaluator(
             airflow_client=self.get_client(context.console),
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
@@ -218,6 +220,7 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
             console=context.console,
             notification_targets=context.notification_targets,
             ddl_concurrent_tasks=context.ddl_concurrent_tasks,
+            **kwargs,
         )
 
 
@@ -242,6 +245,7 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
                     scopes=["https://www.googleapis.com/auth/cloud-platform"]
                 )[0]
             )
+            self._session.headers.update({"Content-Type": "application/json"})
         return self._session
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
@@ -302,6 +306,7 @@ class Config(PydanticModel):
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     ddl_concurrent_tasks: int = 1
+    users: t.List[User] = []
 
     class Config:
         arbitrary_types_allowed = True
