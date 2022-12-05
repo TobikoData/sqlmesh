@@ -229,7 +229,7 @@ each_macro = lambda: "test"
 def test_fingerprint(model: Model, parent_model: Model):
     macro.get_registry()
     fingerprint = fingerprint_from_model(model, models={})
-    original_fingerprint = "4168321870_0"
+    original_fingerprint = "2774500705_0"
 
     assert fingerprint == original_fingerprint
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint

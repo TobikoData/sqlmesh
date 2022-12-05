@@ -291,6 +291,12 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
     ),
     "time_column": lambda value: value.expression,
+    "depends_on_": lambda value: exp.Tuple(expressions=value),
+    "columns_": lambda value: exp.Schema(
+        expressions=[
+            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
+        ]
+    ),
 }
 
 EXEC_PREFIX = "__EXEC__ "
@@ -431,7 +437,7 @@ class ModelMeta(PydanticModel):
 
     @validator("depends_on_", pre=True)
     def _depends_on_validator(cls, v: t.Any) -> t.Optional[t.Set[str]]:
-        if isinstance(v, exp.Array):
+        if isinstance(v, (exp.Array, exp.Tuple)):
             return {
                 exp.table_name(table.name if table.is_string else table.sql())
                 for table in v.expressions
@@ -836,7 +842,7 @@ class Model(ModelMeta, frozen=True):
         expand = set(expand) | {name for name in snapshots if name not in mapping}
 
         if key not in self._query_cache:
-            if self.is_sql:
+            if query_ or self.is_sql:
                 macro_evaluator = MacroEvaluator(
                     dialect or self.dialect, self.python_env
                 )
@@ -865,7 +871,6 @@ class Model(ModelMeta, frozen=True):
                     model = snapshots[name].model if name in snapshots else None
                     if name in expand and model:
                         return model._render_query(
-                            model.query,
                             start=start,
                             end=end,
                             latest=latest,
@@ -1205,6 +1210,9 @@ class model(registry_decorator):
         self.meta = ModelMeta(
             **{
                 "depends_on": set(),
+                "description": "\n".join(comment.strip() for comment in meta.comments)
+                if meta
+                else None,
                 **(
                     {prop.name: prop.args.get("value") for prop in meta.expressions}
                     if meta

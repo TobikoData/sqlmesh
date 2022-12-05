@@ -12,10 +12,10 @@ from sqlmesh.utils.date import to_ds
 @model(
     """
     MODEL(
-        name raw.order_items,
+        name sushi.order_items,
         kind incremental,
         time_column ds,
-        depends_on [raw.orders, raw.items],
+        depends_on [sushi.orders, sushi.items],
         cron '@daily',
         batch_size 30,
         columns (
@@ -40,7 +40,7 @@ def execute(
     dfs = []
 
     raw_orders = (
-        snapshots["raw.orders"].table_name if snapshots else mapping["raw.orders"]
+        snapshots["sushi.orders"].table_name if snapshots else mapping["sushi.orders"]
     )
 
     for dt in iter_dates(start, end):

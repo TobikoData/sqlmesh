@@ -217,15 +217,6 @@ def test_json_serde():
 
 
 def test_column_descriptions(sushi_context, assert_exp_eq):
-    assert sushi_context.models["sushi.orders"].column_descriptions == {
-        "id": "Primary key",
-        "customer_id": "Id of customer who made the order",
-        "waiter_id": "Id of waiter who took the order",
-        "start_ts": "Start timestamp",
-        "end_ts": "End timestamp",
-        "ds": "Date of order",
-    }
-
     assert sushi_context.models[
         "sushi.customer_revenue_by_day"
     ].column_descriptions == {

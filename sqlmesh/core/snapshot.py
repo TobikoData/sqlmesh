@@ -594,9 +594,8 @@ def fingerprint_from_model(
 
     if model.name not in cache:
         data = [
-            model.render_query().sql(identify=True, comments=False)
-            if model.is_sql
-            else str(sorted(model.python_env.items())),
+            model.render_query().sql(identify=True, comments=False),
+            str(sorted(model.python_env.items())),
             model.kind.name,
             model.cron,
             model.storage_format,

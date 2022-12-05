@@ -75,11 +75,8 @@ def test_custom_macros(sushi_context):
 
 def test_dag(sushi_context):
     assert set(sushi_context.dag.upstream("sushi.customer_revenue_by_day")) == {
-        "raw.items",
         "sushi.items",
-        "raw.orders",
         "sushi.orders",
-        "raw.order_items",
         "sushi.order_items",
     }
 
@@ -102,58 +99,28 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
           CAST(o.ds AS TEXT) AS ds /* Date */
         FROM (
           SELECT
-            CAST(id AS INT) AS id, /* Primary key */
-            CAST(customer_id AS INT) AS customer_id, /* Id of customer who made the order */
-            CAST(waiter_id AS INT) AS waiter_id, /* Id of waiter who took the order */
-            CAST(start_ts AS TEXT) AS start_ts, /* Start timestamp */
-            CAST(end_ts AS TEXT) AS end_ts, /* End timestamp */
-            CAST(ds AS TEXT) AS ds /* Date of order */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS INT) AS customer_id,
-              CAST(NULL AS INT) AS waiter_id,
-              CAST(NULL AS INT) AS start_ts,
-              CAST(NULL AS INT) AS end_ts,
-              CAST(NULL AS TEXT) AS ds
-          ) AS orders
-          WHERE
-            ds <= '2021-01-01' AND ds >= '2021-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS INT) AS customer_id,
+            CAST(NULL AS INT) AS waiter_id,
+            CAST(NULL AS INT) AS start_ts,
+            CAST(NULL AS INT) AS end_ts,
+            CAST(NULL AS TEXT) AS ds
         ) AS o
         LEFT JOIN (
           SELECT
-            CAST(id AS INT) AS id, /* Primary key */
-            CAST(order_id AS INT) AS order_id, /* Order id */
-            CAST(item_id AS INT) AS item_id, /* Item id */
-            CAST(quantity AS INT) AS quantity, /* Quantity of items ordered */
-            CAST(ds AS TEXT) AS ds /* Date of order */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS INT) AS order_id,
-              CAST(NULL AS INT) AS item_id,
-              CAST(NULL AS INT) AS quantity,
-              CAST(NULL AS TEXT) AS ds
-          ) AS order_items
-          WHERE
-            ds <= '2021-01-01' AND ds >= '2021-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS INT) AS order_id,
+            CAST(NULL AS INT) AS item_id,
+            CAST(NULL AS INT) AS quantity,
+            CAST(NULL AS TEXT) AS ds
         ) AS oi
           ON o.ds = oi.ds AND o.id = oi.order_id
         LEFT JOIN (
           SELECT
-            id AS id, /* Primary key */
-            CAST(name AS TEXT) AS name, /* Name of the sushi */
-            CAST(price AS DOUBLE) AS price, /* Price of the sushi */
-            CAST(ds AS TEXT) AS ds /* Date */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS TEXT) AS name,
-              CAST(NULL AS DOUBLE) AS price,
-              CAST(NULL AS TEXT) AS ds
-          ) AS items
-          WHERE
-            ds <= '2021-01-01' AND ds >= '2021-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS TEXT) AS name,
+            CAST(NULL AS DOUBLE) AS price,
+            CAST(NULL AS TEXT) AS ds
         ) AS i
           ON oi.ds = i.ds AND oi.item_id = i.id
         WHERE
@@ -204,58 +171,28 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
           CAST(o.ds AS TEXT) AS ds /* Date */
         FROM (
           SELECT
-            CAST(id AS INT) AS id, /* Primary key */
-            CAST(customer_id AS INT) AS customer_id, /* Id of customer who made the order */
-            CAST(waiter_id AS INT) AS waiter_id, /* Id of waiter who took the order */
-            CAST(start_ts AS TEXT) AS start_ts, /* Start timestamp */
-            CAST(end_ts AS TEXT) AS end_ts, /* End timestamp */
-            CAST(ds AS TEXT) AS ds /* Date of order */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS INT) AS customer_id,
-              CAST(NULL AS INT) AS waiter_id,
-              CAST(NULL AS INT) AS start_ts,
-              CAST(NULL AS INT) AS end_ts,
-              CAST(NULL AS TEXT) AS ds
-          ) AS orders
-          WHERE
-            ds <= '1970-01-01' AND ds >= '1970-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS INT) AS customer_id,
+            CAST(NULL AS INT) AS waiter_id,
+            CAST(NULL AS INT) AS start_ts,
+            CAST(NULL AS INT) AS end_ts,
+            CAST(NULL AS TEXT) AS ds
         ) AS o
         LEFT JOIN (
           SELECT
-            CAST(id AS INT) AS id, /* Primary key */
-            CAST(order_id AS INT) AS order_id, /* Order id */
-            CAST(item_id AS INT) AS item_id, /* Item id */
-            CAST(quantity AS INT) AS quantity, /* Quantity of items ordered */
-            CAST(ds AS TEXT) AS ds /* Date of order */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS INT) AS order_id,
-              CAST(NULL AS INT) AS item_id,
-              CAST(NULL AS INT) AS quantity,
-              CAST(NULL AS TEXT) AS ds
-          ) AS order_items
-          WHERE
-            ds <= '1970-01-01' AND ds >= '1970-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS INT) AS order_id,
+            CAST(NULL AS INT) AS item_id,
+            CAST(NULL AS INT) AS quantity,
+            CAST(NULL AS TEXT) AS ds
         ) AS oi
           ON o.ds = oi.ds AND o.id = oi.order_id
         LEFT JOIN (
           SELECT
-            id AS id, /* Primary key */
-            CAST(name AS TEXT) AS name, /* Name of the sushi */
-            CAST(price AS DOUBLE) AS price, /* Price of the sushi */
-            CAST(ds AS TEXT) AS ds /* Date */
-          FROM (
-            SELECT
-              CAST(NULL AS INT) AS id,
-              CAST(NULL AS TEXT) AS name,
-              CAST(NULL AS DOUBLE) AS price,
-              CAST(NULL AS TEXT) AS ds
-          ) AS items
-          WHERE
-            ds <= '1970-01-01' AND ds >= '1970-01-01'
+            CAST(NULL AS INT) AS id,
+            CAST(NULL AS TEXT) AS name,
+            CAST(NULL AS DOUBLE) AS price,
+            CAST(NULL AS TEXT) AS ds
         ) AS i
           ON oi.ds = i.ds AND oi.item_id = i.id
         WHERE

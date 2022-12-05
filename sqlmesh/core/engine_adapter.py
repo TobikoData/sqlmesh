@@ -92,6 +92,8 @@ class EngineAdapter:
         if self.supports_partitions:
             self.insert_overwrite(table_name, query_or_df)
         else:
+            if isinstance(query_or_df, pd.DataFrame):
+                query_or_df = next(pandas_to_sql(query_or_df))
             self.execute(
                 exp.Create(
                     kind="TABLE",

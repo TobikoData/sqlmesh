@@ -3,7 +3,6 @@ from datetime import date
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
 from sqlglot.expressions import DataType
 
 from sqlmesh.core.context import Context
@@ -150,6 +149,7 @@ def validate_query_change(
 
     directly_modified = ["sushi.items"]
     indirectly_modified = [
+        "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
         "sushi.top_waiters",
@@ -228,13 +228,8 @@ def test_model_kind_change(from_: ModelKind, to: ModelKind, sushi_context: Conte
 
 def change_model_kind(context: Context, kind: ModelKind):
     if kind in (ModelKind.VIEW, ModelKind.EMBEDDED, ModelKind.FULL):
-        sushi_items_query_no_dates = parse_one(
-            "SELECT id::INT AS id, name::TEXT AS name, price::DOUBLE AS price, ds::TEXT AS ds FROM raw.items",
-            read=context.dialect,
-        )
         context.upsert_model(
             "sushi.items",
-            query=sushi_items_query_no_dates,
             partitioned_by=None,
             audits={},
         )
@@ -250,6 +245,7 @@ def validate_model_kind_change(
 ):
     directly_modified = ["sushi.items"]
     indirectly_modified = [
+        "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
         "sushi.top_waiters",
@@ -288,6 +284,7 @@ def test_environment_isolation(sushi_context: Context):
     )
     directly_modified = ["sushi.items"]
     indirectly_modified = [
+        "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
         "sushi.top_waiters",
@@ -395,7 +392,6 @@ def test_no_override(sushi_context: Context) -> None:
     plan.set_choice(items, SnapshotChangeCategory.BREAKING)
     plan.set_choice(order_items, SnapshotChangeCategory.NON_BREAKING)
     assert items.is_new_version
-    print(waiter_revenue.fingerprint, waiter_revenue.version)
     assert waiter_revenue.is_new_version
     plan.set_choice(items, SnapshotChangeCategory.NON_BREAKING)
     assert not waiter_revenue.is_new_version
@@ -490,6 +486,7 @@ def setup_rebase(
     assert plan.categorized == [context.snapshots["sushi.items"]]
     assert plan.indirectly_modified == {
         "sushi.items": {
+            "sushi.order_items",
             "sushi.waiter_revenue_by_day",
             "sushi.top_waiters",
             "sushi.customer_revenue_by_day",
@@ -685,12 +682,17 @@ def change_data_type(
 ) -> None:
     model = context.models[model_name]
 
-    data_types = model.query.find_all(DataType)
-    for data_type in data_types:
-        if data_type.this == old_type:
-            data_type.set("this", new_type)
+    if model.is_sql:
+        data_types = model.query.find_all(DataType)
+        for data_type in data_types:
+            if data_type.this == old_type:
+                data_type.set("this", new_type)
+    else:
+        for k, v in model.columns_.items():
+            if v.this == old_type:
+                model.columns_[k] = DataType.build(new_type)
 
-    context.upsert_model(model_name, query=model.query)
+    context.upsert_model(model_name, query=model.query, columns=model.columns_)
 
 
 def validate_plan_changes(
