@@ -8,7 +8,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient
 
 @pytest.fixture(autouse=True)
 def wait_for_airflow(airflow_client: AirflowClient):
-    @retry(wait=wait_fixed(2), stop=stop_after_attempt(50), reraise=True)
+    @retry(wait=wait_fixed(2), stop=stop_after_attempt(10), reraise=True)
     def get_receiver_dag() -> None:
         airflow_client.get_plan_receiver_dag()
 

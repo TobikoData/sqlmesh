@@ -1,4 +1,4 @@
-name: SQLMesh Main
+name: Test and Lint SQLMesh Package
 
 on:
   push:
