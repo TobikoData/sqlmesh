@@ -12,6 +12,9 @@ jobs:
       - setup_remote_docker:
           version: 20.10.14
       - run:
+          name: Install envsubst
+          command: sudo apt-get update && sudo apt-get install gettext-base
+      - run:
           name: Install dependencies
           command: make install-dev
       - run:
