@@ -1,3 +1,4 @@
+import sys
 import typing as t
 
 import pandas as pd
@@ -104,6 +105,8 @@ def test_serialize_env() -> None:
     build_env(main_func, env=env, name="MAIN", module="tests")
     env = serialize_env(env, module="tests", prefix="PREFIX ")  # type: ignore
 
+    lambda_no_args_padding = " " if sys.version_info < (3, 11) else ""
+
     assert env == {
         "MAIN": """PREFIX def main_func(y):
     sqlglot.parse_one('1')
@@ -133,7 +136,7 @@ def test_serialize_env() -> None:
         return KLASS_Z""",
         "pd": "PREFIX import pandas as pd",
         "sqlglot": "PREFIX import sqlglot",
-        "my_lambda": "PREFIX my_lambda = lambda : print('z')",
+        "my_lambda": f"PREFIX my_lambda = lambda{lambda_no_args_padding}: print('z')",
         "other_func": """PREFIX def other_func(a):
     import sqlglot
     sqlglot.parse_one('1')
@@ -165,7 +168,7 @@ def test_fun():
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 162, in test_print_exception
+  File "{__file__}", line 165, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
