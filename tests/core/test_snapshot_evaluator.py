@@ -66,7 +66,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     adapter_mock.create_table.assert_called_once_with(
         "physical_schema.test_schema__test_model__1",
-        columns={"a": exp.DataType.build("int")},
+        query_or_columns={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
     )

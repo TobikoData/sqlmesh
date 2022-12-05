@@ -92,6 +92,8 @@ class EngineAdapter:
         if self.supports_partitions:
             self.insert_overwrite(table_name, query_or_df)
         else:
+            if isinstance(query_or_df, pd.DataFrame):
+                query_or_df = next(pandas_to_sql(query_or_df))
             self.execute(
                 exp.Create(
                     kind="TABLE",
@@ -104,29 +106,42 @@ class EngineAdapter:
     def create_table(
         self,
         table_name: str,
-        columns: t.Dict[str, exp.DataType],
+        query_or_columns: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs,
     ) -> None:
-        """Create a table using a DDL statement
+        """Create a table using a DDL statement or a CTAS.
+
+        If a query is passed in instead of column type map, CREATE TABLE AS will be used.
 
         Args:
-            table_name: The name of the table to create. Can be fully qualified or just table name
-            columns: A mapping between the column name and its data type
-            exists: Indicates if you to include an IF EXISTS check
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            query_columns: A query or mapping between the column name and its data type.
+            exists: Indicates if you to include an IF EXISTS check.
             kwargs: Optional create table properties.
         """
         properties = self._create_table_properties(**kwargs)
 
-        schema = exp.Schema(
-            this=exp.to_table(table_name),
-            expressions=[
-                exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                for column, kind in columns.items()
-            ],
-        )
+        query = None
+        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
+
+        if isinstance(query_or_columns, dict):
+            schema = exp.Schema(
+                this=schema,
+                expressions=[
+                    exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
+                    for column, kind in query_or_columns.items()
+                ],
+            )
+        else:
+            query = query_or_columns
+
         create_expression = exp.Create(
-            this=schema, kind="TABLE", exists=exists, properties=properties
+            this=schema,
+            kind="TABLE",
+            exists=exists,
+            properties=properties,
+            expression=query,
         )
         self.execute(create_expression)
 
