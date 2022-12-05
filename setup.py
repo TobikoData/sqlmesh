@@ -13,7 +13,7 @@ setup(
     url="https://github.com/TobikoData/sqlmesh",
     author="TobikoData Inc.",
     author_email="engineering@tobikodata.com",
-    license="MIT",
+    license="Apache License 2.0",
     packages=find_packages(include=["sqlmesh", "sqlmesh.*"]),
     entry_points={
         "console_scripts": [
@@ -66,7 +66,7 @@ setup(
     classifiers=[
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: SQL",
         "Programming Language :: Python :: 3 :: Only",
