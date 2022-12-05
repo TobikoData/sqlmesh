@@ -10,7 +10,7 @@ MODEL (
 );
 
 SELECT
-  id::INT AS id, /* Primary key */
+  id AS id, /* Primary key */
   name::TEXT AS name, /* Name of the sushi */
   price::DOUBLE AS price, /* Price of the sushi */
   ds::TEXT AS ds /* Date */

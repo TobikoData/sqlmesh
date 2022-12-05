@@ -590,7 +590,7 @@ def fingerprint_from_model(
     Returns:
         The fingerprint.
     """
-    cache = cache or {}
+    cache = {} if cache is None else cache
 
     if model.name not in cache:
         data = [
