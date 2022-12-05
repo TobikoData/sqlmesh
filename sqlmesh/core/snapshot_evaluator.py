@@ -182,7 +182,9 @@ class SnapshotEvaluator:
             logger.info("Creating table '%s'", table_name)
             self.adapter.create_table(
                 table_name,
-                columns=snapshot.model.columns,
+                query_or_columns=snapshot.model.columns
+                if snapshot.model.annotated
+                else snapshot.model.ctas_query(snapshots),
                 storage_format=snapshot.model.storage_format,
                 partitioned_by=snapshot.model.partitioned_by,
             )
