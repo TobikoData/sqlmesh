@@ -27,19 +27,3 @@ jobs:
     - name: Run doc tests
       run: |
         make doc-test
-
-  integration-and-end-to-end-tests:
-    runs-on: ubuntu-latest
-    needs: style-and-unit-tests
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.7"
-    - name: Install dependencies
-      run: |
-        make install-dev
-    - name: Run integration and end-to-end tests
-      run: |
-        make it-test
