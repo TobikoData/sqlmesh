@@ -1,0 +1,67 @@
+FROM apache/spark-py:latest AS spark
+
+FROM apache/airflow:$AIRFLOW_VERSION
+
+USER root
+
+# Fix the airflow user UID
+ENV AIRFLOW_UID=$AIRFLOW_UID
+RUN usermod -u $AIRFLOW_UID airflow
+
+RUN apt-get update
+
+# Install system packages
+RUN apt install -y default-jdk gcc g++
+
+ENV JAVA_HOME="/usr/lib/jvm/default-java/"
+
+# Install Spark
+COPY --from=spark /opt/spark /opt/spark
+RUN chown -R airflow /opt/spark
+ENV SPARK_HOME="/opt/spark"
+ENV PATH="$PATH:$SPARK_HOME/bin"
+
+# Install Postgres driver for Spark
+RUN curl https://jdbc.postgresql.org/download/postgresql-42.5.0.jar -o /opt/spark/jars/postgresql-42.5.0.jar
+
+# Install Hadoop
+RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz -o hadoop-3.3.4.tar.gz && \
+    tar xf hadoop-3.3.4.tar.gz -C /opt/ && \
+    mv /opt/hadoop-3.3.4 /opt/hadoop
+
+ENV HADOOP_HOME="/opt/hadoop"
+
+# Install Hive
+RUN curl https://dlcdn.apache.org/hive/hive-2.3.9/apache-hive-2.3.9-bin.tar.gz -o apache-hive-2.3.9-bin.tar.gz && \
+    tar xf apache-hive-2.3.9-bin.tar.gz -C /opt/ && \
+    mv /opt/apache-hive-2.3.9-bin /opt/hive
+
+ENV HIVE_HOME="/opt/hive"
+
+# Airflow connections
+ENV AIRFLOW_CONN_SPARK_DEFAULT="spark://local?deploy-mode=client"
+
+# Airflow configuration
+ENV AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=3
+
+USER airflow
+
+# Install Spark provider for Airflow
+RUN pip install apache-airflow-providers-apache-spark \
+                apache-airflow-providers-databricks \
+                apache-airflow-providers-github
+
+# Install Deps
+USER root
+ADD setup.py /opt/sqlmesh/setup.py
+WORKDIR /opt/sqlmesh
+RUN chown -R airflow /opt/sqlmesh
+USER airflow
+RUN pip install .
+
+# Install Package
+USER root
+ADD . .
+RUN chown -R airflow /opt/sqlmesh
+USER airflow
+RUN pip install -e .

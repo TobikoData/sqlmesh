@@ -1,0 +1,25 @@
+<configuration>
+   <property>
+     <name>javax.jdo.option.ConnectionURL</name>
+     <value>jdbc:postgresql://airflow-postgres-1:5432/metastore_db</value>
+     <description>JDBC connect string for a JDBC metastore</description>
+   </property>
+   <property>
+     <name>javax.jdo.option.ConnectionDriverName</name>
+     <value>org.postgresql.Driver</value>
+     <description>Driver class name for a JDBC metastore</description>
+   </property>
+   <property>
+     <name>javax.jdo.option.ConnectionUserName</name>
+     <value>airflow</value>
+   </property>
+   <property>
+     <name>javax.jdo.option.ConnectionPassword</name>
+     <value>airflow</value>
+   </property>
+   <property>
+      <name>hive.metastore.warehouse.dir</name>
+      <value>/opt/warehouse</value>
+      <description>location of default database for the warehouse</description>
+   </property>
+</configuration>
