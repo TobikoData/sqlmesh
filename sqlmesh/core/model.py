@@ -747,7 +747,7 @@ class Model(ModelMeta, frozen=True):
             query = annotate_types(self._render_query())
 
             self._columns = {
-                expression.alias_or_name: exp.DataType.build(expression.type)
+                expression.alias_or_name: expression.type
                 for expression in query.expressions
             }
         return self._columns
@@ -889,7 +889,7 @@ class Model(ModelMeta, frozen=True):
                 query = query.copy()
             for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
                 if isinstance(node, exp.Select):
-                    self._filter_time_column(node, start or EPOCH_DS, end or EPOCH_DS)
+                    self._filter_time_column(node, *dates[0:2])
 
         if mapping:
             return exp.replace_tables(query, mapping)

@@ -395,6 +395,7 @@ def test_no_override(sushi_context: Context) -> None:
     plan.set_choice(items, SnapshotChangeCategory.BREAKING)
     plan.set_choice(order_items, SnapshotChangeCategory.NON_BREAKING)
     assert items.is_new_version
+    print(waiter_revenue.fingerprint, waiter_revenue.version)
     assert waiter_revenue.is_new_version
     plan.set_choice(items, SnapshotChangeCategory.NON_BREAKING)
     assert not waiter_revenue.is_new_version

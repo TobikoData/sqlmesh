@@ -4,7 +4,7 @@ import pytest
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.dialect import format_model_expressions
-from sqlmesh.core.model import Model, ModelMeta
+from sqlmesh.core.model import Model, ModelMeta, TimeColumn
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 
@@ -88,12 +88,9 @@ def test_load(assert_exp_eq):
 @pytest.mark.parametrize(
     "query, error",
     [
-        ("x", "must be explicitly cast to a type"),
         ("sum(x)::int", "must have inferrable names"),
         ("CAST(x + 1 AS INT)", "must have inferrable names"),
-        ("y AS y", "must be explicitly cast to a type"),
         ("y::int, x::int AS y", "duplicate"),
-        ("x --annotation", "must be explicitly cast to a type"),
         ("sum(x)::int -- annotation", "must have inferrable names"),
         ("*", "explicitly select"),
     ],
@@ -346,9 +343,10 @@ def test_render_query(assert_exp_eq):
     model = Model(
         name="test",
         cron="1 0 * * *",
+        time_column=TimeColumn(column="y"),
         query=parse_one(
             """
-        SELECT *
+        SELECT y
         FROM x
         WHERE
           y BETWEEN @start_date and @end_date AND
@@ -359,7 +357,7 @@ def test_render_query(assert_exp_eq):
     assert_exp_eq(
         model.render_query(start="2020-10-28", end="2020-10-28"),
         """
-        SELECT *
+        SELECT y
         FROM x
         WHERE
           y <= '2020-10-28'
@@ -371,7 +369,7 @@ def test_render_query(assert_exp_eq):
     assert_exp_eq(
         model.render_query(start="2020-10-28", end=to_datetime("2020-10-29")),
         """
-        SELECT *
+        SELECT y
         FROM x
         WHERE
           y <= '2020-10-28'
