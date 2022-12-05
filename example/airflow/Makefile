@@ -2,10 +2,13 @@ AIRFLOW_VERSION ?= 2.3.3
 AIRFLOW_IMAGE_NAME ?= airflow-sqlmesh
 AIRFLOW_UID ?= $(shell id -u)
 
+install-requirements:
+	pip install -r requirements.txt
+
 download-docker-compose:
 	curl -LfO 'https://airflow.apache.org/docs/apache-airflow/$(AIRFLOW_VERSION)/docker-compose.yaml'
 
-decorate-docker-compose: download-docker-compose
+decorate-docker-compose: install-requirements download-docker-compose
 	python3 ./docker_compose_decorator.py
 
 download-cli:

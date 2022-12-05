@@ -199,8 +199,7 @@ def test_plan_receiver_task_duplicated_snapshot(
         new_snapshots=[snapshot],
         environment=new_environment,
         no_gaps=False,
-        restatements=set()
-,
+        restatements=set(),
         notification_targets=[],
     )
 
