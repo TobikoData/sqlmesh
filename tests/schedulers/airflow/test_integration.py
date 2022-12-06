@@ -24,7 +24,7 @@ DAG_RUN_POLL_INTERVAL = 1
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_system_dags(airflow_client: AirflowClient):
-    @retry(wait=wait_fixed(2), stop=stop_after_attempt(30), reraise=True)
+    @retry(wait=wait_fixed(2), stop=stop_after_attempt(15), reraise=True)
     def get_system_dags() -> t.List[t.Dict[str, t.Any]]:
         return [
             airflow_client.get_plan_receiver_dag(),
@@ -300,7 +300,7 @@ def _apply_plan_and_block(
     )
 
 
-@retry(wait=wait_fixed(3), stop=stop_after_attempt(10), reraise=True)
+@retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)
 def _validate_snapshot_fingerprints_for_version(
     airflow_client: AirflowClient,
     snapshot: Snapshot,
@@ -313,7 +313,7 @@ def _validate_snapshot_fingerprints_for_version(
     ) == sorted(expected_fingerprints)
 
 
-@retry(wait=wait_fixed(3), stop=stop_after_attempt(10), reraise=True)
+@retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)
 def _get_snapshot_dag(
     airflow_client: AirflowClient, model_name: str, version: str
 ) -> t.Dict[str, t.Any]:
