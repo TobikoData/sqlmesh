@@ -3,7 +3,7 @@ AIRFLOW_IMAGE_NAME ?= airflow-sqlmesh
 AIRFLOW_UID ?= $(shell id -u)
 
 install-requirements:
-	pip install -r requirements.txt
+	pip3 install -r requirements.txt
 
 download-docker-compose:
 	curl -LfO 'https://airflow.apache.org/docs/apache-airflow/$(AIRFLOW_VERSION)/docker-compose.yaml'
