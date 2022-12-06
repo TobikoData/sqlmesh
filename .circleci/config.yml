@@ -13,7 +13,7 @@ jobs:
           name: Install dependencies
           command: make install-dev
       - run:
-          name: Run integration and end-to-end tests
+          name: Run Core integration and end-to-end tests
           command: make core-it-test
 
   airflow-integration-and-end-to-end-tests:
@@ -28,8 +28,15 @@ jobs:
           name: Install envsubst
           command: sudo apt-get update && sudo apt-get install gettext-base
       - run:
-          name: Run integration and end-to-end tests
+          name: Run Airflow integration and end-to-end tests
           command: make airflow-it-test-docker-with-env
+      - run:
+          command: |
+            mkdir -p /tmp/airflow_logs
+            cp -R example/airflow/logs/* /tmp/airflow_logs/
+          when: on_fail
+      - store_artifacts:
+          path: /tmp/airflow_logs
 
 
 workflows:

@@ -50,4 +50,4 @@ spark-sql:
 	docker exec -it airflow-airflow-worker-1 spark-sql
 
 it-test-docker: decorate-docker-compose
-	docker-compose up sqlmesh-tests
+	docker-compose up --exit-code-from sqlmesh-tests sqlmesh-tests
