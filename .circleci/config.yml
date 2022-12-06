@@ -19,6 +19,7 @@ jobs:
   airflow-integration-tests:
     machine:
       image: ubuntu-2204:2022.10.2
+      docker_layer_caching: true
     steps:
       - checkout
       - run:
@@ -36,7 +37,6 @@ jobs:
           when: on_fail
       - store_artifacts:
           path: /tmp/airflow_logs
-
 
 workflows:
   main-pr-integration-tests:
