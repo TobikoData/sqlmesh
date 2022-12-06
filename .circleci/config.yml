@@ -4,7 +4,28 @@ orbs:
   python: circleci/python@1.5.0
 
 jobs:
-  core-integration-tests:
+  style_and_unit_tests:
+    parameters:
+      python_version:
+        type: string
+    docker:
+      - image: cimg/python:<< parameters.python_version >>
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run liners and code style checks
+          command: make style
+      - run:
+          name: Run unit tests
+          command: make unit-test
+      - run:
+          name: Run doc tests
+          command: make doc-test
+
+  core_integration_tests:
     docker:
       - image: cimg/python:3.7
     steps:
@@ -16,7 +37,7 @@ jobs:
           name: Run Core integration tests
           command: make core-it-test
 
-  airflow-integration-tests:
+  airflow_integration_tests:
     machine:
       image: ubuntu-2204:2022.10.2
       docker_layer_caching: true
@@ -39,7 +60,11 @@ jobs:
           path: /tmp/airflow_logs
 
 workflows:
-  main-pr-integration-tests:
+  main_pr:
     jobs:
-      - core-integration-tests
-      - airflow-integration-tests
+      - style_and_unit_tests:
+          matrix:
+            parameters:
+              python_version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+      - core_integration_tests
+      - airflow_integration_tests
