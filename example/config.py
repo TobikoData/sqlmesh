@@ -39,3 +39,13 @@ airflow_config = Config(
         "scheduler_backend": AirflowSchedulerBackend(),
     }
 )
+
+
+airflow_config_docker = Config(
+    **{
+        **DEFAULT_KWARGS,
+        "scheduler_backend": AirflowSchedulerBackend(
+            airflow_url="http://airflow-webserver:8080/"
+        ),
+    }
+)

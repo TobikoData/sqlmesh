@@ -1,7 +1,7 @@
 /* View of top waiters. */
 MODEL (
   name sushi.top_waiters,
-  kind view,
+  kind full,
   owner jen
 );
 

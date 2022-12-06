@@ -2,10 +2,13 @@ AIRFLOW_VERSION ?= 2.3.3
 AIRFLOW_IMAGE_NAME ?= airflow-sqlmesh
 AIRFLOW_UID ?= $(shell id -u)
 
+install-requirements:
+	pip3 install -r requirements.txt
+
 download-docker-compose:
 	curl -LfO 'https://airflow.apache.org/docs/apache-airflow/$(AIRFLOW_VERSION)/docker-compose.yaml'
 
-decorate-docker-compose: download-docker-compose
+decorate-docker-compose: install-requirements download-docker-compose
 	python3 ./docker_compose_decorator.py
 
 download-cli:
@@ -45,3 +48,6 @@ psql:
 
 spark-sql:
 	docker exec -it airflow-airflow-worker-1 spark-sql
+
+it-test-docker: decorate-docker-compose
+	docker-compose up --exit-code-from sqlmesh-tests sqlmesh-tests

@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pytest
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -10,13 +11,29 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
-def airflow_client() -> AirflowClient:
-    return _get_airflow_client()
+def is_docker() -> bool:
+    return os.environ.get("IS_DOCKER", "false").lower() in ("true", "1")
+
+
+@pytest.fixture(scope="session")
+def airflow_host(is_docker: bool) -> str:
+    return "airflow-webserver" if is_docker else "localhost"
+
+
+@pytest.fixture(scope="session")
+def airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerBackend:
+    return _get_airflow_scheduler_backend(airflow_host)
+
+
+@pytest.fixture(scope="session")
+def airflow_client(airflow_scheduler_backend: AirflowSchedulerBackend) -> AirflowClient:
+    return airflow_scheduler_backend.get_client()
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(10), reraise=True)
-def _get_airflow_client() -> AirflowClient:
-    client = AirflowSchedulerBackend().get_client()
+def _get_airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerBackend:
+    backend = AirflowSchedulerBackend(airflow_url=f"http://{airflow_host}:8080/")
+    client = backend.get_client()
 
     try:
         client.get_all_dags()
@@ -27,4 +44,5 @@ def _get_airflow_client() -> AirflowClient:
         raise
 
     logger.info("The Airflow Client is ready")
-    return client
+
+    return backend
