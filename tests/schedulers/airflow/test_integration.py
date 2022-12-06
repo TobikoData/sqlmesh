@@ -24,7 +24,7 @@ DAG_RUN_POLL_INTERVAL = 1
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_system_dags(airflow_client: AirflowClient):
-    @retry(wait=wait_fixed(2), stop=stop_after_attempt(10), reraise=True)
+    @retry(wait=wait_fixed(2), stop=stop_after_attempt(15), reraise=True)
     def get_system_dags() -> t.List[t.Dict[str, t.Any]]:
         return [
             airflow_client.get_plan_receiver_dag(),
