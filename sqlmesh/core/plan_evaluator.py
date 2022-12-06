@@ -20,8 +20,10 @@ import typing as t
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.model import ModelKind
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common as airflow_common
@@ -93,10 +95,39 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         Args:
             plan: The plan to source snapshots from.
         """
-        snapshots = {snapshot.name: snapshot for snapshot in plan.new_snapshots}
-        self.state_sync.push_snapshots(snapshots.values())
-        for snapshot in snapshots.values():
-            self.snapshot_evaluator.create(snapshot, snapshots)
+        parent_snapshot_ids = {
+            p_sid for snapshot in plan.new_snapshots for p_sid in snapshot.parents
+        }
+
+        stored_snapshots_by_id = self.state_sync.get_snapshots(parent_snapshot_ids)
+        new_snapshots_by_id = {
+            snapshot.snapshot_id: snapshot for snapshot in plan.new_snapshots
+        }
+        all_snapshots_by_id = {**stored_snapshots_by_id, **new_snapshots_by_id}
+
+        visited_snapshot_ids = set()
+
+        def create(snapshot: Snapshot) -> None:
+            if snapshot.snapshot_id in visited_snapshot_ids:
+                return
+
+            if snapshot.model.kind == ModelKind.VIEW:
+                for parent_sid in snapshot.parents:
+                    if parent_sid in new_snapshots_by_id:
+                        create(new_snapshots_by_id[parent_sid])
+
+            parent_snapshots_by_name = {
+                all_snapshots_by_id[p_sid].name: all_snapshots_by_id[p_sid]
+                for p_sid in snapshot.parents
+            }
+            self.snapshot_evaluator.create(snapshot, parent_snapshots_by_name)
+
+            visited_snapshot_ids.add(snapshot.snapshot_id)
+
+        for snapshot in plan.new_snapshots:
+            create(snapshot)
+
+        self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:
         """Promote a plan.

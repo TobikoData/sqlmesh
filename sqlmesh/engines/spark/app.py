@@ -18,6 +18,11 @@ def create_spark_session() -> SparkSession:
 
 
 def main() -> None:
+    logging.basicConfig(
+        format="%(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
+        level=logging.INFO,
+    )
+
     spark = create_spark_session()
     connection = spark_session_db.connection(spark)
     evaluator = SnapshotEvaluator(EngineAdapter(connection, "spark"))

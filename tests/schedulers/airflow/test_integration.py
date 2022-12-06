@@ -166,7 +166,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
     ) == common.PlanApplicationRequest(
         request_id="test_request_id",
         environment_name=environment_name,
-        new_snapshot_batches=[[snapshot]],
+        new_snapshot_batches=[[[snapshot]]],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
                 snapshot_id=snapshot.snapshot_id,

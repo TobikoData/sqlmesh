@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.model import ModelKind
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common, util
@@ -226,8 +227,10 @@ def _plan_receiver_task(
         for (snapshot, intervals) in backfill_batches
     ]
 
-    new_snapshot_batches = util.create_batches(
-        plan_conf.new_snapshots, ddl_concurrent_tasks
+    new_snapshot_batches = util.create_topological_snapshot_batches(
+        plan_conf.new_snapshots,
+        ddl_concurrent_tasks,
+        lambda s: s.model.kind == ModelKind.VIEW,
     )
 
     promotion_batches = util.create_batches(
