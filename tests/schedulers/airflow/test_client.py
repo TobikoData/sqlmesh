@@ -101,7 +101,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "kind": "incremental",
                         "name": "test_model",
                         "partitioned_by": ["a"],
-                        "path": ".",
                         "query": "SELECT a " "FROM tbl",
                         "storage_format": "parquet",
                     },

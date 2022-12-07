@@ -64,7 +64,7 @@ class SQLMeshMagics(Magics):
             loaded = Model.load(
                 parse(sql),
                 macros=self.context.macros,
-                path=model.path,
+                path=model._path,
                 dialect=self.context.dialect,
                 time_column_format=self.context.config.time_column_format,
             )
@@ -87,7 +87,7 @@ class SQLMeshMagics(Magics):
             replace=True,
         )
 
-        with open(model.path, "w", encoding="utf-8") as file:
+        with open(model._path, "w", encoding="utf-8") as file:
             file.write(formatted)
 
         self.context.models.update({model.name: model})
