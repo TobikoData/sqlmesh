@@ -100,6 +100,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         no_gaps=False,
         notification_targets=[],
         restatements=set(),
+        ddl_concurrent_tasks=1,
     )
 
     assert airflow_client_mock.wait_for_dag_run_completion.call_count == 2

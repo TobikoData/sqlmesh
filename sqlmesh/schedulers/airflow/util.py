@@ -1,5 +1,4 @@
 import logging
-import math
 import typing as t
 from datetime import datetime, timedelta, timezone
 
@@ -10,7 +9,6 @@ from airflow.utils.session import provide_session
 from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
 
-from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
@@ -108,66 +106,3 @@ def safe_utcfromtimestamp(timestamp: t.Optional[float]) -> t.Optional[datetime]:
         if timestamp is not None
         else None
     )
-
-
-def create_topological_snapshot_batches(
-    snapshots: t.List[Snapshot],
-    tasks_num: int,
-    matching_criteria: t.Callable[[Snapshot], bool],
-) -> t.List[t.List[t.List[Snapshot]]]:
-    """Group snapshots while preserving the topological order for models that match the given criteria.
-
-    Args:
-        snapshots: Target snapshots.
-        tasks_num: The number of batches that will be created per each group.
-        matching_criteria: The predicate which determines for which snapshots the topological order
-            must be preserved.
-
-    Returns:
-        The collection of groups sorted in the topological order. Each group consists of `tasks_num` number
-        of snapshot batches.
-    """
-    snapshot_by_ids = {s.snapshot_id: s for s in snapshots}
-
-    upstream_dependencies: t.Dict[SnapshotId, t.Set[SnapshotId]] = {}
-    for snapshot in snapshots:
-        dependencies = set()
-        if matching_criteria(snapshot):
-            for p_sid in snapshot.parents:
-                if p_sid in snapshot_by_ids:
-                    dependencies.add(p_sid)
-        upstream_dependencies[snapshot.snapshot_id] = dependencies
-
-    groups = []
-    while upstream_dependencies:
-        next_group = {
-            sid: snapshot_by_ids[sid]
-            for sid, deps in upstream_dependencies.items()
-            if not deps
-        }
-        next_group_sids = set(next_group)
-
-        for sid in next_group:
-            upstream_dependencies.pop(sid)
-
-        for deps in upstream_dependencies.values():
-            deps -= next_group_sids
-
-        groups.append(list(next_group.values()))
-
-    return [create_batches(g, tasks_num) for g in groups if g]
-
-
-T = t.TypeVar("T")
-
-
-def create_batches(snapshots: t.List[T], tasks_num: int) -> t.List[t.List[T]]:
-    batch_size = math.ceil(len(snapshots) / tasks_num)
-
-    result = []
-    for i in range(0, tasks_num):
-        batch_offset = i * batch_size
-        batch = snapshots[batch_offset : batch_offset + batch_size]
-        result.append(batch)
-
-    return result

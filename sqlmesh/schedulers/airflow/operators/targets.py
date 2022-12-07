@@ -22,6 +22,7 @@ CP = t.TypeVar("CP", bound=PydanticModel)
 class BaseTarget(abc.ABC, t.Generic[CP]):
     command_type: commands.CommandType
     command_handler: t.Callable[[SnapshotEvaluator, CP], None]
+    ddl_concurrent_tasks: int
 
     def serialized_command_payload(self, context: Context) -> str:
         """Returns the serialized command payload for the Spark application.
@@ -44,7 +45,10 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
             dialect: The dialect with which this adapter is associated.
         """
         payload = self._get_command_payload_or_skip(context)
-        snapshot_evaluator = SnapshotEvaluator(EngineAdapter(connection, dialect))
+        snapshot_evaluator = SnapshotEvaluator(
+            EngineAdapter(connection, dialect),
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+        )
         self.command_handler(snapshot_evaluator, payload)
         self.post_hook(context)
 
@@ -93,6 +97,7 @@ class SnapshotEvaluationTarget(
     command_handler: t.Callable[
         [SnapshotEvaluator, commands.EvaluateCommandPayload], None
     ] = commands.evaluate
+    ddl_concurrent_tasks: int = 1
 
     snapshot: Snapshot
     table_mapping: t.Dict[str, str]
@@ -151,6 +156,7 @@ class SnapshotPromotionTarget(
 
     snapshots: t.List[SnapshotTableInfo]
     environment: str
+    ddl_concurrent_tasks: int
 
     def _get_command_payload(
         self, context: Context
@@ -178,6 +184,7 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
 
     snapshots: t.List[SnapshotTableInfo]
     environment: str
+    ddl_concurrent_tasks: int
 
     def _get_command_payload(
         self, context: Context
@@ -197,6 +204,7 @@ class SnapshotTableCleanupTarget(
     command_handler: t.Callable[
         [SnapshotEvaluator, commands.CleanupCommandPayload], None
     ] = commands.cleanup
+    ddl_concurrent_tasks: int = 1
 
     @provide_session
     def post_hook(
@@ -237,7 +245,7 @@ class SnapshotCreateTableTarget(
     ] = commands.create_tables
 
     new_snapshots: t.List[Snapshot]
-    new_parent_snapshots: t.List[Snapshot]
+    ddl_concurrent_tasks: int
 
     def _get_command_payload(
         self, context: Context
@@ -252,7 +260,7 @@ class SnapshotCreateTableTarget(
 
         return commands.CreateTablesCommandPayload(
             target_snapshot_ids=[s.snapshot_id for s in self.new_snapshots],
-            snapshots=stored_snapshots + self.new_snapshots + self.new_parent_snapshots,
+            snapshots=stored_snapshots + self.new_snapshots,
         )
 
     @provide_session

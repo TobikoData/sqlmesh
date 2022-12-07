@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelKind
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common, util
@@ -54,7 +53,6 @@ class SQLMeshAirflow:
             connection ID.
         ddl_engine_operator_args: Same as `engine_operator_args` but only used for the
             snapshot promotion process. If not specified falls back to using `engine_operator_args`.
-        ddl_concurrent_task: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
         janitor_interval: Defines how often the janitor DAG runs.
             The janitor DAG removes platform-managed DAG instances that are pending
             deletion from Airflow. Default: 1 hour.
@@ -67,7 +65,6 @@ class SQLMeshAirflow:
         engine_operator: t.Union[str, t.Type[BaseOperator]],
         engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
         ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
-        ddl_concurrent_tasks: int = 1,
         janitor_interval: timedelta = timedelta(hours=1),
         plan_application_dag_ttl: timedelta = timedelta(days=2),
     ):
@@ -79,7 +76,6 @@ class SQLMeshAirflow:
         self._ddl_engine_operator_args = (
             ddl_engine_operator_args or engine_operator_args or {}
         )
-        self._ddl_concurrent_tasks = ddl_concurrent_tasks
         self._janitor_interval = janitor_interval
         self._plan_application_dag_ttl = plan_application_dag_ttl
 
@@ -119,7 +115,6 @@ class SQLMeshAirflow:
         receiver_task = PythonOperator(
             task_id=common.PLAN_RECEIVER_TASK_ID,
             python_callable=_plan_receiver_task,
-            op_kwargs={"ddl_concurrent_tasks": self._ddl_concurrent_tasks},
             dag=dag,
         )
 
@@ -167,7 +162,6 @@ class SQLMeshAirflow:
 def _plan_receiver_task(
     dag_run: DagRun,
     ti: TaskInstance,
-    ddl_concurrent_tasks: int,
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
     state_sync = XComStateSync(session)
@@ -227,33 +221,20 @@ def _plan_receiver_task(
         for (snapshot, intervals) in backfill_batches
     ]
 
-    new_snapshot_batches = util.create_topological_snapshot_batches(
-        plan_conf.new_snapshots,
-        ddl_concurrent_tasks,
-        lambda s: s.model.kind == ModelKind.VIEW,
-    )
-
-    promotion_batches = util.create_batches(
-        plan_conf.environment.snapshots, ddl_concurrent_tasks
-    )
-
-    demotion_batches = util.create_batches(
-        _get_demoted_snapshots(plan_conf.environment, state_sync), ddl_concurrent_tasks
-    )
-
     request = common.PlanApplicationRequest(
         request_id=plan_conf.request_id,
         environment_name=plan_conf.environment.name,
-        new_snapshot_batches=new_snapshot_batches,
+        new_snapshots=plan_conf.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promotion_batches=promotion_batches,
-        demotion_batches=demotion_batches,
+        promoted_snapshots=plan_conf.environment.snapshots,
+        demoted_snapshots=_get_demoted_snapshots(plan_conf.environment, state_sync),
         start=plan_conf.environment.start,
         end=plan_conf.environment.end,
         no_gaps=plan_conf.no_gaps,
         plan_id=plan_conf.environment.plan_id,
         previous_plan_id=plan_conf.environment.previous_plan_id,
         notification_targets=plan_conf.notification_targets,
+        ddl_concurrent_tasks=plan_conf.ddl_concurrent_tasks,
     )
 
     ti.xcom_push(

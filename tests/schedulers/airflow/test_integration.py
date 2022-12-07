@@ -122,6 +122,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         no_gaps=True,
         restatements={"raw.items"},
         notification_targets=[],
+        ddl_concurrent_tasks=1,
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -129,6 +130,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         fingerprint="test_fingerprint",
         version="test_version",
         physical_schema="test_physical_schema",
+        parents=[],
     )
     old_environment = Environment(
         name=environment_name,
@@ -166,21 +168,22 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
     ) == common.PlanApplicationRequest(
         request_id="test_request_id",
         environment_name=environment_name,
-        new_snapshot_batches=[[[snapshot]]],
+        new_snapshots=[snapshot],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
                 snapshot_id=snapshot.snapshot_id,
                 intervals=[(to_datetime("2022-01-01"), to_datetime("2022-01-02"))],
             )
         ],
-        promotion_batches=[[snapshot.table_info]],
-        demotion_batches=[[deleted_snapshot]],
+        promoted_snapshots=[snapshot.table_info],
+        demoted_snapshots=[deleted_snapshot],
         start="2022-01-01",
         end="2022-01-01",
         no_gaps=True,
         plan_id="test_plan_id",
         previous_plan_id=None,
         notification_targets=[],
+        ddl_concurrent_tasks=1,
     )
 
 
@@ -201,6 +204,7 @@ def test_plan_receiver_task_duplicated_snapshot(
         no_gaps=False,
         restatements=set(),
         notification_targets=[],
+        ddl_concurrent_tasks=1,
     )
 
     task_instance_mock = mocker.Mock()
@@ -242,6 +246,7 @@ def test_plan_receiver_task_unbounded_end(
         no_gaps=True,
         restatements={"raw.items"},
         notification_targets=[],
+        ddl_concurrent_tasks=1,
     )
 
     task_instance_mock = mocker.Mock()

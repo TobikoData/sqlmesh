@@ -20,10 +20,8 @@ import typing as t
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.model import ModelKind
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common as airflow_common
@@ -105,28 +103,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         }
         all_snapshots_by_id = {**stored_snapshots_by_id, **new_snapshots_by_id}
 
-        visited_snapshot_ids = set()
-
-        def create(snapshot: Snapshot) -> None:
-            if snapshot.snapshot_id in visited_snapshot_ids:
-                return
-
-            if snapshot.model.kind == ModelKind.VIEW:
-                for parent_sid in snapshot.parents:
-                    if parent_sid in new_snapshots_by_id:
-                        create(new_snapshots_by_id[parent_sid])
-
-            parent_snapshots_by_name = {
-                all_snapshots_by_id[p_sid].name: all_snapshots_by_id[p_sid]
-                for p_sid in snapshot.parents
-            }
-            self.snapshot_evaluator.create(snapshot, parent_snapshots_by_name)
-
-            visited_snapshot_ids.add(snapshot.snapshot_id)
-
-        for snapshot in plan.new_snapshots:
-            create(snapshot)
-
+        self.snapshot_evaluator.create(plan.new_snapshots, all_snapshots_by_id)
         self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:
@@ -141,16 +118,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
-        for snapshot_table_info in added:
-            self.snapshot_evaluator.promote(
-                snapshot_table_info,
-                environment=environment.name,
-            )
-        for snapshot_table_info in removed:
-            self.snapshot_evaluator.demote(
-                snapshot_table_info,
-                environment=environment.name,
-            )
+        self.snapshot_evaluator.promote(
+            added,
+            environment=environment.name,
+        )
+        self.snapshot_evaluator.demote(
+            removed,
+            environment=environment.name,
+        )
 
 
 class AirflowPlanEvaluator(PlanEvaluator):
@@ -163,6 +138,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         dag_creation_poll_interval_secs: int = 30,
         dag_creation_max_retry_attempts: int = 10,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
+        ddl_concurrent_tasks: int = 1,
     ):
         self.airflow_client = airflow_client
         self.blocking = blocking
@@ -171,6 +147,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
         self.console = console or get_console()
         self.notification_targets = notification_targets or []
+        self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(self, plan: Plan) -> None:
         environment = plan.environment
@@ -184,6 +161,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             no_gaps=plan.no_gaps,
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
 
         if self.blocking:
