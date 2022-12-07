@@ -237,7 +237,6 @@ class SnapshotCreateTableTarget(
     ] = commands.create_tables
 
     new_snapshots: t.List[Snapshot]
-    new_parent_snapshots: t.List[Snapshot]
 
     def _get_command_payload(
         self, context: Context
@@ -252,7 +251,7 @@ class SnapshotCreateTableTarget(
 
         return commands.CreateTablesCommandPayload(
             target_snapshot_ids=[s.snapshot_id for s in self.new_snapshots],
-            snapshots=stored_snapshots + self.new_snapshots + self.new_parent_snapshots,
+            snapshots=stored_snapshots + self.new_snapshots,
         )
 
     @provide_session

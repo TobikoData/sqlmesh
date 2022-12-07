@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_spark_session() -> SparkSession:
-    return SparkSession.builder.enableHiveSupport().getOrCreate()
+    return (
+        SparkSession.builder.config("spark.scheduler.mode", "FAIR")
+        .config("spark.sql.session.timeZone", "UTC")
+        .enableHiveSupport()
+        .getOrCreate()
+    )
 
 
 def main() -> None:

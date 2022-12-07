@@ -120,14 +120,8 @@ class SnapshotDagGenerator:
             request.environment_name,
         )
 
-        new_snapshots = {
-            s
-            for group in request.new_snapshot_batches
-            for batch in group
-            for s in batch
-        }
         all_snapshots = {
-            **{s.snapshot_id: s for s in new_snapshots},
+            **{s.snapshot_id: s for s in request.new_snapshots},
             **self._snapshots,
         }
 
@@ -147,7 +141,7 @@ class SnapshotDagGenerator:
             end_task = EmptyOperator(task_id="plan_application_end")
 
             (create_start_task, create_end_task) = self._create_creation_tasks(
-                request.new_snapshot_batches
+                request.new_snapshots
             )
 
             (backfill_start_task, backfill_end_task) = self._create_backfill_tasks(
@@ -158,8 +152,8 @@ class SnapshotDagGenerator:
                 promote_start_task,
                 promote_end_task,
             ) = self._create_promotion_demotion_tasks(
-                request.promotion_batches,
-                request.demotion_batches,
+                request.promoted_snapshots,
+                request.demoted_snapshots,
                 request.environment_name,
                 request.start,
                 request.end,
@@ -214,75 +208,35 @@ class SnapshotDagGenerator:
             promote_end_task >> end_task
 
     def _create_creation_tasks(
-        self, new_snapshot_batches: t.List[t.List[t.List[Snapshot]]]
+        self, new_snapshots: t.List[Snapshot]
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
         end_task = EmptyOperator(task_id="snapshot_creation_end")
 
-        non_empty_batches = []
-        for group in new_snapshot_batches:
-            new_group = []
-            for batch in group:
-                if batch:
-                    new_group.append(batch)
-            if new_group:
-                non_empty_batches.append(new_group)
-
-        if not non_empty_batches:
+        if not new_snapshots:
             start_task >> end_task
             return (start_task, end_task)
 
-        new_snapshots = {
-            s.snapshot_id: s
-            for group in new_snapshot_batches
-            for batch in group
-            for s in batch
-        }
+        creation_task = self._create_snapshot_create_table_operator(
+            new_snapshots, "snapshot_creation__create_tables"
+        )
 
         update_state_task = PythonOperator(
             task_id="snapshot_creation__update_state",
             python_callable=creation_update_state_task,
-            op_kwargs={"new_snapshots": new_snapshots.values()},
+            op_kwargs={"new_snapshots": new_snapshots},
         )
 
+        start_task >> creation_task
+        creation_task >> update_state_task
         update_state_task >> end_task
-
-        prev_group_end_task = start_task
-
-        for group_id, group in enumerate(non_empty_batches):
-            group_start_task = EmptyOperator(
-                task_id=f"snapshot_creation__create_tables_group_{group_id}_start"
-            )
-            group_end_task = EmptyOperator(
-                task_id=f"snapshot_creation__create_tables_group_{group_id}_end"
-            )
-
-            prev_group_end_task >> group_start_task
-            prev_group_end_task = group_end_task
-
-            for batch_id, batch in enumerate(group):
-                new_parent_snapshots = [
-                    new_snapshots[p_sid]
-                    for snapshot in batch
-                    for p_sid in snapshot.parents
-                    if p_sid in new_snapshots
-                ]
-                task = self._create_snapshot_create_table_operator(
-                    batch,
-                    new_parent_snapshots,
-                    f"snapshot_creation__create_tables_group_{group_id}_batch_{batch_id}",
-                )
-                group_start_task >> task
-                task >> group_end_task
-
-        prev_group_end_task >> update_state_task
 
         return (start_task, end_task)
 
     def _create_promotion_demotion_tasks(
         self,
-        promotion_batches: t.List[t.List[SnapshotTableInfo]],
-        demotion_batches: t.List[t.List[SnapshotTableInfo]],
+        promoted_snapshots: t.List[SnapshotTableInfo],
+        demoted_snapshots: t.List[SnapshotTableInfo],
         environment: str,
         start: TimeLike,
         end: t.Optional[TimeLike],
@@ -293,12 +247,11 @@ class SnapshotDagGenerator:
         start_task = EmptyOperator(task_id="snapshot_promotion_start")
         end_task = EmptyOperator(task_id="snapshot_promotion_end")
 
-        snapshots = [s for snapshots in promotion_batches for s in snapshots]
         update_state_task = PythonOperator(
             task_id="snapshot_promotion__update_state",
             python_callable=promotion_update_state_task,
             op_kwargs={
-                "snapshots": snapshots,
+                "snapshots": promoted_snapshots,
                 "environment_name": environment,
                 "start": start,
                 "end": end,
@@ -310,28 +263,25 @@ class SnapshotDagGenerator:
 
         start_task >> update_state_task
 
-        promotion_batches = [b for b in promotion_batches if b]
-        demotion_batches = [b for b in demotion_batches if b]
-
-        for batch_id, batch in enumerate(promotion_batches):
-            task = self._create_snapshot_promotion_operator(
-                batch,
+        if promoted_snapshots:
+            create_views_task = self._create_snapshot_promotion_operator(
+                promoted_snapshots,
                 environment,
-                f"snapshot_promotion__create_views_batch_{batch_id}",
+                "snapshot_promotion__create_views",
             )
-            update_state_task >> task
-            task >> end_task
+            update_state_task >> create_views_task
+            create_views_task >> end_task
 
-        for batch_id, batch in enumerate(demotion_batches):
-            task = self._create_snapshot_demotion_operator(
-                batch,
+        if demoted_snapshots:
+            delete_views_task = self._create_snapshot_demotion_operator(
+                demoted_snapshots,
                 environment,
-                f"snapshot_promotion__delete_views_batch_{batch_id}",
+                "snapshot_promotion__delete_views",
             )
-            update_state_task >> task
-            task >> end_task
+            update_state_task >> delete_views_task
+            delete_views_task >> end_task
 
-        if not promotion_batches and not demotion_batches:
+        if not promoted_snapshots and not demoted_snapshots:
             update_state_task >> end_task
 
         return (start_task, end_task)
@@ -441,15 +391,11 @@ class SnapshotDagGenerator:
     def _create_snapshot_create_table_operator(
         self,
         new_snapshots: t.List[Snapshot],
-        new_parent_snapshots: t.List[Snapshot],
         task_id: str,
     ) -> BaseOperator:
         return self._engine_operator(
             **self._ddl_engine_operator_args,
-            target=targets.SnapshotCreateTableTarget(
-                new_snapshots=new_snapshots,
-                new_parent_snapshots=new_parent_snapshots,
-            ),
+            target=targets.SnapshotCreateTableTarget(new_snapshots=new_snapshots),
             task_id=task_id,
         )
 

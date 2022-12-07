@@ -82,6 +82,8 @@ class Context:
         physical_schema: The schema used to store physical materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         path: The directory containing SQLMesh files.
+        ddl_concurrent_task: The number of concurrent tasks used for DDL
+            operations (table / view creation, deletion, etc). Default: 1.
         config: A Config object or the name of a Config object in config.py.
         test_config: A Config object or name of a Config object in config.py to use for testing only
         load: Whether or not to automatically load all models and macros (default True).
@@ -97,6 +99,7 @@ class Context:
         physical_schema: str = "",
         snapshot_ttl: str = "",
         path: str = "",
+        ddl_concurrent_tasks: t.Optional[int] = None,
         config: t.Optional[t.Union[Config, str]] = None,
         test_config: t.Optional[t.Union[Config, str]] = None,
         load: bool = True,
@@ -120,7 +123,11 @@ class Context:
         self.macros = UniqueKeyDict("macros")
         self.dag: DAG[str] = DAG()
         self.engine_adapter = engine_adapter or self.config.engine_adapter
-        self.snapshot_evaluator = SnapshotEvaluator(self.engine_adapter)
+        self.snapshot_evaluator = SnapshotEvaluator(
+            self.engine_adapter,
+            ddl_concurrent_tasks=ddl_concurrent_tasks
+            or self.config.ddl_concurrent_tasks,
+        )
         self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
         self.console = console or get_console()
 

@@ -813,9 +813,9 @@ class Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             add_incremental_filter: Add an incremental filter to the query if the model is incremental.
-            snapshots: All snapshots to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
                 If passing snapshots is undesirable, mapping can be used instead to manually map tables.
-            mapping: Mapping to replace table names, if not set, the mapping wil be created from snapshots.
+            mapping: Mapping to replace table names, if not set, the mapping will be created from snapshots.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
@@ -912,7 +912,7 @@ class Model(ModelMeta, frozen=True):
         SELECTS and hopefully the optimizer is smart enough to not do anything.
 
         Args:
-            All upstream snapshots of this model so queries can be expanded.
+            snapshots: All upstream snapshots of this model so queries can be expanded.
         Return:
             The mocked out ctas query.
         """

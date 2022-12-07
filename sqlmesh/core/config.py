@@ -286,6 +286,8 @@ class Config(PydanticModel):
         physical_schema: The default schema used to store materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
+        ddl_concurrent_task: The number of concurrent tasks used for DDL
+            operations (table / view creation, deletion, etc). Default: 1.
     """
 
     engine_adapter: EngineAdapter = Field(
@@ -298,6 +300,7 @@ class Config(PydanticModel):
     snapshot_ttl: str = ""
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
+    ddl_concurrent_tasks: int = 1
 
     class Config:
         arbitrary_types_allowed = True

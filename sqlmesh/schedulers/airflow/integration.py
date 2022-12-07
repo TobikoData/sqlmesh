@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelKind
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common, util
@@ -227,27 +226,13 @@ def _plan_receiver_task(
         for (snapshot, intervals) in backfill_batches
     ]
 
-    new_snapshot_batches = util.create_topological_snapshot_batches(
-        plan_conf.new_snapshots,
-        ddl_concurrent_tasks,
-        lambda s: s.model.kind == ModelKind.VIEW,
-    )
-
-    promotion_batches = util.create_batches(
-        plan_conf.environment.snapshots, ddl_concurrent_tasks
-    )
-
-    demotion_batches = util.create_batches(
-        _get_demoted_snapshots(plan_conf.environment, state_sync), ddl_concurrent_tasks
-    )
-
     request = common.PlanApplicationRequest(
         request_id=plan_conf.request_id,
         environment_name=plan_conf.environment.name,
-        new_snapshot_batches=new_snapshot_batches,
+        new_snapshots=plan_conf.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promotion_batches=promotion_batches,
-        demotion_batches=demotion_batches,
+        promoted_snapshots=plan_conf.environment.snapshots,
+        demoted_snapshots=_get_demoted_snapshots(plan_conf.environment, state_sync),
         start=plan_conf.environment.start,
         end=plan_conf.environment.end,
         no_gaps=plan_conf.no_gaps,

@@ -129,6 +129,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         fingerprint="test_fingerprint",
         version="test_version",
         physical_schema="test_physical_schema",
+        parents=[],
     )
     old_environment = Environment(
         name=environment_name,
@@ -166,15 +167,15 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
     ) == common.PlanApplicationRequest(
         request_id="test_request_id",
         environment_name=environment_name,
-        new_snapshot_batches=[[[snapshot]]],
+        new_snapshots=[snapshot],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
                 snapshot_id=snapshot.snapshot_id,
                 intervals=[(to_datetime("2022-01-01"), to_datetime("2022-01-02"))],
             )
         ],
-        promotion_batches=[[snapshot.table_info]],
-        demotion_batches=[[deleted_snapshot]],
+        promoted_snapshots=[snapshot.table_info],
+        demoted_snapshots=[deleted_snapshot],
         start="2022-01-01",
         end="2022-01-01",
         no_gaps=True,

@@ -57,10 +57,10 @@ class BackfillIntervalsPerSnapshot(PydanticModel):
 class PlanApplicationRequest(PydanticModel):
     request_id: str
     environment_name: str
-    new_snapshot_batches: t.List[t.List[t.List[Snapshot]]]
+    new_snapshots: t.List[Snapshot]
     backfill_intervals_per_snapshot: t.List[BackfillIntervalsPerSnapshot]
-    promotion_batches: t.List[t.List[SnapshotTableInfo]]
-    demotion_batches: t.List[t.List[SnapshotTableInfo]]
+    promoted_snapshots: t.List[SnapshotTableInfo]
+    demoted_snapshots: t.List[SnapshotTableInfo]
     start: TimeLike
     end: t.Optional[TimeLike]
     no_gaps: bool
