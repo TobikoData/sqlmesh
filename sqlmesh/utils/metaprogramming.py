@@ -8,8 +8,12 @@ import textwrap
 import traceback
 import types
 import typing as t
+from enum import Enum
+from pathlib import Path
 
+from sqlmesh.utils import trim_path
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pydantic import PydanticModel
 
 
 def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
@@ -138,9 +142,34 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
         )
 
 
-def serialize_env(
-    env: t.Dict[str, t.Any], *, module: str, prefix: str = ""
-) -> t.Dict[str, t.Any]:
+class ExecutableKind(str, Enum):
+    """The kind of of executable."""
+
+    DEFINITION = "definition"
+    IMPORT = "import"
+    VALUE = "value"
+
+
+class Executable(PydanticModel):
+    payload: t.Any
+    kind: ExecutableKind = ExecutableKind.DEFINITION
+    name: t.Optional[str] = None
+    path: t.Optional[str] = None
+
+    @property
+    def is_definition(self):
+        return self.kind == ExecutableKind.DEFINITION
+
+    @property
+    def is_import(self):
+        return self.kind == ExecutableKind.IMPORT
+
+    @property
+    def is_value(self):
+        return self.kind == ExecutableKind.VALUE
+
+
+def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executable]:
     """Serializes a python function into a self contained dictionary.
 
     Recursively walks a function's globals to store all other references inside of env.
@@ -148,30 +177,62 @@ def serialize_env(
     Args:
         env: Dictionary to store the env.
         module: The module to filter on. Other modules will not be walked and treated as imports.
-        prefix: Optional prefix to namespace the function definition.
     """
     serialized = {}
 
     for k, v in env.items():
         if callable(v):
+            name = v.__name__
+            name = k if name == "<lambda>" else name
+
             if v.__module__.startswith(module):
-                serialized[k] = f"{prefix}{normalize_source(v)}"
+                serialized[k] = Executable(
+                    name=name if name != k else None,
+                    payload=normalize_source(v),
+                    kind=ExecutableKind.DEFINITION,
+                    path=trim_path(Path(inspect.getfile(v)), module).name,
+                )
             else:
-                serialized[k] = f"{prefix}from {v.__module__} import {k}"
+                serialized[k] = Executable(
+                    payload=f"from {v.__module__} import {name}",
+                    kind=ExecutableKind.IMPORT,
+                )
         elif inspect.ismodule(v):
             name = v.__name__
             postfix = "" if name == k else f" as {k}"
-            serialized[k] = f"{prefix}import {name}" + postfix
+            serialized[k] = Executable(
+                payload=f"import {name}{postfix}",
+                kind=ExecutableKind.IMPORT,
+            )
         else:
-            serialized[k] = v
+            serialized[k] = Executable(payload=v, kind=ExecutableKind.VALUE)
 
     return serialized
 
 
+def prepare_env(
+    env: t.Dict[str, t.Any],
+    python_env: t.Dict[str, Executable],
+) -> None:
+    """Prepare a python env by hydrating and executing functions.
+
+    The Python ENV is stored in a json serializable format.
+    Functions and imports are stored as a special data class.
+
+    Args:
+        env: The dictionary to execute code in.
+        python_env: The dictionary containing the serialized python environment.
+    """
+    for name, executable in python_env.items():
+        if executable.is_value:
+            env[name] = executable.payload
+        else:
+            exec(executable.payload, env)
+
+
 def print_exception(
     exception: Exception,
-    python_env: t.Dict[str, t.Any],
-    path: str,
+    python_env: t.Dict[str, Executable],
     out=sys.stderr,
 ) -> None:
     """Formats exceptions that occur from evaled code.
@@ -182,10 +243,7 @@ def print_exception(
     Args:
         exception: The exception to print the stack trace for.
         python_env: The environment containing stringified python code.
-        path: The path to show in the error message.
     """
-    from sqlmesh.core.model import strip_exec_prefix
-
     tb: t.List[str] = []
 
     if sys.version_info < (3, 10):
@@ -209,12 +267,12 @@ def print_exception(
             tb.append(error_line)
             continue
 
+        executable = python_env[func]
         indent = error_line[: match.start()]
-        error_line = (
-            f"{indent}File '{path}' (or imported file), line {line_num}, in {func}"
-        )
 
-        code = strip_exec_prefix(python_env[func])
+        error_line = f"{indent}File '{executable.path}' (or imported file), line {line_num}, in {func}"
+
+        code = executable.payload
         formatted = []
 
         for i, code_line in enumerate(code.splitlines()):

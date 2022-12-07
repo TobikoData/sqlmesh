@@ -350,7 +350,7 @@ class Context:
     def format(self) -> None:
         """Format all models in a given directory."""
         for model in self.models.values():
-            with open(model.path, "r+", encoding="utf-8") as file:
+            with open(model._path, "r+", encoding="utf-8") as file:
                 expressions = [e for e in parse(file.read(), read=self.dialect) if e]
                 file.seek(0)
                 file.write(format_model_expressions(expressions, model.dialect))
