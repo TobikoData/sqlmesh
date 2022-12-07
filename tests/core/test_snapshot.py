@@ -62,7 +62,6 @@ def test_json(snapshot: Snapshot):
         "model": {
             "audits": {},
             "cron": "1 0 * * *",
-            "path": ".",
             "batch_size": 30,
             "kind": "incremental",
             "start": "2020-01-01",

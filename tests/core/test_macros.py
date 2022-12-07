@@ -2,7 +2,7 @@ import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.macros import MacroEvaluator, macro
-from sqlmesh.core.model import EXEC_PREFIX
+from sqlmesh.utils.metaprogramming import Executable
 
 
 @macro()
@@ -15,7 +15,8 @@ def filter_country(
 @pytest.fixture
 def macro_evaluator() -> MacroEvaluator:
     return MacroEvaluator(
-        "hive", {"test": f"{EXEC_PREFIX}def test(_):\n    return 'test'"}
+        "hive",
+        {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
 
 
