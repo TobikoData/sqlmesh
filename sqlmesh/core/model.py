@@ -259,13 +259,8 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.macros import (
-    MacroEvaluator,
-    MacroRegistry,
-    macro,
-    normalize_macro_name,
-)
-from sqlmesh.utils import UniqueKeyDict, registry_decorator, trim_path, unique
+from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
+from sqlmesh.utils import UniqueKeyDict, registry_decorator, unique
 from sqlmesh.utils.date import (
     TimeLike,
     date_dict,
@@ -274,7 +269,13 @@ from sqlmesh.utils.date import (
     to_datetime,
 )
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.metaprogramming import build_env, print_exception, serialize_env
+from sqlmesh.utils.metaprogramming import (
+    Executable,
+    build_env,
+    prepare_env,
+    print_exception,
+    serialize_env,
+)
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -299,7 +300,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
 }
 
-EXEC_PREFIX = "__EXEC__ "
 EPOCH_DS = "1970-01-01"
 
 
@@ -613,10 +613,10 @@ class Model(ModelMeta, frozen=True):
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
-    python_env_: t.Optional[t.Dict[str, t.Any]] = Field(
+    python_env_: t.Optional[t.Dict[str, Executable]] = Field(
         default=None, alias="python_env"
     )
-    path: Path = Path()
+    _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _columns: t.Optional[t.Dict[str, exp.DataType]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
@@ -689,7 +689,6 @@ class Model(ModelMeta, frozen=True):
             query=query,
             expressions=statements,
             python_env=_python_env(query, module, macros or macro.get_registry()),
-            path=path,
             **{
                 "dialect": dialect or "",
                 **ModelMeta(
@@ -700,6 +699,8 @@ class Model(ModelMeta, frozen=True):
                 ).dict(exclude_defaults=True),
             },
         )
+
+        model._path = path
 
         if time_column_format and model.time_column and not model.time_column.format:
             if dialect != model.dialect:
@@ -998,10 +999,9 @@ class Model(ModelMeta, frozen=True):
             )
             return df
         except Exception as e:
-            path = trim_path(self.path, "models")
-            print_exception(e, self.python_env, str(path))
+            print_exception(e, self.python_env)
             raise SQLMeshError(
-                f"Error executing Python model '{path}::{self.query.name}'"
+                f"Error executing Python model '{self.name}::{self.query.name}'"
             )
 
     def render_audit_queries(
@@ -1101,7 +1101,7 @@ class Model(ModelMeta, frozen=True):
         return self.expressions_ or []
 
     @property
-    def python_env(self) -> t.Dict[str, t.Any]:
+    def python_env(self) -> t.Dict[str, Executable]:
         return self.python_env_ or {}
 
     def validate_definition(self) -> None:
@@ -1120,7 +1120,7 @@ class Model(ModelMeta, frozen=True):
             if isinstance(expression, exp.Star):
                 _raise_config_error(
                     "SELECT * is not allowed you must explicitly select columns.",
-                    self.path,
+                    self._path,
                 )
 
             alias = expression.alias_or_name
@@ -1131,13 +1131,13 @@ class Model(ModelMeta, frozen=True):
             elif not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
-                    self.path,
+                    self._path,
                 )
 
         for name, count in name_counts.items():
             if count > 1:
                 _raise_config_error(
-                    f"Found duplicate outer select name `{name}`", self.path
+                    f"Found duplicate outer select name `{name}`", self._path
                 )
 
         if self.partitioned_by:
@@ -1145,7 +1145,7 @@ class Model(ModelMeta, frozen=True):
             if len(self.partitioned_by) != len(unique_partition_keys):
                 _raise_config_error(
                     "All partition keys must be unique in the model definition",
-                    self.path,
+                    self._path,
                 )
 
             projections = {p.lower() for p in query.named_selects}
@@ -1154,13 +1154,13 @@ class Model(ModelMeta, frozen=True):
                 missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
                 _raise_config_error(
                     f"Partition keys [{missing_keys_str}] are missing in the query in the model definition",
-                    self.path,
+                    self._path,
                 )
 
         if self.kind == ModelKind.INCREMENTAL and not self.time_column:
             _raise_config_error(
                 "Incremental models must have a time_column field.",
-                self.path,
+                self._path,
             )
 
     def _filter_time_column(
@@ -1236,47 +1236,14 @@ class model(registry_decorator):
             module=module,
         )
 
-        return Model(
+        model = Model(
             query=f"@{name}",
-            python_env=serialize_env(env, module=module, prefix=EXEC_PREFIX),
-            path=path,
+            python_env=serialize_env(env, module=module),
             **self.meta.dict(exclude_defaults=True),
         )
 
-
-def strip_exec_prefix(code: str) -> str:
-    return code[len(EXEC_PREFIX) :]
-
-
-def prepare_env(
-    env: t.Dict[str, t.Any],
-    python_env: t.Optional[t.Dict[str, t.Any]] = None,
-    functions: t.Optional[t.Dict[str, t.Callable]] = None,
-) -> None:
-    """Prepare a python env by hydrating and executing functions.
-
-    The Python ENV is stored in a json serializable format.
-    Because we store macros as function strings, we need to detect
-    when a variable is supposed to a function and then deserialize it
-    appropriately. We assume strings with EXEC_PREFIX are actually
-    functions and then execute them using our local env to hydrate them.
-
-    Args:
-        env: The dictionary to execute code in.
-        python_env: The dictionary containing the serialized python environment.
-        functions: Optional dictionary to set function names.
-    """
-    if python_env:
-        for name, value in python_env.items():
-            if isinstance(value, str) and value.startswith(EXEC_PREFIX):
-                code = strip_exec_prefix(value)
-                exec(code, env)
-                if functions:
-                    func = list(env.values())[-1]
-                    if callable(func) and code.startswith("def "):
-                        functions[normalize_macro_name(name)] = func
-            else:
-                env[name] = value
+        model._path = path
+        return model
 
 
 def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str]:
@@ -1316,8 +1283,8 @@ def find_tables(query: exp.Expression) -> t.Set[str]:
 
 def _python_env(
     query: exp.Expression, module: str, macros: MacroRegistry
-) -> t.Dict[str, t.Any]:
-    python_env: t.Dict[str, t.Any] = {}
+) -> t.Dict[str, Executable]:
+    python_env: t.Dict[str, Executable] = {}
 
     for macro_func in query.find_all(d.MacroFunc):
         if isinstance(macro_func, (d.MacroSQL, d.MacroStrReplace)):
@@ -1332,7 +1299,7 @@ def _python_env(
                 module=module,
             )
 
-    return serialize_env(python_env, module=module, prefix=EXEC_PREFIX)
+    return serialize_env(python_env, module=module)
 
 
 def _raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:

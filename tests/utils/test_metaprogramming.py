@@ -6,11 +6,13 @@ import sqlglot
 from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import to_table
 
-from sqlmesh.core.model import EXEC_PREFIX, prepare_env
 from sqlmesh.utils.metaprogramming import (
+    Executable,
+    ExecutableKind,
     build_env,
     func_globals,
     normalize_source,
+    prepare_env,
     print_exception,
     serialize_env,
 )
@@ -103,26 +105,36 @@ def test_normalize_source() -> None:
 def test_serialize_env() -> None:
     env: t.Dict[str, t.Any] = {}
     build_env(main_func, env=env, name="MAIN", module="tests")
-    env = serialize_env(env, module="tests", prefix="PREFIX ")  # type: ignore
+    env = serialize_env(env, module="tests")  # type: ignore
 
     lambda_no_args_padding = " " if sys.version_info < (3, 11) else ""
 
     assert env == {
-        "MAIN": """PREFIX def main_func(y):
+        "MAIN": Executable(
+            name="main_func",
+            path="test_metaprogramming.py",
+            payload="""def main_func(y):
     sqlglot.parse_one('1')
     MyClass()
 
     def closure(z):
         return z + Z
     return closure(y) + other_func(Y)""",
-        "X": 1,
-        "Y": 2,
-        "Z": 3,
-        "KLASS_X": 1,
-        "KLASS_Y": 2,
-        "KLASS_Z": 3,
-        "to_table": "PREFIX from sqlglot.expressions import to_table",
-        "MyClass": """PREFIX class MyClass:
+        ),
+        "X": Executable(payload=1, kind=ExecutableKind.VALUE),
+        "Y": Executable(payload=2, kind=ExecutableKind.VALUE),
+        "Z": Executable(payload=3, kind=ExecutableKind.VALUE),
+        "KLASS_X": Executable(payload=1, kind=ExecutableKind.VALUE),
+        "KLASS_Y": Executable(payload=2, kind=ExecutableKind.VALUE),
+        "KLASS_Z": Executable(payload=3, kind=ExecutableKind.VALUE),
+        "to_table": Executable(
+            kind=ExecutableKind.IMPORT,
+            payload="from sqlglot.expressions import to_table",
+        ),
+        "MyClass": Executable(
+            kind=ExecutableKind.DEFINITION,
+            path="test_metaprogramming.py",
+            payload="""class MyClass:
 
     @staticmethod
     def foo():
@@ -134,48 +146,52 @@ def test_serialize_env() -> None:
 
     def baz(self):
         return KLASS_Z""",
-        "pd": "PREFIX import pandas as pd",
-        "sqlglot": "PREFIX import sqlglot",
-        "my_lambda": f"PREFIX my_lambda = lambda{lambda_no_args_padding}: print('z')",
-        "other_func": """PREFIX def other_func(a):
+        ),
+        "pd": Executable(payload="import pandas as pd", kind=ExecutableKind.IMPORT),
+        "sqlglot": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot"),
+        "my_lambda": Executable(
+            path="test_metaprogramming.py",
+            payload=f"my_lambda = lambda{lambda_no_args_padding}: print('z')",
+        ),
+        "other_func": Executable(
+            path="test_metaprogramming.py",
+            payload="""def other_func(a):
     import sqlglot
     sqlglot.parse_one('1')
     pd.DataFrame([{'x': 1}])
     to_table('y')
     my_lambda()
     return X + a""",
+        ),
     }
 
 
 def test_print_exception(mocker: MockerFixture):
     out_mock = mocker.Mock()
 
-    test_code = """
-
-def test_fun():
-    raise RuntimeError("error")
-
-"""
-
-    test_path = "/test/path.py"
-    test_env = {"test_fun": f"{EXEC_PREFIX}{test_code}"}
+    test_env = {
+        "test_fun": Executable(
+            name="test_func",
+            payload="""def test_fun():
+    raise RuntimeError("error")""",
+            path="/test/path.py",
+        ),
+    }
     env: t.Dict[str, t.Any] = {}
     prepare_env(env, test_env)
     try:
         eval("test_fun()", env)
     except Exception as ex:
-        print_exception(ex, test_env, test_path, out_mock)
+        print_exception(ex, test_env, out_mock)
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 165, in test_print_exception
+  File "{__file__}", line 183, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
 
-  File '/test/path.py' (or imported file), line 4, in test_fun
-
-
+  File '/test/path.py' (or imported file), line 2, in test_fun
     def test_fun():
         raise RuntimeError("error")
 

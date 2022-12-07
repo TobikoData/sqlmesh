@@ -19,6 +19,7 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
+from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 
 class MacroStrTemplate(Template):
@@ -93,17 +94,21 @@ class MacroEvaluator:
         env: Python execution environment including global variables
     """
 
-    def __init__(self, dialect: str = "", env: t.Optional[t.Dict[str, t.Any]] = None):
-        from sqlmesh.core.model import prepare_env
-
+    def __init__(
+        self, dialect: str = "", env: t.Optional[t.Dict[str, Executable]] = None
+    ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
         self.env = {**ENV, "self": self}
+        self.python_env = env or {}
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
-        prepare_env(self.env, env, self.macros)
+        prepare_env(self.env, self.python_env)
+        for k, v in self.python_env.items():
+            if v.is_definition:
+                self.macros[normalize_macro_name(k)] = self.env[v.name or k]
 
     def send(
         self, name: str, *args
@@ -113,7 +118,11 @@ class MacroEvaluator:
         if not callable(func):
             raise SQLMeshError(f"Macro '{name}' does not exist.")
 
-        return func(self, *args)
+        try:
+            return func(self, *args)
+        except Exception as e:
+            print_exception(e, self.python_env)
+            raise MacroEvalError(f"Error trying to eval macro.") from e
 
     def transform(
         self, query: exp.Expression
@@ -194,6 +203,7 @@ class MacroEvaluator:
             code = self.generator.generate(node)
             return eval(code, self.env, self.locals)
         except Exception as e:
+            print_exception(e, self.python_env)
             raise MacroEvalError(
                 f"Error trying to eval macro.\n\nGenerated code: {code}\n\nOriginal sql: {node}"
             ) from e
