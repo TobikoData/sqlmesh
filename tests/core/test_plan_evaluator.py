@@ -1,9 +1,11 @@
 import pytest
 from pytest_mock.plugin import MockerFixture
+from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.model import Model, ModelKind
 from sqlmesh.core.plan import Plan
-from sqlmesh.core.plan_evaluator import AirflowPlanEvaluator
+from sqlmesh.core.plan_evaluator import AirflowPlanEvaluator, BuiltInPlanEvaluator
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -19,6 +21,65 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
         dag=sushi_context.dag,
         state_reader=sushi_context.state_reader,
     )
+
+
+def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
+    new_model = Model(
+        name="sushi.new_test_model",
+        owner="jen",
+        cron="@daily",
+        start="2020-01-01",
+        query=parse_one("SELECT 1::INT AS one"),
+    )
+    new_view_model = Model(
+        name="sushi.new_test_view_model",
+        kind=ModelKind.VIEW,
+        owner="jen",
+        start="2020-01-01",
+        query=parse_one(
+            "SELECT 1::INT AS one FROM sushi.new_test_model, sushi.waiters"
+        ),
+    )
+
+    sushi_context.upsert_model(new_view_model)
+    sushi_context.upsert_model(new_model)
+
+    snapshots = sushi_context.snapshots
+    new_model_snapshot = snapshots[new_model.name]
+    new_view_model_snapshot = snapshots[new_view_model.name]
+
+    new_model_snapshot.version = new_model_snapshot.fingerprint
+    sushi_context.table_info_cache[
+        new_model_snapshot.snapshot_id
+    ] = new_model_snapshot.table_info
+    new_view_model_snapshot.version = new_view_model_snapshot.fingerprint
+    sushi_context.table_info_cache[
+        new_view_model_snapshot.snapshot_id
+    ] = new_view_model_snapshot.table_info
+
+    plan = Plan(
+        sushi_context._context_diff("prod"),
+        dag=sushi_context.dag,
+        state_reader=sushi_context.state_reader,
+    )
+
+    evaluator = BuiltInPlanEvaluator(
+        sushi_context.state_sync,
+        sushi_context.snapshot_evaluator,
+        sushi_context.console,
+    )
+    evaluator._push(plan)
+
+    assert (
+        len(
+            sushi_context.state_sync.get_snapshots(
+                [new_model_snapshot, new_view_model_snapshot]
+            )
+        )
+        == 2
+    )
+    assert sushi_context.engine_adapter.table_exists(new_model_snapshot.table_name)
+    assert sushi_context.engine_adapter.table_exists(new_view_model_snapshot.table_name)
 
 
 def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
@@ -39,6 +100,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         no_gaps=False,
         notification_targets=[],
         restatements=set(),
+        ddl_concurrent_tasks=1,
     )
 
     assert airflow_client_mock.wait_for_dag_run_completion.call_count == 2

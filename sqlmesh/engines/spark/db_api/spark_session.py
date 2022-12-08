@@ -1,4 +1,5 @@
 import typing as t
+from threading import get_ident
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import Row
@@ -16,6 +17,11 @@ class SparkSessionCursor:
     def execute(self, query: str, parameters: t.Optional[t.Any] = None) -> None:
         if parameters:
             raise NotSupportedError("Parameterized queries are not supported")
+
+        self._spark.sparkContext.setLocalProperty(
+            "spark.scheduler.pool", f"pool_{get_ident()}"
+        )
+
         self._last_df = self._spark.sql(query)
         self._last_output = None
         self._last_output_cursor = 0
