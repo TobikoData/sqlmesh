@@ -29,10 +29,7 @@ from sqlglot import exp, select
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
-from sqlmesh.utils.concurrency import (
-    ConcurrentApplyOrder,
-    concurrent_apply_to_snapshots,
-)
+from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError
 
@@ -175,7 +172,6 @@ class SnapshotEvaluator:
             target_snapshots,
             lambda s: self._create_snapshot(s, snapshots),
             self.ddl_concurrent_tasks,
-            ConcurrentApplyOrder.TOPOLOGICAL,
         )
 
     def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
@@ -188,7 +184,7 @@ class SnapshotEvaluator:
             target_snapshots,
             self._cleanup_snapshot,
             self.ddl_concurrent_tasks,
-            ConcurrentApplyOrder.REVERSED_TOPOLOGICAL,
+            reverse_order=True,
         )
 
     def audit(

@@ -713,5 +713,4 @@ class Context:
     def _add_model_to_dag(self, model: Model) -> None:
         self.dag.graph[model.name] = set()
 
-        for table in model.depends_on:
-            self.dag.add(model.name, table)
+        self.dag.add(model.name, model.depends_on)

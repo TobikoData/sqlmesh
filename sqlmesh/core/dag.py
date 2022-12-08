@@ -16,17 +16,17 @@ class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
         self.graph = graph or {}
 
-    def add(self, node: T, dependency: t.Optional[T] = None) -> None:
+    def add(self, node: T, dependencies: t.Optional[t.Iterable[T]] = None) -> None:
         """Add a node to the graph with an optional upstream dependency.
 
         Args:
             node: The node to add.
-            dependency: An optional dependency to add to the node.
+            dependencies: Optional dependencies to add to the node.
         """
         if node not in self.graph:
             self.graph[node] = set()
-        if dependency:
-            self.graph[node].add(dependency)
+        if dependencies:
+            self.graph[node].update(dependencies)
 
     def subdag(self, *nodes: T) -> DAG[T]:
         """Create a new subdag given node(s).
@@ -50,7 +50,7 @@ class DAG(t.Generic[T]):
 
     def upstream(self, node: T) -> t.List[T]:
         """Returns all upstream dependencies in topologically sorted order."""
-        return self.subdag(node).sort()[:-1]
+        return self.subdag(node).sorted()[:-1]
 
     @property
     def leaves(self) -> t.Set[T]:
@@ -59,7 +59,7 @@ class DAG(t.Generic[T]):
             dep for deps in self.graph.values() for dep in deps if dep not in self.graph
         }
 
-    def sort(self) -> t.List[T]:
+    def sorted(self) -> t.List[T]:
         """Topologically sort the graph.
 
         Returns:
@@ -98,7 +98,7 @@ class DAG(t.Generic[T]):
         Returns:
             A list of descendant nodes sorted in topological order.
         """
-        sorted_nodes = self.sort()
+        sorted_nodes = self.sorted()
         try:
             node_index = sorted_nodes.index(node)
         except ValueError:
