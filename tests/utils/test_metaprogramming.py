@@ -1,4 +1,3 @@
-import sys
 import typing as t
 from dataclasses import dataclass
 
@@ -116,8 +115,6 @@ def test_serialize_env() -> None:
     build_env(main_func, env=env, name="MAIN", module="tests")
     env = serialize_env(env, module="tests")  # type: ignore
 
-    lambda_no_args_padding = " " if sys.version_info < (3, 11) else ""
-
     assert env == {
         "MAIN": Executable(
             name="main_func",
@@ -171,7 +168,7 @@ class DataClass:
         "sqlglot": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot"),
         "my_lambda": Executable(
             path="test_metaprogramming.py",
-            payload=f"my_lambda = lambda{lambda_no_args_padding}: print('z')",
+            payload=f"my_lambda = lambda : print('z')",
         ),
         "other_func": Executable(
             path="test_metaprogramming.py",
@@ -206,7 +203,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 203, in test_print_exception
+  File "{__file__}", line 200, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
