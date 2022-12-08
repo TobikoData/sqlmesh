@@ -47,7 +47,7 @@ ITEMS = [
 @model(
     """
     MODEL(
-        name raw.items,
+        name sushi.items,
         kind incremental,
         time_column ds,
         start 'Jan 1 2022',

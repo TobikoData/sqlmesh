@@ -13,8 +13,9 @@ WAITERS = list(range(0, 10))
 
 @model(
     """
+    -- Table of sushi orders.
     MODEL(
-        name raw.orders,
+        name sushi.orders,
         kind incremental,
         time_column ds,
         start '2022-01-01',

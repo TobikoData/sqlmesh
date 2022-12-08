@@ -51,7 +51,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
     )
 
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
-    evaluator.create(snapshot, {})
+    evaluator.create([snapshot], {})
     evaluator.evaluate(
         snapshot,
         "2020-01-01",
@@ -66,7 +66,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     adapter_mock.create_table.assert_called_once_with(
         "physical_schema.test_schema__test_model__1",
-        columns={"a": exp.DataType.build("int")},
+        query_or_columns={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
     )
@@ -85,7 +85,7 @@ def test_promote(mocker: MockerFixture, make_snapshot):
     )
 
     evaluator.promote(
-        make_snapshot(model, physical_schema="physical_schema", version="1"),
+        [make_snapshot(model, physical_schema="physical_schema", version="1")],
         "test_env",
     )
 
@@ -102,12 +102,15 @@ def test_promote_model_info(mocker: MockerFixture):
     evaluator = SnapshotEvaluator(adapter_mock)
 
     evaluator.promote(
-        SnapshotTableInfo(
-            physical_schema="physical_schema",
-            name="test_schema.test_model",
-            fingerprint="1",
-            version="1",
-        ),
+        [
+            SnapshotTableInfo(
+                physical_schema="physical_schema",
+                name="test_schema.test_model",
+                fingerprint="1",
+                version="1",
+                parents=[],
+            )
+        ],
         "test_env",
     )
 
@@ -124,7 +127,7 @@ def test_evaluate_creation_duckdb(
     date_kwargs: t.Dict[str, str],
 ):
     evaluator = SnapshotEvaluator(EngineAdapter(duck_conn, "duckdb"))
-    evaluator.create(snapshot, {})
+    evaluator.create([snapshot], {})
     version = snapshot.version
 
     def assert_tables_exist() -> None:

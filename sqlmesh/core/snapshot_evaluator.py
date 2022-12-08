@@ -28,7 +28,8 @@ from sqlglot import exp, select
 
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.snapshot import Snapshot, SnapshotInfoLike, SnapshotTableInfo
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
+from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError
 
@@ -44,10 +45,13 @@ class SnapshotEvaluator:
 
     Args:
         adapter: The adapter that interfaces with the execution engine.
+        ddl_concurrent_task: The number of concurrent tasks used for DDL
+            operations (table / view creation, deletion, etc). Default: 1.
     """
 
-    def __init__(self, adapter: EngineAdapter):
+    def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
         self.adapter = adapter
+        self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(
         self,
@@ -123,88 +127,65 @@ class SnapshotEvaluator:
             else:
                 self.adapter.insert_append(table_name, query_or_df, columns=columns)
 
-    def promote(self, snapshot: SnapshotInfoLike, environment: str) -> None:
-        """Promotes the given snapshot in the target environment by replacing a corresponding view with
-        a physical table associated with the given snapshot.
+    def promote(
+        self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
+    ) -> None:
+        """Promotes the given collection of snapshots in the target environment by replacing a corresponding
+        view with a physical table associated with the given snapshot.
 
         Args:
-            snapshot: Snapshot to promote.
+            target_snapshots: Snapshots to promote.
             environment: The target environment.
         """
-        qualified_view_name = snapshot.qualified_view_name
-        schema = qualified_view_name.schema_for_environment(environment=environment)
-        if schema is not None:
-            self.adapter.create_schema(schema)
-
-        view_name = qualified_view_name.for_environment(environment=environment)
-        table_name = snapshot.table_name
-        if self.adapter.table_exists(table_name):
-            logger.info(
-                "Updating view '%s' to point at table '%s'", view_name, table_name
-            )
-            self.adapter.create_view(view_name, exp.select("*").from_(table_name))
-        else:
-            logger.info("Dropping view '%s' for non-materialized table", view_name)
-            self.adapter.drop_view(view_name)
-
-    def demote(self, snapshot: SnapshotInfoLike, environment: str) -> None:
-        """Demotes the given snapshot in the target environment by removing its view.
-
-        Args:
-            snapshot: Snapshot to remove.
-            environment: The target environment.
-        """
-        view_name = snapshot.qualified_view_name.for_environment(
-            environment=environment
+        concurrent_apply_to_snapshots(
+            target_snapshots,
+            lambda s: self._promote_snapshot(s, environment),
+            self.ddl_concurrent_tasks,
         )
-        if self.adapter.table_exists(view_name):
-            logger.info("Dropping view '%s'", view_name)
-            self.adapter.drop_view(view_name)
 
-    def create(self, snapshot: Snapshot, snapshots: t.Dict[str, Snapshot]) -> None:
-        """Creates a physical snapshot schema and table.
+    def demote(
+        self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
+    ) -> None:
+        """Demotes the given collection of snapshots in the target environment by removing its view.
 
         Args:
-            snapshot: Snapshot to create.
+            target_snapshots: Snapshots to demote.
+            environment: The target environment.
         """
-        if snapshot.is_embedded_kind:
-            return
+        concurrent_apply_to_snapshots(
+            target_snapshots,
+            lambda s: self._demote_snapshot(s, environment),
+            self.ddl_concurrent_tasks,
+        )
 
-        self.adapter.create_schema(snapshot.physical_schema)
-        table_name = snapshot.table_name
+    def create(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+    ) -> None:
+        """Creates a physical snapshot schema and table for the given collection of snapshots.
 
-        if snapshot.is_view_kind:
-            logger.info("Creating view '%s'", table_name)
-            self.adapter.create_view(
-                table_name, snapshot.model.render_query(snapshots=snapshots)
-            )
-        else:
-            logger.info("Creating table '%s'", table_name)
-            self.adapter.create_table(
-                table_name,
-                columns=snapshot.model.columns,
-                storage_format=snapshot.model.storage_format,
-                partitioned_by=snapshot.model.partitioned_by,
-            )
+        Args:
+            target_snapshots: Target snapshost.
+        """
+        concurrent_apply_to_snapshots(
+            target_snapshots,
+            lambda s: self._create_snapshot(s, snapshots),
+            self.ddl_concurrent_tasks,
+        )
 
-    def cleanup(self, snapshots: t.Iterable[SnapshotTableInfo | Snapshot]) -> None:
+    def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
         """Cleans up the given snapshots by removing its table
 
         Args:
-            snapshots: Snapshots to cleanup.
+            target_snapshots: Snapshots to cleanup.
         """
-        for snapshot in snapshots:
-            snapshot = snapshot.table_info
-            table_name = snapshot.table_name
-            if not self.adapter.table_exists(table_name):
-                continue
-
-            try:
-                self.adapter.drop_table(table_name)
-                logger.info("Dropped table '%s'", table_name)
-            except Exception:
-                self.adapter.drop_view(table_name)
-                logger.info("Dropped view '%s'", table_name)
+        concurrent_apply_to_snapshots(
+            target_snapshots,
+            self._cleanup_snapshot,
+            self.ddl_concurrent_tasks,
+            reverse_order=True,
+        )
 
     def audit(
         self,
@@ -249,3 +230,69 @@ class SnapshotEvaluator:
                     )
             results.append(AuditResult(audit=audit, count=count, query=query))
         return results
+
+    def _create_snapshot(
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> None:
+        if snapshot.is_embedded_kind:
+            return
+
+        self.adapter.create_schema(snapshot.physical_schema)
+        table_name = snapshot.table_name
+
+        parent_snapshots_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+        }
+
+        if snapshot.is_view_kind:
+            logger.info("Creating view '%s'", table_name)
+            self.adapter.create_view(
+                table_name,
+                snapshot.model.render_query(snapshots=parent_snapshots_by_name),
+            )
+        else:
+            logger.info("Creating table '%s'", table_name)
+            self.adapter.create_table(
+                table_name,
+                query_or_columns=snapshot.model.columns
+                if snapshot.model.annotated
+                else snapshot.model.ctas_query(parent_snapshots_by_name),
+                storage_format=snapshot.model.storage_format,
+                partitioned_by=snapshot.model.partitioned_by,
+            )
+
+    def _promote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
+        qualified_view_name = snapshot.qualified_view_name
+        schema = qualified_view_name.schema_for_environment(environment=environment)
+        if schema is not None:
+            self.adapter.create_schema(schema)
+
+        view_name = qualified_view_name.for_environment(environment=environment)
+        table_name = snapshot.table_name
+        if self.adapter.table_exists(table_name):
+            logger.info(
+                "Updating view '%s' to point at table '%s'", view_name, table_name
+            )
+            self.adapter.create_view(view_name, exp.select("*").from_(table_name))
+        else:
+            logger.info("Dropping view '%s' for non-materialized table", view_name)
+            self.adapter.drop_view(view_name)
+
+    def _demote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
+        view_name = snapshot.qualified_view_name.for_environment(
+            environment=environment
+        )
+        if self.adapter.table_exists(view_name):
+            logger.info("Dropping view '%s'", view_name)
+            self.adapter.drop_view(view_name)
+
+    def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
+        snapshot = snapshot.table_info
+        table_name = snapshot.table_name
+        if self.adapter.table_exists(table_name):
+            try:
+                self.adapter.drop_table(table_name)
+                logger.info("Dropped table '%s'", table_name)
+            except Exception:
+                self.adapter.drop_view(table_name)
+                logger.info("Dropped view '%s'", table_name)

@@ -14,18 +14,31 @@ logger = logging.getLogger(__name__)
 
 
 def create_spark_session() -> SparkSession:
-    return SparkSession.builder.enableHiveSupport().getOrCreate()
+    return (
+        SparkSession.builder.config("spark.scheduler.mode", "FAIR")
+        .enableHiveSupport()
+        .getOrCreate()
+    )
 
 
 def main() -> None:
-    spark = create_spark_session()
-    connection = spark_session_db.connection(spark)
-    evaluator = SnapshotEvaluator(EngineAdapter(connection, "spark"))
+    logging.basicConfig(
+        format="%(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
+        level=logging.INFO,
+    )
 
     command_type = commands.CommandType(sys.argv[1])
     command_handler = commands.COMMAND_HANDLERS.get(command_type)
     if not command_handler:
         raise NotSupportedError(f"Command '{command_type.value}' not supported")
+
+    ddl_concurrent_tasks = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+
+    spark = create_spark_session()
+    connection = spark_session_db.connection(spark)
+    evaluator = SnapshotEvaluator(
+        EngineAdapter(connection, "spark"), ddl_concurrent_tasks=ddl_concurrent_tasks
+    )
 
     with open(SparkFiles.get(commands.COMMAND_PAYLOAD_FILE_NAME), "r") as payload_fd:
         command_payload = payload_fd.read()

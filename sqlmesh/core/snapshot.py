@@ -168,6 +168,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     fingerprint: str
     version: str
     physical_schema: str
+    parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
 
@@ -233,7 +234,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     fingerprint: str
     physical_schema: str
     model: Model
-    parents: t.List[SnapshotId]
+    parents: t.Tuple[SnapshotId, ...]
     intervals: Intervals
     created_ts: int
     updated_ts: int
@@ -327,7 +328,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             ),
             physical_schema=physical_schema,
             model=model,
-            parents=[
+            parents=tuple(
                 SnapshotId(
                     name=name,
                     fingerprint=fingerprint_from_model(
@@ -338,7 +339,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                     ),
                 )
                 for name in _parents_from_model(model, models)
-            ],
+            ),
             intervals=[],
             created_ts=created_ts,
             updated_ts=created_ts,
@@ -509,6 +510,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             name=self.name,
             fingerprint=self.fingerprint,
             version=self.version,
+            parents=self.parents,
             previous_versions=self.previous_versions,
             change_category=self.change_category,
         )
@@ -590,13 +592,12 @@ def fingerprint_from_model(
     Returns:
         The fingerprint.
     """
-    cache = cache or {}
+    cache = {} if cache is None else cache
 
     if model.name not in cache:
         data = [
-            model.render_query().sql(identify=True, comments=False)
-            if model.is_sql
-            else str(sorted(model.python_env.items())),
+            model.render_query().sql(identify=True, comments=False),
+            str(sorted(model.python_env.items())),
             model.kind.name,
             model.cron,
             model.storage_format,

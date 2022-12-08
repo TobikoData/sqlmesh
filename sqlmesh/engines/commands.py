@@ -64,8 +64,7 @@ def promote(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = PromoteCommandPayload.parse_raw(command_payload)
-    for s in command_payload.snapshots:
-        evaluator.promote(s, command_payload.environment)
+    evaluator.promote(command_payload.snapshots, command_payload.environment)
 
 
 def demote(
@@ -73,8 +72,7 @@ def demote(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = DemoteCommandPayload.parse_raw(command_payload)
-    for s in command_payload.snapshots:
-        evaluator.demote(s, command_payload.environment)
+    evaluator.demote(command_payload.snapshots, command_payload.environment)
 
 
 def cleanup(
@@ -92,16 +90,11 @@ def create_tables(
     if isinstance(command_payload, str):
         command_payload = CreateTablesCommandPayload.parse_raw(command_payload)
 
-    snapshots = {s.snapshot_id: s for s in command_payload.snapshots}
-    for target_sid in command_payload.target_snapshot_ids:
-        target_snapshot = snapshots[target_sid]
-        parent_snapshots = {
-            p.name: p
-            for p in [
-                snapshots[sid] for sid in target_snapshot.parents if sid in snapshots
-            ]
-        }
-        evaluator.create(target_snapshot, parent_snapshots)
+    snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
+    target_snapshots = [
+        snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids
+    ]
+    evaluator.create(target_snapshots, snapshots_by_id)
 
 
 COMMAND_HANDLERS: t.Dict[CommandType, t.Callable[[SnapshotEvaluator, str], None]] = {

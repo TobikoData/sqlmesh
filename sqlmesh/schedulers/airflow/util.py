@@ -1,5 +1,4 @@
 import logging
-import math
 import typing as t
 from datetime import datetime, timedelta, timezone
 
@@ -107,18 +106,3 @@ def safe_utcfromtimestamp(timestamp: t.Optional[float]) -> t.Optional[datetime]:
         if timestamp is not None
         else None
     )
-
-
-T = t.TypeVar("T")
-
-
-def create_batches(snapshots: t.List[T], tasks_num: int) -> t.List[t.List[T]]:
-    batch_size = math.ceil(len(snapshots) / tasks_num)
-
-    result = []
-    for i in range(0, tasks_num):
-        batch_offset = i * batch_size
-        batch = snapshots[batch_offset : batch_offset + batch_size]
-        result.append(batch)
-
-    return result

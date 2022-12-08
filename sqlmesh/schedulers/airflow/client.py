@@ -50,6 +50,7 @@ class AirflowClient:
         no_gaps: bool = False,
         restatements: t.Optional[t.Iterable[str]] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
+        ddl_concurrent_tasks: int = 1,
         timestamp: t.Optional[datetime] = None,
     ) -> str:
         is_first_run = self._get_first_dag_run_id(common.PLAN_RECEIVER_DAG_ID) is None
@@ -62,6 +63,7 @@ class AirflowClient:
                 request_id=request_id,
                 restatements=set(restatements or []),
                 notification_targets=notification_targets or [],
+                ddl_concurrent_tasks=ddl_concurrent_tasks,
             ),
             dag_run_id=common.INIT_RUN_ID if is_first_run else None,
             timestamp=timestamp,
