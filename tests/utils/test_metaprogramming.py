@@ -2,10 +2,12 @@ import typing as t
 from dataclasses import dataclass
 
 import pandas as pd
+import pytest
 import sqlglot
 from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import to_table
 
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
     ExecutableKind,
@@ -108,6 +110,11 @@ def test_normalize_source() -> None:
     my_lambda()
     return X + a"""
     )
+
+
+def test_serialize_env_error() -> None:
+    with pytest.raises(SQLMeshError) as e:
+        serialize_env({"pandas": pd}, module="pandas")
 
 
 def test_serialize_env() -> None:
