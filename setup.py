@@ -21,7 +21,6 @@ setup(
         ],
     },
     install_requires=[
-        "astor; python_version < '3.9.0'",
         "click",
         "croniter",
         "duckdb",
