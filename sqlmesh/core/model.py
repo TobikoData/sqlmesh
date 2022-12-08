@@ -609,7 +609,7 @@ class Model(ModelMeta, frozen=True):
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
 
-    query: t.Union[exp.Subqueryable, d.MacroVar]
+    query: t.Union[exp.Subqueryable, d.MacroVar, d.JinjaModel]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
@@ -664,6 +664,15 @@ class Model(ModelMeta, frozen=True):
             time_column_format: The default time column format to use if no model time column is configured.
         """
         if len(expressions) < 2:
+            if expressions and isinstance(expressions[0], d.JinjaModel):
+                model = cls(
+                    query=expressions[0], name="test"
+                )  # We need the model's name for this instantiation to be valid
+                model._path = path
+
+                model.validate_definition()
+                return model
+
             _raise_config_error(
                 "Incomplete model definition, missing MODEL and QUERY", path
             )
@@ -953,6 +962,11 @@ class Model(ModelMeta, frozen=True):
         Returns:
             The rendered expression.
         """
+
+        # If the query is an instance of d.JinjaModel, render it and parse the produced string
+        # to create and validate the resulting model. Then we can extract the query and pass it
+        # as the query_ argument below. Do we want to do any validation earlier (e.g. inside load())?
+
         return self._render_query(
             start=start,
             end=end,

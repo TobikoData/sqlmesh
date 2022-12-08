@@ -9,6 +9,10 @@ class Model(exp.Expression):
     arg_types = {"expressions": True}
 
 
+class JinjaModel(exp.Expression):
+    """Stores a model file that contains Jinja code as a raw string."""
+
+
 class Audit(exp.Expression):
     arg_types = {"expressions": True}
 

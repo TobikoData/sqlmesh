@@ -27,6 +27,7 @@ setup(
         "duckdb",
         "dateparser",
         "hyperscript",
+        "jinja2",
         "pandas",
         "pydantic",
         "requests",

@@ -49,7 +49,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dag import DAG
-from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions
+from sqlmesh.core.dialect import JinjaModel, extend_sqlglot, format_model_expressions
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
@@ -65,6 +65,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache
+from sqlmesh.utils.jinja import JINJA_RE
 
 if t.TYPE_CHECKING:
     import graphviz
@@ -657,7 +658,13 @@ class Context:
         for path in self._glob_path(self.models_directory_path, ".sql"):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), read=self.dialect)
+                file_contents = file.read()
+
+                if JINJA_RE.search(file_contents):
+                    expressions = [JinjaModel(this=file_contents)]
+                else:
+                    expressions = parse(file_contents, read=self.dialect)
+
                 model = Model.load(
                     expressions,
                     module=module,
