@@ -11,7 +11,7 @@ From least to greatest precedence:
     import duckdb
     from sqlmesh.core.engine_adapter import EngineAdapter
     local_config = Config(
-        engine_config_factory=duckdb.connect,
+        engine_connection_factory=duckdb.connect,
         engine_dialect="duckdb"
     )
     # End config.py
@@ -274,7 +274,7 @@ class Config(PydanticModel):
     engine_dialect: str = "duckdb"
     scheduler_backend: SchedulerBackend = BuiltInSchedulerBackend()
     notification_targets: t.List[NotificationTarget] = []
-    dialect: t.Optional[str] = None
+    dialect: str = ""
     physical_schema: str = ""
     snapshot_ttl: str = ""
     ignore_patterns: t.List[str] = []
