@@ -351,7 +351,9 @@ class GithubPullRequestBot:
             if self.pr_plan.new_snapshots:
                 for notification_target in self.context.notification_targets:
                     notification_target.send(requires_input_msg)
-                raise PlanRequiresUserInput()
+                raise PlanRequiresUserInput(
+                    f"New Snapshots: {self.pr_plan.new_snapshots}"
+                )
             if self.pr_plan.context_diff.has_differences:
                 self.context.apply(self.pr_plan, blocking=True)
             return
