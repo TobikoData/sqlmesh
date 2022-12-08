@@ -351,6 +351,8 @@ class GithubPullRequestBot:
             if self.pr_plan.new_snapshots:
                 for notification_target in self.context.notification_targets:
                     notification_target.send(requires_input_msg)
+                # debug
+                print(list(self.pr_plan.snapshots)[0].model.python_env)
                 raise PlanRequiresUserInput(
                     f"New Snapshots: {self.pr_plan.new_snapshots}"
                 )
