@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from contextlib import contextmanager
 
 from sqlglot import exp, select
 
@@ -137,11 +138,12 @@ class SnapshotEvaluator:
             target_snapshots: Snapshots to promote.
             environment: The target environment.
         """
-        concurrent_apply_to_snapshots(
-            target_snapshots,
-            lambda s: self._promote_snapshot(s, environment),
-            self.ddl_concurrent_tasks,
-        )
+        with self.multithreaded_context():
+            concurrent_apply_to_snapshots(
+                target_snapshots,
+                lambda s: self._promote_snapshot(s, environment),
+                self.ddl_concurrent_tasks,
+            )
 
     def demote(
         self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
@@ -152,11 +154,12 @@ class SnapshotEvaluator:
             target_snapshots: Snapshots to demote.
             environment: The target environment.
         """
-        concurrent_apply_to_snapshots(
-            target_snapshots,
-            lambda s: self._demote_snapshot(s, environment),
-            self.ddl_concurrent_tasks,
-        )
+        with self.multithreaded_context():
+            concurrent_apply_to_snapshots(
+                target_snapshots,
+                lambda s: self._demote_snapshot(s, environment),
+                self.ddl_concurrent_tasks,
+            )
 
     def create(
         self,
@@ -168,11 +171,12 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Target snapshost.
         """
-        concurrent_apply_to_snapshots(
-            target_snapshots,
-            lambda s: self._create_snapshot(s, snapshots),
-            self.ddl_concurrent_tasks,
-        )
+        with self.multithreaded_context():
+            concurrent_apply_to_snapshots(
+                target_snapshots,
+                lambda s: self._create_snapshot(s, snapshots),
+                self.ddl_concurrent_tasks,
+            )
 
     def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
         """Cleans up the given snapshots by removing its table
@@ -180,12 +184,13 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Snapshots to cleanup.
         """
-        concurrent_apply_to_snapshots(
-            target_snapshots,
-            self._cleanup_snapshot,
-            self.ddl_concurrent_tasks,
-            reverse_order=True,
-        )
+        with self.multithreaded_context():
+            concurrent_apply_to_snapshots(
+                target_snapshots,
+                self._cleanup_snapshot,
+                self.ddl_concurrent_tasks,
+                reverse_order=True,
+            )
 
     def audit(
         self,
@@ -230,6 +235,28 @@ class SnapshotEvaluator:
                     )
             results.append(AuditResult(audit=audit, count=count, query=query))
         return results
+
+    @contextmanager
+    def multithreaded_context(self) -> t.Generator[None, None, None]:
+        try:
+            yield
+        finally:
+            self.recycle()
+
+    def recycle(self) -> None:
+        """Closes all open connections and releases all allocated resources associated with any thread
+        except the calling one."""
+        try:
+            self.adapter.recycle()
+        except Exception:
+            logger.exception("Failed to recycle Snapshot Evaluator")
+
+    def close(self) -> None:
+        """Closes all open connections and releases all allocated resources."""
+        try:
+            self.adapter.close()
+        except Exception:
+            logger.exception("Failed to close Snapshot Evaluator")
 
     def _create_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]

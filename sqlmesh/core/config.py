@@ -11,8 +11,8 @@ From least to greatest precedence:
     import duckdb
     from sqlmesh.core.engine_adapter import EngineAdapter
     local_config = Config(
-        engine_adapter=EngineAdapter(duckdb.connect(), "duckdb"),
-        dialect="duckdb"
+        engine_connection_factory=duckdb.connect,
+        engine_dialect="duckdb"
     )
     # End config.py
 
@@ -25,17 +25,20 @@ From least to greatest precedence:
     >>> from sqlmesh import Context
     >>> from sqlmesh.core.config import Config
     >>> my_config = Config(
-    ...     engine_adapter=EngineAdapter(duckdb.connect(), "duckdb"),
-    ...     dialect="duckdb"
+    ...     engine_connection_factory=duckdb.connect,
+    ...     engine_dialect="duckdb"
     ... )
     >>> context = Context(path="example", config=my_config)
 
     ```
 - Individual config parameters used when initializing a Context.
     ```python
-    >>> adapter = EngineAdapter(duckdb.connect(), "duckdb")
+    >>> from sqlmesh import Context
+    >>> from sqlmesh.core.engine_adapter import EngineAdapter
+    >>> adapter = EngineAdapter(duckdb.connect, "duckdb")
     >>> context = Context(
-    ...     path="example", engine_adapter=adapter,
+    ...     path="example",
+    ...     engine_adapter=adapter,
     ...     dialect="duckdb",
     ... )
 
@@ -60,7 +63,7 @@ from my_project.utils import load_test_data
 
 DEFAULT_KWARGS = {
     "dialect": "duckdb", # The default dialect of models is DuckDB SQL.
-    "engine_adapter": EngineAdapter(duckdb.connect(), "duckdb"), # The default engine runs in DuckDB.
+    "engine_adapter": EngineAdapter(duckdb.connect, "duckdb"), # The default engine runs in DuckDB.
 }
 
 # An in memory DuckDB config.
@@ -102,13 +105,11 @@ import abc
 import typing as t
 
 import duckdb
-from pydantic import Field
 from requests import Session
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.plan_evaluator import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
@@ -256,34 +257,12 @@ class Config(PydanticModel):
     """
     An object used by a Context to configure your SQLMesh project.
 
-    An engine adapter can lazily establish a database connection if it is passed a callable that returns a
-    database API compliant connection.
-    ```python
-    >>> from sqlmesh import Context
-    >>> context = Context(
-    ...     path="example",
-    ...     engine_adapter=EngineAdapter(duckdb.connect, "duckdb"),
-    ...     dialect="duckdb"
-    ... )
-
-    ```
-    ```python
-    >>> def create_connection():
-    ...     return duckdb.connect()
-    ...
-    >>> context = Context(
-    ...     path="example",
-    ...     engine_adapter=EngineAdapter(create_connection, "duckdb"),
-    ...     dialect="duckdb"
-    ... )
-
-    ```
-
     Args:
-        engine_adapter: The default engine adapter to use
+        engine_connection_factory: The calllable which creates a new engine connection on each call.
+        engine_dialect: The engine dialect.
         scheduler_backend: Identifies which scheduler backend to use.
         notification_targets: The notification targets to use.
-        dialect: The default sql dialect of model queries.
+        dialect: The default sql dialect of model queries. Default: same as engine dialect.
         physical_schema: The default schema used to store materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
@@ -291,9 +270,8 @@ class Config(PydanticModel):
             operations (table / view creation, deletion, etc). Default: 1.
     """
 
-    engine_adapter: EngineAdapter = Field(
-        default_factory=lambda: EngineAdapter(duckdb.connect, "duckdb")
-    )
+    engine_connection_factory: t.Callable[[], t.Any] = duckdb.connect
+    engine_dialect: str = "duckdb"
     scheduler_backend: SchedulerBackend = BuiltInSchedulerBackend()
     notification_targets: t.List[NotificationTarget] = []
     dialect: str = ""

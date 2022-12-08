@@ -126,7 +126,7 @@ def test_evaluate_creation_duckdb(
     duck_conn,
     date_kwargs: t.Dict[str, str],
 ):
-    evaluator = SnapshotEvaluator(EngineAdapter(duck_conn, "duckdb"))
+    evaluator = SnapshotEvaluator(EngineAdapter(lambda: duck_conn, "duckdb"))
     evaluator.create([snapshot], {})
     version = snapshot.version
 

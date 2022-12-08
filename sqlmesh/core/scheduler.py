@@ -136,7 +136,7 @@ class Scheduler:
             # We have to run all batches per snapshot to mark it as completed
             self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
-        with ThreadPoolExecutor() as snapshot_pool, ThreadPoolExecutor(
+        with self.snapshot_evaluator.multithreaded_context(), ThreadPoolExecutor() as snapshot_pool, ThreadPoolExecutor(
             max_workers=self.max_workers
         ) as batch_pool:
             while True:

@@ -17,7 +17,7 @@ from sqlmesh.utils.file_cache import FileCache
 @pytest.fixture
 def state_sync(duck_conn, mock_file_cache):
     state_sync = EngineAdapterStateSync(
-        EngineAdapter(duck_conn, "duckdb"),
+        EngineAdapter(lambda: duck_conn, "duckdb"),
         "sqlmesh",
         mock_file_cache,
     )

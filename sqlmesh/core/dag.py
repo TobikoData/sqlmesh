@@ -14,7 +14,7 @@ T = t.TypeVar("T", bound=t.Hashable)
 
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
-        self.graph: t.Dict[T, t.Set[T]] = {}
+        self._graph: t.Dict[T, t.Set[T]] = {}
         for node, dependencies in (graph or {}).items():
             self.add(node, dependencies)
 
@@ -25,10 +25,10 @@ class DAG(t.Generic[T]):
             node: The node to add.
             dependencies: Optional dependencies to add to the node.
         """
-        if node not in self.graph:
-            self.graph[node] = set()
+        if node not in self._graph:
+            self._graph[node] = set()
         if dependencies:
-            self.graph[node].update(dependencies)
+            self._graph[node].update(dependencies)
             for d in dependencies:
                 self.add(d)
 
@@ -46,7 +46,7 @@ class DAG(t.Generic[T]):
 
         while queue:
             node = queue.pop()
-            deps = self.graph.get(node, set())
+            deps = self._graph.get(node, set())
             graph[node] = deps
             queue.update(deps)
 
@@ -60,17 +60,24 @@ class DAG(t.Generic[T]):
     def leaves(self) -> t.Set[T]:
         """Returns all nodes in the graph without any upstream dependencies."""
         return {
-            dep for deps in self.graph.values() for dep in deps if dep not in self.graph
+            dep
+            for deps in self._graph.values()
+            for dep in deps
+            if dep not in self._graph
         }
+
+    @property
+    def graph(self) -> t.Dict[T, t.Set[T]]:
+        graph = {}
+        for node, deps in self._graph.items():
+            graph[node] = deps.copy()
+        return graph
 
     def sorted(self) -> t.List[T]:
         """Returns a list of nodes sorted in topological order."""
         result: t.List[T] = []
 
-        unprocessed_nodes = {}
-        for node, deps in self.graph.items():
-            unprocessed_nodes[node] = deps.copy()
-
+        unprocessed_nodes = self.graph
         while unprocessed_nodes:
             next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
@@ -103,7 +110,7 @@ class DAG(t.Generic[T]):
             """Visit topologically sorted nodes after input node and yield downstream dependants."""
             downstream = {node}
             for current_node in sorted_nodes[node_index + 1 :]:
-                upstream = self.graph.get(current_node, set())
+                upstream = self._graph.get(current_node, set())
                 if not upstream.isdisjoint(downstream):
                     downstream.add(current_node)
                     yield current_node
