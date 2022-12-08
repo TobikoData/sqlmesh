@@ -311,6 +311,10 @@ def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executabl
                 )
         elif inspect.ismodule(v):
             name = v.__name__
+            if name.startswith(module):
+                raise SQLMeshError(
+                    f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
+                )
             postfix = "" if name == k else f" as {k}"
             serialized[k] = Executable(
                 payload=f"import {name}{postfix}",
