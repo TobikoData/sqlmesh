@@ -93,10 +93,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         Args:
             plan: The plan to source snapshots from.
         """
-        snapshots = {snapshot.name: snapshot for snapshot in plan.new_snapshots}
-        self.state_sync.push_snapshots(snapshots.values())
-        for snapshot in snapshots.values():
-            self.snapshot_evaluator.create(snapshot, snapshots)
+        parent_snapshot_ids = {
+            p_sid for snapshot in plan.new_snapshots for p_sid in snapshot.parents
+        }
+
+        stored_snapshots_by_id = self.state_sync.get_snapshots(parent_snapshot_ids)
+        new_snapshots_by_id = {
+            snapshot.snapshot_id: snapshot for snapshot in plan.new_snapshots
+        }
+        all_snapshots_by_id = {**stored_snapshots_by_id, **new_snapshots_by_id}
+
+        self.snapshot_evaluator.create(plan.new_snapshots, all_snapshots_by_id)
+        self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:
         """Promote a plan.
@@ -110,16 +118,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
-        for snapshot_table_info in added:
-            self.snapshot_evaluator.promote(
-                snapshot_table_info,
-                environment=environment.name,
-            )
-        for snapshot_table_info in removed:
-            self.snapshot_evaluator.demote(
-                snapshot_table_info,
-                environment=environment.name,
-            )
+        self.snapshot_evaluator.promote(
+            added,
+            environment=environment.name,
+        )
+        self.snapshot_evaluator.demote(
+            removed,
+            environment=environment.name,
+        )
 
 
 class AirflowPlanEvaluator(PlanEvaluator):
@@ -132,6 +138,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         dag_creation_poll_interval_secs: int = 30,
         dag_creation_max_retry_attempts: int = 10,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
+        ddl_concurrent_tasks: int = 1,
     ):
         self.airflow_client = airflow_client
         self.blocking = blocking
@@ -140,6 +147,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
         self.console = console or get_console()
         self.notification_targets = notification_targets or []
+        self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(self, plan: Plan) -> None:
         environment = plan.environment
@@ -153,6 +161,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             no_gaps=plan.no_gaps,
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
 
         if self.blocking:

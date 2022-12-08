@@ -288,7 +288,7 @@ class Plan:
     def info_cache(self) -> InfoCache:
         """Returns the info cache of categorized, uncategorized snapshots."""
         if self._info_cache is None:
-            queue = deque(self._dag.sort())
+            queue = deque(self._dag.sorted())
             snapshots = []
             all_indirectly_modified = set()
 

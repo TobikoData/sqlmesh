@@ -121,6 +121,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "physical_schema": "physical_schema",
                         "previous_versions": [],
                         "version": snapshot.version,
+                        "parents": [],
                     }
                 ],
                 "start": "2022-01-01",
@@ -132,6 +133,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
             "notification_targets": [],
             "request_id": request_id,
             "restatements": [],
+            "ddl_concurrent_tasks": 1,
         },
         "dag_run_id": expected_dag_run_id,
         "logical_date": "2022-08-16T02:40:19.000000Z",
