@@ -12,6 +12,8 @@ import typing as t
 from enum import Enum
 from pathlib import Path
 
+from astor import to_source
+
 from sqlmesh.utils import trim_path, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -132,14 +134,6 @@ def getsource(obj: t.Any) -> str:
     raise SQLMeshError(f"Cannot find source for {obj}")
 
 
-def unparse(node: ast.Module) -> str:
-    if sys.version_info < (3, 9):
-        import astor
-
-        return astor.to_source(node).strip()
-    return ast.unparse(node).strip()
-
-
 def _parse_source(func: t.Callable) -> ast.Module:
     return ast.parse(textwrap.dedent(getsource(func)))
 
@@ -198,7 +192,7 @@ def normalize_source(obj: t.Any) -> str:
         elif isinstance(node, ast.arg):
             node.annotation = None
 
-    return unparse(root_node)
+    return to_source(root_node).strip()
 
 
 def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) -> None:
