@@ -1,5 +1,6 @@
 import sys
 import typing as t
+from dataclasses import dataclass
 
 import pandas as pd
 import sqlglot
@@ -26,6 +27,11 @@ my_lambda = lambda: print("z")
 KLASS_X = 1
 KLASS_Y = 2
 KLASS_Z = 3
+
+
+@dataclass
+class DataClass:
+    x: int
 
 
 class MyClass:
@@ -55,6 +61,7 @@ def main_func(y: int) -> int:
     """DOC STRING"""
     sqlglot.parse_one("1")
     MyClass()
+    DataClass(x=y)
 
     def closure(z: int) -> int:
         return z + Z
@@ -66,6 +73,7 @@ def test_func_globals() -> None:
     assert func_globals(main_func) == {
         "Y": 2,
         "Z": 3,
+        "DataClass": DataClass,
         "MyClass": MyClass,
         "other_func": other_func,
         "sqlglot": sqlglot,
@@ -84,6 +92,7 @@ def test_normalize_source() -> None:
         == """def main_func(y):
     sqlglot.parse_one('1')
     MyClass()
+    DataClass(x=y)
 
     def closure(z):
         return z + Z
@@ -116,6 +125,7 @@ def test_serialize_env() -> None:
             payload="""def main_func(y):
     sqlglot.parse_one('1')
     MyClass()
+    DataClass(x=y)
 
     def closure(z):
         return z + Z
@@ -130,6 +140,13 @@ def test_serialize_env() -> None:
         "to_table": Executable(
             kind=ExecutableKind.IMPORT,
             payload="from sqlglot.expressions import to_table",
+        ),
+        "DataClass": Executable(
+            kind=ExecutableKind.DEFINITION,
+            path="test_metaprogramming.py",
+            payload="""@dataclass
+class DataClass:
+    x: int""",
         ),
         "MyClass": Executable(
             kind=ExecutableKind.DEFINITION,
@@ -146,6 +163,9 @@ def test_serialize_env() -> None:
 
     def baz(self):
         return KLASS_Z""",
+        ),
+        "dataclass": Executable(
+            payload="from dataclasses import dataclass", kind=ExecutableKind.IMPORT
         ),
         "pd": Executable(payload="import pandas as pd", kind=ExecutableKind.IMPORT),
         "sqlglot": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot"),
@@ -186,7 +206,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 183, in test_print_exception
+  File "{__file__}", line 203, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
