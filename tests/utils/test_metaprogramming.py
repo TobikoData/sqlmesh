@@ -19,6 +19,42 @@ from sqlmesh.utils.metaprogramming import (
     serialize_env,
 )
 
+
+def test_print_exception(mocker: MockerFixture):
+    out_mock = mocker.Mock()
+
+    test_env = {
+        "test_fun": Executable(
+            name="test_func",
+            payload="""def test_fun():
+    raise RuntimeError("error")""",
+            path="/test/path.py",
+        ),
+    }
+    env: t.Dict[str, t.Any] = {}
+    prepare_env(env, test_env)
+    try:
+        eval("test_fun()", env)
+    except Exception as ex:
+        print_exception(ex, test_env, out_mock)
+
+    expected_message = f"""Traceback (most recent call last):
+
+  File "{__file__}", line 37, in test_print_exception
+    eval("test_fun()", env)
+
+  File "<string>", line 1, in <module>
+
+  File '/test/path.py' (or imported file), line 2, in test_fun
+    def test_fun():
+        raise RuntimeError("error")
+
+
+RuntimeError: error
+"""
+    out_mock.write.assert_called_once_with(expected_message)
+
+
 X = 1
 Y = 2
 Z = 3
@@ -114,6 +150,7 @@ def test_normalize_source() -> None:
 
 def test_serialize_env_error() -> None:
     with pytest.raises(SQLMeshError) as e:
+        # pretend to be the module pandas
         serialize_env({"pandas": pd}, module="pandas")
 
 
@@ -188,38 +225,3 @@ class DataClass:
     return X + a""",
         ),
     }
-
-
-def test_print_exception(mocker: MockerFixture):
-    out_mock = mocker.Mock()
-
-    test_env = {
-        "test_fun": Executable(
-            name="test_func",
-            payload="""def test_fun():
-    raise RuntimeError("error")""",
-            path="/test/path.py",
-        ),
-    }
-    env: t.Dict[str, t.Any] = {}
-    prepare_env(env, test_env)
-    try:
-        eval("test_fun()", env)
-    except Exception as ex:
-        print_exception(ex, test_env, out_mock)
-
-    expected_message = f"""Traceback (most recent call last):
-
-  File "{__file__}", line 200, in test_print_exception
-    eval("test_fun()", env)
-
-  File "<string>", line 1, in <module>
-
-  File '/test/path.py' (or imported file), line 2, in test_fun
-    def test_fun():
-        raise RuntimeError("error")
-
-
-RuntimeError: error
-"""
-    out_mock.write.assert_called_once_with(expected_message)
