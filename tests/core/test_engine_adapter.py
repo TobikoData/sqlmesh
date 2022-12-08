@@ -14,7 +14,7 @@ def test_create_view(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), replace=False)
 
@@ -29,7 +29,7 @@ def test_create_schema(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_schema("test_schema")
     adapter.create_schema("test_schema", ignore_if_exists=False)
 
@@ -44,7 +44,7 @@ def test_table_exists(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
         "DESCRIBE TABLE test_table",
@@ -54,7 +54,7 @@ def test_table_exists(mocker: MockerFixture):
     cursor_mock.execute.side_effect = RuntimeError("error")
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert not adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
         "DESCRIBE TABLE test_table",
@@ -66,7 +66,7 @@ def test_insert_overwrite(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.insert_overwrite(
         "test_table", parse_one("SELECT a FROM tbl"), columns=["a"]
     )
@@ -81,7 +81,7 @@ def test_insert_append(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.insert_append("test_table", parse_one("SELECT a FROM tbl"), columns=["a"])
 
     cursor_mock.execute.assert_called_once_with(
@@ -94,7 +94,7 @@ def test_delete_insert_query(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.delete_insert_query(
         "test_table",
         parse_one("SELECT a FROM tbl"),
@@ -117,7 +117,7 @@ def test_create_and_insert(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_and_insert(
         "test_table",
         {"a": exp.DataType.build("bigint")},
@@ -140,7 +140,7 @@ def test_create_table(mocker: MockerFixture):
         "colb": exp.DataType.build("TEXT"),
     }
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_table("test_table", column_mapping)
 
     cursor_mock.execute.assert_called_once_with(
@@ -158,7 +158,7 @@ def test_create_table_properties(mocker: MockerFixture):
         "colb": exp.DataType.build("TEXT"),
     }
 
-    adapter = EngineAdapter(connection_mock, "spark")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_table(
         "test_table",
         column_mapping,
@@ -181,7 +181,7 @@ def test_create_table_properties_ignored(mocker: MockerFixture):
         "colb": exp.DataType.build("TEXT"),
     }
 
-    adapter = EngineAdapter(connection_mock, "duckdb")  # type: ignore
+    adapter = EngineAdapter(lambda: connection_mock, "duckdb")  # type: ignore
     adapter.create_table(
         "test_table",
         column_mapping,
@@ -194,23 +194,10 @@ def test_create_table_properties_ignored(mocker: MockerFixture):
     )
 
 
-def test_lazy_connection(mocker: MockerFixture):
-    create_connection_mock = mocker.Mock()
-    adapter = EngineAdapter(create_connection_mock, "duckdb")
-    create_connection_mock.assert_not_called()
-
-    cursor1 = adapter.cursor
-    create_connection_mock.assert_called_once()
-
-    cursor2 = adapter.cursor
-    create_connection_mock.assert_called_once()
-    assert cursor1 == cursor2
-
-
 @pytest.fixture
 def adapter(duck_conn):
     duck_conn.execute("CREATE VIEW tbl AS SELECT 1 AS a")
-    return EngineAdapter(duck_conn, "duckdb")
+    return EngineAdapter(lambda: duck_conn, "duckdb")
 
 
 def test_create_view_duckdb(adapter: EngineAdapter, duck_conn):

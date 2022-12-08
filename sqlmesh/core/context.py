@@ -105,14 +105,24 @@ class Context:
         load: bool = True,
         console: t.Optional[Console] = None,
     ):
+        self.console = console or get_console()
         self.path = Path(path).absolute()
         self.config = self._load_config(config)
+
+        self.test_config = None
+        try:
+            self.test_config = self._load_config(test_config or "test_config")
+        except ConfigError:
+            self.console.log_error(
+                "Running without test support since `test_config` was not provided and ` "
+                "test_config` variable was not found in the namespace"
+            )
 
         # Initialize cache
         cache_path = self.path.joinpath(c.CACHE_PATH)
         cache_path.mkdir(exist_ok=True)
         self.table_info_cache = FileCache(cache_path.joinpath(c.TABLE_INFO_CACHE))
-        self.dialect = dialect or self.config.dialect
+        self.dialect = dialect or self.config.dialect or self.config.engine_dialect
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
         )
@@ -122,33 +132,40 @@ class Context:
         self.models = UniqueKeyDict("models")
         self.macros = UniqueKeyDict("macros")
         self.dag: DAG[str] = DAG()
-        self.engine_adapter = engine_adapter or self.config.engine_adapter
+
         self.ddl_concurrent_tasks = (
             ddl_concurrent_tasks or self.config.ddl_concurrent_tasks
         )
+
+        self.engine_adapter = engine_adapter or EngineAdapter(
+            self.config.engine_connection_factory,
+            self.config.engine_dialect,
+            multithreaded=self.ddl_concurrent_tasks > 1,
+        )
+        self.test_engine_adapter = (
+            EngineAdapter(
+                self.test_config.engine_connection_factory,
+                self.test_config.engine_dialect,
+                multithreaded=self.test_config.ddl_concurrent_tasks > 1,
+            )
+            if self.test_config
+            else None
+        )
+
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.ddl_concurrent_tasks
         )
-        self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
-        self.console = console or get_console()
+
+        self.notification_targets = self.config.notification_targets + (
+            notification_targets or []
+        )
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
         self._state_reader: t.Optional[StateReader] = None
 
-        self.notification_targets = self.config.notification_targets + (
-            notification_targets or []
-        )
-        self.test_config = None
+        self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
         self._path_mtimes: t.Dict[Path, float] = {}
-
-        try:
-            self.test_config = self._load_config(test_config or "test_config")
-        except ConfigError:
-            self.console.log_error(
-                "Running without test support since `test_config` was not provided and ` "
-                "test_config` variable was not found in the namespace"
-            )
 
         if load:
             self.load()
@@ -367,10 +384,10 @@ class Context:
     def _run_plan_tests(
         self, skip_tests: bool = False
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
-        if self.test_config and not skip_tests:
+        if self.test_engine_adapter and not skip_tests:
             result, test_output = self.run_tests()
             self.console.log_test_results(
-                result, test_output, self.test_config.engine_adapter.dialect
+                result, test_output, self.test_engine_adapter.dialect
             )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -522,14 +539,14 @@ class Context:
         self, path: t.Optional[str] = None
     ) -> t.Tuple[unittest.result.TestResult, str]:
         """Discover and run model tests"""
-        if not self.test_config:
+        if not self.test_engine_adapter:
             raise ConfigError("Tried to run tests but test_config is not defined")
         test_output = StringIO()
         with contextlib.redirect_stderr(test_output):
             result = run_all_model_tests(
                 path=Path(path) if path else self.test_directory_path,
                 snapshots=self.snapshots,
-                engine_adapter=self.test_config.engine_adapter,
+                engine_adapter=self.test_engine_adapter,
                 ignore_patterns=self._ignore_patterns,
             )
         return result, test_output.getvalue()
@@ -583,6 +600,10 @@ class Context:
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
         self.console.log_status_update("Done.")
+
+    def close(self):
+        """Releases all resources allocated by this context."""
+        self.snapshot_evaluator.close()
 
     def _context_diff(
         self,

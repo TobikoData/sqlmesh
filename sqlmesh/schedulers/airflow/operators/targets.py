@@ -35,21 +35,24 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         """
         return self._get_command_payload_or_skip(context).json()
 
-    def execute(self, context: Context, connection: t.Any, dialect: str) -> None:
+    def execute(
+        self, context: Context, connection_factory: t.Callable[[], t.Any], dialect: str
+    ) -> None:
         """Executes this target.
 
         Args:
             context: Airflow task context.
-            connection: Database API compliant connection. The connection will be
-                lazily established if a callable that returns a connection is passed in.
+            connection_factory: a callable which produces a new Database API compliant
+                connection on every call.
             dialect: The dialect with which this adapter is associated.
         """
         payload = self._get_command_payload_or_skip(context)
         snapshot_evaluator = SnapshotEvaluator(
-            EngineAdapter(connection, dialect),
+            EngineAdapter(connection_factory, dialect),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
         self.command_handler(snapshot_evaluator, payload)
+        snapshot_evaluator.close()
         self.post_hook(context)
 
     def post_hook(self, context: Context, **kwargs) -> None:
