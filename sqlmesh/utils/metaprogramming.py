@@ -11,9 +11,11 @@ import typing as t
 from enum import Enum
 from pathlib import Path
 
-from sqlmesh.utils import trim_path
+from sqlmesh.utils import trim_path, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+IGNORE_DECORATORS = {"macro", "model"}
 
 
 def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
@@ -42,12 +44,38 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
     variables = {}
 
     if hasattr(func, "__code__"):
-        for var in _code_globals(func.__code__):
+        for var in list(_code_globals(func.__code__)) + decorators(func):
             if var in func.__globals__:
                 ref = func.__globals__[var]
                 variables[var] = ref
 
     return variables
+
+
+def _parse_source(func: t.Callable) -> ast.Module:
+    return ast.parse(textwrap.dedent(inspect.getsource(func)))
+
+
+def _decorator_name(decorator: ast.expr) -> str:
+    if isinstance(decorator, ast.Call):
+        return decorator.func.id  # type: ignore
+    if isinstance(decorator, ast.Name):
+        return decorator.id
+    return ""
+
+
+def decorators(func: t.Callable) -> t.List[str]:
+    """Finds a list of all the decorators of a callable."""
+    root_node = _parse_source(func)
+    decorators = []
+
+    for node in ast.walk(root_node):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            for decorator in node.decorator_list:
+                name = _decorator_name(decorator)
+                if name not in IGNORE_DECORATORS:
+                    decorators.append(name)
+    return unique(decorators)
 
 
 def normalize_source(obj: t.Any) -> str:
@@ -59,17 +87,13 @@ def normalize_source(obj: t.Any) -> str:
     Returns:
         A string representation of the normalized function.
     """
-    root_node = ast.parse(textwrap.dedent(inspect.getsource(obj)))
+    root_node = _parse_source(obj)
 
     for node in ast.walk(root_node):
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            # remove decorators for regular functions
-            node.decorator_list = [
-                d
-                for d in node.decorator_list
-                if isinstance(d, ast.Name)
-                and d.id in ("property", "staticmethod", "classmethod")
-            ]
+            for decorator in node.decorator_list:
+                if _decorator_name(decorator) in IGNORE_DECORATORS:
+                    node.decorator_list.remove(decorator)
 
             # remove docstrings
             body = node.body
@@ -105,13 +129,23 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
         module: The module to filter on. Other modules will not be walked and treated as imports.
     """
 
-    obj_module = obj.__module__ if hasattr(obj, "__module__") else ""
+    obj_module = inspect.getmodule(obj)
+    obj_module_name = obj_module.__name__ if obj_module else ""
 
-    if obj_module == "builtins":
+    if obj_module_name == "builtins":
         return
 
     def walk(obj: t.Any) -> None:
         if inspect.isclass(obj):
+            for decorator in decorators(obj):
+                if obj_module and decorator in obj_module.__dict__:
+                    build_env(
+                        obj_module.__dict__[decorator],
+                        env=env,
+                        name=decorator,
+                        module=module,
+                    )
+
             for base in obj.__bases__:
                 build_env(base, env=env, name=base.__qualname__, module=module)
 
@@ -134,7 +168,7 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
 
     if name not in env:
         env[name] = obj
-        if obj_module.startswith(module):
+        if obj_module_name.startswith(module):
             walk(obj)
     elif env[name] != obj:
         raise SQLMeshError(
@@ -223,7 +257,9 @@ def prepare_env(
         env: The dictionary to execute code in.
         python_env: The dictionary containing the serialized python environment.
     """
-    for name, executable in python_env.items():
+    for name, executable in sorted(
+        python_env.items(), key=lambda item: 0 if item[1].is_import else 1
+    ):
         if executable.is_value:
             env[name] = executable.payload
         else:
