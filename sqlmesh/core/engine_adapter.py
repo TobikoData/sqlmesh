@@ -17,6 +17,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils import optional_import
+from sqlmesh.utils.connection_pool import connection_pool
 from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -40,27 +41,38 @@ class EngineAdapter:
     with the underlying engine and data store.
 
     Args:
-        connection: Database API compliant connection. The connection will be
-            lazily established if a callable that returns a connection is passed in.
+        connection_factory: a callable which produces a new Database API compliant
+            connection on every call.
         dialect: The dialect with which this adapter is associated.
+        multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
 
-    def __init__(self, connection: t.Any, dialect: str):
-        self.connection = connection
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        dialect: str,
+        multithreaded: bool = False,
+    ):
         self.dialect = dialect.lower()
-        self.spark: t.Optional["pyspark.sql.SparkSession"] = getattr(  # type: ignore
-            connection, "spark", None
-        )
+        self._connection_pool = connection_pool(connection_factory, multithreaded)
         self._transaction = False
 
     @property
     def cursor(self) -> t.Any:
-        if not hasattr(self, "_cursor"):
-            if callable(self.connection):
-                self._cursor = self.connection().cursor()
-            else:
-                self._cursor = self.connection.cursor()
-        return self._cursor
+        return self._connection_pool.get_cursor()
+
+    @property
+    def spark(self) -> t.Optional["pyspark.sql.SparkSession"]:  # type: ignore
+        return getattr(self._connection_pool.get(), "spark", None)
+
+    def recycle(self) -> t.Any:
+        """Closes all open connections and releases all allocated resources associated with any thread
+        except the calling one."""
+        self._connection_pool.close_all(exclude_calling_thread=True)
+
+    def close(self) -> t.Any:
+        """Closes all open connections and releases all allocated resources."""
+        self._connection_pool.close_all()
 
     def create_and_insert(
         self,
@@ -324,6 +336,8 @@ class EngineAdapter:
                 expressions=[exp.column(c, quoted=True) for c in columns],
             )
 
+        connection = self._connection_pool.get()
+
         if (
             self.spark
             and pyspark
@@ -340,17 +354,17 @@ class EngineAdapter:
             if (
                 not overwrite
                 and sqlalchemy
-                and isinstance(self.connection, sqlalchemy.engine.Connectable)
+                and isinstance(connection, sqlalchemy.engine.Connectable)
             ):
                 query_or_df.to_sql(
                     table_name,
-                    self.connection,
+                    connection,
                     if_exists="append",
                     index=False,
                     chunksize=batch_size,
                     method="multi",
                 )
-            elif isinstance(self.connection, duckdb.DuckDBPyConnection):
+            elif isinstance(connection, duckdb.DuckDBPyConnection):
                 self.execute(
                     exp.Insert(
                         this=into,

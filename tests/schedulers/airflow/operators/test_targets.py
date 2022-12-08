@@ -48,7 +48,7 @@ def test_evaluation_target_execute(
     target = targets.SnapshotEvaluationTarget(
         snapshot=snapshot, table_mapping=table_mapping
     )
-    target.execute(context, None, "spark")
+    target.execute(context, lambda: None, "spark")
 
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot, interval_ds, interval_ds, logical_ds, {}, mapping=table_mapping
@@ -81,7 +81,7 @@ def test_table_cleanup_target_execute(
 
     target = targets.SnapshotTableCleanupTarget()
 
-    target.execute(context, None, "spark")
+    target.execute(context, lambda: None, "spark")
 
     evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
 
@@ -114,7 +114,7 @@ def test_table_cleanup_target_skip_execution(
 
     target = targets.SnapshotTableCleanupTarget()
     with pytest.raises(AirflowSkipException):
-        target.execute(context, None, "spark")
+        target.execute(context, lambda: None, "spark")
 
     evaluator_cleanup_mock.assert_not_called()
     delete_xcom_mock.assert_called_once()

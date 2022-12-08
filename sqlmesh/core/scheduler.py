@@ -168,6 +168,8 @@ class Scheduler:
         else:
             self.console.complete_snapshot_progress()
 
+        self.snapshot_evaluator.recycle()
+
         return self.failed
 
     def interval_params(

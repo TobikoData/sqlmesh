@@ -37,7 +37,10 @@ def main() -> None:
     spark = create_spark_session()
     connection = spark_session_db.connection(spark)
     evaluator = SnapshotEvaluator(
-        EngineAdapter(connection, "spark"), ddl_concurrent_tasks=ddl_concurrent_tasks
+        EngineAdapter(
+            lambda: connection, "spark", multithreaded=ddl_concurrent_tasks > 1
+        ),
+        ddl_concurrent_tasks=ddl_concurrent_tasks,
     )
 
     with open(SparkFiles.get(commands.COMMAND_PAYLOAD_FILE_NAME), "r") as payload_fd:
@@ -45,6 +48,8 @@ def main() -> None:
         logger.info("Command payload:\n %s", command_payload)
 
     command_handler(evaluator, command_payload)
+
+    evaluator.close()
 
 
 if __name__ == "__main__":

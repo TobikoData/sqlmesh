@@ -142,6 +142,7 @@ class SnapshotEvaluator:
             lambda s: self._promote_snapshot(s, environment),
             self.ddl_concurrent_tasks,
         )
+        self.recycle()
 
     def demote(
         self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
@@ -157,6 +158,7 @@ class SnapshotEvaluator:
             lambda s: self._demote_snapshot(s, environment),
             self.ddl_concurrent_tasks,
         )
+        self.recycle()
 
     def create(
         self,
@@ -173,6 +175,7 @@ class SnapshotEvaluator:
             lambda s: self._create_snapshot(s, snapshots),
             self.ddl_concurrent_tasks,
         )
+        self.recycle()
 
     def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
         """Cleans up the given snapshots by removing its table
@@ -186,6 +189,7 @@ class SnapshotEvaluator:
             self.ddl_concurrent_tasks,
             reverse_order=True,
         )
+        self.recycle()
 
     def audit(
         self,
@@ -230,6 +234,21 @@ class SnapshotEvaluator:
                     )
             results.append(AuditResult(audit=audit, count=count, query=query))
         return results
+
+    def recycle(self) -> None:
+        """Closes all open connections and releases all allocated resources associated with any thread
+        except the calling one."""
+        try:
+            self.adapter.recycle()
+        except Exception:
+            logger.exception("Failed to recycle Snapshot Evaluator")
+
+    def close(self) -> None:
+        """Closes all open connections and releases all allocated resources."""
+        try:
+            self.adapter.close()
+        except Exception:
+            logger.exception("Failed to close Snapshot Evaluator")
 
     def _create_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]

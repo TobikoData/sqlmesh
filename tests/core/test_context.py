@@ -1,7 +1,6 @@
 import pathlib
 from datetime import date
 
-import duckdb
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -9,7 +8,6 @@ from sqlglot import parse_one
 import sqlmesh.core.constants
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.plan_evaluator import BuiltInPlanEvaluator
 from sqlmesh.utils.errors import ConfigError
@@ -306,5 +304,5 @@ def test_incremental_model_without_partition_support(tmpdir) -> None:
     ):
         Context(
             path=str(tmpdir),
-            config=Config(engine_adapter=EngineAdapter(duckdb.connect, "duckdb")),
+            config=Config(),
         )

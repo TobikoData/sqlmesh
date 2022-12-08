@@ -3,16 +3,13 @@ import os
 import duckdb
 
 from sqlmesh.core.config import AirflowSchedulerBackend, Config
-from sqlmesh.core.engine_adapter import EngineAdapter
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 DEFAULT_KWARGS = {
-    "dialect": "duckdb",  # The default dialect of models is DuckDB SQL.
-    "engine_adapter": EngineAdapter(
-        duckdb.connect(), "duckdb"
-    ),  # The default engine runs in DuckDB.
+    "engine_dialect": "duckdb",
+    "engine_connection_factory": duckdb.connect,
 }
 
 # An in memory DuckDB config.
@@ -22,8 +19,8 @@ config = Config(**DEFAULT_KWARGS)
 local_config = Config(
     **{
         **DEFAULT_KWARGS,
-        "engine_adapter": EngineAdapter(
-            lambda: duckdb.connect(database=f"{DATA_DIR}/local.duckdb"), "duckdb"
+        "engine_connection_factory": lambda: duckdb.connect(
+            database=f"{DATA_DIR}/local.duckdb"
         ),
     }
 )
