@@ -354,7 +354,7 @@ class GithubPullRequestBot:
                 # debug
                 print(list(self.pr_plan.snapshots)[0].model.python_env)
                 raise PlanRequiresUserInput(
-                    f"New Snapshots: {self.pr_plan.new_snapshots}\n{list(self.pr_plan.snapshots)[0].model.python_env}"
+                    f"New Snapshots: {self.pr_plan.new_snapshots}\n{' '.join(str(list(self.pr_plan.snapshots)[0].model.python_env))}"
                 )
             if self.pr_plan.context_diff.has_differences:
                 self.context.apply(self.pr_plan, blocking=True)
