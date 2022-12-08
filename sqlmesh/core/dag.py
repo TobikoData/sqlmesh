@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import typing as t
 
-T = t.TypeVar("T")
+T = t.TypeVar("T", bound=t.Hashable)
 
 
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
-        self.graph = graph or {}
+        self.graph: t.Dict[T, t.Set[T]] = {}
+        for node, dependencies in (graph or {}).items():
+            self.add(node, dependencies)
 
     def add(self, node: T, dependencies: t.Optional[t.Iterable[T]] = None) -> None:
         """Add a node to the graph with an optional upstream dependency.
@@ -27,6 +29,8 @@ class DAG(t.Generic[T]):
             self.graph[node] = set()
         if dependencies:
             self.graph[node].update(dependencies)
+            for d in dependencies:
+                self.add(d)
 
     def subdag(self, *nodes: T) -> DAG[T]:
         """Create a new subdag given node(s).
@@ -60,32 +64,23 @@ class DAG(t.Generic[T]):
         }
 
     def sorted(self) -> t.List[T]:
-        """Topologically sort the graph.
+        """Returns a list of nodes sorted in topological order."""
+        result: t.List[T] = []
 
-        Returns:
-            A list of the nodes sorted in topological order.
+        unprocessed_nodes = {}
+        for node, deps in self.graph.items():
+            unprocessed_nodes[node] = deps.copy()
 
-        Raises:
-            ValueError: If a cycle has been detected in the graph.
-        """
-        result = []
+        while unprocessed_nodes:
+            next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
-        def visit(node: T, visited: t.Set[T]) -> None:
-            if node in result:
-                return
-            if node in visited:
-                raise ValueError("Cycle error")
+            for node in next_nodes:
+                unprocessed_nodes.pop(node)
 
-            visited.add(node)
+            for deps in unprocessed_nodes.values():
+                deps -= next_nodes
 
-            for dep in self.graph.get(node, []):
-                visit(dep, visited)
-
-            visited.remove(node)
-            result.append(node)
-
-        for node in self.graph:
-            visit(node, set())
+            result.extend(next_nodes)
 
         return result
 
