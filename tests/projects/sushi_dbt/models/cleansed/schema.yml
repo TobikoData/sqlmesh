@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: items
+  - name: orders
+  - name: order_items
+  - name: customers
+  - name: waiters
+sources:
+  - name: raw
+    tables:
+      - name: items
+      - name: orders
+      - name: order_items
