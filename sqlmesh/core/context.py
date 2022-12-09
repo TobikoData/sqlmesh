@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import os
 import types
 import typing as t
 import unittest.result
@@ -693,6 +694,10 @@ class Context:
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             try:
+                # TODO: Temp bug fix for python modules
+                import sys
+
+                sys.path.insert(0, os.environ["PYTHONPATH"])
                 spec.loader.exec_module(module)
                 return module
             except FileNotFoundError:
