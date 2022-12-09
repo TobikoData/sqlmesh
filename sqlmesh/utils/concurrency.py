@@ -1,6 +1,6 @@
 import typing as t
-from concurrent.futures import Future, ThreadPoolExecutor, wait
-from threading import Event
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
+from threading import Lock
 
 from sqlmesh.core.dag import DAG
 from sqlmesh.core.snapshot import SnapshotId, SnapshotInfoLike
@@ -59,31 +59,48 @@ def concurrent_apply_to_dag(
     if tasks_num <= 0:
         raise ConfigError(f"Invalid number of concurrent tasks {tasks_num}")
 
+    if tasks_num == 1:
+        sequential_apply_to_dag(dag, fn, reverse_order)
+        return
+
+    unprocessed_nodes = dag.graph if not reverse_order else dag.reversed_graph
+    unprocessed_nodes_lock = Lock()
+    finished_future = Future()  # type: ignore
+
+    def submit_next_nodes(executor: Executor) -> None:
+        with unprocessed_nodes_lock:
+            if not unprocessed_nodes:
+                finished_future.set_result(None)
+                return
+
+            next_nodes = [node for node, deps in unprocessed_nodes.items() if not deps]
+            for node in next_nodes:
+                unprocessed_nodes.pop(node)
+                executor.submit(process_node, node, executor)
+
+    def process_node(node: H, executor: Executor) -> None:
+        try:
+            fn(node)
+        except Exception as ex:
+            finished_future.set_exception(ex)
+            return
+
+        with unprocessed_nodes_lock:
+            for deps in unprocessed_nodes.values():
+                deps -= {node}
+        submit_next_nodes(executor)
+
+    with ThreadPoolExecutor(max_workers=tasks_num) as pool:
+        submit_next_nodes(pool)
+        finished_future.result()
+
+
+def sequential_apply_to_dag(
+    dag: DAG[H], fn: t.Callable[[H], None], reverse_order: bool = False
+) -> None:
     ordered_nodes = dag.sorted()
     if reverse_order:
         ordered_nodes.reverse()
 
-    if tasks_num == 1:
-        for node in ordered_nodes:
-            fn(node)
-        return
-
-    future_map: t.Dict[H, Future] = {}
-    future_map_ready = Event()
-
-    def process_node(node: H) -> None:
-        future_map_ready.wait()
-
-        wait_for = [
-            future_map[n]
-            for n in (dag.upstream(node) if not reverse_order else dag.downstream(node))
-        ]
-        wait(wait_for)
+    for node in ordered_nodes:
         fn(node)
-
-    with ThreadPoolExecutor(max_workers=tasks_num) as pool:
-        for node in ordered_nodes:
-            future_map[node] = pool.submit(process_node, node)
-        future_map_ready.set()
-
-    wait(future_map.values())
