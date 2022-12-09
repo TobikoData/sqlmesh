@@ -50,10 +50,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
+        backfill_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
+        self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
 
     def evaluate(self, plan: Plan) -> None:
@@ -75,6 +77,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 {snapshot.name: snapshot for snapshot in snapshots},
                 self.snapshot_evaluator,
                 self.state_sync,
+                max_workers=self.backfill_concurrent_tasks,
                 console=self.console,
             )
             scheduler.run(snapshots, plan.start, plan.end)
@@ -138,6 +141,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         dag_creation_poll_interval_secs: int = 30,
         dag_creation_max_retry_attempts: int = 10,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
+        backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
     ):
         self.airflow_client = airflow_client
@@ -147,6 +151,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
         self.console = console or get_console()
         self.notification_targets = notification_targets or []
+        self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
     def evaluate(self, plan: Plan) -> None:
@@ -161,6 +166,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             no_gaps=plan.no_gaps,
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
+            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
 

@@ -122,6 +122,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         no_gaps=True,
         restatements={"raw.items"},
         notification_targets=[],
+        backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
     )
 
@@ -183,6 +184,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         plan_id="test_plan_id",
         previous_plan_id=None,
         notification_targets=[],
+        backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
     )
 
@@ -204,6 +206,7 @@ def test_plan_receiver_task_duplicated_snapshot(
         no_gaps=False,
         restatements=set(),
         notification_targets=[],
+        backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
     )
 
@@ -246,6 +249,7 @@ def test_plan_receiver_task_unbounded_end(
         no_gaps=True,
         restatements={"raw.items"},
         notification_targets=[],
+        backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
     )
 

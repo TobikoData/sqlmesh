@@ -66,7 +66,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,
         sushi_context.snapshot_evaluator,
-        sushi_context.console,
+        console=sushi_context.console,
     )
     evaluator._push(plan)
 
@@ -100,6 +100,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         no_gaps=False,
         notification_targets=[],
         restatements=set(),
+        backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
     )
 

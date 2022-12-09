@@ -173,6 +173,7 @@ class BuiltInSchedulerBackend(SchedulerBackend):
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
+            backfill_concurrent_tasks=context.backfill_concurrent_tasks,
             console=context.console,
         )
 
@@ -218,6 +219,7 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
             dag_creation_max_retry_attempts=self.dag_creation_max_retry_attempts,
             console=context.console,
             notification_targets=context.notification_targets,
+            backfill_concurrent_tasks=context.backfill_concurrent_tasks,
             ddl_concurrent_tasks=context.ddl_concurrent_tasks,
         )
 
@@ -267,8 +269,12 @@ class Config(PydanticModel):
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
+            plan application. Default: 1.
         ddl_concurrent_task: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
+        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
+            running with the built-in scheduler. Default: 1.
     """
 
     engine_connection_factory: t.Callable[[], t.Any] = duckdb.connect
@@ -280,7 +286,9 @@ class Config(PydanticModel):
     snapshot_ttl: str = ""
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
+    backfill_concurrent_tasks: int = 1
     ddl_concurrent_tasks: int = 1
+    evaluation_concurrent_tasks: int = 1
 
     class Config:
         arbitrary_types_allowed = True
