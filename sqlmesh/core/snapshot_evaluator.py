@@ -145,7 +145,7 @@ class SnapshotEvaluator:
             target_snapshots: Snapshots to promote.
             environment: The target environment.
         """
-        with self.multithreaded_context():
+        with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._promote_snapshot(s, environment),
@@ -161,7 +161,7 @@ class SnapshotEvaluator:
             target_snapshots: Snapshots to demote.
             environment: The target environment.
         """
-        with self.multithreaded_context():
+        with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._demote_snapshot(s, environment),
@@ -178,7 +178,7 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Target snapshost.
         """
-        with self.multithreaded_context():
+        with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._create_snapshot(s, snapshots),
@@ -191,7 +191,7 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Snapshots to cleanup.
         """
-        with self.multithreaded_context():
+        with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 self._cleanup_snapshot,
@@ -241,7 +241,7 @@ class SnapshotEvaluator:
         return results
 
     @contextmanager
-    def multithreaded_context(self) -> t.Generator[None, None, None]:
+    def concurrent_context(self) -> t.Generator[None, None, None]:
         try:
             yield
         finally:

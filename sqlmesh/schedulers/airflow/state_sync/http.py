@@ -79,13 +79,7 @@ class HttpStateReader(StateReader):
         call to the rest api. Multiple threads can be used, but it could possibly have detrimental effects
         on the production server.
         """
-        snapshot_ids = (
-            list(snapshot_ids) if snapshot_ids else self._client.get_snapshot_ids()
-        )
-        if len(snapshot_ids) > 1:
-            logger.warning(
-                "Fetching multiple snapshots from Airflow using the REST API is inefficient and not recommended"
-            )
+        snapshot_ids = snapshot_ids or self._client.get_snapshot_ids()
 
         with ThreadPoolExecutor(
             max_workers=self.max_concurrent_requests,

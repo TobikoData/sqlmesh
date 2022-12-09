@@ -28,7 +28,7 @@ class Scheduler:
     The scheduler comes equipped with a simple ThreadPoolExecutor based evaluation engine.
 
     Args:
-        snapshots: A dictionary of all snapshots.
+        snapshots: A collection of snapshots.
         snapshot_evaluator: The snapshot evaluator to execute queries.
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
@@ -37,13 +37,13 @@ class Scheduler:
 
     def __init__(
         self,
-        snapshots: t.Dict[SnapshotId, Snapshot],
+        snapshots: t.Iterable[Snapshot],
         snapshot_evaluator: SnapshotEvaluator,
         state_sync: StateSync,
         max_workers: int = 1,
         console: t.Optional[Console] = None,
     ):
-        self.snapshots = snapshots
+        self.snapshots = {s.snapshot_id: s for s in snapshots}
         self.snapshot_evaluator = snapshot_evaluator
         self.state_sync = state_sync
         self.max_workers = max_workers
@@ -131,7 +131,7 @@ class Scheduler:
             self.evaluate(self.snapshots[sid], start, end, latest)
 
         try:
-            with self.snapshot_evaluator.multithreaded_context():
+            with self.snapshot_evaluator.concurrent_context():
                 concurrent_apply_to_dag(dag, evaluate_node, self.max_workers)
         except NodeExecutionFailedError as error:
             sid = error.node[0]  # type: ignore

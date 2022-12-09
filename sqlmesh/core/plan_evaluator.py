@@ -72,7 +72,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.missing_intervals:
             snapshots = plan.snapshots
             scheduler = Scheduler(
-                {snapshot.snapshot_id: snapshot for snapshot in snapshots},
+                snapshots,
                 self.snapshot_evaluator,
                 self.state_sync,
                 console=self.console,

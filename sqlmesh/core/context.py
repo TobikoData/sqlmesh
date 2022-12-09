@@ -264,20 +264,21 @@ class Context(BaseContext):
         self._add_model_to_dag(model)
         return model
 
-    def scheduler(self, use_local_state: bool = True) -> Scheduler:
+    def scheduler(self, global_state: bool = False) -> Scheduler:
         """Returns the built-in scheduler.
 
         Args:
-            use_local_state: Whether to initialize the scheduler from the currently loaded
-            local state or use the persisted state instead.
+            global_state: Whether to initialize the scheduler from the persisted state
+                or from the currently loaded local state. Default: False.
 
         Returns:
             The built-in scheduler instance.
         """
-        if use_local_state:
-            snapshots = {s.snapshot_id: s for s in self.snapshots.values()}
+        snapshots: t.Iterable[Snapshot]
+        if global_state:
+            snapshots = self.state_sync.get_snapshots(None).values()
         else:
-            snapshots = self.state_sync.get_snapshots(None)
+            snapshots = self.snapshots.values()
         return Scheduler(
             snapshots,
             self.snapshot_evaluator,
@@ -353,7 +354,7 @@ class Context(BaseContext):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        use_local_state: bool = True,
+        global_state: bool = False,
     ) -> None:
         """Run the entire dag through the scheduler.
 
@@ -361,10 +362,10 @@ class Context(BaseContext):
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
-            use_local_state: If set to True runs against the currently loaded local state,
-                otherwise uses the persisted state.
+            global_state: If set to True runs against the persisted state,
+                otherwise uses the currently loaded local state. Default: False.
         """
-        return self.scheduler(use_local_state).run(start, end, latest)
+        return self.scheduler(global_state).run(start, end, latest)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
