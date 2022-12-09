@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from example.helper import iter_dates
-from sqlmesh import EngineAdapter, model
+from sqlmesh import ExecutionContext, model
 from sqlmesh.utils.date import to_ds
 
 ITEMS = [
@@ -63,7 +63,7 @@ ITEMS = [
     """
 )
 def execute(
-    engine: EngineAdapter,
+    context: ExecutionContext,
     start: datetime,
     end: datetime,
     latest: datetime,

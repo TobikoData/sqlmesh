@@ -266,6 +266,7 @@ class Config(PydanticModel):
         physical_schema: The default schema used to store materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
+            This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
         ddl_concurrent_task: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
     """

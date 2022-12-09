@@ -32,6 +32,7 @@ context.run_tests()
 """
 from __future__ import annotations
 
+import abc
 import contextlib
 import importlib
 import types
@@ -50,7 +51,7 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dag import DAG
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import DF, EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
@@ -69,10 +70,76 @@ from sqlmesh.utils.file_cache import FileCache
 if t.TYPE_CHECKING:
     import graphviz
 
+    MODEL_OR_SNAPSHOT = t.Union[str, Model, Snapshot]
+
 extend_sqlglot()
 
 
-class Context:
+class BaseContext(abc.ABC):
+    """The base context which defines methods to execute a model."""
+
+    @property
+    @abc.abstractmethod
+    def model_tables(self) -> t.Dict[str, str]:
+        """Returns a mapping of model names to tables."""
+
+    @property
+    @abc.abstractmethod
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+
+    @property
+    def spark(self) -> t.Optional["pyspark.sql.SparkSession"]:  # type: ignore
+        """Returns the spark session if it exists."""
+        return self.engine_adapter.spark
+
+    def table(self, model_name: str) -> str:
+        """Gets the physical table name for a given model.
+
+        Args:
+            model_name: The model name.
+
+        Returns:
+            The physical table name.
+        """
+        return self.model_tables[model_name]
+
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+        """Fetches a dataframe given a sql string or sqlglot expression.
+
+        Args:
+            query: SQL string or sqlglot expression.
+
+        Returns:
+            The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
+        """
+        return self.engine_adapter.fetchdf(query)
+
+
+class ExecutionContext(BaseContext):
+    """The minimal context needed to execute a model.
+
+    Args:
+        engine_adapter: The engine adapter to execute queries against.
+        mapping: A mapping of models to physical tables.
+    """
+
+    def __init__(self, engine_adapter: EngineAdapter, model_tables: t.Dict[str, str]):
+        self._engine_adapter = engine_adapter
+        self._model_tables = model_tables
+
+    @property
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+        return self._engine_adapter
+
+    @property
+    def model_tables(self) -> t.Dict[str, str]:
+        """Returns a mapping of model names to tables."""
+        return self._model_tables
+
+
+class Context(BaseContext):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -137,7 +204,7 @@ class Context:
             ddl_concurrent_tasks or self.config.ddl_concurrent_tasks
         )
 
-        self.engine_adapter = engine_adapter or EngineAdapter(
+        self._engine_adapter = engine_adapter or EngineAdapter(
             self.config.engine_connection_factory,
             self.config.engine_dialect,
             multithreaded=self.ddl_concurrent_tasks > 1,
@@ -169,6 +236,11 @@ class Context:
 
         if load:
             self.load()
+
+    @property
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+        return self._engine_adapter
 
     def upsert_model(self, model: t.Union[str, Model] = "", **kwargs) -> Model:
         """Update or insert a model.
@@ -303,9 +375,22 @@ class Context:
                 snapshots[model.name] = snapshot
         return snapshots
 
+    @property
+    def model_tables(self) -> t.Dict[str, str]:
+        """Mapping of model name to physical table name.
+
+        If a snapshot has not been versioned yet, its view name will be returned.
+        """
+        return {
+            name: snapshot.table_name
+            if snapshot.version
+            else snapshot.qualified_view_name.for_environment(c.PROD)
+            for name, snapshot in self.snapshots.items()
+        }
+
     def render(
         self,
-        model: t.Union[str, Model],
+        model_or_snapshot: MODEL_OR_SNAPSHOT,
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -317,7 +402,7 @@ class Context:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
-            model: The model name or instance to render.
+            model_or_snapshot: The model, model name, or snapshot to render.
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
@@ -330,7 +415,14 @@ class Context:
             The rendered expression.
         """
         latest = latest or yesterday_ds()
-        model = model if isinstance(model, Model) else self.models[model]
+
+        if isinstance(model_or_snapshot, str):
+            model = self.models[model_or_snapshot]
+        elif isinstance(model_or_snapshot, Snapshot):
+            model = model_or_snapshot.model
+        else:
+            model = model_or_snapshot
+
         expand = self.dag.upstream(model.name) if expand is True else expand or []
 
         return model.render_query(
@@ -345,32 +437,42 @@ class Context:
 
     def evaluate(
         self,
-        snapshot: Snapshot | str,
+        model_or_snapshot: MODEL_OR_SNAPSHOT,
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
+        limit: t.Optional[int] = None,
         **kwargs,
-    ) -> None:
-        """Evaluate a snapshot (running its query against a DB/Engine).
+    ) -> DF:
+        """Evaluate a model or snapshot (running its query against a DB/Engine).
+
+        This method is used to test or iterate on models without side effects.
 
         Args:
-            snapshot: The snapshot to evaluate.
+            model_or_snapshot: The model, model name, or snapshot to render.
             start: The start of the interval to evaluate.
             end: The end of the interval to evaluate.
             latest: The latest time used for non incremental datasets.
+            limit: A limit applied to the model, this must be > 0.
         """
-        if isinstance(snapshot, str):
-            snapshot = self.snapshots[snapshot]
+        if isinstance(model_or_snapshot, str):
+            snapshot = self.snapshots[model_or_snapshot]
+        elif isinstance(model_or_snapshot, Model):
+            snapshot = self.snapshots[model_or_snapshot.name]
+        else:
+            snapshot = model_or_snapshot
 
-        self.snapshot_evaluator.evaluate(
+        if not limit or limit <= 0:
+            limit = 1000
+
+        return self.snapshot_evaluator.evaluate(
             snapshot,
             start,
             end,
             latest,
-            snapshots=self.snapshots,
+            mapping=self.model_tables,
+            limit=limit,
         )
-
-        self.state_sync.add_interval(snapshot.snapshot_id, start, end)
 
     def format(self) -> None:
         """Format all models in a given directory."""
@@ -680,7 +782,11 @@ class Context:
             new = registry.keys() - registered
             registered |= new
             for name in new:
-                model = registry[name].model(module, path)
+                model = registry[name].model(
+                    module=module,
+                    path=path,
+                    time_column_format=self.config.time_column_format,
+                )
                 self.models[model.name] = model
                 self._add_model_to_dag(model)
 

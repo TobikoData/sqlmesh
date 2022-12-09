@@ -213,19 +213,25 @@ class SQLMeshMagics(Magics):
     @argument("--start", "-s", type=str, help="Start date to render.")
     @argument("--end", "-e", type=str, help="End date to render.")
     @argument("--latest", "-l", type=str, help="Latest date to render.")
+    @argument(
+        "--limit",
+        type=int,
+        help="The number of rows which the query should be limited to.",
+    )
     @line_magic
     def evaluate(self, line):
         """Evaluate a model query and fetches a dataframe."""
         self.context.refresh()
         args = parse_argstring(self.evaluate, line)
 
-        query = self.context.render(
+        df = self.context.evaluate(
             args.model,
             start=args.start,
             end=args.end,
             latest=args.latest,
+            limit=args.limit,
         )
-        self.display(self.context.engine_adapter.fetchdf(query))
+        self.display(df)
 
     @magic_arguments()
     @argument(
@@ -239,7 +245,7 @@ class SQLMeshMagics(Magics):
     def fetchdf(self, line, sql: str):
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
-        df = self.context.engine_adapter.fetchdf(sql)
+        df = self.context.fetchdf(sql)
         if args.df_var:
             self.shell.user_ns[args.df_var] = df
         self.display(df)
