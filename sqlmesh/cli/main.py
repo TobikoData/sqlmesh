@@ -80,6 +80,36 @@ def render(
     ctx.obj.console.show_sql(sql)
 
 
+@cli.command("evaluate")
+@click.argument("model")
+@opt.start_time
+@opt.end_time
+@opt.latest_time
+@click.option(
+    "--limit",
+    type=int,
+    help="The number of rows which the query should be limited to.",
+)
+@click.pass_context
+def evaluate(
+    ctx,
+    model: str,
+    start: TimeLike,
+    end: TimeLike,
+    latest: t.Optional[TimeLike] = None,
+    limit: t.Optional[int] = None,
+) -> None:
+    """Evaluate a model and return a dataframe with a default limit of 1000."""
+    df = ctx.obj.evaluate(
+        model,
+        start=start,
+        end=end,
+        latest=latest,
+        limit=limit,
+    )
+    ctx.obj.console.log_success(df)
+
+
 @cli.command("format")
 @click.pass_context
 def format(ctx) -> None:

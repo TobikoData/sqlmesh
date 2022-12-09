@@ -54,7 +54,6 @@ def evaluate(
         command_payload.start,
         command_payload.end,
         command_payload.latest,
-        {},
         mapping=command_payload.table_mapping,
     )
 

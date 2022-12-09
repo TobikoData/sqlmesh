@@ -384,8 +384,8 @@ def test_time_column():
     )
     model = Model.load(expressions)
     assert model.time_column.column == "ds"
-    assert model.time_column.format is None
-    assert model.time_column.expression == parse_one("ds")
+    assert model.time_column.format == "%Y-%m-%d"
+    assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
 
     expressions = parse(
         """
@@ -399,14 +399,15 @@ def test_time_column():
     )
     model = Model.load(expressions)
     assert model.time_column.column == "ds"
-    assert model.time_column.format is None
-    assert model.time_column.expression == parse_one("ds")
+    assert model.time_column.format == "%Y-%m-%d"
+    assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
 
     expressions = parse(
         """
         MODEL (
             name db.table,
-            time_column (ds, 'yyyy-mm-dd')
+            time_column (ds, 'yyyy-MM'),
+            dialect 'hive',
         );
 
         SELECT col::text, ds::text
@@ -414,8 +415,8 @@ def test_time_column():
     )
     model = Model.load(expressions)
     assert model.time_column.column == "ds"
-    assert model.time_column.format == "yyyy-mm-dd"
-    assert model.time_column.expression == parse_one("(ds, 'yyyy-mm-dd')")
+    assert model.time_column.format == "%Y-%m"
+    assert model.time_column.expression == parse_one("(ds, '%Y-%m')")
 
 
 def test_default_time_column():
@@ -429,35 +430,35 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, time_column_format="yyyy-mm-dd")
-    assert model.time_column.format == "yyyy-mm-dd"
+    model = Model.load(expressions, time_column_format="%Y")
+    assert model.time_column.format == "%Y"
 
     expressions = parse(
         """
         MODEL (
             name db.table,
-            time_column (ds, "mm-dd-yyyy")
+            time_column (ds, "%Y")
         );
 
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, time_column_format="yyyy-mm-dd")
-    assert model.time_column.format == "mm-dd-yyyy"
+    model = Model.load(expressions, time_column_format="%m")
+    assert model.time_column.format == "%Y"
 
     expressions = parse(
         """
         MODEL (
             name db.table,
-            dialect duckdb,
-            time_column ds,
+            dialect hive,
+            time_column (ds, "dd")
         );
 
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, dialect="hive", time_column_format="yy-M-ss")
-    assert model.time_column.format == "%y-%-m-%S"
+    model = Model.load(expressions, dialect="duckdb", time_column_format="%Y")
+    assert model.time_column.format == "%d"
 
 
 def test_convert_to_time_column():
@@ -474,7 +475,7 @@ def test_convert_to_time_column():
     model = Model.load(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one("'2022-01-01'")
     assert model.convert_to_time_column(to_datetime("2022-01-01")) == parse_one(
-        "'2022-01-01 00:00:00+00:00'"
+        "'2022-01-01'"
     )
 
     expressions = parse(

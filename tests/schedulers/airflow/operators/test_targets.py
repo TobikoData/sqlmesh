@@ -51,7 +51,7 @@ def test_evaluation_target_execute(
     target.execute(context, lambda: mocker.Mock(), "spark")
 
     evaluator_evaluate_mock.assert_called_once_with(
-        snapshot, interval_ds, interval_ds, logical_ds, {}, mapping=table_mapping
+        snapshot, interval_ds, interval_ds, logical_ds, mapping=table_mapping
     )
 
     add_interval_mock.assert_called_once_with(

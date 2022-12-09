@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from sqlglot import exp, select
 
 from sqlmesh.core.audit import AuditResult
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import DF, EngineAdapter
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
@@ -60,10 +60,11 @@ class SnapshotEvaluator:
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
-        snapshots: t.Dict[str, Snapshot],
+        limit: int = 0,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         **kwargs,
-    ) -> None:
+    ) -> t.Optional[DF]:
         """Evaluate a snapshot, creating its schema and table if it doesn't exist and then inserting it.
 
         Args:
@@ -73,36 +74,47 @@ class SnapshotEvaluator:
             latest: The latest datetime to use for non-incremental queries.
             snapshots: All snapshots to use for mapping of physical locations.
             mapping: Mapping of model references to physical snapshots.
+            limit: If limit is >= 0, the query will not be persisted but evaluated and returned
+                as a dataframe.
             kwargs: Additional kwargs to pass to the renderer.
         """
         if snapshot.is_embedded_kind:
-            return
+            return None
 
-        table_name = snapshot.table_name
         model = snapshot.model
 
         for sql_statement in model.sql_statements:
             self.adapter.execute(sql_statement)
+
+        mapping = mapping or {
+            name: snapshot.table_name for name, snapshot in (snapshots or {}).items()
+        }
 
         if model.is_sql:
             query_or_df = model.render_query(
                 start=start,
                 end=end,
                 latest=latest,
-                snapshots=snapshots,
                 mapping=mapping,
                 **kwargs,
             )
         else:
+            from sqlmesh.core.context import ExecutionContext
+
             query_or_df = model.exec_python(
-                self.adapter,
+                ExecutionContext(self.adapter, mapping),
                 start=start,
                 end=end,
                 latest=latest,
-                snapshots=snapshots,
-                mapping=mapping,
                 **kwargs,
             )
+
+        if limit > 0:
+            if isinstance(query_or_df, exp.Expression):
+                query_or_df = self.adapter.fetchdf(query_or_df.limit(limit))
+            return query_or_df.head(limit)
+
+        table_name = snapshot.table_name
 
         if snapshot.is_view_kind:
             logger.info("Replacing view '%s'", table_name)
@@ -127,6 +139,7 @@ class SnapshotEvaluator:
                 )
             else:
                 self.adapter.insert_append(table_name, query_or_df, columns=columns)
+        return None
 
     def promote(
         self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
