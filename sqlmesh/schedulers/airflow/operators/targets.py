@@ -51,9 +51,11 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
             EngineAdapter(connection_factory, dialect),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
-        self.command_handler(snapshot_evaluator, payload)
-        snapshot_evaluator.close()
-        self.post_hook(context)
+        try:
+            self.command_handler(snapshot_evaluator, payload)
+            self.post_hook(context)
+        finally:
+            snapshot_evaluator.close()
 
     def post_hook(self, context: Context, **kwargs) -> None:
         """The hook that should be invoked once the processing of this target
