@@ -69,7 +69,7 @@ from sqlmesh.utils.file_cache import FileCache
 if t.TYPE_CHECKING:
     import graphviz
 
-    MODEL_OR_SNAPSHOT = str | Model | Snapshot
+    MODEL_OR_SNAPSHOT = t.Union[str, Model, Snapshot]
 
 extend_sqlglot()
 
