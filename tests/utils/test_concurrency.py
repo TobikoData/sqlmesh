@@ -1,3 +1,4 @@
+import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.snapshot import SnapshotId
@@ -34,3 +35,23 @@ def test_concurrent_apply_to_snapshots(mocker: MockerFixture):
     assert processed_snapshots[1] in (snapshot_a, snapshot_b)
     assert processed_snapshots[2] == snapshot_c
     assert processed_snapshots[3] == snapshot_d
+
+
+def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture):
+    snapshot_a = mocker.Mock()
+    snapshot_a.snapshot_id = SnapshotId(name="model_a", fingerprint="snapshot_a")
+    snapshot_a.parents = []
+
+    snapshot_b = mocker.Mock()
+    snapshot_b.snapshot_id = SnapshotId(name="model_b", fingerprint="snapshot_b")
+    snapshot_b.parents = []
+
+    def raise_():
+        raise RuntimeError("fail")
+
+    with pytest.raises(RuntimeError, match="fail"):
+        concurrent_apply_to_snapshots(
+            [snapshot_a, snapshot_b],
+            lambda s: raise_(),
+            2,
+        )
