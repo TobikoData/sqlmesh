@@ -1,11 +1,10 @@
 import random
-import typing as t
 from datetime import datetime
 
 import pandas as pd
 
 from example.helper import iter_dates
-from sqlmesh import EngineAdapter, Snapshot, model
+from sqlmesh import ExecutionContext, model
 from sqlmesh.utils.date import to_ds
 
 
@@ -29,23 +28,19 @@ from sqlmesh.utils.date import to_ds
     """
 )
 def execute(
-    engine: EngineAdapter,
+    context: ExecutionContext,
     start: datetime,
     end: datetime,
     latest: datetime,
-    snapshots: t.Dict[str, Snapshot],
-    mapping: t.Optional[t.Dict[str, str]],
     **kwargs,
 ) -> pd.DataFrame:
     dfs = []
 
-    raw_orders = (
-        snapshots["sushi.orders"].table_name if snapshots else mapping["sushi.orders"]
-    )
+    raw_orders = context.table("sushi.orders")
 
     for dt in iter_dates(start, end):
         # this section not super clean, make it easier to fetch other snapshots
-        orders = engine.fetchdf(
+        orders = context.fetchdf(
             f"""
             SELECT *
             FROM {raw_orders}
@@ -56,7 +51,7 @@ def execute(
         if not isinstance(orders, pd.DataFrame):
             orders = orders.toPandas()
 
-        items = engine.fetchdf(
+        items = context.fetchdf(
             f"""
 SELECT *
             FROM {raw_orders}

@@ -257,6 +257,7 @@ from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.time import format_time
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
@@ -279,7 +280,8 @@ from sqlmesh.utils.metaprogramming import (
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter import DF, EngineAdapter
+    from sqlmesh.core.context import ExecutionContext
+    from sqlmesh.core.engine_adapter import DF
     from sqlmesh.core.snapshot import Snapshot
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
@@ -291,7 +293,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "partitioned_by_": lambda value: (
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
     ),
-    "time_column": lambda value: value.expression,
     "depends_on_": lambda value: exp.Tuple(expressions=value),
     "columns_": lambda value: exp.Schema(
         expressions=[
@@ -650,9 +651,9 @@ class Model(ModelMeta, frozen=True):
         *,
         path: Path = Path(),
         module: str = "",
+        time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         macros: t.Optional[MacroRegistry] = None,
         dialect: t.Optional[str] = None,
-        time_column_format: t.Optional[str] = None,
     ) -> Model:
         """Load a model from a parsed SQLMesh model file.
 
@@ -662,6 +663,7 @@ class Model(ModelMeta, frozen=True):
             path: An optional path to the file.
             dialect: The default dialect if no model dialect is configured.
             time_column_format: The default time column format to use if no model time column is configured.
+                The format must adhere to Python's strftime codes.
         """
         if len(expressions) < 2:
             _raise_config_error(
@@ -701,20 +703,7 @@ class Model(ModelMeta, frozen=True):
         )
 
         model._path = path
-
-        if time_column_format and model.time_column and not model.time_column.format:
-            if dialect != model.dialect:
-                # Transpile default time column format in default dialect to model's dialect
-                default_format = format_time(
-                    time_column_format, d.Dialect.get_or_raise(dialect).time_mapping
-                )
-                time_column_format = (
-                    d.Dialect.get_or_raise(model.dialect)()
-                    .generator()
-                    .format_time(default_format)
-                )
-            model.time_column.format = time_column_format
-
+        model.set_time_format(time_column_format)
         model.validate_definition()
 
         return model
@@ -777,6 +766,27 @@ class Model(ModelMeta, frozen=True):
             if field_value is not None:
                 if field.name == "description":
                     comment = field_value
+                elif field.name == "time_column":
+                    expression = field_value.expression
+
+                    # time_column.format is stored as python format in memory
+                    # convert it back to the model dialect
+                    if field_value.format:
+                        expression.expressions.pop()
+                        expression.append(
+                            "expressions",
+                            exp.Literal.string(
+                                format_time(
+                                    field_value.format,
+                                    d.Dialect.get_or_raise(
+                                        self.dialect
+                                    ).inverse_time_mapping,
+                                )
+                            ),
+                        )
+                    expressions.append(
+                        exp.Property(this="time_column", value=expression)
+                    )
                 else:
                     expressions.append(
                         exp.Property(
@@ -966,7 +976,7 @@ class Model(ModelMeta, frozen=True):
 
     def exec_python(
         self,
-        adapter: EngineAdapter,
+        context: ExecutionContext,
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -976,7 +986,7 @@ class Model(ModelMeta, frozen=True):
         """Executes this model's python script.
 
         Args:
-            adapter: The engine adapter to use for fetching data.
+            context: The execution context used for fetching data.
             start: The start date/time of the run.
             end: The end date/time of the run.
             latest: The latest date/time to use for the run.
@@ -989,14 +999,35 @@ class Model(ModelMeta, frozen=True):
                 f"Model '{self.name}' is a SQL model and cannot be executed as a Python script."
             )
 
+        from sqlmesh.core.engine_adapter import pyspark
+
         env: t.Dict[str, t.Any] = {}
         prepare_env(env, self.python_env)
         start, end = make_inclusive(start or EPOCH_DS, end or EPOCH_DS)
         latest = to_datetime(latest or EPOCH_DS)
         try:
             df = env[self.query.name](
-                adapter, start=start, end=end, latest=latest, **kwargs
+                context, start=start, end=end, latest=latest, **kwargs
             )
+            if self.kind == ModelKind.INCREMENTAL:
+                assert self.time_column
+
+                if pyspark and isinstance(df, pyspark.sql.DataFrame):
+                    self.convert_to_time_column(end)
+                    df = df.where(
+                        f"""
+                    {self.time_column.column} BETWEEN
+                    {self.convert_to_time_column(start).sql("spark")} AND
+                    {self.convert_to_time_column(end)}.sql("spark")
+                    """
+                    )
+                else:
+                    if self.time_column.format:
+                        start = start.strftime(self.time_column.format)
+                        end = end.strftime(self.time_column.format)
+
+                    df_time = df[self.time_column.column]
+                    df = df[(df_time >= start) & (df_time <= end)]
             return df
         except Exception as e:
             print_exception(e, self.python_env)
@@ -1064,14 +1095,31 @@ class Model(ModelMeta, frozen=True):
             )
         ).strip()
 
+    def set_time_format(
+        self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
+    ) -> None:
+        """Sets the default time format for a model.
+
+        Args:
+            default_time_format: A python time format used as the default format when none is provided.
+        """
+        if not self.time_column:
+            return
+
+        if self.time_column.format:
+            # Transpile the time column format into the generic dialect
+            self.time_column.format = format_time(
+                self.time_column.format,
+                d.Dialect.get_or_raise(self.dialect).time_mapping,
+            )
+        else:
+            self.time_column.format = default_time_format
+
     def convert_to_time_column(self, time: TimeLike) -> exp.Expression:
         """Convert a TimeLike object to the same time format and type as the model's time column."""
         if self.time_column:
             if self.time_column.format:
-                mapping = d.Dialect.get_or_raise(self.dialect).time_mapping
-                fmt = format_time(self.time_column.format, mapping)
-                if fmt:
-                    time = to_datetime(time).strftime(fmt)
+                time = to_datetime(time).strftime(self.time_column.format)
 
             time_column_type = self.columns[self.time_column.column]
             if time_column_type.this in exp.DataType.TEXT_TYPES:
@@ -1224,7 +1272,13 @@ class model(registry_decorator):
         self.expressions = expressions
         self.name = self.meta.name
 
-    def model(self, module: str, path: Path) -> Model:
+    def model(
+        self,
+        *,
+        module: str,
+        path: Path,
+        time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
+    ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
         name = self.func.__name__
@@ -1242,6 +1296,7 @@ class model(registry_decorator):
             **self.meta.dict(exclude_defaults=True),
         )
 
+        model.set_time_format(time_column_format)
         model._path = path
         return model
 
