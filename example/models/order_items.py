@@ -36,14 +36,14 @@ def execute(
 ) -> pd.DataFrame:
     dfs = []
 
-    raw_orders = context.table("sushi.orders")
+    orders_table = context.table("sushi.orders")
+    items_table = context.table("sushi.items")
 
     for dt in iter_dates(start, end):
-        # this section not super clean, make it easier to fetch other snapshots
         orders = context.fetchdf(
             f"""
             SELECT *
-            FROM {raw_orders}
+            FROM {orders_table}
             WHERE ds = '{to_ds(dt)}'
             """
         )
@@ -54,7 +54,7 @@ def execute(
         items = context.fetchdf(
             f"""
 SELECT *
-            FROM {raw_orders}
+            FROM {items_table}
             WHERE ds = '{to_ds(dt)}'
             """
         )

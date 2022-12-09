@@ -32,6 +32,7 @@ context.run_tests()
 """
 from __future__ import annotations
 
+import abc
 import contextlib
 import importlib
 import types
@@ -74,21 +75,23 @@ if t.TYPE_CHECKING:
 extend_sqlglot()
 
 
-class ExecutionContext:
-    """The minimal context needed in order to execute a query.
-    Args:
-        engine_adapter: The engine adapter to execute queries against.
-        mapping: A mapping of models to physical tables.
-    """
-
-    def __init__(self, engine_adapter: EngineAdapter, mapping: t.Dict[str, str]):
-        self.engine_adapter = engine_adapter
-        self.spark = self.engine_adapter.spark
-        self._mapping = mapping
+class BaseContext(abc.ABC):
+    """The base context which defines methods to execute a model."""
 
     @property
-    def mapping(self) -> t.Dict[str, str]:
-        return self._mapping
+    @abc.abstractmethod
+    def model_tables(self) -> t.Dict[str, str]:
+        """Returns a mapping of model names to tables."""
+
+    @property
+    @abc.abstractmethod
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+
+    @property
+    def spark(self) -> t.Optional["pyspark.sql.SparkSession"]:  # type: ignore
+        """Returns the spark session if it exists."""
+        return self.engine_adapter.spark
 
     def table(self, model_name: str) -> str:
         """Gets the physical table name for a given model.
@@ -99,7 +102,7 @@ class ExecutionContext:
         Returns:
             The physical table name.
         """
-        return self.mapping[model_name]
+        return self.model_tables[model_name]
 
     def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a dataframe given a sql string or sqlglot expression.
@@ -113,7 +116,30 @@ class ExecutionContext:
         return self.engine_adapter.fetchdf(query)
 
 
-class Context(ExecutionContext):
+class ExecutionContext(BaseContext):
+    """The minimal context needed to execute a model.
+
+    Args:
+        engine_adapter: The engine adapter to execute queries against.
+        mapping: A mapping of models to physical tables.
+    """
+
+    def __init__(self, engine_adapter: EngineAdapter, model_tables: t.Dict[str, str]):
+        self._engine_adapter = engine_adapter
+        self._model_tables = model_tables
+
+    @property
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+        return self._engine_adapter
+
+    @property
+    def model_tables(self) -> t.Dict[str, str]:
+        """Returns a mapping of model names to tables."""
+        return self._model_tables
+
+
+class Context(BaseContext):
     """Encapsulates a SQLMesh environment supplying convenient functions to perform various tasks.
 
     Args:
@@ -178,7 +204,7 @@ class Context(ExecutionContext):
             ddl_concurrent_tasks or self.config.ddl_concurrent_tasks
         )
 
-        self.engine_adapter = engine_adapter or EngineAdapter(
+        self._engine_adapter = engine_adapter or EngineAdapter(
             self.config.engine_connection_factory,
             self.config.engine_dialect,
             multithreaded=self.ddl_concurrent_tasks > 1,
@@ -210,6 +236,11 @@ class Context(ExecutionContext):
 
         if load:
             self.load()
+
+    @property
+    def engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter."""
+        return self._engine_adapter
 
     def upsert_model(self, model: t.Union[str, Model] = "", **kwargs) -> Model:
         """Update or insert a model.
@@ -345,7 +376,7 @@ class Context(ExecutionContext):
         return snapshots
 
     @property
-    def mapping(self) -> t.Dict[str, str]:
+    def model_tables(self) -> t.Dict[str, str]:
         """Mapping of model name to physical table name.
 
         If a snapshot has not been versioned yet, its view name will be returned.
@@ -439,7 +470,7 @@ class Context(ExecutionContext):
             start,
             end,
             latest,
-            mapping=self.mapping,
+            mapping=self.model_tables,
             limit=limit,
         )
 
