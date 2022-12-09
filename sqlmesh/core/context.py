@@ -348,7 +348,7 @@ class Context(ExecutionContext):
     def mapping(self) -> t.Dict[str, str]:
         """Mapping of model name to physical table name.
 
-        If a snapshot has not been versioned yet, it's view name will be returned.
+        If a snapshot has not been versioned yet, its view name will be returned.
         """
         return {
             name: snapshot.table_name
