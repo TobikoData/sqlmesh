@@ -1018,7 +1018,7 @@ class Model(ModelMeta, frozen=True):
                         f"""
                     {self.time_column.column} BETWEEN
                     {self.convert_to_time_column(start).sql("spark")} AND
-                    {self.convert_to_time_column(end)}.sql("spark")
+                    {self.convert_to_time_column(end).sql("spark")}
                     """
                     )
                 else:
