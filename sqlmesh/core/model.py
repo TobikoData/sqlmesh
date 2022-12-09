@@ -375,10 +375,8 @@ class TimeColumn(PydanticModel):
         column = exp.to_column(self.column)
         if not self.format:
             return column
-        t = exp.Tuple(expressions=[column])
-        if self.format:
-            t.append("expressions", exp.Literal.string(self.format))
-        return t
+
+        return exp.Tuple(expressions=[column, exp.Literal.string(self.format)])
 
 
 class ModelMeta(PydanticModel):
@@ -1013,7 +1011,6 @@ class Model(ModelMeta, frozen=True):
                 assert self.time_column
 
                 if pyspark and isinstance(df, pyspark.sql.DataFrame):
-                    self.convert_to_time_column(end)
                     df = df.where(
                         f"""
                     {self.time_column.column} BETWEEN
