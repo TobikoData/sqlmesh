@@ -46,12 +46,13 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_snapshots(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Bulk fetch snapshots given the corresponding snapshot ids.
 
         Args:
-            snapshot_ids: Iterable of snapshot ids to get.
+            snapshot_ids: Iterable of snapshot ids to get. If not provided all
+                available snapshots will be returned.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
@@ -312,7 +313,7 @@ class StateSync(StateReader, abc.ABC):
 
 class CommonStateSyncMixin(StateSync):
     def get_snapshots(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
     ) -> t.Dict[SnapshotId, Snapshot]:
         return self._get_snapshots(snapshot_ids)
 
@@ -766,7 +767,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return expired_snapshots
 
     def get_snapshots(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
     ) -> t.Dict[SnapshotId, Snapshot]:
         snapshots = super().get_snapshots(snapshot_ids)
         self._update_cache(snapshots.values())

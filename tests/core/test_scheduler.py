@@ -9,11 +9,7 @@ from sqlmesh.utils.date import to_datetime
 
 @pytest.fixture
 def scheduler(sushi_context_pre_scheduling: Context) -> Scheduler:
-    return Scheduler(
-        sushi_context_pre_scheduling.snapshots,
-        sushi_context_pre_scheduling.snapshot_evaluator,
-        sushi_context_pre_scheduling.state_sync,
-    )
+    return sushi_context_pre_scheduling.scheduler()
 
 
 @pytest.fixture
@@ -112,13 +108,11 @@ def test_multi_version_snapshots(
 def test_run(sushi_context_pre_scheduling: Context, scheduler: Scheduler):
     adapter = sushi_context_pre_scheduling.engine_adapter
     snapshot = sushi_context_pre_scheduling.snapshots["sushi.items"]
-    errors = scheduler.run(
-        sushi_context_pre_scheduling.snapshots.values(),
+    scheduler.run(
         "2022-01-01",
         "2022-01-03",
         "2022-01-30",
     )
-    assert not errors
 
     assert (
         adapter.fetchone(

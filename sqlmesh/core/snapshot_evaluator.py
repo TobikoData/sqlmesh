@@ -60,9 +60,8 @@ class SnapshotEvaluator:
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
+        mapping: t.Dict[str, str],
         limit: int = 0,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
         **kwargs,
     ) -> t.Optional[DF]:
         """Evaluate a snapshot, creating its schema and table if it doesn't exist and then inserting it.
@@ -72,7 +71,6 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             latest: The latest datetime to use for non-incremental queries.
-            snapshots: All snapshots to use for mapping of physical locations.
             mapping: Mapping of model references to physical snapshots.
             limit: If limit is >= 0, the query will not be persisted but evaluated and returned
                 as a dataframe.
@@ -85,10 +83,6 @@ class SnapshotEvaluator:
 
         for sql_statement in model.sql_statements:
             self.adapter.execute(sql_statement)
-
-        mapping = mapping or {
-            name: snapshot.table_name for name, snapshot in (snapshots or {}).items()
-        }
 
         if model.is_sql:
             query_or_df = model.render_query(
@@ -212,7 +206,6 @@ class SnapshotEvaluator:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         raise_exception: bool = True,
         **kwargs,
@@ -223,7 +216,6 @@ class SnapshotEvaluator:
             snapshot: Snapshot to evaluate.  start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All snapshots to use for mapping of physical locations.
             mapping: Mapping of model references to physical snapshots.
             collection_exceptions:
             kwargs: Additional kwargs to pass to the renderer.
@@ -233,7 +225,6 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            snapshots=snapshots,
             mapping=mapping,
             **kwargs,
         ):

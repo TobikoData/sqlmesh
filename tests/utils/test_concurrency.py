@@ -2,7 +2,10 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.snapshot import SnapshotId
-from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
+from sqlmesh.utils.concurrency import (
+    NodeExecutionFailedError,
+    concurrent_apply_to_snapshots,
+)
 
 
 def test_concurrent_apply_to_snapshots(mocker: MockerFixture):
@@ -49,7 +52,7 @@ def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture):
     def raise_():
         raise RuntimeError("fail")
 
-    with pytest.raises(RuntimeError, match="fail"):
+    with pytest.raises(NodeExecutionFailedError):
         concurrent_apply_to_snapshots(
             [snapshot_a, snapshot_b],
             lambda s: raise_(),

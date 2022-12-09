@@ -4,7 +4,7 @@ from threading import Lock
 
 from sqlmesh.core.dag import DAG
 from sqlmesh.core.snapshot import SnapshotId, SnapshotInfoLike
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 T = t.TypeVar("T", bound=SnapshotInfoLike)
 
@@ -65,6 +65,7 @@ def concurrent_apply_to_dag(
 
     unprocessed_nodes = dag.graph if not reverse_order else dag.reversed_graph
     unprocessed_nodes_lock = Lock()
+    finished_nodes: t.Set[H] = set()
     finished_future = Future()  # type: ignore
 
     def submit_next_nodes(executor: Executor) -> None:
@@ -73,7 +74,11 @@ def concurrent_apply_to_dag(
                 finished_future.set_result(None)
                 return
 
-            next_nodes = [node for node, deps in unprocessed_nodes.items() if not deps]
+            next_nodes = [
+                node
+                for node, deps in unprocessed_nodes.items()
+                if finished_nodes >= deps
+            ]
             for node in next_nodes:
                 unprocessed_nodes.pop(node)
                 executor.submit(process_node, node, executor)
@@ -82,12 +87,12 @@ def concurrent_apply_to_dag(
         try:
             fn(node)
         except Exception as ex:
-            finished_future.set_exception(ex)
+            error = NodeExecutionFailedError(node)
+            error.__cause__ = ex
+            finished_future.set_exception(error)
             return
 
-        with unprocessed_nodes_lock:
-            for deps in unprocessed_nodes.values():
-                deps -= {node}
+        finished_nodes.add(node)
         submit_next_nodes(executor)
 
     with ThreadPoolExecutor(max_workers=tasks_num) as pool:
@@ -103,4 +108,13 @@ def sequential_apply_to_dag(
         ordered_nodes.reverse()
 
     for node in ordered_nodes:
-        fn(node)
+        try:
+            fn(node)
+        except Exception as ex:
+            raise NodeExecutionFailedError(node) from ex
+
+
+class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
+    def __init__(self, node: H):
+        self.node = node
+        super().__init__(f"Execution failed for node {node}")

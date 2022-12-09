@@ -3,18 +3,19 @@ from __future__ import annotations
 import logging
 import traceback
 import typing as t
-from concurrent.futures import Executor, ThreadPoolExecutor, wait
 from datetime import datetime
-from time import sleep
 
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.dag import DAG
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.utils.concurrency import NodeExecutionFailedError, concurrent_apply_to_dag
 from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday
 
 logger = logging.getLogger(__name__)
 SnapshotBatches = t.List[t.Tuple[Snapshot, t.List[t.Tuple[datetime, datetime]]]]
+SchedulingUnit = t.Tuple[SnapshotId, t.Tuple[datetime, datetime]]
 
 
 class Scheduler:
@@ -36,7 +37,7 @@ class Scheduler:
 
     def __init__(
         self,
-        snapshots: t.Dict[str, Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
         snapshot_evaluator: SnapshotEvaluator,
         state_sync: StateSync,
         max_workers: int = 1,
@@ -46,9 +47,6 @@ class Scheduler:
         self.snapshot_evaluator = snapshot_evaluator
         self.state_sync = state_sync
         self.max_workers = max_workers
-        self.running: t.Set[str] = set()
-        self.failed: t.Dict[str, str] = {}
-        self.finished: t.Set[str] = set()
         self.console: Console = console or get_console()
 
     def evaluate(
@@ -68,107 +66,79 @@ class Scheduler:
             latest: The latest datetime to use for non-incremental queries.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        try:
-            self.snapshot_evaluator.evaluate(
-                snapshot,
-                start,
-                end,
-                latest,
-                snapshots=self.snapshots,
-                **kwargs,
-            )
-            self.state_sync.add_interval(snapshot.snapshot_id, start, end)
-            self.snapshot_evaluator.audit(
-                snapshot=snapshot,
-                start=start,
-                end=end,
-                latest=latest,
-                snapshots=self.snapshots,
-                **kwargs,
-            )
-            self.console.update_snapshot_progress(snapshot.name, 1)
-        except Exception:
-            self.failed[snapshot.name] = traceback.format_exc()
+
+        mapping = {
+            **{
+                p_sid.name: self.snapshots[p_sid].table_name
+                for p_sid in snapshot.parents
+            },
+            snapshot.name: snapshot.table_name,
+        }
+
+        self.snapshot_evaluator.evaluate(
+            snapshot,
+            start,
+            end,
+            latest,
+            mapping=mapping,
+            **kwargs,
+        )
+        self.state_sync.add_interval(snapshot.snapshot_id, start, end)
+        self.snapshot_evaluator.audit(
+            snapshot=snapshot,
+            start=start,
+            end=end,
+            latest=latest,
+            mapping=mapping,
+            **kwargs,
+        )
+        self.console.update_snapshot_progress(snapshot.name, 1)
 
     def run(
         self,
-        snapshots: t.Iterable[Snapshot],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-    ) -> t.Dict[str, str]:
+    ) -> None:
         """Concurrently runs all snapshots in topological order.
 
         Args:
-            snapshots: An iterable of all the snapshots to run.
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
-
-        Returns:
-            A dictionary of model name to error string.
         """
-        snapshots = tuple(snapshots)
         latest = latest or now()
-        batches = self.interval_params(snapshots, start, end, latest)
+        batches = self.interval_params(self.snapshots.values(), start, end, latest)
 
-        self.running.clear()
-        self.finished.clear()
-        self.failed.clear()
-        dag = []
+        intervals_per_snapshot_id = {
+            snapshot.snapshot_id: intervals for snapshot, intervals in batches
+        }
 
+        dag = DAG[SchedulingUnit]()
         for snapshot, intervals in batches:
-            dag.append(
-                (
-                    snapshot,
-                    intervals,
-                    {
-                        table
-                        for table in snapshot.model.depends_on
-                        if table in self.snapshots
-                    },
-                )
+            upstream_dependencies = [
+                (p_sid, interval)
+                for p_sid in snapshot.parents
+                for interval in intervals_per_snapshot_id.get(p_sid, [])
+            ]
+            sid = snapshot.snapshot_id
+            for interval in intervals:
+                dag.add((sid, interval), upstream_dependencies)
+
+        def evaluate_node(node: SchedulingUnit) -> None:
+            assert latest
+            sid, (start, end) = node
+            self.evaluate(self.snapshots[sid], start, end, latest)
+
+        try:
+            with self.snapshot_evaluator.multithreaded_context():
+                concurrent_apply_to_dag(dag, evaluate_node, self.max_workers)
+        except NodeExecutionFailedError as error:
+            sid = error.node[0]  # type: ignore
+            self.console.log_error(
+                f"Failed Executing Batch.\nSnapshot: {sid}\n{traceback.format_exc()}"
             )
-
-        for snapshot, intervals, _ in dag[::-1]:
-            if not intervals:
-                continue
-            # We have to run all batches per snapshot to mark it as completed
-            self.console.start_snapshot_progress(snapshot.name, len(intervals))
-
-        with self.snapshot_evaluator.multithreaded_context(), ThreadPoolExecutor() as snapshot_pool, ThreadPoolExecutor(
-            max_workers=self.max_workers
-        ) as batch_pool:
-            while True:
-                if self.failed:
-                    for model_name, error_message in self.failed.items():
-                        self.console.log_error(
-                            f"Failed Executing Batch.\nModel name:{model_name}\n{error_message}"
-                        )
-                    snapshot_pool.shutdown()
-                    batch_pool.shutdown()
-                    break
-                if self.finished >= {snapshot.name for snapshot, _, _ in dag}:
-                    break
-                processed = self.running | self.finished
-                for snapshot, intervals, deps in dag:
-                    if snapshot.name not in processed and self.finished >= deps:
-                        self.running.add(snapshot.name)
-                        snapshot_pool.submit(
-                            self._run_snapshot_intervals,
-                            snapshot,
-                            intervals,
-                            latest,
-                            batch_pool,
-                        )
-                sleep(0.1)
-
-        if self.failed:
-            self.console.stop_snapshot_progress()
-        else:
-            self.console.complete_snapshot_progress()
-
-        return self.failed
+            raise
 
     def interval_params(
         self,
@@ -207,22 +177,6 @@ class Scheduler:
             end=end or now(),
             latest=latest or now(),
         )
-
-    def _run_snapshot_intervals(
-        self,
-        snapshot: Snapshot,
-        intervals: t.List[t.Tuple[datetime, datetime]],
-        latest: TimeLike,
-        pool: Executor,
-    ) -> None:
-        wait(
-            [
-                pool.submit(self.evaluate, snapshot, start, end, latest)
-                for start, end in intervals
-            ],
-        )
-        self.finished.add(snapshot.name)
-        self.running.remove(snapshot.name)
 
 
 def compute_interval_params(
