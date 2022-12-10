@@ -33,7 +33,7 @@ test_config = Config(**DEFAULT_KWARGS)
 DEFAULT_AIRFLOW_KWARGS = {
     **DEFAULT_KWARGS,
     "backfill_concurrent_tasks": 4,
-    "ddl_concurrent_tasks": 4,
+    "ddl_concurrent_tasks": 1,
 }
 
 
