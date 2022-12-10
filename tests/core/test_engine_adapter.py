@@ -273,3 +273,23 @@ def test_transaction_duckdb(adapter: EngineAdapter, duck_conn):
     except Exception:
         pass
     assert duck_conn.execute("SELECT * FROM test_table").fetchall() == [(1,)]
+
+
+def test_merge(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
+    adapter.merge(
+        target_table="target",
+        source_table="source",
+        columns=["id", "ts", "val"],
+        unique_key="id",
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+    )
