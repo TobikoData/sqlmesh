@@ -129,6 +129,7 @@ class SnapshotDagGenerator:
             dag_id=dag_id,
             schedule_interval="@once",
             start_date=now(),
+            max_active_tasks=request.backfill_concurrent_tasks,
             catchup=False,
             is_paused_upon_creation=False,
             tags=[

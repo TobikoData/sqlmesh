@@ -18,10 +18,6 @@ class SparkSessionCursor:
         if parameters:
             raise NotSupportedError("Parameterized queries are not supported")
 
-        self._spark.sparkContext.setLocalProperty(
-            "spark.scheduler.pool", f"pool_{get_ident()}"
-        )
-
         self._last_df = self._spark.sql(query)
         self._last_output = None
         self._last_output_cursor = 0
@@ -71,6 +67,9 @@ class SparkSessionConnection:
         self.spark = spark
 
     def cursor(self) -> SparkSessionCursor:
+        self.spark.sparkContext.setLocalProperty(
+            "spark.scheduler.pool", f"pool_{get_ident()}"
+        )
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:

@@ -112,7 +112,7 @@ class SQLMeshAirflow:
     def _create_plan_receiver_dag(self) -> DAG:
         dag = self._create_system_dag(common.PLAN_RECEIVER_DAG_ID, None)
 
-        receiver_task = PythonOperator(
+        PythonOperator(
             task_id=common.PLAN_RECEIVER_TASK_ID,
             python_callable=_plan_receiver_task,
             dag=dag,
@@ -234,6 +234,7 @@ def _plan_receiver_task(
         plan_id=plan_conf.environment.plan_id,
         previous_plan_id=plan_conf.environment.previous_plan_id,
         notification_targets=plan_conf.notification_targets,
+        backfill_concurrent_tasks=plan_conf.backfill_concurrent_tasks,
         ddl_concurrent_tasks=plan_conf.ddl_concurrent_tasks,
     )
 

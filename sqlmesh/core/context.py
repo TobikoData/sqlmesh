@@ -149,8 +149,12 @@ class Context(BaseContext):
         physical_schema: The schema used to store physical materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         path: The directory containing SQLMesh files.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
+            plan application. Default: 1.
         ddl_concurrent_task: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
+        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
+            running with the built-in scheduler. Default: 1.
         config: A Config object or the name of a Config object in config.py.
         test_config: A Config object or name of a Config object in config.py to use for testing only
         load: Whether or not to automatically load all models and macros (default True).
@@ -166,7 +170,9 @@ class Context(BaseContext):
         physical_schema: str = "",
         snapshot_ttl: str = "",
         path: str = "",
+        backfill_concurrent_tasks: t.Optional[int] = None,
         ddl_concurrent_tasks: t.Optional[int] = None,
+        evaluation_concurrent_tasks: t.Optional[int] = None,
         config: t.Optional[t.Union[Config, str]] = None,
         test_config: t.Optional[t.Union[Config, str]] = None,
         load: bool = True,
@@ -200,20 +206,33 @@ class Context(BaseContext):
         self.macros = UniqueKeyDict("macros")
         self.dag: DAG[str] = DAG()
 
+        self.backfill_concurrent_tasks = (
+            backfill_concurrent_tasks or self.config.backfill_concurrent_tasks
+        )
         self.ddl_concurrent_tasks = (
             ddl_concurrent_tasks or self.config.ddl_concurrent_tasks
+        )
+        self.evaluation_concurrent_tasks = (
+            evaluation_concurrent_tasks or self.config.evaluation_concurrent_tasks
+        )
+        self.is_multithreaded = (
+            max(
+                self.backfill_concurrent_tasks,
+                self.ddl_concurrent_tasks,
+                self.evaluation_concurrent_tasks,
+            )
+            > 1
         )
 
         self._engine_adapter = engine_adapter or EngineAdapter(
             self.config.engine_connection_factory,
             self.config.engine_dialect,
-            multithreaded=self.ddl_concurrent_tasks > 1,
+            multithreaded=self.is_multithreaded,
         )
         self.test_engine_adapter = (
             EngineAdapter(
                 self.test_config.engine_connection_factory,
                 self.test_config.engine_dialect,
-                multithreaded=self.test_config.ddl_concurrent_tasks > 1,
             )
             if self.test_config
             else None
@@ -270,6 +289,7 @@ class Context(BaseContext):
             self.snapshots,
             self.snapshot_evaluator,
             self.state_sync,
+            max_workers=self.evaluation_concurrent_tasks,
             console=self.console,
         )
 

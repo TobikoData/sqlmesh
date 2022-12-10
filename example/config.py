@@ -30,9 +30,16 @@ test_config = Config(**DEFAULT_KWARGS)
 
 
 # A config that uses Airflow + Spark.
+DEFAULT_AIRFLOW_KWARGS = {
+    **DEFAULT_KWARGS,
+    "backfill_concurrent_tasks": 4,
+    "ddl_concurrent_tasks": 4,
+}
+
+
 airflow_config = Config(
     **{
-        **DEFAULT_KWARGS,
+        **DEFAULT_AIRFLOW_KWARGS,
         "scheduler_backend": AirflowSchedulerBackend(),
     }
 )
@@ -40,7 +47,7 @@ airflow_config = Config(
 
 airflow_config_docker = Config(
     **{
-        **DEFAULT_KWARGS,
+        **DEFAULT_AIRFLOW_KWARGS,
         "scheduler_backend": AirflowSchedulerBackend(
             airflow_url="http://airflow-webserver:8080/"
         ),
