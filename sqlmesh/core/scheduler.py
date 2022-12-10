@@ -138,7 +138,10 @@ class Scheduler:
             self.console.log_error(
                 f"Failed Executing Batch.\nSnapshot: {sid}\n{traceback.format_exc()}"
             )
+            self.console.stop_snapshot_progress()
             raise
+
+        self.console.complete_snapshot_progress()
 
     def interval_params(
         self,
