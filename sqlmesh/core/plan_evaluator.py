@@ -74,13 +74,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.missing_intervals:
             snapshots = plan.snapshots
             scheduler = Scheduler(
-                {snapshot.name: snapshot for snapshot in snapshots},
+                snapshots,
                 self.snapshot_evaluator,
                 self.state_sync,
                 max_workers=self.backfill_concurrent_tasks,
                 console=self.console,
             )
-            scheduler.run(snapshots, plan.start, plan.end)
+            scheduler.run(plan.start, plan.end)
 
         self._promote(plan)
 

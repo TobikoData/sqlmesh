@@ -283,10 +283,23 @@ class Context(BaseContext):
         self._add_model_to_dag(model)
         return model
 
-    def scheduler(self) -> Scheduler:
-        """The built in scheduler."""
+    def scheduler(self, global_state: bool = False) -> Scheduler:
+        """Returns the built-in scheduler.
+
+        Args:
+            global_state: Whether to initialize the scheduler from the persisted state
+                or from the currently loaded local state. Default: False.
+
+        Returns:
+            The built-in scheduler instance.
+        """
+        snapshots: t.Iterable[Snapshot]
+        if global_state:
+            snapshots = self.state_sync.get_snapshots(None).values()
+        else:
+            snapshots = self.snapshots.values()
         return Scheduler(
-            self.snapshots,
+            snapshots,
             self.snapshot_evaluator,
             self.state_sync,
             max_workers=self.evaluation_concurrent_tasks,
@@ -361,18 +374,18 @@ class Context(BaseContext):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-    ) -> t.Dict[str, str]:
+        global_state: bool = False,
+    ) -> None:
         """Run the entire dag through the scheduler.
 
         Args:
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
-
-        Returns:
-            Dictionary of stacktraces if errors occur.
+            global_state: If set to True runs against the persisted state,
+                otherwise uses the currently loaded local state. Default: False.
         """
-        return self.scheduler().run(self.snapshots.values(), start, end, latest)
+        return self.scheduler(global_state).run(start, end, latest)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
