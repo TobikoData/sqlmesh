@@ -47,6 +47,7 @@ class PlanReceiverDagConf(PydanticModel):
     no_gaps: bool
     restatements: t.Set[str]
     notification_targets: t.List[NotificationTarget]
+    backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
 
 
@@ -68,6 +69,7 @@ class PlanApplicationRequest(PydanticModel):
     plan_id: str
     previous_plan_id: t.Optional[str]
     notification_targets: t.List[NotificationTarget]
+    backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
 
 

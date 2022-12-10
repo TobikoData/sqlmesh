@@ -133,6 +133,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
             "notification_targets": [],
             "request_id": request_id,
             "restatements": [],
+            "backfill_concurrent_tasks": 1,
             "ddl_concurrent_tasks": 1,
         },
         "dag_run_id": expected_dag_run_id,

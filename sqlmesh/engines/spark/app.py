@@ -32,13 +32,14 @@ def main() -> None:
     if not command_handler:
         raise NotSupportedError(f"Command '{command_type.value}' not supported")
 
-    ddl_concurrent_tasks = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-
     spark = create_spark_session()
-    connection = spark_session_db.connection(spark)
+
+    ddl_concurrent_tasks = int(sys.argv[2]) if len(sys.argv) > 2 else 1
     evaluator = SnapshotEvaluator(
         EngineAdapter(
-            lambda: connection, "spark", multithreaded=ddl_concurrent_tasks > 1
+            lambda: spark_session_db.connection(spark),
+            "spark",
+            multithreaded=ddl_concurrent_tasks > 1,
         ),
         ddl_concurrent_tasks=ddl_concurrent_tasks,
     )
