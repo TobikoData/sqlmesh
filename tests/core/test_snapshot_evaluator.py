@@ -57,7 +57,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         "2020-01-01",
         "2020-01-02",
         "2020-01-02",
-        snapshots={},
+        mapping={},
     )
 
     assert adapter_mock.create_schema.mock_calls == [
@@ -144,7 +144,7 @@ def test_evaluate_creation_duckdb(
         "2020-01-01",
         "2020-01-01",
         "2020-01-01",
-        snapshots={},
+        mapping={},
     )
     assert_tables_exist()
     assert duck_conn.execute(
@@ -157,7 +157,7 @@ def test_evaluate_creation_duckdb(
         "2020-01-01",
         "2020-01-01",
         "2020-01-01",
-        snapshots={},
+        mapping={},
     )
     assert_tables_exist()
     assert duck_conn.execute(
