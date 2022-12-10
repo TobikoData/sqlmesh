@@ -105,7 +105,7 @@ class MacroEvaluator:
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
-        prepare_env(self.env, self.python_env)
+        prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]

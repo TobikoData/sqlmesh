@@ -27,12 +27,13 @@ setup(
         "duckdb",
         "dateparser",
         "hyperscript",
+        "jinja2",
         "pandas",
         "pydantic",
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.2.5",
+        "sqlglot>=10.2.6",
     ],
     extras_require={
         "dev": [

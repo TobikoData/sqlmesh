@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+import re
 import typing as t
 from difflib import unified_diff
 
+from jinja2 import Environment
+from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 from sqlglot.tokens import Token
 
@@ -13,12 +18,19 @@ class Audit(exp.Expression):
     arg_types = {"expressions": True}
 
 
+class Jinja(exp.Func):
+    arg_types = {"this": True, "expressions": False}
+    is_var_len_args = True
+
+
 class MacroVar(exp.Var):
     pass
 
 
 class MacroFunc(exp.Func):
-    pass
+    @property
+    def name(self):
+        return self.this.name
 
 
 class MacroDef(MacroFunc):
@@ -322,6 +334,69 @@ def text_diff(
     )
 
 
+DIALECT_PATTERN = re.compile(
+    r"(model|audit).*?\(.*?dialect.+?([a-z]+)", re.IGNORECASE | re.DOTALL
+)
+JINJA_PATTERN = re.compile(r"{{|{%|{#")
+
+
+def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression]:
+    """Parse a sql string containing a model definition.
+
+    If a jinja block is detected, the query is stored as raw string in a Jinja node.
+
+    Args:
+        sql: The sql based definition.
+        default_dialect: The dialect to use if the model does not specify one.
+
+    Returns:
+        A list of the expressions, [Model, *Statements, Query | Jinja]
+    """
+    match = DIALECT_PATTERN.search(sql)
+    dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
+
+    tokens = dialect.tokenizer.tokenize(sql)
+    chunks: t.List[t.Tuple[t.List, bool]] = [([], False)]
+    total = len(tokens)
+
+    for i, token in enumerate(tokens):
+        if token.token_type == TokenType.SEMICOLON:
+            if i < total - 1:
+                chunks.append(([], False))
+        else:
+            if token.token_type == TokenType.BLOCK_START or (
+                token.token_type == TokenType.STRING
+                and JINJA_PATTERN.search(token.text)
+            ):
+                chunks[-1] = (chunks[-1][0], True)
+            chunks[-1][0].append(token)
+
+    expressions: t.List[exp.Expression] = []
+    sql_lines = None
+
+    for chunk, is_jinja in chunks:
+        if is_jinja:
+            start, *_, end = chunk
+            sql_lines = sql_lines or sql.split("\n")
+            lines = sql_lines[start.line - 1 : end.line]
+            lines[0] = lines[0][start.col - 1 :]
+            lines[-1] = lines[-1][: end.col + len(end.text) - 1]
+            segment = "\n".join(lines)
+            variables = [
+                exp.Literal.string(var)
+                for var in find_undeclared_variables(Environment().parse(segment))
+            ]
+            expressions.append(
+                Jinja(this=exp.Literal.string(segment), expressions=variables)
+            )
+        else:
+            for expression in dialect.parser().parse(chunk, sql):
+                if expression:
+                    expressions.append(expression)
+
+    return expressions
+
+
 @t.no_type_check
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
@@ -353,6 +428,11 @@ def extend_sqlglot() -> None:
             )
 
     for parser in parsers:
+        parser.FUNCTIONS.update(
+            {
+                "JINJA": Jinja.from_arg_list,
+            }
+        )
         parser.PRIMARY_PARSERS.update(
             {
                 TokenType.PARAMETER: _parse_macro,
