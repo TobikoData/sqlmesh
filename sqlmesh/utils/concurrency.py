@@ -65,23 +65,25 @@ def concurrent_apply_to_dag(
 
     unprocessed_nodes = dag.graph if not reverse_order else dag.reversed_graph
     unprocessed_nodes_lock = Lock()
-    finished_nodes: t.Set[H] = set()
     finished_future = Future()  # type: ignore
 
-    def submit_next_nodes(executor: Executor) -> None:
+    def submit_next_nodes(
+        executor: Executor, processed_node: t.Optional[H] = None
+    ) -> None:
         with unprocessed_nodes_lock:
             if not unprocessed_nodes:
                 finished_future.set_result(None)
                 return
 
-            next_nodes = [
-                node
-                for node, deps in unprocessed_nodes.items()
-                if finished_nodes >= deps
-            ]
-            for node in next_nodes:
-                unprocessed_nodes.pop(node)
-                executor.submit(process_node, node, executor)
+            submitted_nodes = []
+            for next_node, deps in unprocessed_nodes.items():
+                if processed_node:
+                    deps.remove(processed_node)
+                if not deps:
+                    executor.submit(process_node, next_node, executor)
+                    submitted_nodes.append(next_node)
+            for submitted_node in submitted_nodes:
+                unprocessed_nodes.pop(submitted_node)
 
     def process_node(node: H, executor: Executor) -> None:
         try:
@@ -92,8 +94,7 @@ def concurrent_apply_to_dag(
             finished_future.set_exception(error)
             return
 
-        finished_nodes.add(node)
-        submit_next_nodes(executor)
+        submit_next_nodes(executor, node)
 
     with ThreadPoolExecutor(max_workers=tasks_num) as pool:
         submit_next_nodes(pool)
