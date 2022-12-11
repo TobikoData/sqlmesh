@@ -23,6 +23,9 @@ def concurrent_apply_to_snapshots(
         fn: The function that will be applied concurrently to each snapshot.
         tasks_num: The number of concurrent tasks.
         reverse_order: Whether the order should be reversed. Default: False..
+
+    Raises:
+        NodeExecutionFailedError when execution fails for any snapshot.
     """
     snapshots_by_id = {s.snapshot_id: s for s in snapshots}
 
@@ -55,6 +58,9 @@ def concurrent_apply_to_dag(
         fn: The function that will be applied concurrently to each snapshot.
         tasks_num: The number of concurrent tasks.
         reverse_order: Whether the order should be reversed. Default: False..
+
+    Raises:
+        NodeExecutionFailedError when execution fails for any node.
     """
     if tasks_num <= 0:
         raise ConfigError(f"Invalid number of concurrent tasks {tasks_num}")
@@ -64,40 +70,43 @@ def concurrent_apply_to_dag(
         return
 
     unprocessed_nodes = dag.graph if not reverse_order else dag.reversed_graph
+    unprocessed_nodes_num = len(unprocessed_nodes)
     unprocessed_nodes_lock = Lock()
     finished_future = Future()  # type: ignore
 
     def submit_next_nodes(
         executor: Executor, processed_node: t.Optional[H] = None
     ) -> None:
-        with unprocessed_nodes_lock:
-            if not unprocessed_nodes:
-                finished_future.set_result(None)
-                return
+        if not unprocessed_nodes_num:
+            finished_future.set_result(None)
+            return
 
-            submitted_nodes = []
-            for next_node, deps in unprocessed_nodes.items():
-                if processed_node:
-                    deps.remove(processed_node)
-                if not deps:
-                    executor.submit(process_node, next_node, executor)
-                    submitted_nodes.append(next_node)
-            for submitted_node in submitted_nodes:
-                unprocessed_nodes.pop(submitted_node)
+        submitted_nodes = []
+        for next_node, deps in unprocessed_nodes.items():
+            if processed_node:
+                deps.discard(processed_node)
+            if not deps:
+                executor.submit(process_node, next_node, executor)
+                submitted_nodes.append(next_node)
+        for submitted_node in submitted_nodes:
+            unprocessed_nodes.pop(submitted_node)
 
     def process_node(node: H, executor: Executor) -> None:
         try:
             fn(node)
+
+            with unprocessed_nodes_lock:
+                nonlocal unprocessed_nodes_num
+                unprocessed_nodes_num -= 1
+                submit_next_nodes(executor, node)
         except Exception as ex:
             error = NodeExecutionFailedError(node)
             error.__cause__ = ex
             finished_future.set_exception(error)
-            return
-
-        submit_next_nodes(executor, node)
 
     with ThreadPoolExecutor(max_workers=tasks_num) as pool:
-        submit_next_nodes(pool)
+        with unprocessed_nodes_lock:
+            submit_next_nodes(pool)
         finished_future.result()
 
 
