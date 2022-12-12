@@ -278,11 +278,16 @@ class EngineAdapter:
         target_table: str,
         source_table: str,
         columns: t.Iterable[str],
-        unique_key: str,
+        unique_keys: t.Iterable[str],
     ):
-        on = exp.EQ(
-            this=exp.column(unique_key, target_table),
-            expression=exp.column(unique_key, source_table),
+        on = exp.and_(
+            *(
+                exp.EQ(
+                    this=exp.column(key, target_table),
+                    expression=exp.column(key, source_table),
+                )
+                for key in unique_keys
+            )
         )
         when_matched = exp.When(
             this="MATCHED",

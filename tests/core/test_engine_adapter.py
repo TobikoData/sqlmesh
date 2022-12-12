@@ -285,11 +285,23 @@ def test_merge(mocker: MockerFixture):
         target_table="target",
         source_table="source",
         columns=["id", "ts", "val"],
-        unique_key="id",
+        unique_keys=["id"],
     )
-
     cursor_mock.execute.assert_called_once_with(
         "MERGE INTO target USING source ON `target`.`id` = `source`.`id` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+    )
+
+    cursor_mock.reset_mock()
+    adapter.merge(
+        target_table="target",
+        source_table="source",
+        columns=["id", "ts", "val"],
+        unique_keys=["id", "ts"],
+    )
+    cursor_mock.execute.assert_called_once_with(
+        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` AND `target`.`ts` = `source`.`ts` "
         "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
         "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
     )
