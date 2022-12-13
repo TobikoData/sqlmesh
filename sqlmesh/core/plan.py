@@ -45,7 +45,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import TimeLike, make_inclusive, now, to_ds
+from sqlmesh.utils.date import TimeLike, make_inclusive, now, to_ds, validate_date_range
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -206,6 +206,7 @@ class Plan:
         """Runs apply if an apply function was passed in."""
         if not self._apply:
             raise SQLMeshError(f"Plan was not initialized with an applier.")
+        validate_date_range(self.start, self.end)
         self._apply(self)
 
     def set_choice(self, snapshot: Snapshot, choice: SnapshotChangeCategory) -> None:

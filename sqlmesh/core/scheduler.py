@@ -11,7 +11,13 @@ from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils.concurrency import NodeExecutionFailedError, concurrent_apply_to_dag
-from sqlmesh.utils.date import TimeLike, now, to_datetime, yesterday
+from sqlmesh.utils.date import (
+    TimeLike,
+    now,
+    to_datetime,
+    validate_date_range,
+    yesterday,
+)
 
 logger = logging.getLogger(__name__)
 SnapshotBatches = t.List[t.Tuple[Snapshot, t.List[t.Tuple[datetime, datetime]]]]
@@ -66,6 +72,7 @@ class Scheduler:
             latest: The latest datetime to use for non-incremental queries.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        validate_date_range(start, end)
 
         mapping = {
             **{
@@ -107,6 +114,8 @@ class Scheduler:
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
         """
+        validate_date_range(start, end)
+
         latest = latest or now()
         batches = self.interval_params(self.snapshots.values(), start, end, latest)
 
@@ -124,6 +133,7 @@ class Scheduler:
             sid = snapshot.snapshot_id
             for interval in intervals:
                 dag.add((sid, interval), upstream_dependencies)
+            self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest

@@ -132,6 +132,7 @@ from sqlglot import Expression, exp, parse_one
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import Snapshot, table_name
 from sqlmesh.utils import unique
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import yaml
 
@@ -149,7 +150,7 @@ class ModelTestMetadata(PydanticModel):
         return self.fully_qualified_test_name.__hash__()
 
 
-class TestError(Exception):
+class TestError(SQLMeshError):
     """Test error"""
 
 
@@ -173,17 +174,21 @@ class ModelTest(unittest.TestCase):
             engine_adapter: The engine adapter to use.
             path: An optional path to the test definition yaml file
         """
-        if "inputs" not in body:
-            self._raise_error("Incomplete test, missing inputs")
-        if "outputs" not in body:
-            self._raise_error("Incomplete test, missing outputs")
-
         self.body = body
         self.path = path
 
         self.test_name = test_name
-        self.model_name = body["model"]
         self.engine_adapter = engine_adapter
+
+        if "model" not in body:
+            self._raise_error("Incomplete test, missing model name")
+
+        if "outputs" not in body:
+            self._raise_error("Incomplete test, missing outputs")
+
+        self.model_name = body["model"]
+        if self.model_name not in snapshots:
+            self._raise_error(f"Model '{self.model_name}' was not found")
 
         self.snapshot = snapshots[self.model_name]
         # For tests we just use the model name for the table reference and we don't want to expand
@@ -218,18 +223,21 @@ class ModelTest(unittest.TestCase):
             )
 
         for snapshot_id in self.snapshot.parents:
-            if snapshot_id.name in table:
-                self.view_names.append(
-                    table_name(
-                        self.snapshot.physical_schema,
-                        snapshot_id.name,
-                        snapshot_id.fingerprint,
-                    )
+            if snapshot_id.name not in inputs:
+                self._raise_error(
+                    f"Incomplete test, missing input for table {snapshot_id.name}"
                 )
-                self.engine_adapter.create_view(
-                    self.view_names[-1],
-                    parse_one(f"SELECT * FROM {snapshot_id.name}"),  # type: ignore
+            self.view_names.append(
+                table_name(
+                    self.snapshot.physical_schema,
+                    snapshot_id.name,
+                    snapshot_id.fingerprint,
                 )
+            )
+            self.engine_adapter.create_view(
+                self.view_names[-1],
+                parse_one(f"SELECT * FROM {snapshot_id.name}"),  # type: ignore
+            )
 
     def tearDown(self) -> None:
         """Drop all input tables"""
@@ -286,7 +294,7 @@ class ModelTest(unittest.TestCase):
         return f"{self.test_name} ({self.path}:{self.body.lc.line})"
 
     def _raise_error(self, msg: str) -> None:
-        raise TestError(f"{msg}: {self.path}")
+        raise TestError(f"{msg} at {self.path}")
 
 
 def load_model_test_file(

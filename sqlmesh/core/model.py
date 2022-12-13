@@ -421,13 +421,27 @@ class ModelMeta(PydanticModel):
             return v
 
         name = v.name if isinstance(v, exp.Expression) else str(v)
-        return ModelKind.__members__[name.upper()]
+        try:
+            return ModelKind(name.lower())
+        except ValueError:
+            _raise_config_error(f"Invalid model kind '{name}'")
+            raise
 
-    @validator("dialect", "owner", "cron", "storage_format", "description", pre=True)
+    @validator("dialect", "owner", "storage_format", "description", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         if isinstance(v, exp.Expression):
             return v.name
         return str(v) if v is not None else None
+
+    @validator("cron", pre=True)
+    def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
+        cron = cls._string_validator(v)
+        if cron:
+            try:
+                croniter(cron)
+            except Exception:
+                raise ConfigError(f"Invalid cron expression '{cron}'")
+        return cron
 
     @validator("columns_", pre=True)
     def _columns_validator(cls, v: t.Any) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -456,14 +470,20 @@ class ModelMeta(PydanticModel):
         if isinstance(v, exp.Expression):
             v = v.name
         if not to_datetime(v):
-            raise ConfigError(f"{v} not a valid date time")
+            raise ConfigError(f"'{v}' not a valid date time")
         return v
 
     @validator("batch_size", pre=True)
     def _int_validator(cls, v: t.Any) -> t.Optional[int]:
-        if isinstance(v, exp.Expression):
-            return int(v.name)
-        return int(v) if v is not None else None
+        if not isinstance(v, exp.Expression):
+            batch_size = int(v) if v is not None else None
+        else:
+            batch_size = int(v.name)
+        if batch_size is not None and batch_size <= 0:
+            raise ConfigError(
+                f"Invalid batch size {batch_size}. The value should be greater than 0"
+            )
+        return batch_size
 
     @root_validator
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -682,26 +702,54 @@ class Model(ModelMeta, frozen=True):
                 path,
             )
 
+        provided_meta_fields = {p.name for p in meta.expressions}
+
+        missing_required_fields = ModelMeta.missing_required_fields(
+            provided_meta_fields
+        )
+        if missing_required_fields:
+            _raise_config_error(
+                f"Missing required fields {missing_required_fields} in the model definition",
+                path,
+            )
+
+        extra_fields = ModelMeta.extra_fields(provided_meta_fields)
+        if extra_fields:
+            _raise_config_error(
+                f"Invalid extra fields {extra_fields} in the model definition", path
+            )
+
         if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
             _raise_config_error(
                 "A query is required and must be a SELECT or UNION statement.",
                 path,
             )
 
-        model = cls(
-            query=query,
-            expressions=statements,
-            python_env=_python_env(query, module, macros or macro.get_registry()),
-            **{
-                "dialect": dialect or "",
-                **ModelMeta(
-                    **{prop.name: prop.args.get("value") for prop in meta.expressions},
-                    description="\n".join(comment.strip() for comment in meta.comments)
-                    if meta.comments
-                    else None,
-                ).dict(exclude_defaults=True),
-            },
-        )
+        if not query.expressions:
+            _raise_config_error("Query missing select statements", path)
+
+        try:
+            model = cls(
+                query=query,
+                expressions=statements,
+                python_env=_python_env(query, module, macros or macro.get_registry()),
+                **{
+                    "dialect": dialect or "",
+                    **ModelMeta(
+                        **{
+                            prop.name: prop.args.get("value")
+                            for prop in meta.expressions
+                        },
+                        description="\n".join(
+                            comment.strip() for comment in meta.comments
+                        )
+                        if meta.comments
+                        else None,
+                    ).dict(exclude_defaults=True),
+                },
+            )
+        except Exception as ex:
+            _raise_config_error(str(ex), location=path)
 
         model._path = path
         model.set_time_format(time_column_format)
@@ -1233,6 +1281,9 @@ class Model(ModelMeta, frozen=True):
                 self._path,
             )
 
+    def _validate_view(self, query: exp.Expression) -> None:
+        pass
+
     def _filter_time_column(
         self, query: exp.Select, start: TimeLike, end: TimeLike
     ) -> None:
@@ -1391,5 +1442,5 @@ def _python_env(
 
 def _raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:
     if location:
-        raise ConfigError(f"{msg}: '{location}'")
+        raise ConfigError(f"{msg} at '{location}'")
     raise ConfigError(msg)
