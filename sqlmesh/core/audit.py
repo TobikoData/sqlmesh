@@ -169,6 +169,23 @@ class Audit(AuditMeta, frozen=True):
             )
             raise
 
+        provided_meta_fields = {p.name for p in meta.expressions}
+
+        missing_required_fields = AuditMeta.missing_required_fields(
+            provided_meta_fields
+        )
+        if missing_required_fields:
+            _raise_config_error(
+                f"Missing required fields {missing_required_fields} in the audit definition",
+                path,
+            )
+
+        extra_fields = AuditMeta.extra_fields(provided_meta_fields)
+        if extra_fields:
+            _raise_config_error(
+                f"Invalid extra fields {extra_fields} in the audit definition", path
+            )
+
         if not isinstance(query, exp.Subqueryable):
             _raise_config_error("Missing SELECT query in the audit definition", path)
             raise
@@ -176,20 +193,23 @@ class Audit(AuditMeta, frozen=True):
         if not query.expressions:
             _raise_config_error("Query missing select statements", path)
 
-        audit = cls(
-            query=query,
-            expressions=statements,
-            **{
-                "dialect": dialect or "",
-                **AuditMeta(
-                    **{
-                        prop.name: prop.args.get("value")
-                        for prop in meta.expressions
-                        if prop
-                    },
-                ).dict(),
-            },
-        )
+        try:
+            audit = cls(
+                query=query,
+                expressions=statements,
+                **{
+                    "dialect": dialect or "",
+                    **AuditMeta(
+                        **{
+                            prop.name: prop.args.get("value")
+                            for prop in meta.expressions
+                            if prop
+                        },
+                    ).dict(),
+                },
+            )
+        except Exception as ex:
+            _raise_config_error(str(ex), path)
 
         audit._path = path
         return audit
