@@ -787,7 +787,6 @@ class Context(BaseContext):
 
     def _load_models(self):
         """Load all models."""
-        module = self.path.name
 
         for path in self._glob_path(self.models_directory_path, ".sql"):
             self._path_mtimes[path] = path.stat().st_mtime
@@ -795,9 +794,9 @@ class Context(BaseContext):
                 expressions = parse_model(file.read(), default_dialect=self.dialect)
                 model = Model.load(
                     expressions,
-                    module=module,
                     macros=self.macros,
                     path=Path(path).absolute(),
+                    module_path=self.path,
                     dialect=self.dialect,
                     time_column_format=self.config.time_column_format,
                 )
@@ -816,8 +815,8 @@ class Context(BaseContext):
             registered |= new
             for name in new:
                 model = registry[name].model(
-                    module=module,
                     path=path,
+                    module_path=self.path,
                     time_column_format=self.config.time_column_format,
                 )
                 self.models[model.name] = model

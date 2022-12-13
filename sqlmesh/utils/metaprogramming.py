@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ast
 import dis
 import inspect
@@ -14,11 +16,30 @@ from pathlib import Path
 
 from astor import to_source
 
-from sqlmesh.utils import trim_path, unique
+from sqlmesh.utils import unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 IGNORE_DECORATORS = {"macro", "model"}
+
+
+def _is_relative_to(
+    path: t.Optional[Path | str], other: t.Optional[Path | str]
+) -> bool:
+    """path.is_relative_to compatibility, was only supported >= 3.9"""
+    if path is None or other is None:
+        return False
+
+    if isinstance(path, str):
+        path = Path(path)
+    if isinstance(other, str):
+        other = Path(other)
+
+    try:
+        path.absolute().relative_to(other.absolute())
+        return True
+    except ValueError:
+        return False
 
 
 def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
@@ -195,7 +216,13 @@ def normalize_source(obj: t.Any) -> str:
     return to_source(root_node).strip()
 
 
-def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) -> None:
+def build_env(
+    obj: t.Any,
+    *,
+    env: t.Dict[str, t.Any],
+    name: str,
+    path: Path,
+) -> None:
     """Fills in env dictionary with all globals needed to execute the object.
 
     Recursively traverse classes and functions.
@@ -204,13 +231,12 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
         obj: Any python object.
         env: Dictionary to store the env.
         name: Name of the object in the env.
-        module: The module to filter on. Other modules will not be walked and treated as imports.
+        path: The module path to serialize. Other modules will not be walked and treated as imports.
     """
 
     obj_module = inspect.getmodule(obj)
-    obj_module_name = obj_module.__name__ if obj_module else ""
 
-    if obj_module_name == "builtins":
+    if obj_module and obj_module.__name__ == "builtins":
         return
 
     def walk(obj: t.Any) -> None:
@@ -221,11 +247,11 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
                         obj_module.__dict__[decorator],
                         env=env,
                         name=decorator,
-                        module=module,
+                        path=path,
                     )
 
             for base in obj.__bases__:
-                build_env(base, env=env, name=base.__qualname__, module=module)
+                build_env(base, env=env, name=base.__qualname__, path=path)
 
             for k, v in obj.__dict__.items():
                 if k.startswith("__"):
@@ -239,14 +265,14 @@ def build_env(obj: t.Any, *, env: t.Dict[str, t.Any], name: str, module: str) ->
                     if v.__qualname__.startswith(obj.__qualname__):
                         walk(v)
                     else:
-                        build_env(v, env=env, name=v.__name__, module=module)
+                        build_env(v, env=env, name=v.__name__, path=path)
         elif callable(obj):
             for k, v in func_globals(obj).items():
-                build_env(v, env=env, name=k, module=module)
+                build_env(v, env=env, name=k, path=path)
 
     if name not in env:
         env[name] = obj
-        if obj_module_name.startswith(module):
+        if obj_module and _is_relative_to(obj_module.__file__, path):
             walk(obj)
     elif env[name] != obj:
         raise SQLMeshError(
@@ -281,14 +307,14 @@ class Executable(PydanticModel):
         return self.kind == ExecutableKind.VALUE
 
 
-def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executable]:
+def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
     """Serializes a python function into a self contained dictionary.
 
     Recursively walks a function's globals to store all other references inside of env.
 
     Args:
         env: Dictionary to store the env.
-        module: The module to filter on. Other modules will not be walked and treated as imports.
+        path: The root path to seralize. Other modules will not be walked and treated as imports.
     """
     serialized = {}
 
@@ -296,13 +322,14 @@ def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executabl
         if callable(v):
             name = v.__name__
             name = k if name == "<lambda>" else name
+            file_path = Path(inspect.getfile(v))
 
-            if v.__module__.startswith(module):
+            if _is_relative_to(file_path, path):
                 serialized[k] = Executable(
                     name=name if name != k else None,
                     payload=normalize_source(v),
                     kind=ExecutableKind.DEFINITION,
-                    path=trim_path(Path(inspect.getfile(v)), module).name,
+                    path=str(file_path.relative_to(path.absolute())),
                 )
             else:
                 serialized[k] = Executable(
@@ -311,7 +338,7 @@ def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executabl
                 )
         elif inspect.ismodule(v):
             name = v.__name__
-            if name.startswith(module):
+            if _is_relative_to(v.__file__, path):
                 raise SQLMeshError(
                     f"Cannot serialize 'import {name}'. Use 'from {name} import ...' instead."
                 )

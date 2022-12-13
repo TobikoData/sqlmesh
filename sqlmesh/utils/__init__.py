@@ -34,27 +34,6 @@ def random_id() -> str:
     return str(uuid.uuid4()).replace("-", "_")
 
 
-def trim_path(path: Path, directory: str) -> Path:
-    """Trim a path up to a given directory.
-
-    Example:
-        >>> trim_path(Path("/a/b/c.txt"), "b")
-        PosixPath('b/c.txt')
-
-    Args:
-        path: A path object
-        directory: The directory to keep.
-    Returns:
-        The trimmed path.
-    """
-    parts = []
-    for part in reversed(path.parts):
-        parts.append(part)
-        if part == directory:
-            break
-    return Path(os.path.join(*reversed(parts)))
-
-
 class UniqueKeyDict(dict):
     """Dict that raises when a duplicate key is set."""
 
