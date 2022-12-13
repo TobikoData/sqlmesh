@@ -1,5 +1,6 @@
 import typing as t
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -7,6 +8,7 @@ import sqlglot
 from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import to_table
 
+import tests.utils.test_date as test_date
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -39,7 +41,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 36, in test_print_exception
+  File "{__file__}", line 38, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>
@@ -150,13 +152,14 @@ def test_normalize_source() -> None:
 def test_serialize_env_error() -> None:
     with pytest.raises(SQLMeshError) as e:
         # pretend to be the module pandas
-        serialize_env({"pandas": pd}, module="pandas")
+        serialize_env({"test_date": test_date}, path=Path("tests/utils"))
 
 
 def test_serialize_env() -> None:
     env: t.Dict[str, t.Any] = {}
-    build_env(main_func, env=env, name="MAIN", module="tests")
-    env = serialize_env(env, module="tests")  # type: ignore
+    path = Path("tests/utils")
+    build_env(main_func, env=env, name="MAIN", path=path)
+    env = serialize_env(env, path=path)  # type: ignore
 
     assert env == {
         "MAIN": Executable(

@@ -674,7 +674,7 @@ class Model(ModelMeta, frozen=True):
         expressions: t.List[exp.Expression],
         *,
         path: Path = Path(),
-        module: str = "",
+        module_path: Path = Path(),
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         macros: t.Optional[MacroRegistry] = None,
         dialect: t.Optional[str] = None,
@@ -683,7 +683,7 @@ class Model(ModelMeta, frozen=True):
 
         Args:
             expressions: Model, *Statements, Query.
-            module: The python module to serialize macros for.
+            module_path: The python module path to serialize macros for.
             path: An optional path to the file.
             dialect: The default dialect if no model dialect is configured.
             time_column_format: The default time column format to use if no model time column is configured.
@@ -732,7 +732,9 @@ class Model(ModelMeta, frozen=True):
             model = cls(
                 query=query,
                 expressions=statements,
-                python_env=_python_env(query, module, macros or macro.get_registry()),
+                python_env=_python_env(
+                    query, module_path, macros or macro.get_registry()
+                ),
                 **{
                     "dialect": dialect or "",
                     **ModelMeta(
@@ -1350,7 +1352,7 @@ class model(registry_decorator):
     def model(
         self,
         *,
-        module: str,
+        module_path: Path,
         path: Path,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     ) -> Model:
@@ -1362,12 +1364,12 @@ class model(registry_decorator):
             self.func,
             env=env,
             name=name,
-            module=module,
+            path=module_path,
         )
 
         model = Model(
             query=f"@{name}",
-            python_env=serialize_env(env, module=module),
+            python_env=serialize_env(env, path=module_path),
             **self.meta.dict(exclude_defaults=True),
         )
 
@@ -1412,7 +1414,7 @@ def find_tables(query: exp.Expression) -> t.Set[str]:
 
 
 def _python_env(
-    query: exp.Expression, module: str, macros: MacroRegistry
+    query: exp.Expression, module_path: Path, macros: MacroRegistry
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
 
@@ -1434,10 +1436,10 @@ def _python_env(
                 macro.func,
                 env=python_env,
                 name=name,
-                module=module,
+                path=module_path,
             )
 
-    return serialize_env(python_env, module=module)
+    return serialize_env(python_env, path=module_path)
 
 
 def _raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:
