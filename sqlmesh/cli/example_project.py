@@ -70,7 +70,7 @@ SELECT
     item_id,
     ds,
 FROM
-    (VALUES 
+    (VALUES
         (1, 1, '2020-01-01'),
         (1, 2, '2020-01-01'),
         (2, 1, '2020-01-01'),
@@ -96,7 +96,7 @@ WHERE
 """
 
 
-EXAMPLE_TEST = f"""test_example_model:
+EXAMPLE_TEST = f"""test_example_full_model:
   model: {EXAMPLE_FULL_MODEL_NAME}
   inputs:
     {EXAMPLE_INCREMENTAL_MODEL_NAME}:
@@ -161,7 +161,7 @@ def _create_config(config_path: Path, template: ProjectTemplate) -> None:
 
 
 def _create_audits(audits_path: Path) -> None:
-    _write_file(audits_path / f"example_model.sql", EXAMPLE_AUDIT)
+    _write_file(audits_path / "example_full_model.sql", EXAMPLE_AUDIT)
 
 
 def _create_models(models_path: Path) -> None:
@@ -173,7 +173,7 @@ def _create_models(models_path: Path) -> None:
 
 
 def _create_tests(tests_path: Path) -> None:
-    _write_file(tests_path / "test_example_model.yaml", EXAMPLE_TEST)
+    _write_file(tests_path / "test_example_full_model.yaml", EXAMPLE_TEST)
 
 
 def _write_file(path: Path, payload: str) -> None:
