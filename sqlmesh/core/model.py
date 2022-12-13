@@ -470,7 +470,7 @@ class ModelMeta(PydanticModel):
         if isinstance(v, exp.Expression):
             v = v.name
         if not to_datetime(v):
-            raise ConfigError(f"{v} not a valid date time")
+            raise ConfigError(f"'{v}' not a valid date time")
         return v
 
     @validator("batch_size", pre=True)
@@ -727,7 +727,6 @@ class Model(ModelMeta, frozen=True):
 
         if not query.expressions:
             _raise_config_error("Query missing select statements", path)
-            raise
 
         try:
             model = cls(

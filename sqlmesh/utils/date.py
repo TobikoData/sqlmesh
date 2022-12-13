@@ -242,3 +242,13 @@ def preserve_time_like_kind(input_value: TimeLike, output_value: TimeLike) -> Ti
     if is_date(input_value):
         return to_date(output_value)
     return output_value
+
+
+def validate_date_range(
+    start: t.Optional[TimeLike],
+    end: t.Optional[TimeLike],
+) -> None:
+    if start and end and to_datetime(start) > to_datetime(end):
+        raise ValueError(
+            f"Start date / time ({start}) can't be greater than end date / time ({end})"
+        )
