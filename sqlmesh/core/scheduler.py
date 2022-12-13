@@ -83,7 +83,6 @@ class Scheduler:
             mapping=mapping,
             **kwargs,
         )
-        self.state_sync.add_interval(snapshot.snapshot_id, start, end)
         self.snapshot_evaluator.audit(
             snapshot=snapshot,
             start=start,
@@ -92,6 +91,7 @@ class Scheduler:
             mapping=mapping,
             **kwargs,
         )
+        self.state_sync.add_interval(snapshot.snapshot_id, start, end)
         self.console.update_snapshot_progress(snapshot.name, 1)
 
     def run(
