@@ -124,9 +124,9 @@ class QualifiedViewName(PydanticModel, frozen=True):
             if p is not None
         )
 
-    def schema_for_environment(self, environment: str) -> t.Optional[str]:
-        schema = self.schema_name
-        if schema is not None and environment.lower() != c.PROD:
+    def schema_for_environment(self, environment: str) -> str:
+        schema = self.schema_name or "default"
+        if environment.lower() != c.PROD:
             schema = f"{schema}__{environment}"
         return schema
 

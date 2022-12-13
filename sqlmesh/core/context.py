@@ -834,6 +834,10 @@ class Context(BaseContext):
                     dialect=self.dialect,
                 ):
                     if not audit.skip:
+                        if audit.model not in self.models:
+                            raise ConfigError(
+                                f"Model '{audit.model}' referenced in the audit '{audit.name}' ({path}) was not found"
+                            )
                         self.models[audit.model].audits[audit.name] = audit
 
     def _import_python_file(self, path: Path) -> t.Optional[types.ModuleType]:

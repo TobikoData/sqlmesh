@@ -3,7 +3,9 @@ import typing as t
 
 import click
 
+from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
+from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.core.test import run_all_model_tests, run_model_tests
 from sqlmesh.utils.date import TimeLike
@@ -13,6 +15,7 @@ from sqlmesh.utils.date import TimeLike
 @opt.path
 @opt.config
 @click.pass_context
+@error_handler
 def cli(ctx, path, config=None) -> None:
     """SQLMesh command line tool."""
     path = os.path.abspath(path)
@@ -33,18 +36,21 @@ def cli(ctx, path, config=None) -> None:
 
 
 @cli.command("init")
+@click.option(
+    "-t",
+    "--template",
+    type=str,
+    help="Project template. Support values: airflow, default.",
+)
 @click.pass_context
-def init(ctx) -> None:
+@error_handler
+def init(ctx, template: t.Optional[str] = None) -> None:
     """Create a new SQLMesh repository."""
-    path = os.path.join(ctx.obj, "config.py")
-    if os.path.exists(path):
-        raise click.ClickException(f"Found an existing config in `{path}`.")
-    with open(path, "w", encoding="utf8") as file:
-        file.write(
-            """from sqlmesh.core.config import Config
-
-config = Config()"""
-        )
+    try:
+        project_template = ProjectTemplate(template.lower() if template else "default")
+    except ValueError:
+        raise click.ClickException(f"Invalid project template '{template}'")
+    init_example_project(ctx.obj, template=project_template)
 
 
 @cli.command("render")
@@ -54,6 +60,7 @@ config = Config()"""
 @opt.latest_time
 @opt.expand
 @click.pass_context
+@error_handler
 def render(
     ctx,
     model: str,
@@ -91,6 +98,7 @@ def render(
     help="The number of rows which the query should be limited to.",
 )
 @click.pass_context
+@error_handler
 def evaluate(
     ctx,
     model: str,
@@ -112,6 +120,7 @@ def evaluate(
 
 @cli.command("format")
 @click.pass_context
+@error_handler
 def format(ctx) -> None:
     """Format all models in a given directory."""
     ctx.obj.format()
@@ -120,6 +129,7 @@ def format(ctx) -> None:
 @cli.command("diff")
 @opt.environment
 @click.pass_context
+@error_handler
 def diff(ctx, environment: t.Optional[str] = None) -> None:
     """Show the diff between the current context and a given environment."""
     ctx.obj.diff(environment)
@@ -149,9 +159,11 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
 )
 @click.option(
     "--no_gaps",
+    is_flag=True,
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
 )
 @click.pass_context
+@error_handler
 def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
@@ -161,6 +173,7 @@ def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
 @cli.command("dag")
 @opt.file
 @click.pass_context
+@error_handler
 def dag(ctx, file) -> None:
     """
     Renders the dag using graphviz.
@@ -175,6 +188,7 @@ def dag(ctx, file) -> None:
 @opt.verbose
 @click.argument("tests", nargs=-1)
 @click.pass_obj
+@error_handler
 def test(obj, k, verbose, tests) -> None:
     """Run model unit tests."""
     # Set Python unittest verbosity level
@@ -210,6 +224,7 @@ def test(obj, k, verbose, tests) -> None:
 @opt.end_time
 @opt.latest_time
 @click.pass_obj
+@error_handler
 def audit(
     obj,
     models: t.Tuple[str],

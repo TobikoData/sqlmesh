@@ -30,7 +30,7 @@ end_time = click.option(
 latest_time = click.option(
     "-l",
     "--latest",
-    help="The latest time used for non incremental datasets (defaults to yesterday).",
+    help="The latest time used for non incremental datasets (defaults to now).",
 )
 
 expand = click.option(
@@ -41,7 +41,7 @@ expand = click.option(
 
 environment = click.option(
     "--environment",
-    help="The environment to diff the current context against.",
+    help="The environment to diff the current context against. Default: prod",
 )
 
 file = click.option(
