@@ -732,7 +732,9 @@ class Model(ModelMeta, frozen=True):
             model = cls(
                 query=query,
                 expressions=statements,
-                python_env=_python_env(query, module_path, macros or macro.get_registry()),
+                python_env=_python_env(
+                    query, module_path, macros or macro.get_registry()
+                ),
                 **{
                     "dialect": dialect or "",
                     **ModelMeta(
