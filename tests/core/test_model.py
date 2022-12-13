@@ -593,7 +593,8 @@ def test_parse_model(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          time_column ds
+          time_column ds,
+          dialect '',
         );
 
         SELECT
@@ -603,11 +604,12 @@ def test_parse_model(assert_exp_eq):
         WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
     """
     )
-    model = Model.load(expressions)
+    model = Model.load(expressions, dialect="hive")
     assert model.columns == {
         "ds": exp.DataType.build("unknown"),
         "id": exp.DataType.build("int"),
     }
+    assert model.dialect == ""
     assert isinstance(model.query, Jinja)
     assert isinstance(Model.parse_raw(model.json()).query, Jinja)
     assert_exp_eq(

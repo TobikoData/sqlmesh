@@ -747,7 +747,7 @@ class Model(ModelMeta, frozen=True):
                         )
                         if meta.comments
                         else None,
-                    ).dict(exclude_defaults=True),
+                    ).dict(),
                 },
             )
         except Exception as ex:
