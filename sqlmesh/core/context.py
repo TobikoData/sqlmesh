@@ -44,7 +44,7 @@ from io import StringIO
 from pathlib import Path
 
 from sqlglot import exp
-
+from sqlglot.schema import MappingSchema
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit
@@ -472,7 +472,21 @@ class Context(BaseContext):
         else:
             model = model_or_snapshot
 
-        expand = self.dag.upstream(model.name) if expand is True else expand or []
+        upstream_deps = []
+        schema: t.Optional[MappingSchema] = None
+
+        # We need the upstream tables' schemas in order to expand any possible star projections
+        if model.query.find(exp.Star):
+            schema = MappingSchema(dialect=self.dialect)
+            upstream_deps = self.dag.upstream(model.name)
+            for dep in upstream_deps:
+                schema.add_table(self.models[dep].name, self.models[dep].columns)
+
+        expand = (
+            upstream_deps or self.dag.upstream(model.name)
+            if expand is True
+            else expand or []
+        )
 
         return model.render_query(
             start=start,
@@ -481,6 +495,7 @@ class Context(BaseContext):
             snapshots=self.snapshots,
             mapping=mapping,
             expand=expand,
+            schema=schema,
             **kwargs,
         )
 

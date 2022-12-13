@@ -254,10 +254,14 @@ from astor import to_source
 from croniter import croniter
 from jinja2 import Environment
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse, parse_one
+from sqlglot import exp, maybe_parse, parse_one, parse
+from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.optimizer.simplify import simplify
+from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
@@ -305,6 +309,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 }
 
 EPOCH_DS = "1970-01-01"
+
+RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
 
 
 # switch to autoname with sqlglot is typed
@@ -876,6 +882,7 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
+        schema: t.Optional[MappingSchema] = None,
         audit_name: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
         **kwargs,
@@ -894,6 +901,7 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
+            schema: Schema used to expand a star expression into the corresponding upstream dependency columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -952,6 +960,9 @@ class Model(ModelMeta, frozen=True):
                 )
 
         query = self._query_cache[key]
+
+        if schema:
+            query = optimize(query, schema=schema, rules=RENDER_OPTIMIZER_RULES)
 
         if expand:
 
@@ -1022,6 +1033,7 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
+        schema: t.Optional[MappingSchema] = None,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -1036,6 +1048,7 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
+            schema: Schema used to expand a star expression into the corresponding upstream dependency columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -1050,6 +1063,7 @@ class Model(ModelMeta, frozen=True):
             snapshots=snapshots,
             mapping=mapping,
             expand=expand,
+            schema=schema,
             **kwargs,
         )
 
@@ -1251,10 +1265,7 @@ class Model(ModelMeta, frozen=True):
 
         for expression in query.expressions:
             if isinstance(expression, exp.Star):
-                _raise_config_error(
-                    "SELECT * is not allowed you must explicitly select columns.",
-                    self._path,
-                )
+                continue
 
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1

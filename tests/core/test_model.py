@@ -4,7 +4,11 @@ import pytest
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
+<<<<<<< HEAD
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
+=======
+from sqlmesh.core.model import Model, ModelKind, ModelMeta, TimeColumn
+>>>>>>> 06a788d (Add support for expanding star projections)
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 
@@ -92,7 +96,6 @@ def test_load(assert_exp_eq):
         ("CAST(x + 1 AS INT)", "must have inferrable names"),
         ("y::int, x::int AS y", "duplicate"),
         ("sum(x)::int -- annotation", "must have inferrable names"),
-        ("*", "explicitly select"),
     ],
 )
 def test_model_validation(query, error):
