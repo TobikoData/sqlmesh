@@ -619,7 +619,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 
     change_data_type(
         sushi_context,
-        "sushi.customer_revenue_by_day",
+        "sushi.waiter_revenue_by_day",
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
@@ -763,7 +763,7 @@ def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
         table_should_exist = not snapshot.is_embedded_kind
         assert adapter.table_exists(snapshot.table_name) == table_should_exist
         if table_should_exist:
-            assert bool(list(select_all(snapshot.table_name, adapter)))
+            assert select_all(snapshot.table_name, adapter)
 
 
 def validate_environment_views(

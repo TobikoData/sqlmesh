@@ -41,7 +41,7 @@ import unittest.result
 from io import StringIO
 from pathlib import Path
 
-from sqlglot import exp, parse
+from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
@@ -50,7 +50,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dag import DAG
-from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions
+from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import DF, EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
@@ -511,7 +511,7 @@ class Context(BaseContext):
         """Format all models in a given directory."""
         for model in self.models.values():
             with open(model._path, "r+", encoding="utf-8") as file:
-                expressions = [e for e in parse(file.read(), read=self.dialect) if e]
+                expressions = parse_model(file.read(), default_dialect=self.dialect)
                 file.seek(0)
                 file.write(format_model_expressions(expressions, model.dialect))
                 file.truncate()
@@ -792,7 +792,7 @@ class Context(BaseContext):
         for path in self._glob_path(self.models_directory_path, ".sql"):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), read=self.dialect)
+                expressions = parse_model(file.read(), default_dialect=self.dialect)
                 model = Model.load(
                     expressions,
                     module=module,
@@ -827,7 +827,7 @@ class Context(BaseContext):
         for path in self._glob_path(self.audits_directory_path, ".sql"):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), read=self.dialect)
+                expressions = parse_model(file.read(), default_dialect=self.dialect)
                 for audit in Audit.load_multiple(
                     expressions=expressions,
                     path=path,

@@ -31,8 +31,7 @@ def test_print_exception(mocker: MockerFixture):
             path="/test/path.py",
         ),
     }
-    env: t.Dict[str, t.Any] = {}
-    prepare_env(env, test_env)
+    env = prepare_env(test_env)
     try:
         eval("test_fun()", env)
     except Exception as ex:
@@ -40,7 +39,7 @@ def test_print_exception(mocker: MockerFixture):
 
     expected_message = f"""Traceback (most recent call last):
 
-  File "{__file__}", line 37, in test_print_exception
+  File "{__file__}", line 36, in test_print_exception
     eval("test_fun()", env)
 
   File "<string>", line 1, in <module>

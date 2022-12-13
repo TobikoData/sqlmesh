@@ -143,7 +143,7 @@ class Audit(AuditMeta, frozen=True):
     @classmethod
     def load(
         cls,
-        expressions: t.List[exp.Expression | None],
+        expressions: t.List[exp.Expression],
         *,
         path: pathlib.Path,
         dialect: t.Optional[str] = None,
@@ -178,7 +178,7 @@ class Audit(AuditMeta, frozen=True):
 
         audit = cls(
             query=query,
-            expressions=[statement for statement in statements if statement],
+            expressions=statements,
             **{
                 "dialect": dialect or "",
                 **AuditMeta(
@@ -197,12 +197,12 @@ class Audit(AuditMeta, frozen=True):
     @classmethod
     def load_multiple(
         cls,
-        expressions: t.List[exp.Expression | None],
+        expressions: t.List[exp.Expression],
         *,
         path: pathlib.Path,
         dialect: t.Optional[str] = None,
     ) -> t.Generator[Audit, None, None]:
-        audit_block: t.List[t.Optional[exp.Expression]] = []
+        audit_block: t.List[exp.Expression] = []
         for expression in expressions:
             if isinstance(expression, d.Audit):
                 if audit_block:

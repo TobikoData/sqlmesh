@@ -250,8 +250,9 @@ from itertools import zip_longest
 from pathlib import Path
 
 from croniter import croniter
+from jinja2 import Environment
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse, parse
+from sqlglot import exp, maybe_parse, parse_one
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.optimizer.simplify import simplify
@@ -337,6 +338,11 @@ class ModelKind(str, Enum):
     @property
     def is_materialized(self):
         return self not in (ModelKind.VIEW, ModelKind.EMBEDDED)
+
+    @property
+    def only_latest(self):
+        """Whether or not this model only cares about latest date to render."""
+        return self in (ModelKind.VIEW, ModelKind.FULL)
 
 
 class IntervalUnit(str, Enum):
@@ -608,7 +614,7 @@ class Model(ModelMeta, frozen=True):
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
 
-    query: t.Union[exp.Subqueryable, d.MacroVar]
+    query: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
@@ -645,7 +651,7 @@ class Model(ModelMeta, frozen=True):
     @classmethod
     def load(
         cls,
-        expressions: t.List[exp.Expression | None],
+        expressions: t.List[exp.Expression],
         *,
         path: Path = Path(),
         module: str = "",
@@ -675,15 +681,12 @@ class Model(ModelMeta, frozen=True):
                 "MODEL statement is required as the first statement in the definition",
                 path,
             )
-            raise
 
-        if not isinstance(query, exp.Subqueryable):
-            _raise_config_error("Missing SELECT query in the model definition", path)
-            raise
-
-        if not query.expressions:
-            _raise_config_error("Query missing select statements", path)
-            raise
+        if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
+            _raise_config_error(
+                "A query is required and must be a SELECT or UNION statement.",
+                path,
+            )
 
         model = cls(
             query=query,
@@ -852,16 +855,31 @@ class Model(ModelMeta, frozen=True):
 
         if key not in self._query_cache:
             if query_ or self.is_sql:
+                query_ = query_ or self.query
+                render_kwargs = {
+                    **date_dict(*dates, only_latest=self.kind.only_latest),
+                    **kwargs,
+                }
+
+                if isinstance(query_, d.Jinja):
+                    env = prepare_env(self.python_env)
+
+                    query_ = parse_one(
+                        Environment()
+                        .from_string(query_.name)
+                        .render(**env, **render_kwargs),
+                        read=self.dialect,
+                    )
+
                 macro_evaluator = MacroEvaluator(
                     dialect or self.dialect, self.python_env
                 )
-                macro_evaluator.locals.update(kwargs)
-                macro_evaluator.locals.update(date_dict(*dates))
+                macro_evaluator.locals.update(render_kwargs)
 
                 for definition in self.macro_definitions:
                     macro_evaluator.evaluate(definition)
 
-                self._query_cache[key] = macro_evaluator.transform(query_ or self.query)  # type: ignore
+                self._query_cache[key] = macro_evaluator.transform(query_)  # type: ignore
             else:
                 self._query_cache[key] = exp.select(
                     *(
@@ -999,8 +1017,7 @@ class Model(ModelMeta, frozen=True):
 
         from sqlmesh.core.engine_adapter import pyspark
 
-        env: t.Dict[str, t.Any] = {}
-        prepare_env(env, self.python_env)
+        env = prepare_env(self.python_env)
         start, end = make_inclusive(start or EPOCH_DS, end or EPOCH_DS)
         latest = to_datetime(latest or EPOCH_DS)
         try:
@@ -1161,6 +1178,14 @@ class Model(ModelMeta, frozen=True):
         name_counts: t.Dict[str, int] = {}
         query = self._render_query()
 
+        if not isinstance(query, exp.Subqueryable):
+            _raise_config_error(
+                "Missing SELECT query in the model definition", self._path
+            )
+
+        if not query.expressions:
+            _raise_config_error("Query missing select statements", self._path)
+
         for expression in query.expressions:
             if isinstance(expression, exp.Star):
                 _raise_config_error(
@@ -1250,7 +1275,9 @@ class model(registry_decorator):
     registry_name = "python_models"
 
     def __init__(self, definition: str = "", **kwargs):
-        meta, *expressions = parse(definition, read=kwargs.get("dialect"))
+        meta, *expressions = d.parse_model(
+            definition, default_dialect=kwargs.get("dialect")
+        )
 
         self.meta = ModelMeta(
             **{
@@ -1338,11 +1365,19 @@ def _python_env(
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
 
-    for macro_func in query.find_all(d.MacroFunc):
-        if isinstance(macro_func, (d.MacroSQL, d.MacroStrReplace)):
-            continue
-        name = macro_func.this.name.lower()
-        macro = macros[name]
+    used_macros = {}
+
+    if isinstance(query, d.Jinja):
+        for var in query.expressions:
+            if var in macros:
+                used_macros[var] = macros[var]
+    else:
+        for macro_func in query.find_all(d.MacroFunc):
+            if macro_func.__class__ is d.MacroFunc:
+                name = macro_func.this.name.lower()
+                used_macros[name] = macros[name]
+
+    for name, macro in used_macros.items():
         if macro.serialize:
             build_env(
                 macro.func,

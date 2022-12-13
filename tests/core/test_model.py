@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from sqlglot import exp, parse, parse_one
 
-from sqlmesh.core.dialect import format_model_expressions
+from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
@@ -175,7 +175,7 @@ def test_no_query():
 
     with pytest.raises(ConfigError) as ex:
         Model.load(expressions, path=Path("test_location"))
-    assert "definition: 'test_location'" in str(ex.value)
+    assert "must be a SELECT" in str(ex.value)
 
 
 def test_partition_key_is_missing_in_query():
@@ -585,4 +585,39 @@ def test_filter_time_column(assert_exp_eq):
         WHERE
           CAST(ds AS TEXT) <= '20210101' AND CAST(ds as TEXT) >= '20210101'
         """,
+    )
+
+
+def test_parse_model(assert_exp_eq):
+    expressions = parse_model(
+        """
+        MODEL (
+          name sushi.items,
+          time_column ds
+        );
+
+        SELECT
+          id::INT AS id,
+          ds
+        FROM x
+        WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
+    """
+    )
+    model = Model.load(expressions)
+    assert model.columns == {
+        "ds": exp.DataType.build("unknown"),
+        "id": exp.DataType.build("int"),
+    }
+    assert isinstance(model.query, Jinja)
+    assert isinstance(Model.parse_raw(model.json()).query, Jinja)
+    assert_exp_eq(
+        model.render_query(),
+        """
+      SELECT
+        CAST(id AS INT) AS id,
+        ds
+      FROM x
+      WHERE
+        ds <= '1970-01-01' AND ds >= '1970-01-01'
+    """,
     )
