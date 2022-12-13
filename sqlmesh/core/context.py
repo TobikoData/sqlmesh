@@ -45,6 +45,7 @@ from pathlib import Path
 
 from sqlglot import exp
 from sqlglot.schema import MappingSchema
+
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit

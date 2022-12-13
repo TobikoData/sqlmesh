@@ -4,11 +4,7 @@ import pytest
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
-<<<<<<< HEAD
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
-=======
-from sqlmesh.core.model import Model, ModelKind, ModelMeta, TimeColumn
->>>>>>> 06a788d (Add support for expanding star projections)
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 
@@ -628,7 +624,16 @@ def test_parse_model(assert_exp_eq):
     )
 
 
+<<<<<<< HEAD
 CONST = "bar"
+=======
+def test_star_expansion(assert_exp_eq, sushi_context):
+    new_model = Model(
+        name="sushi.new_test_model",
+        kind=ModelKind.FULL,
+        query=parse_one("SELECT * FROM sushi.orders AS o"),
+    )
+>>>>>>> 629785a (PR feedback, rebase)
 
 
 def test_python_model_deps() -> None:

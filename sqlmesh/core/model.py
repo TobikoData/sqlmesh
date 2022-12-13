@@ -254,7 +254,7 @@ from astor import to_source
 from croniter import croniter
 from jinja2 import Environment
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse, parse_one, parse
+from sqlglot import exp, maybe_parse, parse_one
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
@@ -1264,9 +1264,6 @@ class Model(ModelMeta, frozen=True):
             _raise_config_error("Query missing select statements", self._path)
 
         for expression in query.expressions:
-            if isinstance(expression, exp.Star):
-                continue
-
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
