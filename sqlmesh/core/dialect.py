@@ -335,7 +335,7 @@ def text_diff(
 
 
 DIALECT_PATTERN = re.compile(
-    r"(model|audit).*?\(.*?dialect.+?([a-z]+)", re.IGNORECASE | re.DOTALL
+    r"(model|audit).*?\(.*?dialect[^a-z,]+([a-z]*|,)", re.IGNORECASE | re.DOTALL
 )
 JINJA_PATTERN = re.compile(r"{{|{%|{#")
 
