@@ -6,11 +6,10 @@ from collections import defaultdict
 from IPython.core.display import HTML, display
 from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
-from sqlglot import parse
 
 from sqlmesh.core.console import NotebookMagicConsole
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import format_model_expressions
+from sqlmesh.core.dialect import format_model_expressions, parse_model
 from sqlmesh.core.model import Model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
@@ -62,7 +61,7 @@ class SQLMeshMagics(Magics):
 
         if sql:
             loaded = Model.load(
-                parse(sql),
+                parse_model(sql, default_dialect=self.context.dialect),
                 macros=self.context.macros,
                 path=model._path,
                 dialect=self.context.dialect,

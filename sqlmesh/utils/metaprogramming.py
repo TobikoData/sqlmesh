@@ -327,18 +327,23 @@ def serialize_env(env: t.Dict[str, t.Any], module: str) -> t.Dict[str, Executabl
 
 
 def prepare_env(
-    env: t.Dict[str, t.Any],
     python_env: t.Dict[str, Executable],
-) -> None:
+    env: t.Optional[t.Dict[str, t.Any]] = None,
+) -> t.Dict[str, t.Any]:
     """Prepare a python env by hydrating and executing functions.
 
     The Python ENV is stored in a json serializable format.
     Functions and imports are stored as a special data class.
 
     Args:
-        env: The dictionary to execute code in.
         python_env: The dictionary containing the serialized python environment.
+        env: The dictionary to execute code in.
+
+    Returns:
+        The prepared environment with hydrated functions.
     """
+    env = {} if env is None else env
+
     for name, executable in sorted(
         python_env.items(), key=lambda item: 0 if item[1].is_import else 1
     ):
@@ -346,6 +351,7 @@ def prepare_env(
             env[name] = executable.payload
         else:
             exec(executable.payload, env)
+    return env
 
 
 def print_exception(

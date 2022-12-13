@@ -3,6 +3,7 @@ MODEL (
   name sushi.customer_revenue_by_day,
   owner jen,
   cron '@daily',
+  dialect hive,
   batch_size 10,
   time_column ds
 );
@@ -16,7 +17,7 @@ WITH order_total AS (
   LEFT JOIN sushi.items AS i
     ON oi.item_id = i.id AND oi.ds = i.ds
   WHERE
-    oi.ds BETWEEN @start_ds AND @end_ds
+    oi.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
   GROUP BY
     oi.order_id,
     oi.ds
@@ -29,7 +30,7 @@ FROM sushi.orders AS o
 LEFT JOIN order_total AS ot
   ON o.id = ot.order_id AND o.ds = ot.ds
 WHERE
-  o.ds BETWEEN @start_ds AND @end_ds
+  o.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 GROUP BY
   o.customer_id,
   o.ds

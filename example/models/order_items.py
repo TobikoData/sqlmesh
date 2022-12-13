@@ -71,7 +71,7 @@ SELECT *
                         "order_id": order["id"],
                         "item_id": item["id"],
                         "quantity": random.randint(1, 10),
-                        "ds": dt,
+                        "ds": to_ds(dt),
                     }
                 )
         dfs.append(
