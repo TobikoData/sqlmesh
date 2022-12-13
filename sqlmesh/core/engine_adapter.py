@@ -273,6 +273,53 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.update(table_name, properties, where=where))
 
+    def merge(
+        self,
+        target_table: str,
+        source_table: str,
+        columns: t.Iterable[str],
+        unique_keys: t.Iterable[str],
+    ):
+        on = exp.and_(
+            *(
+                exp.EQ(
+                    this=exp.column(key, target_table),
+                    expression=exp.column(key, source_table),
+                )
+                for key in unique_keys
+            )
+        )
+        when_matched = exp.When(
+            this="MATCHED",
+            then=exp.update(
+                None,
+                properties={
+                    exp.column(col, target_table): exp.column(col, source_table)
+                    for col in columns
+                },
+            ),
+        )
+        when_not_matched = exp.When(
+            this=exp.Not(this="MATCHED"),
+            then=exp.Insert(
+                this=exp.Tuple(expressions=[exp.column(col) for col in columns]),
+                expression=exp.Tuple(
+                    expressions=[exp.column(col, source_table) for col in columns]
+                ),
+            ),
+        )
+        self.execute(
+            exp.Merge(
+                this=target_table,
+                using=source_table,
+                on=on,
+                expressions=[
+                    when_matched,
+                    when_not_matched,
+                ],
+            )
+        )
+
     def fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
         self.execute(query)
         return self.cursor.fetchone()
