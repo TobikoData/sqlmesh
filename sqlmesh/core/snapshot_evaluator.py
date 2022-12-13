@@ -76,6 +76,7 @@ class SnapshotEvaluator:
                 as a dataframe.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
         if snapshot.is_embedded_kind:
             return None
 
@@ -220,6 +221,7 @@ class SnapshotEvaluator:
             collection_exceptions:
             kwargs: Additional kwargs to pass to the renderer.
         """
+        logger.info("Auditing snapshot %s", snapshot.snapshot_id)
         results = []
         for audit, query in snapshot.model.render_audit_queries(
             start=start,
