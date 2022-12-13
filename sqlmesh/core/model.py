@@ -681,7 +681,12 @@ class Model(ModelMeta, frozen=True):
                 "MODEL statement is required as the first statement in the definition",
                 path,
             )
-            raise
+
+        if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
+            _raise_config_error(
+                "A query is required and must be a SELECT or UNION statement.",
+                path,
+            )
 
         model = cls(
             query=query,

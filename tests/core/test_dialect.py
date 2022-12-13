@@ -1,6 +1,12 @@
-from sqlglot import parse, parse_one
+from sqlglot import exp, parse, parse_one
 
-from sqlmesh.core.dialect import format_model_expressions, text_diff
+from sqlmesh.core.dialect import (
+    Jinja,
+    Model,
+    format_model_expressions,
+    parse_model,
+    text_diff,
+)
 
 
 def test_format_model_expressions():
@@ -110,3 +116,22 @@ def test_text_diff():
 +FROM y""" in text_diff(
         parse_one("SELECT * FROM x"), parse_one("SELECT 1 FROM y")
     )
+
+
+def test_parse_model():
+    expressions = parse_model(
+        """
+        MODEL (
+            kind full,
+            dialect "hive",
+        );
+
+        CACHE TABLE x as SELECT 1 as Y;
+
+        SELECT * FROM x WHERE y = {{ 1 }} ;
+    """
+    )
+
+    assert isinstance(expressions[0], Model)
+    assert isinstance(expressions[1], exp.Cache)
+    assert isinstance(expressions[2], Jinja)

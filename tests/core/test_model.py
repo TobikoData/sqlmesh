@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
@@ -174,8 +173,9 @@ def test_no_query():
     """
     )
 
-    with pytest.raises(ValidationError) as ex:
+    with pytest.raises(ConfigError) as ex:
         Model.load(expressions, path=Path("test_location"))
+    assert "must be a SELECT" in str(ex.value)
 
 
 def test_partition_key_is_missing_in_query():
