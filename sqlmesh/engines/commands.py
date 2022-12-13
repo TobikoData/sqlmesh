@@ -56,6 +56,13 @@ def evaluate(
         command_payload.latest,
         mapping=command_payload.table_mapping,
     )
+    evaluator.audit(
+        snapshot=command_payload.snapshot,
+        start=command_payload.start,
+        end=command_payload.end,
+        latest=command_payload.latest,
+        mapping=command_payload.table_mapping,
+    )
 
 
 def promote(
