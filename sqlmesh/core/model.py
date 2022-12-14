@@ -677,7 +677,9 @@ class Model(ModelMeta, frozen=True):
         module_path: Path = Path(),
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         macros: t.Optional[MacroRegistry] = None,
+        python_env: t.Optional[t.Dict[str, Executable]] = None,
         dialect: t.Optional[str] = None,
+        **kwargs,
     ) -> Model:
         """Load a model from a parsed SQLMesh model file.
 
@@ -725,16 +727,17 @@ class Model(ModelMeta, frozen=True):
                 path,
             )
 
-        if not query.expressions:
+        if not query.expressions and not isinstance(query, d.MacroVar):
             _raise_config_error("Query missing select statements", path)
+
+        if not python_env:
+            python_env = _python_env(query, module_path, macros or macro.get_registry())
 
         try:
             model = cls(
                 query=query,
                 expressions=statements,
-                python_env=_python_env(
-                    query, module_path, macros or macro.get_registry()
-                ),
+                python_env=python_env,
                 **{
                     "dialect": dialect or "",
                     **ModelMeta(
@@ -747,6 +750,7 @@ class Model(ModelMeta, frozen=True):
                         )
                         if meta.comments
                         else None,
+                        **kwargs,
                     ).dict(),
                 },
             )
@@ -1328,26 +1332,20 @@ class model(registry_decorator):
     registry_name = "python_models"
 
     def __init__(self, definition: str = "", **kwargs):
-        meta, *expressions = d.parse_model(
+        self.expressions = d.parse_model(
             definition, default_dialect=kwargs.get("dialect")
         )
+        self.kwargs = kwargs
 
-        self.meta = ModelMeta(
-            **{
-                "depends_on": set(),
-                "description": "\n".join(comment.strip() for comment in meta.comments)
-                if meta
-                else None,
-                **(
-                    {prop.name: prop.args.get("value") for prop in meta.expressions}
-                    if meta
-                    else {}
-                ),
-                **kwargs,
-            },
-        )
-        self.expressions = expressions
-        self.name = self.meta.name
+        if "name" not in kwargs:
+            meta = self.expressions[0]
+            for prop in meta.expressions:
+                if prop.name == "name":
+                    self.name = prop.args.get("value")
+                    break
+                raise ConfigError("Missing name attribute in Python model")
+        else:
+            self.name = kwargs["name"]
 
     def model(
         self,
@@ -1367,14 +1365,18 @@ class model(registry_decorator):
             path=module_path,
         )
 
-        model = Model(
-            query=f"@{name}",
-            python_env=serialize_env(env, path=module_path),
-            **self.meta.dict(exclude_defaults=True),
-        )
+        expressions = [
+            *self.expressions,
+            d.MacroVar(this=name),
+        ]
 
-        model.set_time_format(time_column_format)
-        model._path = path
+        model = Model.load(
+            expressions,
+            path=path,
+            time_column_format=time_column_format,
+            python_env=serialize_env(env, path=module_path),
+            **self.kwargs,
+        )
         return model
 
 
