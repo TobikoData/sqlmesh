@@ -625,6 +625,7 @@ def test_parse_model(assert_exp_eq):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 CONST = "bar"
 =======
 def test_star_expansion(assert_exp_eq, sushi_context):
@@ -646,3 +647,27 @@ def test_python_model_deps() -> None:
         module_path=Path("."),
         path=Path("."),
     ).depends_on == {"foo", "bar.baz"}
+=======
+# def test_star_expansion(assert_exp_eq, sushi_context):
+#     new_model = Model(
+#         name="sushi.new_test_model",
+#         kind=ModelKind.FULL,
+#         query=parse_one("SELECT * FROM sushi.orders AS o"),
+#     )
+
+#     sushi_context.upsert_model(new_model)
+
+#     assert_exp_eq(
+#         sushi_context.render("sushi.new_test_model"),
+#         """
+#         SELECT
+#           o.id AS id,
+#           o.customer_id AS customer_id,
+#           o.waiter_id AS waiter_id,
+#           o.start_ts AS start_ts,
+#           o.end_ts AS end_ts,
+#           o.ds AS ds
+#         FROM sqlmesh.sushi__orders__2566857023_0 AS o
+#         """,
+#     )
+>>>>>>> a47b02f (Try out new approach for expanding stars)

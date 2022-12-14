@@ -652,10 +652,12 @@ class Model(ModelMeta, frozen=True):
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _columns: t.Optional[t.Dict[str, exp.DataType]] = None
+    _ordered_columns: t.Optional[t.List[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
     _query_cache: t.Dict[
         t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
     ] = {}
+    _contains_star_query: bool = False
     audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
     @validator("query", "expressions_", pre=True)
@@ -809,14 +811,17 @@ class Model(ModelMeta, frozen=True):
         if self.columns_:
             return self.columns_
 
-        if self._columns is None:
+        _columns = self._columns
+        if _columns is None:
             query = annotate_types(self._render_query())
+            _columns = self._set_columns(query)
 
-            self._columns = {
-                expression.alias_or_name: expression.type
-                for expression in query.expressions
-            }
-        return self._columns
+        return _columns
+
+    @property
+    def contains_star_query(self) -> bool:
+        """Returns True if the model's query contains a star projection."""
+        return self._contains_star_query
 
     @property
     def annotated(self) -> bool:
@@ -825,6 +830,12 @@ class Model(ModelMeta, frozen=True):
             column_type.this != exp.DataType.Type.UNKNOWN
             for column_type in self.columns.values()
         )
+
+    def expand_star(self, schema: MappingSchema) -> None:
+        """Sets this model's columns after expanding the outermost star projection."""
+        query = self._render_query().copy()
+        expanded_query = optimize(query, schema=schema, rules=RENDER_OPTIMIZER_RULES)
+        self._set_columns(expanded_query)
 
     def render(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model."""
@@ -882,7 +893,6 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        schema: t.Optional[MappingSchema] = None,
         audit_name: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
         **kwargs,
@@ -901,7 +911,6 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            schema: Schema used to expand a star expression into the corresponding upstream dependency columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -961,9 +970,6 @@ class Model(ModelMeta, frozen=True):
 
         query = self._query_cache[key]
 
-        if schema:
-            query = optimize(query, schema=schema, rules=RENDER_OPTIMIZER_RULES)
-
         if expand:
 
             def _expand(node: exp.Expression) -> exp.Expression:
@@ -996,6 +1002,20 @@ class Model(ModelMeta, frozen=True):
             for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
                 if isinstance(node, exp.Select):
                     self._filter_time_column(node, *dates[0:2])
+
+        # If the query contains a SELECT *, we'll wrap it in a new SELECT expression with the
+        # corresponding column projections: SELECT col1::type1 AS col1 [, ...] FROM (SELECT * ...)
+        if self._contains_star_query:
+            assert self._ordered_columns is not None
+
+            query = exp.select(
+                *(
+                    exp.alias_(f"{column}::{self.columns[column]}", column)
+                    for column in self._ordered_columns
+                )
+            ).from_(
+                query.subquery()
+            )  # Should we copy `query` here?
 
         if mapping:
             return exp.replace_tables(query, mapping)
@@ -1033,7 +1053,6 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        schema: t.Optional[MappingSchema] = None,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -1048,7 +1067,6 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            schema: Schema used to expand a star expression into the corresponding upstream dependency columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -1063,7 +1081,6 @@ class Model(ModelMeta, frozen=True):
             snapshots=snapshots,
             mapping=mapping,
             expand=expand,
-            schema=schema,
             **kwargs,
         )
 
@@ -1269,6 +1286,8 @@ class Model(ModelMeta, frozen=True):
 
             if isinstance(expression, exp.Alias):
                 expression = expression.this
+            elif isinstance(expression, exp.Star):
+                self._contains_star_query = True
             elif not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
@@ -1303,6 +1322,16 @@ class Model(ModelMeta, frozen=True):
                 "Incremental models must have a time_column field.",
                 self._path,
             )
+
+    def _set_columns(self, query: exp.Expression) -> t.Dict[str, exp.DataType]:
+        self._columns = {}
+        self._ordered_columns = []
+
+        for expression in query.expressions:
+            self._ordered_columns.append(expression.alias_or_name)
+            self._columns[expression.alias_or_name] = expression.type
+
+        return self._columns
 
     def _validate_view(self, query: exp.Expression) -> None:
         pass

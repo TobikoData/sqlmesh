@@ -473,21 +473,7 @@ class Context(BaseContext):
         else:
             model = model_or_snapshot
 
-        upstream_deps = []
-        schema: t.Optional[MappingSchema] = None
-
-        # We need the upstream tables' schemas in order to expand any possible star projections
-        if model.query.find(exp.Star):
-            schema = MappingSchema(dialect=self.dialect)
-            upstream_deps = self.dag.upstream(model.name)
-            for dep in upstream_deps:
-                schema.add_table(self.models[dep].name, self.models[dep].columns)
-
-        expand = (
-            upstream_deps or self.dag.upstream(model.name)
-            if expand is True
-            else expand or []
-        )
+        expand = self.dag.upstream(model.name) if expand is True else expand or []
 
         return model.render_query(
             start=start,
@@ -496,7 +482,6 @@ class Context(BaseContext):
             snapshots=self.snapshots,
             mapping=mapping,
             expand=expand,
-            schema=schema,
             **kwargs,
         )
 
@@ -878,6 +863,25 @@ class Context(BaseContext):
                 )
                 self.models[model.name] = model
                 self._add_model_to_dag(model)
+
+        schema = MappingSchema(dialect=self.dialect)
+        for name in self.dag.sorted():
+            model = self.models.get(name)
+
+            # External models don't exist in the context, so we need to skip them
+            if not model:
+                continue
+
+            if model.contains_star_query:
+                upstream_deps = model.depends_on
+                if any(map(lambda dep: dep not in self.models, upstream_deps)):
+                    raise SQLMeshError(
+                        f"Can't expand SELECT * expression for model {name}"
+                    )
+
+                model.expand_star(schema)
+
+            schema.add_table(name, model.columns)
 
     def _load_audits(self) -> None:
         for path in self._glob_path(self.audits_directory_path, ".sql"):
