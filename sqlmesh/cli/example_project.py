@@ -61,7 +61,6 @@ EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
     kind incremental,
     time_column ds,
     start '2020-01-01',
-    batch_size 1,
     cron '@daily',
 );
 
