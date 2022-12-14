@@ -168,23 +168,33 @@ class SQLMeshMagics(Magics):
         help="The environment to base the plan on instead of local files.",
     )
     @argument(
-        "--skip_tests",
+        "--skip-tests",
         "-t",
         action="store_true",
         help="Skip the unit tests defined for the model",
     )
     @argument(
-        "--restate_from",
+        "--restate-from",
         "-r",
         type=str,
         nargs="*",
         help="Restate all models that depend on these upstream tables. All snapshots that depend on these upstream tables will have their intervals wiped but only the current snapshots will be backfilled.",
     )
     @argument(
-        "--no_gaps",
+        "--no-gaps",
         "-g",
         action="store_true",
         help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
+    )
+    @argument(
+        "--no-prompts",
+        action="store_true",
+        help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
+    )
+    @argument(
+        "--auto-apply",
+        action="store_true",
+        help="Automatically applies the new plan after creation.",
     )
     @line_magic
     def plan(self, line) -> None:
@@ -204,6 +214,8 @@ class SQLMeshMagics(Magics):
             skip_tests=args.skip_tests,
             restate_from=args.restate_from,
             no_gaps=args.no_gaps,
+            no_prompts=args.no_prompts,
+            auto_apply=args.auto_apply,
         )
         self.context.console = console
 
