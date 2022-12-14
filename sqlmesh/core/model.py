@@ -894,6 +894,7 @@ class Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         add_incremental_filter: bool = False,
+        expand_star: bool = False,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -909,6 +910,7 @@ class Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             add_incremental_filter: Add an incremental filter to the query if the model is incremental.
+            expand_star: If the query contains a star projection, it's expanded into the corresponding columns.
             snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
                 If passing snapshots is undesirable, mapping can be used instead to manually map tables.
             mapping: Mapping to replace table names, if not set, the mapping will be created from snapshots.
@@ -1007,17 +1009,16 @@ class Model(ModelMeta, frozen=True):
                 if isinstance(node, exp.Select):
                     self._filter_time_column(node, *dates[0:2])
 
-        # If the query contains a SELECT *, we'll wrap it in a new SELECT expression with the
-        # corresponding column projections: SELECT col1::type1 AS col1 [, ...] FROM (SELECT * ...)
-        if self._contains_star_query:
-            query = exp.select(
+        if expand_star and self._contains_star_query:
+            # FIXME: fix union expressions when we start handling them in other places too
+            # (e.g. `Model.columns` would need to be fixed, etc.)
+            query = query.select(  # type: ignore
                 *(
                     exp.alias_(f"{name}::{column_type}", name)
                     for name, column_type in self.columns.items()
-                )
-            ).from_(
-                query.subquery()
-            )  # Should we copy `query` here?
+                ),
+                append=False,
+            )
 
         if mapping:
             return exp.replace_tables(query, mapping)
@@ -1039,7 +1040,9 @@ class Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(snapshots=snapshots, expand=snapshots)
+        query = self._render_query(
+            expand_star=True, snapshots=snapshots, expand=snapshots
+        )
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)
@@ -1055,6 +1058,7 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
+        expand_star: bool = True,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -1069,6 +1073,7 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
+            expand_star: If the query contains a star projection, it's expanded into the corresponding columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -1083,6 +1088,7 @@ class Model(ModelMeta, frozen=True):
             snapshots=snapshots,
             mapping=mapping,
             expand=expand,
+            expand_star=expand_star,
             **kwargs,
         )
 
