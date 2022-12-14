@@ -2,7 +2,6 @@ MODEL (
   name sushi.waiters,
   owner jen,
   cron '@daily',
-  batch_size 30,
   time_column ds
 );
 
