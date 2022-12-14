@@ -652,7 +652,6 @@ class Model(ModelMeta, frozen=True):
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _columns: t.Optional[t.Dict[str, exp.DataType]] = None
-    _ordered_columns: t.Optional[t.List[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
     _query_cache: t.Dict[
         t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
@@ -811,12 +810,14 @@ class Model(ModelMeta, frozen=True):
         if self.columns_:
             return self.columns_
 
-        _columns = self._columns
-        if _columns is None:
+        if self._columns is None:
             query = annotate_types(self._render_query())
-            _columns = self._set_columns(query)
+            self._columns = {
+                expression.alias_or_name: expression.type
+                for expression in query.expressions
+            }
 
-        return _columns
+        return self._columns
 
     @property
     def contains_star_query(self) -> bool:
@@ -835,7 +836,10 @@ class Model(ModelMeta, frozen=True):
         """Sets this model's columns after expanding the outermost star projection."""
         query = self._render_query().copy()
         expanded_query = optimize(query, schema=schema, rules=RENDER_OPTIMIZER_RULES)
-        self._set_columns(expanded_query)
+        self._columns = {
+            expression.alias_or_name: expression.type
+            for expression in expanded_query.expressions
+        }
 
     def render(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model."""
@@ -1006,12 +1010,10 @@ class Model(ModelMeta, frozen=True):
         # If the query contains a SELECT *, we'll wrap it in a new SELECT expression with the
         # corresponding column projections: SELECT col1::type1 AS col1 [, ...] FROM (SELECT * ...)
         if self._contains_star_query:
-            assert self._ordered_columns is not None
-
             query = exp.select(
                 *(
-                    exp.alias_(f"{column}::{self.columns[column]}", column)
-                    for column in self._ordered_columns
+                    exp.alias_(f"{name}::{column_type}", name)
+                    for name, column_type in self.columns.items()
                 )
             ).from_(
                 query.subquery()
@@ -1322,16 +1324,6 @@ class Model(ModelMeta, frozen=True):
                 "Incremental models must have a time_column field.",
                 self._path,
             )
-
-    def _set_columns(self, query: exp.Expression) -> t.Dict[str, exp.DataType]:
-        self._columns = {}
-        self._ordered_columns = []
-
-        for expression in query.expressions:
-            self._ordered_columns.append(expression.alias_or_name)
-            self._columns[expression.alias_or_name] = expression.type
-
-        return self._columns
 
     def _validate_view(self, query: exp.Expression) -> None:
         pass
