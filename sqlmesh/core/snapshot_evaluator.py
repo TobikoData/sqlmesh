@@ -115,7 +115,7 @@ class SnapshotEvaluator:
             logger.info("Replacing view '%s'", table_name)
             self.adapter.create_view(table_name, query_or_df, model.columns)
         elif snapshot.is_full_kind:
-            self.adapter.replace_query(table_name, query_or_df)
+            self.adapter.replace_query(table_name, query_or_df, model.columns)
         else:
             logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
             columns = model.columns

@@ -92,28 +92,49 @@ class EngineAdapter:
         self.create_table(table_name, columns, **kwargs)
         self.insert_append(table_name, query_or_df, columns=columns)
 
-    def replace_query(self, table_name: str, query_or_df: QueryOrDF):
+    def replace_query(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
         """Replaces an existing table with a query.
 
-        For partiton based engines (hive, spark), insert override is used. For other systems, create or replace is used.
+        For partition based engines (hive, spark), insert override is used. For other systems, create or replace is used.
 
         Args:
             table_name: The name of the table (eg. prod.table)
             query_or_df: The SQL query to run or a dataframe.
+            column_mapping: Only used if a dataframe is provided. A mapping between the column name and its data type.
+                Expected to be ordered to match the order of values in the dataframe.
         """
         if self.supports_partitions:
             self.insert_overwrite(table_name, query_or_df)
         else:
             if isinstance(query_or_df, pd.DataFrame):
-                query_or_df = next(pandas_to_sql(query_or_df))
-            self.execute(
-                exp.Create(
+                if column_mapping is None:
+                    raise ValueError("column_mapping must be provided for dataframes")
+                schema = exp.Schema(
+                    this=exp.to_identifier(table_name),
+                    expressions=[
+                        exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
+                        for column, kind in column_mapping.items()
+                    ],
+                )
+                create = exp.Create(
+                    this=schema,
+                    kind="TABLE",
+                    replace=True,
+                    expression=next(pandas_to_sql(query_or_df)),
+                )
+            else:
+                create = exp.Create(
                     kind="TABLE",
                     this=exp.to_table(table_name),
                     replace=True,
                     expression=query_or_df,
                 )
-            )
+            self.execute(create)
 
     def create_table(
         self,
