@@ -21,7 +21,6 @@ from sqlmesh.integrations.github.notification_target import GithubNotificationTa
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
-from sqlmesh.schedulers.airflow.operators.hwm_signal import HighWaterMarkSignalOperator
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
@@ -83,6 +82,7 @@ class SnapshotDagGenerator:
             dag_id=dag_id,
             schedule_interval=snapshot.model.cron,
             start_date=to_datetime(snapshot.unpaused_ts),
+            max_active_runs=1,
             catchup=True,
             is_paused_upon_creation=False,
             tags=[
@@ -90,6 +90,10 @@ class SnapshotDagGenerator:
                 common.SNAPSHOT_AIRFLOW_TAG,
                 snapshot.name,
             ],
+            default_args={
+                "email": snapshot.model.owner,
+                "email_on_failure": True,
+            },
         ) as dag:
 
             hwm_sensor_tasks = self._create_hwm_sensors(snapshot=snapshot)
@@ -100,11 +104,7 @@ class SnapshotDagGenerator:
                 task_id="snapshot_evaluator",
             )
 
-            hwm_signal_task = HighWaterMarkSignalOperator(
-                task_id="high_water_mark_signal"
-            )
-
-            hwm_sensor_tasks >> evaluator_task >> hwm_signal_task
+            hwm_sensor_tasks >> evaluator_task
 
             return dag
 
@@ -439,15 +439,11 @@ class SnapshotDagGenerator:
         output = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            upstream_dag_id = common.dag_id_for_snapshot_info(
-                upstream_snapshot.table_info
-            )
             output.append(
                 HighWaterMarkSensor(
-                    target_dag_id=upstream_dag_id,
-                    target_cron=upstream_snapshot.model.cron,
-                    this_cron=snapshot.model.cron,
-                    task_id=f"{upstream_dag_id}_high_water_mark_sensor",
+                    target_snapshot_info=upstream_snapshot.table_info,
+                    this_snapshot=snapshot,
+                    task_id=f"{upstream_snapshot.name}_{upstream_snapshot.version}_high_water_mark_sensor",
                 )
             )
         return output

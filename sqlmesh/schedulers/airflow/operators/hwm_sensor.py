@@ -1,12 +1,16 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from airflow.models import DagRun
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.context import Context
-from croniter import croniter_range
+from airflow.utils.session import provide_session
+from sqlalchemy.orm import Session
 
-from sqlmesh.schedulers.airflow import common, util
+from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
+from sqlmesh.schedulers.airflow import util
+from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.utils.date import to_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +18,8 @@ logger = logging.getLogger(__name__)
 class HighWaterMarkSensor(BaseSensorOperator):
     def __init__(
         self,
-        target_dag_id: str,
-        target_cron: str,
-        this_cron: str,
-        target_start_date: datetime = common.AIRFLOW_START_DATE,
-        this_start_date: datetime = common.AIRFLOW_START_DATE,
+        target_snapshot_info: SnapshotTableInfo,
+        this_snapshot: Snapshot,
         poke_interval: float = 60.0,
         timeout: float = 7.0 * 24.0 * 60.0 * 60.0,  # 7 days
         mode: str = "reschedule",
@@ -30,25 +31,25 @@ class HighWaterMarkSensor(BaseSensorOperator):
             mode=mode,
             **kwargs,
         )
-        self.target_dag_id = target_dag_id
-        self.target_cron = target_cron
-        self.this_cron = this_cron
-        self.target_start_date = target_start_date.replace(tzinfo=timezone.utc)
-        self.this_start_date = this_start_date.replace(tzinfo=timezone.utc)
+        self.target_snapshot_info = target_snapshot_info
+        self.this_snapshot = this_snapshot
 
     def poke(self, context: Context) -> bool:
-        task_instance = context["task_instance"]
         dag_run = context["dag_run"]
 
-        target_high_water_mark = self._compute_target_high_water_mark(dag_run)
-        current_high_water_mark = util.safe_utcfromtimestamp(
-            task_instance.xcom_pull(
-                dag_id=self.target_dag_id, key=common.HWM_UTC_XCOM_KEY
-            )
+        target_snapshot = self._get_target_snapshot()
+        if target_snapshot.intervals:
+            current_high_water_mark = to_datetime(target_snapshot.intervals[-1][1])
+        else:
+            current_high_water_mark = None
+
+        target_high_water_mark = self._compute_target_high_water_mark(
+            dag_run, target_snapshot
         )
+
         logger.info(
-            "The current high water mark for DAG '%s' is '%s' (target is '%s')",
-            self.target_dag_id,
+            "The current high water mark for snapshot %s is '%s' (target is '%s')",
+            self.target_snapshot_info.snapshot_id,
             current_high_water_mark,
             target_high_water_mark,
         )
@@ -56,12 +57,21 @@ class HighWaterMarkSensor(BaseSensorOperator):
             return current_high_water_mark >= target_high_water_mark
         return False
 
-    def _compute_target_high_water_mark(self, dag_run: DagRun) -> datetime:
-        execution_date = dag_run.execution_date.replace(tzinfo=timezone.utc)
-        target_prev = next(
-            croniter_range(execution_date, self.target_start_date, self.target_cron)
-        )
-        this_prev = next(
-            croniter_range(execution_date, self.this_start_date, self.this_cron)
-        )
+    def _compute_target_high_water_mark(
+        self, dag_run: DagRun, target_snapshot: Snapshot
+    ) -> datetime:
+        target_date = to_datetime(dag_run.data_interval_end)
+        target_prev = to_datetime(target_snapshot.model.cron_floor(target_date))
+        this_prev = to_datetime(self.this_snapshot.model.cron_floor(target_date))
         return min(target_prev, this_prev)
+
+    @provide_session
+    def _get_target_snapshot(
+        self, session: Session = util.PROVIDED_SESSION
+    ) -> Snapshot:
+        target_snapshots = XComStateSync(session).get_snapshots_with_same_version(
+            [self.target_snapshot_info]
+        )
+        return Snapshot.merge_snapshots(
+            [self.target_snapshot_info], {s.snapshot_id: s for s in target_snapshots}
+        )[0]

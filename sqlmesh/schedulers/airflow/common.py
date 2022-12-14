@@ -9,7 +9,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_datetime
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -36,7 +36,6 @@ SNAPSHOT_PAYLOAD_KEY_PREFIX = "snapshot_payload"
 SNAPSHOT_VERSION_KEY_PREFIX = "snapshot_version_index"
 ENV_KEY_PREFIX = "environment"
 
-AIRFLOW_START_DATE = to_datetime("2022-01-01")
 AIRFLOW_LOCAL_URL = "http://localhost:8080/"
 
 
