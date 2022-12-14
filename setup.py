@@ -33,7 +33,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.2.8",
+        "sqlglot>=10.2.9",
     ],
     extras_require={
         "dev": [
