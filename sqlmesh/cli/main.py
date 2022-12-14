@@ -149,20 +149,30 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     help="The environment to base the plan on instead of local files.",
 )
 @click.option(
-    "--skip_tests",
+    "--skip-tests",
     help="Skip tests prior to generating the plan if they are defined.",
 )
 @click.option(
-    "--restate_from",
+    "--restate-from",
     "-r",
     type=str,
     nargs="*",
     help="Restate all models that depend on these upstream tables. All snapshots that depend on these upstream tables will have their intervals wiped but only the current snapshots will be backfilled.",
 )
 @click.option(
-    "--no_gaps",
+    "--no-gaps",
     is_flag=True,
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
+)
+@click.option(
+    "--no-prompts",
+    is_flag=True,
+    help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
+)
+@click.option(
+    "--auto-apply",
+    is_flag=True,
+    help="Automatically applies the new plan after creation.",
 )
 @click.pass_context
 @error_handler
@@ -170,6 +180,22 @@ def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
     context.plan(environment, **kwargs)
+
+
+@cli.command("run")
+@opt.start_time
+@opt.end_time
+@click.option(
+    "--global-state",
+    is_flag=True,
+    help="If set loads the DAG from the persisted state, otherwise loads from the current local state.",
+)
+@click.pass_context
+@error_handler
+def run(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
+    """Evaluates the DAG of models using the built-in scheduler."""
+    context = ctx.obj
+    context.run(**kwargs)
 
 
 @cli.command("dag")

@@ -309,6 +309,10 @@ class Context(BaseContext):
             snapshots = self.state_sync.get_snapshots(None).values()
         else:
             snapshots = self.snapshots.values()
+
+        if not snapshots:
+            raise ConfigError("No models were found")
+
         return Scheduler(
             snapshots,
             self.snapshot_evaluator,
@@ -553,6 +557,8 @@ class Context(BaseContext):
         skip_tests: bool = False,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        no_prompts: bool = False,
+        auto_apply: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -573,6 +579,10 @@ class Context(BaseContext):
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
+                if this flag is set to true and there are uncategorized changes the plan creation will
+                fail. Default: False.
+            auto_apply: Whether to automatically apply the new plan after creation. Default: False.
 
         Returns:
             The populated Plan object.
@@ -604,7 +614,15 @@ class Context(BaseContext):
             no_gaps=no_gaps,
         )
 
-        self.console.plan(plan)
+        if no_prompts:
+            if plan.uncategorized:
+                raise PlanError(
+                    "Detected uncategorized changes. Enable prompts to proceed"
+                )
+            if auto_apply:
+                self.apply(plan)
+        else:
+            self.console.plan(plan, auto_apply)
 
         return plan
 
