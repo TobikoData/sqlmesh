@@ -121,11 +121,14 @@ class EngineAdapter:
                         for column, kind in column_mapping.items()
                     ],
                 )
+                column_names = column_mapping.keys()
+                values = next(pandas_to_sql(query_or_df, columns=column_names))
+                select = exp.select(*column_names).from_(values)
                 create = exp.Create(
                     this=schema,
                     kind="TABLE",
                     replace=True,
-                    expression=next(pandas_to_sql(query_or_df)),
+                    expression=select,
                 )
             else:
                 create = exp.Create(
