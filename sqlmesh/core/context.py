@@ -186,7 +186,7 @@ class Context(BaseContext):
         with sys_path(self.path):
             try:
                 config_module = self._import_python_file(self.path / "config.py")
-            except ConfigError:
+            except ImportError:
                 config_module = None
 
         self.config = self._load_config(config, config_module)
@@ -855,17 +855,14 @@ class Context(BaseContext):
                         self.models[audit.model].audits[audit.name] = audit
 
     def _import_python_file(self, path: Path) -> types.ModuleType:
-        try:
-            module_name = str(path.relative_to(self.path).with_suffix("")).replace(
-                os.path.sep, "."
-            )
-            # remove the entire module hierarchy in case they were already loaded
-            parts = module_name.split(".")
-            for i in range(len(parts)):
-                sys.modules.pop(".".join(parts[0 : i + 1]), None)
-            return importlib.import_module(module_name)
-        except Exception as e:
-            raise ConfigError(f"Error importing '{path}'.") from e
+        module_name = str(path.relative_to(self.path).with_suffix("")).replace(
+            os.path.sep, "."
+        )
+        # remove the entire module hierarchy in case they were already loaded
+        parts = module_name.split(".")
+        for i in range(len(parts)):
+            sys.modules.pop(".".join(parts[0 : i + 1]), None)
+        return importlib.import_module(module_name)
 
     def _glob_path(
         self, path: Path, file_extension: str
