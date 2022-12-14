@@ -4,6 +4,7 @@ import sys
 import types
 import typing as t
 import uuid
+from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 
@@ -86,18 +87,19 @@ class registry_decorator:
         cls._registry = registry
 
 
-class sys_path:
+@contextmanager
+def sys_path(path: Path):
     """A context manager to temporarily add a path to 'sys.path'."""
+    path_str = str(path.absolute())
 
-    def __init__(self, path: Path):
-        self.path = str(path.absolute())
-        self.inserted = False
+    if path_str in sys.path:
+        inserted = False
+    else:
+        sys.path.insert(0, path_str)
+        inserted = True
 
-    def __enter__(self) -> None:
-        if self.path not in sys.path:
-            sys.path.insert(0, self.path)
-            self.inserted = True
-
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
-        if self.inserted:
-            sys.path.remove(self.path)
+    try:
+        yield
+    finally:
+        if inserted:
+            sys.path.remove(path_str)

@@ -856,9 +856,11 @@ class Context(BaseContext):
 
     def _import_python_file(self, path: Path) -> types.ModuleType:
         try:
+            module_name = str(path.relative_to(self.path)).replace(os.path.sep, ".")
             module_name = (
-                str(path.relative_to(self.path)).replace(os.path.sep, ".").rstrip(".py")
+                module_name[:-3] if module_name.endswith(".py") else module_name
             )
+
             # remove the entire module hierarchy in case they were already loaded
             parts = module_name.split(".")
             for i in range(len(parts)):
