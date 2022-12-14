@@ -1,5 +1,6 @@
 import importlib
 import os
+import sys
 import types
 import typing as t
 import uuid
@@ -83,3 +84,20 @@ class registry_decorator:
     def set_registry(cls, registry: UniqueKeyDict) -> None:
         """Set the registry."""
         cls._registry = registry
+
+
+class sys_path:
+    """A context manager to temporarily add a path to 'sys.path'."""
+
+    def __init__(self, path: Path):
+        self.path = str(path.absolute())
+        self.inserted = False
+
+    def __enter__(self) -> None:
+        if self.path not in sys.path:
+            sys.path.insert(0, self.path)
+            self.inserted = True
+
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        if self.inserted:
+            sys.path.remove(self.path)

@@ -35,6 +35,8 @@ from __future__ import annotations
 import abc
 import contextlib
 import importlib
+import os
+import sys
 import types
 import typing as t
 import unittest.result
@@ -62,7 +64,7 @@ from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache
@@ -180,11 +182,20 @@ class Context(BaseContext):
     ):
         self.console = console or get_console()
         self.path = Path(path).absolute()
-        self.config = self._load_config(config)
 
+        with sys_path(self.path):
+            try:
+                config_module = self._import_python_file(self.path / "config.py")
+            except ConfigError:
+                config_module = None
+
+        self.config = self._load_config(config, config_module)
         self.test_config = None
+
         try:
-            self.test_config = self._load_config(test_config or "test_config")
+            self.test_config = self._load_config(
+                test_config or "test_config", config_module
+            )
         except ConfigError:
             self.console.log_error(
                 "Running without test support since `test_config` was not provided and ` "
@@ -192,9 +203,9 @@ class Context(BaseContext):
             )
 
         # Initialize cache
-        cache_path = self.path.joinpath(c.CACHE_PATH)
+        cache_path = self.path / c.CACHE_PATH
         cache_path.mkdir(exist_ok=True)
-        self.table_info_cache = FileCache(cache_path.joinpath(c.TABLE_INFO_CACHE))
+        self.table_info_cache = FileCache(cache_path / c.TABLE_INFO_CACHE)
         self.dialect = dialect or self.config.dialect or self.config.engine_dialect
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
@@ -338,20 +349,20 @@ class Context(BaseContext):
     @property
     def models_directory_path(self) -> Path:
         """Path to the directory where the models are defined"""
-        return self.path.joinpath("models")
+        return self.path / "models"
 
     @property
     def macro_directory_path(self) -> Path:
         """Path to the drectory where the macros are defined"""
-        return self.path.joinpath("macros")
+        return self.path / "macros"
 
     @property
     def test_directory_path(self) -> Path:
-        return self.path.joinpath("tests")
+        return self.path / "tests"
 
     @property
     def audits_directory_path(self) -> Path:
-        return self.path.joinpath("audits")
+        return self.path / "audits"
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
@@ -364,9 +375,10 @@ class Context(BaseContext):
 
     def load(self) -> Context:
         """Load all files in the context's path."""
-        self._load_macros()
-        self._load_models()
-        self._load_audits()
+        with sys_path(self.path):
+            self._load_macros()
+            self._load_models()
+            self._load_audits()
         return self
 
     def run(
@@ -749,10 +761,13 @@ class Context(BaseContext):
             environment, snapshots or self.snapshots, self.state_reader
         )
 
-    def _load_config(self, config: t.Optional[t.Union[Config, str]]) -> Config:
+    def _load_config(
+        self,
+        config: t.Optional[t.Union[Config, str]],
+        config_module: t.Optional[types.ModuleType],
+    ) -> Config:
         if isinstance(config, Config):
             return config
-        config_module = self._import_python_file(self.path.joinpath("config.py"))
         config_obj = None
         if config_module:
             if config is None:
@@ -839,18 +854,18 @@ class Context(BaseContext):
                             )
                         self.models[audit.model].audits[audit.name] = audit
 
-    def _import_python_file(self, path: Path) -> t.Optional[types.ModuleType]:
-        spec = importlib.util.spec_from_file_location(self.path.name, path)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            try:
-                spec.loader.exec_module(module)
-                return module
-            except FileNotFoundError:
-                pass
-            except Exception as e:
-                raise ConfigError(f"Error importing {path}.") from e
-        return None
+    def _import_python_file(self, path: Path) -> types.ModuleType:
+        try:
+            module_name = (
+                str(path.relative_to(self.path)).replace(os.path.sep, ".").rstrip(".py")
+            )
+            # remove the entire module hierarchy in case they were already loaded
+            parts = module_name.split(".")
+            for i in range(len(parts)):
+                sys.modules.pop(".".join(parts[0 : i + 1]), None)
+            return importlib.import_module(module_name)
+        except Exception as e:
+            raise ConfigError(f"Error importing '{path}'.") from e
 
     def _glob_path(
         self, path: Path, file_extension: str
