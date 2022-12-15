@@ -4,7 +4,7 @@ import re
 
 from sqlmesh.core.model import Model, ModelKind
 from sqlmesh.utils.errors import ConfigError
-from dbt.config import Config, Materialization, ModelConfig
+from sqlmesh.dbt_adapter.config import Config, Materialization, ModelConfig
 
 def dbt_to_sqlmesh():
     """

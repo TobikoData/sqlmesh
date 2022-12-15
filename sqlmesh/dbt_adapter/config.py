@@ -8,7 +8,7 @@ import typing as t
 
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.errors import ConfigError
-from dbt.render import render_jinja
+from sqlmesh.dbt_adapter.render import render_jinja
 
 DEFAULT_PROJECT_FILE = "dbt_project.yml"
 
