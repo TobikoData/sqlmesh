@@ -7,6 +7,8 @@ from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
 from sqlmesh.utils.date import to_ds
 
+ITEMS = "sushi.items"
+
 
 @model(
     """
@@ -14,7 +16,6 @@ from sqlmesh.utils.date import to_ds
         name sushi.order_items,
         kind incremental,
         time_column ds,
-        depends_on [sushi.orders, sushi.items],
         cron '@daily',
         batch_size 30,
         columns (
@@ -37,7 +38,7 @@ def execute(
     dfs = []
 
     orders_table = context.table("sushi.orders")
-    items_table = context.table("sushi.items")
+    items_table = context.table(ITEMS)
 
     for dt in iter_dates(start, end):
         orders = context.fetchdf(
