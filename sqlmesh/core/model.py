@@ -243,12 +243,14 @@ SQLMesh will handle casting the start and end dates to the type of your time col
 """
 from __future__ import annotations
 
+import ast
 import typing as t
 from datetime import datetime
 from enum import Enum
 from itertools import zip_longest
 from pathlib import Path
 
+from astor import to_source
 from croniter import croniter
 from jinja2 import Environment
 from pydantic import Field, root_validator, validator
@@ -734,24 +736,31 @@ class Model(ModelMeta, frozen=True):
             python_env = _python_env(query, module_path, macros or macro.get_registry())
 
         try:
+            model_meta = ModelMeta(
+                **{
+                    prop.name.lower(): prop.args.get("value")
+                    for prop in meta.expressions
+                },
+                description="\n".join(comment.strip() for comment in meta.comments)
+                if meta.comments
+                else None,
+                **kwargs,
+            )
+
+            # find dependencies for python models by parsing code if they are not explicitly defined
+            if model_meta.depends_on_ is None and isinstance(query, d.MacroVar):
+                depends_on = _parse_depends_on(query, python_env)
+            else:
+                depends_on = None
+
             model = cls(
                 query=query,
                 expressions=statements,
                 python_env=python_env,
                 **{
                     "dialect": dialect or "",
-                    **ModelMeta(
-                        **{
-                            prop.name: prop.args.get("value")
-                            for prop in meta.expressions
-                        },
-                        description="\n".join(
-                            comment.strip() for comment in meta.comments
-                        )
-                        if meta.comments
-                        else None,
-                        **kwargs,
-                    ).dict(),
+                    "depends_on": depends_on,
+                    **model_meta.dict(),
                 },
             )
         except Exception as ex:
@@ -1076,7 +1085,7 @@ class Model(ModelMeta, frozen=True):
         latest = to_datetime(latest or EPOCH_DS)
         try:
             df = env[self.query.name](
-                context, start=start, end=end, latest=latest, **kwargs
+                context=context, start=start, end=end, latest=latest, **kwargs
             )
             if self.kind == ModelKind.INCREMENTAL:
                 assert self.time_column
@@ -1332,20 +1341,35 @@ class model(registry_decorator):
     registry_name = "python_models"
 
     def __init__(self, definition: str = "", **kwargs):
-        self.expressions = d.parse_model(
-            definition, default_dialect=kwargs.get("dialect")
-        )
         self.kwargs = kwargs
+        self.expressions = d.parse_model(
+            definition, default_dialect=self.kwargs.get("dialect")
+        )
 
-        if "name" not in kwargs:
-            meta = self.expressions[0]
-            for prop in meta.expressions:
-                if prop.name == "name":
-                    self.name = prop.args.get("value")
-                    break
-                raise ConfigError("Missing name attribute in Python model")
-        else:
-            self.name = kwargs["name"]
+        if not self.expressions:
+            self.expressions.insert(
+                0,
+                d.Model(
+                    expressions=[
+                        exp.Property(this="name", value=self.kwargs.pop("name", None))
+                    ]
+                ),
+            )
+
+        self.name = ""
+        columns = "columns" in self.kwargs
+
+        for prop in self.expressions[0].expressions:
+            prop_name = prop.name.lower()
+            if prop_name == "name":
+                self.name = prop.text("value")
+            elif prop_name == "columns":
+                columns = True
+
+        if not self.name:
+            raise ConfigError(f"Python model must have a name.")
+        if not columns:
+            raise ConfigError(f"Python model must define column schema.")
 
     def model(
         self,
@@ -1370,14 +1394,13 @@ class model(registry_decorator):
             d.MacroVar(this=name),
         ]
 
-        model = Model.load(
+        return Model.load(
             expressions,
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
             **self.kwargs,
         )
-        return model
 
 
 def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str]:
@@ -1442,6 +1465,49 @@ def _python_env(
             )
 
     return serialize_env(python_env, path=module_path)
+
+
+def _parse_depends_on(
+    model_func: d.MacroVar, python_env: t.Dict[str, Executable]
+) -> t.Set[str]:
+    """Parses the source of a model function and finds upstream dependencies based on calls to context."""
+    env = prepare_env(python_env)
+    depends_on = set()
+    executable = python_env[model_func.name]
+
+    for node in ast.walk(ast.parse(executable.payload)):
+        if not isinstance(node, ast.Call):
+            continue
+
+        func = node.func
+
+        if (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "context"
+            and func.attr == "table"
+        ):
+            if node.args:
+                table: t.Optional[ast.expr] = node.args[0]
+            else:
+                table = next(
+                    (
+                        keyword.value
+                        for keyword in node.keywords
+                        if keyword.arg == "model_name"
+                    ),
+                    None,
+                )
+
+            try:
+                expression = to_source(table)
+                depends_on.add(eval(expression, env))
+            except Exception:
+                raise ConfigError(
+                    f"Error resolving dependencies for '{executable.path}'. References to context must be resolvable at parse time.\n\n{expression}"
+                )
+
+    return depends_on
 
 
 def _raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:

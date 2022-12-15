@@ -1,6 +1,6 @@
 import logging
 import typing as t
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from airflow.api.common.experimental.delete_dag import delete_dag
 from airflow.exceptions import AirflowException, DagNotFound
@@ -98,11 +98,3 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
                 "Failed to automatically discover an operator for Databricks"
             )
     raise ValueError(f"Unsupported engine name '{name}'")
-
-
-def safe_utcfromtimestamp(timestamp: t.Optional[float]) -> t.Optional[datetime]:
-    return (
-        datetime.utcfromtimestamp(timestamp).replace(tzinfo=timezone.utc)
-        if timestamp is not None
-        else None
-    )

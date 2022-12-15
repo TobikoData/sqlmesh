@@ -105,6 +105,7 @@ import abc
 import typing as t
 
 import duckdb
+from pydantic import validator
 from requests import Session
 
 from sqlmesh.core import constants as c
@@ -118,6 +119,7 @@ from sqlmesh.core.plan_evaluator import (
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -292,3 +294,16 @@ class Config(PydanticModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+    @validator(
+        "backfill_concurrent_tasks",
+        "ddl_concurrent_tasks",
+        "evaluation_concurrent_tasks",
+        pre=True,
+    )
+    def _concurrent_tasks_validator(cls, v: t.Any) -> int:
+        if not isinstance(v, int) or v <= 0:
+            raise ConfigError(
+                f"The number of concurrent tasks must be an integer value greater than 0. '{v}' was provided"
+            )
+        return v

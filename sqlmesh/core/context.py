@@ -35,6 +35,8 @@ from __future__ import annotations
 import abc
 import contextlib
 import importlib
+import os
+import sys
 import types
 import typing as t
 import unittest.result
@@ -49,7 +51,6 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dag import DAG
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import DF, EngineAdapter
 from sqlmesh.core.environment import Environment
@@ -62,7 +63,8 @@ from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, sys_path
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache
@@ -80,7 +82,7 @@ class BaseContext(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
 
     @property
@@ -102,7 +104,7 @@ class BaseContext(abc.ABC):
         Returns:
             The physical table name.
         """
-        return self.model_tables[model_name]
+        return self._model_tables[model_name]
 
     def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a dataframe given a sql string or sqlglot expression.
@@ -126,7 +128,7 @@ class ExecutionContext(BaseContext):
 
     def __init__(self, engine_adapter: EngineAdapter, model_tables: t.Dict[str, str]):
         self._engine_adapter = engine_adapter
-        self._model_tables = model_tables
+        self.__model_tables = model_tables
 
     @property
     def engine_adapter(self) -> EngineAdapter:
@@ -134,9 +136,9 @@ class ExecutionContext(BaseContext):
         return self._engine_adapter
 
     @property
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
-        return self._model_tables
+        return self.__model_tables
 
 
 class Context(BaseContext):
@@ -180,11 +182,20 @@ class Context(BaseContext):
     ):
         self.console = console or get_console()
         self.path = Path(path).absolute()
-        self.config = self._load_config(config)
 
+        with sys_path(self.path):
+            try:
+                config_module = self._import_python_file(self.path / "config.py")
+            except ImportError:
+                config_module = None
+
+        self.config = self._load_config(config, config_module)
         self.test_config = None
+
         try:
-            self.test_config = self._load_config(test_config or "test_config")
+            self.test_config = self._load_config(
+                test_config or "test_config", config_module
+            )
         except ConfigError:
             self.console.log_error(
                 "Running without test support since `test_config` was not provided and ` "
@@ -192,9 +203,9 @@ class Context(BaseContext):
             )
 
         # Initialize cache
-        cache_path = self.path.joinpath(c.CACHE_PATH)
+        cache_path = self.path / c.CACHE_PATH
         cache_path.mkdir(exist_ok=True)
-        self.table_info_cache = FileCache(cache_path.joinpath(c.TABLE_INFO_CACHE))
+        self.table_info_cache = FileCache(cache_path / c.TABLE_INFO_CACHE)
         self.dialect = dialect or self.config.dialect or self.config.engine_dialect
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
@@ -298,6 +309,10 @@ class Context(BaseContext):
             snapshots = self.state_sync.get_snapshots(None).values()
         else:
             snapshots = self.snapshots.values()
+
+        if not snapshots:
+            raise ConfigError("No models were found")
+
         return Scheduler(
             snapshots,
             self.snapshot_evaluator,
@@ -338,20 +353,20 @@ class Context(BaseContext):
     @property
     def models_directory_path(self) -> Path:
         """Path to the directory where the models are defined"""
-        return self.path.joinpath("models")
+        return self.path / "models"
 
     @property
     def macro_directory_path(self) -> Path:
         """Path to the drectory where the macros are defined"""
-        return self.path.joinpath("macros")
+        return self.path / "macros"
 
     @property
     def test_directory_path(self) -> Path:
-        return self.path.joinpath("tests")
+        return self.path / "tests"
 
     @property
     def audits_directory_path(self) -> Path:
-        return self.path.joinpath("audits")
+        return self.path / "audits"
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
@@ -364,9 +379,10 @@ class Context(BaseContext):
 
     def load(self) -> Context:
         """Load all files in the context's path."""
-        self._load_macros()
-        self._load_models()
-        self._load_audits()
+        with sys_path(self.path):
+            self._load_macros()
+            self._load_models()
+            self._load_audits()
         return self
 
     def run(
@@ -409,7 +425,7 @@ class Context(BaseContext):
         return snapshots
 
     @property
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Mapping of model name to physical table name.
 
         If a snapshot has not been versioned yet, its view name will be returned.
@@ -503,7 +519,7 @@ class Context(BaseContext):
             start,
             end,
             latest,
-            mapping=self.model_tables,
+            mapping=self._model_tables,
             limit=limit,
         )
 
@@ -541,6 +557,9 @@ class Context(BaseContext):
         skip_tests: bool = False,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        skip_backfill: bool = False,
+        no_prompts: bool = False,
+        auto_apply: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -561,10 +580,20 @@ class Context(BaseContext):
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            skip_backfill: Whether to skip the backfill step. Default: False.
+            no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
+                if this flag is set to true and there are uncategorized changes the plan creation will
+                fail. Default: False.
+            auto_apply: Whether to automatically apply the new plan after creation. Default: False.
 
         Returns:
             The populated Plan object.
         """
+        if skip_backfill and not no_gaps and (environment or c.PROD) == c.PROD:
+            raise ConfigError(
+                "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
+            )
+
         self._run_plan_tests(skip_tests)
 
         if from_:
@@ -590,9 +619,17 @@ class Context(BaseContext):
             apply=self.apply,
             restate_from=restate_from,
             no_gaps=no_gaps,
+            skip_backfill=skip_backfill,
         )
 
-        self.console.plan(plan)
+        if not no_prompts:
+            self.console.plan(plan, auto_apply)
+        elif auto_apply:
+            if plan.uncategorized:
+                raise PlanError(
+                    "Can't auto-apply plan with uncategorized changes. Enable prompts to proceed."
+                )
+            self.apply(plan)
 
         return plan
 
@@ -749,10 +786,13 @@ class Context(BaseContext):
             environment, snapshots or self.snapshots, self.state_reader
         )
 
-    def _load_config(self, config: t.Optional[t.Union[Config, str]]) -> Config:
+    def _load_config(
+        self,
+        config: t.Optional[t.Union[Config, str]],
+        config_module: t.Optional[types.ModuleType],
+    ) -> Config:
         if isinstance(config, Config):
             return config
-        config_module = self._import_python_file(self.path.joinpath("config.py"))
         config_obj = None
         if config_module:
             if config is None:
@@ -839,18 +879,15 @@ class Context(BaseContext):
                             )
                         self.models[audit.model].audits[audit.name] = audit
 
-    def _import_python_file(self, path: Path) -> t.Optional[types.ModuleType]:
-        spec = importlib.util.spec_from_file_location(self.path.name, path)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            try:
-                spec.loader.exec_module(module)
-                return module
-            except FileNotFoundError:
-                pass
-            except Exception as e:
-                raise ConfigError(f"Error importing {path}.") from e
-        return None
+    def _import_python_file(self, path: Path) -> types.ModuleType:
+        module_name = str(path.relative_to(self.path).with_suffix("")).replace(
+            os.path.sep, "."
+        )
+        # remove the entire module hierarchy in case they were already loaded
+        parts = module_name.split(".")
+        for i in range(len(parts)):
+            sys.modules.pop(".".join(parts[0 : i + 1]), None)
+        return importlib.import_module(module_name)
 
     def _glob_path(
         self, path: Path, file_extension: str
