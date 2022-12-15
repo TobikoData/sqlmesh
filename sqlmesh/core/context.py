@@ -51,7 +51,6 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dag import DAG
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import DF, EngineAdapter
 from sqlmesh.core.environment import Environment
@@ -65,6 +64,7 @@ from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.utils import UniqueKeyDict, sys_path
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache

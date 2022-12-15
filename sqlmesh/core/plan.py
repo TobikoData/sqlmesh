@@ -34,7 +34,6 @@ from enum import Enum
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dag import DAG
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Intervals,
@@ -45,6 +44,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, make_inclusive, now, to_ds, validate_date_range
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
