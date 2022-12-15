@@ -290,21 +290,18 @@ def _batched_intervals(params: SnapshotBatches) -> SnapshotBatches:
     batches = []
 
     for snapshot, intervals in params:
-        model = snapshot.model
-        if model.batch_size:
-            batches_for_snapshot = []
-            next_batch: t.List[t.Tuple[datetime, datetime]] = []
-            for interval in intervals:
-                if len(next_batch) >= model.batch_size or (
-                    next_batch and interval[0] != next_batch[-1][-1]
-                ):
-                    batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
-                    next_batch = []
-                next_batch.append(interval)
-            if next_batch:
+        batch_size = snapshot.model.batch_size
+        batches_for_snapshot = []
+        next_batch: t.List[t.Tuple[datetime, datetime]] = []
+        for interval in intervals:
+            if (batch_size and len(next_batch) >= batch_size) or (
+                next_batch and interval[0] != next_batch[-1][-1]
+            ):
                 batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
-            batches.append((snapshot, batches_for_snapshot))
-        else:
-            batches.append((snapshot, intervals))
+                next_batch = []
+            next_batch.append(interval)
+        if next_batch:
+            batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
+        batches.append((snapshot, batches_for_snapshot))
 
     return batches

@@ -63,6 +63,23 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     ]
 
 
+def test_interval_params_missing(
+    scheduler: Scheduler, sushi_context_pre_scheduling: Context
+):
+    waiters = sushi_context_pre_scheduling.snapshots["sushi.waiters"]
+
+    start_ds = "2022-01-01"
+    end_ds = "2022-03-01"
+    assert scheduler.interval_params([waiters], start_ds, end_ds) == [
+        (
+            waiters,
+            [
+                (to_datetime(start_ds), to_datetime("2022-03-02")),
+            ],
+        ),
+    ]
+
+
 def test_multi_version_snapshots(
     sushi_context_pre_scheduling: Context, scheduler: Scheduler, make_snapshot
 ):
