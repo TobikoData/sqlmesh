@@ -64,7 +64,7 @@ class Console(abc.ABC):
         """Displays a summary of differences for the given models"""
 
     @abc.abstractmethod
-    def plan(self, plan: Plan) -> None:
+    def plan(self, plan: Plan, auto_apply: bool) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -72,6 +72,7 @@ class Console(abc.ABC):
 
         Args:
             plan: The plan to make choices for.
+            auto_apply: Whether to automatically apply the plan after all choices have been made.
         """
 
     @abc.abstractmethod
@@ -219,7 +220,7 @@ class TerminalConsole(Console):
                 tree.add(indirect)
         self.console.print(tree)
 
-    def plan(self, plan: Plan) -> None:
+    def plan(self, plan: Plan, auto_apply: bool) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -227,20 +228,24 @@ class TerminalConsole(Console):
 
         Args:
             plan: The plan to make choices for.
+            auto_apply: Whether to automatically apply the plan after all choices have been made.
         """
-        self._prompt_categorize(plan)
-        self._show_options_after_categorization(plan)
+        self._prompt_categorize(plan, auto_apply)
+        self._show_options_after_categorization(plan, auto_apply)
 
     def _show_options_after_categorization(
-        self, plan: Plan, unbounded_end: bool = False
+        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
     ) -> None:
         if plan.missing_intervals:
             self._show_missing_dates(plan)
-            self._prompt_backfill(plan, unbounded_end=unbounded_end)
+            self._prompt_backfill(plan, auto_apply, unbounded_end=unbounded_end)
         elif plan.context_diff.has_differences:
             self._prompt_promote(plan)
 
-    def _prompt_categorize(self, plan: Plan) -> None:
+        if auto_apply:
+            plan.apply()
+
+    def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
         """Get the user's change category for the directly modified models"""
         self.show_model_difference_summary(plan.context_diff)
 
@@ -259,7 +264,7 @@ class TerminalConsole(Console):
                     tree.add(indirect_tree)
                 indirect_tree.add(f"[indirect]{child}")
             self.console.print(tree)
-            self._get_snapshot_change_category(snapshot, plan)
+            self._get_snapshot_change_category(snapshot, plan, auto_apply)
 
     def _show_categorized_snapshots(self, plan: Plan) -> None:
         context_diff = plan.context_diff
@@ -292,7 +297,9 @@ class TerminalConsole(Console):
             backfill.add(f"{missing.snapshot_name}: {missing.format_missing_range()}")
         self.console.print(backfill)
 
-    def _prompt_backfill(self, plan: Plan, unbounded_end: bool = False) -> None:
+    def _prompt_backfill(
+        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
+    ) -> None:
         if not plan.override_start:
             plan.start = Prompt.ask(
                 "Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history",
@@ -303,7 +310,7 @@ class TerminalConsole(Console):
                 "Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank if unbounded",
                 console=self.console,
             )
-        if Confirm.ask("Apply - Backfill Tables"):
+        if not auto_apply and Confirm.ask("Apply - Backfill Tables"):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
@@ -363,7 +370,9 @@ class TerminalConsole(Console):
         self.loading_status[id].stop()
         del self.loading_status[id]
 
-    def _get_snapshot_change_category(self, snapshot: Snapshot, plan: Plan) -> None:
+    def _get_snapshot_change_category(
+        self, snapshot: Snapshot, plan: Plan, auto_apply: bool
+    ) -> None:
         if plan.indirectly_modified[snapshot.name]:
             choices = self._snapshot_change_choices(snapshot)
             response = Prompt.ask(
@@ -482,7 +491,9 @@ class NotebookMagicConsole(TerminalConsole):
         button.on_click(self._apply)
         button.output = output
 
-    def _prompt_backfill(self, plan: Plan, unbounded_end: bool = False) -> None:
+    def _prompt_backfill(
+        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
+    ) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
@@ -512,17 +523,23 @@ class NotebookMagicConsole(TerminalConsole):
 
         def start_change_callback(change):
             plan.start = change["new"]
-            self._show_options_after_categorization(plan, unbounded_end=unbounded_end)
+            self._show_options_after_categorization(
+                plan, auto_apply, unbounded_end=unbounded_end
+            )
 
         def end_change_callback(change):
             plan.end = change["new"]
-            self._show_options_after_categorization(plan, unbounded_end=unbounded_end)
+            self._show_options_after_categorization(
+                plan, auto_apply, unbounded_end=unbounded_end
+            )
 
         def unbounded_end_callback(change):
             checked = change["new"]
             if checked:
                 plan.end = None
-            self._show_options_after_categorization(plan, unbounded_end=checked)
+            self._show_options_after_categorization(
+                plan, auto_apply, unbounded_end=checked
+            )
 
         add_to_layout_widget(
             prompt,
@@ -554,30 +571,35 @@ class NotebookMagicConsole(TerminalConsole):
 
         self._add_to_dynamic_options(prompt)
 
-        button = widgets.Button(
-            description="Apply - Backfill Tables",
-            disabled=False,
-            button_style="success",
-        )
-        self._add_to_dynamic_options(button)
-        output = widgets.Output()
-        self._add_to_dynamic_options(output)
+        if not auto_apply:
+            button = widgets.Button(
+                description="Apply - Backfill Tables",
+                disabled=False,
+                button_style="success",
+            )
+            self._add_to_dynamic_options(button)
+            output = widgets.Output()
+            self._add_to_dynamic_options(output)
 
-        button.plan = plan
-        button.on_click(self._apply)
-        button.output = output
+            button.plan = plan
+            button.on_click(self._apply)
+            button.output = output
 
     def _show_options_after_categorization(
-        self, plan: Plan, unbounded_end: bool = False
+        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
     ) -> None:
         self.dynamic_options_after_categorization_output.children = ()
         self.display(self.dynamic_options_after_categorization_output)
-        super()._show_options_after_categorization(plan, unbounded_end=unbounded_end)
+        super()._show_options_after_categorization(
+            plan, auto_apply, unbounded_end=unbounded_end
+        )
 
     def _add_to_dynamic_options(self, *widgets: widgets.Widget) -> None:
         add_to_layout_widget(self.dynamic_options_after_categorization_output, *widgets)
 
-    def _get_snapshot_change_category(self, snapshot: Snapshot, plan: Plan) -> None:
+    def _get_snapshot_change_category(
+        self, snapshot: Snapshot, plan: Plan, auto_apply: bool
+    ) -> None:
         import ipywidgets as widgets
 
         def radio_button_selected(change):

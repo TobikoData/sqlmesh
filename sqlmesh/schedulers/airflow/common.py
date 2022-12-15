@@ -44,6 +44,7 @@ class PlanReceiverDagConf(PydanticModel):
     new_snapshots: t.List[Snapshot]
     environment: Environment
     no_gaps: bool
+    skip_backfill: bool
     restatements: t.Set[str]
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
