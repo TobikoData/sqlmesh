@@ -969,16 +969,20 @@ class Model(ModelMeta, frozen=True):
                 )
 
             if self._schema:
+                # This takes care of expanding star projections, if any
                 self._query_cache[key] = optimize(
                     self._query_cache[key],
                     schema=self._schema,
                     rules=RENDER_OPTIMIZER_RULES,
                 )
 
+                # This is updated because a star might've been expanded into a new projection list
                 self._columns = {
                     expression.alias_or_name: expression.type
                     for expression in self._query_cache[key].expressions
                 }
+
+                self.validate_definition()
 
         query = self._query_cache[key]
 
@@ -1282,9 +1286,7 @@ class Model(ModelMeta, frozen=True):
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
-            if isinstance(expression, exp.Alias):
-                expression = expression.this
-            elif isinstance(expression, exp.Star):
+            if isinstance(expression, exp.Star):
                 self._contains_star_query = True
             elif not alias:
                 _raise_config_error(
