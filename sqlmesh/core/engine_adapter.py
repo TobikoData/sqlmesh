@@ -254,6 +254,10 @@ class EngineAdapter:
         if_exists = " IF EXISTS" if ignore_if_not_exists else ""
         self.execute(f"DROP VIEW{if_exists} {view_name}")
 
+    def describe_table(self, table_name: str) -> t.List[t.Tuple]:
+        self.execute(f"DESCRIBE TABLE {table_name}")
+        return self.cursor.fetchall()
+
     def table_exists(self, table_name: str) -> bool:
         try:
             self.execute(f"DESCRIBE TABLE {table_name}")
