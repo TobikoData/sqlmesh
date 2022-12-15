@@ -1284,6 +1284,8 @@ class Model(ModelMeta, frozen=True):
 
             if isinstance(expression, exp.Alias):
                 expression = expression.this
+            elif isinstance(expression, exp.Star):
+                self._contains_star_query = True
             elif not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",

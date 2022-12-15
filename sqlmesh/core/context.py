@@ -873,7 +873,7 @@ class Context(BaseContext):
                 continue
 
             if model.contains_star_query and any(
-                dep not in self.models, model.depends_on
+                dep not in self.models for dep in model.depends_on
             ):
                 raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
 
