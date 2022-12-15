@@ -557,6 +557,7 @@ class Context(BaseContext):
         skip_tests: bool = False,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        skip_backfill: bool = False,
         no_prompts: bool = False,
         auto_apply: bool = False,
     ) -> Plan:
@@ -579,6 +580,7 @@ class Context(BaseContext):
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            skip_backfill: Whether to skip the backfill step. Default: False.
             no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False.
@@ -587,6 +589,11 @@ class Context(BaseContext):
         Returns:
             The populated Plan object.
         """
+        if skip_backfill and not no_gaps and (environment or c.PROD) == c.PROD:
+            raise ConfigError(
+                "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
+            )
+
         self._run_plan_tests(skip_tests)
 
         if from_:
@@ -612,17 +619,17 @@ class Context(BaseContext):
             apply=self.apply,
             restate_from=restate_from,
             no_gaps=no_gaps,
+            skip_backfill=skip_backfill,
         )
 
-        if no_prompts:
+        if not no_prompts:
+            self.console.plan(plan, auto_apply)
+        elif auto_apply:
             if plan.uncategorized:
                 raise PlanError(
-                    "Detected uncategorized changes. Enable prompts to proceed"
+                    "Can't auto-apply plan with uncategorized changes. Enable prompts to proceed."
                 )
-            if auto_apply:
-                self.apply(plan)
-        else:
-            self.console.plan(plan, auto_apply)
+            self.apply(plan)
 
         return plan
 

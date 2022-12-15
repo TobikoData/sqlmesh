@@ -187,6 +187,11 @@ class SQLMeshMagics(Magics):
         help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
     )
     @argument(
+        "--skip-backfill",
+        action="store_true",
+        help="Skip the backfill step.",
+    )
+    @argument(
         "--no-prompts",
         action="store_true",
         help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
@@ -214,6 +219,7 @@ class SQLMeshMagics(Magics):
             skip_tests=args.skip_tests,
             restate_from=args.restate_from,
             no_gaps=args.no_gaps,
+            skip_backfill=args.skip_backfill,
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
         )

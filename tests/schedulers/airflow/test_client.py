@@ -130,6 +130,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                 "previous_plan_id": "previous_plan_id",
             },
             "no_gaps": False,
+            "skip_backfill": False,
             "notification_targets": [],
             "request_id": request_id,
             "restatements": [],

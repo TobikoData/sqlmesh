@@ -71,7 +71,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 ),
             )
 
-        if plan.missing_intervals:
+        if plan.requires_backfill:
             snapshots = plan.snapshots
             scheduler = Scheduler(
                 snapshots,
@@ -84,7 +84,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self._promote(plan)
 
-        if not plan.missing_intervals:
+        if not plan.requires_backfill:
             self.console.log_success("Logical Update executed successfully")
 
     def _push(self, plan: Plan) -> None:

@@ -165,14 +165,19 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     help="Ensure that new snapshots have no data gaps when comparing to existing snapshots for matching models in the target environment.",
 )
 @click.option(
+    "--skip-backfill",
+    is_flag=True,
+    help="Skip the backfill step.",
+)
+@click.option(
     "--no-prompts",
     is_flag=True,
-    help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
+    help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
 )
 @click.option(
     "--auto-apply",
     is_flag=True,
-    help="Automatically applies the new plan after creation.",
+    help="Automatically apply the new plan after creation.",
 )
 @click.pass_context
 @error_handler
