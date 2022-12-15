@@ -1,4 +1,4 @@
-from sqlmesh.core.dag import DAG
+from sqlmesh.utils.dag import DAG
 
 
 def test_downstream(sushi_context):

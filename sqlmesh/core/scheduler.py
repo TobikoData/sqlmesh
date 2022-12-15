@@ -6,11 +6,11 @@ import typing as t
 from datetime import datetime
 
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.dag import DAG
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils.concurrency import NodeExecutionFailedError, concurrent_apply_to_dag
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     now,

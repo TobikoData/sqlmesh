@@ -2,8 +2,8 @@ import typing as t
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from threading import Lock
 
-from sqlmesh.core.dag import DAG
 from sqlmesh.core.snapshot import SnapshotId, SnapshotInfoLike
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 T = t.TypeVar("T", bound=SnapshotInfoLike)
