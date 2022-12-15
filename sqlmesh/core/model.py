@@ -1281,17 +1281,17 @@ class Model(ModelMeta, frozen=True):
             ConfigError
         """
         name_counts: t.Dict[str, int] = {}
-        query_ = query or self._render_query()
+        query = query or self._render_query()
 
-        if not isinstance(query_, exp.Subqueryable):
+        if not isinstance(query, exp.Subqueryable):
             _raise_config_error(
                 "Missing SELECT query in the model definition", self._path
             )
 
-        if not query_.expressions:
+        if not query.expressions:
             _raise_config_error("Query missing select statements", self._path)
 
-        for expression in query_.expressions:
+        for expression in query.expressions:
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
@@ -1315,7 +1315,7 @@ class Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-            projections = {p.lower() for p in query_.named_selects}
+            projections = {p.lower() for p in query.named_selects}
             missing_keys = unique_partition_keys - projections
             if missing_keys:
                 missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
