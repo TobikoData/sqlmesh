@@ -737,7 +737,10 @@ class Model(ModelMeta, frozen=True):
 
         try:
             model_meta = ModelMeta(
-                **{prop.name: prop.args.get("value") for prop in meta.expressions},
+                **{
+                    prop.name.lower(): prop.args.get("value")
+                    for prop in meta.expressions
+                },
                 description="\n".join(comment.strip() for comment in meta.comments)
                 if meta.comments
                 else None,
@@ -1498,15 +1501,10 @@ def _parse_depends_on(
 
             try:
                 expression = to_source(table)
-                depends_on.add(
-                    eval(
-                        compile(expression, f"{executable.path}: {expression}", "eval"),
-                        env,
-                    )
-                )
+                depends_on.add(eval(expression, env))
             except Exception:
                 raise ConfigError(
-                    f"Python model references to context must be resolvable at parse time."
+                    f"Error resolving dependencies for '{executable.path}'. References to context must be resolvable at parse time.\n\n{expression}"
                 )
 
     return depends_on
