@@ -113,7 +113,7 @@ class EngineAdapter:
         else:
             table = exp.to_table(table_name)
             if isinstance(query_or_df, pd.DataFrame):
-                if column_mapping is None:
+                if not column_mapping:
                     raise ValueError("column_mapping must be provided for dataframes")
                 casted_columns = [
                     exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
