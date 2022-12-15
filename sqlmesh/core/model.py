@@ -654,8 +654,7 @@ class Model(ModelMeta, frozen=True):
     _columns: t.Optional[t.Dict[str, exp.DataType]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
     _query_cache: t.Dict[
-        t.Tuple[str, datetime, datetime, datetime, t.Optional[MappingSchema]],
-        exp.Subqueryable,
+        t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
     ] = {}
     _schema: t.Optional[MappingSchema] = None
     _contains_star_query: bool = False
@@ -888,6 +887,11 @@ class Model(ModelMeta, frozen=True):
     def add_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
 
+        if self._contains_star_query:
+            # We need to re-render in order to expand the star projection
+            self._query_cache.clear()
+            self._render_query()
+
     def _render_query(
         self,
         query_: t.Optional[exp.Expression] = None,
@@ -927,7 +931,7 @@ class Model(ModelMeta, frozen=True):
             *make_inclusive(start or EPOCH_DS, end or EPOCH_DS),
             to_datetime(latest or EPOCH_DS),
         )
-        key = (audit_name or "", *dates, self._schema)
+        key = (audit_name or "", *dates)
 
         snapshots = snapshots or {}
         mapping = mapping or {
@@ -974,21 +978,20 @@ class Model(ModelMeta, frozen=True):
                     )
                 )
 
-            if self._schema:
-                # This takes care of expanding star projections, if any
+            if self._schema and self._contains_star_query:
+                # This takes care of expanding star projections
                 self._query_cache[key] = optimize(
                     self._query_cache[key],
                     schema=self._schema,
                     rules=RENDER_OPTIMIZER_RULES,
                 )
 
-                # This is updated because a star might've been expanded into a new projection list
                 self._columns = {
                     expression.alias_or_name: expression.type
                     for expression in self._query_cache[key].expressions
                 }
 
-                self.validate_definition()
+                self.validate_definition(query=self._query_cache[key])
 
         query = self._query_cache[key]
 

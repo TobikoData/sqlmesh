@@ -864,21 +864,7 @@ class Context(BaseContext):
                 self.models[model.name] = model
                 self._add_model_to_dag(model)
 
-        schema = MappingSchema(dialect=self.dialect)
-        for name in self.dag.sorted():
-            model = self.models.get(name)
-
-            # External models don't exist in the context, so we need to skip them
-            if not model:
-                continue
-
-            if model.contains_star_query and any(
-                dep not in self.models for dep in model.depends_on
-            ):
-                raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
-
-            schema.add_table(name, model.columns)
-            model.add_schema(schema)
+        self._update_model_schemas()
 
     def _load_audits(self) -> None:
         for path in self._glob_path(self.audits_directory_path, ".sql"):
@@ -932,3 +918,20 @@ class Context(BaseContext):
         self.dag.graph[model.name] = set()
 
         self.dag.add(model.name, model.depends_on)
+
+    def _update_model_schemas(self):
+        schema = MappingSchema(dialect=self.dialect)
+        for name in self.dag.sorted():
+            model = self.models.get(name)
+
+            # External models don't exist in the context, so we need to skip them
+            if not model:
+                continue
+
+            if model.contains_star_query and any(
+                dep not in self.models for dep in model.depends_on
+            ):
+                raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
+
+            model.add_schema(schema)
+            schema.add_table(name, model.columns)
