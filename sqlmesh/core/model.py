@@ -1076,7 +1076,7 @@ class Model(ModelMeta, frozen=True):
         latest = to_datetime(latest or EPOCH_DS)
         try:
             df = env[self.query.name](
-                context, start=start, end=end, latest=latest, **kwargs
+                context=context, start=start, end=end, latest=latest, **kwargs
             )
             if self.kind == ModelKind.INCREMENTAL:
                 assert self.time_column
