@@ -61,16 +61,36 @@ def update_field(
         if not isinstance(old, dict) or not isinstance(new, dict):
             raise ConfigError("KEY_UPDATE behavior requires dictionary field")
 
-        return old.update(new)
+        combined = old.copy()
+        combined.update(new)
+        return combined
     elif update_strategy == UpdateStrategy.KEY_APPEND:
         if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_UPDATE behavior requires dictionary field")
+            raise ConfigError("KEY_APPEND behavior requires dictionary field")
 
-        for key, value in new:
-            if old.get(key):
-                return old[key] + value
+        combined = old.copy()
+        for key, value in new.items():
+            if not isinstance(value, list):
+                raise ConfigError(
+                    "KEY_APPEND behavior requires list values in dictionary"
+                )
+
+            old_value = combined.get(key)
+            if old_value:
+                if not isinstance(old_value, list):
+                    raise ConfigError(
+                        "KEY_APPEND behavior requires list values in dictionary"
+                    )
+
+                combined[key] = old_value + value
             else:
-                return value
+                combined[key] = value
+
+        return combined
+
+
+def ensure_list(val: t.Any) -> t.List[t.Any]:
+    return val if isinstance(val, list) else [val]
 
 
 class ModelConfig(PydanticModel):
@@ -131,9 +151,7 @@ class ModelConfig(PydanticModel):
         pre=True,
     )
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
-        if not isinstance(v, list):
-            v = [v]
-        return v
+        return ensure_list(v)
 
     @validator("enabled", "full_refresh", pre=True)
     def _validate_bool(cls, v: str) -> bool:
@@ -168,7 +186,7 @@ class ModelConfig(PydanticModel):
 
     @validator("grants", pre=True)
     def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
-        return {key: list(set(value)) for key, value in v.items()}
+        return {key: ensure_list(value) for key, value in v.items()}
 
     @classmethod
     def _try_str_to_bool(cls, val: str) -> t.Union[bool, str]:
