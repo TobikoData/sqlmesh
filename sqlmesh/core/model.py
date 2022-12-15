@@ -777,7 +777,13 @@ class Model(ModelMeta, frozen=True):
 
         model._path = path
         model.set_time_format(time_column_format)
-        model.validate_definition()
+
+        query = model._render_query()
+        model.validate_definition(query=query)
+
+        model._contains_star_query = any(
+            isinstance(expression, exp.Star) for expression in query.expressions
+        )
 
         return model
 
@@ -1262,7 +1268,7 @@ class Model(ModelMeta, frozen=True):
     def python_env(self) -> t.Dict[str, Executable]:
         return self.python_env_ or {}
 
-    def validate_definition(self) -> None:
+    def validate_definition(self, query: t.Optional[exp.Subqueryable] = None) -> None:
         """Validates the model's definition.
 
         Model's are not allowed to have duplicate column names, non-explicitly casted columns,
@@ -1272,23 +1278,21 @@ class Model(ModelMeta, frozen=True):
             ConfigError
         """
         name_counts: t.Dict[str, int] = {}
-        query = self._render_query()
+        query_ = query or self._render_query()
 
-        if not isinstance(query, exp.Subqueryable):
+        if not isinstance(query_, exp.Subqueryable):
             _raise_config_error(
                 "Missing SELECT query in the model definition", self._path
             )
 
-        if not query.expressions:
+        if not query_.expressions:
             _raise_config_error("Query missing select statements", self._path)
 
-        for expression in query.expressions:
+        for expression in query_.expressions:
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
-            if isinstance(expression, exp.Star):
-                self._contains_star_query = True
-            elif not alias:
+            if not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
                     self._path,
@@ -1308,7 +1312,7 @@ class Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-            projections = {p.lower() for p in query.named_selects}
+            projections = {p.lower() for p in query_.named_selects}
             missing_keys = unique_partition_keys - projections
             if missing_keys:
                 missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
