@@ -67,6 +67,7 @@ class Plan:
         no_gaps:  Whether to ensure that new snapshots for models that are already a
             part of the target environment have no data gaps when compared against previous
             snapshots for same models.
+        skip_backfill: Whether to skip the backfill step.
     """
 
     def __init__(
@@ -79,6 +80,7 @@ class Plan:
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
+        skip_backfill: bool = False,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -86,6 +88,7 @@ class Plan:
         self.plan_id: str = random_id()
         self.restatements = set()
         self.no_gaps = no_gaps
+        self.skip_backfill = skip_backfill
         self._start = start
         self._end = end
         self._apply = apply
@@ -140,6 +143,10 @@ class Plan:
     def end(self, new_end: TimeLike) -> None:
         self._end = new_end
         self._missing_intervals = None
+
+    @property
+    def requires_backfill(self) -> bool:
+        return not self.skip_backfill and bool(self.missing_intervals)
 
     @property
     def missing_intervals(self) -> t.List[MissingIntervals]:
