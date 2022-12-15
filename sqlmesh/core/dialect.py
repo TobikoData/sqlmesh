@@ -23,6 +23,10 @@ class Jinja(exp.Func):
     is_var_len_args = True
 
 
+class ModelKind(exp.Expression):
+    arg_types = {"this": True, "expressions": False}
+
+
 class MacroVar(exp.Var):
     pass
 
@@ -200,6 +204,23 @@ def _parse_order(
     return macro
 
 
+@t.no_type_check
+def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
+    key = self._parse_id_var(True)
+
+    if not key:
+        return None
+
+    index = self._index
+    if self._match(TokenType.L_PAREN):
+        self._retreat(index)
+        value = self._parse_wrapped_id_vars()
+    else:
+        value = self._parse_bracket(self._parse_field(any_token=True))
+
+    return self.expression(exp.Property, this=key.name.lower(), value=value)
+
+
 def _create_parser(
     parser_type: t.Type[exp.Expression], table_keys: t.List[str]
 ) -> t.Callable:
@@ -218,6 +239,20 @@ def _create_parser(
                 value = exp.table_name(self._parse_table())
             elif key == "columns":
                 value = self._parse_schema()
+            elif key == "kind":
+                id_var = self._parse_id_var(True).name.lower()
+                if id_var in (
+                    "incremental_by_time_range",
+                    "incremental_by_unique_key",
+                ):
+                    props = self._parse_wrapped_csv(self._parse_props)
+                else:
+                    props = None
+                value = self.expression(
+                    ModelKind,
+                    this=id_var,
+                    expressions=props,
+                )
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -244,6 +279,18 @@ def _model_sql(self, expression: exp.Expression) -> str:
         ]
     )
     return "\n".join(["MODEL (", props, ")"])
+
+
+def _model_kind_sql(self, expression: ModelKind) -> str:
+    props = ",\n".join(
+        [
+            self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+            for prop in expression.expressions
+        ]
+    )
+    if props:
+        return "\n".join([f"kind {expression.this} (", props, ")"])
+    return f"kind {expression.this}"
 
 
 def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
@@ -420,6 +467,7 @@ def extend_sqlglot() -> None:
                     MacroSQL: lambda self, e: f"@SQL({self.sql(e.this)})",
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
+                    ModelKind: _model_kind_sql,
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (
@@ -448,3 +496,4 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_placeholder)
+    setattr(Parser, _parse_props.__name__, _parse_props)
