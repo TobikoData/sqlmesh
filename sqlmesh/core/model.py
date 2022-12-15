@@ -654,8 +654,10 @@ class Model(ModelMeta, frozen=True):
     _columns: t.Optional[t.Dict[str, exp.DataType]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
     _query_cache: t.Dict[
-        t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
+        t.Tuple[str, datetime, datetime, datetime, t.Optional[MappingSchema]],
+        exp.Subqueryable,
     ] = {}
+    _schema: t.Optional[MappingSchema] = None
     _contains_star_query: bool = False
     audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
@@ -832,15 +834,6 @@ class Model(ModelMeta, frozen=True):
             for column_type in self.columns.values()
         )
 
-    def expand_star(self, schema: MappingSchema) -> None:
-        """Sets this model's columns after expanding the outermost star projection."""
-        query = self._render_query().copy()
-        expanded_query = optimize(query, schema=schema, rules=RENDER_OPTIMIZER_RULES)
-        self._columns = {
-            expression.alias_or_name: expression.type
-            for expression in expanded_query.expressions
-        }
-
     def render(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model."""
         expressions = []
@@ -886,6 +879,9 @@ class Model(ModelMeta, frozen=True):
         model.comments = [comment] if comment else None
         return [model, *self.expressions, self.query]
 
+    def add_schema(self, schema: MappingSchema) -> None:
+        self._schema = schema
+
     def _render_query(
         self,
         query_: t.Optional[exp.Expression] = None,
@@ -894,7 +890,6 @@ class Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         add_incremental_filter: bool = False,
-        expand_star: bool = False,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -910,7 +905,6 @@ class Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             add_incremental_filter: Add an incremental filter to the query if the model is incremental.
-            expand_star: If the query contains a star projection, it's expanded into the corresponding columns.
             snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
                 If passing snapshots is undesirable, mapping can be used instead to manually map tables.
             mapping: Mapping to replace table names, if not set, the mapping will be created from snapshots.
@@ -927,7 +921,7 @@ class Model(ModelMeta, frozen=True):
             *make_inclusive(start or EPOCH_DS, end or EPOCH_DS),
             to_datetime(latest or EPOCH_DS),
         )
-        key = (audit_name or "", *dates)
+        key = (audit_name or "", *dates, self._schema)
 
         snapshots = snapshots or {}
         mapping = mapping or {
@@ -974,6 +968,18 @@ class Model(ModelMeta, frozen=True):
                     )
                 )
 
+            if self._schema:
+                self._query_cache[key] = optimize(
+                    self._query_cache[key],
+                    schema=self._schema,
+                    rules=RENDER_OPTIMIZER_RULES,
+                )
+
+                self._columns = {
+                    expression.alias_or_name: expression.type
+                    for expression in self._query_cache[key].expressions
+                }
+
         query = self._query_cache[key]
 
         if expand:
@@ -1009,17 +1015,6 @@ class Model(ModelMeta, frozen=True):
                 if isinstance(node, exp.Select):
                     self._filter_time_column(node, *dates[0:2])
 
-        if expand_star and self._contains_star_query:
-            # FIXME: fix union expressions when we start handling them in other places too
-            # (e.g. `Model.columns` would need to be fixed, etc.)
-            query = query.select(  # type: ignore
-                *(
-                    exp.alias_(f"{name}::{column_type}", name)
-                    for name, column_type in self.columns.items()
-                ),
-                append=False,
-            )
-
         if mapping:
             return exp.replace_tables(query, mapping)
 
@@ -1040,9 +1035,7 @@ class Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(
-            expand_star=True, snapshots=snapshots, expand=snapshots
-        )
+        query = self._render_query(snapshots=snapshots, expand=snapshots)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)
@@ -1058,7 +1051,6 @@ class Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        expand_star: bool = True,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -1073,7 +1065,6 @@ class Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            expand_star: If the query contains a star projection, it's expanded into the corresponding columns.
             audit_name: The name of audit if the query to render is for an audit.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -1088,7 +1079,6 @@ class Model(ModelMeta, frozen=True):
             snapshots=snapshots,
             mapping=mapping,
             expand=expand,
-            expand_star=expand_star,
             **kwargs,
         )
 
@@ -1271,8 +1261,8 @@ class Model(ModelMeta, frozen=True):
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
-        Model's are not allowed to have SELECT * in the final query, duplicate column names,
-        non-explicitly casted columns, or non infererrable column names.
+        Model's are not allowed to have duplicate column names, non-explicitly casted columns,
+        or non infererrable column names.
 
         Raises:
             ConfigError
@@ -1294,8 +1284,6 @@ class Model(ModelMeta, frozen=True):
 
             if isinstance(expression, exp.Alias):
                 expression = expression.this
-            elif isinstance(expression, exp.Star):
-                self._contains_star_query = True
             elif not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",

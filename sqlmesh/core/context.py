@@ -872,16 +872,13 @@ class Context(BaseContext):
             if not model:
                 continue
 
-            if model.contains_star_query:
-                upstream_deps = model.depends_on
-                if any(map(lambda dep: dep not in self.models, upstream_deps)):
-                    raise SQLMeshError(
-                        f"Can't expand SELECT * expression for model {name}"
-                    )
-
-                model.expand_star(schema)
+            if model.contains_star_query and any(
+                dep not in self.models, model.depends_on
+            ):
+                raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
 
             schema.add_table(name, model.columns)
+            model.add_schema(schema)
 
     def _load_audits(self) -> None:
         for path in self._glob_path(self.audits_directory_path, ".sql"):
