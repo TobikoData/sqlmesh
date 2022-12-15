@@ -9,6 +9,7 @@ the SnapshotEvaluator delegates them to engine adapters so these components can 
 from __future__ import annotations
 
 import contextlib
+import itertools
 import logging
 import typing as t
 
@@ -254,9 +255,17 @@ class EngineAdapter:
         if_exists = " IF EXISTS" if ignore_if_not_exists else ""
         self.execute(f"DROP VIEW{if_exists} {view_name}")
 
-    def describe_table(self, table_name: str) -> t.List[t.Tuple]:
+    def columns(self, table_name: str) -> t.Dict[str, str]:
+        """Fetches column names and types for the target table."""
         self.execute(f"DESCRIBE TABLE {table_name}")
-        return self.cursor.fetchall()
+        describe_output = self.cursor.fetchall()
+        return {
+            t[0]: t[1].upper()
+            for t in itertools.takewhile(
+                lambda t: not t[0].startswith("#"),
+                describe_output,
+            )
+        }
 
     def table_exists(self, table_name: str) -> bool:
         try:

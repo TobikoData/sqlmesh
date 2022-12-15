@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import typing as t
 from enum import Enum, auto
 
@@ -43,7 +42,7 @@ class SchemaDelta(PydanticModel):
 
 
 class SchemaDiffCalculator:
-    """Claculates the difference between table schema.s
+    """Calculates the difference between table schemas.
 
     Args:
         engine_adapter: The engine adapter.
@@ -62,10 +61,11 @@ class SchemaDiffCalculator:
             lambda src, tgt: False
         )
 
-    def calculate(self, source_table: str, target_table: str) -> t.List[SchemaDelta]:
-        """Calculates a list of schema deltas between the source and the target tables, applying which
-        in order to the source table brings its schema in correspondence with the schema of the target
-        table.
+    def calculate(
+        self, apply_to_table: str, schema_from_table: str
+    ) -> t.List[SchemaDelta]:
+        """Calculates a list of schema deltas between the two tables, applying which in order to the first table
+        brings its schema in correspondence with the schema of the second table.
 
         Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
 
@@ -73,48 +73,34 @@ class SchemaDiffCalculator:
         It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
 
         Args:
-            source_table: The name of the source table.
-            target_table: The name of the target table.
+            apply_to_table: The name of the table to which deltas will be applied.
+            schema_from_table: The schema of this table will be used for comparison.
 
         Returns:
             The list of deltas.
         """
-        source_schema = self._fetch_table_schema(source_table)
-        target_schema = self._fetch_table_schema(target_table)
+        to_schema = self.engine_adapter.columns(apply_to_table)
+        from_schema = self.engine_adapter.columns(schema_from_table)
 
         result = []
 
-        for source_column_name, source_column_type in source_schema.items():
-            target_column_type = target_schema.get(source_column_name)
+        for to_column_name, to_column_type in to_schema.items():
+            from_column_type = from_schema.get(to_column_name)
 
-            if target_column_type != source_column_type:
-                if target_column_type and self.is_type_transition_allowed(
-                    source_column_type, target_column_type
+            if from_column_type != to_column_type:
+                if from_column_type and self.is_type_transition_allowed(
+                    to_column_type, from_column_type
                 ):
                     result.append(
-                        SchemaDelta.alter_type(source_column_name, target_column_type)
+                        SchemaDelta.alter_type(to_column_name, from_column_type)
                     )
                 else:
-                    result.append(
-                        SchemaDelta.drop(source_column_name, source_column_type)
-                    )
-                    if target_column_type:
-                        result.append(
-                            SchemaDelta.add(source_column_name, target_column_type)
-                        )
+                    result.append(SchemaDelta.drop(to_column_name, to_column_type))
+                    if from_column_type:
+                        result.append(SchemaDelta.add(to_column_name, from_column_type))
 
-        for target_column_name, target_column_type in target_schema.items():
-            if target_column_name not in source_schema:
-                result.append(SchemaDelta.add(target_column_name, target_column_type))
+        for from_column_name, from_column_type in from_schema.items():
+            if from_column_name not in to_schema:
+                result.append(SchemaDelta.add(from_column_name, from_column_type))
 
         return result
-
-    def _fetch_table_schema(self, table_name: str) -> t.Dict[str, str]:
-        describe_output = self.engine_adapter.describe_table(table_name)
-        return {
-            t[0]: t[1].upper()
-            for t in itertools.takewhile(
-                lambda t: not t[0].startswith("#"),
-                describe_output,
-            )
-        }
