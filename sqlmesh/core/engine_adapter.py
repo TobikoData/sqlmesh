@@ -111,29 +111,27 @@ class EngineAdapter:
         if self.supports_partitions:
             self.insert_overwrite(table_name, query_or_df)
         else:
+            table = exp.to_table(table_name)
             if isinstance(query_or_df, pd.DataFrame):
                 if column_mapping is None:
                     raise ValueError("column_mapping must be provided for dataframes")
-                schema = exp.Schema(
-                    this=exp.to_identifier(table_name),
-                    expressions=[
-                        exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                        for column, kind in column_mapping.items()
-                    ],
-                )
-                column_names = column_mapping.keys()
-                values = next(pandas_to_sql(query_or_df, columns=column_names))
-                select = exp.select(*column_names).from_(values)
+                casted_columns = [
+                    exp.alias_(
+                        exp.Cast(this=exp.to_identifier(column), to=kind), column
+                    )
+                    for column, kind in column_mapping.items()
+                ]
+                values = next(pandas_to_sql(query_or_df, columns=column_mapping.keys()))
                 create = exp.Create(
-                    this=schema,
+                    this=table,
                     kind="TABLE",
                     replace=True,
-                    expression=select,
+                    expression=exp.select(*casted_columns).from_(values),
                 )
             else:
                 create = exp.Create(
+                    this=table,
                     kind="TABLE",
-                    this=exp.to_table(table_name),
                     replace=True,
                     expression=query_or_df,
                 )
