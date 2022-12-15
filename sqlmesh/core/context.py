@@ -82,7 +82,7 @@ class BaseContext(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
 
     @property
@@ -104,7 +104,7 @@ class BaseContext(abc.ABC):
         Returns:
             The physical table name.
         """
-        return self.model_tables[model_name]
+        return self._model_tables[model_name]
 
     def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a dataframe given a sql string or sqlglot expression.
@@ -128,7 +128,7 @@ class ExecutionContext(BaseContext):
 
     def __init__(self, engine_adapter: EngineAdapter, model_tables: t.Dict[str, str]):
         self._engine_adapter = engine_adapter
-        self._model_tables = model_tables
+        self.__model_tables = model_tables
 
     @property
     def engine_adapter(self) -> EngineAdapter:
@@ -136,9 +136,9 @@ class ExecutionContext(BaseContext):
         return self._engine_adapter
 
     @property
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
-        return self._model_tables
+        return self.__model_tables
 
 
 class Context(BaseContext):
@@ -425,7 +425,7 @@ class Context(BaseContext):
         return snapshots
 
     @property
-    def model_tables(self) -> t.Dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Mapping of model name to physical table name.
 
         If a snapshot has not been versioned yet, its view name will be returned.
@@ -519,7 +519,7 @@ class Context(BaseContext):
             start,
             end,
             latest,
-            mapping=self.model_tables,
+            mapping=self._model_tables,
             limit=limit,
         )
 

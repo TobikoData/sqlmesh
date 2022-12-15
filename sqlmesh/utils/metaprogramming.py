@@ -155,7 +155,8 @@ def getsource(obj: t.Any) -> str:
     raise SQLMeshError(f"Cannot find source for {obj}")
 
 
-def _parse_source(func: t.Callable) -> ast.Module:
+def parse_source(func: t.Callable) -> ast.Module:
+    """Parse a function and returns an ast node."""
     return ast.parse(textwrap.dedent(getsource(func)))
 
 
@@ -169,7 +170,7 @@ def _decorator_name(decorator: ast.expr) -> str:
 
 def decorators(func: t.Callable) -> t.List[str]:
     """Finds a list of all the decorators of a callable."""
-    root_node = _parse_source(func)
+    root_node = parse_source(func)
     decorators = []
 
     for node in ast.walk(root_node):
@@ -190,7 +191,7 @@ def normalize_source(obj: t.Any) -> str:
     Returns:
         A string representation of the normalized function.
     """
-    root_node = _parse_source(obj)
+    root_node = parse_source(obj)
 
     for node in ast.walk(root_node):
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):

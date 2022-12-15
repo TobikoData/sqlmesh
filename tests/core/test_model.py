@@ -4,7 +4,7 @@ import pytest
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
-from sqlmesh.core.model import Model, ModelMeta, TimeColumn
+from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 
@@ -623,3 +623,18 @@ def test_parse_model(assert_exp_eq):
         ds <= '1970-01-01' AND ds >= '1970-01-01'
     """,
     )
+
+
+CONST = "bar"
+
+
+def test_python_model_deps() -> None:
+    @model(name="my_model", kind="full", columns={"foo": "int"})
+    def my_model(context, **kwargs):
+        context.table("foo")
+        context.table(model_name=CONST + ".baz")
+
+    assert model.get_registry()["my_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    ).depends_on == {"foo", "bar.baz"}
