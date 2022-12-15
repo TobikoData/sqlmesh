@@ -39,6 +39,34 @@ def test_create_schema(mocker: MockerFixture):
     ]
 
 
+def test_columns(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+
+    connection_mock.cursor.return_value = cursor_mock
+    cursor_mock.fetchall.return_value = [
+        ("id", "int"),
+        ("name", "string"),
+        ("price", "double"),
+        ("ds", "string"),
+        ("# Partition Information", ""),
+        ("# col_name", "data_type"),
+        ("ds", "string"),
+    ]
+
+    adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
+    assert adapter.columns("test_table") == {
+        "id": "INT",
+        "name": "STRING",
+        "price": "DOUBLE",
+        "ds": "STRING",
+    }
+
+    cursor_mock.execute.assert_called_once_with(
+        "DESCRIBE TABLE test_table",
+    )
+
+
 def test_table_exists(mocker: MockerFixture):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
