@@ -116,12 +116,10 @@ class EngineAdapter:
                 if column_mapping is None:
                     raise ValueError("column_mapping must be provided for dataframes")
                 casted_columns = [
-                    exp.alias_(
-                        exp.Cast(this=exp.to_identifier(column), to=kind), column
-                    )
+                    exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
                     for column, kind in column_mapping.items()
                 ]
-                values = next(pandas_to_sql(query_or_df, columns=column_mapping.keys()))
+                values = next(pandas_to_sql(query_or_df, columns=column_mapping))
                 create = exp.Create(
                     this=table,
                     kind="TABLE",
