@@ -119,7 +119,13 @@ class EngineAdapter:
                     exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
                     for column, kind in column_mapping.items()
                 ]
-                values = next(pandas_to_sql(query_or_df, columns=column_mapping))
+                values = next(
+                    pandas_to_sql(
+                        query_or_df,
+                        alias=table_name.split(".")[-1],
+                        columns=column_mapping,
+                    )
+                )
                 create = exp.Create(
                     this=table,
                     kind="TABLE",
