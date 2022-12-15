@@ -20,7 +20,7 @@ repos:
         language: system
         entry: black
         require_serial: true
-        files: ^(dbt/|sqlmesh/|tests/|web/|example/|setup.py)
+        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
         types_or:
           - python
           - pyi
@@ -29,5 +29,5 @@ repos:
         language: system
         entry: mypy
         "types": [ python ]
-        files: ^(dbt/|sqlmesh/|tests/|web/|setup.py)
+        files: ^(sqlmesh/|tests/|web/|setup.py)
         require_serial: true

@@ -43,7 +43,8 @@ def model_name(config: ModelConfig):
     name = ""
     if config.schema_:
         name += config.schema_
-    name += "." + config.identifier
+    if config.identifier:
+        name += "." + config.identifier
     return name
 
 
