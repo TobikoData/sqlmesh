@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 
 from sqlmesh.core.model import Model, ModelKind
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.dbt_adapter.config import Config, Materialization, ModelConfig
+from sqlmesh.utils.errors import ConfigError
+
 
 def dbt_to_sqlmesh():
     """
@@ -13,7 +14,7 @@ def dbt_to_sqlmesh():
     dbt_config = Config()
     model_config = dbt_config.get_model_config()
 
-    models = [sqlmesh_model(config, path) for (config, path) in model_config.values()]
+    [sqlmesh_model(config, path) for (config, path) in model_config.values()]
 
 
 def sqlmesh_model(config: ModelConfig, path: str) -> Model:
@@ -23,13 +24,13 @@ def sqlmesh_model(config: ModelConfig, path: str) -> Model:
     Args:
         config: The DBT config for the model
         path: The path from the root project folder to the model
-    
+
     Returns:
         The sqlmesh model
     """
     return Model(name=model_name(config), kind=model_kind(config), query=query(path))
 
-    
+
 def model_name(config: ModelConfig):
     """
     Get the sqlmesh model name
@@ -54,7 +55,7 @@ def model_kind(config: ModelConfig) -> ModelKind:
 
     Args:
         config: The DBT config for the model
-    
+
     Returns:
         The sqlmesh ModelKind
     """
@@ -70,20 +71,22 @@ def model_kind(config: ModelConfig) -> ModelKind:
 
     raise ConfigError(f"{materialization.value} materialization not supported")
 
+
 def query(path: str) -> str:
     """
     Get the sqlmesh query
 
     Args:
         path: Path from project root to the DBT model
-    
+
     Returns:
         sqlmesh query
     """
-    with open(path) as file:
+    with open(path, encoding="utf-8") as file:
         query = file.read()
-    
+
     return _remove_config_jinja(query)
+
 
 def _remove_config_jinja(query: str) -> str:
     """
@@ -91,7 +94,7 @@ def _remove_config_jinja(query: str) -> str:
 
     args:
         query: The query
-    
+
     Returns:
         The query without the config method calls
     """

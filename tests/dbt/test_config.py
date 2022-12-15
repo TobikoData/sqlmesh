@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 
-from dbt.config import Config, ModelConfig
+from sqlmesh.dbt_adapter.config import Config, ModelConfig
 
 
 @pytest.mark.parametrize(

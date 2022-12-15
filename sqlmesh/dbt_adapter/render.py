@@ -1,4 +1,5 @@
 import typing as t
+
 from jinja2 import Environment, Undefined
 
 

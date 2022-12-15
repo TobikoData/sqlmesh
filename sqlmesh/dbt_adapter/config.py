@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from enum import Enum, auto
 import glob
+import typing as t
+from enum import Enum, auto
+
 from pydantic import Field, validator
 from ruamel.yaml import YAML
-import typing as t
 
-from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.dbt_adapter.render import render_jinja
+from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
 
 DEFAULT_PROJECT_FILE = "dbt_project.yml"
 
@@ -300,7 +301,7 @@ class ModelConfigBuilder:
         stores them in _scoped_configs
         """
         filename = DEFAULT_PROJECT_FILE
-        with open(self._full_path(filename)) as file:
+        with open(self._full_path(filename), encoding="utf-8") as file:
             contents = YAML().load(file.read())
 
         self._project_name = contents.get("name")
@@ -343,7 +344,7 @@ class ModelConfigBuilder:
         """
         scope = self._scope_from_path(filepath)
 
-        with open(filepath) as file:
+        with open(filepath, encoding="utf-8") as file:
             contents = YAML().load(file.read())
 
         model_data = contents.get("models")
@@ -370,7 +371,7 @@ class ModelConfigBuilder:
         Returns:
             ModelConfig for the specified model file
         """
-        with open(filepath) as file:
+        with open(filepath, encoding="utf-8") as file:
             sql = file.read()
 
         scope = self._scope_from_path(filepath)
@@ -461,8 +462,8 @@ class Config:
         Args:
             project_path: Relative or absolute path to the DBT project
         """
-        self.models: t.Dict[str, t.Tuple[ModelConfig, str]] = {}
-        self.project_path = project_path
+        builder = ModelConfigBuilder()
+        self.models = builder.build_model_configs(project_path)
 
     def get_model_config(self) -> t.Dict[str, t.Tuple[ModelConfig, str]]:
         """
@@ -472,9 +473,4 @@ class Config:
             Dict with model name as the key and a tuple containing ModelConfig
             and relative path to model file from the project root.
         """
-        if self.models:
-            return self.models
-
-        builder = ModelConfigBuilder()
-        self.models = builder.build_model_configs(self.project_path)
         return self.models
