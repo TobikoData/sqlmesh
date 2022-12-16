@@ -6,8 +6,9 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.model import Model
+from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 
@@ -37,7 +38,7 @@ def date_kwargs() -> t.Dict[str, str]:
 
 
 def test_evaluate(mocker: MockerFixture, make_snapshot):
-    adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
+    adapter_mock = mocker.Mock()
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -73,7 +74,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
 
 def test_promote(mocker: MockerFixture, make_snapshot):
-    adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
+    adapter_mock = mocker.Mock()
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -121,12 +122,53 @@ def test_promote_model_info(mocker: MockerFixture):
     )
 
 
+def test_migrate(mocker: MockerFixture, make_snapshot):
+    adapter_mock = mocker.Mock()
+
+    schema_diff_calculator_mock = mocker.patch(
+        "sqlmesh.core.schema_diff.SchemaDiffCalculator.calculate"
+    )
+    schema_diff_calculator_mock.return_value = [
+        SchemaDelta.drop("b", "STRING"),
+        SchemaDelta.add("a", "INT"),
+    ]
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = Model(
+        name="test_schema.test_model",
+        storage_format="parquet",
+        partitioned_by=["a"],
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+    snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
+
+    evaluator.migrate([snapshot], {})
+
+    adapter_mock.create_table.assert_called_once_with(
+        "physical_schema.test_schema__test_model__1__tmp__2412699390_0",
+        query_or_columns=mocker.ANY,
+        storage_format=mocker.ANY,
+        partitioned_by=mocker.ANY,
+    )
+
+    adapter_mock.alter_table.assert_called_once_with(
+        snapshot.table_name,
+        {"a": "INT"},
+        ["b"],
+    )
+
+    adapter_mock.drop_table.assert_called_once_with(
+        "physical_schema.test_schema__test_model__1__tmp__2412699390_0"
+    )
+
+
 def test_evaluate_creation_duckdb(
     snapshot: Snapshot,
     duck_conn,
     date_kwargs: t.Dict[str, str],
 ):
-    evaluator = SnapshotEvaluator(EngineAdapter(lambda: duck_conn, "duckdb"))
+    evaluator = SnapshotEvaluator(create_engine_adapter(lambda: duck_conn, "duckdb"))
     evaluator.create([snapshot], {})
     version = snapshot.version
 
@@ -166,3 +208,29 @@ def test_evaluate_creation_duckdb(
         (1,),
         (1,),
     ]
+
+
+def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
+    evaluator = SnapshotEvaluator(create_engine_adapter(lambda: duck_conn, "duckdb"))
+    evaluator.create([snapshot], {})
+
+    updated_model_dict = snapshot.model.dict()
+    updated_model_dict["query"] = "SELECT a AS b FROM tbl"
+    updated_model = Model.parse_obj(updated_model_dict)
+
+    new_snapshot = make_snapshot(updated_model)
+    new_snapshot.version = snapshot.version
+
+    evaluator.migrate([new_snapshot], {})
+
+    evaluator.evaluate(
+        new_snapshot,
+        "2020-01-01",
+        "2020-01-01",
+        "2020-01-01",
+        mapping={},
+    )
+
+    assert duck_conn.execute(
+        f"SELECT b FROM sqlmesh.db__model__{snapshot.version}"
+    ).fetchall() == [(1,)]
