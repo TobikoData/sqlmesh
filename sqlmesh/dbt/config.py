@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import Field, validator
 from ruamel.yaml import YAML
 
-from sqlmesh.dbt_adapter.render import render_jinja
+from sqlmesh.dbt.render import render_jinja
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 

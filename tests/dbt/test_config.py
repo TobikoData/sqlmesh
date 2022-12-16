@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt_adapter.config import Config, ModelConfig
+from sqlmesh.dbt.config import Config, ModelConfig
 
 
 @pytest.mark.parametrize(
