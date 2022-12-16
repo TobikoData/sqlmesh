@@ -805,22 +805,20 @@ class Context(BaseContext):
     ) -> Config:
         if isinstance(config, Config):
             return config
+        config = config or "config"
         config_obj = None
         if config_module:
-            if config is None:
-                config_obj = getattr(config_module, "config")
-            else:
-                try:
-                    config_obj = getattr(config_module, config)
-                except AttributeError:
-                    raise ConfigError(f"Config {config} not found.")
+            try:
+                config_obj = getattr(config_module, config)
+            except AttributeError:
+                raise ConfigError(f"Config {config} not found.")
         if config_obj is None:
             raise ConfigError(
                 "SQLMesh Config could not be found. Point the cli to the right path with `sqlmesh --path`. If you haven't set up SQLMesh, run `sqlmesh init`."
             )
         if not isinstance(config_obj, Config):
             raise ConfigError(
-                f"Config needs to be of type sqlmesh.core.context.Context. Found `{config_obj}` instead."
+                f"Config needs to be of type sqlmesh.core.config.Config. Found `{config_obj}` instead."
             )
         return config_obj
 
