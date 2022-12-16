@@ -270,7 +270,6 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model_kind import (
-    MODEL_KINDS,
     IncrementalByTimeRange,
     IncrementalByUniqueKey,
     ModelKind,
@@ -339,7 +338,7 @@ class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
     name: str
-    kind: MODEL_KINDS
+    kind: ModelKind = IncrementalByTimeRange()
     dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
@@ -365,7 +364,7 @@ class ModelMeta(PydanticModel):
         return v
 
     @validator("kind", pre=True)
-    def _enum_validator(cls, v: t.Any) -> MODEL_KINDS:
+    def _model_kind_validator(cls, v: t.Any) -> ModelKind:
         if isinstance(v, ModelKind):
             return v
 
@@ -374,12 +373,10 @@ class ModelMeta(PydanticModel):
             props = {prop.name: prop.args.get("value") for prop in v.expressions}
             if kind == ModelKindEnum.INCREMENTAL_BY_TIME_RANGE:
                 return IncrementalByTimeRange(
-                    kind=kind,
                     **props,
                 )
             elif kind == ModelKindEnum.INCREMENTAL_BY_UNIQUE_KEY:
                 return IncrementalByUniqueKey(
-                    kind=kind,
                     **props,
                 )
             else:
@@ -1302,9 +1299,9 @@ class Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-        if isinstance(self.kind, IncrementalByTimeRange) and not self.time_column:
+        if self.kind.is_incremental_by_time_range and not self.time_column:
             _raise_config_error(
-                "Incremental models must have a time_column field.",
+                "Incremental by time range models must have a time_column field.",
                 self._path,
             )
 

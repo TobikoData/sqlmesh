@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import validator
+from pydantic import Field, validator
 from sqlglot import exp
 
 from sqlmesh.utils.pydantic import PydanticModel
@@ -29,8 +29,12 @@ class ModelKind(PydanticModel):
         return self.kind.name
 
     @property
-    def is_incremental(self):
-        return self.kind == ModelKindEnum.INCREMENTAL
+    def is_incremental_by_time_range(self):
+        return self.kind == ModelKindEnum.INCREMENTAL_BY_TIME_RANGE
+
+    @property
+    def is_incremental_by_unique_key(self):
+        return self.kind == ModelKindEnum.INCREMENTAL_BY_UNIQUE_KEY
 
     @property
     def is_full(self):
@@ -73,7 +77,8 @@ class TimeColumn(PydanticModel):
 
 
 class IncrementalByTimeRange(ModelKind):
-    time_column: TimeColumn
+    kind: ModelKindEnum = Field(ModelKindEnum.INCREMENTAL_BY_TIME_RANGE, const=True)
+    time_column: TimeColumn = TimeColumn(column="ds")
 
     @validator("time_column", pre=True)
     def _parse_time_column(cls, v: t.Any) -> TimeColumn:
@@ -82,10 +87,14 @@ class IncrementalByTimeRange(ModelKind):
                 key: v[i].name for i, key in enumerate(("column", "format")[: len(v)])
             }
             return TimeColumn(**kwargs)
+
+        if isinstance(v, exp.Identifier):
+            return TimeColumn(column=v.name)
         return v
 
 
 class IncrementalByUniqueKey(ModelKind):
+    kind: ModelKindEnum = Field(ModelKindEnum.INCREMENTAL_BY_UNIQUE_KEY, const=True)
     unique_key: t.List[str]
 
     @validator("unique_key", pre=True)
@@ -93,6 +102,3 @@ class IncrementalByUniqueKey(ModelKind):
         if isinstance(v, exp.Identifier):
             return [v.this]
         return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
-
-
-MODEL_KINDS = t.Union[ModelKind, IncrementalByTimeRange, IncrementalByUniqueKey]

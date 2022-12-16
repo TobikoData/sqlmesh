@@ -273,20 +273,16 @@ PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
 
 def _model_sql(self, expression: exp.Expression) -> str:
     props = ",\n".join(
-        [
-            self.indent(f"{prop.name} {self.sql(prop, 'value')}")
-            for prop in expression.expressions
-        ]
+        self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+        for prop in expression.expressions
     )
     return "\n".join(["MODEL (", props, ")"])
 
 
 def _model_kind_sql(self, expression: ModelKind) -> str:
     props = ",\n".join(
-        [
-            self.indent(f"{prop.name} {self.sql(prop, 'value')}")
-            for prop in expression.expressions
-        ]
+        self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+        for prop in expression.expressions
     )
     if props:
         return "\n".join([f"kind {expression.this} (", props, ")"])
