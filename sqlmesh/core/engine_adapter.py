@@ -18,7 +18,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.utils import optional_import
-from sqlmesh.utils.connection_pool import connection_pool
+from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -55,7 +55,9 @@ class EngineAdapter:
         multithreaded: bool = False,
     ):
         self.dialect = dialect.lower()
-        self._connection_pool = connection_pool(connection_factory, multithreaded)
+        self._connection_pool = create_connection_pool(
+            connection_factory, multithreaded
+        )
         self._transaction = False
 
     @property
@@ -156,7 +158,7 @@ class EngineAdapter:
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
             query_columns: A query or mapping between the column name and its data type.
-            exists: Indicates if you to include an IF EXISTS check.
+            exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
         properties = self._create_table_properties(**kwargs)
@@ -193,6 +195,21 @@ class EngineAdapter:
         """
         drop_expression = exp.Drop(this=table_name, kind="TABLE", exists=exists)
         self.execute(drop_expression)
+
+    def alter_table(
+        self,
+        table_name: str,
+        added_columns: t.Dict[str, str],
+        dropped_columns: t.Sequence[str],
+    ) -> None:
+        with self.transaction():
+            for column_name, column_type in added_columns.items():
+                self.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                )
+
+            for column_name in dropped_columns:
+                self.execute(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
 
     def create_view(
         self,
@@ -527,3 +544,35 @@ class EngineAdapter:
             **kwargs,
         }
         return e.sql(**kwargs)
+
+
+class SparkEngineAdapter(EngineAdapter):
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        multithreaded: bool = False,
+    ):
+        super().__init__(connection_factory, "spark", multithreaded=multithreaded)
+
+    def alter_table(
+        self,
+        table_name: str,
+        added_columns: t.Dict[str, str],
+        dropped_columns: t.Sequence[str],
+    ) -> None:
+        added_columns_sql = ", ".join(
+            f"{column_name} {column_type}"
+            for column_name, column_type in added_columns.items()
+        )
+        self.execute(f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})")
+
+        dropped_columns_sql = ", ".join(dropped_columns)
+        self.execute(f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})")
+
+
+def create_engine_adapter(
+    connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
+) -> EngineAdapter:
+    if dialect.lower() == "spark":
+        return SparkEngineAdapter(connection_factory, multithreaded=multithreaded)
+    return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)

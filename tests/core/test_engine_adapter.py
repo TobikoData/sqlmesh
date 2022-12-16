@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, SparkEngineAdapter
 
 
 def test_create_view(mocker: MockerFixture):
@@ -219,6 +219,50 @@ def test_create_table_properties_ignored(mocker: MockerFixture):
 
     cursor_mock.execute.assert_called_once_with(
         """CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)"""
+    )
+
+
+def test_alter_table(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "duckdb")  # type: ignore
+    adapter.alter_table(
+        "test_table",
+        {"a": "INT", "b": "TEXT"},
+        ["c", "d"],
+    )
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("BEGIN"),
+            call("""ALTER TABLE test_table ADD COLUMN a INT"""),
+            call("""ALTER TABLE test_table ADD COLUMN b TEXT"""),
+            call("""ALTER TABLE test_table DROP COLUMN c"""),
+            call("""ALTER TABLE test_table DROP COLUMN d"""),
+            call("COMMIT"),
+        ]
+    )
+
+
+def test_alter_table_spark(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = SparkEngineAdapter(lambda: connection_mock)  # type: ignore
+    adapter.alter_table(
+        "test_table",
+        {"a": "INT", "b": "STRING"},
+        ["c", "d"],
+    )
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("""ALTER TABLE test_table ADD COLUMNS (a INT, b STRING)"""),
+            call("""ALTER TABLE test_table DROP COLUMNS (c, d)"""),
+        ]
     )
 
 

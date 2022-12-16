@@ -4,7 +4,7 @@ import sys
 from pyspark import SparkFiles
 from pyspark.sql import SparkSession
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.engines import commands
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
@@ -36,7 +36,7 @@ def main() -> None:
 
     ddl_concurrent_tasks = int(sys.argv[2]) if len(sys.argv) > 2 else 1
     evaluator = SnapshotEvaluator(
-        EngineAdapter(
+        create_engine_adapter(
             lambda: spark_session_db.connection(spark),
             "spark",
             multithreaded=ddl_concurrent_tasks > 1,

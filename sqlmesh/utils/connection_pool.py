@@ -121,7 +121,7 @@ class SingletonConnectionPool(ConnectionPool):
             self.close()
 
 
-def connection_pool(
+def create_connection_pool(
     connection_factory: t.Callable[[], t.Any], multithreaded: bool
 ) -> ConnectionPool:
     return (
