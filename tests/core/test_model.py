@@ -1,12 +1,16 @@
 from pathlib import Path
 
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
 
+from sqlmesh.core.config import Config
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
+from tests.utils.test_filesystem import create_temp_file
 
 
 def test_load(assert_exp_eq):
@@ -637,3 +641,75 @@ def test_python_model_deps() -> None:
         module_path=Path("."),
         path=Path("."),
     ).depends_on == {"foo", "bar.baz"}
+
+
+def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
+    models_dir = Path("models")
+
+    create_temp_file(
+        tmpdir,
+        Path(models_dir, "db", "upstream.sql"),
+        """
+        MODEL (
+          name db.upstream,
+          kind full,
+        );
+
+        SELECT
+            id::INT AS id,
+            item_id::INT AS item_id,
+            ds::TEXT AS ds,
+        FROM
+            (VALUES
+                (1, 1, '2020-01-01'),
+                (1, 2, '2020-01-01'),
+                (2, 1, '2020-01-01'),
+                (3, 3, '2020-01-03'),
+                (4, 1, '2020-01-04'),
+                (5, 1, '2020-01-05'),
+                (6, 1, '2020-01-06'),
+                (7, 1, '2020-01-07')
+            ) AS t (id, item_id, ds)
+        """,
+    )
+    create_temp_file(
+        tmpdir,
+        Path(models_dir, "db", "downstream.sql"),
+        """
+        MODEL (
+          name db.downstream,
+          kind full,
+        );
+
+        SELECT
+          *
+        FROM db.upstream AS upstream
+		""",
+    )
+
+    context = Context(path=str(tmpdir), config=Config())
+
+    assert_exp_eq(
+        context.render("db.downstream"),
+        f"""
+        SELECT
+          upstream.id AS id,
+          upstream.item_id AS item_id,
+          upstream.ds AS ds
+        FROM (
+          SELECT
+            CAST(id AS INT) AS id,
+            CAST(item_id AS INT) AS item_id,
+            CAST(ds AS TEXT) AS ds
+          FROM (VALUES
+            (1, 1, '2020-01-01'),
+            (1, 2, '2020-01-01'),
+            (2, 1, '2020-01-01'),
+            (3, 3, '2020-01-03'),
+            (4, 1, '2020-01-04'),
+            (5, 1, '2020-01-05'),
+            (6, 1, '2020-01-06'),
+            (7, 1, '2020-01-07')) AS t(id, item_id, ds)
+        ) AS upstream
+        """,
+    )

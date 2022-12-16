@@ -67,7 +67,12 @@ from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
-from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    MissingDependencyError,
+    PlanError,
+    SQLMeshError,
+)
 from sqlmesh.utils.file_cache import FileCache
 
 if t.TYPE_CHECKING:
