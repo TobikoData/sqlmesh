@@ -295,9 +295,12 @@ class Context(BaseContext):
         elif isinstance(model, str):
             model = self.models[model]
 
-        model = Model(**{**model.dict(), **kwargs})  # type: ignore
+        model = model.copy(update=kwargs)  # type: ignore
         self.models.update({model.name: model})
+
         self._add_model_to_dag(model)
+        self._update_model_schemas()
+
         return model
 
     def scheduler(self, global_state: bool = False) -> Scheduler:
@@ -938,5 +941,5 @@ class Context(BaseContext):
             ):
                 raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
 
-            model.add_schema(schema)
+            model.update_schema(schema)
             schema.add_table(name, model.columns)

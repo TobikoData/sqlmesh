@@ -884,7 +884,7 @@ class Model(ModelMeta, frozen=True):
         model.comments = [comment] if comment else None
         return [model, *self.expressions, self.query]
 
-    def add_schema(self, schema: MappingSchema) -> None:
+    def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
 
         if self._contains_star_query:

@@ -648,12 +648,9 @@ def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
 
     create_temp_file(
         tmpdir,
-        Path(models_dir, "db", "upstream.sql"),
+        Path(models_dir, "db", "model1.sql"),
         """
-        MODEL (
-          name db.upstream,
-          kind full,
-        );
+        MODEL (name db.model1, kind full);
 
         SELECT
             id::INT AS id,
@@ -674,28 +671,33 @@ def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
     )
     create_temp_file(
         tmpdir,
-        Path(models_dir, "db", "downstream.sql"),
+        Path(models_dir, "db", "model2.sql"),
         """
-        MODEL (
-          name db.downstream,
-          kind full,
-        );
+        MODEL (name db.model2, kind full);
 
-        SELECT
-          *
-        FROM db.upstream AS upstream
+        SELECT * FROM db.model1 AS model1
 		""",
     )
 
     context = Context(path=str(tmpdir), config=Config())
 
+    model3 = Model.load(
+        parse_model(
+            "MODEL(name db.model3, kind full); SELECT * FROM db.model2 AS model2"
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    context.upsert_model(model3)
+
     assert_exp_eq(
-        context.render("db.downstream"),
+        context.render("db.model2"),
         f"""
         SELECT
-          upstream.id AS id,
-          upstream.item_id AS item_id,
-          upstream.ds AS ds
+          model1.id AS id,
+          model1.item_id AS item_id,
+          model1.ds AS ds
         FROM (
           SELECT
             CAST(id AS INT) AS id,
@@ -710,6 +712,36 @@ def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
             (5, 1, '2020-01-05'),
             (6, 1, '2020-01-06'),
             (7, 1, '2020-01-07')) AS t(id, item_id, ds)
-        ) AS upstream
+        ) AS model1
+        """,
+    )
+    assert_exp_eq(
+        context.render("db.model3"),
+        f"""
+        SELECT
+          model2.id AS id,
+          model2.item_id AS item_id,
+          model2.ds AS ds
+        FROM (
+          SELECT
+            model1.id AS id,
+            model1.item_id AS item_id,
+            model1.ds AS ds
+          FROM (
+            SELECT
+              CAST(id AS INT) AS id,
+              CAST(item_id AS INT) AS item_id,
+              CAST(ds AS TEXT) AS ds
+            FROM (VALUES
+              (1, 1, '2020-01-01'),
+              (1, 2, '2020-01-01'),
+              (2, 1, '2020-01-01'),
+              (3, 3, '2020-01-03'),
+              (4, 1, '2020-01-04'),
+              (5, 1, '2020-01-05'),
+              (6, 1, '2020-01-06'),
+              (7, 1, '2020-01-07')) AS t(id, item_id, ds)
+          ) AS model1
+        ) AS model2
         """,
     )
