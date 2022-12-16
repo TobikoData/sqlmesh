@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from sqlmesh.core.model import Model, ModelKind
 from sqlmesh.dbt_adapter.config import Config, Materialization, ModelConfig
@@ -17,7 +18,7 @@ def dbt_to_sqlmesh():
     [sqlmesh_model(config, path) for (config, path) in model_config.values()]
 
 
-def sqlmesh_model(config: ModelConfig, path: str) -> Model:
+def sqlmesh_model(config: ModelConfig, path: Path) -> Model:
     """
     Creates sqlmesh model from DBT model
 
@@ -72,7 +73,7 @@ def model_kind(config: ModelConfig) -> ModelKind:
     raise ConfigError(f"{materialization.value} materialization not supported")
 
 
-def query(path: str) -> str:
+def query(path: Path) -> str:
     """
     Get the sqlmesh query
 
@@ -82,7 +83,7 @@ def query(path: str) -> str:
     Returns:
         sqlmesh query
     """
-    with open(path, encoding="utf-8") as file:
+    with path.open(encoding="utf-8") as file:
         query = file.read()
 
     return _remove_config_jinja(query)

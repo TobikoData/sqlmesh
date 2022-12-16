@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import glob
 import typing as t
 from enum import Enum, auto
+from pathlib import Path
 
 from pydantic import Field, validator
 from ruamel.yaml import YAML
@@ -258,39 +258,39 @@ class ModelConfigBuilder:
 
     def __init__(self):
         self._scoped_configs = {}
-        self._project_path = None
+        self._project_root = None
         self._project_name = None
 
     def build_model_configs(
-        self, project_path: str
-    ) -> t.Dict[str, t.Tuple[ModelConfig, str]]:
+        self, project_root: Path
+    ) -> t.Dict[str, t.Tuple[ModelConfig, Path]]:
         """
         Build the configuration for each model in the specified DBT project.
 
         Args:
-            project_path: Relative or absolute path to the DBT project
+            project_root: Relative or absolute path to the DBT project
 
         Returns:
             Dict with model name as the key and a tuple containing ModelConfig
             and relative path to model file from the project root.
         """
         self._scoped_configs = {}
-        self._project_path = project_path
+        self._project_root = project_root
         self._project_name = None
 
         self._build_project_config()
         # TODO parse profile for schema
-        for file in glob.glob(self._full_path("models/*/*.yml")):
+        for file in self._project_root.glob("models/**/*.yml"):
             self._build_properties_config(file)
 
         configs = {}
-        for file in glob.glob(self._full_path("models/*/*.sql")):
+        for file in self._project_root.glob("models/**/*.sql"):
             model_config = self._build_model_config(file)
             if not model_config.identifier:
                 raise ConfigError(f"No identifier for {file}")
             configs[model_config.identifier] = (
                 model_config,
-                self._project_root_path(file),
+                file.relative_to(self._project_root),
             )
 
         return configs
@@ -300,13 +300,15 @@ class ModelConfigBuilder:
         Builds ModelConfigs for each resource path specified in the project config file and
         stores them in _scoped_configs
         """
-        filename = DEFAULT_PROJECT_FILE
-        with open(self._full_path(filename), encoding="utf-8") as file:
+        project_config_file = DEFAULT_PROJECT_FILE
+        with Path(self._project_root, project_config_file).open(
+            encoding="utf-8"
+        ) as file:
             contents = YAML().load(file.read())
 
         self._project_name = contents.get("name")
         if not self._project_name:
-            raise ConfigError(f"{filename} must include project name")
+            raise ConfigError(f"{project_config_file} must include project name")
 
         model_data = contents.get("models")
         if not model_data:
@@ -334,7 +336,7 @@ class ModelConfigBuilder:
         self._scoped_configs[scope] = build_config(model_data)
         build_nested_configs(model_data, scope)
 
-    def _build_properties_config(self, filepath: str) -> None:
+    def _build_properties_config(self, filepath: Path) -> None:
         """
         Builds ModelConfigs for each model defined in the specified
         properties config file and stores them in _scoped_configs
@@ -344,7 +346,7 @@ class ModelConfigBuilder:
         """
         scope = self._scope_from_path(filepath)
 
-        with open(filepath, encoding="utf-8") as file:
+        with filepath.open(encoding="utf-8") as file:
             contents = YAML().load(file.read())
 
         model_data = contents.get("models")
@@ -361,7 +363,7 @@ class ModelConfigBuilder:
                 scope
             ).update_with(config)
 
-    def _build_model_config(self, filepath: str) -> ModelConfig:
+    def _build_model_config(self, filepath: Path) -> ModelConfig:
         """
         Builds ModelConfig for the specified model file and returns it
 
@@ -371,7 +373,7 @@ class ModelConfigBuilder:
         Returns:
             ModelConfig for the specified model file
         """
-        with open(filepath, encoding="utf-8") as file:
+        with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
         scope = self._scope_from_path(filepath)
@@ -391,37 +393,7 @@ class ModelConfigBuilder:
 
         return model_config
 
-    def _full_path(self, path: str) -> str:
-        """
-        Get full path from relative path from project root
-
-        Args:
-            path: relative path from project root
-
-        Returns:
-            Full path for the specified relative path
-        """
-        if not self._project_path:
-            return path
-
-        return f"{self._project_path}/{path}"
-
-    def _project_root_path(self, path: str) -> str:
-        """
-        Get relative path from project root from specified path
-
-        Args:
-            path: The path
-
-        Returns:
-            Relative path from project root
-        """
-        if not self._project_path or not path.startswith(self._project_path):
-            return path
-
-        return path[len(self._project_path) + 1 :]
-
-    def _scope_from_path(self, path: str) -> t.Tuple[str, ...]:
+    def _scope_from_path(self, path: Path) -> t.Tuple[str, ...]:
         """
         Extract resource scope from path
 
@@ -431,11 +403,11 @@ class ModelConfigBuilder:
         Returns:
             tuple containing the scope of the specified path
         """
-        root_path = self._project_root_path(path)
+        path_from_root = path.relative_to(self._project_root)
         # models/ and file are not included in the scope
-        scope = (self._project_name, *root_path.split("/")[1:-1])
-        if path.endswith(".sql"):
-            scope = (*scope, (root_path.split("/")[-1])[:-4])
+        scope = (self._project_name, *str(path_from_root).split("/")[1:-1])
+        if path.match("*.sql"):
+            scope = (*scope, (str(path_from_root).split("/")[-1])[:-4])
 
         return scope
 
@@ -457,15 +429,16 @@ class Config:
     Class to obtain DBT project config
     """
 
-    def __init__(self, project_path: str = ""):
+    def __init__(self, project_root: t.Optional[Path] = None):
         """
         Args:
-            project_path: Relative or absolute path to the DBT project
+            project_root: Relative or absolute path to the DBT project
         """
+        project_root = project_root or Path()
         builder = ModelConfigBuilder()
-        self.models = builder.build_model_configs(project_path)
+        self.models = builder.build_model_configs(project_root)
 
-    def get_model_config(self) -> t.Dict[str, t.Tuple[ModelConfig, str]]:
+    def get_model_config(self) -> t.Dict[str, t.Tuple[ModelConfig, Path]]:
         """
         Get the config for each model within the DBT project
 

@@ -1,4 +1,5 @@
 import typing as t
+from pathlib import Path
 
 import pytest
 
@@ -54,7 +55,7 @@ def test_model_config():
         "waiter_revenue_by_day",
     }
 
-    model_configs = Config("tests/projects/sushi_dbt").get_model_config()
+    model_configs = Config(Path("tests/projects/sushi_dbt")).get_model_config()
     assert set(model_configs.keys()) == expected_models
 
     expected_config = {
@@ -71,7 +72,6 @@ def test_model_config():
     }
     assert actual_config == expected_config
 
-    assert (
-        model_configs["customer_revenue_by_day"][1]
-        == "models/db/customer_revenue_by_day.sql"
+    assert model_configs["customer_revenue_by_day"][1] == Path(
+        "models/db/customer_revenue_by_day.sql"
     )
