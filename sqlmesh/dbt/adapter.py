@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from sqlmesh.core.model import Model, ModelKind
-from sqlmesh.dbt_adapter.config import Config, Materialization, ModelConfig
+from sqlmesh.dbt.config import Config, Materialization, ModelConfig
 from sqlmesh.utils.errors import ConfigError
 
 
