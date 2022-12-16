@@ -4,7 +4,7 @@ import pytest
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
@@ -17,7 +17,7 @@ from sqlmesh.utils.file_cache import FileCache
 @pytest.fixture
 def state_sync(duck_conn, mock_file_cache):
     state_sync = EngineAdapterStateSync(
-        EngineAdapter(lambda: duck_conn, "duckdb"),
+        create_engine_adapter(lambda: duck_conn, "duckdb"),
         "sqlmesh",
         mock_file_cache,
     )

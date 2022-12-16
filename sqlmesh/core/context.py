@@ -52,7 +52,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
-from sqlmesh.core.engine_adapter import DF, EngineAdapter
+from sqlmesh.core.engine_adapter import DF, EngineAdapter, create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
@@ -235,13 +235,13 @@ class Context(BaseContext):
             > 1
         )
 
-        self._engine_adapter = engine_adapter or EngineAdapter(
+        self._engine_adapter = engine_adapter or create_engine_adapter(
             self.config.engine_connection_factory,
             self.config.engine_dialect,
             multithreaded=self.is_multithreaded,
         )
         self.test_engine_adapter = (
-            EngineAdapter(
+            create_engine_adapter(
                 self.test_config.engine_connection_factory,
                 self.test_config.engine_dialect,
             )
@@ -627,7 +627,7 @@ class Context(BaseContext):
         elif auto_apply:
             if plan.uncategorized:
                 raise PlanError(
-                    "Can't auto-apply plan with uncategorized changes. Enable prompts to proceed."
+                    "Can't auto-apply a plan with uncategorized changes. Enable prompts to proceed."
                 )
             self.apply(plan)
 

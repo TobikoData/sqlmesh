@@ -34,8 +34,8 @@ From least to greatest precedence:
 - Individual config parameters used when initializing a Context.
     ```python
     >>> from sqlmesh import Context
-    >>> from sqlmesh.core.engine_adapter import EngineAdapter
-    >>> adapter = EngineAdapter(duckdb.connect, "duckdb")
+    >>> from sqlmesh.core.engine_adapter import create_engine_adapter
+    >>> adapter = create_engine_adapter(duckdb.connect, "duckdb")
     >>> context = Context(
     ...     path="example",
     ...     engine_adapter=adapter,
@@ -55,31 +55,31 @@ Example config.py:
 ```python
 import duckdb
 
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.config import Config, AirflowSchedulerBackend
 
 from my_project.utils import load_test_data
 
 
 DEFAULT_KWARGS = {
-    "dialect": "duckdb", # The default dialect of models is DuckDB SQL.
-    "engine_adapter": EngineAdapter(duckdb.connect, "duckdb"), # The default engine runs in DuckDB.
+    "engine_dialect": "duckdb",
+    "engine_connection_factory": duckdb.connect,
 }
 
 # An in memory DuckDB config.
 config = Config(**DEFAULT_KWARGS)
 
 # A stateful DuckDB config.
-local_config = Config(**{
-    **DEFAULT_KWARGS,
-    "engine_adapter": EngineAdapter(
-        lambda: duckdb.connect(database="local.duckdb"), "duckdb"
-    ),
-})
+local_config = Config(
+    **{
+        **DEFAULT_KWARGS,
+        "engine_connection_factory": lambda: duckdb.connect(
+            database=f"{DATA_DIR}/local.duckdb"
+        ),
+    }
+)
 
 # The config to run model tests.
 test_config = Config(
-    "on_init": load_test_data,
     **DEFAULT_KWARGS,
 )
 

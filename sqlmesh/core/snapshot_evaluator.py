@@ -29,10 +29,11 @@ from sqlglot import exp, select
 
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import DF, EngineAdapter
+from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import AuditError
+from sqlmesh.utils.errors import AuditError, ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class SnapshotEvaluator:
     def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
+        self._schema_diff_calculator = SchemaDiffCalculator(self.adapter)
 
     def evaluate(
         self,
@@ -177,12 +179,29 @@ class SnapshotEvaluator:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
         Args:
-            target_snapshots: Target snapshost.
+            target_snapshots: Target snapshosts.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
                 lambda s: self._create_snapshot(s, snapshots),
+                self.ddl_concurrent_tasks,
+            )
+
+    def migrate(
+        self,
+        target_snapshots: t.Iterable[Snapshot],
+        snapshots: t.Dict[SnapshotId, Snapshot],
+    ) -> None:
+        """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
+
+        Args:
+            target_snapshots: Target snapshosts.
+        """
+        with self.concurrent_context():
+            concurrent_apply_to_snapshots(
+                target_snapshots,
+                lambda s: self._migrate_snapshot(s, snapshots),
                 self.ddl_concurrent_tasks,
             )
 
@@ -293,6 +312,53 @@ class SnapshotEvaluator:
                 storage_format=snapshot.model.storage_format,
                 partitioned_by=snapshot.model.partitioned_by,
             )
+
+    def _migrate_snapshot(
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> None:
+        if not snapshot.is_materialized:
+            return
+
+        tmp_table_name = f"{snapshot.table_name}__tmp__{snapshot.fingerprint}"
+        target_table_name = snapshot.table_name
+
+        parent_snapshots_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+        }
+
+        logger.info("Creating a temporary table '%s'", tmp_table_name)
+        self.adapter.create_table(
+            tmp_table_name,
+            query_or_columns=snapshot.model.columns
+            if snapshot.model.annotated
+            else snapshot.model.ctas_query(parent_snapshots_by_name),
+            storage_format=snapshot.model.storage_format,
+            partitioned_by=snapshot.model.partitioned_by,
+        )
+
+        schema_deltas = self._schema_diff_calculator.calculate(
+            target_table_name, tmp_table_name
+        )
+        added_columns = {}
+        dropped_columns = []
+        for delta in schema_deltas:
+            if delta.op == SchemaDeltaOp.ADD:
+                added_columns[delta.column_name] = delta.column_type
+            elif delta.op == SchemaDeltaOp.DROP:
+                dropped_columns.append(delta.column_name)
+            else:
+                raise ConfigError(f"Unsupported schema delta operation: {delta.op}")
+
+        logger.info(
+            "Altering table '%s'. Added columns: %s; dropped columns: %s",
+            target_table_name,
+            added_columns,
+            dropped_columns,
+        )
+        self.adapter.alter_table(target_table_name, added_columns, dropped_columns)
+
+        logger.info("Dropping the temporary table '%s'", tmp_table_name)
+        self.adapter.drop_table(tmp_table_name)
 
     def _promote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
         qualified_view_name = snapshot.qualified_view_name

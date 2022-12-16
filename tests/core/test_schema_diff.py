@@ -4,7 +4,7 @@ from unittest.mock import call
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.schema_diff import SchemaDelta, SchemaDiffCalculator
 
 
@@ -79,7 +79,7 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
 
 
 def test_schema_diff_calculate_duckdb(duck_conn):
-    engine_adapter = EngineAdapter(lambda: duck_conn, "duckdb")
+    engine_adapter = create_engine_adapter(lambda: duck_conn, "duckdb")
 
     engine_adapter.create_table(
         "apply_to_table",

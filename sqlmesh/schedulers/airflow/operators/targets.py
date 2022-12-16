@@ -7,7 +7,7 @@ from airflow.utils.context import Context
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
 from sqlmesh.engines import commands
@@ -48,7 +48,9 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         """
         payload = self._get_command_payload_or_skip(context)
         snapshot_evaluator = SnapshotEvaluator(
-            EngineAdapter(connection_factory, dialect),
+            create_engine_adapter(
+                connection_factory, dialect, multithreaded=self.ddl_concurrent_tasks > 1
+            ),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )
         try:
