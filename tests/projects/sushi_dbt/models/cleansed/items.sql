@@ -1,6 +1,6 @@
 {{
     config(
-        materialized='incremental',
+        materialized='incremental_by_time_range',
         incremental_strategy='delete+insert',
         cluster_by=['ds'],
         unique_key=['ds'],

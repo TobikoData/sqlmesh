@@ -97,12 +97,9 @@ def test_multi_version_snapshots(
     items_a.add_interval("2022-01-10", "2022-01-15")
     sushi_context_pre_scheduling.state_sync.push_snapshots([items_a])
 
-    # The following call is expected to update the model's query to SELECT 1::INT, which breaks the
-    # guarantee where we expect at least one projection that involves the time column.
     model = sushi_context_pre_scheduling.upsert_model(
         model,
-        query=parse_one("SELECT 1::INT"),
-        time_column=None,
+        query=parse_one("SELECT 1::INT, '2022-01-01'::TEXT AS ds"),
     )
 
     items_b = make_snapshot(

@@ -301,7 +301,6 @@ if t.TYPE_CHECKING:
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
-    "kind": lambda value: exp.to_identifier(value.name.lower()),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
@@ -809,26 +808,12 @@ class Model(ModelMeta, frozen=True):
             if field_value is not None:
                 if field.name == "description":
                     comment = field_value
-                elif field.name == "time_column":
-                    expression = field_value.expression
-
-                    # time_column.format is stored as python format in memory
-                    # convert it back to the model dialect
-                    if field_value.format:
-                        expression.expressions.pop()
-                        expression.append(
-                            "expressions",
-                            exp.Literal.string(
-                                format_time(
-                                    field_value.format,
-                                    d.Dialect.get_or_raise(
-                                        self.dialect
-                                    ).inverse_time_mapping,
-                                )
-                            ),
-                        )
+                elif field.name == "kind":
                     expressions.append(
-                        exp.Property(this="time_column", value=expression)
+                        exp.Property(
+                            this="kind",
+                            value=field_value.to_expression(self.dialect),
+                        )
                     )
                 else:
                     expressions.append(
@@ -1376,9 +1361,9 @@ class model(registry_decorator):
                 columns = True
 
         if not self.name:
-            raise ConfigError(f"Python model must have a name.")
+            raise ConfigError("Python model must have a name.")
         if not columns:
-            raise ConfigError(f"Python model must define column schema.")
+            raise ConfigError("Python model must define column schema.")
 
     def model(
         self,

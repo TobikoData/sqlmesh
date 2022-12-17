@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import re
 import typing as t
 from difflib import unified_diff
@@ -204,7 +205,6 @@ def _parse_order(
     return macro
 
 
-@t.no_type_check
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(True)
 
@@ -214,7 +214,12 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     index = self._index
     if self._match(TokenType.L_PAREN):
         self._retreat(index)
-        value = self._parse_wrapped_id_vars()
+        value = self.expression(
+            exp.Tuple,
+            expressions=self._parse_wrapped_csv(
+                lambda: self._parse_string() or self._parse_id_var()
+            ),
+        )
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -241,11 +246,15 @@ def _create_parser(
                 value = self._parse_schema()
             elif key == "kind":
                 id_var = self._parse_id_var(True).name.lower()
+                index = self._index
                 if id_var in (
                     "incremental_by_time_range",
                     "incremental_by_unique_key",
-                ):
-                    props = self._parse_wrapped_csv(self._parse_props)
+                ) and self._match(TokenType.L_PAREN):
+                    self._retreat(index)
+                    props = self._parse_wrapped_csv(
+                        functools.partial(_parse_props, self)
+                    )
                 else:
                     props = None
                 value = self.expression(
@@ -281,12 +290,12 @@ def _model_sql(self, expression: exp.Expression) -> str:
 
 def _model_kind_sql(self, expression: ModelKind) -> str:
     props = ",\n".join(
-        self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+        self.indent(f"{prop.this} {self.sql(prop, 'value')}")
         for prop in expression.expressions
     )
     if props:
-        return "\n".join([f"kind {expression.this} (", props, ")"])
-    return f"kind {expression.this}"
+        return "\n".join([f"{expression.this} (", props, ")"])
+    return f"{expression.this}"
 
 
 def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
@@ -492,4 +501,3 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_placeholder)
-    setattr(Parser, _parse_props.__name__, _parse_props)

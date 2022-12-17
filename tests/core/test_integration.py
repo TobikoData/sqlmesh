@@ -7,7 +7,7 @@ from sqlglot.expressions import DataType
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.model import ModelKind
+from sqlmesh.core.model_kind import ModelKind, ModelKindName
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -193,41 +193,41 @@ def validate_query_change(
 @pytest.mark.parametrize(
     "from_, to",
     [
-        (ModelKind.INCREMENTAL, ModelKind.VIEW),
-        (ModelKind.INCREMENTAL, ModelKind.EMBEDDED),
-        (ModelKind.INCREMENTAL, ModelKind.FULL),
-        (ModelKind.VIEW, ModelKind.EMBEDDED),
-        (ModelKind.VIEW, ModelKind.FULL),
-        (ModelKind.VIEW, ModelKind.INCREMENTAL),
-        (ModelKind.EMBEDDED, ModelKind.VIEW),
-        (ModelKind.EMBEDDED, ModelKind.FULL),
-        (ModelKind.EMBEDDED, ModelKind.INCREMENTAL),
-        (ModelKind.FULL, ModelKind.VIEW),
-        (ModelKind.FULL, ModelKind.EMBEDDED),
-        (ModelKind.FULL, ModelKind.INCREMENTAL),
+        (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.VIEW),
+        (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.EMBEDDED),
+        (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.FULL),
+        (ModelKindName.VIEW, ModelKindName.EMBEDDED),
+        (ModelKindName.VIEW, ModelKindName.FULL),
+        (ModelKindName.VIEW, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
+        (ModelKindName.EMBEDDED, ModelKindName.VIEW),
+        (ModelKindName.EMBEDDED, ModelKindName.FULL),
+        (ModelKindName.EMBEDDED, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
+        (ModelKindName.FULL, ModelKindName.VIEW),
+        (ModelKindName.FULL, ModelKindName.EMBEDDED),
+        (ModelKindName.FULL, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
     ],
 )
 def test_model_kind_change(from_: ModelKind, to: ModelKind, sushi_context: Context):
     environment = "prod"
     incremental_snapshot = sushi_context.snapshots["sushi.items"].copy()
 
-    if from_ != ModelKind.INCREMENTAL:
+    if from_ != ModelKindName.INCREMENTAL_BY_TIME_RANGE:
         change_model_kind(sushi_context, from_)
         apply_to_environment(
             sushi_context, environment, SnapshotChangeCategory.NON_BREAKING
         )
 
-    if to == ModelKind.INCREMENTAL:
+    if to == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
         sushi_context.upsert_model(incremental_snapshot.model)
     else:
         change_model_kind(sushi_context, to)
 
-    logical = to in (ModelKind.INCREMENTAL, ModelKind.EMBEDDED)
+    logical = to in (ModelKindName.INCREMENTAL_BY_TIME_RANGE, ModelKindName.EMBEDDED)
     validate_model_kind_change(to, sushi_context, environment, logical=logical)
 
 
 def change_model_kind(context: Context, kind: ModelKind):
-    if kind in (ModelKind.VIEW, ModelKind.EMBEDDED, ModelKind.FULL):
+    if kind in (ModelKindName.VIEW, ModelKindName.EMBEDDED, ModelKindName.FULL):
         context.upsert_model(
             "sushi.items",
             partitioned_by=None,

@@ -5,7 +5,9 @@ from enum import Enum
 
 from pydantic import Field, validator
 from sqlglot import exp
+from sqlglot.time import format_time
 
+from sqlmesh.core import dialect as d
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -61,6 +63,11 @@ class ModelKind(PydanticModel):
         """Whether or not this model only cares about latest date to render."""
         return self.kind in (ModelKindEnum.VIEW, ModelKindEnum.FULL)
 
+    def to_expression(self, *args, **kwargs) -> d.ModelKind:
+        return d.ModelKind(
+            this=self.name,
+        )
+
 
 class TimeColumn(PydanticModel):
     column: str
@@ -75,6 +82,24 @@ class TimeColumn(PydanticModel):
 
         return exp.Tuple(expressions=[column, exp.Literal.string(self.format)])
 
+    def to_expression(self, dialect: str) -> exp.Column | exp.Tuple:
+        """Convert this pydantic model into a time_column SQLGlot expression."""
+        column = exp.to_column(self.column)
+        if not self.format:
+            return column
+
+        return exp.Tuple(
+            expressions=[
+                column,
+                exp.Literal.string(
+                    format_time(
+                        self.format,
+                        d.Dialect.get_or_raise(dialect).inverse_time_mapping,
+                    )
+                ),
+            ]
+        )
+
 
 class IncrementalByTimeRange(ModelKind):
     kind: ModelKindEnum = Field(ModelKindEnum.INCREMENTAL_BY_TIME_RANGE, const=True)
@@ -82,15 +107,32 @@ class IncrementalByTimeRange(ModelKind):
 
     @validator("time_column", pre=True)
     def _parse_time_column(cls, v: t.Any) -> TimeColumn:
-        if isinstance(v, list):
+        if isinstance(v, exp.Tuple):
             kwargs = {
-                key: v[i].name for i, key in enumerate(("column", "format")[: len(v)])
+                key: v.expressions[i].name
+                for i, key in enumerate(("column", "format")[: len(v.expressions)])
             }
             return TimeColumn(**kwargs)
 
         if isinstance(v, exp.Identifier):
             return TimeColumn(column=v.name)
+
+        if isinstance(v, exp.Expression):
+            return TimeColumn(column=v.name)
+
+        if isinstance(v, str):
+            return TimeColumn(column=v)
         return v
+
+    def to_expression(self, dialect: str) -> d.ModelKind:
+        return d.ModelKind(
+            this=self.kind,
+            expressions=[
+                exp.Property(
+                    this="time_column", value=self.time_column.to_expression(dialect)
+                )
+            ],
+        )
 
 
 class IncrementalByUniqueKey(ModelKind):
