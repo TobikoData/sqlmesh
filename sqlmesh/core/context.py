@@ -805,13 +805,15 @@ class Context(BaseContext):
     ) -> Config:
         if isinstance(config, Config):
             return config
+        if not config and not config_module:
+            raise ConfigError(
+                "Both `config` and `config_module` need to be specified if not using a Config object."
+            )
         config = config or "config"
-        config_obj = None
-        if config_module:
-            try:
-                config_obj = getattr(config_module, config)
-            except AttributeError:
-                raise ConfigError(f"Config {config} not found.")
+        try:
+            config_obj = getattr(config_module, config)
+        except AttributeError:
+            raise ConfigError(f"Config {config} not found.")
         if config_obj is None:
             raise ConfigError(
                 "SQLMesh Config could not be found. Point the cli to the right path with `sqlmesh --path`. If you haven't set up SQLMesh, run `sqlmesh init`."
@@ -899,6 +901,7 @@ class Context(BaseContext):
         parts = module_name.split(".")
         for i in range(len(parts)):
             sys.modules.pop(".".join(parts[0 : i + 1]), None)
+
         return importlib.import_module(module_name)
 
     def _glob_path(
