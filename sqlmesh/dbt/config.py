@@ -11,12 +11,11 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import Model, ModelKind, TimeColumn
+from sqlmesh.dbt.database import DatabaseConfig
 from sqlmesh.dbt.render import render_jinja
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
-
-DEFAULT_PROJECT_FILE = "dbt_project.yml"
 
 
 class Materialization(str, Enum):
@@ -276,6 +275,7 @@ class ModelConfig(PydanticModel):
         """
         self.__dict__.update(other.dict())
 
+
     def to_sqlmesh(self) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = [
@@ -346,6 +346,40 @@ class ModelConfig(PydanticModel):
         raise ConfigError(f"{materialization.value} materialization not supported")
 
 
+class ProjectConfig(PydanticModel):
+    DEFAULT_PROJECT_FILE = "dbt_project.yml"
+
+    def __init__(self, project_name: str, config: t.Dict[str, t.Any]):
+        self._project_name = project_name
+        self._project_config = config
+
+    @classmethod
+    def load(cls, project_root: t.Optional[Path]) -> ProjectConfig:
+        project_root = project_root or Path()
+        project_config_path = Path(project_root, cls.DEFAULT_PROJECT_FILE)
+        if not project_config_path.exists():
+            raise ConfigError(
+                f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
+            )
+
+        with project_config_path.open(encoding="utf-8") as file:
+            contents = YAML().load(file.read())
+
+        project_name = contents.get("name")
+        if not project_name:
+            raise ConfigError(f"{cls.DEFAULT_PROJECT_FILE} must include project name")
+
+        return ProjectConfig(project_name, contents)
+
+    @property
+    def config(self) -> t.Dict[str, t.Any]:
+        return self._project_config
+
+    @property
+    def project_name(self) -> str:
+        return self._project_name
+
+
 class ModelConfigBuilder:
     """
     The ModelConfigBuilder reads the model and configuration files of a DBT
@@ -356,13 +390,17 @@ class ModelConfigBuilder:
         self._scoped_configs = {}
         self._project_root = None
         self._project_name = None
+        self._project_schema = None
 
-    def build_model_configs(self, project_root: Path) -> t.Dict[str, ModelConfig]:
+    def build_model_configs(self,
+        project_root: Path,
+        schema: str,) -> t.Dict[str, ModelConfig]:
         """
         Build the configuration for each model in the specified DBT project.
 
         Args:
             project_root: Relative or absolute path to the DBT project
+            schema: The database schema
 
         Returns:
             Dict with model name as the key and a tuple containing ModelConfig
@@ -370,6 +408,7 @@ class ModelConfigBuilder:
         """
         self._scoped_configs = {}
         self._project_root = project_root
+        self._project_schema = schema
         self._project_name = None
 
         self._build_project_config()
@@ -391,17 +430,9 @@ class ModelConfigBuilder:
         Builds ModelConfigs for each resource path specified in the project config file and
         stores them in _scoped_configs
         """
-        project_config_file = DEFAULT_PROJECT_FILE
-        with Path(self._project_root, project_config_file).open(
-            encoding="utf-8"
-        ) as file:
-            contents = YAML().load(file.read())
-
-        self._project_name = contents.get("name")
-        if not self._project_name:
-            raise ConfigError(f"{project_config_file} must include project name")
-
-        model_data = contents.get("models")
+        project_config = ProjectConfig.load(self._project_root)
+        self._project_name = project_config.project_name
+        model_data = project_config.config.get("models")
         if not model_data:
             self._scoped_configs[()] = ModelConfig()
             return
@@ -423,8 +454,11 @@ class ModelConfigBuilder:
                 self._scoped_configs[nested_scope] = build_config(value, parent_config)
                 build_nested_configs(value, nested_scope)
 
+        root_config = build_config(model_data)
+        root_config.schema = self._project_schema
+
         scope = ()
-        self._scoped_configs[scope] = build_config(model_data)
+        self._scoped_configs[scope] = root_config
         build_nested_configs(model_data, scope)
 
     def _build_properties_config(self, filepath: Path) -> None:
@@ -516,6 +550,59 @@ class ModelConfigBuilder:
         return self._scoped_configs.get(scope) or self._config_for_scope(scope[0:-1])
 
 
+class Profile:
+    PROFILE_FILENAME = "profiles.yml"
+
+    def __init__(self, project_root: Path, *, target: t.Optional[str] = None):
+        project_root = project_root or Path()
+        project_name = ProjectConfig.load(project_root).project_name
+        profile_path = self._find_profile(project_root)
+        if not profile_path:
+            raise ConfigError(f"{self.PROFILE_FILENAME} not found")
+
+        profile_data = self._read_profile(profile_path, project_name, target)
+        self.database = DatabaseConfig.parse(profile_data)
+
+    def _find_profile(self, project_root: Path) -> t.Optional[Path]:
+        # TODO Check environment variable
+        path = Path(project_root, self.PROFILE_FILENAME)
+        if path.exists():
+            return path
+
+        path = Path(Path.home(), self.PROFILE_FILENAME)
+        if path.exists():
+            return path
+
+        return None
+
+    def _read_profile(
+        self, path: Path, project: str, target: t.Optional[str]
+    ) -> t.Dict[str, t.Any]:
+        with path.open(encoding="utf-8") as file:
+            contents = YAML().load(file.read())
+
+        project_data = contents.get(project)
+        if not project_data:
+            raise ConfigError(
+                f"Project '{project}' does not exist in {self.PROFILE_FILENAME}"
+            )
+
+        if not target:
+            target = project_data.get("target")
+            if not target:
+                raise ConfigError(
+                    f"No target found for Project '{project}' in {self.PROFILE_FILENAME}"
+                )
+
+        profile_data = project_data.get(target)
+        if not profile_data:
+            raise ConfigError(
+                f"Profile for Project '{project}' and Target '{target}' not found in {self.PROFILE_FILENAME}"
+            )
+
+        return profile_data
+
+
 class Config:
     """
     Class to obtain DBT project config
@@ -527,18 +614,9 @@ class Config:
             project_root: Relative or absolute path to the DBT project
         """
         project_root = project_root or Path()
+        self.database = Profile(project_root).database
         builder = ModelConfigBuilder()
-        self.models = builder.build_model_configs(project_root)
-
-    def get_model_config(self) -> t.Dict[str, ModelConfig]:
-        """
-        Get the config for each model within the DBT project
-
-        Returns:
-            Dict with model name as the key and a tuple containing ModelConfig
-            and relative path to model file from the project root.
-        """
-        return self.models
+        self.models = builder.build_model_configs(project_root, self.database.schema)
 
 
 def _remove_config_jinja(query: str) -> str:
