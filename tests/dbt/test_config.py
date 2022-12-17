@@ -67,11 +67,7 @@ def test_model_config():
     }
     actual_config = {
         k: v
-        for k, v in model_configs["customer_revenue_by_day"][0].dict().items()
+        for k, v in model_configs["customer_revenue_by_day"].dict().items()
         if k in expected_config
     }
     assert actual_config == expected_config
-
-    assert model_configs["customer_revenue_by_day"][1] == Path(
-        "models/db/customer_revenue_by_day.sql"
-    )

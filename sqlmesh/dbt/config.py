@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import re
 import typing as t
 from enum import Enum, auto
 from pathlib import Path
 
 from pydantic import Field, validator
 from ruamel.yaml import YAML
+from sqlglot import exp, parse_one
 
+from sqlmesh.core import dialect as d
+from sqlmesh.core.model import Model, ModelKind, TimeColumn
 from sqlmesh.dbt.render import render_jinja
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
 
 DEFAULT_PROJECT_FILE = "dbt_project.yml"
@@ -30,6 +35,7 @@ class UpdateStrategy(Enum):
     APPEND = auto()  # Append list to existing list
     KEY_UPDATE = auto()  # Update dict key value with new dict key value
     KEY_APPEND = auto()  # Append dict key value to existing dict key value
+    IMMUTABLE = auto()  # Raise if a key tries to change this value
 
 
 def update_field(
@@ -51,21 +57,24 @@ def update_field(
     if not old:
         return new
 
+    if update_strategy == UpdateStrategy.IMMUTABLE:
+        raise ConfigError("Cannot modify property: {old}")
+
     if update_strategy == UpdateStrategy.REPLACE:
         return new
-    elif update_strategy == UpdateStrategy.APPEND:
+    if update_strategy == UpdateStrategy.APPEND:
         if not isinstance(old, list) or not isinstance(new, list):
             raise ConfigError("APPEND behavior requires list field")
 
         return old + new
-    elif update_strategy == UpdateStrategy.KEY_UPDATE:
+    if update_strategy == UpdateStrategy.KEY_UPDATE:
         if not isinstance(old, dict) or not isinstance(new, dict):
             raise ConfigError("KEY_UPDATE behavior requires dictionary field")
 
         combined = old.copy()
         combined.update(new)
         return combined
-    elif update_strategy == UpdateStrategy.KEY_APPEND:
+    if update_strategy == UpdateStrategy.KEY_APPEND:
         if not isinstance(old, dict) or not isinstance(new, dict):
             raise ConfigError("KEY_APPEND behavior requires dictionary field")
 
@@ -89,6 +98,8 @@ def update_field(
 
         return combined
 
+    raise ConfigError("Unknown update strategy {update_strategy}")
+
 
 def ensure_list(val: t.Any) -> t.List[t.Any]:
     return val if isinstance(val, list) else [val]
@@ -103,6 +114,7 @@ class ModelConfig(PydanticModel):
     General propreties, General configs, and For models sections.
 
     Args:
+        path: The file path of the model.
         alias: Relation identifier for this model instead of the model filename
         cluster_by: Field(s) to use for clustering in databases that support clustering
         database: Database the model is stored in
@@ -122,6 +134,11 @@ class ModelConfig(PydanticModel):
         tags: List of tags that can be used for model grouping
         unique_key: List of columns that define row uniqueness for the model
     """
+
+    # sqlmesh fields
+    path: Path = Path()
+    sql: str = ""
+    time_column: t.Optional[TimeColumn] = None
 
     # DBT configuration fields
     alias: t.Optional[str] = None
@@ -197,25 +214,35 @@ class ModelConfig(PydanticModel):
 
         return maybe_bool == "true"
 
-    _FIELD_update_strategy: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
+    @validator("time_column", pre=True)
+    def _validate_time_column(cls, v: str | TimeColumn) -> TimeColumn:
+        if isinstance(v, str):
+            expression = parse_one(v)
+            assert expression
+            return TimeColumn.from_expression(expression)
+        return v
+
+    _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "alias": UpdateStrategy.REPLACE,
         "cluster_by": UpdateStrategy.REPLACE,
         "database": UpdateStrategy.REPLACE,
         "docs": UpdateStrategy.KEY_UPDATE,
         "enabled": UpdateStrategy.REPLACE,
-        "filepath": UpdateStrategy.REPLACE,
         "full_refresh": UpdateStrategy.REPLACE,
         "grants": UpdateStrategy.KEY_APPEND,
         "identifier": UpdateStrategy.REPLACE,
         "incremental_strategy": UpdateStrategy.REPLACE,
         "meta": UpdateStrategy.KEY_UPDATE,
         "materialized": UpdateStrategy.REPLACE,
+        "path": UpdateStrategy.IMMUTABLE,
         "persist_docs": UpdateStrategy.KEY_UPDATE,
         "post-hook": UpdateStrategy.APPEND,
         "pre-hook": UpdateStrategy.APPEND,
         "schema": UpdateStrategy.REPLACE,
+        "sql": UpdateStrategy.IMMUTABLE,
         "sql_header": UpdateStrategy.REPLACE,
         "tags": UpdateStrategy.APPEND,
+        "time_column": UpdateStrategy.IMMUTABLE,
         "unique_key": UpdateStrategy.REPLACE,
     }
 
@@ -229,14 +256,14 @@ class ModelConfig(PydanticModel):
         Returns:
             New ModelConfig updated with the passed in config fields
         """
-        fields = self.dict()
         if not config:
-            return ModelConfig(**fields)
+            return self.copy()
 
+        fields = self.dict()
         config = {k: v for k, v in ModelConfig(**config).dict().items() if k in config}
         for key, value in config.items():
             fields[key] = update_field(
-                fields.get(key), value, self._FIELD_update_strategy.get(key)
+                fields.get(key), value, self._FIELD_UPDATE_STRATEGY.get(key)
             )
         return ModelConfig(**fields)
 
@@ -248,6 +275,75 @@ class ModelConfig(PydanticModel):
             other: The ModelConfig to apply to this instance
         """
         self.__dict__.update(other.dict())
+
+    def to_sqlmesh(self) -> Model:
+        """Converts the dbt model into a SQLMesh model."""
+        expressions = [
+            d.Model(expressions=[exp.Property(this="name", value=self.model_name)]),
+            *d.parse_model(self.sql, default_dialect=""),  # how do we get dialect?
+        ]
+
+        for jinja in expressions[1:]:
+            # find all the refs here and filter the python env?
+            if isinstance(jinja, d.Jinja):
+                pass
+
+        python_env = {
+            "source": Executable(
+                payload="""def source(source_name, table_name):
+    return ".".join((source_name, table_name))
+""",
+            ),
+            "ref": Executable(
+                payload="""def ref(source_name, table_name):
+    return "ref"
+""",
+            ),
+            "sqlmesh": Executable(
+                kind=ExecutableKind.VALUE,
+                payload=True,
+            ),
+            "is_incremental": Executable(
+                payload="def is_incremental(): return False",
+            ),
+        }
+
+        return Model.load(
+            expressions,
+            path=self.path,
+            python_env=python_env,
+            time_column=self.time_column,
+        )
+
+    @property
+    def model_name(self) -> str:
+        """
+        Get the sqlmesh model name
+
+        Returns:
+            The sqlmesh model name
+        """
+        return ".".join(part for part in (self.schema_, self.identifier) if part)
+
+    @property
+    def model_kind(self) -> ModelKind:
+        """
+        Get the sqlmesh ModelKind
+
+        Returns:
+            The sqlmesh ModelKind
+        """
+        materialization = self.materialized
+        if materialization == Materialization.TABLE:
+            return ModelKind.FULL
+        if materialization == Materialization.VIEW:
+            return ModelKind.VIEW
+        if materialization == Materialization.INCREMENTAL:
+            return ModelKind.INCREMENTAL
+        if materialization == Materialization.EPHERMAL:
+            return ModelKind.EMBEDDED
+
+        raise ConfigError(f"{materialization.value} materialization not supported")
 
 
 class ModelConfigBuilder:
@@ -261,9 +357,7 @@ class ModelConfigBuilder:
         self._project_root = None
         self._project_name = None
 
-    def build_model_configs(
-        self, project_root: Path
-    ) -> t.Dict[str, t.Tuple[ModelConfig, Path]]:
+    def build_model_configs(self, project_root: Path) -> t.Dict[str, ModelConfig]:
         """
         Build the configuration for each model in the specified DBT project.
 
@@ -288,10 +382,7 @@ class ModelConfigBuilder:
             model_config = self._build_model_config(file)
             if not model_config.identifier:
                 raise ConfigError(f"No identifier for {file}")
-            configs[model_config.identifier] = (
-                model_config,
-                file.relative_to(self._project_root),
-            )
+            configs[model_config.identifier] = model_config
 
         return configs
 
@@ -377,10 +468,10 @@ class ModelConfigBuilder:
             sql = file.read()
 
         scope = self._scope_from_path(filepath)
-        model_config = self._config_for_scope(scope).copy()
+        model_config = self._config_for_scope(scope).copy(update={"path": filepath})
 
         def config(*args, **kwargs):
-            if len(args) > 0:
+            if args:
                 if isinstance(args[0], dict):
                     model_config.replace(model_config.update_with(args[0]))
             if kwargs:
@@ -390,6 +481,8 @@ class ModelConfigBuilder:
 
         if not model_config.identifier:
             model_config.identifier = scope[-1]
+
+        model_config.sql = _remove_config_jinja(sql)
 
         return model_config
 
@@ -405,10 +498,9 @@ class ModelConfigBuilder:
         """
         path_from_root = path.relative_to(self._project_root)
         # models/ and file are not included in the scope
-        scope = (self._project_name, *str(path_from_root).split("/")[1:-1])
+        scope = (self._project_name, *path_from_root.parts[1:-1])
         if path.match("*.sql"):
-            scope = (*scope, (str(path_from_root).split("/")[-1])[:-4])
-
+            scope = (*scope, path_from_root.stem)
         return scope
 
     def _config_for_scope(self, scope: t.Tuple[str, ...]) -> ModelConfig:
@@ -438,7 +530,7 @@ class Config:
         builder = ModelConfigBuilder()
         self.models = builder.build_model_configs(project_root)
 
-    def get_model_config(self) -> t.Dict[str, t.Tuple[ModelConfig, Path]]:
+    def get_model_config(self) -> t.Dict[str, ModelConfig]:
         """
         Get the config for each model within the DBT project
 
@@ -447,3 +539,16 @@ class Config:
             and relative path to model file from the project root.
         """
         return self.models
+
+
+def _remove_config_jinja(query: str) -> str:
+    """
+    Removes jinja for config method calls from a query
+
+    args:
+        query: The query
+
+    Returns:
+        The query without the config method calls
+    """
+    return re.sub("{{\s*config(.|\s)*?}}", "", query).strip()
