@@ -2,6 +2,7 @@
     config(
         materialized='incremental',
         incremental_strategy='delete+insert',
+        time_column='ds',
         cluster_by=['ds'],
         unique_key=['ds']
     )
