@@ -19,7 +19,7 @@ from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
-from sqlmesh.utils.date import TimeLike, now
+from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -179,18 +179,12 @@ def _plan_receiver_task(
 
     if plan_conf.environment.end:
         end = plan_conf.environment.end
+        unpaused_dt = None
     else:
         # Unbounded end date means we need to unpause all paused snapshots
         # that are part of the target environment.
         end = now()
-        stored_environment_snapshots = [
-            stored_snapshots[s.snapshot_id]
-            for s in plan_conf.environment.snapshots
-            if s.snapshot_id in stored_snapshots
-        ]
-        _unpause_snapshots(
-            state_sync, new_snapshots.values(), stored_environment_snapshots, end
-        )
+        unpaused_dt = end
 
     all_snapshots = {**new_snapshots, **stored_snapshots}
 
@@ -234,6 +228,7 @@ def _plan_receiver_task(
         demoted_snapshots=_get_demoted_snapshots(plan_conf.environment, state_sync),
         start=plan_conf.environment.start,
         end=plan_conf.environment.end,
+        unpaused_dt=unpaused_dt,
         no_gaps=plan_conf.no_gaps,
         plan_id=plan_conf.environment.plan_id,
         previous_plan_id=plan_conf.environment.previous_plan_id,
@@ -318,21 +313,3 @@ def _get_demoted_snapshots(
             if s.name not in preserved_snapshot_names
         ]
     return []
-
-
-def _unpause_snapshots(
-    state_sync: XComStateSync,
-    new_snaspots: t.Iterable[Snapshot],
-    stored_snapshots: t.Iterable[Snapshot],
-    unpaused_dt: TimeLike,
-) -> None:
-    paused_stored_snapshots = []
-    for s in stored_snapshots:
-        if not s.unpaused_ts:
-            logger.info(f"Unpausing stored snapshot %s", s.snapshot_id)
-            paused_stored_snapshots.append(s)
-    state_sync.unpause_snapshots(paused_stored_snapshots, unpaused_dt)
-
-    for s in new_snaspots:
-        logger.info(f"Unpausing new snapshot %s", s.snapshot_id)
-        s.set_unpaused_ts(unpaused_dt)

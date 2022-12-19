@@ -65,6 +65,7 @@ class PlanApplicationRequest(PydanticModel):
     demoted_snapshots: t.List[SnapshotTableInfo]
     start: TimeLike
     end: t.Optional[TimeLike]
+    unpaused_dt: t.Optional[TimeLike]
     no_gaps: bool
     plan_id: str
     previous_plan_id: t.Optional[str]

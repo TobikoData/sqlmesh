@@ -27,6 +27,7 @@ from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
+from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -120,6 +121,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         environment = plan.environment
 
         added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
+
+        if not plan.end:
+            self.state_sync.unpause_snapshots(added, now())
 
         self.snapshot_evaluator.promote(
             added,

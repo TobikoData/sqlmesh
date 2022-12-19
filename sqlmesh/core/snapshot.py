@@ -471,13 +471,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         else:
             self.version = version or self.fingerprint
 
-    def set_unpaused_ts(self, unpaused_dt: TimeLike) -> None:
+    def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
         """Sets the timestamp for when this snapshot was unpaused.
 
         Args:
             unpaused_dt: The datetime object of when this snapshot was unpaused.
         """
-        self.unpaused_ts = to_timestamp(self.model.cron_floor(unpaused_dt))
+        self.unpaused_ts = (
+            to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
+        )
 
     @property
     def table_name(self) -> str:
