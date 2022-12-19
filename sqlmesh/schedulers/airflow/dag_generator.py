@@ -158,6 +158,7 @@ class SnapshotDagGenerator:
                 request.environment_name,
                 request.start,
                 request.end,
+                request.unpaused_dt,
                 request.no_gaps,
                 request.plan_id,
                 request.previous_plan_id,
@@ -242,6 +243,7 @@ class SnapshotDagGenerator:
         environment: str,
         start: TimeLike,
         end: t.Optional[TimeLike],
+        unpaused_dt: t.Optional[TimeLike],
         no_gaps: bool,
         plan_id: str,
         previous_plan_id: t.Optional[str],
@@ -258,6 +260,7 @@ class SnapshotDagGenerator:
                 "environment_name": environment,
                 "start": start,
                 "end": end,
+                "unpaused_dt": unpaused_dt,
                 "no_gaps": no_gaps,
                 "plan_id": plan_id,
                 "previous_plan_id": previous_plan_id,
@@ -463,6 +466,7 @@ def promotion_update_state_task(
     environment_name: str,
     start: TimeLike,
     end: t.Optional[TimeLike],
+    unpaused_dt: t.Optional[TimeLike],
     no_gaps: bool,
     plan_id: str,
     previous_plan_id: t.Optional[str],
@@ -476,4 +480,7 @@ def promotion_update_state_task(
         plan_id=plan_id,
         previous_plan_id=previous_plan_id,
     )
-    XComStateSync(session).promote(environment, no_gaps=no_gaps)
+    state_sync = XComStateSync(session)
+    state_sync.promote(environment, no_gaps=no_gaps)
+    if snapshots and not end and unpaused_dt:
+        state_sync.unpause_snapshots(snapshots, unpaused_dt)

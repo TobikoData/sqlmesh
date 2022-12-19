@@ -394,4 +394,18 @@ def test_unpause_snapshots(
 
     actual_snapshot = state_sync.get_snapshots([snapshot])[snapshot.snapshot_id]
     assert actual_snapshot.unpaused_ts
-    assert to_datetime(actual_snapshot.unpaused_ts) == to_datetime(unpaused_dt)
+    assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
+
+    new_snapshot = make_snapshot(
+        Model(name="test_snapshot", query=parse_one("select 2"), cron="@daily"),
+        version="a",
+    )
+    assert not new_snapshot.unpaused_ts
+    state_sync.push_snapshots([new_snapshot])
+    state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
+    assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
+    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(
+        unpaused_dt
+    )
