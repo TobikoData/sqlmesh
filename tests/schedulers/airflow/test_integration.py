@@ -181,6 +181,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         demoted_snapshots=[deleted_snapshot],
         start="2022-01-01",
         end="2022-01-01",
+        unpaused_dt=None,
         no_gaps=True,
         plan_id="test_plan_id",
         previous_plan_id=None,
@@ -273,17 +274,10 @@ def test_plan_receiver_task_unbounded_end(
         "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
     )
 
-    unpause_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.unpause_snapshots"
-    )
-
     _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
     get_environment_mock.assert_called_once()
-
-    # Make sure that the unrelated snapshot was not unpaused.
-    unpause_snapshots_mock.assert_called_once_with([snapshot], mocker.ANY)
 
     task_instance_mock.xcom_push.assert_called_once()
 

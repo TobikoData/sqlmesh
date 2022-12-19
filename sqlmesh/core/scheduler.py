@@ -50,6 +50,7 @@ class Scheduler:
         console: t.Optional[Console] = None,
     ):
         self.snapshots = {s.snapshot_id: s for s in snapshots}
+        self.snapshot_per_version = _resolve_one_snapshot_per_version(snapshots)
         self.snapshot_evaluator = snapshot_evaluator
         self.state_sync = state_sync
         self.max_workers = max_workers
@@ -117,10 +118,13 @@ class Scheduler:
         validate_date_range(start, end)
 
         latest = latest or now()
-        batches = self.interval_params(self.snapshots.values(), start, end, latest)
+        batches = self.interval_params(
+            self.snapshot_per_version.values(), start, end, latest
+        )
 
-        intervals_per_snapshot_id = {
-            snapshot.snapshot_id: intervals for snapshot, intervals in batches
+        intervals_per_snapshot_version = {
+            (snapshot.name, snapshot.version_or_fingerprint): intervals
+            for snapshot, intervals in batches
         }
 
         dag = DAG[SchedulingUnit]()
@@ -128,7 +132,14 @@ class Scheduler:
             upstream_dependencies = [
                 (p_sid, interval)
                 for p_sid in snapshot.parents
-                for interval in intervals_per_snapshot_id.get(p_sid, [])
+                if p_sid in self.snapshots
+                for interval in intervals_per_snapshot_version.get(
+                    (
+                        self.snapshots[p_sid].name,
+                        self.snapshots[p_sid].version_or_fingerprint,
+                    ),
+                    [],
+                )
             ]
             sid = snapshot.snapshot_id
             for interval in intervals:
@@ -305,3 +316,22 @@ def _batched_intervals(params: SnapshotBatches) -> SnapshotBatches:
         batches.append((snapshot, batches_for_snapshot))
 
     return batches
+
+
+def _resolve_one_snapshot_per_version(
+    snapshots: t.Iterable[Snapshot],
+) -> t.Dict[t.Tuple[str, str], Snapshot]:
+    snapshot_per_version: t.Dict[t.Tuple[str, str], Snapshot] = {}
+    for snapshot in snapshots:
+        key = (snapshot.name, snapshot.version_or_fingerprint)
+        if key not in snapshot_per_version:
+            snapshot_per_version[key] = snapshot
+        else:
+            prev_snapshot = snapshot_per_version[key]
+            if snapshot.unpaused_ts and (
+                not prev_snapshot.unpaused_ts
+                or snapshot.created_ts > prev_snapshot.created_ts
+            ):
+                snapshot_per_version[key] = snapshot
+
+    return snapshot_per_version

@@ -286,7 +286,7 @@ class StateSync(StateReader, abc.ABC):
 
     @abc.abstractmethod
     def unpause_snapshots(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike], unpaused_dt: TimeLike
+        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         """Unpauses target snapshots.
 
@@ -294,7 +294,7 @@ class StateSync(StateReader, abc.ABC):
         Once unpaused a snapshot can't be paused again.
 
         Args:
-            snapshot_ids: Target snapshot IDs.
+            snapshots: Target snapshots.
             unpaused_dt: The datetime object which indicates when target snapshots
                 were unpaused.
         """
@@ -470,12 +470,22 @@ class CommonStateSyncMixin(StateSync):
             self._update_snapshot(snapshot)
 
     def unpause_snapshots(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike], unpaused_dt: TimeLike
+        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
-        snapshots = self._get_snapshots(snapshot_ids=snapshot_ids, lock_for_update=True)
-        for snapshot in snapshots.values():
-            snapshot.set_unpaused_ts(unpaused_dt)
-            self._update_snapshot(snapshot)
+        target_snapshot_ids = {s.snapshot_id for s in snapshots}
+        snapshots = self._get_snapshots_with_same_version(
+            snapshots, lock_for_update=True
+        )
+        for snapshot in snapshots:
+            is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
+            if is_target_snapshot and not snapshot.unpaused_ts:
+                logger.info(f"Unpausing snapshot %s", snapshot.snapshot_id)
+                snapshot.set_unpaused_ts(unpaused_dt)
+                self._update_snapshot(snapshot)
+            elif not is_target_snapshot and snapshot.unpaused_ts:
+                logger.info(f"Pausing snapshot %s", snapshot.snapshot_id)
+                snapshot.set_unpaused_ts(None)
+                self._update_snapshot(snapshot)
 
     def _ensure_no_gaps(
         self, target_snapshots: t.Iterable[Snapshot], target_environment: Environment
