@@ -273,7 +273,7 @@ from sqlmesh.core.model_kind import (
     IncrementalByTimeRange,
     IncrementalByUniqueKey,
     ModelKind,
-    ModelKindEnum,
+    ModelKindName,
     TimeColumn,
 )
 from sqlmesh.utils import UniqueKeyDict, registry_decorator, unique
@@ -368,32 +368,29 @@ class ModelMeta(PydanticModel):
             return v
 
         if isinstance(v, d.ModelKind):
-            kind = v.this.lower()
+            name = v.this.lower()
             props = {prop.name: prop.args.get("value") for prop in v.expressions}
-            if kind == ModelKindEnum.INCREMENTAL_BY_TIME_RANGE:
-                return IncrementalByTimeRange(
-                    **props,
-                )
-            elif kind == ModelKindEnum.INCREMENTAL_BY_UNIQUE_KEY:
-                return IncrementalByUniqueKey(
-                    **props,
-                )
+            klass: t.Type[ModelKind] = ModelKind
+            if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                klass = IncrementalByTimeRange
+            elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                klass = IncrementalByUniqueKey
             else:
-                return ModelKind(
-                    kind=kind,
-                    **props,
-                )
+                props["name"] = ModelKindName(name)
+            return klass(**props)
 
         if isinstance(v, dict):
-            if v.get("kind") == ModelKindEnum.INCREMENTAL_BY_TIME_RANGE:
-                return IncrementalByTimeRange(**v)
-            if v.get("kind") == ModelKindEnum.INCREMENTAL_BY_UNIQUE_KEY:
-                return IncrementalByUniqueKey(**v)
-            return ModelKind(**v)
+            if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                klass = IncrementalByTimeRange
+            elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                klass = IncrementalByUniqueKey
+            else:
+                klass = ModelKind
+            return klass(**v)
 
         name = v.name if isinstance(v, exp.Expression) else str(v)
         try:
-            return ModelKind(kind=ModelKindEnum(name.lower()))
+            return ModelKind(name=ModelKindName(name.lower()))
         except ValueError:
             _raise_config_error(f"Invalid model kind '{name}'")
             raise
