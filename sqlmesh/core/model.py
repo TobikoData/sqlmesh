@@ -657,7 +657,6 @@ class Model(ModelMeta, frozen=True):
         t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
     ] = {}
     _schema: t.Optional[MappingSchema] = None
-    _contains_star_query: bool = False
     audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
     @validator("query", "expressions_", pre=True)
@@ -780,10 +779,6 @@ class Model(ModelMeta, frozen=True):
         query = model._render_query()
         model.validate_definition(query=query)
 
-        model._contains_star_query = any(
-            isinstance(expression, exp.Star) for expression in query.expressions
-        )
-
         return model
 
     @property
@@ -829,7 +824,10 @@ class Model(ModelMeta, frozen=True):
     @property
     def contains_star_query(self) -> bool:
         """Returns True if the model's query contains a star projection."""
-        return self._contains_star_query
+        return any(
+            isinstance(expression, exp.Star)
+            for expression in self.render_query().expressions
+        )
 
     @property
     def annotated(self) -> bool:
@@ -887,7 +885,7 @@ class Model(ModelMeta, frozen=True):
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
 
-        if self._contains_star_query:
+        if self.contains_star_query:
             # We need to re-render in order to expand the star projection
             self._query_cache.clear()
             self._render_query()
@@ -978,7 +976,7 @@ class Model(ModelMeta, frozen=True):
                     )
                 )
 
-            if self._schema and self._contains_star_query:
+            if self._schema:
                 # This takes care of expanding star projections
                 self._query_cache[key] = optimize(
                     self._query_cache[key],
