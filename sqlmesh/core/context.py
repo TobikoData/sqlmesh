@@ -295,7 +295,7 @@ class Context(BaseContext):
         elif isinstance(model, str):
             model = self.models[model]
 
-        model = model.copy(update=kwargs)  # type: ignore
+        model = Model(**{**model.dict(), **kwargs})  # type: ignore
         self.models.update({model.name: model})
 
         self._add_model_to_dag(model)

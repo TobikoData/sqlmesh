@@ -775,9 +775,7 @@ class Model(ModelMeta, frozen=True):
 
         model._path = path
         model.set_time_format(time_column_format)
-
-        query = model._render_query()
-        model.validate_definition(query=query)
+        model.validate_definition()
 
         return model
 
@@ -989,7 +987,7 @@ class Model(ModelMeta, frozen=True):
                     for expression in self._query_cache[key].expressions
                 }
 
-                self.validate_definition(query=self._query_cache[key])
+                self.validate_definition()
 
         query = self._query_cache[key]
 
@@ -1269,7 +1267,7 @@ class Model(ModelMeta, frozen=True):
     def python_env(self) -> t.Dict[str, Executable]:
         return self.python_env_ or {}
 
-    def validate_definition(self, query: t.Optional[exp.Subqueryable] = None) -> None:
+    def validate_definition(self) -> None:
         """Validates the model's definition.
 
         Model's are not allowed to have duplicate column names, non-explicitly casted columns,
@@ -1279,7 +1277,7 @@ class Model(ModelMeta, frozen=True):
             ConfigError
         """
         name_counts: t.Dict[str, int] = {}
-        query = query or self._render_query()
+        query = self._render_query()
 
         if not isinstance(query, exp.Subqueryable):
             _raise_config_error(
