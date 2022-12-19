@@ -629,7 +629,8 @@ class Context(BaseContext):
                 raise PlanError(
                     "Can't auto-apply a plan with uncategorized changes. Enable prompts to proceed."
                 )
-            self.apply(plan)
+            if plan.context_diff.has_differences:
+                self.apply(plan)
 
         return plan
 
