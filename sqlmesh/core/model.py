@@ -244,6 +244,7 @@ SQLMesh will handle casting the start and end dates to the type of your time col
 from __future__ import annotations
 
 import ast
+import types
 import typing as t
 from datetime import datetime
 from enum import Enum
@@ -1099,8 +1100,10 @@ class Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         **kwargs,
-    ) -> DF:
+    ) -> t.Generator[DF, None, None]:
         """Executes this model's python script.
+
+        A python model is expected to return a dataframe or a generator that yields dataframes.
 
         Args:
             context: The execution context used for fetching data.
@@ -1122,28 +1125,38 @@ class Model(ModelMeta, frozen=True):
         start, end = make_inclusive(start or EPOCH_DS, end or EPOCH_DS)
         latest = to_datetime(latest or EPOCH_DS)
         try:
-            df = env[self.query.name](
+            df_or_iter = env[self.query.name](
                 context=context, start=start, end=end, latest=latest, **kwargs
             )
-            if self.kind == ModelKind.INCREMENTAL:
-                assert self.time_column
 
-                if pyspark and isinstance(df, pyspark.sql.DataFrame):
-                    df = df.where(
-                        f"""
-                    {self.time_column.column} BETWEEN
-                    {self.convert_to_time_column(start).sql("spark")} AND
-                    {self.convert_to_time_column(end).sql("spark")}
-                    """
-                    )
-                else:
-                    if self.time_column.format:
-                        start = start.strftime(self.time_column.format)
-                        end = end.strftime(self.time_column.format)
+            if not isinstance(df_or_iter, types.GeneratorType):
+                df_or_iter = [df_or_iter]
 
-                    df_time = df[self.time_column.column]
-                    df = df[(df_time >= start) & (df_time <= end)]
-            return df
+            for df in df_or_iter:
+                if self.kind == ModelKind.INCREMENTAL:
+                    assert self.time_column
+
+                    if pyspark and isinstance(df, pyspark.sql.DataFrame):
+                        df = df.where(
+                            f"""
+                        {self.time_column.column} BETWEEN
+                        {self.convert_to_time_column(start).sql("spark")} AND
+                        {self.convert_to_time_column(end).sql("spark")}
+                        """
+                        )
+                    else:
+                        if self.time_column.format:
+                            start_format: TimeLike = start.strftime(
+                                self.time_column.format
+                            )
+                            end_format: TimeLike = end.strftime(self.time_column.format)
+                        else:
+                            start_format = start
+                            end_format = end
+
+                        df_time = df[self.time_column.column]
+                        df = df[(df_time >= start_format) & (df_time <= end_format)]
+                yield df
         except Exception as e:
             print_exception(e, self.python_env)
             raise SQLMeshError(

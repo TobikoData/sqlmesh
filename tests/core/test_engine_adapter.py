@@ -132,10 +132,8 @@ def test_delete_insert_query(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            mocker.call("BEGIN"),
             mocker.call("DELETE FROM `test_table` WHERE `a` BETWEEN 0 AND 1"),
             mocker.call("INSERT INTO `test_table` (`a`) SELECT `a` FROM `tbl`"),
-            mocker.call("COMMIT"),
         ]
     )
 
