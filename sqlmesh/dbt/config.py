@@ -551,4 +551,4 @@ def _remove_config_jinja(query: str) -> str:
     Returns:
         The query without the config method calls
     """
-    return re.sub("{{\s*config(.|\s)*?}}", "", query).strip()
+    return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()

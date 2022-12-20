@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 from sqlglot import exp, parse, parse_one
 
+from sqlmesh.core.config import Config
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
@@ -92,7 +94,6 @@ def test_load(assert_exp_eq):
         ("CAST(x + 1 AS INT)", "must have inferrable names"),
         ("y::int, x::int AS y", "duplicate"),
         ("sum(x)::int -- annotation", "must have inferrable names"),
-        ("*", "explicitly select"),
     ],
 )
 def test_model_validation(query, error):
@@ -638,3 +639,116 @@ def test_python_model_deps() -> None:
         module_path=Path("."),
         path=Path("."),
     ).depends_on == {"foo", "bar.baz"}
+
+
+def test_star_expansion(assert_exp_eq) -> None:
+    context = Context(config=Config())
+
+    model1 = Model.load(
+        parse_model(
+            """
+        MODEL (name db.model1, kind full);
+
+        SELECT
+            id::INT AS id,
+            item_id::INT AS item_id,
+            ds::TEXT AS ds,
+        FROM
+            (VALUES
+                (1, 1, '2020-01-01'),
+                (1, 2, '2020-01-01'),
+                (2, 1, '2020-01-01'),
+                (3, 3, '2020-01-03'),
+                (4, 1, '2020-01-04'),
+                (5, 1, '2020-01-05'),
+                (6, 1, '2020-01-06'),
+                (7, 1, '2020-01-07')
+            ) AS t (id, item_id, ds)
+        """
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    model2 = Model.load(
+        parse_model(
+            """
+        MODEL (name db.model2, kind full);
+
+        SELECT * FROM db.model1 AS model1
+		"""
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    model3 = Model.load(
+        parse_model(
+            """
+            MODEL(name db.model3, kind full);
+
+            SELECT * FROM db.model2 AS model2
+        """
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    context.upsert_model(model1)
+    context.upsert_model(model2)
+    context.upsert_model(model3)
+
+    assert_exp_eq(
+        context.render("db.model2"),
+        f"""
+        SELECT
+          model1.id AS id,
+          model1.item_id AS item_id,
+          model1.ds AS ds
+        FROM (
+          SELECT
+            CAST(t.id AS INT) AS id,
+            CAST(t.item_id AS INT) AS item_id,
+            CAST(t.ds AS TEXT) AS ds
+          FROM (VALUES
+            (1, 1, '2020-01-01'),
+            (1, 2, '2020-01-01'),
+            (2, 1, '2020-01-01'),
+            (3, 3, '2020-01-03'),
+            (4, 1, '2020-01-04'),
+            (5, 1, '2020-01-05'),
+            (6, 1, '2020-01-06'),
+            (7, 1, '2020-01-07')) AS t(id, item_id, ds)
+        ) AS model1
+        """,
+    )
+    assert_exp_eq(
+        context.render("db.model3"),
+        f"""
+        SELECT
+          model2.id AS id,
+          model2.item_id AS item_id,
+          model2.ds AS ds
+        FROM (
+          SELECT
+            model1.id AS id,
+            model1.item_id AS item_id,
+            model1.ds AS ds
+          FROM (
+            SELECT
+              CAST(t.id AS INT) AS id,
+              CAST(t.item_id AS INT) AS item_id,
+              CAST(t.ds AS TEXT) AS ds
+            FROM (VALUES
+              (1, 1, '2020-01-01'),
+              (1, 2, '2020-01-01'),
+              (2, 1, '2020-01-01'),
+              (3, 3, '2020-01-03'),
+              (4, 1, '2020-01-04'),
+              (5, 1, '2020-01-05'),
+              (6, 1, '2020-01-06'),
+              (7, 1, '2020-01-07')) AS t(id, item_id, ds)
+          ) AS model1
+        ) AS model2
+        """,
+    )

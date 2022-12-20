@@ -255,9 +255,13 @@ from croniter import croniter
 from jinja2 import Environment
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse, parse_one
+from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.optimizer.simplify import simplify
+from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
@@ -305,6 +309,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 }
 
 EPOCH_DS = "1970-01-01"
+
+RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
 
 
 # switch to autoname with sqlglot is typed
@@ -650,6 +656,7 @@ class Model(ModelMeta, frozen=True):
     _query_cache: t.Dict[
         t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
     ] = {}
+    _schema: t.Optional[MappingSchema] = None
     audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
     @validator("query", "expressions_", pre=True)
@@ -805,12 +812,20 @@ class Model(ModelMeta, frozen=True):
 
         if self._columns is None:
             query = annotate_types(self._render_query())
-
             self._columns = {
                 expression.alias_or_name: expression.type
                 for expression in query.expressions
             }
+
         return self._columns
+
+    @property
+    def contains_star_query(self) -> bool:
+        """Returns True if the model's query contains a star projection."""
+        return any(
+            isinstance(expression, exp.Star)
+            for expression in self.render_query().expressions
+        )
 
     @property
     def annotated(self) -> bool:
@@ -864,6 +879,14 @@ class Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
         return [model, *self.expressions, self.query]
+
+    def update_schema(self, schema: MappingSchema) -> None:
+        self._schema = schema
+
+        if self.contains_star_query:
+            # We need to re-render in order to expand the star projection
+            self._query_cache.clear()
+            self._render_query()
 
     def _render_query(
         self,
@@ -950,6 +973,21 @@ class Model(ModelMeta, frozen=True):
                         for name, column_type in self.columns.items()
                     )
                 )
+
+            if self._schema:
+                # This takes care of expanding star projections
+                self._query_cache[key] = optimize(
+                    self._query_cache[key],
+                    schema=self._schema,
+                    rules=RENDER_OPTIMIZER_RULES,
+                )
+
+                self._columns = {
+                    expression.alias_or_name: expression.type
+                    for expression in self._query_cache[key].expressions
+                }
+
+                self.validate_definition()
 
         query = self._query_cache[key]
 
@@ -1232,8 +1270,8 @@ class Model(ModelMeta, frozen=True):
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
-        Model's are not allowed to have SELECT * in the final query, duplicate column names,
-        non-explicitly casted columns, or non infererrable column names.
+        Model's are not allowed to have duplicate column names, non-explicitly casted columns,
+        or non infererrable column names.
 
         Raises:
             ConfigError
@@ -1250,18 +1288,10 @@ class Model(ModelMeta, frozen=True):
             _raise_config_error("Query missing select statements", self._path)
 
         for expression in query.expressions:
-            if isinstance(expression, exp.Star):
-                _raise_config_error(
-                    "SELECT * is not allowed you must explicitly select columns.",
-                    self._path,
-                )
-
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
-            if isinstance(expression, exp.Alias):
-                expression = expression.this
-            elif not alias:
+            if not alias:
                 _raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
                     self._path,
