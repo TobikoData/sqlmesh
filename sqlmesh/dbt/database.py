@@ -3,26 +3,29 @@ from __future__ import annotations
 import abc
 import typing as t
 
-from sqlmesh.utils.pydantic import PydanticModel
+from pydantic import Field
+
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
+
 
 class DatabaseConfig(abc.ABC, PydanticModel):
     type: str
-    schema: str
+    schema_: str = Field(alias="schema")
 
     @classmethod
     def parse(cls, data: t.Dict[str, t.Any]) -> DatabaseConfig:
         db_type = data["type"]
         if db_type == "snowflake":
-            return SnowflakeConfig(data)
+            return SnowflakeConfig(**data)
 
-        # TODO add other databases    
+        # TODO add other databases
         raise ConfigError(f"{db_type} not supported")
 
 
 class SnowflakeConfig(DatabaseConfig):
     # TODO add other forms of authentication
-    account: str 
+    account: str
     warehouse: str
     database: str
     user: str

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import typing as t
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, validator
@@ -11,11 +11,15 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import Model, ModelKind, TimeColumn
-from sqlmesh.dbt.database import DatabaseConfig
-from sqlmesh.dbt.render import render_jinja
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.dbt.project import ProjectConfig
+from sqlmesh.dbt.render import render_jinja
+from sqlmesh.dbt.update import UpdateStrategy, update_field
+from sqlmesh.utils.errors import ConfigError
+
+def ensure_list(val: t.Any) -> t.List[t.Any]:
+    return val if isinstance(val, list) else [val]
 
 
 class Materialization(str, Enum):
@@ -25,84 +29,6 @@ class Materialization(str, Enum):
     VIEW = "view"
     INCREMENTAL = "incremental"
     EPHERMAL = "ephemeral"
-
-
-class UpdateStrategy(Enum):
-    """Supported strategies for adding new config to existing config"""
-
-    REPLACE = auto()  # Replace with new value
-    APPEND = auto()  # Append list to existing list
-    KEY_UPDATE = auto()  # Update dict key value with new dict key value
-    KEY_APPEND = auto()  # Append dict key value to existing dict key value
-    IMMUTABLE = auto()  # Raise if a key tries to change this value
-
-
-def update_field(
-    old: t.Optional[t.Any],
-    new: t.Any,
-    update_strategy: t.Optional[UpdateStrategy] = UpdateStrategy.REPLACE,
-) -> t.Any:
-    """
-    Update config field with new config value
-
-    Args:
-        old: The existing config value
-        new: The new config value
-        update_strategy: The strategy to use when updating the field
-
-    Returns:
-        The updated field
-    """
-    if not old:
-        return new
-
-    if update_strategy == UpdateStrategy.IMMUTABLE:
-        raise ConfigError("Cannot modify property: {old}")
-
-    if update_strategy == UpdateStrategy.REPLACE:
-        return new
-    if update_strategy == UpdateStrategy.APPEND:
-        if not isinstance(old, list) or not isinstance(new, list):
-            raise ConfigError("APPEND behavior requires list field")
-
-        return old + new
-    if update_strategy == UpdateStrategy.KEY_UPDATE:
-        if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_UPDATE behavior requires dictionary field")
-
-        combined = old.copy()
-        combined.update(new)
-        return combined
-    if update_strategy == UpdateStrategy.KEY_APPEND:
-        if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_APPEND behavior requires dictionary field")
-
-        combined = old.copy()
-        for key, value in new.items():
-            if not isinstance(value, list):
-                raise ConfigError(
-                    "KEY_APPEND behavior requires list values in dictionary"
-                )
-
-            old_value = combined.get(key)
-            if old_value:
-                if not isinstance(old_value, list):
-                    raise ConfigError(
-                        "KEY_APPEND behavior requires list values in dictionary"
-                    )
-
-                combined[key] = old_value + value
-            else:
-                combined[key] = value
-
-        return combined
-
-    raise ConfigError("Unknown update strategy {update_strategy}")
-
-
-def ensure_list(val: t.Any) -> t.List[t.Any]:
-    return val if isinstance(val, list) else [val]
-
 
 class ModelConfig(PydanticModel):
     """
@@ -275,7 +201,6 @@ class ModelConfig(PydanticModel):
         """
         self.__dict__.update(other.dict())
 
-
     def to_sqlmesh(self) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = [
@@ -345,58 +270,14 @@ class ModelConfig(PydanticModel):
 
         raise ConfigError(f"{materialization.value} materialization not supported")
 
-
-class ProjectConfig(PydanticModel):
-    DEFAULT_PROJECT_FILE = "dbt_project.yml"
-
-    def __init__(self, project_name: str, config: t.Dict[str, t.Any]):
-        self._project_name = project_name
-        self._project_config = config
+class Models():
+    Scope = t.Tuple[str, ...]
+    ScopedModelConfig = t.Dict[Scope, ModelConfig]
 
     @classmethod
-    def load(cls, project_root: t.Optional[Path]) -> ProjectConfig:
-        project_root = project_root or Path()
-        project_config_path = Path(project_root, cls.DEFAULT_PROJECT_FILE)
-        if not project_config_path.exists():
-            raise ConfigError(
-                f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
-            )
-
-        with project_config_path.open(encoding="utf-8") as file:
-            contents = YAML().load(file.read())
-
-        project_name = contents.get("name")
-        if not project_name:
-            raise ConfigError(f"{cls.DEFAULT_PROJECT_FILE} must include project name")
-
-        return ProjectConfig(project_name, contents)
-
-    @property
-    def config(self) -> t.Dict[str, t.Any]:
-        return self._project_config
-
-    @property
-    def project_name(self) -> str:
-        return self._project_name
-
-
-class ModelConfigBuilder:
-    """
-    The ModelConfigBuilder reads the model and configuration files of a DBT
-    project and builds the configuration for each of the models
-    """
-
-    def __init__(self):
-        self._scoped_configs = {}
-        self._project_root = None
-        self._project_name = None
-        self._project_schema = None
-
-    def build_model_configs(self,
-        project_root: Path,
-        schema: str,) -> t.Dict[str, ModelConfig]:
+    def load(cls, project_root: Path, project_schema: str, project_config: ProjectConfig) -> t.Dict[str, ModelConfig]:
         """
-        Build the configuration for each model in the specified DBT project.
+        Loads the configuration for all models in the specified DBT project.
 
         Args:
             project_root: Relative or absolute path to the DBT project
@@ -405,95 +286,97 @@ class ModelConfigBuilder:
         Returns:
             Dict with model name as the key and a tuple containing ModelConfig
             and relative path to model file from the project root.
-        """
-        self._scoped_configs = {}
-        self._project_root = project_root
-        self._project_schema = schema
-        self._project_name = None
+        """ 
+        # Start with configs in the project file
+        global_config = ModelConfig(schema=project_schema)
+        configs = cls._load_project_config(project_config.project_config, global_config)
+        
+        # Layer on configs in property files
+        for filepath in project_root.glob("models/**/*.yml"):
+            scope = cls._scope_from_path(filepath, project_root, project_config.project_name)
+            configs = cls._load_properties_config(filepath, scope, configs)
 
-        self._build_project_config()
-        # TODO parse profile for schema
-        for file in self._project_root.glob("models/**/*.yml"):
-            self._build_properties_config(file)
-
-        configs = {}
-        for file in self._project_root.glob("models/**/*.sql"):
-            model_config = self._build_model_config(file)
+        # Layer on configs from the model file and create model configs
+        model_configs = {}
+        for filepath in project_root.glob("models/**/*.sql"):
+            scope = cls._scope_from_path(filepath, project_root, project_config.project_name)
+            model_config = cls._load_model_config(filepath, scope, configs)
             if not model_config.identifier:
-                raise ConfigError(f"No identifier for {file}")
-            configs[model_config.identifier] = model_config
+                raise ConfigError(f"No identifier for {filepath.name}")
+            model_configs[model_config.identifier] = model_config
 
-        return configs
+        return model_configs
 
-    def _build_project_config(self) -> None:
+    @classmethod
+    def _load_project_config(cls, config: t.Dict[str, t.Any], global_config: ModelConfig) -> ScopedModelConfig:
         """
         Builds ModelConfigs for each resource path specified in the project config file and
         stores them in _scoped_configs
         """
-        project_config = ProjectConfig.load(self._project_root)
-        self._project_name = project_config.project_name
-        model_data = project_config.config.get("models")
+        scoped_configs = {}
+
+        model_data = config.get("models")
         if not model_data:
-            self._scoped_configs[()] = ModelConfig()
-            return
+            scoped_configs[()] = global_config
+            return scoped_configs
 
-        def build_config(data, parent=None):
-            parent = parent or ModelConfig()
-            fields = {
-                key[1:]: value for key, value in data.items() if key.startswith("+")
-            }
-            return parent.update_with(fields)
-
-        def build_nested_configs(data, scope):
-            parent_config = self._scoped_configs[scope]
+        def load_config(data, parent, scope):
+            nested_config = {}
+            fields = {}
             for key, value in data.items():
                 if key.startswith("+"):
-                    continue
+                    fields[key[1:]] = value
+                else:
+                    nested_config[key] = value
 
+            config = parent.update_with(fields)
+            scoped_configs[scope] = config
+            for key, value in nested_config.items():
                 nested_scope = (*scope, key)
-                self._scoped_configs[nested_scope] = build_config(value, parent_config)
-                build_nested_configs(value, nested_scope)
+                load_config(value, config, nested_scope)
 
-        root_config = build_config(model_data)
-        root_config.schema = self._project_schema
+        load_config(model_data, global_config, ())
+        print(scoped_configs.keys())
+        return scoped_configs
 
-        scope = ()
-        self._scoped_configs[scope] = root_config
-        build_nested_configs(model_data, scope)
-
-    def _build_properties_config(self, filepath: Path) -> None:
+    @classmethod
+    def _load_properties_config(cls, filepath: Path, scope: Scope, configs: ScopedModelConfig) -> ScopedModelConfig:
         """
-        Builds ModelConfigs for each model defined in the specified
-        properties config file and stores them in _scoped_configs
+        Loads model config within the specified properties file.
 
         Args:
             filepath: Path to the properties file
+            configs: Model configs from the project file
+       
+        Returns:
+            Passed-in model configs updated with model configs found in the properties file
         """
-        scope = self._scope_from_path(filepath)
-
         with filepath.open(encoding="utf-8") as file:
             contents = YAML().load(file.read())
 
         model_data = contents.get("models")
         if not model_data:
-            return
+            return configs
 
         for value in model_data:
-            config = value.get("config")
-            if not config:
+            fields = value.get("config")
+            if not fields:
                 continue
 
             model_scope = (*scope, value["name"])
-            self._scoped_configs[model_scope] = self._config_for_scope(
-                scope
-            ).update_with(config)
+            configs[model_scope] = cls._config_for_scope(scope, configs).update_with(fields)
 
-    def _build_model_config(self, filepath: Path) -> ModelConfig:
+        return configs
+
+    @classmethod
+    def _load_model_config(cls, filepath: Path, scope: Scope, configs: ScopedModelConfig) -> ModelConfig:
         """
-        Builds ModelConfig for the specified model file and returns it
+        Loads ModelConfig for the specified model file
 
         Args:
             filepath: Path to the model file
+            scope: The project scope for the model
+            configs: The scoped config from the project and properties files
 
         Returns:
             ModelConfig for the specified model file
@@ -501,8 +384,7 @@ class ModelConfigBuilder:
         with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
-        scope = self._scope_from_path(filepath)
-        model_config = self._config_for_scope(scope).copy(update={"path": filepath})
+        model_config = cls._config_for_scope(scope, configs).copy(update={"path": filepath})
 
         def config(*args, **kwargs):
             if args:
@@ -516,11 +398,12 @@ class ModelConfigBuilder:
         if not model_config.identifier:
             model_config.identifier = scope[-1]
 
-        model_config.sql = _remove_config_jinja(sql)
+        model_config.sql = cls._remove_config_jinja(sql)
 
         return model_config
 
-    def _scope_from_path(self, path: Path) -> t.Tuple[str, ...]:
+    @classmethod
+    def _scope_from_path(cls, path: Path, root_path: Path, project_name: str) -> Scope:
         """
         Extract resource scope from path
 
@@ -530,14 +413,15 @@ class ModelConfigBuilder:
         Returns:
             tuple containing the scope of the specified path
         """
-        path_from_root = path.relative_to(self._project_root)
+        path_from_root = path.relative_to(root_path)
         # models/ and file are not included in the scope
-        scope = (self._project_name, *path_from_root.parts[1:-1])
+        scope = (project_name, *path_from_root.parts[1:-1])
         if path.match("*.sql"):
             scope = (*scope, path_from_root.stem)
         return scope
 
-    def _config_for_scope(self, scope: t.Tuple[str, ...]) -> ModelConfig:
+    @classmethod
+    def _config_for_scope(cls, scope: Scope, configs: ScopedModelConfig) -> ModelConfig:
         """
         Gets the current config for the specified scope
 
@@ -547,86 +431,18 @@ class ModelConfigBuilder:
         Returns:
             The current config for the specified scope
         """
-        return self._scoped_configs.get(scope) or self._config_for_scope(scope[0:-1])
+        return configs.get(scope) or cls._config_for_scope(scope[0:-1], configs)
 
-
-class Profile:
-    PROFILE_FILENAME = "profiles.yml"
-
-    def __init__(self, project_root: Path, *, target: t.Optional[str] = None):
-        project_root = project_root or Path()
-        project_name = ProjectConfig.load(project_root).project_name
-        profile_path = self._find_profile(project_root)
-        if not profile_path:
-            raise ConfigError(f"{self.PROFILE_FILENAME} not found")
-
-        profile_data = self._read_profile(profile_path, project_name, target)
-        self.database = DatabaseConfig.parse(profile_data)
-
-    def _find_profile(self, project_root: Path) -> t.Optional[Path]:
-        # TODO Check environment variable
-        path = Path(project_root, self.PROFILE_FILENAME)
-        if path.exists():
-            return path
-
-        path = Path(Path.home(), self.PROFILE_FILENAME)
-        if path.exists():
-            return path
-
-        return None
-
-    def _read_profile(
-        self, path: Path, project: str, target: t.Optional[str]
-    ) -> t.Dict[str, t.Any]:
-        with path.open(encoding="utf-8") as file:
-            contents = YAML().load(file.read())
-
-        project_data = contents.get(project)
-        if not project_data:
-            raise ConfigError(
-                f"Project '{project}' does not exist in {self.PROFILE_FILENAME}"
-            )
-
-        if not target:
-            target = project_data.get("target")
-            if not target:
-                raise ConfigError(
-                    f"No target found for Project '{project}' in {self.PROFILE_FILENAME}"
-                )
-
-        profile_data = project_data.get(target)
-        if not profile_data:
-            raise ConfigError(
-                f"Profile for Project '{project}' and Target '{target}' not found in {self.PROFILE_FILENAME}"
-            )
-
-        return profile_data
-
-
-class Config:
-    """
-    Class to obtain DBT project config
-    """
-
-    def __init__(self, project_root: t.Optional[Path] = None):
+    @classmethod
+    def _remove_config_jinja(cls, query: str) -> str:
         """
-        Args:
-            project_root: Relative or absolute path to the DBT project
+        Removes jinja for config method calls from a query
+
+        args:
+            query: The query
+
+        Returns:
+            The query without the config method calls
         """
-        project_root = project_root or Path()
-        self.database = Profile(project_root).database
-        builder = ModelConfigBuilder()
-        self.models = builder.build_model_configs(project_root, self.database.schema)
+        return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
 
-
-def _remove_config_jinja(query: str) -> str:
-    """
-    Removes jinja for config method calls from a query
-
-    args:
-        query: The query
-
-    Returns:
-        The query without the config method calls
-    """
-    return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()

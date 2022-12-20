@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.config import Config, ModelConfig
+from sqlmesh.dbt.models import Materialization, ModelConfig
+from sqlmesh.dbt.project import ProjectConfig
 
 
 @pytest.mark.parametrize(
@@ -55,11 +56,11 @@ def test_model_config():
         "waiter_revenue_by_day",
     }
 
-    model_configs = Config(Path("tests/projects/sushi_dbt")).get_model_config()
+    model_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).models
     assert set(model_configs.keys()) == expected_models
 
     expected_config = {
-        "materialized": "incremental",
+        "materialized": Materialization.INCREMENTAL,
         "incremental_strategy": "delete+insert",
         "cluster_by": ["ds"],
         "unique_key": ["ds"],
