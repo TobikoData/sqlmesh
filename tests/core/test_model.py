@@ -555,7 +555,6 @@ def test_filter_time_column(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          kind incremental,
           kind INCREMENTAL_BY_TIME_RANGE(
             time_column (ds, '%Y%m%d')
           )
@@ -589,7 +588,6 @@ def test_filter_time_column(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          kind incremental,
           kind INCREMENTAL_BY_TIME_RANGE(
             time_column (ds, '%Y%m%d')
           )

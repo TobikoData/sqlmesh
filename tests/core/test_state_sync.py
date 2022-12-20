@@ -7,7 +7,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import IncrementalByTimeRange, ModelKind, ModelKindName
+from sqlmesh.core.model_kind import ModelKind, ModelKindName
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -32,7 +32,6 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
         make_snapshot(
             Model(
                 name="a",
-                kind=IncrementalByTimeRange(),
                 query=parse_one("select 1, ds"),
             ),
             version="a",
@@ -40,7 +39,6 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
         make_snapshot(
             Model(
                 name="b",
-                kind=IncrementalByTimeRange(),
                 query=parse_one("select 2, ds"),
             ),
             version="b",
@@ -73,14 +71,12 @@ def test_push_snapshots(
     snapshot_a = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         )
     )
     snapshot_b = make_snapshot(
         Model(
             name="b",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 2, ds"),
         )
     )
@@ -146,7 +142,6 @@ def test_duplicates(
     snapshot_a = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="1",
@@ -154,7 +149,6 @@ def test_duplicates(
     snapshot_b = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="1",
@@ -162,7 +156,6 @@ def test_duplicates(
     snapshot_c = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="1",
@@ -197,7 +190,6 @@ def test_get_snapshots_with_same_version(
     snapshot_c = make_snapshot(
         Model(
             name="c",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 3, ds"),
         ),
         version="a",
@@ -225,7 +217,6 @@ def test_add_interval(
         Model(
             name="a",
             cron="@daily",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="a",
@@ -261,7 +252,6 @@ def test_remove_interval(
         Model(
             name="a",
             cron="@daily",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="a",
@@ -270,7 +260,6 @@ def test_remove_interval(
         Model(
             name="a",
             cron="@daily",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 2::INT, '2022-01-01'::TEXT AS ds"),
         ),
         version="a",
@@ -297,7 +286,6 @@ def test_promote_snapshots(
     snapshot_a = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="a",
@@ -314,7 +302,6 @@ def test_promote_snapshots(
     snapshot_c = make_snapshot(
         Model(
             name="c",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 3, ds"),
         ),
         version="c",
@@ -369,7 +356,6 @@ def test_promote_snapshots(
     snapshot_d = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 2, ds"),
         ),
         version="d",
@@ -386,7 +372,6 @@ def test_promote_snapshots_parent_plan_id_mismatch(
     snapshot = make_snapshot(
         Model(
             name="a",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
         ),
         version="a",
@@ -427,7 +412,6 @@ def test_promote_snapshots_no_gaps(
 ):
     model = Model(
         name="a",
-        kind=IncrementalByTimeRange(),
         query=parse_one("select 1, ds"),
         cron="@daily",
     )
@@ -482,7 +466,6 @@ def test_unpause_snapshots(
     snapshot = make_snapshot(
         Model(
             name="test_snapshot",
-            kind=IncrementalByTimeRange(),
             query=parse_one("select 1, ds"),
             cron="@daily",
         ),

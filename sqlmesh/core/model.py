@@ -112,24 +112,6 @@ MODEL (
 );
 ```
 
-# Model Kinds
-
-## incremental
-
-Incremental load is the default model kind. It specifies that the data is incrementally computed. For example,
-many models representing 'facts' or 'logs' should be incremental because new data is continuously added.
-
-## full
-Full refresh is used when the entire table needs to be recomputed from scratch every batch.
-
-## snapshot
-Snapshot means recomputing the entire history of a table as of the compute date and storing that in a partition. Snapshots are expensive to compute and store but allow you to look at the frozen snapshot at a certain point in time. An example of a snapshot model would be computing and storing lifetime revenue of a user daily.
-
-## view
-View models rely on datebase engine views and don't require any direct backfilling. Using a view will create a view in the same location as you may expect a physical table, but no table is computed. Other models that reference view models will incur compute cost because only the query is stored.
-
-## embedded
-Embedded models are like views except they don't interact with the data warehouse at all. They are embedded directly in models that reference them as expanded queries. They are an easy way to share logic across models.
 
 # Macros
 Macros can be used for passing in paramaterized arguments like dates as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used your SQL. Macros are used by prefixing with the `@` symbol.
@@ -192,8 +174,9 @@ the dialect of the model, e.g. '%Y-%m-%d' for DuckDB or 'yyyy-mm-dd' for Snowfla
 MODEL (
   name sushi.orders,
   dialect duckdb,
-  kind incremental,
-  time_column (ds, '%Y-%m-%d')
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (ds, '%Y-%m-%d')
+  )
 );
 
 SELECT
@@ -224,8 +207,9 @@ The column used as your model's time column is not limited to being a text or da
 MODEL (
   name sushi.orders,
   dialect duckdb,
-  kind incremental,
-  time_column (di, '%Y%m%d')
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (di, '%Y%m%d')
+  ),
 );
 
 SELECT
@@ -368,7 +352,7 @@ class ModelMeta(PydanticModel):
             return v
 
         if isinstance(v, d.ModelKind):
-            name = v.this.lower()
+            name = v.this
             props = {prop.name: prop.args.get("value") for prop in v.expressions}
             klass: t.Type[ModelKind] = ModelKind
             if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
@@ -390,7 +374,7 @@ class ModelMeta(PydanticModel):
 
         name = v.name if isinstance(v, exp.Expression) else str(v)
         try:
-            return ModelKind(name=ModelKindName(name.lower()))
+            return ModelKind(name=ModelKindName(name))
         except ValueError:
             _raise_config_error(f"Invalid model kind '{name}'")
             raise
@@ -962,7 +946,7 @@ class Model(ModelMeta, frozen=True):
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
-        if add_incremental_filter and isinstance(self.kind, IncrementalByTimeRange):
+        if add_incremental_filter and self.kind.is_incremental_by_time_range:
             # expansion copies the query for us. if it doesn't occur, make sure to copy.
             if not expand:
                 query = query.copy()

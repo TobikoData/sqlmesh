@@ -7,7 +7,6 @@ from sqlglot import parse_one
 
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import IncrementalByTimeRange
 from sqlmesh.core.snapshot import Snapshot, fingerprint_from_model
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
@@ -17,7 +16,6 @@ def parent_model():
     return Model(
         name="parent.tbl",
         dialect="spark",
-        kind=IncrementalByTimeRange(),
         query=parse_one("SELECT 1, ds"),
     )
 
@@ -28,7 +26,6 @@ def model():
         name="name",
         owner="owner",
         dialect="spark",
-        kind=IncrementalByTimeRange(),
         cron="1 0 * * *",
         batch_size=30,
         start="2020-01-01",

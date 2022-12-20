@@ -233,7 +233,7 @@ def _create_parser(
         expressions = []
 
         while True:
-            key = self._parse_id_var(True)
+            key = self._parse_id_var(any_token=True)
 
             if not key:
                 break
@@ -245,23 +245,27 @@ def _create_parser(
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
-                id_var = self._parse_id_var(True).name.lower()
-                index = self._index
-                if id_var in (
-                    "incremental_by_time_range",
-                    "incremental_by_unique_key",
-                ) and self._match(TokenType.L_PAREN):
-                    self._retreat(index)
-                    props = self._parse_wrapped_csv(
-                        functools.partial(_parse_props, self)
-                    )
+                id_var = self._parse_id_var(any_token=True)
+                if not id_var:
+                    value = None
                 else:
-                    props = None
-                value = self.expression(
-                    ModelKind,
-                    this=id_var,
-                    expressions=props,
-                )
+                    id_var = id_var.name.lower()
+                    index = self._index
+                    if id_var in (
+                        "incremental_by_time_range",
+                        "incremental_by_unique_key",
+                    ) and self._match(TokenType.L_PAREN):
+                        self._retreat(index)
+                        props = self._parse_wrapped_csv(
+                            functools.partial(_parse_props, self)
+                        )
+                    else:
+                        props = None
+                    value = self.expression(
+                        ModelKind,
+                        this=id_var,
+                        expressions=props,
+                    )
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -295,7 +299,7 @@ def _model_kind_sql(self, expression: ModelKind) -> str:
     )
     if props:
         return "\n".join([f"{expression.this} (", props, ")"])
-    return f"{expression.this}"
+    return expression.name
 
 
 def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:

@@ -28,8 +28,7 @@ class Materialization(str, Enum):
 
     TABLE = "table"
     VIEW = "view"
-    INCREMENTAL_BY_TIME_RANGE = "incremental_by_time_range"
-    INCREMENTAL_BY_UNIQUE_KEY = "incremental_by_unique_key"
+    INCREMENTAL = "incremental"
     EPHERMAL = "ephemeral"
 
 
@@ -254,7 +253,7 @@ class ModelConfig(PydanticModel):
         return ".".join(part for part in (self.schema_, self.identifier) if part)
 
     @property
-    def model_kind(self) -> ModelKindName:
+    def model_kind_name(self) -> ModelKindName:
         """
         Get the sqlmesh ModelKind
 
@@ -266,9 +265,7 @@ class ModelConfig(PydanticModel):
             return ModelKindName.FULL
         if materialization == Materialization.VIEW:
             return ModelKindName.VIEW
-        if materialization == Materialization.INCREMENTAL_BY_TIME_RANGE:
-            return ModelKindName.INCREMENTAL_BY_TIME_RANGE
-        if materialization == Materialization.INCREMENTAL_BY_UNIQUE_KEY:
+        if materialization == Materialization.INCREMENTAL:
             return ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
         if materialization == Materialization.EPHERMAL:
             return ModelKindName.EMBEDDED
