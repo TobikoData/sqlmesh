@@ -7,7 +7,13 @@ from sqlglot.expressions import DataType
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.model_kind import ModelKind, ModelKindName
+from sqlmesh.core.model_kind import (
+    IncrementalByTimeRange,
+    IncrementalByUniqueKey,
+    ModelKind,
+    ModelKindName,
+    TimeColumn,
+)
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -207,7 +213,9 @@ def validate_query_change(
         (ModelKindName.FULL, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
     ],
 )
-def test_model_kind_change(from_: ModelKind, to: ModelKind, sushi_context: Context):
+def test_model_kind_change(
+    from_: ModelKindName, to: ModelKindName, sushi_context: Context
+):
     environment = "prod"
     incremental_snapshot = sushi_context.snapshots["sushi.items"].copy()
 
@@ -226,18 +234,18 @@ def test_model_kind_change(from_: ModelKind, to: ModelKind, sushi_context: Conte
     validate_model_kind_change(to, sushi_context, environment, logical=logical)
 
 
-def change_model_kind(context: Context, kind: ModelKind):
+def change_model_kind(context: Context, kind: ModelKindName):
     if kind in (ModelKindName.VIEW, ModelKindName.EMBEDDED, ModelKindName.FULL):
         context.upsert_model(
             "sushi.items",
             partitioned_by=None,
             audits={},
         )
-    context.upsert_model("sushi.items", kind=kind)
+    context.upsert_model("sushi.items", kind=ModelKind(name=kind))
 
 
 def validate_model_kind_change(
-    kind: ModelKind,
+    kind_name: ModelKindName,
     context: Context,
     environment: str,
     *,
@@ -250,6 +258,13 @@ def validate_model_kind_change(
         "sushi.customer_revenue_by_day",
         "sushi.top_waiters",
     ]
+    kind: ModelKind = ModelKind(name=kind_name)
+    if kind_name == "incremental_by_time_range":
+        kind = IncrementalByTimeRange(
+            time_column=TimeColumn(column="ds", format="%Y-%m-%d")
+        )
+    elif kind_name == "incremental_by_unique_key":
+        kind = IncrementalByUniqueKey(unique_key="id")
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)

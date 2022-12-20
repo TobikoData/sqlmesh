@@ -61,7 +61,7 @@ class ModelKind(PydanticModel):
 
     def to_expression(self, *args, **kwargs) -> d.ModelKind:
         return d.ModelKind(
-            this=self.name,
+            this=self.name.value,
         )
 
 
@@ -122,7 +122,7 @@ class IncrementalByTimeRange(ModelKind):
 
     def to_expression(self, dialect: str) -> d.ModelKind:
         return d.ModelKind(
-            this=self.name,
+            this=self.name.value,
             expressions=[
                 exp.Property(
                     this="time_column", value=self.time_column.to_expression(dialect)
