@@ -11,12 +11,12 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import Model, ModelKind, TimeColumn
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
-from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.dbt.render import render_jinja
 from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+from sqlmesh.utils.pydantic import PydanticModel
+
 
 def ensure_list(val: t.Any) -> t.List[t.Any]:
     return val if isinstance(val, list) else [val]
@@ -29,6 +29,7 @@ class Materialization(str, Enum):
     VIEW = "view"
     INCREMENTAL = "incremental"
     EPHERMAL = "ephemeral"
+
 
 class ModelConfig(PydanticModel):
     """
@@ -270,12 +271,21 @@ class ModelConfig(PydanticModel):
 
         raise ConfigError(f"{materialization.value} materialization not supported")
 
-class Models():
-    Scope = t.Tuple[str, ...]
+
+if t.TYPE_CHECKING:
+    Scope = t.Union[t.Tuple[()], t.Tuple[str, ...]]
     ScopedModelConfig = t.Dict[Scope, ModelConfig]
 
+
+class Models:
     @classmethod
-    def load(cls, project_root: Path, project_schema: str, project_config: ProjectConfig) -> t.Dict[str, ModelConfig]:
+    def load(
+        cls,
+        project_root: Path,
+        project_name: str,
+        project_schema: str,
+        project_config: t.Dict[str, t.Any],
+    ) -> t.Dict[str, ModelConfig]:
         """
         Loads the configuration for all models in the specified DBT project.
 
@@ -286,20 +296,20 @@ class Models():
         Returns:
             Dict with model name as the key and a tuple containing ModelConfig
             and relative path to model file from the project root.
-        """ 
+        """
         # Start with configs in the project file
         global_config = ModelConfig(schema=project_schema)
-        configs = cls._load_project_config(project_config.project_config, global_config)
-        
+        configs = cls._load_project_config(project_config, global_config)
+
         # Layer on configs in property files
         for filepath in project_root.glob("models/**/*.yml"):
-            scope = cls._scope_from_path(filepath, project_root, project_config.project_name)
+            scope = cls._scope_from_path(filepath, project_root, project_name)
             configs = cls._load_properties_config(filepath, scope, configs)
 
         # Layer on configs from the model file and create model configs
         model_configs = {}
         for filepath in project_root.glob("models/**/*.sql"):
-            scope = cls._scope_from_path(filepath, project_root, project_config.project_name)
+            scope = cls._scope_from_path(filepath, project_root, project_name)
             model_config = cls._load_model_config(filepath, scope, configs)
             if not model_config.identifier:
                 raise ConfigError(f"No identifier for {filepath.name}")
@@ -308,12 +318,14 @@ class Models():
         return model_configs
 
     @classmethod
-    def _load_project_config(cls, config: t.Dict[str, t.Any], global_config: ModelConfig) -> ScopedModelConfig:
+    def _load_project_config(
+        cls, config: t.Dict[str, t.Any], global_config: ModelConfig
+    ) -> ScopedModelConfig:
         """
         Builds ModelConfigs for each resource path specified in the project config file and
         stores them in _scoped_configs
         """
-        scoped_configs = {}
+        scoped_configs: ScopedModelConfig = {}
 
         model_data = config.get("models")
         if not model_data:
@@ -340,14 +352,16 @@ class Models():
         return scoped_configs
 
     @classmethod
-    def _load_properties_config(cls, filepath: Path, scope: Scope, configs: ScopedModelConfig) -> ScopedModelConfig:
+    def _load_properties_config(
+        cls, filepath: Path, scope: Scope, configs: ScopedModelConfig
+    ) -> ScopedModelConfig:
         """
         Loads model config within the specified properties file.
 
         Args:
             filepath: Path to the properties file
             configs: Model configs from the project file
-       
+
         Returns:
             Passed-in model configs updated with model configs found in the properties file
         """
@@ -364,12 +378,16 @@ class Models():
                 continue
 
             model_scope = (*scope, value["name"])
-            configs[model_scope] = cls._config_for_scope(scope, configs).update_with(fields)
+            configs[model_scope] = cls._config_for_scope(scope, configs).update_with(
+                fields
+            )
 
         return configs
 
     @classmethod
-    def _load_model_config(cls, filepath: Path, scope: Scope, configs: ScopedModelConfig) -> ModelConfig:
+    def _load_model_config(
+        cls, filepath: Path, scope: Scope, configs: ScopedModelConfig
+    ) -> ModelConfig:
         """
         Loads ModelConfig for the specified model file
 
@@ -384,7 +402,9 @@ class Models():
         with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
-        model_config = cls._config_for_scope(scope, configs).copy(update={"path": filepath})
+        model_config = cls._config_for_scope(scope, configs).copy(
+            update={"path": filepath}
+        )
 
         def config(*args, **kwargs):
             if args:
@@ -395,7 +415,7 @@ class Models():
 
         render_jinja(sql, {"config": config})
 
-        if not model_config.identifier:
+        if not model_config.identifier and scope:
             model_config.identifier = scope[-1]
 
         model_config.sql = cls._remove_config_jinja(sql)
@@ -445,4 +465,3 @@ class Models():
             The query without the config method calls
         """
         return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
-

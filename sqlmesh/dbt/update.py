@@ -5,6 +5,7 @@ from enum import Enum, auto
 
 from sqlmesh.utils.errors import ConfigError
 
+
 class UpdateStrategy(Enum):
     """Supported strategies for adding new config to existing config"""
 
