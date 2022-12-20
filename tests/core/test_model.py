@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.config import Config
@@ -10,7 +9,6 @@ from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
-from tests.utils.test_filesystem import create_temp_file
 
 
 def test_load(assert_exp_eq):
@@ -643,13 +641,12 @@ def test_python_model_deps() -> None:
     ).depends_on == {"foo", "bar.baz"}
 
 
-def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
-    models_dir = Path("models")
+def test_star_expansion(assert_exp_eq) -> None:
+    context = Context(config=Config())
 
-    create_temp_file(
-        tmpdir,
-        Path(models_dir, "db", "model1.sql"),
-        """
+    model1 = Model.load(
+        parse_model(
+            """
         MODEL (name db.model1, kind full);
 
         SELECT
@@ -667,28 +664,38 @@ def test_star_expansion(mocker: MockerFixture, tmpdir, assert_exp_eq) -> None:
                 (6, 1, '2020-01-06'),
                 (7, 1, '2020-01-07')
             ) AS t (id, item_id, ds)
-        """,
-    )
-    create_temp_file(
-        tmpdir,
-        Path(models_dir, "db", "model2.sql"),
         """
-        MODEL (name db.model2, kind full);
-
-        SELECT * FROM db.model1 AS model1
-		""",
-    )
-
-    context = Context(path=str(tmpdir), config=Config())
-
-    model3 = Model.load(
-        parse_model(
-            "MODEL(name db.model3, kind full); SELECT * FROM db.model2 AS model2"
         ),
         path=context.path,
         dialect=context.dialect,
     )
 
+    model2 = Model.load(
+        parse_model(
+            """
+        MODEL (name db.model2, kind full);
+
+        SELECT * FROM db.model1 AS model1
+		"""
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    model3 = Model.load(
+        parse_model(
+            """
+            MODEL(name db.model3, kind full);
+
+            SELECT * FROM db.model2 AS model2
+        """
+        ),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    context.upsert_model(model1)
+    context.upsert_model(model2)
     context.upsert_model(model3)
 
     assert_exp_eq(
