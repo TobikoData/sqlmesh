@@ -3,12 +3,11 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from ruamel.yaml import YAML
-
 from sqlmesh.dbt.database import DatabaseConfig
 from sqlmesh.dbt.models import ModelConfig, Models
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.yaml import yaml
 
 
 class ProjectConfig:
@@ -33,7 +32,7 @@ class ProjectConfig:
             )
 
         with project_config_path.open(encoding="utf-8") as file:
-            contents = YAML().load(file.read())
+            contents = yaml.load(file.read())
 
         project_name = contents.get("name")
         if not project_name:

@@ -6,7 +6,6 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, validator
-from ruamel.yaml import YAML
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
@@ -16,6 +15,7 @@ from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.yaml import yaml
 
 
 def ensure_list(val: t.Any) -> t.List[t.Any]:
@@ -366,7 +366,7 @@ class Models:
             Passed-in model configs updated with model configs found in the properties file
         """
         with filepath.open(encoding="utf-8") as file:
-            contents = YAML().load(file.read())
+            contents = yaml.load(file.read())
 
         model_data = contents.get("models")
         if not model_data:

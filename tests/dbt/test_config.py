@@ -57,7 +57,7 @@ def test_model_config():
     }
 
     model_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).models
-    assert set(model_configs.keys()) == expected_models
+    assert set(model_configs) == expected_models
 
     expected_config = {
         "materialized": Materialization.INCREMENTAL,

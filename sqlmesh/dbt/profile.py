@@ -3,10 +3,9 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from ruamel.yaml import YAML
-
 from sqlmesh.dbt.database import DatabaseConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.yaml import yaml
 
 
 class Profile:
@@ -44,7 +43,7 @@ class Profile:
         cls, path: Path, project: str, target: t.Optional[str]
     ) -> t.Dict[str, t.Any]:
         with path.open(encoding="utf-8") as file:
-            contents = YAML().load(file.read())
+            contents = yaml.load(file.read())
 
         project_data = contents.get(project)
         if not project_data:
