@@ -625,12 +625,7 @@ class Context(BaseContext):
         if not no_prompts:
             self.console.plan(plan, auto_apply)
         elif auto_apply:
-            if plan.uncategorized:
-                raise PlanError(
-                    "Can't auto-apply a plan with uncategorized changes. Enable prompts to proceed."
-                )
-            if plan.context_diff.has_differences:
-                self.apply(plan)
+            self.apply(plan)
 
         return plan
 
@@ -643,6 +638,10 @@ class Context(BaseContext):
         Args:
             plan: The plan to apply.
         """
+        if not plan.context_diff.has_differences:
+            return
+        if plan.uncategorized:
+            raise PlanError("Can't apply a plan with uncategorized changes.")
         self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
