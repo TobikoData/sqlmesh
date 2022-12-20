@@ -95,7 +95,6 @@ class Plan:
         self._dag = dag
         self._state_reader = state_reader
         self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
-        self._info_cache: t.Optional[InfoCache] = None
 
         for table in restate_from or []:
             if table in context_diff.snapshots:
@@ -109,20 +108,22 @@ class Plan:
 
             self.restatements.update(downstream)
 
+        self._info_cache: InfoCache = self._build_info_cache()
+
     @property
     def categorized(self) -> t.List[Snapshot]:
         """Returns the already categorized snapshots."""
-        return self.info_cache[0]
+        return self._info_cache[0]
 
     @property
     def uncategorized(self) -> t.List[Snapshot]:
         """Returns the uncategorized snapshots."""
-        return self.info_cache[1]
+        return self._info_cache[1]
 
     @property
     def indirectly_modified(self) -> SnapshotMapping:
         """Returns a mapping of snapshots to their indirectly modified downstream snapshots."""
-        return self.info_cache[2]
+        return self._info_cache[2]
 
     @property
     def start(self) -> TimeLike:
@@ -292,55 +293,52 @@ class Plan:
         ]
         return min(change_categories, key=lambda x: x.value)
 
-    @property
-    def info_cache(self) -> InfoCache:
-        """Returns the info cache of categorized, uncategorized snapshots."""
-        if self._info_cache is None:
-            queue = deque(self._dag.sorted())
-            snapshots = []
-            all_indirectly_modified = set()
+    def _build_info_cache(self) -> InfoCache:
+        """Builds the info cache of categorized, uncategorized snapshots."""
+        queue = deque(self._dag.sorted())
+        snapshots = []
+        all_indirectly_modified = set()
 
-            while queue:
-                model_name = queue.popleft()
+        while queue:
+            model_name = queue.popleft()
 
-                if model_name not in self.context_diff.snapshots:
-                    continue
+            if model_name not in self.context_diff.snapshots:
+                continue
 
-                snapshot = self.context_diff.snapshots[model_name]
+            snapshot = self.context_diff.snapshots[model_name]
 
-                if model_name in self.context_diff.modified_snapshots:
-                    if self.context_diff.directly_modified(model_name):
-                        snapshots.append(snapshot)
-                    else:
-                        all_indirectly_modified.add(model_name)
-
-                        # set to breaking if an indirect child has no directly modified parents
-                        # that need a decision. this can happen when a revert to a parent causes
-                        # an indirectly modified snapshot to be created because of a new parent
-                        if not snapshot.version and not any(
-                            self.context_diff.directly_modified(upstream)
-                            and not self.context_diff.snapshots[upstream].version
-                            for upstream in self._dag.upstream(model_name)
-                        ):
-                            snapshot.set_version()
-
-                elif model_name in self.context_diff.added:
-                    snapshot.set_version()
+            if model_name in self.context_diff.modified_snapshots:
+                if self.context_diff.directly_modified(model_name):
                     snapshots.append(snapshot)
+                else:
+                    all_indirectly_modified.add(model_name)
 
-            indirectly_modified: SnapshotMapping = defaultdict(set)
+                    # set to breaking if an indirect child has no directly modified parents
+                    # that need a decision. this can happen when a revert to a parent causes
+                    # an indirectly modified snapshot to be created because of a new parent
+                    if not snapshot.version and not any(
+                        self.context_diff.directly_modified(upstream)
+                        and not self.context_diff.snapshots[upstream].version
+                        for upstream in self._dag.upstream(model_name)
+                    ):
+                        snapshot.set_version()
 
-            for snapshot in snapshots:
-                for downstream in self._dag.downstream(snapshot.name):
-                    if downstream in all_indirectly_modified:
-                        indirectly_modified[snapshot.name].add(downstream)
+            elif model_name in self.context_diff.added:
+                snapshot.set_version()
+                snapshots.append(snapshot)
 
-            self._info_cache = (
-                [snapshot for snapshot in snapshots if snapshot.version],
-                [snapshot for snapshot in snapshots if not snapshot.version],
-                indirectly_modified,
-            )
-        return self._info_cache
+        indirectly_modified: SnapshotMapping = defaultdict(set)
+
+        for snapshot in snapshots:
+            for downstream in self._dag.downstream(snapshot.name):
+                if downstream in all_indirectly_modified:
+                    indirectly_modified[snapshot.name].add(downstream)
+
+        return (
+            [snapshot for snapshot in snapshots if snapshot.version],
+            [snapshot for snapshot in snapshots if not snapshot.version],
+            indirectly_modified,
+        )
 
 
 class PlanStatus(str, Enum):
