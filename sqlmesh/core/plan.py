@@ -50,7 +50,6 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 SnapshotMapping = t.Dict[str, t.Set[str]]
-InfoCache = t.Tuple[t.List[Snapshot], t.List[Snapshot], SnapshotMapping]
 
 
 class Plan:
@@ -108,22 +107,30 @@ class Plan:
 
             self.restatements.update(downstream)
 
-        self._info_cache: InfoCache = self._build_info_cache()
+        categorized_snapshots = self._categorize_snapshots()
+        self.added_and_directly_modified = categorized_snapshots[0]
+        self.indirectly_modified = categorized_snapshots[1]
+
+        self._categorized: t.Optional[t.List[Snapshot]] = None
+        self._uncategorized: t.Optional[t.List[Snapshot]] = None
 
     @property
     def categorized(self) -> t.List[Snapshot]:
         """Returns the already categorized snapshots."""
-        return self._info_cache[0]
+        if self._categorized is None:
+            self._categorized = [
+                s for s in self.added_and_directly_modified if s.version
+            ]
+        return self._categorized
 
     @property
     def uncategorized(self) -> t.List[Snapshot]:
         """Returns the uncategorized snapshots."""
-        return self._info_cache[1]
-
-    @property
-    def indirectly_modified(self) -> SnapshotMapping:
-        """Returns a mapping of snapshots to their indirectly modified downstream snapshots."""
-        return self._info_cache[2]
+        if self._uncategorized is None:
+            self._uncategorized = [
+                s for s in self.added_and_directly_modified if not s.version
+            ]
+        return self._uncategorized
 
     @property
     def start(self) -> TimeLike:
@@ -244,12 +251,16 @@ class Plan:
 
             # If any other snapshot specified breaking this child, then that child
             # needs to be backfilled as a part of the plan.
-            for upstream in self.uncategorized:
+            for upstream in self.added_and_directly_modified:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
                         child_snapshot.set_version()
                         break
+
+        # Invalidate caches.
+        self._categorized = None
+        self._uncategorized = None
 
     def snapshot_change_category(self, snapshot: Snapshot) -> SnapshotChangeCategory:
         """Returns the SnapshotChangeCategory for the specified snapshot within this plan.
@@ -293,10 +304,17 @@ class Plan:
         ]
         return min(change_categories, key=lambda x: x.value)
 
-    def _build_info_cache(self) -> InfoCache:
-        """Builds the info cache of categorized, uncategorized snapshots."""
+    def _categorize_snapshots(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
+        """Automatically categorizes snapshots that can be automatically categorized and
+        returns a list of added and directly modified snapshots as well as the mapping of
+        indirectly modified snapshots.
+
+        Returns:
+            The tuple in which the first element contains a list of added and directly modified
+            snapshots while the second element contains a mapping of indirectly modified snapshots.
+        """
         queue = deque(self._dag.sorted())
-        snapshots = []
+        added_and_directly_modified = []
         all_indirectly_modified = set()
 
         while queue:
@@ -309,7 +327,7 @@ class Plan:
 
             if model_name in self.context_diff.modified_snapshots:
                 if self.context_diff.directly_modified(model_name):
-                    snapshots.append(snapshot)
+                    added_and_directly_modified.append(snapshot)
                 else:
                     all_indirectly_modified.add(model_name)
 
@@ -325,18 +343,17 @@ class Plan:
 
             elif model_name in self.context_diff.added:
                 snapshot.set_version()
-                snapshots.append(snapshot)
+                added_and_directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
 
-        for snapshot in snapshots:
+        for snapshot in added_and_directly_modified:
             for downstream in self._dag.downstream(snapshot.name):
                 if downstream in all_indirectly_modified:
                     indirectly_modified[snapshot.name].add(downstream)
 
         return (
-            [snapshot for snapshot in snapshots if snapshot.version],
-            [snapshot for snapshot in snapshots if not snapshot.version],
+            added_and_directly_modified,
             indirectly_modified,
         )
 

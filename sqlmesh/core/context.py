@@ -649,7 +649,7 @@ class Context(BaseContext):
         """
         if not plan.context_diff.has_differences:
             return
-        if any([s.version is None for s in plan.snapshots]):
+        if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
         self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
 
