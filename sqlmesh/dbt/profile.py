@@ -3,27 +3,47 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.database import DatabaseConfig
+from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import yaml
 
 
 class Profile:
+    """
+    A class to read DBT profiles and obtain the project's target data warehouse configuration
+    """
+
     PROFILE_FILE = "profiles.yml"
 
-    def __init__(self, database: DatabaseConfig):
-        self.database = database
+    def __init__(self, datawarehouse_config: DataWarehouseConfig):
+        """
+        Args:
+            datwarehouse_config: The data warehouse configuration for the project's target
+        """
+        self.datawarehouse_config = datawarehouse_config
 
     @classmethod
     def load(
         cls, project_root: Path, project_name: str, *, target: t.Optional[str] = None
     ) -> Profile:
+        """
+        Loads the profile for the specified project
+
+        Args:
+            project_root: Path to the root of the DBT project
+            project_name: Name of the DBT project specified in the project yaml
+            target: The project's profile target to load. If not specified,
+                    the target defined in the project's profile will be used.
+
+        Returns:
+            The profile configuration for the specified project and target
+        """
         profile_filepath = cls._find_profile(project_root)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found")
 
         profile_data = cls._read_profile(profile_filepath, project_name, target)
-        return Profile(DatabaseConfig.parse(profile_data))
+        return Profile(DataWarehouseConfig.load(profile_data))
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
