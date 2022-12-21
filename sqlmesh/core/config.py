@@ -244,6 +244,7 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
                     scopes=["https://www.googleapis.com/auth/cloud-platform"]
                 )[0]
             )
+            self._session.headers.update({"Content-Type": "application/json"})
         return self._session
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
