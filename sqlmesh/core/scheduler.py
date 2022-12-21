@@ -66,6 +66,7 @@ class Scheduler:
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
+        is_dev: bool = False,
         **kwargs,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -75,16 +76,18 @@ class Scheduler:
             start: The start datetime to render.
             end: The end datetime to render.
             latest: The latest datetime to use for non-incremental queries.
+            is_dev: Indicates whether the evaluation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
         validate_date_range(start, end)
 
         mapping = {
             **{
-                p_sid.name: self.snapshots[p_sid].table_name
+                p_sid.name: self.snapshots[p_sid].table_name(is_dev=is_dev)
                 for p_sid in snapshot.parents
             },
-            snapshot.name: snapshot.table_name,
+            snapshot.name: snapshot.table_name(is_dev=is_dev),
         }
 
         self.snapshot_evaluator.evaluate(
@@ -93,6 +96,7 @@ class Scheduler:
             end,
             latest,
             mapping=mapping,
+            is_dev=is_dev,
             **kwargs,
         )
         self.snapshot_evaluator.audit(
@@ -103,7 +107,7 @@ class Scheduler:
             mapping=mapping,
             **kwargs,
         )
-        self.state_sync.add_interval(snapshot.snapshot_id, start, end)
+        self.state_sync.add_interval(snapshot.snapshot_id, start, end, is_dev=is_dev)
         self.console.update_snapshot_progress(snapshot.name, 1)
 
     def run(
@@ -111,6 +115,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
     ) -> None:
         """Concurrently runs all snapshots in topological order.
 
@@ -118,6 +123,8 @@ class Scheduler:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
+            is_dev: Indicates whether the evaluation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
         """
         validate_date_range(start, end)
 
@@ -153,7 +160,7 @@ class Scheduler:
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
             sid, (start, end) = node
-            self.evaluate(self.snapshots[sid], start, end, latest)
+            self.evaluate(self.snapshots[sid], start, end, latest, is_dev=is_dev)
 
         try:
             with self.snapshot_evaluator.concurrent_context():

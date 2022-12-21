@@ -64,6 +64,7 @@ class SnapshotEvaluator:
         latest: TimeLike,
         mapping: t.Dict[str, str],
         limit: int = 0,
+        is_dev: bool = False,
         **kwargs,
     ) -> t.Optional[DF]:
         """Evaluate a snapshot, creating its schema and table if it doesn't exist and then inserting it.
@@ -76,6 +77,8 @@ class SnapshotEvaluator:
             mapping: Mapping of model references to physical snapshots.
             limit: If limit is >= 0, the query will not be persisted but evaluated and returned
                 as a dataframe.
+            is_dev: Indicates whether the evaluation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
@@ -84,7 +87,7 @@ class SnapshotEvaluator:
 
         model = snapshot.model
         columns_to_types = model.columns_to_types
-        table_name = snapshot.table_name
+        table_name = snapshot.table_name(is_dev=is_dev)
 
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if snapshot.is_view_kind:
@@ -162,7 +165,10 @@ class SnapshotEvaluator:
             return None
 
     def promote(
-        self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
+        self,
+        target_snapshots: t.Iterable[SnapshotInfoLike],
+        environment: str,
+        is_dev: bool = False,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
         view with a physical table associated with the given snapshot.
@@ -170,11 +176,13 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Snapshots to promote.
             environment: The target environment.
+            is_dev: Indicates whether the promotion happens in the development mode and temporary
+                tables / table clones should be used where applicable.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment),
+                lambda s: self._promote_snapshot(s, environment, is_dev),
                 self.ddl_concurrent_tasks,
             )
 
@@ -313,17 +321,22 @@ class SnapshotEvaluator:
             return
 
         self.adapter.create_schema(snapshot.physical_schema)
-        table_name = snapshot.table_name
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+        # If a snapshot reuses an existing version we assume that the table for that version
+        # has already been created, so we only need to create a temporary table or a clone.
+        is_dev = not snapshot.is_new_version
+        table_name = snapshot.table_name(is_dev=is_dev)
+
+        parent_tables_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid].table_name(is_dev=is_dev)
+            for p_sid in snapshot.parents
         }
 
         if snapshot.is_view_kind:
             logger.info("Creating view '%s'", table_name)
             self.adapter.create_view(
                 table_name,
-                snapshot.model.render_query(snapshots=parent_snapshots_by_name),
+                snapshot.model.render_query(mapping=parent_tables_by_name),
             )
         else:
             logger.info("Creating table '%s'", table_name)
@@ -331,7 +344,7 @@ class SnapshotEvaluator:
                 table_name,
                 query_or_columns_to_types=snapshot.model.columns_to_types
                 if snapshot.model.annotated
-                else snapshot.model.ctas_query(parent_snapshots_by_name),
+                else snapshot.model.ctas_query(parent_tables_by_name),
                 storage_format=snapshot.model.storage_format,
                 partitioned_by=snapshot.model.partitioned_by,
             )
@@ -342,11 +355,12 @@ class SnapshotEvaluator:
         if not snapshot.is_materialized:
             return
 
-        tmp_table_name = f"{snapshot.table_name}__tmp__{snapshot.fingerprint}"
-        target_table_name = snapshot.table_name
+        tmp_table_name = f"{snapshot.table_name()}__tmp__{snapshot.fingerprint}"
+        target_table_name = snapshot.table_name()
 
-        parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+        parent_tables_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid].table_name()
+            for p_sid in snapshot.parents
         }
 
         logger.info("Creating a temporary table '%s'", tmp_table_name)
@@ -354,7 +368,7 @@ class SnapshotEvaluator:
             tmp_table_name,
             query_or_columns_to_types=snapshot.model.columns_to_types
             if snapshot.model.annotated
-            else snapshot.model.ctas_query(parent_snapshots_by_name),
+            else snapshot.model.ctas_query(parent_tables_by_name),
             storage_format=snapshot.model.storage_format,
             partitioned_by=snapshot.model.partitioned_by,
         )
@@ -383,14 +397,16 @@ class SnapshotEvaluator:
         logger.info("Dropping the temporary table '%s'", tmp_table_name)
         self.adapter.drop_table(tmp_table_name)
 
-    def _promote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
+    def _promote_snapshot(
+        self, snapshot: SnapshotInfoLike, environment: str, is_dev: bool
+    ) -> None:
         qualified_view_name = snapshot.qualified_view_name
         schema = qualified_view_name.schema_for_environment(environment=environment)
         if schema is not None:
             self.adapter.create_schema(schema)
 
         view_name = qualified_view_name.for_environment(environment=environment)
-        table_name = snapshot.table_name
+        table_name = snapshot.table_name()  # FIXME: support promotion of dev tables.
         if self.adapter.table_exists(table_name):
             logger.info(
                 "Updating view '%s' to point at table '%s'", view_name, table_name
@@ -410,11 +426,15 @@ class SnapshotEvaluator:
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
-        table_name = snapshot.table_name
-        if self.adapter.table_exists(table_name):
-            try:
-                self.adapter.drop_table(table_name)
-                logger.info("Dropped table '%s'", table_name)
-            except Exception:
-                self.adapter.drop_view(table_name)
-                logger.info("Dropped view '%s'", table_name)
+        table_names = [snapshot.table_name()]
+        if snapshot.version != snapshot.fingerprint:
+            table_names.append(snapshot.table_name(is_dev=True))
+
+        for table_name in table_names:
+            if self.adapter.table_exists(table_name):
+                try:
+                    self.adapter.drop_table(table_name)
+                    logger.info("Dropped table '%s'", table_name)
+                except Exception:
+                    self.adapter.drop_view(table_name)
+                    logger.info("Dropped view '%s'", table_name)

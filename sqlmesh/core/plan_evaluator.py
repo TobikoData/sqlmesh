@@ -16,6 +16,7 @@ Refer to `sqlmesh.core.plan`.
 import abc
 import typing as t
 
+from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan.definition import Plan
@@ -43,6 +44,10 @@ class PlanEvaluator(abc.ABC):
         Args:
             plan: The plan to evaluate.
         """
+
+    def _is_dev_plan(self, plan: Plan) -> bool:
+        """Returns True if the given plan is for development purposes."""
+        return plan.environment.name != c.PROD
 
 
 class BuiltInPlanEvaluator(PlanEvaluator):
@@ -80,7 +85,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 max_workers=self.backfill_concurrent_tasks,
                 console=self.console,
             )
-            scheduler.run(plan.start, plan.end)
+            scheduler.run(plan.start, plan.end, is_dev=self._is_dev_plan(plan))
 
         self._promote(plan)
 
@@ -127,6 +132,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.snapshot_evaluator.promote(
             added,
             environment=environment.name,
+            is_dev=self._is_dev_plan(plan),
         )
         self.snapshot_evaluator.demote(
             removed,

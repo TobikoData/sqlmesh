@@ -148,10 +148,14 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
 
-    @property
-    def table_name(self) -> str:
+    def table_name(self, is_dev: bool = False) -> str:
         """Returns the physical location of this snapshot."""
-        return table_name(self.physical_schema, self.name, self.version)
+        return table_name(
+            self.physical_schema,
+            self.name,
+            self.version if not is_dev else self.fingerprint,
+            is_dev=is_dev and self.version != self.fingerprint,
+        )
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -457,14 +461,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    @property
-    def table_name(self) -> str:
+    def table_name(self, is_dev: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot."""
         if not self.version:
             raise SQLMeshError(
                 f"Snapshot {self.snapshot_id} has not been versioned yet."
             )
-        return table_name(self.physical_schema, self.name, self.version)
+        return table_name(
+            self.physical_schema,
+            self.name,
+            self.version if not is_dev else self.fingerprint,
+            is_dev=is_dev and self.version != self.fingerprint,
+        )
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -543,8 +551,11 @@ SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 
 
-def table_name(physical_schema: str, name: str, version: str) -> str:
-    return f"{physical_schema}.{name.replace('.', '__')}__{version}"
+def table_name(
+    physical_schema: str, name: str, version: str, is_dev: bool = False
+) -> str:
+    temp_suffx = "__temp" if is_dev else ""
+    return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
 
 
 def fingerprint_from_model(

@@ -27,11 +27,13 @@ class EvaluateCommandPayload(PydanticModel):
     start: TimeLike
     end: TimeLike
     latest: TimeLike
+    is_dev: bool
 
 
 class PromoteCommandPayload(PydanticModel):
     snapshots: t.List[SnapshotTableInfo]
     environment: str
+    is_dev: bool
 
 
 class DemoteCommandPayload(PydanticModel):
@@ -59,6 +61,7 @@ def evaluate(
         command_payload.end,
         command_payload.latest,
         mapping=command_payload.table_mapping,
+        is_dev=command_payload.is_dev,
     )
     evaluator.audit(
         snapshot=command_payload.snapshot,
@@ -74,7 +77,11 @@ def promote(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = PromoteCommandPayload.parse_raw(command_payload)
-    evaluator.promote(command_payload.snapshots, command_payload.environment)
+    evaluator.promote(
+        command_payload.snapshots,
+        command_payload.environment,
+        is_dev=command_payload.is_dev,
+    )
 
 
 def demote(

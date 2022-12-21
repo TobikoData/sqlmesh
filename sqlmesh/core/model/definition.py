@@ -388,7 +388,7 @@ class Model(ModelMeta, frozen=True):
 
         snapshots = snapshots or {}
         mapping = mapping or {
-            name: snapshot.table_name
+            name: snapshot.table_name()
             for name, snapshot in snapshots.items()
             if snapshot.version and not snapshot.is_embedded_kind
         }
@@ -489,7 +489,7 @@ class Model(ModelMeta, frozen=True):
 
         return query
 
-    def ctas_query(self, snapshots: t.Dict[str, Snapshot]) -> exp.Subqueryable:
+    def ctas_query(self, mapping: t.Dict[str, str]) -> exp.Subqueryable:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -497,11 +497,11 @@ class Model(ModelMeta, frozen=True):
         SELECTS and hopefully the optimizer is smart enough to not do anything.
 
         Args:
-            snapshots: All upstream snapshots of this model so queries can be expanded.
+            mapping: Mapping for all upstream models to their physical tables.
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(snapshots=snapshots, expand=snapshots)
+        query = self._render_query(mapping=mapping, expand=mapping)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)

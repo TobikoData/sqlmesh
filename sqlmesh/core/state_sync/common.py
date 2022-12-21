@@ -150,8 +150,16 @@ class CommonStateSyncMixin(StateSync):
         return expired_snapshots
 
     def add_interval(
-        self, snapshot_id: SnapshotIdLike, start: TimeLike, end: TimeLike
+        self,
+        snapshot_id: SnapshotIdLike,
+        start: TimeLike,
+        end: TimeLike,
+        is_dev: bool = False,
     ) -> None:
+        if is_dev:
+            # FIXME: add support for dev intervals.
+            return
+
         snapshot_id = snapshot_id.snapshot_id
         logger.info("Adding interval for snapshot %s", snapshot_id)
 

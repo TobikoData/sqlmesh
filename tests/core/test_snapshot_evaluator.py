@@ -50,7 +50,9 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         ),
     )
 
-    snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
+    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot.version = snapshot.fingerprint
+
     evaluator.create([snapshot], {})
     evaluator.evaluate(
         snapshot,
@@ -60,12 +62,14 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         mapping={},
     )
 
-    assert adapter_mock.create_schema.mock_calls == [
-        call("physical_schema"),
-    ]
+    adapter_mock.create_schema.assert_has_calls(
+        [
+            call("physical_schema"),
+        ]
+    )
 
     adapter_mock.create_table.assert_called_once_with(
-        "physical_schema.test_schema__test_model__1",
+        snapshot.table_name(),
         query_or_columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
@@ -152,7 +156,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     )
 
     adapter_mock.alter_table.assert_called_once_with(
-        snapshot.table_name,
+        snapshot.table_name(),
         {"a": "INT"},
         ["b"],
     )

@@ -443,7 +443,7 @@ class Context(BaseContext):
         If a snapshot has not been versioned yet, its view name will be returned.
         """
         return {
-            name: snapshot.table_name
+            name: snapshot.table_name()
             if snapshot.version
             else snapshot.qualified_view_name.for_environment(c.PROD)
             for name, snapshot in self.snapshots.items()
