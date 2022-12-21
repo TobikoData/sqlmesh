@@ -1,4 +1,5 @@
 import random
+import typing as t
 from datetime import datetime
 
 import pandas as pd
@@ -34,9 +35,7 @@ def execute(
     end: datetime,
     latest: datetime,
     **kwargs,
-) -> pd.DataFrame:
-    dfs = []
-
+) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")
     items_table = context.table(ITEMS)
 
@@ -63,20 +62,14 @@ SELECT *
         if not isinstance(items, pd.DataFrame):
             items = items.toPandas()
 
-        order_items = []
+        for order_id in orders["id"]:
+            n = random.randint(1, 5)
 
-        for order in orders.to_dict(orient="records"):
-            for item in items.sample(n=random.randint(1, 5)).to_dict(orient="records"):
-                order_items.append(
-                    {
-                        "order_id": order["id"],
-                        "item_id": item["id"],
-                        "quantity": random.randint(1, 10),
-                        "ds": to_ds(dt),
-                    }
-                )
-        dfs.append(
-            pd.DataFrame(order_items).reset_index().rename(columns={"index": "id"})
-        )
-
-    return pd.concat(dfs)
+            yield pd.DataFrame(
+                {
+                    "order_id": order_id,
+                    "item_id": items.sample(n=n)["id"],
+                    "quantity": np.random.randint(1, 10, n),
+                    "ds": to_ds(dt),
+                }
+            ).reset_index().rename(columns={"index": "id"})

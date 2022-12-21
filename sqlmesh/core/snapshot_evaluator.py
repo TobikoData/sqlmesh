@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from sqlglot import exp, select
 
 from sqlmesh.core.audit import AuditResult
-from sqlmesh.core.engine_adapter import DF, EngineAdapter
+from sqlmesh.core.engine_adapter import DF, EngineAdapter, QueryOrDF
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
@@ -83,60 +83,72 @@ class SnapshotEvaluator:
             return None
 
         model = snapshot.model
+        columns = model.columns
+        table_name = snapshot.table_name
+
+        def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
+            if snapshot.is_view_kind:
+                if index > 0:
+                    raise ConfigError("Cannot batch view creation.")
+                logger.info("Replacing view '%s'", table_name)
+                self.adapter.create_view(table_name, query_or_df, columns)
+            elif index > 0:
+                self.adapter.insert_append(table_name, query_or_df, columns=columns)
+            elif snapshot.is_full_kind:
+                self.adapter.replace_query(table_name, query_or_df, columns)
+            else:
+                logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
+                if self.adapter.supports_partitions:
+                    self.adapter.insert_overwrite(
+                        table_name, query_or_df, columns=columns
+                    )
+                elif snapshot.is_incremental_kind:
+                    # A model's time_column could be None but it shouldn't be for an incremental model
+                    assert model.time_column
+                    where = exp.Between(
+                        this=exp.to_column(model.time_column.column),
+                        low=model.convert_to_time_column(start),
+                        high=model.convert_to_time_column(end),
+                    )
+                    self.adapter.delete_insert_query(
+                        table_name, query_or_df, where=where, columns=columns
+                    )
+                else:
+                    self.adapter.insert_append(table_name, query_or_df, columns=columns)
 
         for sql_statement in model.sql_statements:
             self.adapter.execute(sql_statement)
 
         if model.is_sql:
-            query_or_df = model.render_query(
+            query = model.render_query(
                 start=start,
                 end=end,
                 latest=latest,
                 mapping=mapping,
                 **kwargs,
             )
-        else:
-            from sqlmesh.core.context import ExecutionContext
 
-            query_or_df = model.exec_python(
-                ExecutionContext(self.adapter, mapping),
-                start=start,
-                end=end,
-                latest=latest,
-                **kwargs,
-            )
+            if limit > 0:
+                return self.adapter.fetchdf(query.limit(limit))
+            apply(query)
+            return None
 
-        if limit > 0:
-            if isinstance(query_or_df, exp.Expression):
-                query_or_df = self.adapter.fetchdf(query_or_df.limit(limit))
-            return query_or_df.head(limit)
+        from sqlmesh.core.context import ExecutionContext
 
-        table_name = snapshot.table_name
-
-        if snapshot.is_view_kind:
-            logger.info("Replacing view '%s'", table_name)
-            self.adapter.create_view(table_name, query_or_df, model.columns)
-        elif snapshot.is_full_kind:
-            self.adapter.replace_query(table_name, query_or_df, model.columns)
-        else:
-            logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
-            columns = model.columns
-            if self.adapter.supports_partitions:
-                self.adapter.insert_overwrite(table_name, query_or_df, columns=columns)
-            elif snapshot.is_incremental_kind:
-                # A model's time_column could be None but it shouldn't be for an incremental model
-                assert model.time_column
-                where = exp.Between(
-                    this=exp.to_column(model.time_column.column),
-                    low=model.convert_to_time_column(start),
-                    high=model.convert_to_time_column(end),
+        with self.adapter.transaction():
+            for index, df in enumerate(
+                model.exec_python(
+                    ExecutionContext(self.adapter, mapping),
+                    start=start,
+                    end=end,
+                    latest=latest,
+                    **kwargs,
                 )
-                self.adapter.delete_insert_query(
-                    table_name, query_or_df, where=where, columns=columns
-                )
-            else:
-                self.adapter.insert_append(table_name, query_or_df, columns=columns)
-        return None
+            ):
+                if limit > 0:
+                    return df.head(limit)  # type: ignore
+                apply(df, index)
+            return None
 
     def promote(
         self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
