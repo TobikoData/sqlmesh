@@ -410,7 +410,7 @@ class EngineAdapter:
     @contextlib.contextmanager
     def transaction(self) -> t.Generator[None, None, None]:
         """A transaction context manager."""
-        if self._transaction:
+        if self._transaction or not self.supports_transactions:
             yield
             return
         self._transaction = True
@@ -429,6 +429,11 @@ class EngineAdapter:
     def supports_partitions(self) -> bool:
         """Whether or not the engine adapter supports partitions."""
         return self.dialect in ("hive", "spark")
+
+    @property
+    def supports_transactions(self) -> bool:
+        """Whether or not the engine adapter supports transactions."""
+        return self.dialect not in ("hive", "spark")
 
     def execute(self, sql: t.Union[str, exp.Expression]) -> None:
         """Execute a sql query."""
