@@ -42,7 +42,7 @@ class ModelConfig(PydanticModel):
     Args:
         path: The file path of the model.
         alias: Relation identifier for this model instead of the model filename
-        cluster_by: Field(s) to use for clustering in databases that support clustering
+        cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         database: Database the model is stored in
         docs: Documentation specific configuration
         enabled: When false, the model is ignored
@@ -284,22 +284,23 @@ class Models:
         project_root: Path,
         project_name: str,
         project_schema: str,
-        project_config: t.Dict[str, t.Any],
+        project_raw_config: t.Dict[str, t.Any],
     ) -> t.Dict[str, ModelConfig]:
         """
-        Loads the configuration for all models in the specified DBT project.
+        Loads the configuration of all models within the specified DBT project.
 
         Args:
-            project_root: Relative or absolute path to the DBT project
-            schema: The database schema
+            project_root: Path to the root directory of the DBT project
+            project_name: Name of the DBT project as defined in the project yaml
+            project_schema: The target database schema
+            project_raw_config: The raw yaml from the project yaml file
 
         Returns:
-            Dict with model name as the key and a tuple containing ModelConfig
-            and relative path to model file from the project root.
+            Dictionary of model names to model configuration
         """
         # Start with configs in the project file
         global_config = ModelConfig(schema=project_schema)
-        configs = cls._load_project_config(project_config, global_config)
+        configs = cls._load_project_config(project_raw_config, global_config)
 
         # Layer on configs in property files
         for filepath in project_root.glob("models/**/*.yml"):
@@ -321,10 +322,6 @@ class Models:
     def _load_project_config(
         cls, config: t.Dict[str, t.Any], global_config: ModelConfig
     ) -> ScopedModelConfig:
-        """
-        Builds ModelConfigs for each resource path specified in the project config file and
-        stores them in _scoped_configs
-        """
         scoped_configs: ScopedModelConfig = {}
 
         model_data = config.get("models")
@@ -355,16 +352,6 @@ class Models:
     def _load_properties_config(
         cls, filepath: Path, scope: Scope, configs: ScopedModelConfig
     ) -> ScopedModelConfig:
-        """
-        Loads model config within the specified properties file.
-
-        Args:
-            filepath: Path to the properties file
-            configs: Model configs from the project file
-
-        Returns:
-            Passed-in model configs updated with model configs found in the properties file
-        """
         with filepath.open(encoding="utf-8") as file:
             contents = yaml.load(file.read())
 
@@ -388,17 +375,6 @@ class Models:
     def _load_model_config(
         cls, filepath: Path, scope: Scope, configs: ScopedModelConfig
     ) -> ModelConfig:
-        """
-        Loads ModelConfig for the specified model file
-
-        Args:
-            filepath: Path to the model file
-            scope: The project scope for the model
-            configs: The scoped config from the project and properties files
-
-        Returns:
-            ModelConfig for the specified model file
-        """
         with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
@@ -425,16 +401,12 @@ class Models:
     @classmethod
     def _scope_from_path(cls, path: Path, root_path: Path, project_name: str) -> Scope:
         """
-        Extract resource scope from path
-
-        Args:
-            path: The path
-
-        Returns:
-            tuple containing the scope of the specified path
+        DBT rolls-up configuration based on the project name and the directory structure.
+        Scope mimics this structure, building a tuple containing the project name and
+        directories from project root to the file, omitting the "models" directory and
+        filename if a properties file.
         """
         path_from_root = path.relative_to(root_path)
-        # models/ and file are not included in the scope
         scope = (project_name, *path_from_root.parts[1:-1])
         if path.match("*.sql"):
             scope = (*scope, path_from_root.stem)
@@ -442,26 +414,8 @@ class Models:
 
     @classmethod
     def _config_for_scope(cls, scope: Scope, configs: ScopedModelConfig) -> ModelConfig:
-        """
-        Gets the current config for the specified scope
-
-        Args:
-            scope: The scope
-
-        Returns:
-            The current config for the specified scope
-        """
         return configs.get(scope) or cls._config_for_scope(scope[0:-1], configs)
 
     @classmethod
     def _remove_config_jinja(cls, query: str) -> str:
-        """
-        Removes jinja for config method calls from a query
-
-        args:
-            query: The query
-
-        Returns:
-            The query without the config method calls
-        """
         return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
