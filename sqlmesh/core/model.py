@@ -1138,11 +1138,10 @@ class Model(ModelMeta, frozen=True):
 
                     if pyspark and isinstance(df, pyspark.sql.DataFrame):
                         df = df.where(
-                            f"""
-                        {self.time_column.column} BETWEEN
-                        {self.convert_to_time_column(start).sql("spark")} AND
-                        {self.convert_to_time_column(end).sql("spark")}
-                        """
+                            pyspark.sql.functions.col(self.time_column).between(
+                                self.convert_to_time_column(start).sql("spark"),
+                                self.convert_to_time_column(end).sql("spark"),
+                            )
                         )
                     else:
                         if self.time_column.format:
