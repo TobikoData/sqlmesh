@@ -1138,7 +1138,7 @@ class Model(ModelMeta, frozen=True):
 
                     if pyspark and isinstance(df, pyspark.sql.DataFrame):
                         df = df.where(
-                            pyspark.sql.functions.col(self.time_column).between(
+                            pyspark.sql.functions.col(self.time_column.column).between(
                                 self.convert_to_time_column(start).sql("spark"),
                                 self.convert_to_time_column(end).sql("spark"),
                             )
