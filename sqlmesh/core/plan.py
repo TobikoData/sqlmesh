@@ -153,6 +153,11 @@ class Plan:
         self._missing_intervals = None
 
     @property
+    def is_unbounded_end(self) -> bool:
+        """Indicates whether this plan has an unbounded end."""
+        return not self._end
+
+    @property
     def requires_backfill(self) -> bool:
         return not self.skip_backfill and bool(self.missing_intervals)
 
