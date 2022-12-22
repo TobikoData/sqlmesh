@@ -3,8 +3,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import ModelKind, ModelKindName
+from sqlmesh.core.model import Model, ModelKind, ModelKindName
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.plan_evaluator import AirflowPlanEvaluator, BuiltInPlanEvaluator
 from sqlmesh.schedulers.airflow import common as airflow_common
