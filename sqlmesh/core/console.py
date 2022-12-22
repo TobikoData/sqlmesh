@@ -17,7 +17,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import to_date
+from sqlmesh.utils.date import now, to_date
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -231,8 +231,13 @@ class TerminalConsole(Console):
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
         """
+        unbounded_end = (
+            plan.context_diff.environment == c.PROD and plan.is_unbounded_end
+        )
         self._prompt_categorize(plan, auto_apply)
-        self._show_options_after_categorization(plan, auto_apply)
+        self._show_options_after_categorization(
+            plan, auto_apply, unbounded_end=unbounded_end
+        )
 
     def _show_options_after_categorization(
         self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
@@ -538,6 +543,8 @@ class NotebookMagicConsole(TerminalConsole):
             checked = change["new"]
             if checked:
                 plan.end = None
+            else:
+                plan.end = now()
             self._show_options_after_categorization(
                 plan, auto_apply, unbounded_end=checked
             )
@@ -552,11 +559,14 @@ class NotebookMagicConsole(TerminalConsole):
             ),
         )
 
-        unbounded_end_date_widget = (
-            [_checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)]
-            if plan.environment.name == c.PROD
-            else []
-        )
+        if plan.environment.name == c.PROD:
+            unbounded_end_date_widget = [
+                _checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)
+            ]
+        else:
+            unbounded_end_date_widget = []
+            if plan.is_unbounded_end:
+                plan.end = now()
 
         add_to_layout_widget(
             prompt,
