@@ -805,9 +805,9 @@ class Context(BaseContext):
     ) -> Config:
         if isinstance(config, Config):
             return config
-        if not config and not config_module:
+        if not config_module:
             raise ConfigError(
-                "Both `config` and `config_module` need to be specified if not using a Config object."
+                "`config_module` must to be specified if not using a Config object."
             )
         config = config or "config"
         try:
