@@ -11,7 +11,6 @@ from astor import to_source
 from jinja2 import Environment
 from pydantic import Field, validator
 from sqlglot import exp, maybe_parse, parse_one
-from sqlglot.helper import split_num_words
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
