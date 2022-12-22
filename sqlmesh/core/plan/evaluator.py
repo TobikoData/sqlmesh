@@ -24,6 +24,7 @@ from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
@@ -147,6 +148,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
+        users: t.Optional[t.List[User]] = None,
     ):
         self.airflow_client = airflow_client
         self.blocking = blocking
@@ -157,6 +159,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
         self.notification_targets = notification_targets or []
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
+        self.users = users or []
 
     def evaluate(self, plan: Plan) -> None:
         environment = plan.environment
