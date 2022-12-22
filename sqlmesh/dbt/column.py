@@ -4,12 +4,11 @@ import typing as t
 
 from pydantic import validator
 
-from sqlmesh.dbt.common import parse_meta
+from sqlmesh.dbt.common import BaseConfig, parse_meta
 from sqlmesh.utils.datatype import ensure_bool, ensure_list
-from sqlmesh.utils.pydantic import PydanticModel
 
 
-class ColumnConfig(PydanticModel):
+class ColumnConfig(BaseConfig):
     """
     Column configuration for a DBT project
 

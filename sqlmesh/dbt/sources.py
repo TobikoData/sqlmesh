@@ -5,13 +5,11 @@ import typing as t
 from pydantic import validator
 
 from sqlmesh.dbt.column import ColumnConfig
-from sqlmesh.dbt.common import parse_meta
-from sqlmesh.dbt.update import UpdateStrategy
+from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
 from sqlmesh.utils.datatype import ensure_bool, ensure_list
-from sqlmesh.utils.pydantic import PydanticModel
 
 
-class SourceConfig(PydanticModel):
+class SourceConfig(BaseConfig):
     """
     Args:
         name: The name of the source or table
@@ -35,7 +33,7 @@ class SourceConfig(PydanticModel):
     description: t.Optional[str] = None
     meta: t.Optional[t.Dict[str, t.Any]] = {}
     database: t.Optional[str] = None
-    schema: t.Optional[str] = None
+    schema_: t.Optional[str] = Field(None, alias="schema")
     identifier: t.Optional[str] = None
     loader: t.Optional[str] = None
     tests: t.Optional[t.List[str]] = []
@@ -65,7 +63,7 @@ class SourceConfig(PydanticModel):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.List[ColumnConfig]:
-        return [ColumnConfig()]
+        return [ColumnConfig(name="Placeholder")]
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "meta": UpdateStrategy.KEY_UPDATE,
