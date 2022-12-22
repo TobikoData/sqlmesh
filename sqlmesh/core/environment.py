@@ -32,3 +32,10 @@ class Environment(PydanticModel):
         if isinstance(v, str):
             return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
         return v
+
+    @validator("name", pre=True)
+    @classmethod
+    def _normalize_name(cls, v: t.Any):
+        if isinstance(v, str):
+            return v.lower()
+        return v

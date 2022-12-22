@@ -62,10 +62,11 @@ class ContextDiff(PydanticModel):
             The ContextDiff object.
         """
         if isinstance(environment, str):
+            environment = environment.lower()
             env = state_reader.get_environment(environment)
         else:
             env = environment
-            environment = env.name
+            environment = env.name.lower()
 
         existing_info = {info.name: info for info in (env.snapshots if env else [])}
         existing_models = set(existing_info)
