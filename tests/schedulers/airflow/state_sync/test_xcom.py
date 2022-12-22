@@ -5,8 +5,7 @@ from airflow.utils.session import create_session
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import ModelKind, ModelKindName
+from sqlmesh.core.model import Model, ModelKind, ModelKindName
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
 from sqlmesh.utils.date import to_timestamp

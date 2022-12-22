@@ -10,8 +10,7 @@ from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import IncrementalByTimeRange, ModelKindName, TimeColumn
+from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKindName, TimeColumn
 from sqlmesh.dbt.render import render_jinja
 from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError

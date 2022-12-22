@@ -8,8 +8,7 @@ from sqlglot import parse_one
 import sqlmesh.core.constants
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
-from sqlmesh.core.plan import Plan
-from sqlmesh.core.plan_evaluator import BuiltInPlanEvaluator
+from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 

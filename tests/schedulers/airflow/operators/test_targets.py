@@ -35,7 +35,7 @@ def test_evaluation_target_execute(
     context = Context(dag_run=dag_run_mock)  # type: ignore
 
     evaluator_evaluate_mock = mocker.patch(
-        "sqlmesh.core.snapshot_evaluator.SnapshotEvaluator.evaluate"
+        "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.evaluate"
     )
 
     add_interval_mock = mocker.patch(
@@ -72,7 +72,7 @@ def test_table_cleanup_target_execute(
     context = Context(ti=task_instance_mock)  # type: ignore
 
     evaluator_cleanup_mock = mocker.patch(
-        "sqlmesh.core.snapshot_evaluator.SnapshotEvaluator.cleanup"
+        "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
     delete_xcom_mock = mocker.patch(
@@ -105,7 +105,7 @@ def test_table_cleanup_target_skip_execution(
     context = Context(ti=task_instance_mock)  # type: ignore
 
     evaluator_cleanup_mock = mocker.patch(
-        "sqlmesh.core.snapshot_evaluator.SnapshotEvaluator.cleanup"
+        "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
     delete_xcom_mock = mocker.patch(

@@ -6,8 +6,7 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import ModelKind, ModelKindName
+from sqlmesh.core.model import Model, ModelKind, ModelKindName
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import to_datetime, to_timestamp
