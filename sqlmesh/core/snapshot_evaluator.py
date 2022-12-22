@@ -32,7 +32,7 @@ from sqlmesh.core.engine_adapter import DF, EngineAdapter, QueryOrDF
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import AuditError, ConfigError
 
 logger = logging.getLogger(__name__)
@@ -105,10 +105,14 @@ class SnapshotEvaluator:
                 elif snapshot.is_incremental_by_time_range_kind:
                     # A model's time_column could be None but it shouldn't be for an incremental model
                     assert model.time_column
+                    low, high = [
+                        model.convert_to_time_column(dt)
+                        for dt in make_inclusive(start, end)
+                    ]
                     where = exp.Between(
                         this=exp.to_column(model.time_column.column),
-                        low=model.convert_to_time_column(start),
-                        high=model.convert_to_time_column(end),
+                        low=low,
+                        high=high,
                     )
                     self.adapter.delete_insert_query(
                         table_name, query_or_df, where=where, columns=columns
