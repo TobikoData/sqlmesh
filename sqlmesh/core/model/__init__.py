@@ -226,6 +226,7 @@ WHERE
 SQLMesh will handle casting the start and end dates to the type of your time column. The format is reflected in the time column format string.
 """
 from sqlmesh.core.model.common import parse_model_name
+from sqlmesh.core.model.decorator import model
 from sqlmesh.core.model.definition import Model
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRange,
@@ -234,5 +235,4 @@ from sqlmesh.core.model.kind import (
     ModelKindName,
     TimeColumn,
 )
-from sqlmesh.core.model.macro import model
 from sqlmesh.core.model.meta import ModelMeta

@@ -111,11 +111,7 @@ from requests import Session
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
-from sqlmesh.core.plan_evaluator import (
-    AirflowPlanEvaluator,
-    BuiltInPlanEvaluator,
-    PlanEvaluator,
-)
+from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL

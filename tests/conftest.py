@@ -9,8 +9,7 @@ from sqlglot import exp, maybe_parse
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
-from sqlmesh.core.plan import Plan
-from sqlmesh.core.plan_evaluator import BuiltInPlanEvaluator
+from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils import random_id
 
