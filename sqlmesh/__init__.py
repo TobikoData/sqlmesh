@@ -8,6 +8,7 @@ import os
 import sys
 from enum import Enum
 
+from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import macro
