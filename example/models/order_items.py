@@ -15,8 +15,9 @@ ITEMS = "sushi.items"
     """
     MODEL(
         name sushi.order_items,
-        kind incremental,
-        time_column ds,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+        ),
         cron '@daily',
         batch_size 30,
         columns (

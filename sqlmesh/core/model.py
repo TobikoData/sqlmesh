@@ -112,24 +112,6 @@ MODEL (
 );
 ```
 
-# Model Kinds
-
-## incremental
-
-Incremental load is the default model kind. It specifies that the data is incrementally computed. For example,
-many models representing 'facts' or 'logs' should be incremental because new data is continuously added.
-
-## full
-Full refresh is used when the entire table needs to be recomputed from scratch every batch.
-
-## snapshot
-Snapshot means recomputing the entire history of a table as of the compute date and storing that in a partition. Snapshots are expensive to compute and store but allow you to look at the frozen snapshot at a certain point in time. An example of a snapshot model would be computing and storing lifetime revenue of a user daily.
-
-## view
-View models rely on datebase engine views and don't require any direct backfilling. Using a view will create a view in the same location as you may expect a physical table, but no table is computed. Other models that reference view models will incur compute cost because only the query is stored.
-
-## embedded
-Embedded models are like views except they don't interact with the data warehouse at all. They are embedded directly in models that reference them as expanded queries. They are an easy way to share logic across models.
 
 # Macros
 Macros can be used for passing in paramaterized arguments like dates as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used your SQL. Macros are used by prefixing with the `@` symbol.
@@ -192,8 +174,9 @@ the dialect of the model, e.g. '%Y-%m-%d' for DuckDB or 'yyyy-mm-dd' for Snowfla
 MODEL (
   name sushi.orders,
   dialect duckdb,
-  kind incremental,
-  time_column (ds, '%Y-%m-%d')
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (ds, '%Y-%m-%d')
+  )
 );
 
 SELECT
@@ -224,8 +207,9 @@ The column used as your model's time column is not limited to being a text or da
 MODEL (
   name sushi.orders,
   dialect duckdb,
-  kind incremental,
-  time_column (di, '%Y%m%d')
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column (di, '%Y%m%d')
+  ),
 );
 
 SELECT
@@ -269,6 +253,13 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
+from sqlmesh.core.model_kind import (
+    IncrementalByTimeRange,
+    IncrementalByUniqueKey,
+    ModelKind,
+    ModelKindName,
+    TimeColumn,
+)
 from sqlmesh.utils import UniqueKeyDict, registry_decorator, unique
 from sqlmesh.utils.date import (
     TimeLike,
@@ -294,7 +285,6 @@ if t.TYPE_CHECKING:
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
-    "kind": lambda value: exp.to_identifier(value.name.lower()),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
@@ -314,46 +304,6 @@ EPOCH_DS = "1970-01-01"
 RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
 
 
-# switch to autoname with sqlglot is typed
-class ModelKind(str, Enum):
-    """The kind of model, determining how this data is computed and stored in the warehouse."""
-
-    INCREMENTAL = "incremental"
-    FULL = "full"
-    SNAPSHOT = "snapshot"
-    VIEW = "view"
-    EMBEDDED = "embedded"
-
-    @property
-    def is_incremental(self):
-        return self == ModelKind.INCREMENTAL
-
-    @property
-    def is_full(self):
-        return self == ModelKind.FULL
-
-    @property
-    def is_snapshot(self):
-        return self == ModelKind.SNAPSHOT
-
-    @property
-    def is_view(self):
-        return self == ModelKind.VIEW
-
-    @property
-    def is_embedded(self):
-        return self == ModelKind.EMBEDDED
-
-    @property
-    def is_materialized(self):
-        return self not in (ModelKind.VIEW, ModelKind.EMBEDDED)
-
-    @property
-    def only_latest(self):
-        """Whether or not this model only cares about latest date to render."""
-        return self in (ModelKind.VIEW, ModelKind.FULL)
-
-
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental model.
 
@@ -367,38 +317,11 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
-class TimeColumn(PydanticModel):
-    column: str
-    format: t.Optional[str] = None
-
-    @classmethod
-    def from_expression(cls, v: exp.Expression) -> TimeColumn:
-        """Create a TimeColumn pydantic model from a time_column SQLGlot expression."""
-        if isinstance(v, exp.Tuple):
-            kwargs = {
-                key: v.expressions[i].name
-                for i, key in enumerate(("column", "format")[: len(v.expressions)])
-            }
-            return TimeColumn(**kwargs)
-        if isinstance(v, exp.Paren):
-            return TimeColumn(column=v.this.name)
-        return TimeColumn(column=v.name)
-
-    @property
-    def expression(self) -> exp.Column | exp.Tuple:
-        """Convert this pydantic model into a time_column SQLGlot expression."""
-        column = exp.to_column(self.column)
-        if not self.format:
-            return column
-
-        return exp.Tuple(expressions=[column, exp.Literal.string(self.format)])
-
-
 class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
     name: str
-    kind: ModelKind = ModelKind.INCREMENTAL
+    kind: ModelKind = IncrementalByTimeRange()
     dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
@@ -409,7 +332,6 @@ class ModelMeta(PydanticModel):
     partitioned_by_: t.Optional[t.List[str]] = Field(
         default=None, alias="partitioned_by"
     )
-    time_column: t.Optional[TimeColumn]
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
@@ -425,13 +347,34 @@ class ModelMeta(PydanticModel):
         return v
 
     @validator("kind", pre=True)
-    def _enum_validator(cls, v: t.Any) -> ModelKind:
+    def _model_kind_validator(cls, v: t.Any) -> ModelKind:
         if isinstance(v, ModelKind):
             return v
 
+        if isinstance(v, d.ModelKind):
+            name = v.this
+            props = {prop.name: prop.args.get("value") for prop in v.expressions}
+            klass: t.Type[ModelKind] = ModelKind
+            if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                klass = IncrementalByTimeRange
+            elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                klass = IncrementalByUniqueKey
+            else:
+                props["name"] = ModelKindName(name)
+            return klass(**props)
+
+        if isinstance(v, dict):
+            if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                klass = IncrementalByTimeRange
+            elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                klass = IncrementalByUniqueKey
+            else:
+                klass = ModelKind
+            return klass(**v)
+
         name = v.name if isinstance(v, exp.Expression) else str(v)
         try:
-            return ModelKind(name.lower())
+            return ModelKind(name=ModelKindName(name))
         except ValueError:
             _raise_config_error(f"Invalid model kind '{name}'")
             raise
@@ -504,11 +447,11 @@ class ModelMeta(PydanticModel):
                 )
         return values
 
-    @validator("time_column", pre=True)
-    def _parse_time_column(cls, v: t.Any) -> t.Optional[TimeColumn]:
-        if isinstance(v, exp.Expression):
-            return TimeColumn.from_expression(v)
-        return v
+    @property
+    def time_column(self) -> t.Optional[TimeColumn]:
+        if isinstance(self.kind, IncrementalByTimeRange):
+            return self.kind.time_column
+        return None
 
     @property
     def partitioned_by(self) -> t.List[str]:
@@ -846,26 +789,12 @@ class Model(ModelMeta, frozen=True):
             if field_value is not None:
                 if field.name == "description":
                     comment = field_value
-                elif field.name == "time_column":
-                    expression = field_value.expression
-
-                    # time_column.format is stored as python format in memory
-                    # convert it back to the model dialect
-                    if field_value.format:
-                        expression.expressions.pop()
-                        expression.append(
-                            "expressions",
-                            exp.Literal.string(
-                                format_time(
-                                    field_value.format,
-                                    d.Dialect.get_or_raise(
-                                        self.dialect
-                                    ).inverse_time_mapping,
-                                )
-                            ),
-                        )
+                elif field.name == "kind":
                     expressions.append(
-                        exp.Property(this="time_column", value=expression)
+                        exp.Property(
+                            this="kind",
+                            value=field_value.to_expression(self.dialect),
+                        )
                     )
                 else:
                     expressions.append(
@@ -1017,7 +946,7 @@ class Model(ModelMeta, frozen=True):
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
-        if add_incremental_filter and self.kind == ModelKind.INCREMENTAL:
+        if add_incremental_filter and self.kind.is_incremental_by_time_range:
             # expansion copies the query for us. if it doesn't occur, make sure to copy.
             if not expand:
                 query = query.copy()
@@ -1133,7 +1062,7 @@ class Model(ModelMeta, frozen=True):
                 df_or_iter = [df_or_iter]
 
             for df in df_or_iter:
-                if self.kind == ModelKind.INCREMENTAL:
+                if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
                     if pyspark and isinstance(df, pyspark.sql.DataFrame):
@@ -1336,9 +1265,9 @@ class Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-        if self.kind == ModelKind.INCREMENTAL and not self.time_column:
+        if self.kind.is_incremental_by_time_range and not self.time_column:
             _raise_config_error(
-                "Incremental models must have a time_column field.",
+                "Incremental by time range models must have a time_column field.",
                 self._path,
             )
 
@@ -1413,9 +1342,9 @@ class model(registry_decorator):
                 columns = True
 
         if not self.name:
-            raise ConfigError(f"Python model must have a name.")
+            raise ConfigError("Python model must have a name.")
         if not columns:
-            raise ConfigError(f"Python model must define column schema.")
+            raise ConfigError("Python model must define column schema.")
 
     def model(
         self,

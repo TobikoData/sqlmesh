@@ -289,20 +289,3 @@ def test_plan_apply(sushi_context) -> None:
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")
-
-
-def test_incremental_model_without_partition_support(tmpdir) -> None:
-    models_dir = pathlib.Path("models")
-    create_temp_file(
-        tmpdir,
-        pathlib.Path(models_dir, "my_model.sql"),
-        "MODEL(name db.actual_test, kind incremental); SELECT 1::int",
-    )
-    with pytest.raises(
-        ConfigError,
-        match="Incremental models must have a time_column field.",
-    ):
-        Context(
-            path=str(tmpdir),
-            config=Config(),
-        )

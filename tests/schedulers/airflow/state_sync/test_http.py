@@ -17,7 +17,7 @@ def model() -> Model:
         name="test_model",
         storage_format="parquet",
         partitioned_by=["a"],
-        query=parse_one("SELECT a FROM tbl"),
+        query=parse_one("SELECT a, ds FROM tbl"),
         expressions=[
             parse_one("@DEF(key, 'value')"),
         ],

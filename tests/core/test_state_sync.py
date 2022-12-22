@@ -7,6 +7,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
+from sqlmesh.core.model_kind import ModelKind, ModelKindName
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -28,8 +29,20 @@ def state_sync(duck_conn, mock_file_cache):
 @pytest.fixture
 def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
     return [
-        make_snapshot(Model(name="a", query=parse_one("select 1")), version="a"),
-        make_snapshot(Model(name="b", query=parse_one("select 2")), version="b"),
+        make_snapshot(
+            Model(
+                name="a",
+                query=parse_one("select 1, ds"),
+            ),
+            version="a",
+        ),
+        make_snapshot(
+            Model(
+                name="b",
+                query=parse_one("select 2, ds"),
+            ),
+            version="b",
+        ),
     ]
 
 
@@ -55,8 +68,18 @@ def test_push_snapshots(
     make_snapshot: t.Callable,
     mock_file_cache: FileCache,
 ) -> None:
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1")))
-    snapshot_b = make_snapshot(Model(name="b", query=parse_one("select 2")))
+    snapshot_a = make_snapshot(
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        )
+    )
+    snapshot_b = make_snapshot(
+        Model(
+            name="b",
+            query=parse_one("select 2, ds"),
+        )
+    )
 
     with pytest.raises(
         SQLMeshError,
@@ -99,6 +122,7 @@ def test_push_snapshots(
             make_snapshot(
                 Model(
                     name="a",
+                    kind=ModelKind(name=ModelKindName.FULL),
                     query=parse_one(
                         """
             select 'x' + ' ' as y,
@@ -116,13 +140,25 @@ def test_duplicates(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
     snapshot_a = make_snapshot(
-        Model(name="a", query=parse_one("select 1")), version="1"
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="1",
     )
     snapshot_b = make_snapshot(
-        Model(name="a", query=parse_one("select 1")), version="1"
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="1",
     )
     snapshot_c = make_snapshot(
-        Model(name="a", query=parse_one("select 1")), version="1"
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="1",
     )
     snapshot_b.updated_ts = snapshot_a.updated_ts + 1
     snapshot_c.updated_ts = 0
@@ -152,7 +188,11 @@ def test_get_snapshots_with_same_version(
     snapshots: t.List[Snapshot],
 ) -> None:
     snapshot_c = make_snapshot(
-        Model(name="c", query=parse_one("select 3")), version="a"
+        Model(
+            name="c",
+            query=parse_one("select 3, ds"),
+        ),
+        version="a",
     )
     state_sync.push_snapshots(snapshots + [snapshot_c])
 
@@ -174,7 +214,12 @@ def test_add_interval(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
     snapshot = make_snapshot(
-        Model(name="a", cron="@daily", query=parse_one("select 1")), version="a"
+        Model(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
     )
     snapshot_id = snapshot.snapshot_id
 
@@ -204,10 +249,20 @@ def test_remove_interval(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
     snapshot_a = make_snapshot(
-        Model(name="a", cron="@daily", query=parse_one("select 1")), version="a"
+        Model(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
     )
     snapshot_b = make_snapshot(
-        Model(name="a", cron="@daily", query=parse_one("select 2")), version="a"
+        Model(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 2::INT, '2022-01-01'::TEXT AS ds"),
+        ),
+        version="a",
     )
     state_sync.push_snapshots([snapshot_a, snapshot_b])
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
@@ -229,15 +284,27 @@ def test_promote_snapshots(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     snapshot_a = make_snapshot(
-        Model(name="a", query=parse_one("select 1")), version="a"
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
     )
     snapshot_b = make_snapshot(
-        Model(name="b", query=parse_one("select * from a")),
+        Model(
+            name="b",
+            kind=ModelKind(name=ModelKindName.FULL),
+            query=parse_one("select * from a"),
+        ),
         models={"a": snapshot_a.model},
         version="b",
     )
     snapshot_c = make_snapshot(
-        Model(name="c", query=parse_one("select 3")), version="c"
+        Model(
+            name="c",
+            query=parse_one("select 3, ds"),
+        ),
+        version="c",
     )
 
     with pytest.raises(
@@ -287,7 +354,11 @@ def test_promote_snapshots(
     assert set(removed) == {snapshot_c.table_info}
 
     snapshot_d = make_snapshot(
-        Model(name="a", query=parse_one("select 2")), version="d"
+        Model(
+            name="a",
+            query=parse_one("select 2, ds"),
+        ),
+        version="d",
     )
     state_sync.push_snapshots([snapshot_d])
     added, removed = promote_snapshots(state_sync, [snapshot_d], "prod")
@@ -298,7 +369,13 @@ def test_promote_snapshots(
 def test_promote_snapshots_parent_plan_id_mismatch(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
-    snapshot = make_snapshot(Model(name="a", query=parse_one("select 1")), version="a")
+    snapshot = make_snapshot(
+        Model(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
 
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "prod")
@@ -333,7 +410,11 @@ def test_promote_snapshots_parent_plan_id_mismatch(
 def test_promote_snapshots_no_gaps(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
-    model = Model(name="a", query=parse_one("select 1"), cron="@daily")
+    model = Model(
+        name="a",
+        query=parse_one("select 1, ds"),
+        cron="@daily",
+    )
 
     snapshot = make_snapshot(model, version="a")
     snapshot.add_interval("2022-01-01", "2022-01-02")
@@ -383,7 +464,11 @@ def test_unpause_snapshots(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ):
     snapshot = make_snapshot(
-        Model(name="test_snapshot", query=parse_one("select 1"), cron="@daily"),
+        Model(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@daily",
+        ),
         version="a",
     )
     assert not snapshot.unpaused_ts
@@ -397,7 +482,7 @@ def test_unpause_snapshots(
     assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
 
     new_snapshot = make_snapshot(
-        Model(name="test_snapshot", query=parse_one("select 2"), cron="@daily"),
+        Model(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
         version="a",
     )
     assert not new_snapshot.unpaused_ts

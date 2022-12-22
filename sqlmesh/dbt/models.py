@@ -9,7 +9,8 @@ from pydantic import Field, validator
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model, ModelKind, TimeColumn
+from sqlmesh.core.model import Model
+from sqlmesh.core.model_kind import IncrementalByTimeRange, ModelKindName, TimeColumn
 from sqlmesh.dbt.render import render_jinja
 from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError
@@ -145,7 +146,7 @@ class ModelConfig(PydanticModel):
         if isinstance(v, str):
             expression = parse_one(v)
             assert expression
-            return TimeColumn.from_expression(expression)
+            return IncrementalByTimeRange._parse_time_column(expression)
         return v
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -252,7 +253,7 @@ class ModelConfig(PydanticModel):
         return ".".join(part for part in (self.schema_, self.identifier) if part)
 
     @property
-    def model_kind(self) -> ModelKind:
+    def model_kind_name(self) -> ModelKindName:
         """
         Get the sqlmesh ModelKind
 
@@ -261,13 +262,13 @@ class ModelConfig(PydanticModel):
         """
         materialization = self.materialized
         if materialization == Materialization.TABLE:
-            return ModelKind.FULL
+            return ModelKindName.FULL
         if materialization == Materialization.VIEW:
-            return ModelKind.VIEW
+            return ModelKindName.VIEW
         if materialization == Materialization.INCREMENTAL:
-            return ModelKind.INCREMENTAL
+            return ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
         if materialization == Materialization.EPHERMAL:
-            return ModelKind.EMBEDDED
+            return ModelKindName.EMBEDDED
 
         raise ConfigError(f"{materialization.value} materialization not supported")
 

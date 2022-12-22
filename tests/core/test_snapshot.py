@@ -16,7 +16,7 @@ def parent_model():
     return Model(
         name="parent.tbl",
         dialect="spark",
-        query=parse_one("SELECT 1"),
+        query=parse_one("SELECT 1, ds"),
     )
 
 
@@ -29,7 +29,7 @@ def model():
         cron="1 0 * * *",
         batch_size=30,
         start="2020-01-01",
-        query=parse_one("SELECT @EACH([1, 2], x -> x) FROM parent.tbl"),
+        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
     )
 
 
@@ -63,12 +63,15 @@ def test_json(snapshot: Snapshot):
             "audits": {},
             "cron": "1 0 * * *",
             "batch_size": 30,
-            "kind": "incremental",
+            "kind": {
+                "name": "incremental_by_time_range",
+                "time_column": {"column": "ds"},
+            },
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",
             "owner": "owner",
-            "query": "SELECT @EACH(ARRAY(1, 2), x -> x) FROM parent.tbl",
+            "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
         },
         "name": "name",
         "parents": [
@@ -228,7 +231,7 @@ each_macro = lambda: "test"
 def test_fingerprint(model: Model, parent_model: Model):
     macro.get_registry()
     fingerprint = fingerprint_from_model(model, models={})
-    original_fingerprint = "2774500705_0"
+    original_fingerprint = "3127055399_0"
 
     assert fingerprint == original_fingerprint
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
@@ -244,15 +247,17 @@ def test_fingerprint(model: Model, parent_model: Model):
         fingerprint_from_model(
             model,
             models={
-                "parent.tbl": Model(**{**model.dict(), "query": parse_one("select 2")})
+                "parent.tbl": Model(
+                    **{**model.dict(), "query": parse_one("select 2, ds")}
+                )
             },
         )
         != with_parent_fingerprint
     )
 
-    model = Model(**{**model.dict(), "query": parse_one("select 1")})
+    model = Model(**{**model.dict(), "query": parse_one("select 1, ds")})
     new_fingerprint = fingerprint_from_model(model, models={})
     assert new_fingerprint != fingerprint
 
-    model = Model(**{**model.dict(), "query": parse_one("select 1 -- annotation")})
+    model = Model(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint == fingerprint_from_model(model, models={})
