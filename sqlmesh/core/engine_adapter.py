@@ -15,7 +15,7 @@ import typing as t
 
 import duckdb
 import pandas as pd
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -204,12 +204,18 @@ class EngineAdapter:
     ) -> None:
         with self.transaction():
             for column_name, column_type in added_columns.items():
-                self.execute(
+                expression = parse_one(
                     f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
                 )
+                assert expression
+                self.execute(expression)
 
             for column_name in dropped_columns:
-                self.execute(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
+                expression = parse_one(
+                    f"ALTER TABLE {table_name} DROP COLUMN {column_name}"
+                )
+                assert expression
+                self.execute(expression)
 
     def create_view(
         self,
@@ -569,10 +575,21 @@ class SparkEngineAdapter(EngineAdapter):
             f"{column_name} {column_type}"
             for column_name, column_type in added_columns.items()
         )
-        self.execute(f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})")
+        expression = parse_one(
+            f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})",
+            read="spark",
+        )
+        assert expression
+
+        self.execute(expression)
 
         dropped_columns_sql = ", ".join(dropped_columns)
-        self.execute(f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})")
+        expression = parse_one(
+            f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})",
+            read="spark",
+        )
+        assert expression
+        self.execute(expression)
 
 
 def create_engine_adapter(

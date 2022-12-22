@@ -235,10 +235,10 @@ def test_alter_table(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call("BEGIN"),
-            call("""ALTER TABLE test_table ADD COLUMN a INT"""),
-            call("""ALTER TABLE test_table ADD COLUMN b TEXT"""),
-            call("""ALTER TABLE test_table DROP COLUMN c"""),
-            call("""ALTER TABLE test_table DROP COLUMN d"""),
+            call('ALTER TABLE "test_table" ADD COLUMN "a" INT'),
+            call('ALTER TABLE "test_table" ADD COLUMN "b" TEXT'),
+            call('ALTER TABLE "test_table" DROP COLUMN "c"'),
+            call('ALTER TABLE "test_table" DROP COLUMN "d"'),
             call("COMMIT"),
         ]
     )
@@ -258,8 +258,8 @@ def test_alter_table_spark(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE test_table ADD COLUMNS (a INT, b STRING)"""),
-            call("""ALTER TABLE test_table DROP COLUMNS (c, d)"""),
+            call('ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)'),
+            call('ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)'),
         ]
     )
 
