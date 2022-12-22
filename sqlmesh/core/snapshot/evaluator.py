@@ -30,7 +30,7 @@ from sqlglot import exp, select
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import DF, EngineAdapter, QueryOrDF
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
+from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import AuditError, ConfigError

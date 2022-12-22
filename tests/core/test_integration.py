@@ -7,7 +7,7 @@ from sqlglot.expressions import DataType
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.model_kind import (
+from sqlmesh.core.model import (
     IncrementalByTimeRange,
     IncrementalByUniqueKey,
     ModelKind,

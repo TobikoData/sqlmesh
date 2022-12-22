@@ -60,8 +60,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.utils import UniqueKeyDict, sys_path

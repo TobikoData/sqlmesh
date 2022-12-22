@@ -6,8 +6,13 @@ from sqlglot import exp, parse, parse_one
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
-from sqlmesh.core.model import Model, ModelMeta, model
-from sqlmesh.core.model_kind import IncrementalByTimeRange, TimeColumn
+from sqlmesh.core.model import (
+    IncrementalByTimeRange,
+    Model,
+    ModelMeta,
+    TimeColumn,
+    model,
+)
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 

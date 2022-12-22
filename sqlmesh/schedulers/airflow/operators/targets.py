@@ -8,8 +8,12 @@ from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotId,
+    SnapshotTableInfo,
+)
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync

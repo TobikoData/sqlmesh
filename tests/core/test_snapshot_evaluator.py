@@ -7,11 +7,9 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.model import Model
-from sqlmesh.core.model_kind import IncrementalByTimeRange, ModelKind, ModelKindName
+from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKind, ModelKindName
 from sqlmesh.core.schema_diff import SchemaDelta
-from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
 
 
 @pytest.fixture

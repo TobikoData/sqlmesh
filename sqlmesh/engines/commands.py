@@ -1,8 +1,12 @@
 import typing as t
 from enum import Enum
 
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotId,
+    SnapshotTableInfo,
+)
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
