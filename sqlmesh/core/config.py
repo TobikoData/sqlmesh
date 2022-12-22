@@ -220,6 +220,7 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
             notification_targets=context.notification_targets,
             backfill_concurrent_tasks=context.backfill_concurrent_tasks,
             ddl_concurrent_tasks=context.ddl_concurrent_tasks,
+            users=context.users,
         )
 
 

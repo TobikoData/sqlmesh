@@ -12,6 +12,7 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import Snapshot, SnapshotId
+from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
@@ -54,6 +55,7 @@ class AirflowClient:
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
         timestamp: t.Optional[datetime] = None,
+        users: t.Optional[t.List[User]] = None,
     ) -> str:
         is_first_run = self._get_first_dag_run_id(common.PLAN_RECEIVER_DAG_ID) is None
         return self._trigger_dag_run(
@@ -68,6 +70,7 @@ class AirflowClient:
                 notification_targets=notification_targets or [],
                 backfill_concurrent_tasks=backfill_concurrent_tasks,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
+                users=users or [],
             ),
             dag_run_id=common.INIT_RUN_ID if is_first_run else None,
             timestamp=timestamp,

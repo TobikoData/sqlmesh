@@ -36,6 +36,9 @@ class GithubNotificationOperatorProvider(
             notification_status = NotificationStatus.FAILURE
             msg = f"Failed to Update Environment `{plan_application_request.environment_name}`"
 
+        bot_users = [user for user in plan_application_request.users if user.is_bot]
+        bot_user_to_append_to = bot_users[0] if bot_users else None
+
         return GithubOperator(
             task_id=self.get_task_id(target, plan_status),
             trigger_rule=self.get_trigger_rule(plan_status),
@@ -48,6 +51,6 @@ class GithubNotificationOperatorProvider(
                 target.pull_request_info,
                 notification_status,
                 msg,
-                username_to_append_to="SQLMesh",
+                user_to_append_to=bot_user_to_append_to,
             ),
         )

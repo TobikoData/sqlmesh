@@ -6,6 +6,7 @@ import typing as t
 from github.Repository import Repository
 
 from sqlmesh.core.notification_target import NotificationStatus
+from sqlmesh.core.user import User
 from sqlmesh.utils.pydantic import PydanticModel
 
 NOTIFICATION_STATUS_TO_EMOJI = {
@@ -43,14 +44,14 @@ def add_comment_to_pr(
     pull_request_info: PullRequestInfo,
     notification_status: NotificationStatus,
     msg: str,
-    username_to_append_to: t.Optional[str] = None,
+    user_to_append_to: t.Optional[User] = None,
 ) -> None:
     emoji = NOTIFICATION_STATUS_TO_EMOJI[notification_status]
     msg = f"{datetime.datetime.utcnow().isoformat(sep=' ', timespec='seconds')} - {emoji} {msg} {emoji}"
     issue = repo.get_issue(pull_request_info.pr_number)
-    if username_to_append_to:
+    if user_to_append_to:
         for comment in issue.get_comments():
-            if comment.user.name == username_to_append_to:
+            if comment.user.name == user_to_append_to.github_username:
                 comment.edit("\n".join([comment.body, msg]))
                 return
     issue.create_comment(msg)
