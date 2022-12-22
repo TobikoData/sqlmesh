@@ -495,12 +495,12 @@ class EngineAdapter:
                 )
             else:
                 with self.transaction():
-                    for values in pandas_to_sql(query_or_df, batch_size):
+                    for i, values in enumerate(pandas_to_sql(query_or_df, batch_size)):
                         self.execute(
                             exp.Insert(
                                 this=into,
                                 expression=values,
-                                overwrite=overwrite,
+                                overwrite=overwrite if i == 0 else False,
                             )
                         )
         elif isinstance(query_or_df, exp.Expression):
