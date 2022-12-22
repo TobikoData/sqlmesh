@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import Field, validator
 from sqlglot import exp, parse_one
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import Model
@@ -17,10 +18,6 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import yaml
-
-
-def ensure_list(val: t.Any) -> t.List[t.Any]:
-    return val if isinstance(val, list) else [val]
 
 
 class Materialization(str, Enum):
