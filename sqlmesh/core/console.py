@@ -13,6 +13,7 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.tree import Tree
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -551,6 +552,12 @@ class NotebookMagicConsole(TerminalConsole):
             ),
         )
 
+        unbounded_end_date_widget = (
+            [_checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)]
+            if plan.environment.name == c.PROD
+            else []
+        )
+
         add_to_layout_widget(
             prompt,
             widgets.HBox(
@@ -562,9 +569,7 @@ class NotebookMagicConsole(TerminalConsole):
                         end_change_callback,
                         disabled=unbounded_end,
                     ),
-                    _checkbox(
-                        "Unbounded End Date", unbounded_end, unbounded_end_callback
-                    ),
+                    *unbounded_end_date_widget,
                 ]
             ),
         )
