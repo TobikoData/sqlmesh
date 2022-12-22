@@ -22,7 +22,7 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import SnapshotEvaluator
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient

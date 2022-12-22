@@ -5,7 +5,7 @@ from pyspark import SparkFiles
 from pyspark.sql import SparkSession
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
+from sqlmesh.core.snapshot import SnapshotEvaluator
 from sqlmesh.engines import commands
 from sqlmesh.engines.spark.db_api import spark_session as spark_session_db
 from sqlmesh.engines.spark.db_api.errors import NotSupportedError
