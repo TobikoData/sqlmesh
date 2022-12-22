@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import typing as t
+from enum import Enum
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.utils.pydantic import PydanticModel
@@ -10,6 +11,34 @@ if sys.version_info >= (3, 8):
     from typing import Literal
 else:
     from typing_extensions import Literal
+
+
+class NotificationStatus(str, Enum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    WARNING = "warning"
+    INFO = "info"
+    PROGRESS = "progress"
+
+    @property
+    def is_success(self) -> bool:
+        return self == NotificationStatus.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == NotificationStatus.FAILURE
+
+    @property
+    def is_info(self) -> bool:
+        return self == NotificationStatus.INFO
+
+    @property
+    def is_warning(self) -> bool:
+        return self == NotificationStatus.WARNING
+
+    @property
+    def is_progress(self) -> bool:
+        return self == NotificationStatus.PROGRESS
 
 
 class BaseNotificationTarget(PydanticModel):
@@ -21,7 +50,7 @@ class BaseNotificationTarget(PydanticModel):
 
     kind: str
 
-    def send(self, msg: str, **kwargs) -> None:
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs) -> None:
         """
         Sends notification with the provided message. Currently only used by the built-in scheduler.
         """
@@ -41,5 +70,10 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
             self._console = get_console()
         return self._console
 
-    def send(self, msg: str, **kwargs) -> None:
-        self.console.log_status_update(msg)
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs) -> None:
+        if notification_status.is_success:
+            self.console.log_success(msg)
+        elif notification_status.is_failure:
+            self.console.log_error(msg)
+        else:
+            self.console.log_status_update(msg)

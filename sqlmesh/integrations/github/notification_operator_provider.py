@@ -1,7 +1,6 @@
-import datetime
-
 from airflow.models import BaseOperator
 
+from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
 from sqlmesh.integrations.github.shared import add_comment_to_pr
@@ -27,13 +26,15 @@ class GithubNotificationOperatorProvider(
     ) -> BaseOperator:
         from airflow.providers.github.operators.github import GithubOperator
 
-        msg = datetime.datetime.utcnow().isoformat(sep=" ", timespec="seconds")
         if plan_status.is_started:
-            msg += f" - :rocket: Updating Environment `{plan_application_request.environment_name}` :rocket:"
+            notification_status = NotificationStatus.PROGRESS
+            msg = f"Updating Environment `{plan_application_request.environment_name}`"
         elif plan_status.is_finished:
-            msg += f" - :white_check_mark: Updated Environment `{plan_application_request.environment_name}` :white_check_mark:"
+            notification_status = NotificationStatus.SUCCESS
+            msg = f"Updated Environment `{plan_application_request.environment_name}`"
         else:
-            msg += f" - :x: Failed to Update Environment `{plan_application_request.environment_name}` :x:"
+            notification_status = NotificationStatus.FAILURE
+            msg = f"Failed to Update Environment `{plan_application_request.environment_name}`"
 
         return GithubOperator(
             task_id=self.get_task_id(target, plan_status),
@@ -43,6 +44,10 @@ class GithubNotificationOperatorProvider(
                 "full_name_or_id": target.pull_request_info.full_repo_path
             },
             result_processor=lambda repo: add_comment_to_pr(
-                repo, target.pull_request_info, msg, username_to_append_to="SQLMesh"
+                repo,
+                target.pull_request_info,
+                notification_status,
+                msg,
+                username_to_append_to="SQLMesh",
             ),
         )

@@ -8,7 +8,7 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal
 
-from sqlmesh.core.notification_target import BaseNotificationTarget
+from sqlmesh.core.notification_target import BaseNotificationTarget, NotificationStatus
 from sqlmesh.integrations.github.shared import PullRequestInfo, add_comment_to_pr
 
 
@@ -23,7 +23,7 @@ class GithubNotificationTarget(BaseNotificationTarget):
     pull_request_url: str
     _pull_request_info: t.Optional[PullRequestInfo] = None
 
-    def send(self, msg: str, **kwargs) -> None:
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs) -> None:
         from github import Github
 
         client = (
@@ -33,7 +33,11 @@ class GithubNotificationTarget(BaseNotificationTarget):
         )
         repo = client.get_repo(self.pull_request_info.full_repo_path, lazy=True)
         add_comment_to_pr(
-            repo, self.pull_request_info, msg, username_to_append_to="SQLMesh"
+            repo,
+            self.pull_request_info,
+            notification_status,
+            msg,
+            username_to_append_to="SQLMesh",
         )
 
     @property
