@@ -258,8 +258,8 @@ def test_alter_table_spark(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call('ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)'),
-            call('ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)'),
+            call("ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"),
+            call("ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)"),
         ]
     )
 
