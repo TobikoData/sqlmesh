@@ -40,7 +40,7 @@ from sqlmesh.dbt.project import ProjectConfig
 def test_update(
     current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: t.Dict[str, t.Any]
 ):
-    config = ModelConfig(**current).update_with(new)
+    config: ModelConfig = ModelConfig(**current).update_with(new)
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 

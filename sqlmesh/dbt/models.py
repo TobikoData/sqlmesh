@@ -9,12 +9,13 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model, ModelKindName
-from sqlmesh.dbt.update import UpdateStrategy, update_field
+from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKindName, TimeColumn
+from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
+from sqlmesh.dbt.render import render_jinja
+from sqlmesh.utils.datatype import ensure_bool, ensure_list, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
-from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import yaml
 
 
@@ -27,7 +28,7 @@ class Materialization(str, Enum):
     EPHERMAL = "ephemeral"
 
 
-class ModelConfig(PydanticModel):
+class ModelConfig(BaseConfig):
     """
     ModelConfig contains all config parameters available to DBT models
 
@@ -97,16 +98,13 @@ class ModelConfig(PydanticModel):
 
     @validator("enabled", "full_refresh", pre=True)
     def _validate_bool(cls, v: str) -> bool:
-        if isinstance(v, bool):
-            return v
-
-        return bool(cls._try_str_to_bool(v))
+        return ensure_bool(v)
 
     @validator("docs", pre=True)
     def _validate_dict(cls, v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         for key, value in v.items():
             if isinstance(value, str):
-                v[key] = cls._try_str_to_bool(value)
+                v[key] = try_str_to_bool(value)
 
         return v
 
@@ -116,11 +114,7 @@ class ModelConfig(PydanticModel):
 
     @validator("meta", pre=True)
     def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
-        for key, value in v.items():
-            if isinstance(value, str):
-                v[key] = cls._try_str_to_bool(value)
-
-        return v
+        return parse_meta(v)
 
     @validator("persist_docs", pre=True)
     def _validate_persist_docs(cls, v: t.Dict[str, str]) -> t.Dict[str, bool]:
@@ -129,14 +123,6 @@ class ModelConfig(PydanticModel):
     @validator("grants", pre=True)
     def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
         return {key: ensure_list(value) for key, value in v.items()}
-
-    @classmethod
-    def _try_str_to_bool(cls, val: str) -> t.Union[bool, str]:
-        maybe_bool = val.lower()
-        if maybe_bool not in {"true", "false"}:
-            return val
-
-        return maybe_bool == "true"
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "alias": UpdateStrategy.REPLACE,
@@ -162,44 +148,7 @@ class ModelConfig(PydanticModel):
         "unique_key": UpdateStrategy.REPLACE,
     }
 
-    def update_with(self, config: t.Dict[str, t.Any]) -> ModelConfig:
-        """
-        Update this ModelConfig's fields with the passed in config fields and return as a new ModeConfig
-
-        Args:
-            config: Dict of config fields
-
-        Returns:
-            New ModelConfig updated with the passed in config fields
-        """
-        copy = self.copy()
-        other = ModelConfig(**config)
-
-        for field in other.__fields__:
-            if field in config:
-                setattr(
-                    copy,
-                    field,
-                    update_field(
-                        getattr(copy, field),
-                        getattr(other, field),
-                        self._FIELD_UPDATE_STRATEGY.get(field),
-                    ),
-                )
-
-        return copy
-
-    def replace(self, other: ModelConfig) -> None:
-        """
-        Replace the contents of this ModelConfig with the passed in ModelConfig.
-
-        Args:
-            other: The ModelConfig to apply to this instance
-        """
-        for field in other.__fields_set__:
-            setattr(self, field, getattr(other, field))
-
-    def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
+    def to_sqlmesh(self) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
             f"""

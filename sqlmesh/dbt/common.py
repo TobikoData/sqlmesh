@@ -3,7 +3,11 @@ from __future__ import annotations
 import typing as t
 from enum import Enum, auto
 
+from sqlmesh.utils.datatype import try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
+
+T = t.TypeVar("T", bound="BaseConfig")
 
 
 class UpdateStrategy(Enum):
@@ -77,3 +81,45 @@ def update_field(
         return combined
 
     raise ConfigError("Unknown update strategy {update_strategy}")
+
+
+class BaseConfig(PydanticModel):
+    def update_with(self, config: t.Dict[str, t.Any]) -> T:
+        """
+        Update this instance's fields with the passed in config fields and return a new instance
+
+        Args:
+            config: Dict of config fields
+
+        Returns:
+            New instance updated with the passed in config fields
+        """
+        if not config:
+            return self.copy()
+
+        fields = self.dict()
+        config = {
+            k: v for k, v in self.__class__(**config).dict().items() if k in config
+        }
+        for key, value in config.items():
+            fields[key] = update_field(
+                fields.get(key), value, self._FIELD_UPDATE_STRATEGY.get(key)
+            )
+        return self.__class__(**fields)
+
+    def replace(self, other: T) -> None:
+        """
+        Replace the contents of this instance with the passed in instance.
+
+        Args:
+            other: The instance to apply to this instance
+        """
+        self.__dict__.update(other.dict())
+
+
+def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    for key, value in v.items():
+        if isinstance(value, str):
+            v[key] = try_str_to_bool(value)
+
+    return v
