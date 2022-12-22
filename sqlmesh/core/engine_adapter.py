@@ -204,18 +204,16 @@ class EngineAdapter:
     ) -> None:
         with self.transaction():
             for column_name, column_type in added_columns.items():
-                expression = parse_one(
-                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                self.execute(
+                    parse_one(
+                        f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    )
                 )
-                assert expression
-                self.execute(expression)
 
             for column_name in dropped_columns:
-                expression = parse_one(
-                    f"ALTER TABLE {table_name} DROP COLUMN {column_name}"
+                self.execute(
+                    parse_one(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
                 )
-                assert expression
-                self.execute(expression)
 
     def create_view(
         self,
@@ -441,8 +439,9 @@ class EngineAdapter:
         """Whether or not the engine adapter supports transactions."""
         return self.dialect not in ("hive", "spark")
 
-    def execute(self, sql: t.Union[str, exp.Expression]) -> None:
+    def execute(self, sql: t.Union[str, t.Optional[exp.Expression]]) -> None:
         """Execute a sql query."""
+        assert sql
         sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql)
@@ -575,21 +574,21 @@ class SparkEngineAdapter(EngineAdapter):
             f"{column_name} {column_type}"
             for column_name, column_type in added_columns.items()
         )
-        expression = parse_one(
-            f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})",
-            read="spark",
-        )
-        assert expression
 
-        self.execute(expression)
+        self.execute(
+            parse_one(
+                f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})",
+                read="spark",
+            )
+        )
 
         dropped_columns_sql = ", ".join(dropped_columns)
-        expression = parse_one(
-            f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})",
-            read="spark",
+        self.execute(
+            parse_one(
+                f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})",
+                read="spark",
+            )
         )
-        assert expression
-        self.execute(expression)
 
 
 def create_engine_adapter(
