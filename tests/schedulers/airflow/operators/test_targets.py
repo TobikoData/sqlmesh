@@ -16,7 +16,7 @@ from sqlmesh.utils.date import to_datetime
 def model() -> Model:
     return Model(
         name="test_model",
-        query=parse_one("SELECT a FROM tbl"),
+        query=parse_one("SELECT a, ds FROM tbl"),
     )
 
 

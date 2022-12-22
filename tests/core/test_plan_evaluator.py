@@ -3,7 +3,8 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import Model, ModelKind
+from sqlmesh.core.model import Model
+from sqlmesh.core.model_kind import ModelKind, ModelKindName
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.plan_evaluator import AirflowPlanEvaluator, BuiltInPlanEvaluator
 from sqlmesh.schedulers.airflow import common as airflow_common
@@ -26,6 +27,7 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
 def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model = Model(
         name="sushi.new_test_model",
+        kind=ModelKind(name=ModelKindName.FULL),
         owner="jen",
         cron="@daily",
         start="2020-01-01",
@@ -33,7 +35,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     )
     new_view_model = Model(
         name="sushi.new_test_view_model",
-        kind=ModelKind.VIEW,
+        kind=ModelKind(name=ModelKindName.VIEW),
         owner="jen",
         start="2020-01-01",
         query=parse_one(

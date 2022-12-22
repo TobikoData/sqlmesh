@@ -547,8 +547,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.is_view
 
     @property
-    def is_incremental_kind(self):
-        return self.model.kind.is_incremental
+    def is_incremental_by_time_range_kind(self):
+        return self.model.kind.is_incremental_by_time_range
 
     @property
     def is_snapshot_kind(self):

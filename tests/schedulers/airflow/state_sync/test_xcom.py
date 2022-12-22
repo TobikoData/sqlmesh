@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
+from sqlmesh.core.model_kind import ModelKind, ModelKindName
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
 from sqlmesh.utils.date import to_timestamp
@@ -49,7 +50,7 @@ def test_push_snapshots(
 
     state_sync.push_snapshots([snapshot])
 
-    new_snapshot = make_snapshot(_create_model(model_name, query="SELECT a"))
+    new_snapshot = make_snapshot(_create_model(model_name, query="SELECT a, ds"))
     new_snapshot.version = snapshot.version
     state_sync.push_snapshots([new_snapshot])
 
@@ -147,7 +148,7 @@ def test_remove_expired_snapshots(
     expired_snapshot.ttl = ttl
 
     expired_promoted_snapshot = make_snapshot(
-        _create_model(model_name, query="SELECT a"),
+        _create_model(model_name, query="SELECT a, ds"),
         version="2",
     )
     expired_promoted_snapshot.version = expired_snapshot.version
@@ -210,5 +211,6 @@ def _create_model(name: str, query: t.Optional[str] = None) -> Model:
         query = "SELECT * FROM sqlmesh.orders"
     return Model(
         name=name,
+        kind=ModelKind(name=ModelKindName.FULL),
         query=query,
     )

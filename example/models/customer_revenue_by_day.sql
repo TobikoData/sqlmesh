@@ -5,7 +5,6 @@ MODEL (
   cron '@daily',
   dialect hive,
   batch_size 10,
-  time_column ds
 );
 
 WITH order_total AS (

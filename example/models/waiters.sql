@@ -2,7 +2,6 @@ MODEL (
   name sushi.waiters,
   owner jen,
   cron '@daily',
-  time_column ds
 );
 
 SELECT DISTINCT

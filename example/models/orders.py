@@ -16,8 +16,9 @@ WAITERS = list(range(0, 10))
     -- Table of sushi orders.
     MODEL(
         name sushi.orders,
-        kind incremental,
-        time_column ds,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds,
+        ),
         start '2022-01-01',
         cron '@daily',
         batch_size 30,

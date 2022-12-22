@@ -4,7 +4,6 @@ MODEL (
   owner jen,
   cron '@daily',
   batch_size 10,
-  time_column ds
 );
 
 SELECT

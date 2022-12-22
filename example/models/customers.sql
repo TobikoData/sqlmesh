@@ -1,6 +1,6 @@
 MODEL (
   name sushi.customers,
-  kind full,
+  kind FULL,
   owner jen,
   cron '@daily'
 );

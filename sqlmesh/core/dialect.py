@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import re
 import typing as t
 from difflib import unified_diff
@@ -21,6 +22,10 @@ class Audit(exp.Expression):
 class Jinja(exp.Func):
     arg_types = {"this": True, "expressions": False}
     is_var_len_args = True
+
+
+class ModelKind(exp.Expression):
+    arg_types = {"this": True, "expressions": False}
 
 
 class MacroVar(exp.Var):
@@ -200,6 +205,27 @@ def _parse_order(
     return macro
 
 
+def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
+    key = self._parse_id_var(True)
+
+    if not key:
+        return None
+
+    index = self._index
+    if self._match(TokenType.L_PAREN):
+        self._retreat(index)
+        value = self.expression(
+            exp.Tuple,
+            expressions=self._parse_wrapped_csv(
+                lambda: self._parse_string() or self._parse_id_var()
+            ),
+        )
+    else:
+        value = self._parse_bracket(self._parse_field(any_token=True))
+
+    return self.expression(exp.Property, this=key.name.lower(), value=value)
+
+
 def _create_parser(
     parser_type: t.Type[exp.Expression], table_keys: t.List[str]
 ) -> t.Callable:
@@ -207,7 +233,7 @@ def _create_parser(
         expressions = []
 
         while True:
-            key = self._parse_id_var(True)
+            key = self._parse_id_var(any_token=True)
 
             if not key:
                 break
@@ -218,6 +244,28 @@ def _create_parser(
                 value = exp.table_name(self._parse_table())
             elif key == "columns":
                 value = self._parse_schema()
+            elif key == "kind":
+                id_var = self._parse_id_var(any_token=True)
+                if not id_var:
+                    value = None
+                else:
+                    id_var = id_var.name.lower()
+                    index = self._index
+                    if id_var in (
+                        "incremental_by_time_range",
+                        "incremental_by_unique_key",
+                    ) and self._match(TokenType.L_PAREN):
+                        self._retreat(index)
+                        props = self._parse_wrapped_csv(
+                            functools.partial(_parse_props, self)
+                        )
+                    else:
+                        props = None
+                    value = self.expression(
+                        ModelKind,
+                        this=id_var,
+                        expressions=props,
+                    )
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -238,12 +286,20 @@ PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
 
 def _model_sql(self, expression: exp.Expression) -> str:
     props = ",\n".join(
-        [
-            self.indent(f"{prop.name} {self.sql(prop, 'value')}")
-            for prop in expression.expressions
-        ]
+        self.indent(f"{prop.name} {self.sql(prop, 'value')}")
+        for prop in expression.expressions
     )
     return "\n".join(["MODEL (", props, ")"])
+
+
+def _model_kind_sql(self, expression: ModelKind) -> str:
+    props = ",\n".join(
+        self.indent(f"{prop.this} {self.sql(prop, 'value')}")
+        for prop in expression.expressions
+    )
+    if props:
+        return "\n".join([f"{expression.this} (", props, ")"])
+    return expression.name
 
 
 def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
@@ -420,6 +476,7 @@ def extend_sqlglot() -> None:
                     MacroSQL: lambda self, e: f"@SQL({self.sql(e.this)})",
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
+                    ModelKind: _model_kind_sql,
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (

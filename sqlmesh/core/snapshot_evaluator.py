@@ -102,7 +102,7 @@ class SnapshotEvaluator:
                     self.adapter.insert_overwrite(
                         table_name, query_or_df, columns=columns
                     )
-                elif snapshot.is_incremental_kind:
+                elif snapshot.is_incremental_by_time_range_kind:
                     # A model's time_column could be None but it shouldn't be for an incremental model
                     assert model.time_column
                     where = exp.Between(

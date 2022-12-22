@@ -6,7 +6,8 @@ from sqlglot import exp, parse, parse_one
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
-from sqlmesh.core.model import Model, ModelMeta, TimeColumn, model
+from sqlmesh.core.model import Model, ModelMeta, model
+from sqlmesh.core.model_kind import IncrementalByTimeRange, TimeColumn
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 
@@ -20,7 +21,9 @@ def test_load(assert_exp_eq):
             owner owner_name,
             storage_format iceberg,
             partitioned_by d,
-            time_column a,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+            ),
         );
 
         @DEF(x, 1);
@@ -120,7 +123,9 @@ def test_partitioned_by():
             dialect spark,
             owner owner_name,
             partitioned_by (a, b),
-            time_column a,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column a,
+            ),
         );
 
         SELECT 1::int AS a, 2::int AS b;
@@ -186,7 +191,10 @@ def test_partition_key_is_missing_in_query():
             name db.table,
             dialect spark,
             owner owner_name,
-            partitioned_by (a, b, c, d)
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column a
+            ),
+            partitioned_by (b, c, d)
         );
 
         SELECT 1::int AS a, 2::int AS b;
@@ -261,13 +269,14 @@ def test_render():
         """
         MODEL (
             name db.table,
-            kind incremental,
+            kind INCREMENTAL_BY_TIME_RANGE (
+                time_column (a, 'yyyymmdd')
+            ),
             dialect spark,
             cron '@daily',
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,
-            time_column (a, 'yyyymmdd')
         );
 
         @DEF(x, 1);
@@ -335,7 +344,7 @@ def test_render_query(assert_exp_eq):
     model = Model(
         name="test",
         cron="1 0 * * *",
-        time_column=TimeColumn(column="y"),
+        kind=IncrementalByTimeRange(time_column=TimeColumn(column="y")),
         query=parse_one(
             """
         SELECT y
@@ -377,7 +386,9 @@ def test_time_column():
         """
         MODEL (
             name db.table,
-            time_column ds
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            )
         );
 
         SELECT col::text, ds::text
@@ -392,7 +403,9 @@ def test_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds)
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            )
         );
 
         SELECT col::text, ds::text
@@ -407,8 +420,10 @@ def test_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds, 'yyyy-MM'),
             dialect 'hive',
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds, 'yyyy-MM'),
+            )
         );
 
         SELECT col::text, ds::text
@@ -425,7 +440,9 @@ def test_default_time_column():
         """
         MODEL (
             name db.table,
-            time_column ds
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            )
         );
 
         SELECT col::text, ds::text
@@ -438,7 +455,9 @@ def test_default_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds, "%Y")
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds, "%Y")
+            )
         );
 
         SELECT col::text, ds::text
@@ -452,7 +471,9 @@ def test_default_time_column():
         MODEL (
             name db.table,
             dialect hive,
-            time_column (ds, "dd")
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds, "dd")
+            )
         );
 
         SELECT col::text, ds::text
@@ -467,7 +488,9 @@ def test_convert_to_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds)
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds)
+            )
         );
 
         SELECT ds::text
@@ -483,7 +506,9 @@ def test_convert_to_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds, '%d/%m/%Y')
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds, '%d/%m/%Y')
+            )
         );
 
         SELECT ds::text
@@ -496,7 +521,9 @@ def test_convert_to_time_column():
         """
         MODEL (
             name db.table,
-            time_column (di, '%Y%m%d')
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (di, '%Y%m%d')
+            )
         );
 
         SELECT di::int
@@ -509,7 +536,9 @@ def test_convert_to_time_column():
         """
         MODEL (
             name db.table,
-            time_column (ds, '%Y%m%d')
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column (ds, '%Y%m%d')
+            )
         );
 
         SELECT ds::date
@@ -526,8 +555,9 @@ def test_filter_time_column(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          kind incremental,
-          time_column (ds, '%Y%m%d')
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column (ds, '%Y%m%d')
+          )
         );
 
         SELECT
@@ -558,8 +588,9 @@ def test_filter_time_column(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          kind incremental,
-          time_column (ds, '%Y%m%d')
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column (ds, '%Y%m%d')
+          )
         );
 
         SELECT
@@ -594,7 +625,9 @@ def test_parse_model(assert_exp_eq):
         """
         MODEL (
           name sushi.items,
-          time_column ds,
+          kind INCREMENTAL_BY_TIME_RANGE(
+            time_column ds
+          ),
           dialect '',
         );
 

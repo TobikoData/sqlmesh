@@ -8,6 +8,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.model import Model
+from sqlmesh.core.model_kind import IncrementalByTimeRange, ModelKind, ModelKindName
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.snapshot_evaluator import SnapshotEvaluator
@@ -19,7 +20,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
 
     model = Model(
         name="db.model",
-        kind="snapshot",
+        kind=ModelKind(name=ModelKindName.SNAPSHOT),
         query=parse_one("SELECT a::int FROM tbl"),
     )
 
@@ -44,8 +45,8 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
+        kind=IncrementalByTimeRange(time_column="a"),
         storage_format="parquet",
-        partitioned_by=["a"],
         query=parse_one(
             "SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"
         ),
@@ -80,8 +81,8 @@ def test_promote(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
+        kind=IncrementalByTimeRange(time_column="a"),
         storage_format="parquet",
-        partitioned_by=["a"],
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
 
@@ -137,8 +138,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
+        kind=IncrementalByTimeRange(time_column="a"),
         storage_format="parquet",
-        partitioned_by=["a"],
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
@@ -146,7 +147,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     evaluator.migrate([snapshot], {})
 
     adapter_mock.create_table.assert_called_once_with(
-        "physical_schema.test_schema__test_model__1__tmp__2412699390_0",
+        "physical_schema.test_schema__test_model__1__tmp__2497578715_0",
         query_or_columns=mocker.ANY,
         storage_format=mocker.ANY,
         partitioned_by=mocker.ANY,
@@ -159,7 +160,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     )
 
     adapter_mock.drop_table.assert_called_once_with(
-        "physical_schema.test_schema__test_model__1__tmp__2412699390_0"
+        "physical_schema.test_schema__test_model__1__tmp__2497578715_0"
     )
 
 
