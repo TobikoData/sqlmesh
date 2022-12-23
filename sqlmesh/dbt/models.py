@@ -10,7 +10,7 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKindName, TimeColumn
 from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
-from sqlmesh.utils.datatype import ensure_bool, ensure_list, try_str_to_bool
+from sqlmesh.utils.datatype import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import validator
+from pydantic import Field, validator
 
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta

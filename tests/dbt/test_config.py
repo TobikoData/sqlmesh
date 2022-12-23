@@ -88,8 +88,6 @@ def test_source_config():
         "identifier": "items",
     }
     actual_config = {
-        k: v
-        for k, v in source_configs["items"].dict().items()
-        if k in expected_config
+        k: v for k, v in source_configs["items"].dict().items() if k in expected_config
     }
     assert actual_config == expected_config
