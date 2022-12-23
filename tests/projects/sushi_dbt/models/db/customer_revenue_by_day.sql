@@ -17,7 +17,7 @@ WITH order_total AS (
     ON oi.item_id = i.id AND oi.ds = i.ds
 {% if is_incremental() %}
   WHERE
-    oi.ds > (select max(oi.ds) from {{ this }})
+    oi.ds > (select max(ds) from {{ this }})
 {% endif %}
   GROUP BY
     oi.order_id,
@@ -32,7 +32,7 @@ LEFT JOIN order_total AS ot
   ON o.id = ot.order_id AND o.ds = ot.ds
 {% if is_incremental() %}
 WHERE
-  o.ds > (select max(o.ds) from {{ this }})
+  o.ds > (select max(ds) from {{ this }})
 {% endif %}
 GROUP BY
   o.customer_id,
