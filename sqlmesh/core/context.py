@@ -65,7 +65,7 @@ from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, yesterday_ds
+from sqlmesh.utils.date import TimeLike, now, yesterday_ds
 from sqlmesh.utils.errors import (
     ConfigError,
     MissingDependencyError,
@@ -597,7 +597,12 @@ class Context(BaseContext):
         Returns:
             The populated Plan object.
         """
-        if skip_backfill and not no_gaps and (environment or c.PROD) == c.PROD:
+        if not environment:
+            environment = c.PROD
+        else:
+            environment = environment.lower()
+
+        if skip_backfill and not no_gaps and environment == c.PROD:
             raise ConfigError(
                 "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
@@ -610,13 +615,16 @@ class Context(BaseContext):
                 raise PlanError(f"Environment '{from_}' not found.")
 
             start = start or env.start
-            end = end or env.start
+            end = end or env.end
             snapshots = {
                 snapshot.name: snapshot
                 for snapshot in self.state_reader.get_snapshots(env.snapshots).values()
             }
         else:
             snapshots = {}
+
+        if environment != c.PROD and not end:
+            end = now()
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, snapshots),

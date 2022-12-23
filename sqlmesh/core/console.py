@@ -245,7 +245,7 @@ class TerminalConsole(Console):
         if plan.missing_intervals:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, auto_apply, unbounded_end=unbounded_end)
-        elif plan.context_diff.has_differences:
+        elif plan.context_diff.has_differences and not auto_apply:
             self._prompt_promote(plan)
 
         if auto_apply:
@@ -559,14 +559,11 @@ class NotebookMagicConsole(TerminalConsole):
             ),
         )
 
-        if plan.environment.name == c.PROD:
-            unbounded_end_date_widget = [
-                _checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)
-            ]
-        else:
-            unbounded_end_date_widget = []
-            if plan.is_unbounded_end:
-                plan.end = now()
+        unbounded_end_date_widget = (
+            [_checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)]
+            if plan.environment.name == c.PROD
+            else []
+        )
 
         add_to_layout_widget(
             prompt,
