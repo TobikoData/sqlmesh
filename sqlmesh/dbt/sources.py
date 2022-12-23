@@ -63,8 +63,7 @@ class SourceConfig(BaseConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.List[ColumnConfig]:
-        # TODO
-        return [ColumnConfig(name="Placeholder")]
+        return [ColumnConfig(**column_fields) for column_fields in ensure_list(v)]
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "meta": UpdateStrategy.KEY_UPDATE,
