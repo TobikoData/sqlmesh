@@ -3,7 +3,7 @@
         materialized='incremental',
         incremental_strategy='delete+insert',
         cluster_by=['ds'],
-        unique_key=['ds'],
+        time_column='ds',
     )
 }}
 

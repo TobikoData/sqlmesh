@@ -6,14 +6,13 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, validator
-from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKindName, TimeColumn
-from sqlmesh.dbt.render import render_jinja
+from sqlmesh.core.model import Model, ModelKindName
 from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import yaml
@@ -61,7 +60,9 @@ class ModelConfig(PydanticModel):
     # sqlmesh fields
     path: Path = Path()
     sql: str = ""
-    time_column: t.Optional[TimeColumn] = None
+    time_column: t.Optional[str] = None
+    _depends_on: t.Set[str] = set()
+    _calls: t.Set[str] = set()
 
     # DBT configuration fields
     alias: t.Optional[str] = None
@@ -137,14 +138,6 @@ class ModelConfig(PydanticModel):
 
         return maybe_bool == "true"
 
-    @validator("time_column", pre=True)
-    def _validate_time_column(cls, v: str | TimeColumn) -> TimeColumn:
-        if isinstance(v, str):
-            expression = parse_one(v)
-            assert expression
-            return IncrementalByTimeRange._parse_time_column(expression)
-        return v
-
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "alias": UpdateStrategy.REPLACE,
         "cluster_by": UpdateStrategy.REPLACE,
@@ -179,16 +172,22 @@ class ModelConfig(PydanticModel):
         Returns:
             New ModelConfig updated with the passed in config fields
         """
-        if not config:
-            return self.copy()
+        copy = self.copy()
+        other = ModelConfig(**config)
 
-        fields = self.dict()
-        config = {k: v for k, v in ModelConfig(**config).dict().items() if k in config}
-        for key, value in config.items():
-            fields[key] = update_field(
-                fields.get(key), value, self._FIELD_UPDATE_STRATEGY.get(key)
-            )
-        return ModelConfig(**fields)
+        for field in other.__fields__:
+            if field in config:
+                setattr(
+                    copy,
+                    field,
+                    update_field(
+                        getattr(copy, field),
+                        getattr(other, field),
+                        self._FIELD_UPDATE_STRATEGY.get(field),
+                    ),
+                )
+
+        return copy
 
     def replace(self, other: ModelConfig) -> None:
         """
@@ -197,19 +196,32 @@ class ModelConfig(PydanticModel):
         Args:
             other: The ModelConfig to apply to this instance
         """
-        self.__dict__.update(other.dict())
+        for field in other.__fields_set__:
+            setattr(self, field, getattr(other, field))
 
-    def to_sqlmesh(self) -> Model:
+    def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        expressions = [
-            d.Model(expressions=[exp.Property(this="name", value=self.model_name)]),
-            *d.parse_model(self.sql, default_dialect=""),  # how do we get dialect?
-        ]
+        expressions = d.parse_model(
+            f"""
+            MODEL (
+              name {self.model_name},
+              kind {self.model_kind},
+            );
+            """
+            + self.sql,
+            default_dialect="",
+        )
 
         for jinja in expressions[1:]:
             # find all the refs here and filter the python env?
             if isinstance(jinja, d.Jinja):
                 pass
+
+        def ref_code() -> str:
+            deps = ", ".join(
+                f"'{dep}': '{mapping[dep].model_name}'" for dep in self._depends_on
+            )
+            return f"{{{deps}}}[model_name]"
 
         python_env = {
             "source": Executable(
@@ -218,8 +230,11 @@ class ModelConfig(PydanticModel):
 """,
             ),
             "ref": Executable(
-                payload="""def ref(source_name, table_name):
-    return "ref"
+                payload=f"""def ref(package_name, model_name=None):
+    if model_name:
+        raise Exception("Package not supported.")
+    model_name = package_name
+    return {ref_code()}
 """,
             ),
             "sqlmesh": Executable(
@@ -231,11 +246,13 @@ class ModelConfig(PydanticModel):
             ),
         }
 
+        python_env = {k: v for k, v in python_env.items() if k in self._calls}
+
         return Model.load(
             expressions,
             path=self.path,
             python_env=python_env,
-            time_column=self.time_column,
+            depends_on=self._depends_on,
         )
 
     @property
@@ -249,7 +266,7 @@ class ModelConfig(PydanticModel):
         return ".".join(part for part in (self.schema_, self.identifier) if part)
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind(self) -> str:
         """
         Get the sqlmesh ModelKind
 
@@ -258,14 +275,17 @@ class ModelConfig(PydanticModel):
         """
         materialization = self.materialized
         if materialization == Materialization.TABLE:
-            return ModelKindName.FULL
+            return ModelKindName.FULL.value
         if materialization == Materialization.VIEW:
-            return ModelKindName.VIEW
+            return ModelKindName.VIEW.value
         if materialization == Materialization.INCREMENTAL:
-            return ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
+            if self.time_column:
+                return f"{ModelKindName.INCREMENTAL_BY_TIME_RANGE.value} (TIME_COLUMN {self.time_column})"
+            if self.unique_key:
+                return f"{ModelKindName.INCREMENTAL_BY_UNIQUE_KEY.value} (UNIQUE_KEY ({','.join(self.unique_key)}))"
+            raise ConfigError(f"Incremental needs either unique key or time column.")
         if materialization == Materialization.EPHERMAL:
-            return ModelKindName.EMBEDDED
-
+            return ModelKindName.EMBEDDED.value
         raise ConfigError(f"{materialization.value} materialization not supported")
 
 
@@ -342,7 +362,6 @@ class Models:
                 load_config(value, config, nested_scope)
 
         load_config(model_data, global_config, ())
-        print(scoped_configs.keys())
         return scoped_configs
 
     @classmethod
@@ -379,19 +398,29 @@ class Models:
             update={"path": filepath}
         )
 
-        def config(*args, **kwargs):
-            if args:
-                if isinstance(args[0], dict):
-                    model_config.replace(model_config.update_with(args[0]))
-            if kwargs:
-                model_config.replace(model_config.update_with(kwargs))
+        depends_on = set()
+        calls = set()
 
-        render_jinja(sql, {"config": config})
+        for method, args, kwargs in capture_jinja(sql).calls:
+            calls.add(method)
+            if method == "config":
+                if args:
+                    if isinstance(args[0], dict):
+                        model_config.replace(model_config.update_with(args[0]))
+                if kwargs:
+                    model_config.replace(model_config.update_with(kwargs))
+            elif method == "ref":
+                dep = ".".join(args + tuple(kwargs.values()))
+
+                if dep:
+                    depends_on.add(dep)
 
         if not model_config.identifier and scope:
             model_config.identifier = scope[-1]
 
         model_config.sql = cls._remove_config_jinja(sql)
+        model_config._depends_on = depends_on
+        model_config._calls = calls
 
         return model_config
 
