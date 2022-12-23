@@ -63,6 +63,7 @@ from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
+from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, yesterday_ds
@@ -166,6 +167,7 @@ class Context(BaseContext):
         test_config: A Config object or name of a Config object in config.py to use for testing only
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
+        users: A list of users to make known to SQLMesh.
     """
 
     def __init__(
@@ -184,6 +186,7 @@ class Context(BaseContext):
         test_config: t.Optional[t.Union[Config, str]] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
+        users: t.Optional[t.List[User]] = None,
     ):
         self.console = console or get_console()
         self.path = Path(path).absolute()
@@ -268,6 +271,7 @@ class Context(BaseContext):
 
         self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
         self._path_mtimes: t.Dict[Path, float] = {}
+        self.users = self.config.users + (users or [])
 
         if load:
             self.load()
@@ -813,22 +817,22 @@ class Context(BaseContext):
     ) -> Config:
         if isinstance(config, Config):
             return config
-        config_obj = None
-        if config_module:
-            if config is None:
-                config_obj = getattr(config_module, "config")
-            else:
-                try:
-                    config_obj = getattr(config_module, config)
-                except AttributeError:
-                    raise ConfigError(f"Config {config} not found.")
+        if not config_module:
+            raise ConfigError(
+                "`config_module` must to be specified if not using a Config object."
+            )
+        config = config or "config"
+        try:
+            config_obj = getattr(config_module, config)
+        except AttributeError:
+            raise ConfigError(f"Config {config} not found.")
         if config_obj is None:
             raise ConfigError(
                 "SQLMesh Config could not be found. Point the cli to the right path with `sqlmesh --path`. If you haven't set up SQLMesh, run `sqlmesh init`."
             )
         if not isinstance(config_obj, Config):
             raise ConfigError(
-                f"Config needs to be of type sqlmesh.core.context.Context. Found `{config_obj}` instead."
+                f"Config needs to be of type sqlmesh.core.config.Config. Found `{config_obj}` instead."
             )
         return config_obj
 
@@ -909,6 +913,7 @@ class Context(BaseContext):
         parts = module_name.split(".")
         for i in range(len(parts)):
             sys.modules.pop(".".join(parts[0 : i + 1]), None)
+
         return importlib.import_module(module_name)
 
     def _glob_path(

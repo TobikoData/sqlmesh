@@ -112,6 +112,7 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
+from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
 from sqlmesh.utils.errors import ConfigError
@@ -218,6 +219,7 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
             notification_targets=context.notification_targets,
             backfill_concurrent_tasks=context.backfill_concurrent_tasks,
             ddl_concurrent_tasks=context.ddl_concurrent_tasks,
+            users=context.users,
         )
 
 
@@ -242,6 +244,7 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
                     scopes=["https://www.googleapis.com/auth/cloud-platform"]
                 )[0]
             )
+            self._session.headers.update({"Content-Type": "application/json"})
         return self._session
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
@@ -268,10 +271,11 @@ class Config(PydanticModel):
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
             plan application. Default: 1.
-        ddl_concurrent_task: The number of concurrent tasks used for DDL
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
         evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
             running with the built-in scheduler. Default: 1.
+        users: A list of users that can be used for approvals/notifications.
     """
 
     engine_connection_factory: t.Callable[[], t.Any] = duckdb.connect
@@ -286,6 +290,7 @@ class Config(PydanticModel):
     backfill_concurrent_tasks: int = 1
     ddl_concurrent_tasks: int = 1
     evaluation_concurrent_tasks: int = 1
+    users: t.List[User] = []
 
     class Config:
         arbitrary_types_allowed = True
