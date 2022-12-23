@@ -118,11 +118,7 @@ class EngineAdapter:
             if isinstance(query_or_df, pd.DataFrame):
                 if not column_mapping:
                     raise ValueError("column_mapping must be provided for dataframes")
-                casted_columns = [
-                    exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
-                    for column, kind in column_mapping.items()
-                ]
-                values = next(
+                expression = next(
                     pandas_to_sql(
                         query_or_df,
                         alias=table_name.split(".")[-1],
@@ -133,7 +129,7 @@ class EngineAdapter:
                     this=table,
                     kind="TABLE",
                     replace=True,
-                    expression=exp.select(*casted_columns).from_(values),
+                    expression=expression,
                 )
             else:
                 create = exp.Create(
@@ -215,7 +211,7 @@ class EngineAdapter:
         self,
         view_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Iterable[str] = [],
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -226,7 +222,7 @@ class EngineAdapter:
         Args:
             view_name: The view name.
             query_or_df: A query or dataframe.
-            columns: Columns to use in the view statement.
+            column_mapping: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
@@ -238,15 +234,17 @@ class EngineAdapter:
             if not isinstance(query_or_df, pd.DataFrame):
                 raise SQLMeshError("Can only create views with pandas dataframes.")
 
-            if not columns:
+            if not column_mapping:
                 raise SQLMeshError(
-                    "Creating a view with a dataframe requires passing in columns."
+                    "Creating a view with a dataframe requires passing in column_mapping."
                 )
             schema = exp.Schema(
                 this=schema,
-                expressions=[exp.column(column, quoted=True) for column in columns],
+                expressions=[
+                    exp.column(column, quoted=True) for column in column_mapping
+                ],
             )
-            query_or_df = next(pandas_to_sql(query_or_df))
+            query_or_df = next(pandas_to_sql(query_or_df, columns=column_mapping))
 
         self.execute(
             exp.Create(
@@ -311,7 +309,7 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Iterable[str]] = None,
+        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         self._insert(table_name, query_or_df, columns, overwrite=False)
 
@@ -319,7 +317,7 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Iterable[str]] = None,
+        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         self._insert(table_name, query_or_df, columns, overwrite=True)
 
@@ -328,7 +326,7 @@ class EngineAdapter:
         table_name: str,
         query_or_df: QueryOrDF,
         where: exp.Condition,
-        columns: t.Optional[t.Iterable[str]] = None,
+        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         with self.transaction():
             self.delete_from(table_name, where=where)
@@ -445,7 +443,7 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Iterable[str]],
+        columns: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
         batch_size: int = 10000,
     ) -> None:
@@ -494,12 +492,18 @@ class EngineAdapter:
                     )
                 )
             else:
+                if not columns:
+                    raise SQLMeshError(
+                        "Columns must be specified when using a DataFrame and not using SQLAlchemy or running on DuckDB"
+                    )
                 with self.transaction():
-                    for i, values in enumerate(pandas_to_sql(query_or_df, batch_size)):
+                    for i, expression in enumerate(
+                        pandas_to_sql(query_or_df, columns, batch_size)
+                    ):
                         self.execute(
                             exp.Insert(
                                 this=into,
-                                expression=values,
+                                expression=expression,
                                 overwrite=overwrite if i == 0 else False,
                             )
                         )

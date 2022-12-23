@@ -6,28 +6,32 @@ from sqlglot import exp
 
 def pandas_to_sql(
     df: pd.DataFrame,
+    columns: t.Dict[str, exp.DataType],
     batch_size: int = 0,
-    alias: t.Optional[str] = None,
-    columns: t.Optional[t.Iterable[str]] = None,
-) -> t.Generator[exp.Values, None, None]:
+    alias: str = "t",
+) -> t.Generator[exp.Select, None, None]:
     """Convert a pandas dataframe into a VALUES sql statement.
 
     Args:
         df: A pandas dataframe to convert.
+        columns: Mapping of column names to types to assign to the values.
         batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
-        alias: The alias to assign to the values expression. If None and columns defined then will be assigned to "t"
-        columns: Optional list of column names to assign to the values.
+        alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
         This method operates as a generator and yields a VALUES expression.
     """
-    if columns and not alias:
-        alias = "t"
+    casted_columns = [
+        exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
+        for column, kind in columns.items()
+    ]
     batch = []
     for row in df.itertuples():
         batch.append(row[1:])
         if batch_size > 0 and len(batch) > batch_size:
-            yield exp.values(batch, alias=alias, columns=columns)
+            values = exp.values(batch, alias=alias, columns=columns)
+            yield exp.select(*casted_columns).from_(values)
             batch.clear()
     if batch:
-        yield exp.values(batch, alias=alias, columns=columns)
+        values = exp.values(batch, alias=alias, columns=columns)
+        yield exp.select(*casted_columns).from_(values)
