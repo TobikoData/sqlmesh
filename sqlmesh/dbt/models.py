@@ -9,11 +9,11 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, ModelKindName
 from sqlmesh.dbt.update import UpdateStrategy, update_field
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
-from sqlmesh.utils.jinja import CapturedQuery, capture_jinja
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import yaml
 
@@ -61,8 +61,8 @@ class ModelConfig(PydanticModel):
     path: Path = Path()
     sql: str = ""
     time_column: t.Optional[str] = None
-    depends_on: t.Set[str] = set()
-    calls: t.Set[str] = set()
+    _depends_on: t.Set[str] = set()
+    _calls: t.Set[str] = set()
 
     # DBT configuration fields
     alias: t.Optional[str] = None
@@ -199,7 +199,7 @@ class ModelConfig(PydanticModel):
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
 
-    def to_sqlmesh(self) -> Model:
+    def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
             f"""
@@ -218,11 +218,10 @@ class ModelConfig(PydanticModel):
                 pass
 
         def ref_code() -> str:
-            if self.database and self.schema_:
-                return f"'{self.database}.{self.schema_}.' + model_name"
-            if self.schema_:
-                return f"'{self.schema_}.' + model_name"
-            return "model_name"
+            deps = ", ".join(
+                f"'{dep}': '{mapping[dep].model_name}'" for dep in self._depends_on
+            )
+            return f"{{{deps}}}[model_name]"
 
         python_env = {
             "source": Executable(
@@ -247,13 +246,13 @@ class ModelConfig(PydanticModel):
             ),
         }
 
-        python_env = {k: v for k, v in python_env.items() if k in self.calls}
+        python_env = {k: v for k, v in python_env.items() if k in self._calls}
 
         return Model.load(
             expressions,
             path=self.path,
             python_env=python_env,
-            depends_on=self.depends_on,
+            depends_on=self._depends_on,
         )
 
     @property
@@ -276,17 +275,17 @@ class ModelConfig(PydanticModel):
         """
         materialization = self.materialized
         if materialization == Materialization.TABLE:
-            return "FULL"
+            return ModelKindName.FULL.value
         if materialization == Materialization.VIEW:
-            return "VIEW"
+            return ModelKindName.VIEW.value
         if materialization == Materialization.INCREMENTAL:
             if self.time_column:
-                return f"INCREMENTAL_BY_TIME_RANGE (TIME_COLUMN {self.time_column})"
+                return f"{ModelKindName.INCREMENTAL_BY_TIME_RANGE.value} (TIME_COLUMN {self.time_column})"
             if self.unique_key:
-                return f"INCREMENTAL_BY_UNIQUE_KEY (UNIQUE_KEY ({','.join(self.unique_key)}))"
+                return f"{ModelKindName.INCREMENTAL_BY_UNIQUE_KEY.value} (UNIQUE_KEY ({','.join(self.unique_key)}))"
             raise ConfigError(f"Incremental needs either unique key or time column.")
         if materialization == Materialization.EPHERMAL:
-            return "EMBEDDED"
+            return ModelKindName.EMBEDDED.value
         raise ConfigError(f"{materialization.value} materialization not supported")
 
 
@@ -420,8 +419,8 @@ class Models:
             model_config.identifier = scope[-1]
 
         model_config.sql = cls._remove_config_jinja(sql)
-        model_config.depends_on = depends_on
-        model_config.calls = calls
+        model_config._depends_on = depends_on
+        model_config._calls = calls
 
         return model_config
 
