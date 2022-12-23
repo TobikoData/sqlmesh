@@ -27,8 +27,6 @@ Because we understand that everyone's data stack is different, SQLMesh supports 
 ## Local DuckDB
 SQLMesh can be run on your laptop without any other infrastructure. If you'd like to run SQLMesh against local files using DuckDB, you can get started in just a few minutes.
 
-[//]: # (Put instructions for this here?)
-
 ## Airflow
 Refer to `sqlmesh.schedulers.airflow`.
 

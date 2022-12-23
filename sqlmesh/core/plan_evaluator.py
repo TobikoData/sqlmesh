@@ -5,15 +5,13 @@ A plan evaluator is responsible for evaluating a plan when it is being applied.
 
 # Evaluation steps
 
-At a high level, when a plan is evaluated, SQLMesh will
+At a high level, when a plan is evaluated, SQLMesh will:
 - Push new snapshots to the state sync.
 - Create snapshot tables.
 - Backfill data.
 - Promote the snapshots.
 
-# See also
-
-`sqlmesh.core.plan`
+Refer to `sqlmesh.core.plan`.
 """
 import abc
 import typing as t
@@ -37,7 +35,7 @@ class PlanEvaluator(abc.ABC):
         """Evaluates a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state and then kicks off
-        the backfill process for all affected snapshots. Once backfill is done
+        the backfill process for all affected snapshots. Once backfill is done,
         snapshots that are part of the plan are promoted in the environment targeted
         by this plan.
 

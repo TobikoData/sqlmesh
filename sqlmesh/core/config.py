@@ -1,11 +1,10 @@
 """
 # Configuring SQLMesh
 
-You can configure your project in multiple places and SQLMesh will prioritize configurations according to
-the following order of precedence.
+You can configure your project in multiple places, and SQLMesh will prioritize configurations according to
+the following order. From least to greatest precedence:
 
-From least to greatest precedence:
-- A Config object defined in a config.py file at the root of your project.
+- A Config object defined in a config.py file at the root of your project:
     ```python
     # config.py
     import duckdb
@@ -20,7 +19,7 @@ From least to greatest precedence:
     >>> context = Context(path="example", config="local_config")
 
     ```
-- A Config object used when initializing a Context.
+- A Config object used when initializing a Context:
     ```python
     >>> from sqlmesh import Context
     >>> from sqlmesh.core.config import Config
@@ -31,7 +30,7 @@ From least to greatest precedence:
     >>> context = Context(path="example", config=my_config)
 
     ```
-- Individual config parameters used when initializing a Context.
+- Individual config parameters used when initializing a Context:
     ```python
     >>> from sqlmesh import Context
     >>> from sqlmesh.core.engine_adapter import create_engine_adapter
@@ -47,8 +46,8 @@ From least to greatest precedence:
 # Using Config
 
 The most common way to configure your SQLMesh project is with a `config.py` module at the root of the
-project.  A SQLMesh Context will automatically look for Config objects there. You can have multiple
-Config objects defined and then tell Context which one to use. For example, you can have different
+project. A SQLMesh Context will automatically look for Config objects there. You can have multiple
+Config objects defined, and then tell Context which one to use. For example, you can have different
 Configs for local and production environments, Airflow, and Model tests.
 
 Example config.py:

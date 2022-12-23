@@ -77,11 +77,9 @@ class MacroEvaluator:
 
     SQLMesh supports special preprocessed SQL prefixed with `@`. Although it provides similar power to
     traditional methods like string templating, there is semantic understanding of SQL which prevents
-    common errors like leading/trailing commas, syntax errors etc.
+    common errors like leading/trailing commas, syntax errors, etc.
 
-    SQLMesh SQL allows for macro variables and macro functions.
-
-    Macro variables take the form of @variable. These are used for variable substitution.
+    SQLMesh SQL allows for macro variables and macro functions. Macro variables take the form of @variable. These are used for variable substitution.
 
     SELECT * FROM foo WHERE ds BETWEEN @start_date AND @end_date
 
@@ -228,7 +226,7 @@ class MacroEvaluator:
 class macro(registry_decorator):
     """Specifies a function is a macro and registers it the global MACROS registry.
 
-    Registered macros can be referenced in SQL statements to make queries more dynamic or cleaner.
+    Registered macros can be referenced in SQL statements to make queries more dynamic/cleaner.
 
     Example:
         from typing import t
