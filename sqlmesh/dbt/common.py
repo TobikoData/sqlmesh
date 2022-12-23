@@ -86,7 +86,7 @@ def update_field(
 class BaseConfig(PydanticModel):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {}
 
-    def update_with(self, config: t.Dict[str, t.Any]) -> T:
+    def update_with(self: T, config: t.Dict[str, t.Any]) -> T:
         """
         Update this instance's fields with the passed in config fields and return a new instance
 
