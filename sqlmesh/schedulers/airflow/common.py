@@ -9,6 +9,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotTableInfo,
 )
+from sqlmesh.core.user import User
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -49,6 +50,7 @@ class PlanReceiverDagConf(PydanticModel):
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
+    users: t.List[User]
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):
@@ -72,6 +74,7 @@ class PlanApplicationRequest(PydanticModel):
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
+    users: t.List[User]
 
 
 def snapshot_xcom_key(snapshot: SnapshotIdLike) -> str:

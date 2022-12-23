@@ -1,7 +1,9 @@
 from airflow.models import BaseOperator
 
+from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
+from sqlmesh.integrations.github.shared import add_comment_to_pr
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
@@ -11,6 +13,10 @@ from sqlmesh.schedulers.airflow.operators.notification import (
 class GithubNotificationOperatorProvider(
     BaseNotificationOperatorProvider[GithubNotificationTarget]
 ):
+    """
+    Github Notification Operator for Airflow.
+    """
+
     def operator(
         self,
         target: GithubNotificationTarget,
@@ -19,21 +25,32 @@ class GithubNotificationOperatorProvider(
         **dag_kwargs,
     ) -> BaseOperator:
         from airflow.providers.github.operators.github import GithubOperator
-        from github.Repository import Repository
 
-        def post_comment(repo: Repository) -> None:
-            issue = repo.get_issue(number=int(target.pull_request_info["pr_number"]))
-            issue.create_comment(msg)
+        if plan_status.is_started:
+            notification_status = NotificationStatus.PROGRESS
+            msg = f"Updating Environment `{plan_application_request.environment_name}`"
+        elif plan_status.is_finished:
+            notification_status = NotificationStatus.SUCCESS
+            msg = f"Updated Environment `{plan_application_request.environment_name}`"
+        else:
+            notification_status = NotificationStatus.FAILURE
+            msg = f"Failed to Update Environment `{plan_application_request.environment_name}`"
 
-        # Basic message until follow up PR
-        msg = f"Apply {plan_status.value}"
+        bot_users = [user for user in plan_application_request.users if user.is_bot]
+        bot_user_to_append_to = bot_users[0] if bot_users else None
 
         return GithubOperator(
             task_id=self.get_task_id(target, plan_status),
             trigger_rule=self.get_trigger_rule(plan_status),
             github_method="get_repo",
             github_method_args={
-                "full_name_or_id": target.pull_request_info["full_repo_path"]
+                "full_name_or_id": target.pull_request_info.full_repo_path
             },
-            result_processor=post_comment,
+            result_processor=lambda repo: add_comment_to_pr(
+                repo,
+                target.pull_request_info,
+                notification_status,
+                msg,
+                user_to_append_to=bot_user_to_append_to,
+            ),
         )

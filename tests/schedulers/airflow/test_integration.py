@@ -125,6 +125,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
+        users=[],
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -188,6 +189,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
+        users=[],
     )
 
 
@@ -211,6 +213,7 @@ def test_plan_receiver_task_duplicated_snapshot(
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
+        users=[],
     )
 
     task_instance_mock = mocker.Mock()
@@ -255,6 +258,7 @@ def test_plan_receiver_task_unbounded_end(
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
+        users=[],
     )
 
     task_instance_mock = mocker.Mock()

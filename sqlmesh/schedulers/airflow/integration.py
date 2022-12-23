@@ -235,6 +235,7 @@ def _plan_receiver_task(
         notification_targets=plan_conf.notification_targets,
         backfill_concurrent_tasks=plan_conf.backfill_concurrent_tasks,
         ddl_concurrent_tasks=plan_conf.ddl_concurrent_tasks,
+        users=plan_conf.users,
     )
 
     ti.xcom_push(
