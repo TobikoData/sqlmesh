@@ -356,10 +356,10 @@ class EngineAdapter:
         on = exp.and_(
             *(
                 exp.EQ(
-                    this=exp.column(key, target_table),
-                    expression=exp.column(key, SOURCE_ALIAS),
+                    this=exp.column(part, target_table),
+                    expression=exp.column(part, SOURCE_ALIAS),
                 )
-                for key in unique_key
+                for part in unique_key
             )
         )
         when_matched = exp.When(

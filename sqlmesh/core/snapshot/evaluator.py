@@ -127,9 +127,6 @@ class SnapshotEvaluator:
                         columns_to_types=columns_to_types,
                     )
                 elif snapshot.is_incremental_by_unique_key_kind:
-                    # A model's unique_key could be None but
-                    # it shouldn't be for an incremental by unique key model
-                    assert model.unique_key
                     self.adapter.merge(
                         table_name,
                         query_or_df,

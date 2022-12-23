@@ -170,10 +170,10 @@ class ModelMeta(PydanticModel):
         return None
 
     @property
-    def unique_key(self) -> t.Optional[t.List[str]]:
+    def unique_key(self) -> t.List[str]:
         if isinstance(self.kind, IncrementalByUniqueKey):
             return self.kind.unique_key
-        return None
+        return []
 
     @property
     def partitioned_by(self) -> t.List[str]:
