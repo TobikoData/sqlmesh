@@ -29,7 +29,7 @@ class SourceConfig(BaseConfig):
         columns: Columns within the source
     """
 
-    name: str
+    name: t.Optional[str] = None
     description: t.Optional[str] = None
     meta: t.Optional[t.Dict[str, t.Any]] = {}
     database: t.Optional[str] = None
@@ -63,6 +63,7 @@ class SourceConfig(BaseConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.List[ColumnConfig]:
+        # TODO
         return [ColumnConfig(name="Placeholder")]
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
