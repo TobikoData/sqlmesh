@@ -108,7 +108,8 @@ class SnapshotEvaluator:
                         table_name, query_or_df, columns_to_types=columns_to_types
                     )
                 elif snapshot.is_incremental_by_time_range_kind:
-                    # A model's time_column could be None but it shouldn't be for an incremental model
+                    # A model's time_column could be None but
+                    # it shouldn't be for an incremental by time range model
                     assert model.time_column
                     low, high = [
                         model.convert_to_time_column(dt)
@@ -124,6 +125,16 @@ class SnapshotEvaluator:
                         query_or_df,
                         where=where,
                         columns_to_types=columns_to_types,
+                    )
+                elif snapshot.is_incremental_by_unique_key_kind:
+                    # A model's unique_key could be None but
+                    # it shouldn't be for an incremental by unique key model
+                    assert model.unique_key
+                    self.adapter.merge(
+                        table_name,
+                        query_or_df,
+                        columns=columns,
+                        unique_key=model.unique_key,
                     )
                 else:
                     self.adapter.insert_append(

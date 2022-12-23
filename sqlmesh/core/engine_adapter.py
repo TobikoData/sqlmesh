@@ -22,6 +22,7 @@ from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
+SOURCE_ALIAS = "src"
 DF_TYPES: t.Tuple = (pd.DataFrame,)
 pyspark = optional_import("pyspark")
 
@@ -347,17 +348,18 @@ class EngineAdapter:
     def merge(
         self,
         target_table: str,
-        source_table: str,
+        source_table: QueryOrDF,
         columns: t.Iterable[str],
-        unique_keys: t.Iterable[str],
+        unique_key: t.Iterable[str],
     ):
+        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
             *(
                 exp.EQ(
                     this=exp.column(key, target_table),
-                    expression=exp.column(key, source_table),
+                    expression=exp.column(key, SOURCE_ALIAS),
                 )
-                for key in unique_keys
+                for key in unique_key
             )
         )
         when_matched = exp.When(
@@ -365,7 +367,7 @@ class EngineAdapter:
             then=exp.update(
                 None,
                 properties={
-                    exp.column(col, target_table): exp.column(col, source_table)
+                    exp.column(col, target_table): exp.column(col, SOURCE_ALIAS)
                     for col in columns
                 },
             ),
@@ -375,14 +377,14 @@ class EngineAdapter:
             then=exp.Insert(
                 this=exp.Tuple(expressions=[exp.column(col) for col in columns]),
                 expression=exp.Tuple(
-                    expressions=[exp.column(col, source_table) for col in columns]
+                    expressions=[exp.column(col, SOURCE_ALIAS) for col in columns]
                 ),
             ),
         )
         self.execute(
             exp.Merge(
                 this=target_table,
-                using=source_table,
+                using=using,
                 on=on,
                 expressions=[
                     when_matched,

@@ -170,6 +170,12 @@ class ModelMeta(PydanticModel):
         return None
 
     @property
+    def unique_key(self) -> t.Optional[t.List[str]]:
+        if isinstance(self.kind, IncrementalByUniqueKey):
+            return self.kind.unique_key
+        return None
+
+    @property
     def partitioned_by(self) -> t.List[str]:
         time_column = [self.time_column.column] if self.time_column else []
         return unique([*time_column, *(self.partitioned_by_ or [])])

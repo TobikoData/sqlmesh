@@ -533,27 +533,31 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.fingerprint == self.version
 
     @property
-    def is_full_kind(self):
+    def is_full_kind(self) -> bool:
         return self.model.kind.is_full
 
     @property
-    def is_view_kind(self):
+    def is_view_kind(self) -> bool:
         return self.model.kind.is_view
 
     @property
-    def is_incremental_by_time_range_kind(self):
+    def is_incremental_by_time_range_kind(self) -> bool:
         return self.model.kind.is_incremental_by_time_range
 
     @property
-    def is_snapshot_kind(self):
+    def is_incremental_by_unique_key_kind(self):
+        return self.model.kind.is_incremental_by_unique_key
+
+    @property
+    def is_snapshot_kind(self) -> bool:
         return self.model.kind.is_snapshot
 
     @property
-    def is_embedded_kind(self):
+    def is_embedded_kind(self) -> bool:
         return self.model.kind.is_embedded
 
     @property
-    def is_materialized(self):
+    def is_materialized(self) -> bool:
         return self.model.kind.is_materialized
 
 

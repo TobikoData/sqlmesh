@@ -359,25 +359,25 @@ def test_merge(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.merge(
         target_table="target",
-        source_table="source",
+        source_table="SELECT id, ts, val FROM source",
         columns=["id", "ts", "val"],
-        unique_keys=["id"],
+        unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS src ON `target`.`id` = `src`.`id` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `src`.`id`, `target`.`ts` = `src`.`ts`, `target`.`val` = `src`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`src`.`id`, `src`.`ts`, `src`.`val`)"
     )
 
     cursor_mock.reset_mock()
     adapter.merge(
         target_table="target",
-        source_table="source",
+        source_table="SELECT id, ts, val FROM source",
         columns=["id", "ts", "val"],
-        unique_keys=["id", "ts"],
+        unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` AND `target`.`ts` = `source`.`ts` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS src ON `target`.`id` = `src`.`id` AND `target`.`ts` = `src`.`ts` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `src`.`id`, `target`.`ts` = `src`.`ts`, `target`.`val` = `src`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`src`.`id`, `src`.`ts`, `src`.`val`)"
     )
