@@ -26,18 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 class SQLMeshAirflow:
-    """The entrypoint for the SQLMesh integration with Airflow.
+    """The entry point for the SQLMesh integration with Airflow.
 
     The instance of this class should be created in a module that is part of the
-    Airflow DAGs folder. Its primary purpose is to create DAG objects for operational
-    needs of the platform as well as for model evaluation and backfills.
+    Airflow DAGs folder. Its primary purpose is to create DAG objects for the operational
+    needs of the platform, as well as for model evaluation and backfills.
 
-    Please note that it's a responsibility of a user to pass created DAGs into the
-    Airflow scheduler (see the example below).
+    Please note that the user must pass created DAGs into the
+    Airflow scheduler. See the example below:
 
     Example:
         Create a new python module in the Airflow DAGs folder called "sqlmesh_integration.py"
-        with the following content::
+        with the following content:
 
             from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
 
@@ -45,14 +45,14 @@ class SQLMeshAirflow:
                 globals()[dag.dag_id] = dag
 
     Args:
-        engine_operarator: The type of the Airflow operator which will be used for model evaluation.
-            If a string value is passed, an automatic operator discovery will be attempted based
+        engine_operarator: The type of the Airflow operator that will be used for model evaluation.
+            If a string value is passed, an automatic operator discovery is attempted based
             on the engine name specified in the string. Supported string values are: spark.
-        engine_operator_args: The dictionary of arguments which will be passed into the engine
-            operator during its construction. This can be used to customize parameters like
+        engine_operator_args: The dictionary of arguments that will be passed into the engine
+            operator during its construction. This can be used to customize parameters such as
             connection ID.
-        ddl_engine_operator_args: Same as `engine_operator_args` but only used for the
-            snapshot promotion process. If not specified falls back to using `engine_operator_args`.
+        ddl_engine_operator_args: Same as `engine_operator_args`, but only used for the
+            snapshot promotion process. If not specified, falls back to using `engine_operator_args`.
         janitor_interval: Defines how often the janitor DAG runs.
             The janitor DAG removes platform-managed DAG instances that are pending
             deletion from Airflow. Default: 1 hour.
@@ -81,7 +81,7 @@ class SQLMeshAirflow:
 
     @property
     def dags(self) -> t.List[DAG]:
-        """Returns all DAG instances that need to be registered with the Airflow scheduler
+        """Returns all DAG instances that must be registered with the Airflow scheduler
         for the integration to work.
 
         Returns:

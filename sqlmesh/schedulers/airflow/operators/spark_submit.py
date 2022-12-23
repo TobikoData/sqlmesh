@@ -21,13 +21,13 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         target: The target that will be executed by this operator instance.
         application_name: The name of the submitted application (default sqlmesh-spark).
         spark_conf: Spark configuration properties.
-        connection_id: The Airflow Connection ID as described in
+        connection_id: The Airflow connection ID as described in
             https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/stable/connections/spark.html
             (default spark_default).
         total_executor_cores: (Srandalone & Mesos only) The total number of cores for all executors.
         executor_cores: (Standalone, YARN and Kubernetes only) The number of cores per executor.
-        executor_memory: The amount of memory allocated to each executor (eg. 1024M, 2G).
-        driver_memory: The amount of memory allocated to the driver (eg. 1024M, 2G).
+        executor_memory: The amount of memory allocated to each executor (e.g. 1024M, 2G).
+        driver_memory: The amount of memory allocated to the driver (e.g. 1024M, 2G).
         keytab: The full path to the file that contains the keytab.
         principal: The name of the Kerberos principal used for the keytab.
         proxy_user: The name of a user which should be impersonated when submitting the application.

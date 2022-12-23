@@ -2,9 +2,9 @@
 # EngineAdapter
 
 Engine adapters are how SQLMesh connects and interacts with various data stores. They allow SQLMesh to
-generalize its functionality to different engines that have Python Database API 2.0 compliant
-connections. Rather than executing queries directly against your data stores, SQLMesh components like
-the SnapshotEvaluator delegates them to engine adapters so these components can be engine agnostic.
+generalize its functionality to different engines that have Python Database API 2.0-compliant
+connections. Rather than executing queries directly against your data stores, SQLMesh components such as
+the SnapshotEvaluator delegate them to engine adapters so these components can be engine-agnostic.
 """
 from __future__ import annotations
 
@@ -38,11 +38,11 @@ logger = logging.getLogger(__name__)
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
 
-    The EngineAdapter is an easily subclassable interface that interacts
+    The EngineAdapter is an easily-subclassable interface that interacts
     with the underlying engine and data store.
 
     Args:
-        connection_factory: a callable which produces a new Database API compliant
+        connection_factory: a callable which produces a new Database API-compliant
             connection on every call.
         dialect: The dialect with which this adapter is associated.
         multithreaded: Indicates whether this adapter will be used by more than one thread.

@@ -1,8 +1,8 @@
 """
 # ContextDiff
 
-ContextDiff encapsulate the differences between two environments. The two environments can be the local
-environment and a remote environment or two remote environments. ContextDiff is an important part of
+ContextDiff encapsulates the differences between two environments. The two environments can be the local
+environment and a remote environment, or two remote environments. ContextDiff is an important part of
 SQLMesh. SQLMesh plans use ContextDiff to determine what models were changed between two environments.
 The SQLMesh CLI diff command uses ContextDiff to determine what to visualize.
 
@@ -25,7 +25,7 @@ if t.TYPE_CHECKING:
 class ContextDiff(PydanticModel):
     """ContextDiff is an object representing the difference between two environments.
 
-    The two environments can be the local environment and a remote environment or two remote
+    The two environments can be the local environment and a remote environment, or two remote
     environments.
     """
 

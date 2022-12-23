@@ -9,11 +9,11 @@ from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
 
 
 class SQLMeshDatabricksSQLOperator(BaseOperator):
-    """The operator which evaluates a SQLMesh model snapshot on a Databricks cluster
+    """The operator that evaluates a SQLMesh model snapshot on a Databricks cluster.
 
     Args:
         target: The target that will be executed by this operator instance.
-        databricks_conn_id: The Airflow connection id for the databricks target
+        databricks_conn_id: The Airflow connection id for the databricks target.
     """
 
     def __init__(
