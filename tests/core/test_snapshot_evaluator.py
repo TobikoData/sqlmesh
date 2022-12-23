@@ -148,21 +148,10 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     evaluator.migrate([snapshot], {})
 
-    adapter_mock.create_table.assert_called_once_with(
-        "physical_schema.test_schema__test_model__1__tmp__2497578715_0",
-        query_or_columns_to_types=mocker.ANY,
-        storage_format=mocker.ANY,
-        partitioned_by=mocker.ANY,
-    )
-
     adapter_mock.alter_table.assert_called_once_with(
         snapshot.table_name(),
         {"a": "INT"},
         ["b"],
-    )
-
-    adapter_mock.drop_table.assert_called_once_with(
-        "physical_schema.test_schema__test_model__1__tmp__2497578715_0"
     )
 
 
@@ -224,6 +213,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     new_snapshot = make_snapshot(updated_model)
     new_snapshot.version = snapshot.version
 
+    evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot], {})
 
     evaluator.evaluate(

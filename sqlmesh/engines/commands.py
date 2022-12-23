@@ -69,6 +69,7 @@ def evaluate(
         end=command_payload.end,
         latest=command_payload.latest,
         mapping=command_payload.table_mapping,
+        is_dev=command_payload.is_dev,
     )
 
 

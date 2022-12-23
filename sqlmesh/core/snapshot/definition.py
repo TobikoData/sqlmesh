@@ -113,6 +113,12 @@ class SnapshotInfoMixin(FingerprintMixin):
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
+    def is_dev_table(self, is_dev: bool) -> bool:
+        """Provided whether the snapshot is used in a development mode or not, returns True
+        if the snapshot targets a temporary table or a clone and False otherwise.
+        """
+        return is_dev and not self.is_new_version
+
     @property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, fingerprint=self.fingerprint)
@@ -131,6 +137,10 @@ class SnapshotInfoMixin(FingerprintMixin):
 
     @property
     def data_version(self) -> SnapshotDataVersion:
+        raise NotImplementedError
+
+    @property
+    def is_new_version(self) -> bool:
         raise NotImplementedError
 
     @property
@@ -154,7 +164,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
             self.physical_schema,
             self.name,
             self.version if not is_dev else self.fingerprint,
-            is_dev=is_dev and self.version != self.fingerprint,
+            is_temp=self.is_dev_table(is_dev),
         )
 
     @property
@@ -471,7 +481,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.physical_schema,
             self.name,
             self.version if not is_dev else self.fingerprint,
-            is_dev=is_dev and self.version != self.fingerprint,
+            is_temp=self.is_dev_table(is_dev),
         )
 
     @property
@@ -552,9 +562,9 @@ SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 
 
 def table_name(
-    physical_schema: str, name: str, version: str, is_dev: bool = False
+    physical_schema: str, name: str, version: str, is_temp: bool = False
 ) -> str:
-    temp_suffx = "__temp" if is_dev else ""
+    temp_suffx = "__temp" if is_temp else ""
     return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
 
 

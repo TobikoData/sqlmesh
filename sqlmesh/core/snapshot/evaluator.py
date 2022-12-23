@@ -259,6 +259,7 @@ class SnapshotEvaluator:
         latest: t.Optional[TimeLike] = None,
         mapping: t.Optional[t.Dict[str, str]] = None,
         raise_exception: bool = True,
+        is_dev: bool = False,
         **kwargs,
     ) -> t.List[AuditResult]:
         """Execute a snapshot's model's audit queries.
@@ -268,9 +269,14 @@ class SnapshotEvaluator:
             end: The end datetime to audit. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             mapping: Mapping of model references to physical snapshots.
-            collection_exceptions:
+            is_dev: Indicates whether the auditing happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        if snapshot.is_dev_table(is_dev):
+            # We can't audit a temporary table.
+            return []
+
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
         results = []
         for audit, query in snapshot.model.render_audit_queries(
@@ -355,23 +361,8 @@ class SnapshotEvaluator:
         if not snapshot.is_materialized:
             return
 
-        tmp_table_name = f"{snapshot.table_name()}__tmp__{snapshot.fingerprint}"
+        tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
-
-        parent_tables_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid].table_name()
-            for p_sid in snapshot.parents
-        }
-
-        logger.info("Creating a temporary table '%s'", tmp_table_name)
-        self.adapter.create_table(
-            tmp_table_name,
-            query_or_columns_to_types=snapshot.model.columns_to_types
-            if snapshot.model.annotated
-            else snapshot.model.ctas_query(parent_tables_by_name),
-            storage_format=snapshot.model.storage_format,
-            partitioned_by=snapshot.model.partitioned_by,
-        )
 
         schema_deltas = self._schema_diff_calculator.calculate(
             target_table_name, tmp_table_name
@@ -393,9 +384,6 @@ class SnapshotEvaluator:
             dropped_columns,
         )
         self.adapter.alter_table(target_table_name, added_columns, dropped_columns)
-
-        logger.info("Dropping the temporary table '%s'", tmp_table_name)
-        self.adapter.drop_table(tmp_table_name)
 
     def _promote_snapshot(
         self, snapshot: SnapshotInfoLike, environment: str, is_dev: bool

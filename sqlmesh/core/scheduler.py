@@ -105,6 +105,7 @@ class Scheduler:
             end=end,
             latest=latest,
             mapping=mapping,
+            is_dev=is_dev,
             **kwargs,
         )
         self.state_sync.add_interval(snapshot.snapshot_id, start, end, is_dev=is_dev)
