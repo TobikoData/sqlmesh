@@ -175,6 +175,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             notification_targets=self.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            users=self.users,
         )
 
         if self.blocking:
