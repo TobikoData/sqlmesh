@@ -58,7 +58,7 @@ def test_load(assert_exp_eq):
     assert model.dialect == "spark"
     assert model.storage_format == "iceberg"
     assert model.partitioned_by == ["a", "d"]
-    assert model.columns == {
+    assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
         "c": exp.DataType.build("boolean"),
@@ -644,7 +644,7 @@ def test_parse_model(assert_exp_eq):
     """
     )
     model = Model.load(expressions, dialect="hive")
-    assert model.columns == {
+    assert model.columns_to_types == {
         "ds": exp.DataType.build("unknown"),
         "id": exp.DataType.build("int"),
     }

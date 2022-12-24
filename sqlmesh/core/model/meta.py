@@ -50,7 +50,7 @@ class ModelMeta(PydanticModel):
         default=None, alias="partitioned_by"
     )
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    columns_: t.Optional[t.Dict[str, exp.DataType]] = Field(
+    columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
     )
     _croniter: t.Optional[croniter] = None
@@ -111,7 +111,7 @@ class ModelMeta(PydanticModel):
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
-    @validator("columns_", pre=True)
+    @validator("columns_to_types_", pre=True)
     def _columns_validator(cls, v: t.Any) -> t.Optional[t.Dict[str, exp.DataType]]:
         if isinstance(v, exp.Schema):
             return {column.name: column.args["kind"] for column in v.expressions}
