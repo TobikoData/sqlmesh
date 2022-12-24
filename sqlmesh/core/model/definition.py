@@ -52,7 +52,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
     ),
     "depends_on_": lambda value: exp.Tuple(expressions=value),
-    "column_mapping_": lambda value: exp.Schema(
+    "columns_to_types_": lambda value: exp.Schema(
         expressions=[
             exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
         ]
@@ -118,7 +118,7 @@ class Model(ModelMeta, frozen=True):
     )
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
-    _column_mapping: t.Optional[t.Dict[str, exp.DataType]] = Field(
+    _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
     )
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
@@ -274,19 +274,21 @@ class Model(ModelMeta, frozen=True):
         return self._column_descriptions
 
     @property
-    def column_mapping(self) -> t.Dict[str, exp.DataType]:
+    def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         """Returns the mapping of column names to types of this model."""
-        if self.column_mapping_:
-            return self.column_mapping_
+        if self.columns_to_types_:
+            return self.columns_to_types_
 
-        if self._column_mapping is None or isinstance(self._column_mapping, FieldInfo):
+        if self._columns_to_types is None or isinstance(
+            self._columns_to_types, FieldInfo
+        ):
             query = annotate_types(self._render_query())
-            self._column_mapping = {
+            self._columns_to_types = {
                 expression.alias_or_name: expression.type
                 for expression in query.expressions
             }
 
-        return self._column_mapping
+        return self._columns_to_types
 
     @property
     def contains_star_query(self) -> bool:
@@ -301,7 +303,7 @@ class Model(ModelMeta, frozen=True):
         """Checks if all column projection types of this model are known."""
         return all(
             column_type.this != exp.DataType.Type.UNKNOWN
-            for column_type in self.column_mapping.values()
+            for column_type in self.columns_to_types.values()
         )
 
     def render(self) -> t.List[exp.Expression]:
@@ -425,7 +427,7 @@ class Model(ModelMeta, frozen=True):
                 self._query_cache[key] = exp.select(
                     *(
                         exp.alias_(f"NULL::{column_type}", name)
-                        for name, column_type in self.column_mapping.items()
+                        for name, column_type in self.columns_to_types.items()
                     )
                 )
 
@@ -437,7 +439,7 @@ class Model(ModelMeta, frozen=True):
                     rules=RENDER_OPTIMIZER_RULES,
                 )
 
-                self._column_mapping = {
+                self._columns_to_types = {
                     expression.alias_or_name: expression.type
                     for expression in self._query_cache[key].expressions
                 }
@@ -706,7 +708,7 @@ class Model(ModelMeta, frozen=True):
             if self.time_column.format:
                 time = to_datetime(time).strftime(self.time_column.format)
 
-            time_column_type = self.column_mapping[self.time_column.column]
+            time_column_type = self.columns_to_types[self.time_column.column]
             if time_column_type.this in exp.DataType.TEXT_TYPES:
                 return exp.Literal.string(time)
             elif time_column_type.this in exp.DataType.NUMERIC_TYPES:

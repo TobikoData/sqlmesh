@@ -98,7 +98,7 @@ def test_insert_overwrite(mocker: MockerFixture):
     adapter.insert_overwrite(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        column_mapping={"a": exp.DataType.build("INT")},
+        columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -115,7 +115,7 @@ def test_insert_append(mocker: MockerFixture):
     adapter.insert_append(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        column_mapping={"a": exp.DataType.build("INT")},
+        columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -133,7 +133,7 @@ def test_delete_insert_query(mocker: MockerFixture):
         "test_table",
         parse_one("SELECT a FROM tbl"),
         parse_one("a BETWEEN 0 and 1"),
-        column_mapping={"a": exp.DataType.build("INT")},
+        columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_has_calls(
@@ -167,13 +167,13 @@ def test_create_table(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    column_mapping = {
+    columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
 
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
-    adapter.create_table("test_table", column_mapping)
+    adapter.create_table("test_table", columns_to_types)
 
     cursor_mock.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING)"
@@ -185,7 +185,7 @@ def test_create_table_properties(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    column_mapping = {
+    columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
@@ -193,7 +193,7 @@ def test_create_table_properties(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.create_table(
         "test_table",
-        column_mapping,
+        columns_to_types,
         partitioned_by=["colb"],
         storage_format="ICEBERG",
     )
@@ -208,7 +208,7 @@ def test_create_table_properties_ignored(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    column_mapping = {
+    columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
@@ -216,7 +216,7 @@ def test_create_table_properties_ignored(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "duckdb")  # type: ignore
     adapter.create_table(
         "test_table",
-        column_mapping,
+        columns_to_types,
         partitioned_by=["colb"],
         storage_format="ICEBERG",
     )
@@ -316,7 +316,7 @@ def test_create_and_insert_duckdb(adapter: EngineAdapter, duck_conn):
 
 
 def test_create_table_duckdb(adapter: EngineAdapter, duck_conn):
-    column_mapping = {
+    columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
@@ -324,11 +324,11 @@ def test_create_table_duckdb(adapter: EngineAdapter, duck_conn):
         ("cola", "INTEGER", "YES", None, None, None),
         ("colb", "VARCHAR", "YES", None, None, None),
     ]
-    adapter.create_table("test_table", column_mapping)
+    adapter.create_table("test_table", columns_to_types)
     assert duck_conn.execute("DESCRIBE test_table").fetchall() == expected_columns
     adapter.create_table(
         "test_table2",
-        column_mapping,
+        columns_to_types,
         storage_format="ICEBERG",
         partitioned_by=["colb"],
     )

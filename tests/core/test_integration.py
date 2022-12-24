@@ -703,11 +703,11 @@ def change_data_type(
             if data_type.this == old_type:
                 data_type.set("this", new_type)
     else:
-        for k, v in model.column_mapping_.items():
+        for k, v in model.columns_to_types_.items():
             if v.this == old_type:
-                model.column_mapping_[k] = DataType.build(new_type)
+                model.columns_to_types_[k] = DataType.build(new_type)
 
-    context.upsert_model(model_name, query=model.query, columns=model.column_mapping_)
+    context.upsert_model(model_name, query=model.query, columns=model.columns_to_types_)
 
 
 def validate_plan_changes(

@@ -83,7 +83,7 @@ class SnapshotEvaluator:
             return None
 
         model = snapshot.model
-        column_mapping = model.column_mapping
+        columns_to_types = model.columns_to_types
         table_name = snapshot.table_name
 
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
@@ -91,18 +91,18 @@ class SnapshotEvaluator:
                 if index > 0:
                     raise ConfigError("Cannot batch view creation.")
                 logger.info("Replacing view '%s'", table_name)
-                self.adapter.create_view(table_name, query_or_df, column_mapping)
+                self.adapter.create_view(table_name, query_or_df, columns_to_types)
             elif index > 0:
                 self.adapter.insert_append(
-                    table_name, query_or_df, column_mapping=column_mapping
+                    table_name, query_or_df, columns_to_types=columns_to_types
                 )
             elif snapshot.is_full_kind:
-                self.adapter.replace_query(table_name, query_or_df, column_mapping)
+                self.adapter.replace_query(table_name, query_or_df, columns_to_types)
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
                 if self.adapter.supports_partitions:
                     self.adapter.insert_overwrite(
-                        table_name, query_or_df, column_mapping=column_mapping
+                        table_name, query_or_df, columns_to_types=columns_to_types
                     )
                 elif snapshot.is_incremental_by_time_range_kind:
                     # A model's time_column could be None but it shouldn't be for an incremental model
@@ -120,11 +120,11 @@ class SnapshotEvaluator:
                         table_name,
                         query_or_df,
                         where=where,
-                        column_mapping=column_mapping,
+                        columns_to_types=columns_to_types,
                     )
                 else:
                     self.adapter.insert_append(
-                        table_name, query_or_df, column_mapping=column_mapping
+                        table_name, query_or_df, columns_to_types=columns_to_types
                     )
 
         for sql_statement in model.sql_statements:
@@ -329,7 +329,7 @@ class SnapshotEvaluator:
             logger.info("Creating table '%s'", table_name)
             self.adapter.create_table(
                 table_name,
-                query_or_column_mapping=snapshot.model.column_mapping
+                query_or_columns_to_types=snapshot.model.columns_to_types
                 if snapshot.model.annotated
                 else snapshot.model.ctas_query(parent_snapshots_by_name),
                 storage_format=snapshot.model.storage_format,
@@ -352,7 +352,7 @@ class SnapshotEvaluator:
         logger.info("Creating a temporary table '%s'", tmp_table_name)
         self.adapter.create_table(
             tmp_table_name,
-            query_or_column_mapping=snapshot.model.column_mapping
+            query_or_columns_to_types=snapshot.model.columns_to_types
             if snapshot.model.annotated
             else snapshot.model.ctas_query(parent_snapshots_by_name),
             storage_format=snapshot.model.storage_format,

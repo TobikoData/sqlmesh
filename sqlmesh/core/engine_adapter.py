@@ -80,7 +80,7 @@ class EngineAdapter:
     def create_and_insert(
         self,
         table_name: str,
-        column_mapping: t.Dict[str, exp.DataType],
+        columns_to_types: t.Dict[str, exp.DataType],
         query_or_df: QueryOrDF,
         **kwargs,
     ):
@@ -88,18 +88,18 @@ class EngineAdapter:
 
         Args:
             table_name: The name of the table (eg. prod.table)
-            column_mapping: A mapping between the column name and its data type
+            columns_to_types: A mapping between the column name and its data type
             query_or_df: The SQL query or dataframe to insert.
             kwargs: Additional kwargs for creating the table or updating the query
         """
-        self.create_table(table_name, column_mapping, **kwargs)
-        self.insert_append(table_name, query_or_df, column_mapping=column_mapping)
+        self.create_table(table_name, columns_to_types, **kwargs)
+        self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 
     def replace_query(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         """Replaces an existing table with a query.
 
@@ -108,7 +108,7 @@ class EngineAdapter:
         Args:
             table_name: The name of the table (eg. prod.table)
             query_or_df: The SQL query to run or a dataframe.
-            column_mapping: Only used if a dataframe is provided. A mapping between the column name and its data type.
+            columns_to_types: Only used if a dataframe is provided. A mapping between the column name and its data type.
                 Expected to be ordered to match the order of values in the dataframe.
         """
         if self.supports_partitions:
@@ -116,13 +116,13 @@ class EngineAdapter:
         else:
             table = exp.to_table(table_name)
             if isinstance(query_or_df, pd.DataFrame):
-                if not column_mapping:
-                    raise ValueError("column_mapping must be provided for dataframes")
+                if not columns_to_types:
+                    raise ValueError("columns_to_types must be provided for dataframes")
                 expression = next(
                     pandas_to_sql(
                         query_or_df,
                         alias=table_name.split(".")[-1],
-                        column_mapping=column_mapping,
+                        columns_to_types=columns_to_types,
                     )
                 )
                 create = exp.Create(
@@ -143,7 +143,7 @@ class EngineAdapter:
     def create_table(
         self,
         table_name: str,
-        query_or_column_mapping: Query | t.Dict[str, exp.DataType],
+        query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs,
     ) -> None:
@@ -153,7 +153,7 @@ class EngineAdapter:
 
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
-            query_or_column_mapping: A query or mapping between the column name and its data type.
+            query_or_columns_to_types: A query or mapping between the column name and its data type.
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
@@ -162,16 +162,16 @@ class EngineAdapter:
         query = None
         schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
 
-        if isinstance(query_or_column_mapping, dict):
+        if isinstance(query_or_columns_to_types, dict):
             schema = exp.Schema(
                 this=schema,
                 expressions=[
                     exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                    for column, kind in query_or_column_mapping.items()
+                    for column, kind in query_or_columns_to_types.items()
                 ],
             )
         else:
-            query = query_or_column_mapping
+            query = query_or_columns_to_types
 
         create_expression = exp.Create(
             this=schema,
@@ -211,7 +211,7 @@ class EngineAdapter:
         self,
         view_name: str,
         query_or_df: QueryOrDF,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -222,7 +222,7 @@ class EngineAdapter:
         Args:
             view_name: The view name.
             query_or_df: A query or dataframe.
-            column_mapping: Columns to use in the view statement.
+            columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
@@ -234,18 +234,18 @@ class EngineAdapter:
             if not isinstance(query_or_df, pd.DataFrame):
                 raise SQLMeshError("Can only create views with pandas dataframes.")
 
-            if not column_mapping:
+            if not columns_to_types:
                 raise SQLMeshError(
-                    "Creating a view with a dataframe requires passing in column_mapping."
+                    "Creating a view with a dataframe requires passing in columns_to_types."
                 )
             schema = exp.Schema(
                 this=schema,
                 expressions=[
-                    exp.column(column, quoted=True) for column in column_mapping
+                    exp.column(column, quoted=True) for column in columns_to_types
                 ],
             )
             query_or_df = next(
-                pandas_to_sql(query_or_df, column_mapping=column_mapping)
+                pandas_to_sql(query_or_df, columns_to_types=columns_to_types)
             )
 
         self.execute(
@@ -311,28 +311,30 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self._insert(table_name, query_or_df, column_mapping, overwrite=False)
+        self._insert(table_name, query_or_df, columns_to_types, overwrite=False)
 
     def insert_overwrite(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self._insert(table_name, query_or_df, column_mapping, overwrite=True)
+        self._insert(table_name, query_or_df, columns_to_types, overwrite=True)
 
     def delete_insert_query(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
         where: exp.Condition,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         with self.transaction():
             self.delete_from(table_name, where=where)
-            self.insert_append(table_name, query_or_df, column_mapping=column_mapping)
+            self.insert_append(
+                table_name, query_or_df, columns_to_types=columns_to_types
+            )
 
     def update_table(
         self,
@@ -445,16 +447,16 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        column_mapping: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
         batch_size: int = 10000,
     ) -> None:
-        if not column_mapping:
+        if not columns_to_types:
             into: t.Optional[exp.Expression] = exp.to_table(table_name)
         else:
             into = exp.Schema(
                 this=exp.to_table(table_name),
-                expressions=[exp.column(c, quoted=True) for c in column_mapping],
+                expressions=[exp.column(c, quoted=True) for c in columns_to_types],
             )
 
         connection = self._connection_pool.get()
@@ -466,7 +468,7 @@ class EngineAdapter:
         ):
             if not isinstance(query_or_df, pyspark.sql.DataFrame):
                 query_or_df = self.spark.createDataFrame(query_or_df)
-            query_or_df.select(*self.spark.table(table_name).column_mapping).write.insertInto(  # type: ignore
+            query_or_df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
                 table_name, overwrite=overwrite
             )
         elif isinstance(query_or_df, pd.DataFrame):
@@ -494,13 +496,13 @@ class EngineAdapter:
                     )
                 )
             else:
-                if not column_mapping:
+                if not columns_to_types:
                     raise SQLMeshError(
                         "Column Mapping must be specified when using a DataFrame and not using SQLAlchemy or running on DuckDB"
                     )
                 with self.transaction():
                     for i, expression in enumerate(
-                        pandas_to_sql(query_or_df, column_mapping, batch_size)
+                        pandas_to_sql(query_or_df, columns_to_types, batch_size)
                     ):
                         self.execute(
                             exp.Insert(
