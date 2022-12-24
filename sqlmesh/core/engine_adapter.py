@@ -112,7 +112,7 @@ class EngineAdapter:
                 Expected to be ordered to match the order of values in the dataframe.
         """
         if self.supports_partitions:
-            self.insert_overwrite(table_name, query_or_df)
+            self.insert_overwrite(table_name, query_or_df, columns_to_types)
         else:
             table = exp.to_table(table_name)
             if isinstance(query_or_df, pd.DataFrame):
