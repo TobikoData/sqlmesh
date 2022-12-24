@@ -98,7 +98,7 @@ def test_insert_overwrite(mocker: MockerFixture):
     adapter.insert_overwrite(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns={"a": exp.DataType.build("INT")},
+        column_mapping={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -115,7 +115,7 @@ def test_insert_append(mocker: MockerFixture):
     adapter.insert_append(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        columns={"a": exp.DataType.build("INT")},
+        column_mapping={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -133,7 +133,7 @@ def test_delete_insert_query(mocker: MockerFixture):
         "test_table",
         parse_one("SELECT a FROM tbl"),
         parse_one("a BETWEEN 0 and 1"),
-        columns={"a": exp.DataType.build("INT")},
+        column_mapping={"a": exp.DataType.build("INT")},
     )
 
     cursor_mock.execute.assert_has_calls(

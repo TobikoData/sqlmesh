@@ -80,7 +80,7 @@ class EngineAdapter:
     def create_and_insert(
         self,
         table_name: str,
-        columns: t.Dict[str, exp.DataType],
+        column_mapping: t.Dict[str, exp.DataType],
         query_or_df: QueryOrDF,
         **kwargs,
     ):
@@ -88,12 +88,12 @@ class EngineAdapter:
 
         Args:
             table_name: The name of the table (eg. prod.table)
-            columns: A mapping between the column name and its data type
+            column_mapping: A mapping between the column name and its data type
             query_or_df: The SQL query or dataframe to insert.
             kwargs: Additional kwargs for creating the table or updating the query
         """
-        self.create_table(table_name, columns, **kwargs)
-        self.insert_append(table_name, query_or_df, columns=columns)
+        self.create_table(table_name, column_mapping, **kwargs)
+        self.insert_append(table_name, query_or_df, column_mapping=column_mapping)
 
     def replace_query(
         self,
@@ -122,7 +122,7 @@ class EngineAdapter:
                     pandas_to_sql(
                         query_or_df,
                         alias=table_name.split(".")[-1],
-                        columns=column_mapping,
+                        column_mapping=column_mapping,
                     )
                 )
                 create = exp.Create(
@@ -143,7 +143,7 @@ class EngineAdapter:
     def create_table(
         self,
         table_name: str,
-        query_or_columns: Query | t.Dict[str, exp.DataType],
+        query_or_column_mapping: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs,
     ) -> None:
@@ -153,7 +153,7 @@ class EngineAdapter:
 
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
-            query_columns: A query or mapping between the column name and its data type.
+            query_or_column_mapping: A query or mapping between the column name and its data type.
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
@@ -162,16 +162,16 @@ class EngineAdapter:
         query = None
         schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
 
-        if isinstance(query_or_columns, dict):
+        if isinstance(query_or_column_mapping, dict):
             schema = exp.Schema(
                 this=schema,
                 expressions=[
                     exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                    for column, kind in query_or_columns.items()
+                    for column, kind in query_or_column_mapping.items()
                 ],
             )
         else:
-            query = query_or_columns
+            query = query_or_column_mapping
 
         create_expression = exp.Create(
             this=schema,
@@ -244,7 +244,9 @@ class EngineAdapter:
                     exp.column(column, quoted=True) for column in column_mapping
                 ],
             )
-            query_or_df = next(pandas_to_sql(query_or_df, columns=column_mapping))
+            query_or_df = next(
+                pandas_to_sql(query_or_df, column_mapping=column_mapping)
+            )
 
         self.execute(
             exp.Create(
@@ -309,28 +311,28 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self._insert(table_name, query_or_df, columns, overwrite=False)
+        self._insert(table_name, query_or_df, column_mapping, overwrite=False)
 
     def insert_overwrite(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self._insert(table_name, query_or_df, columns, overwrite=True)
+        self._insert(table_name, query_or_df, column_mapping, overwrite=True)
 
     def delete_insert_query(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
         where: exp.Condition,
-        columns: t.Optional[t.Dict[str, exp.DataType]] = None,
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         with self.transaction():
             self.delete_from(table_name, where=where)
-            self.insert_append(table_name, query_or_df, columns=columns)
+            self.insert_append(table_name, query_or_df, column_mapping=column_mapping)
 
     def update_table(
         self,
@@ -443,16 +445,16 @@ class EngineAdapter:
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        columns: t.Optional[t.Dict[str, exp.DataType]],
+        column_mapping: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
         batch_size: int = 10000,
     ) -> None:
-        if not columns:
+        if not column_mapping:
             into: t.Optional[exp.Expression] = exp.to_table(table_name)
         else:
             into = exp.Schema(
                 this=exp.to_table(table_name),
-                expressions=[exp.column(c, quoted=True) for c in columns],
+                expressions=[exp.column(c, quoted=True) for c in column_mapping],
             )
 
         connection = self._connection_pool.get()
@@ -464,7 +466,7 @@ class EngineAdapter:
         ):
             if not isinstance(query_or_df, pyspark.sql.DataFrame):
                 query_or_df = self.spark.createDataFrame(query_or_df)
-            query_or_df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
+            query_or_df.select(*self.spark.table(table_name).column_mapping).write.insertInto(  # type: ignore
                 table_name, overwrite=overwrite
             )
         elif isinstance(query_or_df, pd.DataFrame):
@@ -492,13 +494,13 @@ class EngineAdapter:
                     )
                 )
             else:
-                if not columns:
+                if not column_mapping:
                     raise SQLMeshError(
-                        "Columns must be specified when using a DataFrame and not using SQLAlchemy or running on DuckDB"
+                        "Column Mapping must be specified when using a DataFrame and not using SQLAlchemy or running on DuckDB"
                     )
                 with self.transaction():
                     for i, expression in enumerate(
-                        pandas_to_sql(query_or_df, columns, batch_size)
+                        pandas_to_sql(query_or_df, column_mapping, batch_size)
                     ):
                         self.execute(
                             exp.Insert(

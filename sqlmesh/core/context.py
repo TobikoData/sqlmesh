@@ -957,4 +957,4 @@ class Context(BaseContext):
                 raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
 
             model.update_schema(schema)
-            schema.add_table(name, model.columns)
+            schema.add_table(name, model.column_mapping)
