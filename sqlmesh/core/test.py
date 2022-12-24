@@ -207,7 +207,6 @@ class ModelTest(unittest.TestCase):
         }
         conn = duckdb.connect()
         self.engine_adapter.create_schema(self.snapshot.physical_schema)
-
         for table, rows in inputs.items():
             self.engine_adapter.create_schema(table)
             df = pd.DataFrame.from_records(rows)  # noqa

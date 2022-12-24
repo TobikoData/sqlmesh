@@ -66,7 +66,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     adapter_mock.create_table.assert_called_once_with(
         "physical_schema.test_schema__test_model__1",
-        query_or_columns={"a": exp.DataType.build("int")},
+        query_or_columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
     )
@@ -146,7 +146,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     adapter_mock.create_table.assert_called_once_with(
         "physical_schema.test_schema__test_model__1__tmp__2497578715_0",
-        query_or_columns=mocker.ANY,
+        query_or_columns_to_types=mocker.ANY,
         storage_format=mocker.ANY,
         partitioned_by=mocker.ANY,
     )
