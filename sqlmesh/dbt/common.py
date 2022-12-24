@@ -96,18 +96,22 @@ class BaseConfig(PydanticModel):
         Returns:
             New instance updated with the passed in config fields
         """
-        if not config:
-            return self.copy()
+        copy = self.copy()
+        other = self.__class__(**config)
 
-        fields = self.dict()
-        config = {
-            k: v for k, v in self.__class__(**config).dict().items() if k in config
-        }
-        for key, value in config.items():
-            fields[key] = update_field(
-                fields.get(key), value, self._FIELD_UPDATE_STRATEGY.get(key)
-            )
-        return self.__class__(**fields)
+        for field in other.__fields__:
+            if field in config:
+                setattr(
+                    copy,
+                    field,
+                    update_field(
+                        getattr(copy, field),
+                        getattr(other, field),
+                        self._FIELD_UPDATE_STRATEGY.get(field),
+                    ),
+                )
+
+        return copy
 
     def replace(self, other: T) -> None:
         """
@@ -116,7 +120,8 @@ class BaseConfig(PydanticModel):
         Args:
             other: The instance to apply to this instance
         """
-        self.__dict__.update(other.dict())
+        for field in other.__fields_set__:
+            setattr(self, field, getattr(other, field))
 
 
 def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:

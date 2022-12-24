@@ -8,11 +8,10 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKindName, TimeColumn
+from sqlmesh.core.model import Model, ModelKindName
 from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
 from sqlmesh.utils.datatype import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
@@ -147,7 +146,7 @@ class ModelConfig(BaseConfig):
         "unique_key": UpdateStrategy.REPLACE,
     }
 
-    def to_sqlmesh(self) -> Model:
+    def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
             f"""

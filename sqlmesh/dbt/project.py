@@ -8,9 +8,9 @@ from sqlmesh.dbt.common import BaseConfig
 from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
 from sqlmesh.dbt.models import ModelConfig
 from sqlmesh.dbt.profile import Profile
-from sqlmesh.dbt.render import render_jinja
 from sqlmesh.dbt.sources import SourceConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.yaml import yaml
 
 if t.TYPE_CHECKING:
@@ -236,16 +236,25 @@ class ProjectConfig:
             update={"path": filepath, "table_name": filepath.stem}
         )
 
-        def config(*args, **kwargs):
-            if args:
-                if isinstance(args[0], dict):
-                    model_config.replace(model_config.update_with(args[0]))
-            if kwargs:
-                model_config.replace(model_config.update_with(kwargs))
+        depends_on = set()
+        calls = set()
 
-        render_jinja(sql, {"config": config})
+        for method, args, kwargs in capture_jinja(sql).calls:
+            calls.add(method)
+            if method == "config":
+                if args:
+                    if isinstance(args[0], dict):
+                        model_config.replace(model_config.update_with(args[0]))
+                if kwargs:
+                    model_config.replace(model_config.update_with(kwargs))
+            elif method == "ref":
+                dep = ".".join(args + tuple(kwargs.values()))
+                if dep:
+                    depends_on.add(dep)
 
         model_config.sql = cls._remove_config_jinja(sql)
+        model_config._depends_on = depends_on
+        model_config._calls = calls
 
         return model_config
 
