@@ -242,7 +242,7 @@ class TerminalConsole(Console):
     def _show_options_after_categorization(
         self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
     ) -> None:
-        if plan.missing_intervals:
+        if plan.missing_intervals and not plan.skip_backfill:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, auto_apply, unbounded_end=unbounded_end)
         elif plan.context_diff.has_differences and not auto_apply:
