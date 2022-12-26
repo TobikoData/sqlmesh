@@ -174,9 +174,8 @@ class Scheduler:
             self.console.stop_snapshot_progress()
 
         for error in errors:
-            sid = error.node[0]  # type: ignore
-            cause = error.__cause__
-            formatted_exception = "".join(format_exception(cause or error))
+            sid = error.node[0]
+            formatted_exception = "".join(format_exception(error.__cause__ or error))
             self.console.log_error(
                 f"FAILED processing snapshot {sid}\n{formatted_exception}"
             )

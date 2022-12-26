@@ -17,6 +17,19 @@ class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
 
 
 class ConcurrentDAGExecutor(t.Generic[H]):
+    """Concurrently traverses the given DAG in topological order while applying a function to each node.
+
+    If `raise_on_error` is set to False maintains a state of execution errors as well as of skipped nodes.
+
+    Args:
+        dag: The target DAG.
+        fn: The function that will be applied concurrently to each snapshot.
+        tasks_num: The number of concurrent tasks.
+        raise_on_error: If set to True raises an exception on a first encountered error,
+            otherwises returns a tuple which contains a list of failed nodes and a list of
+            skipped nodes.
+    """
+
     def __init__(
         self,
         dag: DAG[H],
@@ -32,6 +45,14 @@ class ConcurrentDAGExecutor(t.Generic[H]):
         self._init_state()
 
     def run(self) -> t.Tuple[t.List[NodeExecutionFailedError[H]], t.List[H]]:
+        """Runs the executor.
+
+        Raises:
+            NodeExecutionFailedError if `raise_on_error` was set to True and execution fails for any snapshot.
+
+        Returns:
+            A pair which contains a list of node errors and a list of skipped nodes.
+        """
         if self._finished_future.done():
             self._init_state()
 
@@ -119,13 +140,13 @@ def concurrent_apply_to_snapshots(
         snapshots: Target snapshots.
         fn: The function that will be applied concurrently to each snapshot.
         tasks_num: The number of concurrent tasks.
-        reverse_order: Whether the order should be reversed. Default: False..
+        reverse_order: Whether the order should be reversed. Default: False.
         raise_on_error: If set to True raises an exception on a first encountered error,
             otherwises returns a tuple which contains a list of failed nodes and a list of
             skipped nodes.
 
     Raises:
-        NodeExecutionFailedError when execution fails for any snapshot.
+        NodeExecutionFailedError if `raise_on_error` is set to True and execution fails for any snapshot.
 
     Returns:
         A pair which contains a list of errors and a list of skipped snapshot IDs.
@@ -140,10 +161,9 @@ def concurrent_apply_to_snapshots(
         )
 
     return concurrent_apply_to_dag(
-        dag,
+        dag if not reverse_order else dag.reversed,
         lambda s_id: fn(snapshots_by_id[s_id]),
         tasks_num,
-        reverse_order=reverse_order,
         raise_on_error=raise_on_error,
     )
 
@@ -152,7 +172,6 @@ def concurrent_apply_to_dag(
     dag: DAG[H],
     fn: t.Callable[[H], None],
     tasks_num: int,
-    reverse_order: bool = False,
     raise_on_error: bool = True,
 ) -> t.Tuple[t.List[NodeExecutionFailedError[H]], t.List[H]]:
     """Applies a function to the given DAG concurrently while preserving the topological
@@ -162,13 +181,12 @@ def concurrent_apply_to_dag(
         dag: The target DAG.
         fn: The function that will be applied concurrently to each snapshot.
         tasks_num: The number of concurrent tasks.
-        reverse_order: Whether the order should be reversed. Default: False..
         raise_on_error: If set to True raises an exception on a first encountered error,
             otherwises returns a tuple which contains a list of failed nodes and a list of
             skipped nodes.
 
     Raises:
-        NodeExecutionFailedError when execution fails for any node.
+        NodeExecutionFailedError if `raise_on_error` is set to True and execution fails for any snapshot.
 
     Returns:
         A pair which contains a list of node errors and a list of skipped nodes.
@@ -177,10 +195,10 @@ def concurrent_apply_to_dag(
         raise ConfigError(f"Invalid number of concurrent tasks {tasks_num}")
 
     if tasks_num == 1:
-        return sequential_apply_to_dag(dag, fn, reverse_order, raise_on_error)
+        return sequential_apply_to_dag(dag, fn, raise_on_error)
 
     return ConcurrentDAGExecutor(
-        dag if not reverse_order else dag.reversed,
+        dag,
         fn,
         tasks_num,
         raise_on_error,
@@ -190,11 +208,8 @@ def concurrent_apply_to_dag(
 def sequential_apply_to_dag(
     dag: DAG[H],
     fn: t.Callable[[H], None],
-    reverse_order: bool = False,
     raise_on_error: bool = True,
 ) -> t.Tuple[t.List[NodeExecutionFailedError[H]], t.List[H]]:
-    dag = dag if not reverse_order else dag.reversed
-    ordered_nodes = dag.sorted()
     dependencies = dag.graph
 
     node_errors: t.List[NodeExecutionFailedError[H]] = []
@@ -202,7 +217,7 @@ def sequential_apply_to_dag(
 
     failed_or_skipped_nodes: t.Set[H] = set()
 
-    for node in ordered_nodes:
+    for node in dag.sorted():
         if not failed_or_skipped_nodes.isdisjoint(dependencies[node]):
             skipped_nodes.append(node)
             failed_or_skipped_nodes.add(node)
