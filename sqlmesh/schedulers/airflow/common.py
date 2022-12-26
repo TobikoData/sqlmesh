@@ -51,6 +51,7 @@ class PlanReceiverDagConf(PydanticModel):
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     users: t.List[User]
+    is_dev: bool
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):
@@ -75,6 +76,7 @@ class PlanApplicationRequest(PydanticModel):
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     users: t.List[User]
+    is_dev: bool
 
 
 def snapshot_xcom_key(snapshot: SnapshotIdLike) -> str:

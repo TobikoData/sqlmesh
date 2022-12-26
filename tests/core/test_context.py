@@ -141,10 +141,10 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
           CAST(o.waiter_id AS INT) AS waiter_id, -- Waiter id
           CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, -- Revenue from orders taken by this waiter
           CAST(o.ds AS TEXT) AS ds, -- Date
-        FROM {sushi_context.snapshots['sushi.orders'].table_name} AS o
-        LEFT JOIN {sushi_context.snapshots['sushi.order_items'].table_name} AS oi
+        FROM {sushi_context.snapshots['sushi.orders'].table_name()} AS o
+        LEFT JOIN {sushi_context.snapshots['sushi.order_items'].table_name()} AS oi
           ON o.ds = oi.ds AND o.id = oi.order_id
-        LEFT JOIN {sushi_context.snapshots['sushi.items'].table_name} AS i
+        LEFT JOIN {sushi_context.snapshots['sushi.items'].table_name()} AS i
           ON oi.ds = i.ds AND oi.item_id = i.id
         WHERE
           o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'

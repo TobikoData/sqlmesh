@@ -113,6 +113,12 @@ class SnapshotInfoMixin(FingerprintMixin):
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
+    def is_dev_table(self, is_dev: bool) -> bool:
+        """Provided whether the snapshot is used in a development mode or not, returns True
+        if the snapshot targets a temporary table or a clone and False otherwise.
+        """
+        return is_dev and not self.is_new_version
+
     @property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, fingerprint=self.fingerprint)
@@ -134,6 +140,10 @@ class SnapshotInfoMixin(FingerprintMixin):
         raise NotImplementedError
 
     @property
+    def is_new_version(self) -> bool:
+        raise NotImplementedError
+
+    @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
@@ -148,10 +158,14 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
 
-    @property
-    def table_name(self) -> str:
+    def table_name(self, is_dev: bool = False) -> str:
         """Returns the physical location of this snapshot."""
-        return table_name(self.physical_schema, self.name, self.version)
+        return table_name(
+            self.physical_schema,
+            self.name,
+            self.version if not is_dev else self.fingerprint,
+            is_temp=self.is_dev_table(is_dev),
+        )
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -457,14 +471,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    @property
-    def table_name(self) -> str:
+    def table_name(self, is_dev: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot."""
         if not self.version:
             raise SQLMeshError(
                 f"Snapshot {self.snapshot_id} has not been versioned yet."
             )
-        return table_name(self.physical_schema, self.name, self.version)
+        return table_name(
+            self.physical_schema,
+            self.name,
+            self.version if not is_dev else self.fingerprint,
+            is_temp=self.is_dev_table(is_dev),
+        )
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -543,8 +561,11 @@ SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 
 
-def table_name(physical_schema: str, name: str, version: str) -> str:
-    return f"{physical_schema}.{name.replace('.', '__')}__{version}"
+def table_name(
+    physical_schema: str, name: str, version: str, is_temp: bool = False
+) -> str:
+    temp_suffx = "__temp" if is_temp else ""
+    return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
 
 
 def fingerprint_from_model(

@@ -102,6 +102,8 @@ class SnapshotEvaluationTarget(
         start: The start of the interval to evaluate.
         end: The end of the interval to evaluate.
         latest: The latest time used for non incremental datasets.
+        is_dev: Indicates whether the evaluation happens in the development mode and temporary
+            tables / table clones should be used where applicable.
     """
 
     command_type: commands.CommandType = commands.CommandType.EVALUATE
@@ -115,6 +117,7 @@ class SnapshotEvaluationTarget(
     start: t.Optional[TimeLike]
     end: t.Optional[TimeLike]
     latest: t.Optional[TimeLike]
+    is_dev: bool
 
     @provide_session
     def post_hook(
@@ -124,6 +127,7 @@ class SnapshotEvaluationTarget(
             self.snapshot.snapshot_id,
             self._get_start(context),
             self._get_end(context),
+            is_dev=self.is_dev,
         )
 
     def _get_command_payload(
@@ -135,6 +139,7 @@ class SnapshotEvaluationTarget(
             start=self._get_start(context),
             end=self._get_end(context),
             latest=self._get_latest(context),
+            is_dev=self.is_dev,
         )
 
     def _get_start(self, context: Context) -> TimeLike:
@@ -158,6 +163,10 @@ class SnapshotPromotionTarget(
     Args:
         snapshots: The list of snapshots that should be promoted in the target environment.
         environment: The target environment.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL
+            operations (table / view creation, deletion, etc). Default: 1.
+        is_dev: Indicates whether the promotion happens in the development mode and temporary
+            tables / table clones should be used where applicable.
     """
 
     command_type: commands.CommandType = commands.CommandType.PROMOTE
@@ -168,6 +177,7 @@ class SnapshotPromotionTarget(
     snapshots: t.List[SnapshotTableInfo]
     environment: str
     ddl_concurrent_tasks: int
+    is_dev: bool
 
     def _get_command_payload(
         self, context: Context
@@ -175,6 +185,7 @@ class SnapshotPromotionTarget(
         return commands.PromoteCommandPayload(
             snapshots=self.snapshots,
             environment=self.environment,
+            is_dev=self.is_dev,
         )
 
 

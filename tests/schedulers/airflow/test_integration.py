@@ -41,7 +41,8 @@ def test_apply_plan_create_backfill_promote(
     airflow_client: AirflowClient, make_snapshot, random_name
 ):
     model_name = random_name()
-    snapshot = make_snapshot(_create_model(model_name), version="1")
+    snapshot = make_snapshot(_create_model(model_name))
+    snapshot.version = snapshot.fingerprint
 
     environment_name = _random_environment_name()
     environment = _create_environment(snapshot, name=environment_name)
@@ -126,6 +127,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
         users=[],
+        is_dev=False,
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -190,6 +192,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
         users=[],
+        is_dev=False,
     )
 
 
@@ -214,6 +217,7 @@ def test_plan_receiver_task_duplicated_snapshot(
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
         users=[],
+        is_dev=False,
     )
 
     task_instance_mock = mocker.Mock()
@@ -259,6 +263,7 @@ def test_plan_receiver_task_unbounded_end(
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
         users=[],
+        is_dev=False,
     )
 
     task_instance_mock = mocker.Mock()

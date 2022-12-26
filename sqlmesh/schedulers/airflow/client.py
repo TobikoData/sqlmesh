@@ -56,6 +56,7 @@ class AirflowClient:
         ddl_concurrent_tasks: int = 1,
         timestamp: t.Optional[datetime] = None,
         users: t.Optional[t.List[User]] = None,
+        is_dev: bool = False,
     ) -> str:
         is_first_run = self._get_first_dag_run_id(common.PLAN_RECEIVER_DAG_ID) is None
         return self._trigger_dag_run(
@@ -71,6 +72,7 @@ class AirflowClient:
                 backfill_concurrent_tasks=backfill_concurrent_tasks,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
                 users=users or [],
+                is_dev=is_dev,
             ),
             dag_run_id=common.INIT_RUN_ID if is_first_run else None,
             timestamp=timestamp,
