@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import traceback
 import typing as t
 from datetime import datetime
 
@@ -13,7 +12,8 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
 )
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.utils.concurrency import NodeExecutionFailedError, concurrent_apply_to_dag
+from sqlmesh.utils import format_exception
+from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
@@ -163,18 +163,27 @@ class Scheduler:
             sid, (start, end) = node
             self.evaluate(self.snapshots[sid], start, end, latest, is_dev=is_dev)
 
-        try:
-            with self.snapshot_evaluator.concurrent_context():
-                concurrent_apply_to_dag(dag, evaluate_node, self.max_workers)
-        except NodeExecutionFailedError as error:
-            sid = error.node[0]  # type: ignore
-            self.console.log_error(
-                f"Failed Executing Batch.\nSnapshot: {sid}\n{traceback.format_exc()}"
+        with self.snapshot_evaluator.concurrent_context():
+            errors, skipped_intervals = concurrent_apply_to_dag(
+                dag, evaluate_node, self.max_workers, raise_on_error=False
             )
-            self.console.stop_snapshot_progress()
-            raise
 
-        self.console.complete_snapshot_progress()
+        if not errors:
+            self.console.complete_snapshot_progress()
+        else:
+            self.console.stop_snapshot_progress()
+
+        for error in errors:
+            sid = error.node[0]  # type: ignore
+            cause = error.__cause__
+            formatted_exception = "".join(format_exception(cause or error))
+            self.console.log_error(
+                f"FAILED processing snapshot {sid}\n{formatted_exception}"
+            )
+
+        skipped_snapshots = {i[0] for i in skipped_intervals}
+        for skipped in skipped_snapshots:
+            self.console.log_status_update(f"SKIPPED snapshot {skipped}\n")
 
     def interval_params(
         self,
