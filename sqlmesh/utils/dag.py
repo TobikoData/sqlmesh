@@ -8,7 +8,6 @@ allows SQLMesh to easily determine a model's lineage and to identify upstream an
 from __future__ import annotations
 
 import typing as t
-from collections import defaultdict
 
 T = t.TypeVar("T", bound=t.Hashable)
 
@@ -32,6 +31,18 @@ class DAG(t.Generic[T]):
             self._graph[node].update(dependencies)
             for d in dependencies:
                 self.add(d)
+
+    @property
+    def reversed(self) -> DAG[T]:
+        """Returns a copy of this DAG with all its edges reversed."""
+        result = DAG[T]()
+
+        for node, deps in self._graph.items():
+            result.add(node)
+            for dep in deps:
+                result.add(dep, [node])
+
+        return result
 
     def subdag(self, *nodes: T) -> DAG[T]:
         """Create a new subdag given node(s).
@@ -72,18 +83,6 @@ class DAG(t.Generic[T]):
         graph = {}
         for node, deps in self._graph.items():
             graph[node] = deps.copy()
-        return graph
-
-    @property
-    def reversed_graph(self) -> t.Dict[T, t.Set[T]]:
-        graph: t.Dict[T, t.Set[T]] = defaultdict(set)
-
-        for node, deps in self._graph.items():
-            if node not in graph:
-                graph[node] = set()
-            for dep in deps:
-                graph[dep].add(node)
-
         return graph
 
     def sorted(self) -> t.List[T]:

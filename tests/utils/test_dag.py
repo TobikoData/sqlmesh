@@ -41,7 +41,7 @@ def test_sorted():
 def test_reversed_graph():
     dag = DAG({"a": {}, "b": {"a"}, "c": {"b", "a"}, "d": {}})
 
-    assert dag.reversed_graph == {
+    assert dag.reversed.graph == {
         "a": {"b", "c"},
         "b": {"c"},
         "c": set(),

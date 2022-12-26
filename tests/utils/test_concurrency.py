@@ -8,7 +8,8 @@ from sqlmesh.utils.concurrency import (
 )
 
 
-def test_concurrent_apply_to_snapshots(mocker: MockerFixture):
+@pytest.mark.parametrize("tasks_num", [1, 2])
+def test_concurrent_apply_to_snapshots(mocker: MockerFixture, tasks_num: int):
     snapshot_a = mocker.Mock()
     snapshot_a.snapshot_id = SnapshotId(name="model_a", fingerprint="snapshot_a")
     snapshot_a.parents = []
@@ -27,10 +28,10 @@ def test_concurrent_apply_to_snapshots(mocker: MockerFixture):
 
     processed_snapshots = []
 
-    concurrent_apply_to_snapshots(
+    errors, skipped = concurrent_apply_to_snapshots(
         [snapshot_a, snapshot_b, snapshot_c, snapshot_d],
         lambda s: processed_snapshots.append(s),
-        2,
+        tasks_num,
     )
 
     assert len(processed_snapshots) == 4
@@ -39,8 +40,12 @@ def test_concurrent_apply_to_snapshots(mocker: MockerFixture):
     assert processed_snapshots[2] == snapshot_c
     assert processed_snapshots[3] == snapshot_d
 
+    assert not errors
+    assert not skipped
 
-def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture):
+
+@pytest.mark.parametrize("tasks_num", [1, 2])
+def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture, tasks_num: int):
     snapshot_a = mocker.Mock()
     snapshot_a.snapshot_id = SnapshotId(name="model_a", fingerprint="snapshot_a")
     snapshot_a.parents = []
@@ -56,5 +61,46 @@ def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture):
         concurrent_apply_to_snapshots(
             [snapshot_a, snapshot_b],
             lambda s: raise_(),
-            2,
+            tasks_num,
         )
+
+
+@pytest.mark.parametrize("tasks_num", [1, 2])
+def test_concurrent_apply_to_snapshots_return_failed_skipped(
+    mocker: MockerFixture, tasks_num: int
+):
+    snapshot_a = mocker.Mock()
+    snapshot_a.snapshot_id = SnapshotId(name="model_a", fingerprint="snapshot_a")
+    snapshot_a.parents = []
+
+    snapshot_b = mocker.Mock()
+    snapshot_b.snapshot_id = SnapshotId(name="model_b", fingerprint="snapshot_b")
+    snapshot_b.parents = [snapshot_a.snapshot_id]
+
+    snapshot_c = mocker.Mock()
+    snapshot_c.snapshot_id = SnapshotId(name="model_c", fingerprint="snapshot_c")
+    snapshot_c.parents = [snapshot_b.snapshot_id]
+
+    snapshot_d = mocker.Mock()
+    snapshot_d.snapshot_id = SnapshotId(name="model_d", fingerprint="snapshot_d")
+    snapshot_d.parents = []
+
+    snapshot_e = mocker.Mock()
+    snapshot_e.snapshot_id = SnapshotId(name="model_e", fingerprint="snapshot_e")
+    snapshot_e.parents = [snapshot_d.snapshot_id]
+
+    def raise_(snapshot):
+        if snapshot.snapshot_id.name == "model_a":
+            raise RuntimeError("fail")
+
+    errors, skipped = concurrent_apply_to_snapshots(
+        [snapshot_a, snapshot_b, snapshot_c, snapshot_d, snapshot_e],
+        lambda s: raise_(s),
+        tasks_num,
+        raise_on_error=False,
+    )
+
+    assert len(errors) == 1
+    assert errors[0].node == snapshot_a.snapshot_id
+
+    assert skipped == [snapshot_b.snapshot_id, snapshot_c.snapshot_id]
