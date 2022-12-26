@@ -360,7 +360,7 @@ def test_merge(mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table="SELECT id, ts, val FROM source",
-        columns=["id", "ts", "val"],
+        column_names=["id", "ts", "val"],
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
@@ -373,7 +373,7 @@ def test_merge(mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table="SELECT id, ts, val FROM source",
-        columns=["id", "ts", "val"],
+        column_names=["id", "ts", "val"],
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(

@@ -349,7 +349,7 @@ class EngineAdapter:
         self,
         target_table: str,
         source_table: QueryOrDF,
-        columns: t.Iterable[str],
+        column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
     ):
         using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
@@ -368,16 +368,16 @@ class EngineAdapter:
                 None,
                 properties={
                     exp.column(col, target_table): exp.column(col, SOURCE_ALIAS)
-                    for col in columns
+                    for col in column_names
                 },
             ),
         )
         when_not_matched = exp.When(
             this=exp.Not(this="MATCHED"),
             then=exp.Insert(
-                this=exp.Tuple(expressions=[exp.column(col) for col in columns]),
+                this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
                 expression=exp.Tuple(
-                    expressions=[exp.column(col, SOURCE_ALIAS) for col in columns]
+                    expressions=[exp.column(col, SOURCE_ALIAS) for col in column_names]
                 ),
             ),
         )
