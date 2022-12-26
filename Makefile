@@ -53,10 +53,13 @@ airflow-it-test-with-env: airflow-clean airflow-init airflow-run airflow-it-test
 
 airflow-it-test-docker-with-env: airflow-clean airflow-init airflow-run airflow-it-test-docker airflow-stop
 
-docs:
+docs-serve:
+	mkdocs serve
+
+api-docs:
 	pdoc/cli.py -o docs
 
-docs-serve:
+api-docs-serve:
 	pdoc/cli.py
 
 web-serve:

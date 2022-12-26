@@ -1,0 +1,5 @@
+site_name: SQLMesh Documentation
+theme:
+  name: material
+plugins:
+  - include-markdown

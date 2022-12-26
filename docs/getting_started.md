@@ -1,8 +1,7 @@
-"""
 # Getting started with SQLMesh
 
 ## How it works
-SQLMesh allows data analysts, scientists, and engineers to unify around common tooling while guaranteeing scalable modern data best practices. 
+SQLMesh allows data analysts, scientists, and engineers to unify around common tooling while guaranteeing scalable modern data best practices.
 
 SQLMesh also makes it easy to iterate, test, and deploy code and data changes, and is built around two main commands: plan and apply.
 
@@ -30,12 +29,12 @@ SQLMesh can be run on your laptop without any other infrastructure. If you'd lik
 ## Airflow
 Refer to `sqlmesh.schedulers.airflow`.
 
-# Using SQLMesh 
+# Using SQLMesh
 
 ## Models
 Date pipelines are made up of many connected queries and jobs that produce tables and data assets. SQLMesh represents each asset as a model, which is a SQL file with a model definition and a query. The model results in either a single table/view or a logical query, which can be used by other queries.
 
-In the following example, SQLMesh automatically understands that ***customer revenue*** depends on two upstream models: ***orders*** and ***customers***. SQLMesh will compute this model incrementally every day after first computing its dependencies rather than re-computing the entire history every day, which can be time-consuming and expensive. 
+In the following example, SQLMesh automatically understands that ***customer revenue*** depends on two upstream models: ***orders*** and ***customers***. SQLMesh will compute this model incrementally every day after first computing its dependencies rather than re-computing the entire history every day, which can be time-consuming and expensive.
 
 ```sql
 -- Customer revenue computed and stored daily.
@@ -54,7 +53,7 @@ JOIN sushi.customers AS c
   ON o.customer_id = c.customer_id
 WHERE o.ds BETWEEN @start_ds and @end_ds
 ```
- 
+
 Note that sometimes, models do need to be re-computed from scratch every day. This can be handled by setting `sqlmesh.core.model.ModelKind` to `full`. Refer to the API for `sqlmesh.core.model`.
 
 ### Model types
@@ -63,7 +62,7 @@ Note that sometimes, models do need to be re-computed from scratch every day. Th
 Lineage provides a way to visualize how data flows through your organization. SQLMesh can automatically build a Directed Acyclic Graph (DAG) that represents your models and their relationships with each other. This lineage graph is a powerful tool for understanding and troubleshooting your organization's data and pipelines.
 
 #### Deployment
-SQLMesh allows you to spin up zero-copy development environments and iterate without affecting production, making deploying SQLMesh models easy and efficient. This is achieved in a data warehouse and engine-agnostic way by leveraging views. 
+SQLMesh allows you to spin up zero-copy development environments and iterate without affecting production, making deploying SQLMesh models easy and efficient. This is achieved in a data warehouse and engine-agnostic way by leveraging views.
 
 Although some data warehouses, such as Snowflake, have the ability to create [zero-copy clones](https://docs.snowflake.com/en/user-guide/tables-storage-considerations.html#label-cloning-tables), it is a manual process and not applicable to other engines. SQLMesh automatically determines when an existing table can be reused or whether it needs backfilling based on fingerprinting a model's SQL query. Execution, backfilling, and promoting views are all handled automatically through SQLMesh's [plan](#the-plan-command) and [apply](#the-apply-command) commands, similar to the paradigm popularized by [Terraform](https://developer.hashicorp.com/terraform/cli/commands/plan).
 
@@ -222,4 +221,3 @@ FROM z
 ```
 
 Refer to the API for `sqlmesh.core.macros`.
-"""
