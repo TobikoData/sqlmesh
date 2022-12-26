@@ -364,9 +364,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS src ON `target`.`id` = `src`.`id` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `src`.`id`, `target`.`ts` = `src`.`ts`, `target`.`val` = `src`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`src`.`id`, `src`.`ts`, `src`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON `target`.`id` = `__MERGE_SOURCE__`.`id` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `__MERGE_SOURCE__`.`id`, `target`.`ts` = `__MERGE_SOURCE__`.`ts`, `target`.`val` = `__MERGE_SOURCE__`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`__MERGE_SOURCE__`.`id`, `__MERGE_SOURCE__`.`ts`, `__MERGE_SOURCE__`.`val`)"
     )
 
     cursor_mock.reset_mock()
@@ -377,7 +377,7 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS src ON `target`.`id` = `src`.`id` AND `target`.`ts` = `src`.`ts` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `src`.`id`, `target`.`ts` = `src`.`ts`, `target`.`val` = `src`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`src`.`id`, `src`.`ts`, `src`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON `target`.`id` = `__MERGE_SOURCE__`.`id` AND `target`.`ts` = `__MERGE_SOURCE__`.`ts` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `__MERGE_SOURCE__`.`id`, `target`.`ts` = `__MERGE_SOURCE__`.`ts`, `target`.`val` = `__MERGE_SOURCE__`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`__MERGE_SOURCE__`.`id`, `__MERGE_SOURCE__`.`ts`, `__MERGE_SOURCE__`.`val`)"
     )

@@ -22,7 +22,7 @@ from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
-SOURCE_ALIAS = "src"
+SOURCE_ALIAS = "__MERGE_SOURCE__"
 DF_TYPES: t.Tuple = (pd.DataFrame,)
 pyspark = optional_import("pyspark")
 
