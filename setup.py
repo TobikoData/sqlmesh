@@ -33,7 +33,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.2.9",
+        "sqlglot>=10.2.13",
     ],
     extras_require={
         "dev": [
@@ -42,6 +42,8 @@ setup(
             "black==22.6.0",
             "google-auth",
             "isort==5.10.1",
+            "mkdocs-include-markdown-plugin",
+            "mkdocs-material",
             "mypy==0.981",
             "ipywidgets",
             "pre-commit",
