@@ -776,9 +776,9 @@ def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
         table_should_exist = not snapshot.is_embedded_kind
-        assert adapter.table_exists(snapshot.table_name) == table_should_exist
+        assert adapter.table_exists(snapshot.table_name()) == table_should_exist
         if table_should_exist:
-            assert select_all(snapshot.table_name, adapter)
+            assert select_all(snapshot.table_name(), adapter)
 
 
 def validate_environment_views(
@@ -793,7 +793,7 @@ def validate_environment_views(
             environment=environment
         )
         assert adapter.table_exists(view_name)
-        assert select_all(snapshot.table_name, adapter) == select_all(
+        assert select_all(snapshot.table_name(), adapter) == select_all(
             view_name, adapter
         )
 

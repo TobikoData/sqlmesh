@@ -200,7 +200,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def remove_expired_snapshots(self) -> t.List[Snapshot]:
         expired_snapshots = super().remove_expired_snapshots()
         for snapshot in expired_snapshots:
-            self.engine_adapter.drop_table(snapshot.table_name)
+            self.engine_adapter.drop_table(snapshot.table_name())
 
         return expired_snapshots
 

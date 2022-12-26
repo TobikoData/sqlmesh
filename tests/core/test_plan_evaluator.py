@@ -78,8 +78,10 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         )
         == 2
     )
-    assert sushi_context.engine_adapter.table_exists(new_model_snapshot.table_name)
-    assert sushi_context.engine_adapter.table_exists(new_view_model_snapshot.table_name)
+    assert sushi_context.engine_adapter.table_exists(new_model_snapshot.table_name())
+    assert sushi_context.engine_adapter.table_exists(
+        new_view_model_snapshot.table_name()
+    )
 
 
 def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):

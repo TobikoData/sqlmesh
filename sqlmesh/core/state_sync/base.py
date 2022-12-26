@@ -210,7 +210,11 @@ class StateSync(StateReader, abc.ABC):
 
     @abc.abstractmethod
     def add_interval(
-        self, snapshot_id: SnapshotIdLike, start: TimeLike, end: TimeLike
+        self,
+        snapshot_id: SnapshotIdLike,
+        start: TimeLike,
+        end: TimeLike,
+        is_dev: bool = False,
     ) -> None:
         """Add an interval to a snapshot and sync it to the store.
 
@@ -220,6 +224,8 @@ class StateSync(StateReader, abc.ABC):
             snapshot_id: The snapshot like object to add an interval to.
             start: The start of the interval to add.
             end: The end of the interval to add.
+            is_dev: Indicates whether the given interval is being added while in
+                development mode.
         """
 
     @abc.abstractmethod

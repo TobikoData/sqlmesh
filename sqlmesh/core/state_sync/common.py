@@ -150,16 +150,26 @@ class CommonStateSyncMixin(StateSync):
         return expired_snapshots
 
     def add_interval(
-        self, snapshot_id: SnapshotIdLike, start: TimeLike, end: TimeLike
+        self,
+        snapshot_id: SnapshotIdLike,
+        start: TimeLike,
+        end: TimeLike,
+        is_dev: bool = False,
     ) -> None:
         snapshot_id = snapshot_id.snapshot_id
-        logger.info("Adding interval for snapshot %s", snapshot_id)
-
         stored_snapshots = self._get_snapshots([snapshot_id], lock_for_update=True)
         if snapshot_id not in stored_snapshots:
             raise SQLMeshError(f"Snapshot {snapshot_id} was not found")
 
         stored_snapshot = stored_snapshots[snapshot_id]
+        if stored_snapshot.is_dev_table(is_dev):
+            # FIXME: add support for dev intervals.
+            logger.info(
+                "Skipping interval for snapshot %s in development mode", snapshot_id
+            )
+            return
+
+        logger.info("Adding interval for snapshot %s", snapshot_id)
         stored_snapshot.add_interval(start, end)
         self._update_snapshot(stored_snapshot)
 

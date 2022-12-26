@@ -140,6 +140,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
             "backfill_concurrent_tasks": 1,
             "ddl_concurrent_tasks": 1,
             "users": [],
+            "is_dev": False,
         },
         "dag_run_id": expected_dag_run_id,
         "logical_date": "2022-08-16T02:40:19.000000Z",
