@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import traceback
 import types
 import typing as t
 import uuid
@@ -105,3 +106,12 @@ def sys_path(path: Path):
     finally:
         if inserted:
             sys.path.remove(path_str)
+
+
+def format_exception(exception: BaseException) -> t.List[str]:
+    if sys.version_info < (3, 10):
+        return traceback.format_exception(
+            type(exception), exception, exception.__traceback__
+        )  # type: ignore
+    else:
+        return traceback.format_exception(exception)  # type: ignore

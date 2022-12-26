@@ -8,7 +8,6 @@ import os
 import re
 import sys
 import textwrap
-import traceback
 import types
 import typing as t
 from enum import Enum
@@ -16,7 +15,7 @@ from pathlib import Path
 
 from astor import to_source
 
-from sqlmesh.utils import unique
+from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -398,14 +397,7 @@ def print_exception(
     """
     tb: t.List[str] = []
 
-    if sys.version_info < (3, 10):
-        formatted_exception = traceback.format_exception(
-            type(exception), exception, exception.__traceback__
-        )  # type: ignore
-    else:
-        formatted_exception = traceback.format_exception(exception)  # type: ignore
-
-    for error_line in formatted_exception:
+    for error_line in format_exception(exception):
         match = re.search(f'File "<string>", line (.*), in (.*)', error_line)
 
         if not match:
