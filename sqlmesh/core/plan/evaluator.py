@@ -181,6 +181,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=self.users,
+            is_dev=self._is_dev_plan(plan),
         )
 
         if self.blocking:
