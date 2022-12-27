@@ -5,19 +5,18 @@ A plan evaluator is responsible for evaluating a plan when it is being applied.
 
 # Evaluation steps
 
-At a high level, when a plan is evaluated, SQLMesh will
+At a high level, when a plan is evaluated, SQLMesh will:
 - Push new snapshots to the state sync.
 - Create snapshot tables.
 - Backfill data.
 - Promote the snapshots.
 
-# See also
-
-`sqlmesh.core.plan`
+Refer to `sqlmesh.core.plan`.
 """
 import abc
 import typing as t
 
+from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan.definition import Plan
@@ -38,13 +37,17 @@ class PlanEvaluator(abc.ABC):
         """Evaluates a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state and then kicks off
-        the backfill process for all affected snapshots. Once backfill is done
+        the backfill process for all affected snapshots. Once backfill is done,
         snapshots that are part of the plan are promoted in the environment targeted
         by this plan.
 
         Args:
             plan: The plan to evaluate.
         """
+
+    def _is_dev_plan(self, plan: Plan) -> bool:
+        """Returns True if the given plan is for development purposes."""
+        return plan.environment.name != c.PROD
 
 
 class BuiltInPlanEvaluator(PlanEvaluator):
@@ -82,7 +85,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 max_workers=self.backfill_concurrent_tasks,
                 console=self.console,
             )
-            scheduler.run(plan.start, plan.end)
+            scheduler.run(plan.start, plan.end, is_dev=self._is_dev_plan(plan))
 
         self._promote(plan)
 
@@ -129,6 +132,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.snapshot_evaluator.promote(
             added,
             environment=environment.name,
+            is_dev=self._is_dev_plan(plan),
         )
         self.snapshot_evaluator.demote(
             removed,
@@ -171,10 +175,13 @@ class AirflowPlanEvaluator(PlanEvaluator):
             environment,
             plan_request_id,
             no_gaps=plan.no_gaps,
+            skip_backfill=plan.skip_backfill,
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            users=self.users,
+            is_dev=self._is_dev_plan(plan),
         )
 
         if self.blocking:

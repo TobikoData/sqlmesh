@@ -342,7 +342,7 @@ class SnapshotEvaluator:
         table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_tables_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid].table_name(is_dev=is_dev)
+            snapshots[p_sid].name: snapshots[p_sid].table_name()
             for p_sid in snapshot.parents
         }
 
