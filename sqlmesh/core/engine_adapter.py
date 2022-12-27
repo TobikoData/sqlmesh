@@ -22,6 +22,7 @@ from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
+SOURCE_ALIAS = "__MERGE_SOURCE__"
 DF_TYPES: t.Tuple = (pd.DataFrame,)
 pyspark = optional_import("pyspark")
 
@@ -347,17 +348,18 @@ class EngineAdapter:
     def merge(
         self,
         target_table: str,
-        source_table: str,
-        columns: t.Iterable[str],
-        unique_keys: t.Iterable[str],
+        source_table: QueryOrDF,
+        column_names: t.Iterable[str],
+        unique_key: t.Iterable[str],
     ):
+        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
             *(
                 exp.EQ(
-                    this=exp.column(key, target_table),
-                    expression=exp.column(key, source_table),
+                    this=exp.column(part, target_table),
+                    expression=exp.column(part, SOURCE_ALIAS),
                 )
-                for key in unique_keys
+                for part in unique_key
             )
         )
         when_matched = exp.When(
@@ -365,24 +367,24 @@ class EngineAdapter:
             then=exp.update(
                 None,
                 properties={
-                    exp.column(col, target_table): exp.column(col, source_table)
-                    for col in columns
+                    exp.column(col, target_table): exp.column(col, SOURCE_ALIAS)
+                    for col in column_names
                 },
             ),
         )
         when_not_matched = exp.When(
             this=exp.Not(this="MATCHED"),
             then=exp.Insert(
-                this=exp.Tuple(expressions=[exp.column(col) for col in columns]),
+                this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
                 expression=exp.Tuple(
-                    expressions=[exp.column(col, source_table) for col in columns]
+                    expressions=[exp.column(col, SOURCE_ALIAS) for col in column_names]
                 ),
             ),
         )
         self.execute(
             exp.Merge(
                 this=target_table,
-                using=source_table,
+                using=using,
                 on=on,
                 expressions=[
                     when_matched,

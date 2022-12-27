@@ -359,25 +359,25 @@ def test_merge(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     adapter.merge(
         target_table="target",
-        source_table="source",
-        columns=["id", "ts", "val"],
-        unique_keys=["id"],
+        source_table="SELECT id, ts, val FROM source",
+        column_names=["id", "ts", "val"],
+        unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON `target`.`id` = `__MERGE_SOURCE__`.`id` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `__MERGE_SOURCE__`.`id`, `target`.`ts` = `__MERGE_SOURCE__`.`ts`, `target`.`val` = `__MERGE_SOURCE__`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`__MERGE_SOURCE__`.`id`, `__MERGE_SOURCE__`.`ts`, `__MERGE_SOURCE__`.`val`)"
     )
 
     cursor_mock.reset_mock()
     adapter.merge(
         target_table="target",
-        source_table="source",
-        columns=["id", "ts", "val"],
-        unique_keys=["id", "ts"],
+        source_table="SELECT id, ts, val FROM source",
+        column_names=["id", "ts", "val"],
+        unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target USING source ON `target`.`id` = `source`.`id` AND `target`.`ts` = `source`.`ts` "
-        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `source`.`id`, `target`.`ts` = `source`.`ts`, `target`.`val` = `source`.`val` "
-        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`source`.`id`, `source`.`ts`, `source`.`val`)"
+        "MERGE INTO target USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON `target`.`id` = `__MERGE_SOURCE__`.`id` AND `target`.`ts` = `__MERGE_SOURCE__`.`ts` "
+        "WHEN MATCHED THEN UPDATE SET `target`.`id` = `__MERGE_SOURCE__`.`id`, `target`.`ts` = `__MERGE_SOURCE__`.`ts`, `target`.`val` = `__MERGE_SOURCE__`.`val` "
+        "WHEN NOT MATCHED THEN INSERT (`id`, `ts`, `val`) VALUES (`__MERGE_SOURCE__`.`id`, `__MERGE_SOURCE__`.`ts`, `__MERGE_SOURCE__`.`val`)"
     )
