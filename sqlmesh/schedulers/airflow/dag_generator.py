@@ -433,7 +433,9 @@ class SnapshotDagGenerator:
         table_mapping = {}
         for sid in [snapshot.snapshot_id, *snapshot.parents]:
             parent_snapshot = snapshots[sid]
-            table_mapping[sid.name] = parent_snapshot.table_name()
+            table_mapping[sid.name] = parent_snapshot.table_name(
+                is_dev=is_dev, is_parent=True
+            )
 
         return self._engine_operator(
             **self._engine_operator_args,

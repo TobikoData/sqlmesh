@@ -93,6 +93,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                     "fingerprint": snapshot.fingerprint,
                     "indirect_versions": {},
                     "intervals": [],
+                    "dev_intervals": [],
                     "model": {
                         "audits": {},
                         "cron": "@daily",

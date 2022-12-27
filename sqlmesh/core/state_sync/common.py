@@ -161,16 +161,9 @@ class CommonStateSyncMixin(StateSync):
         if snapshot_id not in stored_snapshots:
             raise SQLMeshError(f"Snapshot {snapshot_id} was not found")
 
-        stored_snapshot = stored_snapshots[snapshot_id]
-        if stored_snapshot.is_dev_table(is_dev):
-            # FIXME: add support for dev intervals.
-            logger.info(
-                "Skipping interval for snapshot %s in development mode", snapshot_id
-            )
-            return
-
         logger.info("Adding interval for snapshot %s", snapshot_id)
-        stored_snapshot.add_interval(start, end)
+        stored_snapshot = stored_snapshots[snapshot_id]
+        stored_snapshot.add_interval(start, end, is_dev=is_dev)
         self._update_snapshot(stored_snapshot)
 
     def remove_interval(

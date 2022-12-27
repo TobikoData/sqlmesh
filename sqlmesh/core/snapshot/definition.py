@@ -37,6 +37,7 @@ class SnapshotChangeCategory(IntEnum):
     BREAKING = 1
     NON_BREAKING = 2
     NO_CHANGE = 3
+    FORWARD_ONLY = 4
 
 
 class FingerprintMixin:
@@ -112,6 +113,7 @@ class SnapshotInfoMixin(FingerprintMixin):
     fingerprint: str
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
+    change_category: t.Optional[SnapshotChangeCategory]
 
     def is_dev_table(self, is_dev: bool) -> bool:
         """Provided whether the snapshot is used in a development mode or not, returns True
@@ -148,6 +150,38 @@ class SnapshotInfoMixin(FingerprintMixin):
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
+    @property
+    def is_forward_only(self) -> bool:
+        """Returns whether or not the change category for this snapshot was set to FORWARD ONLY."""
+        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+    def _table_name(self, version: str, is_dev: bool, is_parent: bool) -> str:
+        """Full table name pointing to the materialized location of the snapshot.
+
+        Args:
+            version: The snapshot version.
+            is_dev: Whether the table name will be used in development mode.
+            is_parent: Whether the table name will be used as a parent table name for a
+                different snapshot.
+        """
+        if is_dev and is_parent:
+            # If this snapshot is used as a partent return a temporary table
+            # only if the choice for this snapshot was FORWARD ONLY.
+            version = version if not self.is_forward_only else self.fingerprint
+            is_temp = self.is_dev_table(True) and self.is_forward_only
+        elif is_dev:
+            version = self.fingerprint
+            is_temp = self.is_dev_table(True)
+        else:
+            is_temp = False
+
+        return table_name(
+            self.physical_schema,
+            self.name,
+            version,
+            is_temp=is_temp,
+        )
+
 
 class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
@@ -158,14 +192,15 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
 
-    def table_name(self, is_dev: bool = False) -> str:
-        """Returns the physical location of this snapshot."""
-        return table_name(
-            self.physical_schema,
-            self.name,
-            self.version if not is_dev else self.fingerprint,
-            is_temp=self.is_dev_table(is_dev),
-        )
+    def table_name(self, is_dev: bool = False, is_parent: bool = False) -> str:
+        """Full table name pointing to the materialized location of the snapshot.
+
+        Args:
+            is_dev: Whether the table name will be used in development mode.
+            is_parent: Whether the table name will be used as a parent table name for a
+                different snapshot.
+        """
+        return self._table_name(self.version, is_dev, is_parent)
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -226,6 +261,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     model: Model
     parents: t.Tuple[SnapshotId, ...]
     intervals: Intervals
+    dev_intervals: Intervals
     created_ts: int
     updated_ts: int
     ttl: str
@@ -331,6 +367,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 for name in _parents_from_model(model, models)
             ),
             intervals=[],
+            dev_intervals=[],
             created_ts=created_ts,
             updated_ts=created_ts,
             ttl=ttl,
@@ -343,7 +380,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def __hash__(self) -> int:
         return hash((self.__class__, self.fingerprint))
 
-    def add_interval(self, start: TimeLike, end: TimeLike) -> None:
+    def add_interval(
+        self, start: TimeLike, end: TimeLike, is_dev: bool = False
+    ) -> None:
         """Add a newly processed time interval to the snapshot.
 
         The actual stored intervals are [start_ts, end_ts) or start epoch timestamp inclusive and end epoch
@@ -353,13 +392,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval. If end is a date, then it is considered inclusive.
                 If it is a datetime object, then it is exclusive.
+            is_dev: Indicates whether the given interval is being added while in development mode.
         """
-        self.intervals.append(self._inclusive_exclusive(start, end))
+        is_dev = self.is_dev_table(is_dev)
+        intervals = self.intervals if not is_dev else self.dev_intervals
 
-        if len(self.intervals) < 2:
+        intervals.append(self._inclusive_exclusive(start, end))
+
+        if len(intervals) < 2:
             return
 
-        self.intervals = merge_intervals(self.intervals)
+        merged_intervals = merge_intervals(intervals)
+        if is_dev:
+            self.dev_intervals = merged_intervals
+        else:
+            self.intervals = merged_intervals
 
     def remove_interval(self, start: TimeLike, end: TimeLike) -> None:
         """Remove an interval from the snapshot.
@@ -368,9 +415,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: Start interval to remove.
             end: End interval to remove.
         """
-        self.intervals = remove_interval(
-            self.intervals, *self._inclusive_exclusive(start, end)
-        )
+        interval = self._inclusive_exclusive(start, end)
+        self.intervals = remove_interval(self.intervals, *interval)
+        self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
     def _inclusive_exclusive(self, start: TimeLike, end: TimeLike) -> t.Tuple[int, int]:
         start_dt, end_dt = make_inclusive(start, end)
@@ -471,18 +518,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    def table_name(self, is_dev: bool = False) -> str:
-        """Full table name pointing to the materialized location of the snapshot."""
-        if not self.version:
-            raise SQLMeshError(
-                f"Snapshot {self.snapshot_id} has not been versioned yet."
-            )
-        return table_name(
-            self.physical_schema,
-            self.name,
-            self.version if not is_dev else self.fingerprint,
-            is_temp=self.is_dev_table(is_dev),
-        )
+    def table_name(self, is_dev: bool = False, is_parent: bool = False) -> str:
+        """Full table name pointing to the materialized location of the snapshot.
+
+        Args:
+            is_dev: Whether the table name will be used in development mode.
+            is_parent: Whether the table name will be used as a parent table name for a
+                different snapshot.
+        """
+        self._ensure_version()
+        assert self.version
+        return self._table_name(self.version, is_dev, is_parent)
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -497,10 +543,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to get the SnapshotTableInfo from the Snapshot."""
-        if not self.version:
-            raise SQLMeshError(
-                f"Snapshot {self.snapshot_id} has not been versioned yet."
-            )
+        self._ensure_version()
         return SnapshotTableInfo(
             physical_schema=self.physical_schema,
             name=self.name,
@@ -513,10 +556,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def data_version(self) -> SnapshotDataVersion:
-        if not self.version:
-            raise SQLMeshError(
-                f"Snapshot {self.snapshot_id} has not been versioned yet."
-            )
+        self._ensure_version()
         return SnapshotDataVersion(
             fingerprint=self.fingerprint,
             version=self.version,
@@ -526,11 +566,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
-        if not self.version:
-            raise SQLMeshError(
-                f"Snapshot {self.snapshot_id} has not been versioned yet."
-            )
+        self._ensure_version()
         return self.fingerprint == self.version
+
+    @property
+    def is_forward_only(self) -> bool:
+        """Returns whether or not the change category for this snapshot was set to FORWARD ONLY."""
+        self._ensure_version()
+        return super().is_forward_only
 
     @property
     def is_full_kind(self) -> bool:
@@ -559,6 +602,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_materialized(self) -> bool:
         return self.model.kind.is_materialized
+
+    def _ensure_version(self) -> None:
+        if not self.version:
+            raise SQLMeshError(
+                f"Snapshot {self.snapshot_id} has not been versioned yet."
+            )
 
 
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
