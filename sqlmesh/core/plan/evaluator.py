@@ -171,6 +171,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             environment,
             plan_request_id,
             no_gaps=plan.no_gaps,
+            skip_backfill=plan.skip_backfill,
             restatements=plan.restatements,
             notification_targets=self.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
