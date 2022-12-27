@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-import os
+import re
 import sys
 import traceback
 import types
@@ -127,10 +127,4 @@ def word_characters_only(s: str, replacement_char: str = "_") -> str:
     >>> word_characters_only("Hello, world! 123", '')
     'Helloworld123'
     """
-    replacement_map = {
-        c: replacement_char
-        for c in map(chr, range(1114111))
-        if not c.isalnum() and c != "_"
-    }
-    # Context for type ignore: https://github.com/python/mypy/issues/4374
-    return s.translate(str.maketrans(replacement_map))  # type: ignore
+    return re.sub(r"\W", replacement_char, s)
