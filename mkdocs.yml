@@ -1,5 +1,14 @@
 site_name: SQLMesh Documentation
+nav:
+  - Overview: index.md
+  - Getting Started:
+    - getting_started.md
+    - tutorial.md
+  - Concepts:
+    - models.md
+
 theme:
   name: material
 plugins:
   - include-markdown
+copyright: Tobiko Data Inc.
