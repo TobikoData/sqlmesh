@@ -84,10 +84,10 @@ class Scheduler:
 
         mapping = {
             **{
-                p_sid.name: self.snapshots[p_sid].table_name(is_dev=is_dev)
+                p_sid.name: self.snapshots[p_sid].table_name()
                 for p_sid in snapshot.parents
             },
-            snapshot.name: snapshot.table_name(is_dev=is_dev),
+            snapshot.name: snapshot.table_name(),
         }
 
         self.snapshot_evaluator.evaluate(
