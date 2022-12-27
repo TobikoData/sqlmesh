@@ -124,7 +124,6 @@ import pathlib
 import typing as t
 import unittest
 
-import duckdb
 import pandas as pd
 import ruamel
 from sqlglot import Expression, exp, parse_one
@@ -205,21 +204,16 @@ class ModelTest(unittest.TestCase):
         inputs = {
             name: table["rows"] for name, table in self.body.get("inputs", {}).items()
         }
-        conn = duckdb.connect()
         self.engine_adapter.create_schema(self.snapshot.physical_schema)
         for table, rows in inputs.items():
-            self.engine_adapter.create_schema(table)
             df = pd.DataFrame.from_records(rows)  # noqa
-            self.engine_adapter.create_and_insert(
-                table,
-                {
-                    column_name: exp.DataType.build(column_type)
-                    for column_name, column_type, *_ in conn.execute(
-                        "DESCRIBE SELECT * FROM df"
-                    ).fetchall()
-                },
-                exp.values([tuple(row.values()) for row in rows]),
-            )
+            columns_to_types: t.Dict[str, exp.DataType] = {}
+            for i, v in rows[0].items():
+                # convert ruamel into python
+                v = v.real if hasattr(v, "real") else v
+                columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)  # type: ignore
+            self.engine_adapter.create_schema(table)
+            self.engine_adapter.create_view(table, df, columns_to_types)
 
         for snapshot_id in self.snapshot.parents:
             if snapshot_id.name not in inputs:
@@ -241,7 +235,7 @@ class ModelTest(unittest.TestCase):
     def tearDown(self) -> None:
         """Drop all input tables"""
         for table in self.body.get("inputs", {}):
-            self.engine_adapter.execute(f"DROP TABLE {table}")
+            self.engine_adapter.drop_view(table)
         for view in self.view_names:
             self.engine_adapter.drop_view(view)
 

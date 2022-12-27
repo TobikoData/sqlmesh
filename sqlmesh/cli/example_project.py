@@ -7,13 +7,16 @@ import click
 DEFAULT_CONFIG = """import duckdb
 from sqlmesh.core.config import Config
 
+
 config = Config(
-    engine_connection_factory=duckdb.connect,
+    engine_connection_factory=lambda: duckdb.connect("db.duckdb"),
     engine_dialect="duckdb",
 )
 
-
-test_config = config
+test_config = Config(
+    engine_connection_factory=duckdb.connect,
+    engine_dialect="duckdb",
+)
 """
 
 
