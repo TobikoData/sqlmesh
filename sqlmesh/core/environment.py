@@ -53,6 +53,10 @@ class Environment(PydanticModel):
 
     @classmethod
     def normalize_name(cls, v: str | Environment) -> str | Environment:
+        """
+        Normalizes the environment name so we create names that are valid names for database objects.
+        This means alphanumeric and underscores only. Invalid characters are replaced with underscores.
+        """
         if isinstance(v, Environment):
             return v
         if not isinstance(v, str):
