@@ -601,10 +601,8 @@ class Context(BaseContext):
         Returns:
             The populated Plan object.
         """
-        if not environment:
-            environment = c.PROD
-        else:
-            environment = environment.lower()
+        environment = environment or c.PROD
+        environment = Environment.normalize_name(environment)
 
         if skip_backfill and not no_gaps and environment == c.PROD:
             raise ConfigError(
@@ -675,6 +673,8 @@ class Context(BaseContext):
             environment: The environment to diff against.
             detailed: Show the actual SQL differences if True.
         """
+        environment = environment or c.PROD
+        environment = Environment.normalize_name(environment)
         self.console.show_model_difference_summary(
             self._context_diff(environment or c.PROD), detailed
         )
@@ -806,6 +806,8 @@ class Context(BaseContext):
         environment: str | Environment,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ) -> ContextDiff:
+        environment = environment or c.PROD
+        environment = Environment.normalize_name(environment)
         return ContextDiff.create(
             environment, snapshots or self.snapshots, self.state_reader
         )

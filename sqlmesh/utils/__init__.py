@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-import os
+import re
 import sys
 import traceback
 import types
@@ -115,3 +115,16 @@ def format_exception(exception: BaseException) -> t.List[str]:
         )  # type: ignore
     else:
         return traceback.format_exception(exception)  # type: ignore
+
+
+def word_characters_only(s: str, replacement_char: str = "_") -> str:
+    """
+    Replace all non-word characters in string with the replacement character.
+    Reference SO: https://stackoverflow.com/questions/1276764/stripping-everything-but-alphanumeric-chars-from-a-string-in-python/70310018#70310018
+
+    >>> word_characters_only("Hello, world!")
+    'Hello__world_'
+    >>> word_characters_only("Hello, world! 123", '')
+    'Helloworld123'
+    """
+    return re.sub(r"\W", replacement_char, s)
