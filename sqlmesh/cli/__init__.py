@@ -14,7 +14,8 @@ def error_handler(func: t.Callable) -> t.Callable:
         try:
             return func(*args, **kwargs)
         except NodeExecutionFailedError as ex:
-            raise click.ClickException(str(ex.__cause__))
+            cause = ex.__cause__
+            raise click.ClickException(f"Failed processing {ex.node}. {cause}")
         except (SQLMeshError, SqlglotError, ValueError) as ex:
             raise click.ClickException(str(ex))
 
