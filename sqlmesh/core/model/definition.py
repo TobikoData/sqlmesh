@@ -12,6 +12,7 @@ from jinja2 import Environment
 from pydantic import Field, validator
 from pydantic.fields import FieldInfo
 from sqlglot import exp, maybe_parse, parse_one
+from sqlglot.errors import SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
@@ -29,7 +30,7 @@ from sqlmesh.core.model.common import parse_model_name
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -407,12 +408,17 @@ class Model(ModelMeta, frozen=True):
                 if isinstance(query_, d.Jinja):
                     env = prepare_env(self.python_env)
 
-                    query_ = parse_one(
-                        Environment()
-                        .from_string(query_.name)
-                        .render(**env, **render_kwargs),
-                        read=self.dialect,
-                    )
+                    try:
+                        query_ = parse_one(
+                            Environment()
+                            .from_string(query_.name)
+                            .render(**env, **render_kwargs),
+                            read=self.dialect,
+                        )
+                    except Exception as ex:
+                        raise ConfigError(
+                            f"Invalid model query. {ex} at '{self._path}'"
+                        ) from ex
 
                 macro_evaluator = MacroEvaluator(
                     dialect or self.dialect, self.python_env
@@ -420,9 +426,17 @@ class Model(ModelMeta, frozen=True):
                 macro_evaluator.locals.update(render_kwargs)
 
                 for definition in self.macro_definitions:
-                    macro_evaluator.evaluate(definition)
+                    try:
+                        macro_evaluator.evaluate(definition)
+                    except MacroEvalError as ex:
+                        _raise_config_error(
+                            f"Failed to evaluate macro '{definition}'. {ex}", self._path
+                        )
 
-                self._query_cache[key] = macro_evaluator.transform(query_)  # type: ignore
+                try:
+                    self._query_cache[key] = macro_evaluator.transform(query_)  # type: ignore
+                except MacroEvalError as ex:
+                    _raise_config_error(f"Failed to evaluate macro'. {ex}", self._path)
             else:
                 self._query_cache[key] = exp.select(
                     *(
@@ -433,11 +447,14 @@ class Model(ModelMeta, frozen=True):
 
             if self._schema:
                 # This takes care of expanding star projections
-                self._query_cache[key] = optimize(
-                    self._query_cache[key],
-                    schema=self._schema,
-                    rules=RENDER_OPTIMIZER_RULES,
-                )
+                try:
+                    self._query_cache[key] = optimize(
+                        self._query_cache[key],
+                        schema=self._schema,
+                        rules=RENDER_OPTIMIZER_RULES,
+                    )
+                except SqlglotError as ex:
+                    _raise_config_error(f"Invalid model query. {ex}", self._path)
 
                 self._columns_to_types = {
                     expression.alias_or_name: expression.type
@@ -485,7 +502,9 @@ class Model(ModelMeta, frozen=True):
             return exp.replace_tables(query, mapping)
 
         if not isinstance(query, exp.Subqueryable):
-            raise SQLMeshError(f"Query needs to be a SELECT or a UNION {query}")
+            _raise_config_error(
+                f"Query needs to be a SELECT or a UNION {query}", self._path
+            )
 
         return query
 
