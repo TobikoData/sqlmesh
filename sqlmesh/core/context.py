@@ -954,7 +954,9 @@ class Context(BaseContext):
             if model.contains_star_query and any(
                 dep not in self.models for dep in model.depends_on
             ):
-                raise SQLMeshError(f"Can't expand SELECT * expression for model {name}")
+                raise SQLMeshError(
+                    f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+                )
 
             model.update_schema(schema)
             schema.add_table(name, model.columns_to_types)
