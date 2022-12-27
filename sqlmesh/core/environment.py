@@ -9,6 +9,7 @@ import typing as t
 from pydantic import validator
 
 from sqlmesh.core.snapshot import SnapshotTableInfo
+from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -37,5 +38,23 @@ class Environment(PydanticModel):
     @classmethod
     def _normalize_name(cls, v: t.Any):
         if isinstance(v, str):
-            return v.lower()
+            return word_characters_only(v).lower()
         return v
+
+    @t.overload
+    @classmethod
+    def normalize_name(cls, v: str) -> str:
+        ...
+
+    @t.overload
+    @classmethod
+    def normalize_name(cls, v: Environment) -> Environment:
+        ...
+
+    @classmethod
+    def normalize_name(cls, v: str | Environment) -> str | Environment:
+        if isinstance(v, Environment):
+            return v
+        if not isinstance(v, str):
+            raise TypeError(f"Expected str or Environment, got {type(v).__name__}")
+        return cls._normalize_name(v)

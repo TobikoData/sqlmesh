@@ -115,3 +115,22 @@ def format_exception(exception: BaseException) -> t.List[str]:
         )  # type: ignore
     else:
         return traceback.format_exception(exception)  # type: ignore
+
+
+def word_characters_only(s: str, replacement_char: str = "_") -> str:
+    """
+    Replace all non-word characters in string with the replacement character.
+    Reference SO: https://stackoverflow.com/questions/1276764/stripping-everything-but-alphanumeric-chars-from-a-string-in-python/70310018#70310018
+
+    >>> word_characters_only("Hello, world!")
+    'Hello__world_'
+    >>> word_characters_only("Hello, world! 123", '')
+    'Helloworld123'
+    """
+    replacement_map = {
+        c: replacement_char
+        for c in map(chr, range(1114111))
+        if not c.isalnum() and c != "_"
+    }
+    # Context for type ignore: https://github.com/python/mypy/issues/4374
+    return s.translate(str.maketrans(replacement_map))  # type: ignore
