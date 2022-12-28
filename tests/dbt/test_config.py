@@ -10,12 +10,12 @@ from sqlmesh.dbt.project import ProjectConfig
 @pytest.mark.parametrize(
     "current, new, expected",
     [
-        ({}, {"identifier": "correct name"}, {"identifier": "correct name"}),
-        ({"identifier": "correct name"}, {}, {"identifier": "correct name"}),
+        ({}, {"alias": "correct name"}, {"alias": "correct name"}),
+        ({"alias": "correct name"}, {}, {"alias": "correct name"}),
         (
-            {"identifier": "wrong name"},
-            {"identifier": "correct name"},
-            {"identifier": "correct name"},
+            {"alias": "wrong name"},
+            {"alias": "correct name"},
+            {"alias": "correct name"},
         ),
         ({}, {"tags": ["two"]}, {"tags": ["two"]}),
         ({"tags": ["one"]}, {}, {"tags": ["one"]}),
@@ -69,5 +69,25 @@ def test_model_config():
         k: v
         for k, v in model_configs["customer_revenue_by_day"].dict().items()
         if k in expected_config
+    }
+    assert actual_config == expected_config
+
+
+def test_source_config():
+    expected_sources = {
+        "items",
+        "orders",
+        "order_items",
+    }
+
+    source_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).sources
+    assert set(source_configs) == expected_sources
+
+    expected_config = {
+        "schema": "raw",
+        "identifier": "items",
+    }
+    actual_config = {
+        k: v for k, v in source_configs["items"].dict().items() if k in expected_config
     }
     assert actual_config == expected_config
