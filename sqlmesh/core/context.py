@@ -625,9 +625,6 @@ class Context(BaseContext):
         else:
             snapshots = {}
 
-        if environment != c.PROD and not end:
-            end = now()
-
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, snapshots),
             dag=self.dag,
@@ -639,6 +636,11 @@ class Context(BaseContext):
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
         )
+
+        if environment != c.PROD and not end:
+            # Set default end after plan creation to make sure the prompt for the end date
+            # still shows up.
+            plan.end = now()
 
         if not no_prompts:
             self.console.plan(plan, auto_apply)
@@ -662,7 +664,7 @@ class Context(BaseContext):
             raise PlanError("Can't apply a plan with uncategorized changes.")
         if plan.environment.name != c.PROD and plan.is_unbounded_end:
             raise PlanError(
-                "The unbounded end date is not allowed for non-production environments"
+                "The unbounded end date is not allowed for non-production environments."
             )
         self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
 
