@@ -18,7 +18,7 @@ LEFT JOIN {{ ref('items') }} AS i
   ON oi.item_id = i.id AND oi.ds = i.ds
 {% if is_incremental() %}
   WHERE
-    o.ds > (select max(o.ds) from {{ this }})
+    o.ds > (select max(ds) from {{ this }})
 {% endif %}
 GROUP BY
   o.waiter_id,
