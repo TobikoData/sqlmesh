@@ -281,7 +281,7 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        if snapshot.is_dev_table(is_dev):
+        if snapshot.is_temporary_table(is_dev):
             # We can't audit a temporary table.
             return []
 

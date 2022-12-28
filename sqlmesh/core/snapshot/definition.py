@@ -113,7 +113,7 @@ class SnapshotInfoMixin(FingerprintMixin):
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
-    def is_dev_table(self, is_dev: bool) -> bool:
+    def is_temporary_table(self, is_dev: bool) -> bool:
         """Provided whether the snapshot is used in a development mode or not, returns True
         if the snapshot targets a temporary table or a clone and False otherwise.
         """
@@ -164,10 +164,10 @@ class SnapshotInfoMixin(FingerprintMixin):
             # If this snapshot is used for reading, return a temporary table
             # only if this snapshot captures direct changes applied to its model.
             version = version if self.no_change else self.fingerprint
-            is_temp = self.is_dev_table(True) and not self.no_change
+            is_temp = self.is_temporary_table(True) and not self.no_change
         elif is_dev:
             version = self.fingerprint
-            is_temp = self.is_dev_table(True)
+            is_temp = self.is_temporary_table(True)
         else:
             is_temp = False
 
@@ -389,8 +389,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If it is a datetime object, then it is exclusive.
             is_dev: Indicates whether the given interval is being added while in development mode.
         """
-        is_dev = self.is_dev_table(is_dev)
-        intervals = self.intervals if not is_dev else self.dev_intervals
+        is_temp_table = self.is_temporary_table(is_dev)
+        intervals = self.dev_intervals if is_temp_table else self.intervals
 
         intervals.append(self._inclusive_exclusive(start, end))
 
@@ -398,7 +398,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return
 
         merged_intervals = merge_intervals(intervals)
-        if is_dev:
+        if is_temp_table:
             self.dev_intervals = merged_intervals
         else:
             self.intervals = merged_intervals
