@@ -144,13 +144,16 @@ class SnapshotInfoMixin(FingerprintMixin):
         raise NotImplementedError
 
     @property
+    def is_forward_only(self) -> bool:
+        return (
+            not self.data_hash_matches(self.previous_version)
+            and not self.is_new_version
+        )
+
+    @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
-
-    @property
-    def no_change(self) -> bool:
-        return self.data_hash_matches(self.previous_version) and not self.is_new_version
 
     def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -163,8 +166,8 @@ class SnapshotInfoMixin(FingerprintMixin):
         if is_dev and for_read:
             # If this snapshot is used for reading, return a temporary table
             # only if this snapshot captures direct changes applied to its model.
-            version = version if self.no_change else self.fingerprint
-            is_temp = self.is_temporary_table(True) and not self.no_change
+            version = self.fingerprint if self.is_forward_only else version
+            is_temp = self.is_temporary_table(True) and self.is_forward_only
         elif is_dev:
             version = self.fingerprint
             is_temp = self.is_temporary_table(True)
