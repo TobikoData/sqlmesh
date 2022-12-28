@@ -5,12 +5,12 @@ from enum import Enum
 from pathlib import Path
 
 from pydantic import Field, validator
-from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model import Model, ModelKindName
-from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
-from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
+from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.utils.conversions import ensure_bool, ensure_list
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
@@ -24,7 +24,7 @@ class Materialization(str, Enum):
     EPHERMAL = "ephemeral"
 
 
-class ModelConfig(BaseConfig):
+class ModelConfig(GeneralConfig):
     """
     ModelConfig contains all config parameters available to DBT models
 
@@ -40,20 +40,16 @@ class ModelConfig(BaseConfig):
         alias: Relation identifier for this model instead of the model filename
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         database: Database the model is stored in
-        docs: Documentation specific configuration
-        enabled: When false, the model is ignored
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         incremental_strategy: Strategy used to build the incremental model
-        meta: Dictionary of metadata for the model
         materialized: How the model will be materialized in the database
-        perist_docs: Persist resource descriptions as column and/or relation comments in the database
         post-hook: List of SQL statements to run after the model is built
         pre-hook: List of SQL statements to run before the model is built
         schema: Custom schema name added to the model schema name
         sql_header: SQL statement to inject above create table/view as
-        tags: List of tags that can be used for model grouping
         unique_key: List of columns that define row uniqueness for the model
+        columns: Columns within the model
     """
 
     # sqlmesh fields
@@ -68,23 +64,18 @@ class ModelConfig(BaseConfig):
     alias: t.Optional[str] = None
     cluster_by: t.Optional[t.List[str]] = None
     database: t.Optional[str] = None
-    docs: t.Dict[str, t.Any] = {"show": True}
-    enabled: bool = True
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     incremental_strategy: t.Optional[str] = None
-    meta: t.Dict[str, t.Any] = {}
     materialized: Materialization = Materialization.VIEW
-    persist_docs: t.Dict[str, t.Any] = {}
     post_hook: t.List[str] = Field([], alias="post-hook")
     pre_hook: t.List[str] = Field([], alias="pre-hook")
     schema_: t.Optional[str] = Field(None, alias="schema")
     sql_header: t.Optional[str] = None
-    tags: t.List[str] = []
     unique_key: t.Optional[t.List[str]] = None
+    columns: t.Dict[str, ColumnConfig] = {}
 
     @validator(
-        "tags",
         "pre_hook",
         "post_hook",
         "unique_key",
@@ -94,56 +85,33 @@ class ModelConfig(BaseConfig):
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
 
-    @validator("enabled", "full_refresh", pre=True)
+    @validator("full_refresh", pre=True)
     def _validate_bool(cls, v: str) -> bool:
         return ensure_bool(v)
-
-    @validator("docs", pre=True)
-    def _validate_dict(cls, v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        for key, value in v.items():
-            if isinstance(value, str):
-                v[key] = try_str_to_bool(value)
-
-        return v
 
     @validator("materialized", pre=True)
     def _validate_materialization(cls, v: str) -> Materialization:
         return Materialization(v.lower())
 
-    @validator("meta", pre=True)
-    def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
-        return parse_meta(v)
-
-    @validator("persist_docs", pre=True)
-    def _validate_persist_docs(cls, v: t.Dict[str, str]) -> t.Dict[str, bool]:
-        return {key: bool(value) for key, value in v.items()}
-
     @validator("grants", pre=True)
     def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
         return {key: ensure_list(value) for key, value in v.items()}
 
+    @validator("columns", pre=True)
+    def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
+        return yaml_to_columns(v)
+
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
-        "alias": UpdateStrategy.REPLACE,
-        "cluster_by": UpdateStrategy.REPLACE,
-        "database": UpdateStrategy.REPLACE,
-        "docs": UpdateStrategy.KEY_UPDATE,
-        "enabled": UpdateStrategy.REPLACE,
-        "full_refresh": UpdateStrategy.REPLACE,
-        "grants": UpdateStrategy.KEY_APPEND,
-        "table_name": UpdateStrategy.REPLACE,
-        "incremental_strategy": UpdateStrategy.REPLACE,
-        "meta": UpdateStrategy.KEY_UPDATE,
-        "materialized": UpdateStrategy.REPLACE,
-        "path": UpdateStrategy.IMMUTABLE,
-        "persist_docs": UpdateStrategy.KEY_UPDATE,
-        "post-hook": UpdateStrategy.APPEND,
-        "pre-hook": UpdateStrategy.APPEND,
-        "schema": UpdateStrategy.REPLACE,
-        "sql": UpdateStrategy.IMMUTABLE,
-        "sql_header": UpdateStrategy.REPLACE,
-        "tags": UpdateStrategy.APPEND,
-        "time_column": UpdateStrategy.IMMUTABLE,
-        "unique_key": UpdateStrategy.REPLACE,
+        **GeneralConfig._FIELD_UPDATE_STRATEGY,
+        **{
+            "grants": UpdateStrategy.KEY_APPEND,
+            "path": UpdateStrategy.IMMUTABLE,
+            "post-hook": UpdateStrategy.APPEND,
+            "pre-hook": UpdateStrategy.APPEND,
+            "sql": UpdateStrategy.IMMUTABLE,
+            "time_column": UpdateStrategy.IMMUTABLE,
+            "columns": UpdateStrategy.KEY_APPEND,
+        },
     }
 
     def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
