@@ -281,7 +281,7 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        if snapshot.is_dev_table(is_dev):
+        if snapshot.is_temporary_table(is_dev):
             # We can't audit a temporary table.
             return []
 
@@ -342,7 +342,9 @@ class SnapshotEvaluator:
         table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_tables_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid].table_name()
+            snapshots[p_sid].name: (
+                snapshots[p_sid].table_name(is_dev=is_dev, for_read=True)
+            )
             for p_sid in snapshot.parents
         }
 

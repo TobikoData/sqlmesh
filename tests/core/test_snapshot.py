@@ -59,6 +59,7 @@ def test_json(snapshot: Snapshot):
         "fingerprint": snapshot.fingerprint,
         "physical_schema": "sqlmesh",
         "intervals": [],
+        "dev_intervals": [],
         "model": {
             "audits": {},
             "cron": "1 0 * * *",
@@ -142,6 +143,23 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     assert new_snapshot.intervals == [
         (to_timestamp("2018-12-31"), to_timestamp("2020-02-02")),
         (to_timestamp("2020-02-05"), to_timestamp("2020-02-11")),
+    ]
+
+
+def test_add_interval_dev(snapshot: Snapshot):
+    snapshot.version = "existing_version"
+
+    snapshot.add_interval("2020-01-01", "2020-01-01")
+    assert snapshot.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
+    ]
+
+    snapshot.add_interval("2020-01-02", "2020-01-02", is_dev=True)
+    assert snapshot.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
+    ]
+    assert snapshot.dev_intervals == [
+        (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
     ]
 
 
@@ -261,3 +279,31 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     model = Model(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint == fingerprint_from_model(model, models={})
+
+
+def test_table_name(snapshot: Snapshot):
+    # Mimic a direct breaking change.
+    snapshot.fingerprint = "1_1"
+    snapshot.version = snapshot.fingerprint
+    snapshot.previous_versions = ()
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
+
+    # Mimic an indirect non-breaking change.
+    previous_data_version = snapshot.data_version
+    snapshot.fingerprint = "1_2"
+    snapshot.previous_versions = (previous_data_version,)
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_2__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
+
+    # Mimic a direct forward-only change.
+    snapshot.fingerprint = "2_1"
+    snapshot.previous_versions = (previous_data_version,)
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
