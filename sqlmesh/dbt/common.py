@@ -23,7 +23,7 @@ class UpdateStrategy(Enum):
 def update_field(
     old: t.Optional[t.Any],
     new: t.Any,
-    update_strategy: t.Optional[UpdateStrategy] = UpdateStrategy.REPLACE,
+    update_strategy: t.Optional[UpdateStrategy] = None,
 ) -> t.Any:
     """
     Update config field with new config value
@@ -38,6 +38,8 @@ def update_field(
     """
     if not old:
         return new
+
+    update_strategy = update_strategy or UpdateStrategy.REPLACE
 
     if update_strategy == UpdateStrategy.IMMUTABLE:
         raise ConfigError("Cannot modify property: {old}")
@@ -80,11 +82,15 @@ def update_field(
 
         return combined
 
-    raise ConfigError("Unknown update strategy {update_strategy}")
+    raise ConfigError(f"Unknown update strategy {update_strategy}")
 
 
 class BaseConfig(PydanticModel):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {}
+
+    class Config:
+        extra = "allow"
+        allow_mutation = True
 
     def update_with(self: T, config: t.Dict[str, t.Any]) -> T:
         """
@@ -99,8 +105,8 @@ class BaseConfig(PydanticModel):
         copy = self.copy()
         other = self.__class__(**config)
 
-        for field in other.__fields__:
-            if field in config:
+        for field in other.__fields_set__:
+            if field in copy.__fields__:
                 setattr(
                     copy,
                     field,
@@ -110,6 +116,8 @@ class BaseConfig(PydanticModel):
                         self._FIELD_UPDATE_STRATEGY.get(field),
                     ),
                 )
+            else:
+                setattr(copy, field, getattr(other, field))
 
         return copy
 

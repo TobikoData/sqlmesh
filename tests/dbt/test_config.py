@@ -35,6 +35,9 @@ from sqlmesh.dbt.project import ProjectConfig
             {"grants": {"select": ["jen"]}},
             {"grants": {"select": ["bob", "jen"]}},
         ),
+        ({"uknown": "field"}, {"uknown": "value"}, {"uknown": "value"}),
+        ({"uknown": "field"}, {}, {"uknown": "field"}),
+        ({}, {"uknown": "value"}, {"uknown": "value"}),
     ],
 )
 def test_update(
@@ -63,7 +66,7 @@ def test_model_config():
         "materialized": Materialization.INCREMENTAL,
         "incremental_strategy": "delete+insert",
         "cluster_by": ["ds"],
-        "schema": "sushi",
+        "schema": "db",
     }
     actual_config = {
         k: v
