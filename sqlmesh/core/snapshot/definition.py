@@ -37,7 +37,6 @@ class SnapshotChangeCategory(IntEnum):
     BREAKING = 1
     NON_BREAKING = 2
     NO_CHANGE = 3
-    FORWARD_ONLY = 4
 
 
 class FingerprintMixin:
@@ -113,7 +112,6 @@ class SnapshotInfoMixin(FingerprintMixin):
     fingerprint: str
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
-    change_category: t.Optional[SnapshotChangeCategory]
 
     def is_dev_table(self, is_dev: bool) -> bool:
         """Provided whether the snapshot is used in a development mode or not, returns True
@@ -151,24 +149,22 @@ class SnapshotInfoMixin(FingerprintMixin):
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
     @property
-    def is_forward_only(self) -> bool:
-        """Returns whether or not the change category for this snapshot was set to FORWARD ONLY."""
-        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    def no_change(self) -> bool:
+        return self.data_hash_matches(self.previous_version) and not self.is_new_version
 
-    def _table_name(self, version: str, is_dev: bool, is_parent: bool) -> str:
+    def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
             version: The snapshot version.
             is_dev: Whether the table name will be used in development mode.
-            is_parent: Whether the table name will be used as a parent table name for a
-                different snapshot.
+            for_read: Whether the table name will be used for reading by a different snapshot.
         """
-        if is_dev and is_parent:
-            # If this snapshot is used as a partent return a temporary table
-            # only if the choice for this snapshot was FORWARD ONLY.
-            version = version if not self.is_forward_only else self.fingerprint
-            is_temp = self.is_dev_table(True) and self.is_forward_only
+        if is_dev and for_read:
+            # If this snapshot is used for reading, return a temporary table
+            # only if this snapshot captures direct changes applied to its model.
+            version = version if self.no_change else self.fingerprint
+            is_temp = self.is_dev_table(True) and not self.no_change
         elif is_dev:
             version = self.fingerprint
             is_temp = self.is_dev_table(True)
@@ -192,15 +188,14 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
 
-    def table_name(self, is_dev: bool = False, is_parent: bool = False) -> str:
+    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
             is_dev: Whether the table name will be used in development mode.
-            is_parent: Whether the table name will be used as a parent table name for a
-                different snapshot.
+            for_read: Whether the table name will be used for reading by a different snapshot.
         """
-        return self._table_name(self.version, is_dev, is_parent)
+        return self._table_name(self.version, is_dev, for_read)
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -518,17 +513,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    def table_name(self, is_dev: bool = False, is_parent: bool = False) -> str:
+    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
             is_dev: Whether the table name will be used in development mode.
-            is_parent: Whether the table name will be used as a parent table name for a
-                different snapshot.
+            for_read: Whether the table name will be used for reading by a different snapshot.
         """
         self._ensure_version()
         assert self.version
-        return self._table_name(self.version, is_dev, is_parent)
+        return self._table_name(self.version, is_dev, for_read)
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -568,12 +562,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Returns whether or not this version is new and requires a backfill."""
         self._ensure_version()
         return self.fingerprint == self.version
-
-    @property
-    def is_forward_only(self) -> bool:
-        """Returns whether or not the change category for this snapshot was set to FORWARD ONLY."""
-        self._ensure_version()
-        return super().is_forward_only
 
     @property
     def is_full_kind(self) -> bool:

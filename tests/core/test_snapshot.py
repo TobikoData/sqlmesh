@@ -7,11 +7,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotChangeCategory,
-    fingerprint_from_model,
-)
+from sqlmesh.core.snapshot import Snapshot, fingerprint_from_model
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
@@ -286,64 +282,28 @@ def test_fingerprint(model: Model, parent_model: Model):
 
 
 def test_table_name(snapshot: Snapshot):
-    snapshot.fingerprint = "test_fingerprint"
-
     # Mimic a direct breaking change.
+    snapshot.fingerprint = "1_1"
     snapshot.version = snapshot.fingerprint
-    snapshot.change_category = SnapshotChangeCategory.BREAKING
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=False)
-        == "sqlmesh.name__test_fingerprint"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=False)
-        == "sqlmesh.name__test_fingerprint"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=True)
-        == "sqlmesh.name__test_fingerprint"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=True)
-        == "sqlmesh.name__test_fingerprint"
-    )
+    snapshot.previous_versions = ()
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
 
     # Mimic an indirect non-breaking change.
-    snapshot.version = "existing_version"
-    snapshot.change_category = None
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=False)
-        == "sqlmesh.name__existing_version"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=False)
-        == "sqlmesh.name__test_fingerprint__temp"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=True)
-        == "sqlmesh.name__existing_version"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=True)
-        == "sqlmesh.name__existing_version"
-    )
+    previous_data_version = snapshot.data_version
+    snapshot.fingerprint = "1_2"
+    snapshot.previous_versions = (previous_data_version,)
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_2__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
 
     # Mimic a direct forward-only change.
-    snapshot.version = "existing_version"
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=False)
-        == "sqlmesh.name__existing_version"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=False)
-        == "sqlmesh.name__test_fingerprint__temp"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, is_parent=True)
-        == "sqlmesh.name__existing_version"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, is_parent=True)
-        == "sqlmesh.name__test_fingerprint__temp"
-    )
+    snapshot.fingerprint = "2_1"
+    snapshot.previous_versions = (previous_data_version,)
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
