@@ -62,9 +62,7 @@ class Profile:
     def _read_profile(
         cls, path: Path, project: str, target: t.Optional[str]
     ) -> t.Dict[str, t.Any]:
-        with path.open(encoding="utf-8") as file:
-            contents = yaml.load(file.read())
-
+        contents = yaml.load(path)
         project_data = contents.get(project)
         if not project_data:
             raise ConfigError(f"Project '{project}' does not exist in profile")

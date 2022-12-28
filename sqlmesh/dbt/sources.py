@@ -6,7 +6,7 @@ from pydantic import Field, validator
 
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import BaseConfig, UpdateStrategy, parse_meta
-from sqlmesh.utils.datatype import ensure_bool, ensure_list
+from sqlmesh.utils.conversions import ensure_bool, ensure_list
 
 
 class SourceConfig(BaseConfig):

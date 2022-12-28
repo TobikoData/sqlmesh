@@ -64,8 +64,7 @@ class ProjectConfig:
                 f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
             )
 
-        with project_config_path.open(encoding="utf-8") as file:
-            project_yaml = yaml.load(file.read())
+        project_yaml = yaml.load(project_config_path)
 
         project_name = project_yaml.get("name")
         if not project_name:
@@ -118,15 +117,16 @@ class ProjectConfig:
         # Layer on configs in property files
         for filepath in project_root.glob("models/**/*.yml"):
             scope = cls._scope_from_path(filepath, project_root, project_name)
-            with filepath.open(encoding="utf-8") as file:
-                properties_yaml = yaml.load(file.read())
-                scoped_models = cls._load_properties_model_config(
-                    properties_yaml, scope, scoped_models
-                )
-                property_source_configs = cls._load_properties_sources_config(
-                    properties_yaml, scope, scoped_sources
-                )
-                source_configs.update(property_source_configs)
+            properties_yaml = yaml.load(filepath)
+
+            scoped_models = cls._load_properties_model_config(
+                properties_yaml, scope, scoped_models
+            )
+
+            property_source_configs = cls._load_properties_sources_config(
+                properties_yaml, scope, scoped_sources
+            )
+            source_configs.update(property_source_configs)
 
         # Layer on configs from the model file and create model configs
         for filepath in project_root.glob("models/**/*.sql"):

@@ -5,7 +5,7 @@ import typing as t
 from pydantic import validator
 
 from sqlmesh.dbt.common import BaseConfig, parse_meta
-from sqlmesh.utils.datatype import ensure_bool, ensure_list
+from sqlmesh.utils.conversions import ensure_bool, ensure_list
 
 
 class ColumnConfig(BaseConfig):

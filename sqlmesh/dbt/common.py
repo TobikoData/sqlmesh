@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from enum import Enum, auto
 
-from sqlmesh.utils.datatype import try_str_to_bool
+from sqlmesh.utils.conversions import try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
