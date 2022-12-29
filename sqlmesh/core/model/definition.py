@@ -307,6 +307,14 @@ class Model(ModelMeta, frozen=True):
             for column_type in self.columns_to_types.values()
         )
 
+    @property
+    def is_python(self) -> bool:
+        return not self.is_sql
+
+    @property
+    def is_sql(self) -> bool:
+        return not isinstance(self.query, d.MacroVar)
+
     def render(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model."""
         expressions = []
@@ -336,7 +344,16 @@ class Model(ModelMeta, frozen=True):
 
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
-        return [model, *self.expressions, self.query]
+        query: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja, d.PythonCode]
+        if self.is_python:
+            expressions = [
+                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+                for k, v in sorted(self.python_env.items(), key=lambda x: x[1].kind)
+            ]
+            query = d.PythonCode(expressions=expressions)
+        else:
+            query = self.query
+        return [model, *self.expressions, query]
 
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
@@ -850,10 +867,6 @@ class Model(ModelMeta, frozen=True):
 
     def __repr__(self):
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
-
-    @property
-    def is_sql(self) -> bool:
-        return not isinstance(self.query, d.MacroVar)
 
 
 def _find_tables(query: exp.Expression) -> t.Set[str]:
