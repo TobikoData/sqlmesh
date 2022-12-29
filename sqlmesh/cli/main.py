@@ -170,6 +170,11 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     help="Skip the backfill step.",
 )
 @click.option(
+    "--forward-only",
+    is_flag=True,
+    help="Create a plan for forward-only changes.",
+)
+@click.option(
     "--no-prompts",
     is_flag=True,
     help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
