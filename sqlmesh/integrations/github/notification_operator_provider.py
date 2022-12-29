@@ -1,4 +1,4 @@
-from airflow.models import BaseOperator
+import typing as t
 
 from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.plan import PlanStatus
@@ -8,6 +8,9 @@ from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
+
+if t.TYPE_CHECKING:
+    from airflow.providers.github.operators.github import GithubOperator
 
 
 class GithubNotificationOperatorProvider(
@@ -23,7 +26,7 @@ class GithubNotificationOperatorProvider(
         plan_status: PlanStatus,
         plan_application_request: common.PlanApplicationRequest,
         **dag_kwargs,
-    ) -> BaseOperator:
+    ) -> GithubOperator:
         from airflow.providers.github.operators.github import GithubOperator
 
         if plan_status.is_started:
