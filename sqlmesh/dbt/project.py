@@ -114,26 +114,29 @@ class ProjectConfig:
             project_yaml, "sources", scoped_sources
         )
 
-        # Layer on configs in property files
-        for filepath in project_root.glob("models/**/*.yml"):
-            scope = cls._scope_from_path(filepath, project_root, project_name)
-            properties_yaml = yaml.load(filepath)
+        models_dirs = project_yaml.get("model-paths") or ["models"]
+        for dir in models_dirs:
+            dirpath = Path(project_root, dir)
+            # Layer on configs in property files
+            for filepath in dirpath.glob("**/*.yml"):
+                scope = cls._scope_from_path(filepath, dirpath, project_name)
+                properties_yaml = yaml.load(filepath)
 
-            scoped_models = cls._load_properties_model_config(
-                properties_yaml, scope, scoped_models
-            )
+                scoped_models = cls._load_properties_model_config(
+                    properties_yaml, scope, scoped_models
+                )
 
-            property_source_configs = cls._load_properties_sources_config(
-                properties_yaml, scope, scoped_sources
-            )
-            source_configs.update(property_source_configs)
+                property_source_configs = cls._load_properties_sources_config(
+                    properties_yaml, scope, scoped_sources
+                )
+                source_configs.update(property_source_configs)
 
-        # Layer on configs from the model file and create model configs
-        for filepath in project_root.glob("models/**/*.sql"):
-            scope = cls._scope_from_path(filepath, project_root, project_name)
-            model_config = cls._load_model_config(filepath, scope, scoped_models)
-            if model_config.table_name:
-                model_configs[model_config.table_name] = model_config
+            # Layer on configs from the model file and create model configs
+            for filepath in dirpath.glob("**/*.sql"):
+                scope = cls._scope_from_path(filepath, dirpath, project_name)
+                model_config = cls._load_model_config(filepath, scope, scoped_models)
+                if model_config.table_name:
+                    model_configs[model_config.table_name] = model_config
 
         return (model_configs, source_configs)
 
@@ -267,7 +270,7 @@ class ProjectConfig:
         filename if a properties file.
         """
         path_from_root = path.relative_to(root_path)
-        scope = (project_name, *path_from_root.parts[1:-1])
+        scope = (project_name, *path_from_root.parts[:-1])
         if path.match("*.sql"):
             scope = (*scope, path_from_root.stem)
         return scope

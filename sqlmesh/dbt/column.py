@@ -3,12 +3,22 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
+from sqlglot.helper import ensure_list
 
-from sqlmesh.dbt.common import BaseConfig, parse_meta
-from sqlmesh.utils.conversions import ensure_bool, ensure_list
+from sqlmesh.dbt.common import GeneralConfig
+from sqlmesh.utils.conversions import ensure_bool
 
 
-class ColumnConfig(BaseConfig):
+def yaml_to_columns(yaml):
+    columns = {}
+    for column in ensure_list(yaml):
+        config = ColumnConfig(**column)
+        columns[config.name] = config
+
+    return columns
+
+
+class ColumnConfig(GeneralConfig):
     """
     Column configuration for a DBT project
 
@@ -24,23 +34,7 @@ class ColumnConfig(BaseConfig):
 
     name: str
     data_type: t.Optional[str] = None
-    description: t.Optional[str] = None
-    meta: t.Optional[t.Dict[str, t.Any]] = {}
     quote: t.Optional[bool] = False
-    tests: t.Optional[t.List[str]] = []
-    tags: t.Optional[t.List[str]] = []
-
-    @validator(
-        "tests",
-        "tags",
-        pre=True,
-    )
-    def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
-        return ensure_list(v)
-
-    @validator("meta", pre=True)
-    def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
-        return parse_meta(v)
 
     @validator("quote", pre=True)
     def _validate_bool(cls, v: str) -> bool:

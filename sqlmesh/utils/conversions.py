@@ -3,10 +3,6 @@ from __future__ import annotations
 import typing as t
 
 
-def ensure_list(val: t.Any) -> t.List[t.Any]:
-    return val if isinstance(val, list) else [val]
-
-
 def ensure_bool(val: t.Any) -> bool:
     if isinstance(val, bool):
         return val
