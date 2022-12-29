@@ -309,7 +309,7 @@ class Model(ModelMeta, frozen=True):
 
     @property
     def is_python_model(self) -> bool:
-        return self.python_env is not None
+        return bool(self.python_env)
 
     @property
     def is_sql_model(self) -> bool:
