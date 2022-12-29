@@ -35,6 +35,7 @@ from __future__ import annotations
 import abc
 import contextlib
 import importlib
+import linecache
 import os
 import sys
 import types
@@ -384,6 +385,7 @@ class Context(BaseContext):
         """Refresh all models that have been updated."""
         for path, initial_mtime in self._path_mtimes.items():
             if path.stat().st_mtime > initial_mtime:
+                linecache.clearcache()
                 self._path_mtimes.clear()
                 self.models.clear()
                 self.load()
