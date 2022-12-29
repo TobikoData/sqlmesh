@@ -50,6 +50,11 @@ class MacroStrReplace(MacroFunc):
     pass
 
 
+class PythonCode(exp.Func):
+    arg_types = {"this": False, "expressions": False}
+    is_var_len_args = True
+
+
 class DColonCast(exp.Cast):
     pass
 
