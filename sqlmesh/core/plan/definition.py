@@ -179,14 +179,14 @@ class Plan:
         ]
 
     @property
-    def snapshots(self) -> t.Iterable[Snapshot]:
+    def snapshots(self) -> t.List[Snapshot]:
         """Gets all the snapshots in the plan/environment."""
-        return self.context_diff.snapshots.values()
+        return list(self.context_diff.snapshots.values())
 
     @property
-    def new_snapshots(self) -> t.Iterable[Snapshot]:
+    def new_snapshots(self) -> t.List[Snapshot]:
         """Gets only new snapshots in the plan/environment."""
-        return self.context_diff.new_snapshots
+        return list(self.context_diff.new_snapshots.values())
 
     @property
     def environment(self) -> Environment:
@@ -199,6 +199,10 @@ class Plan:
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
         )
+
+    def is_new_snapshot(self, snapshot: Snapshot) -> bool:
+        """Returns True if the given snapshot is a new snapshot in this plan."""
+        return snapshot.snapshot_id in self.context_diff.new_snapshots
 
     def apply(self) -> None:
         """Runs apply if an apply function was passed in."""
@@ -216,6 +220,10 @@ class Plan:
         """
         if self.forward_only:
             raise PlanError("Choice setting is not supported by a forward-only plan.")
+        if not self.is_new_snapshot(snapshot):
+            raise SQLMeshError(
+                f"A choice can't be changed for the existing version of model '{snapshot.name}'."
+            )
 
         snapshot.change_category = choice
         if choice in (
@@ -314,7 +322,7 @@ class Plan:
             snapshot = self.context_diff.snapshots[model_name]
 
             if model_name in self.context_diff.modified_snapshots:
-                if self.forward_only:
+                if self.forward_only and self.is_new_snapshot(snapshot):
                     # In case of the forward only plan any modifications result in reuse of the
                     # previous version.
                     snapshot.set_version(snapshot.previous_version)
@@ -346,7 +354,8 @@ class Plan:
                         "New models can't be added as part of the forward-only plan."
                     )
 
-                snapshot.set_version()
+                if self.is_new_snapshot(snapshot):
+                    snapshot.set_version()
                 added_and_directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
