@@ -25,6 +25,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = {}
     context_diff_mock.modified_snapshots = {"b", (snapshot_b, snapshot_b)}
+    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
 
     state_reader_mock = mocker.Mock()
 
@@ -49,6 +50,7 @@ def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerF
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = {"a"}
     context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
 
     state_reader_mock = mocker.Mock()
 
@@ -76,6 +78,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = {}
     context_diff_mock.modified_snapshots = {"b", (snapshot_b, snapshot_b)}
+    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
 
     state_reader_mock = mocker.Mock()
 

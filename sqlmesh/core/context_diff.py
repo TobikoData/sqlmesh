@@ -14,7 +14,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotDataVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotDataVersion, SnapshotId
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -39,7 +39,7 @@ class ContextDiff(PydanticModel):
     """Modified snapshots."""
     snapshots: t.Dict[str, Snapshot]
     """Merged snapshots."""
-    new_snapshots: t.List[Snapshot]
+    new_snapshots: t.Dict[SnapshotId, Snapshot]
     """New snapshots."""
     previous_plan_id: t.Optional[str]
     """Previous plan id."""
@@ -87,7 +87,7 @@ class ContextDiff(PydanticModel):
 
         merged_snapshots = {}
         modified_snapshots = {}
-        new_snapshots = []
+        new_snapshots = {}
         snapshot_remote_versions: t.Dict[
             str, t.Tuple[t.Tuple[SnapshotDataVersion, ...], int]
         ] = {}
@@ -113,12 +113,12 @@ class ContextDiff(PydanticModel):
             else:
                 snapshot = snapshot.copy()
                 merged_snapshots[name] = snapshot
-                new_snapshots.append(snapshot)
+                new_snapshots[snapshot.snapshot_id] = snapshot
                 if modified:
                     snapshot.previous_versions = modified.all_versions
                     modified_snapshots[name] = (snapshot, stored[modified.snapshot_id])
 
-        for snapshot in new_snapshots:
+        for snapshot in new_snapshots.values():
             if (
                 snapshot.name in snapshot_remote_versions
                 and snapshot.previous_version
