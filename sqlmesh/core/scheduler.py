@@ -158,7 +158,8 @@ class Scheduler:
             sid = snapshot.snapshot_id
             for interval in intervals:
                 dag.add((sid, interval), upstream_dependencies)
-            self.console.start_snapshot_progress(snapshot.name, len(intervals))
+            if intervals:
+                self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
