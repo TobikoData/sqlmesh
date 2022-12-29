@@ -281,11 +281,17 @@ def build_env(
 
 
 class ExecutableKind(str, Enum):
-    """The kind of of executable."""
+    """The kind of of executable. The order of the members is used when serializing the python model to text."""
 
-    DEFINITION = "definition"
     IMPORT = "import"
     VALUE = "value"
+    DEFINITION = "definition"
+
+    def __lt__(self, other):
+        if not isinstance(other, ExecutableKind):
+            return NotImplemented
+        values = list(ExecutableKind.__dict__.values())
+        return values.index(self) < values.index(other)
 
 
 class Executable(PydanticModel):
