@@ -50,6 +50,10 @@ class MacroStrReplace(MacroFunc):
     pass
 
 
+class PythonCode(exp.Expression):
+    arg_types = {"expressions": True}
+
+
 class DColonCast(exp.Cast):
     pass
 
@@ -477,6 +481,7 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
                     ModelKind: _model_kind_sql,
+                    PythonCode: lambda self, e: self.expressions(e),
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (

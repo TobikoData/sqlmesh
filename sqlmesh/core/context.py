@@ -35,6 +35,7 @@ from __future__ import annotations
 import abc
 import contextlib
 import importlib
+import linecache
 import os
 import sys
 import types
@@ -66,7 +67,7 @@ from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now, yesterday_ds
+from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import (
     ConfigError,
     MissingDependencyError,
@@ -384,6 +385,7 @@ class Context(BaseContext):
         """Refresh all models that have been updated."""
         for path, initial_mtime in self._path_mtimes.items():
             if path.stat().st_mtime > initial_mtime:
+                linecache.clearcache()
                 self._path_mtimes.clear()
                 self.models.clear()
                 self.load()
@@ -570,6 +572,7 @@ class Context(BaseContext):
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
+        forward_only: bool = False,
         no_prompts: bool = False,
         auto_apply: bool = False,
     ) -> Plan:
@@ -593,6 +596,7 @@ class Context(BaseContext):
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
             skip_backfill: Whether to skip the backfill step. Default: False.
+            forward_only: Whether the purpose of the plan is to make forward only changes.
             no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False.
@@ -635,12 +639,9 @@ class Context(BaseContext):
             restate_from=restate_from,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
+            is_dev=environment != c.PROD,
+            forward_only=forward_only,
         )
-
-        if environment != c.PROD and not end:
-            # Set default end after plan creation to make sure the prompt for the end date
-            # still shows up.
-            plan.end = now()
 
         if not no_prompts:
             self.console.plan(plan, auto_apply)
