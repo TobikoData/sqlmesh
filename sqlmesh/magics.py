@@ -192,6 +192,11 @@ class SQLMeshMagics(Magics):
         help="Skip the backfill step.",
     )
     @argument(
+        "--forward-only",
+        action="store_true",
+        help="Create a plan for forward-only changes.",
+    )
+    @argument(
         "--no-prompts",
         action="store_true",
         help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
@@ -220,6 +225,7 @@ class SQLMeshMagics(Magics):
             restate_from=args.restate_from,
             no_gaps=args.no_gaps,
             skip_backfill=args.skip_backfill,
+            forward_only=args.forward_only,
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
         )

@@ -102,7 +102,7 @@ def test_no_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(
-        sushi_context, environment, SnapshotChangeCategory.NO_CHANGE, True
+        sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, True
     )
 
 
@@ -169,7 +169,7 @@ def validate_query_change(
     if change_category == SnapshotChangeCategory.BREAKING and not logical:
         models_same = not_modified
         models_different = directly_modified + indirectly_modified
-    elif change_category == SnapshotChangeCategory.NO_CHANGE:
+    elif change_category == SnapshotChangeCategory.FORWARD_ONLY:
         models_same = not_modified + directly_modified + indirectly_modified
         models_different = []
     else:
@@ -353,7 +353,7 @@ def test_environment_promotion(sushi_context: Context):
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.NO_CHANGE)
+    apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.FORWARD_ONLY)
 
     # Promote to prod
     def _validate_plan(context, plan):
@@ -373,7 +373,7 @@ def test_environment_promotion(sushi_context: Context):
             plan.snapshot_change_category(
                 plan.context_diff.modified_snapshots["sushi.customer_revenue_by_day"][0]
             )
-            == SnapshotChangeCategory.NO_CHANGE
+            == SnapshotChangeCategory.FORWARD_ONLY
         )
 
     apply_to_environment(
@@ -548,23 +548,23 @@ def setup_rebase(
 @pytest.mark.parametrize(
     "change_categories, expected",
     [
-        ([SnapshotChangeCategory.NO_CHANGE], SnapshotChangeCategory.NO_CHANGE),
+        ([SnapshotChangeCategory.FORWARD_ONLY], SnapshotChangeCategory.FORWARD_ONLY),
         ([SnapshotChangeCategory.NON_BREAKING], SnapshotChangeCategory.NON_BREAKING),
         ([SnapshotChangeCategory.BREAKING], SnapshotChangeCategory.BREAKING),
         (
-            [SnapshotChangeCategory.NO_CHANGE, SnapshotChangeCategory.NO_CHANGE],
-            SnapshotChangeCategory.NO_CHANGE,
+            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.FORWARD_ONLY],
+            SnapshotChangeCategory.FORWARD_ONLY,
         ),
         (
-            [SnapshotChangeCategory.NO_CHANGE, SnapshotChangeCategory.NON_BREAKING],
+            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.NON_BREAKING],
             SnapshotChangeCategory.NON_BREAKING,
         ),
         (
-            [SnapshotChangeCategory.NO_CHANGE, SnapshotChangeCategory.BREAKING],
+            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.BREAKING],
             SnapshotChangeCategory.BREAKING,
         ),
         (
-            [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.NO_CHANGE],
+            [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.FORWARD_ONLY],
             SnapshotChangeCategory.NON_BREAKING,
         ),
         (
@@ -576,7 +576,7 @@ def setup_rebase(
             SnapshotChangeCategory.BREAKING,
         ),
         (
-            [SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.NO_CHANGE],
+            [SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.FORWARD_ONLY],
             SnapshotChangeCategory.BREAKING,
         ),
         (
