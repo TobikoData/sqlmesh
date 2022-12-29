@@ -18,7 +18,7 @@ from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, make_inclusive, now, to_ds, validate_date_range
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 SnapshotMapping = t.Dict[str, t.Set[str]]
@@ -39,6 +39,8 @@ class Plan:
             part of the target environment have no data gaps when compared against previous
             snapshots for same models.
         skip_backfill: Whether to skip the backfill step.
+        is_dev: Whether this plan is for development purposes.
+        forward_only: Whether the purpose of the plan is to make forward only changes.
     """
 
     def __init__(
@@ -52,6 +54,8 @@ class Plan:
         restate_from: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
+        is_dev: bool = False,
+        forward_only: bool = False,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -60,8 +64,10 @@ class Plan:
         self.restatements = set()
         self.no_gaps = no_gaps
         self.skip_backfill = skip_backfill
+        self.is_dev = is_dev
+        self.forward_only = forward_only
         self._start = start
-        self._end = end
+        self._end = end if end or not is_dev else now()
         self._apply = apply
         self._dag = dag
         self._state_reader = state_reader
@@ -205,9 +211,12 @@ class Plan:
         """Sets a snapshot version based on the user choice.
 
         Args:
-            snapshot: The snapshot to version.
-            choice: The user decision on how to version the snapshot and it's children.
+            snapshot: The target snapshot.
+            choice: The user decision on how to version the target snapshot and its children.
         """
+        if self.forward_only:
+            raise PlanError("Choice setting is not supported by a forward-only plan.")
+
         snapshot.change_category = choice
         if choice in (
             SnapshotChangeCategory.BREAKING,
@@ -256,11 +265,11 @@ class Plan:
             )
 
         if snapshot.name not in self.context_diff.modified_snapshots:
-            return SnapshotChangeCategory.NO_CHANGE
+            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not been modified")
 
         current, previous = self.context_diff.modified_snapshots[snapshot.name]
         if current.version == previous.version:
-            return SnapshotChangeCategory.NO_CHANGE
+            return SnapshotChangeCategory.FORWARD_ONLY
 
         if current.data_hash_matches(previous):
             return SnapshotChangeCategory.BREAKING
@@ -303,8 +312,19 @@ class Plan:
             snapshot = self.context_diff.snapshots[model_name]
 
             if model_name in self.context_diff.modified_snapshots:
+                if self.forward_only:
+                    # In case of the forward only plan any modifications result in reuse of the
+                    # previous version.
+                    snapshot.set_version(snapshot.previous_version)
+
+                upstream_model_names = self._dag.upstream(model_name)
+
                 if self.context_diff.directly_modified(model_name):
                     added_and_directly_modified.append(snapshot)
+                    if not self.forward_only:
+                        self._ensure_no_paused_forward_only_upstream(
+                            model_name, upstream_model_names
+                        )
                 else:
                     all_indirectly_modified.add(model_name)
 
@@ -314,11 +334,16 @@ class Plan:
                     if not snapshot.version and not any(
                         self.context_diff.directly_modified(upstream)
                         and not self.context_diff.snapshots[upstream].version
-                        for upstream in self._dag.upstream(model_name)
+                        for upstream in upstream_model_names
                     ):
                         snapshot.set_version()
 
             elif model_name in self.context_diff.added:
+                if self.forward_only:
+                    raise PlanError(
+                        "New models can't be added as part of the forward-only plan."
+                    )
+
                 snapshot.set_version()
                 added_and_directly_modified.append(snapshot)
 
@@ -333,6 +358,24 @@ class Plan:
             added_and_directly_modified,
             indirectly_modified,
         )
+
+    def _ensure_no_paused_forward_only_upstream(
+        self, model_name: str, upstream_model_names: t.Iterable[str]
+    ) -> None:
+        for upstream in upstream_model_names:
+            upstream_snapshot = self.context_diff.snapshots[upstream]
+            if (
+                upstream_snapshot.version
+                and upstream_snapshot.is_forward_only
+                and upstream_snapshot.is_paused
+            ):
+                raise PlanError(
+                    f"Modified model '{model_name}' depends on a paused forward-only snapshot {upstream_snapshot.snapshot_id}. "
+                    "Possible remedies: "
+                    "1) make sure your codebase is up-to-date; "
+                    f"2) promote the snapshot {upstream_snapshot.snapshot_id} in the production environment; "
+                    "3) recreate this plan in a forward-only mode."
+                )
 
 
 class PlanStatus(str, Enum):

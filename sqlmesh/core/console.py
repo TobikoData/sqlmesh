@@ -13,7 +13,6 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.tree import Tree
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -31,7 +30,7 @@ if t.TYPE_CHECKING:
 SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.BREAKING: "Breaking",
     SnapshotChangeCategory.NON_BREAKING: "Non-breaking",
-    SnapshotChangeCategory.NO_CHANGE: "No change",
+    SnapshotChangeCategory.FORWARD_ONLY: "Forward-only",
 }
 
 
@@ -231,9 +230,7 @@ class TerminalConsole(Console):
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
         """
-        unbounded_end = (
-            plan.context_diff.environment == c.PROD and plan.is_unbounded_end
-        )
+        unbounded_end = not plan.is_dev and plan.is_unbounded_end
         self._prompt_categorize(plan, auto_apply)
         self._show_options_after_categorization(
             plan, auto_apply, unbounded_end=unbounded_end
@@ -379,29 +376,16 @@ class TerminalConsole(Console):
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
     ) -> None:
-        if plan.indirectly_modified[snapshot.name]:
-            choices = self._snapshot_change_choices(snapshot)
-            response = Prompt.ask(
-                "\n".join(
-                    [f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]
-                ),
-                console=self.console,
-                show_choices=False,
-                choices=[f"{i+1}" for i in range(len(choices))],
-            )
-            choice = list(choices)[int(response) - 1]
-        elif not snapshot.is_materialized:
-            choice = (
-                SnapshotChangeCategory.BREAKING
-                if Confirm.ask(
-                    f"Does this change require a backfill of [direct]{snapshot.name}[/direct]?",
-                    console=self.console,
-                )
-                else SnapshotChangeCategory.NO_CHANGE
-            )
-        else:
-            choice = SnapshotChangeCategory.NON_BREAKING
-
+        choices = self._snapshot_change_choices(snapshot)
+        response = Prompt.ask(
+            "\n".join(
+                [f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]
+            ),
+            console=self.console,
+            show_choices=False,
+            choices=[f"{i+1}" for i in range(len(choices))],
+        )
+        choice = list(choices)[int(response) - 1]
         plan.set_choice(snapshot, choice)
 
     def _snapshot_change_choices(
@@ -421,13 +405,12 @@ class TerminalConsole(Console):
         elif snapshot.is_embedded_kind:
             choices = {
                 SnapshotChangeCategory.BREAKING: f"Backfill {indirect}",
-                SnapshotChangeCategory.NO_CHANGE: f"Don't backfill {indirect}",
+                SnapshotChangeCategory.NON_BREAKING: f"Don't backfill {indirect}",
             }
         else:
             choices = {
                 SnapshotChangeCategory.BREAKING: f"Backfill {direct} and {indirect}",
                 SnapshotChangeCategory.NON_BREAKING: f"Backfill {direct} but not {indirect}",
-                SnapshotChangeCategory.NO_CHANGE: f"Don't backfill {direct} or {indirect}",
             }
         labeled_choices = {
             k: f"[{SNAPSHOT_CHANGE_CATEGORY_STR[k]}] {v}" for k, v in choices.items()
@@ -561,7 +544,7 @@ class NotebookMagicConsole(TerminalConsole):
 
         unbounded_end_date_widget = (
             [_checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)]
-            if plan.environment.name == c.PROD
+            if not plan.is_dev
             else []
         )
 
@@ -618,41 +601,21 @@ class NotebookMagicConsole(TerminalConsole):
             plan.set_choice(snapshot, choices[change["owner"].index])
             self._show_options_after_categorization(plan)
 
-        if plan.indirectly_modified[snapshot.name]:
-            choice_mapping = self._snapshot_change_choices(
-                snapshot, use_rich_formatting=False
-            )
-            radio = widgets.RadioButtons(
-                options=choice_mapping.values(),
-                layout={"width": "max-content"},
-                disabled=False,
-            )
-        else:
-            if snapshot.is_view_kind or snapshot.is_embedded_kind:
-                choice_mapping = {
-                    SnapshotChangeCategory.NON_BREAKING: f"Update {snapshot.name}"
-                }
-            else:
-                choice_mapping = {
-                    SnapshotChangeCategory.NON_BREAKING: f"Backfill {snapshot.name}",
-                    SnapshotChangeCategory.NO_CHANGE: f"Don't backfill {snapshot.name}",
-                }
-            choice_mapping = {
-                k: f"[{SNAPSHOT_CHANGE_CATEGORY_STR[k]}] {v}"
-                for k, v in choice_mapping.items()
-            }
-            radio = widgets.RadioButtons(
-                options=choice_mapping.values(),
-                layout={"width": "max-content"},
-                disables=False,
-            )
-
+        choice_mapping = self._snapshot_change_choices(
+            snapshot, use_rich_formatting=False
+        )
         choices = list(choice_mapping)
+        plan.set_choice(snapshot, choices[0])
+
+        radio = widgets.RadioButtons(
+            options=choice_mapping.values(),
+            layout={"width": "max-content"},
+            disabled=False,
+        )
         radio.observe(
             radio_button_selected,
             "value",
         )
-        plan.set_choice(snapshot, choices[0])
         self.display(radio)
 
     def log_test_results(

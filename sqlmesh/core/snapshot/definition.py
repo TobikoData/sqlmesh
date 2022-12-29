@@ -36,7 +36,7 @@ class SnapshotChangeCategory(IntEnum):
 
     BREAKING = 1
     NON_BREAKING = 2
-    NO_CHANGE = 3
+    FORWARD_ONLY = 3
 
 
 class FingerprintMixin:
@@ -593,6 +593,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_materialized(self) -> bool:
         return self.model.kind.is_materialized
+
+    @property
+    def is_paused(self) -> bool:
+        return self.unpaused_ts is None
 
     def _ensure_version(self) -> None:
         if not self.version:
