@@ -3,9 +3,10 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
+from sqlglot.helper import ensure_list
 
 from sqlmesh.dbt.common import GeneralConfig
-from sqlmesh.utils.conversions import ensure_bool, ensure_list
+from sqlmesh.utils.conversions import ensure_bool
 
 
 def yaml_to_columns(yaml):

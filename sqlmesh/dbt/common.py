@@ -4,8 +4,9 @@ import typing as t
 from enum import Enum, auto
 
 from pydantic import validator
+from sqlglot.helper import ensure_list
 
-from sqlmesh.utils.conversions import ensure_bool, ensure_list, try_str_to_bool
+from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
