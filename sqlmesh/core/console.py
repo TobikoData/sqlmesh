@@ -599,7 +599,7 @@ class NotebookMagicConsole(TerminalConsole):
 
         def radio_button_selected(change):
             plan.set_choice(snapshot, choices[change["owner"].index])
-            self._show_options_after_categorization(plan)
+            self._show_options_after_categorization(plan, auto_apply)
 
         choice_mapping = self._snapshot_change_choices(
             snapshot, use_rich_formatting=False
