@@ -256,16 +256,18 @@ class Plan:
         """
         if snapshot not in self.snapshots:
             raise SQLMeshError(
-                f"Snapshot {snapshot.snapshot_id} does not exist in this plan"
+                f"Snapshot {snapshot.snapshot_id} does not exist in this plan."
             )
 
         if not snapshot.version:
             raise SQLMeshError(
-                f"Snapshot {snapshot.snapshot_id} has not be categorized yet"
+                f"Snapshot {snapshot.snapshot_id} has not be categorized yet."
             )
 
         if snapshot.name not in self.context_diff.modified_snapshots:
-            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not been modified")
+            raise SQLMeshError(
+                f"Snapshot {snapshot.snapshot_id} has not been modified."
+            )
 
         current, previous = self.context_diff.modified_snapshots[snapshot.name]
         if current.version == previous.version:
