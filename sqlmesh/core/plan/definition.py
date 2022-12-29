@@ -372,10 +372,10 @@ class Plan:
                 and upstream_snapshot.is_paused
             ):
                 raise PlanError(
-                    f"Modified model '{model_name}' depends on a paused forward-only snapshot {upstream_snapshot.snapshot_id}. "
+                    f"Modified model '{model_name}' depends on a paused version of model '{upstream}'. "
                     "Possible remedies: "
                     "1) make sure your codebase is up-to-date; "
-                    f"2) promote the snapshot {upstream_snapshot.snapshot_id} in the production environment; "
+                    f"2) promote the current version of model '{upstream}' in the production environment; "
                     "3) recreate this plan in a forward-only mode."
                 )
 
