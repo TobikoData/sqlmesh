@@ -575,14 +575,18 @@ class SparkEngineAdapter(EngineAdapter):
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:
-        added_columns_sql = ", ".join(
-            f"{column_name} {column_type}"
-            for column_name, column_type in added_columns.items()
-        )
-        self.execute(f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})")
+        if added_columns:
+            added_columns_sql = ", ".join(
+                f"{column_name} {column_type}"
+                for column_name, column_type in added_columns.items()
+            )
+            self.execute(f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})")
 
-        dropped_columns_sql = ", ".join(dropped_columns)
-        self.execute(f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})")
+        if dropped_columns:
+            dropped_columns_sql = ", ".join(dropped_columns)
+            self.execute(
+                f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})"
+            )
 
 
 def create_engine_adapter(

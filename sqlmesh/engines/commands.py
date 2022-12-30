@@ -19,6 +19,7 @@ class CommandType(Enum):
     DEMOTE = "demote"
     CLEANUP = "cleanup"
     CREATE_TABLES = "create_tables"
+    MIGRATE_TABLES = "migrate_tables"
 
 
 class EvaluateCommandPayload(PydanticModel):
@@ -48,6 +49,10 @@ class CleanupCommandPayload(PydanticModel):
 class CreateTablesCommandPayload(PydanticModel):
     target_snapshot_ids: t.List[SnapshotId]
     snapshots: t.List[Snapshot]
+
+
+class MigrateTablesCommandPayload(PydanticModel):
+    snapshots: t.List[SnapshotTableInfo]
 
 
 def evaluate(
@@ -115,10 +120,20 @@ def create_tables(
     evaluator.create(target_snapshots, snapshots_by_id)
 
 
+def migrate_tables(
+    evaluator: SnapshotEvaluator,
+    command_payload: t.Union[str, MigrateTablesCommandPayload],
+) -> None:
+    if isinstance(command_payload, str):
+        command_payload = MigrateTablesCommandPayload.parse_raw(command_payload)
+    evaluator.migrate(command_payload.snapshots)
+
+
 COMMAND_HANDLERS: t.Dict[CommandType, t.Callable[[SnapshotEvaluator, str], None]] = {
     CommandType.EVALUATE: evaluate,
     CommandType.PROMOTE: promote,
     CommandType.DEMOTE: demote,
     CommandType.CLEANUP: cleanup,
     CommandType.CREATE_TABLES: create_tables,
+    CommandType.MIGRATE_TABLES: migrate_tables,
 }

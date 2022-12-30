@@ -122,6 +122,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
         if not plan.end:
+            if not plan.is_dev:
+                self.snapshot_evaluator.migrate(plan.environment.snapshots)
             self.state_sync.unpause_snapshots(added, now())
 
         self.snapshot_evaluator.promote(
