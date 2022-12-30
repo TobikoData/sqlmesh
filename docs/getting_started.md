@@ -21,7 +21,7 @@ pip install sqlmesh
 Because we understand that everyone's data stack is different, SQLMesh supports a variety of deployment models and use cases. You can interact with SQLMesh via the cli or notebooks.
 
 ### Local DuckDB
-SQLMesh can be run on your laptop without any other infrastructure. If you'd like to run SQLMesh against local files using DuckDB, you can get started in just a few minutes.
+SQLMesh can be run on your laptop without any other infrastructure. If you'd like to run SQLMesh against local files using DuckDB, you can get started in just a few minutes [with the tutorial](/tutorial).
 
 ### Airflow
 Refer to `sqlmesh.schedulers.airflow`.
