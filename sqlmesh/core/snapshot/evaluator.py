@@ -154,7 +154,7 @@ class SnapshotEvaluator:
             )
 
             if limit > 0:
-                return self.adapter.fetchdf(query.limit(limit))
+                return self.adapter._fetchdf(query.limit(limit))
             apply(query)
             return None
 

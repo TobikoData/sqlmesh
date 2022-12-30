@@ -117,7 +117,7 @@ class BaseContext(abc.ABC):
         """
         return self._model_tables[model_name]
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """Fetches a dataframe given a sql string or sqlglot expression.
 
         Args:
@@ -127,17 +127,6 @@ class BaseContext(abc.ABC):
             The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
         """
         return self.engine_adapter.fetchdf(query)
-
-    def fetch_pandas_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
-        """Fetches a Pandas dataframe given a sql string or sqlglot expression.
-
-        Args:
-            query: SQL string or sqlglot expression.
-
-        Returns:
-            A Pandas dataframe.
-        """
-        return self.engine_adapter.fetch_pandas_df(query)
 
     def fetch_pyspark_df(
         self, query: t.Union[exp.Expression, str]

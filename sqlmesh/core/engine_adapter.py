@@ -413,7 +413,7 @@ class EngineAdapter:
         self.execute(query)
         return self.cursor.fetchall()
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         self.execute(query)
         if hasattr(self.cursor, "fetchdf"):
@@ -424,16 +424,16 @@ class EngineAdapter:
             "The cursor does not have a way to return a Pandas DataFrame"
         )
 
-    def fetch_pandas_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
-        df = self.fetchdf(query)
+        df = self._fetchdf(query)
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
         return df
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark DataFrame from the cursor"""
-        df = self.fetchdf(query)
+        df = self._fetchdf(query)
         if PySparkDataFrame and not isinstance(df, PySparkDataFrame):
             raise NotImplementedError(
                 "The cursor does not have a way to return a PySpark DataFrame"
