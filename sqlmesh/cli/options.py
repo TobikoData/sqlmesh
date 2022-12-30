@@ -41,11 +41,6 @@ expand = click.option(
     help="Whether or not to expand materialized models (defaults to False). If True, all referenced models are expanded as raw queries. Multiple model names can also be specified, in which case only they will be expanded as raw queries.",
 )
 
-environment = click.option(
-    "--environment",
-    help="The environment to diff the current context against. Default: prod",
-)
-
 file = click.option(
     "--file",
     help="The file to write the dag image to.",

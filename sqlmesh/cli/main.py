@@ -129,7 +129,7 @@ def format(ctx) -> None:
 
 
 @cli.command("diff")
-@opt.environment
+@click.argument("environment")
 @click.pass_context
 @error_handler
 def diff(ctx, environment: t.Optional[str] = None) -> None:
@@ -138,7 +138,7 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
 
 
 @cli.command("plan")
-@opt.environment
+@click.argument("environment", required=False)
 @opt.start_time
 @opt.end_time
 @click.option(
@@ -272,6 +272,16 @@ def audit(
 ) -> None:
     """Run audits."""
     obj.audit(models=models, start=start, end=end, latest=latest)
+
+
+@cli.command("fetchdf")
+@click.argument("sql")
+@click.pass_context
+@error_handler
+def fetchdf(ctx, sql: str) -> None:
+    """Runs a sql query and displays the results."""
+    context = ctx.obj
+    context.console.log_success(context.fetchdf(sql))
 
 
 if __name__ == "__main__":
