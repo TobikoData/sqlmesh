@@ -2,6 +2,7 @@ import random
 import typing as t
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 
 from example.helper import iter_dates
@@ -41,7 +42,7 @@ def execute(
     items_table = context.table(ITEMS)
 
     for dt in iter_dates(start, end):
-        orders = context.fetchdf(
+        orders = context.fetch_pandas_df(
             f"""
             SELECT *
             FROM {orders_table}
@@ -49,19 +50,13 @@ def execute(
             """
         )
 
-        if not isinstance(orders, pd.DataFrame):
-            orders = orders.toPandas()
-
-        items = context.fetchdf(
+        items = context.fetch_pandas_df(
             f"""
 SELECT *
             FROM {items_table}
             WHERE ds = '{to_ds(dt)}'
             """
         )
-
-        if not isinstance(items, pd.DataFrame):
-            items = items.toPandas()
 
         for order_id in orders["id"]:
             n = random.randint(1, 5)

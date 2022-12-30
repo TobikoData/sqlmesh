@@ -44,6 +44,7 @@ import unittest.result
 from io import StringIO
 from pathlib import Path
 
+import pandas as pd
 from sqlglot import exp
 from sqlglot.schema import MappingSchema
 
@@ -54,7 +55,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
-from sqlmesh.core.engine_adapter import DF, EngineAdapter, create_engine_adapter
+from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
@@ -78,6 +79,9 @@ from sqlmesh.utils.file_cache import FileCache
 
 if t.TYPE_CHECKING:
     import graphviz
+    import pyspark
+
+    from sqlmesh.core.engine_adapter import DF
 
     MODEL_OR_SNAPSHOT = t.Union[str, Model, Snapshot]
 
@@ -98,7 +102,7 @@ class BaseContext(abc.ABC):
         """Returns an engine adapter."""
 
     @property
-    def spark(self) -> t.Optional["pyspark.sql.SparkSession"]:  # type: ignore
+    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
         """Returns the spark session if it exists."""
         return self.engine_adapter.spark
 
@@ -123,6 +127,30 @@ class BaseContext(abc.ABC):
             The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
         """
         return self.engine_adapter.fetchdf(query)
+
+    def fetch_pandas_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+        """Fetches a Pandas dataframe given a sql string or sqlglot expression.
+
+        Args:
+            query: SQL string or sqlglot expression.
+
+        Returns:
+            A Pandas dataframe.
+        """
+        return self.engine_adapter.fetch_pandas_df(query)
+
+    def fetch_pyspark_df(
+        self, query: t.Union[exp.Expression, str]
+    ) -> pyspark.sql.DataFrame:
+        """Fetches a PySpark dataframe given a sql string or sqlglot expression.
+
+        Args:
+            query: SQL string or sqlglot expression.
+
+        Returns:
+            A PySpark dataframe.
+        """
+        return self.engine_adapter.fetch_pyspark_df(query)
 
 
 class ExecutionContext(BaseContext):
@@ -528,7 +556,7 @@ class Context(BaseContext):
         if not limit or limit <= 0:
             limit = 1000
 
-        return self.snapshot_evaluator.evaluate(
+        df = self.snapshot_evaluator.evaluate(
             snapshot,
             start,
             end,
@@ -536,6 +564,10 @@ class Context(BaseContext):
             mapping=self._model_tables,
             limit=limit,
         )
+
+        if df is None:
+            raise RuntimeError(f"Error evaluating {snapshot.model.name}")
+        return df
 
     def format(self) -> None:
         """Format all models in a given directory."""
