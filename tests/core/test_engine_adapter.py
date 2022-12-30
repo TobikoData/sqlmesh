@@ -256,16 +256,34 @@ def test_alter_table_spark(mocker: MockerFixture):
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = SparkEngineAdapter(lambda: connection_mock)  # type: ignore
+
     adapter.alter_table(
         "test_table",
         {"a": "INT", "b": "STRING"},
         ["c", "d"],
     )
 
+    adapter.alter_table(
+        "test_table",
+        {"e": "DOUBLE"},
+        [],
+    )
+
+    adapter.alter_table(
+        "test_table",
+        {},
+        ["f"],
+    )
+
     cursor_mock.execute.assert_has_calls(
         [
+            # 1st call.
             call("""ALTER TABLE test_table ADD COLUMNS (a INT, b STRING)"""),
             call("""ALTER TABLE test_table DROP COLUMNS (c, d)"""),
+            # 2nd call.
+            call("""ALTER TABLE test_table ADD COLUMNS (e DOUBLE)"""),
+            # 3d call.
+            call("""ALTER TABLE test_table DROP COLUMNS (f)"""),
         ]
     )
 

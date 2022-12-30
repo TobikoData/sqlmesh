@@ -256,7 +256,7 @@ class SnapshotTableCleanupTarget(
         ]
 
 
-class SnapshotCreateTableTarget(
+class SnapshotCreateTablesTarget(
     BaseTarget[commands.CreateTablesCommandPayload], PydanticModel
 ):
     """The target which creates physical tables for the given set of new snapshots."""
@@ -290,6 +290,29 @@ class SnapshotCreateTableTarget(
         self, snapshot_ids: t.Set[SnapshotId], session: Session = util.PROVIDED_SESSION
     ) -> t.List[Snapshot]:
         return list(XComStateSync(session).get_snapshots(snapshot_ids).values())
+
+
+class SnapshotMigrateTablesTarget(
+    BaseTarget[commands.MigrateTablesCommandPayload], PydanticModel
+):
+    """The target which updates schemas of existing physical tables to bring them in correspondance
+    with schemas of target snapshots.
+    """
+
+    command_type: commands.CommandType = commands.CommandType.MIGRATE_TABLES
+    command_handler: t.Callable[
+        [SnapshotEvaluator, commands.MigrateTablesCommandPayload], None
+    ] = commands.migrate_tables
+
+    snapshots: t.List[SnapshotTableInfo]
+    ddl_concurrent_tasks: int
+
+    def _get_command_payload(
+        self, context: Context
+    ) -> t.Optional[commands.MigrateTablesCommandPayload]:
+        if not self.snapshots:
+            return None
+        return commands.MigrateTablesCommandPayload(snapshots=self.snapshots)
 
 
 def _delete_xcom(key: str, task_id: str, context: Context, session: Session) -> None:

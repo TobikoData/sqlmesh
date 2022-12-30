@@ -227,11 +227,7 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def migrate(
-        self,
-        target_snapshots: t.Iterable[Snapshot],
-        snapshots: t.Dict[SnapshotId, Snapshot],
-    ) -> None:
+    def migrate(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
         Args:
@@ -240,7 +236,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._migrate_snapshot(s, snapshots),
+                lambda s: self._migrate_snapshot(s),
                 self.ddl_concurrent_tasks,
             )
 
@@ -365,18 +361,16 @@ class SnapshotEvaluator:
                 partitioned_by=snapshot.model.partitioned_by,
             )
 
-    def _migrate_snapshot(
-        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
-    ) -> None:
-        if not snapshot.is_materialized:
-            return
-
+    def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
 
         schema_deltas = self._schema_diff_calculator.calculate(
             target_table_name, tmp_table_name
         )
+        if not schema_deltas:
+            return
+
         added_columns = {}
         dropped_columns = []
         for delta in schema_deltas:

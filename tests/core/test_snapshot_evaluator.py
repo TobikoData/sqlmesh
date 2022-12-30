@@ -146,7 +146,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
 
-    evaluator.migrate([snapshot], {})
+    evaluator.migrate([snapshot])
 
     adapter_mock.alter_table.assert_called_once_with(
         snapshot.table_name(),
@@ -214,7 +214,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     new_snapshot.version = snapshot.version
 
     evaluator.create([new_snapshot], {})
-    evaluator.migrate([new_snapshot], {})
+    evaluator.migrate([new_snapshot])
 
     evaluator.evaluate(
         new_snapshot,

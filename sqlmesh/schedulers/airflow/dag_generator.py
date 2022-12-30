@@ -152,19 +152,7 @@ class SnapshotDagGenerator:
             (
                 promote_start_task,
                 promote_end_task,
-            ) = self._create_promotion_demotion_tasks(
-                request.promoted_snapshots,
-                request.demoted_snapshots,
-                request.environment_name,
-                request.start,
-                request.end,
-                request.unpaused_dt,
-                request.no_gaps,
-                request.plan_id,
-                request.previous_plan_id,
-                request.ddl_concurrent_tasks,
-                request.is_dev,
-            )
+            ) = self._create_promotion_demotion_tasks(request)
 
             start_task >> create_start_task
             create_end_task >> backfill_start_task
@@ -221,7 +209,7 @@ class SnapshotDagGenerator:
             start_task >> end_task
             return (start_task, end_task)
 
-        creation_task = self._create_snapshot_create_table_operator(
+        creation_task = self._create_snapshot_create_tables_operator(
             new_snapshots, ddl_concurrent_tasks, "snapshot_creation__create_tables"
         )
 
@@ -238,18 +226,7 @@ class SnapshotDagGenerator:
         return (start_task, end_task)
 
     def _create_promotion_demotion_tasks(
-        self,
-        promoted_snapshots: t.List[SnapshotTableInfo],
-        demoted_snapshots: t.List[SnapshotTableInfo],
-        environment: str,
-        start: TimeLike,
-        end: t.Optional[TimeLike],
-        unpaused_dt: t.Optional[TimeLike],
-        no_gaps: bool,
-        plan_id: str,
-        previous_plan_id: t.Optional[str],
-        ddl_concurrent_tasks: int,
-        is_dev: bool,
+        self, request: common.PlanApplicationRequest
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_promotion_start")
         end_task = EmptyOperator(task_id="snapshot_promotion_end")
@@ -258,41 +235,51 @@ class SnapshotDagGenerator:
             task_id="snapshot_promotion__update_state",
             python_callable=promotion_update_state_task,
             op_kwargs={
-                "snapshots": promoted_snapshots,
-                "environment_name": environment,
-                "start": start,
-                "end": end,
-                "unpaused_dt": unpaused_dt,
-                "no_gaps": no_gaps,
-                "plan_id": plan_id,
-                "previous_plan_id": previous_plan_id,
+                "snapshots": request.promoted_snapshots,
+                "environment_name": request.environment_name,
+                "start": request.start,
+                "end": request.end,
+                "unpaused_dt": request.unpaused_dt,
+                "no_gaps": request.no_gaps,
+                "plan_id": request.plan_id,
+                "previous_plan_id": request.previous_plan_id,
             },
         )
 
         start_task >> update_state_task
 
-        if promoted_snapshots:
+        if request.promoted_snapshots:
             create_views_task = self._create_snapshot_promotion_operator(
-                promoted_snapshots,
-                environment,
-                ddl_concurrent_tasks,
-                is_dev,
+                request.promoted_snapshots,
+                request.environment_name,
+                request.ddl_concurrent_tasks,
+                request.is_dev,
                 "snapshot_promotion__create_views",
             )
-            update_state_task >> create_views_task
             create_views_task >> end_task
 
-        if demoted_snapshots:
+            if not request.is_dev and request.unpaused_dt:
+                migrate_tables_task = self._create_snapshot_migrate_tables_operator(
+                    request.promoted_snapshots,
+                    request.ddl_concurrent_tasks,
+                    "snapshot_promotion__migrate_tables",
+                )
+                update_state_task >> migrate_tables_task
+                migrate_tables_task >> create_views_task
+            else:
+                update_state_task >> create_views_task
+
+        if request.demoted_snapshots:
             delete_views_task = self._create_snapshot_demotion_operator(
-                demoted_snapshots,
-                environment,
-                ddl_concurrent_tasks,
+                request.demoted_snapshots,
+                request.environment_name,
+                request.ddl_concurrent_tasks,
                 "snapshot_promotion__delete_views",
             )
             update_state_task >> delete_views_task
             delete_views_task >> end_task
 
-        if not promoted_snapshots and not demoted_snapshots:
+        if not request.promoted_snapshots and not request.demoted_snapshots:
             update_state_task >> end_task
 
         return (start_task, end_task)
@@ -407,7 +394,7 @@ class SnapshotDagGenerator:
             task_id=task_id,
         )
 
-    def _create_snapshot_create_table_operator(
+    def _create_snapshot_create_tables_operator(
         self,
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
@@ -415,8 +402,22 @@ class SnapshotDagGenerator:
     ) -> BaseOperator:
         return self._engine_operator(
             **self._ddl_engine_operator_args,
-            target=targets.SnapshotCreateTableTarget(
+            target=targets.SnapshotCreateTablesTarget(
                 new_snapshots=new_snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
+            ),
+            task_id=task_id,
+        )
+
+    def _create_snapshot_migrate_tables_operator(
+        self,
+        snapshots: t.List[SnapshotTableInfo],
+        ddl_concurrent_tasks: int,
+        task_id: str,
+    ) -> BaseOperator:
+        return self._engine_operator(
+            **self._ddl_engine_operator_args,
+            target=targets.SnapshotMigrateTablesTarget(
+                snapshots=snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
             ),
             task_id=task_id,
         )
