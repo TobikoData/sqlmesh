@@ -143,6 +143,8 @@ class Scheduler:
 
         dag = DAG[SchedulingUnit]()
         for snapshot, intervals in batches:
+            if not intervals:
+                continue
             upstream_dependencies = [
                 (p_sid, interval)
                 for p_sid in snapshot.parents
