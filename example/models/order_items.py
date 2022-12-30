@@ -42,7 +42,7 @@ def execute(
     items_table = context.table(ITEMS)
 
     for dt in iter_dates(start, end):
-        orders = context.fetch_pandas_df(
+        orders = context.fetchdf(
             f"""
             SELECT *
             FROM {orders_table}
@@ -50,9 +50,9 @@ def execute(
             """
         )
 
-        items = context.fetch_pandas_df(
+        items = context.fetchdf(
             f"""
-SELECT *
+            SELECT *
             FROM {items_table}
             WHERE ds = '{to_ds(dt)}'
             """
