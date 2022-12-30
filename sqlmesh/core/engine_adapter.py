@@ -24,14 +24,23 @@ from sqlmesh.utils.errors import SQLMeshError
 
 SOURCE_ALIAS = "__MERGE_SOURCE__"
 DF_TYPES: t.Tuple = (pd.DataFrame,)
-pyspark = optional_import("pyspark")
 
-if pyspark:
-    DF_TYPES += (pyspark.sql.DataFrame,)
+if t.TYPE_CHECKING:
+    import pyspark
 
-DF = t.Union[DF_TYPES]  # type: ignore
-Query = t.Union[exp.Subqueryable, exp.DerivedTable]
-QueryOrDF = t.Union[Query, DF]
+    PySparkDataFrame = pyspark.sql.DataFrame
+    DF = t.Union[pd.DataFrame, PySparkDataFrame]
+    Query = t.Union[exp.Subqueryable, exp.DerivedTable]
+    QueryOrDF = t.Union[Query, DF]
+else:
+    try:
+        import pyspark
+
+        PySparkDataFrame = pyspark.sql.DataFrame
+        DF_TYPES += (PySparkDataFrame,)
+    except ImportError:
+        PySparkDataFrame = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +75,11 @@ class EngineAdapter:
         return self._connection_pool.get_cursor()
 
     @property
-    def spark(self) -> t.Optional["pyspark.sql.SparkSession"]:  # type: ignore
-        return getattr(self._connection_pool.get(), "spark", None)
+    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
+        spark_session = getattr(self._connection_pool.get(), "spark", None)
+        if spark_session:
+            spark_session = t.cast(pyspark.sql.SparkSession, spark_session)
+        return spark_session
 
     def recycle(self) -> t.Any:
         """Closes all open connections and releases all allocated resources associated with any thread
@@ -229,7 +241,7 @@ class EngineAdapter:
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
 
         if isinstance(query_or_df, DF_TYPES):
-            if pyspark and isinstance(query_or_df, pyspark.sql.DataFrame):
+            if PySparkDataFrame and isinstance(query_or_df, PySparkDataFrame):
                 query_or_df = query_or_df.toPandas()
 
             if not isinstance(query_or_df, pd.DataFrame):
@@ -401,7 +413,8 @@ class EngineAdapter:
         self.execute(query)
         return self.cursor.fetchall()
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+        """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         self.execute(query)
         if hasattr(self.cursor, "fetchdf"):
             return self.cursor.fetchdf()
@@ -410,6 +423,22 @@ class EngineAdapter:
         raise NotImplementedError(
             "The cursor does not have a way to return a Pandas DataFrame"
         )
+
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+        """Fetches a Pandas DataFrame from the cursor"""
+        df = self._fetchdf(query)
+        if not isinstance(df, pd.DataFrame):
+            return df.toPandas()
+        return df
+
+    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
+        """Fetches a PySpark DataFrame from the cursor"""
+        df = self._fetchdf(query)
+        if PySparkDataFrame and not isinstance(df, PySparkDataFrame):
+            raise NotImplementedError(
+                "The cursor does not have a way to return a PySpark DataFrame"
+            )
+        return df
 
     @contextlib.contextmanager
     def transaction(self) -> t.Generator[None, None, None]:
@@ -465,10 +494,10 @@ class EngineAdapter:
 
         if (
             self.spark
-            and pyspark
-            and isinstance(query_or_df, (pyspark.sql.DataFrame, pd.DataFrame))
+            and PySparkDataFrame
+            and isinstance(query_or_df, (PySparkDataFrame, pd.DataFrame))
         ):
-            if not isinstance(query_or_df, pyspark.sql.DataFrame):
+            if not isinstance(query_or_df, PySparkDataFrame):
                 query_or_df = self.spark.createDataFrame(query_or_df)
             query_or_df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
                 table_name, overwrite=overwrite
