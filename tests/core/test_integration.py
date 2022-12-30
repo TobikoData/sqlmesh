@@ -5,6 +5,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import DataType
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import (
@@ -98,7 +99,7 @@ def test_breaking_change(sushi_context: Context):
 
 @pytest.mark.integration
 @pytest.mark.core_integration
-def test_no_change(sushi_context: Context):
+def test_forward_only(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(
@@ -681,7 +682,12 @@ def apply_to_environment(
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
 
-    plan = context.plan(environment, start=START, end=END)
+    plan = context.plan(
+        environment,
+        start=START,
+        end=END,
+        forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
+    )
     plan_choice(plan, choice)
     for validator in plan_validators:
         validator(context, plan)
@@ -793,9 +799,9 @@ def validate_environment_views(
             environment=environment
         )
         assert adapter.table_exists(view_name)
-        assert select_all(snapshot.table_name(), adapter) == select_all(
-            view_name, adapter
-        )
+        assert select_all(
+            snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter
+        ) == select_all(view_name, adapter)
 
 
 def select_all(table: str, adapter: EngineAdapter) -> t.Iterable:
