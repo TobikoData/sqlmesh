@@ -438,7 +438,6 @@ class EngineAdapter:
             raise NotImplementedError(
                 "The cursor does not have a way to return a PySpark DataFrame"
             )
-        # df = t.cast(PySparkDataFrame, df)
         return df
 
     @contextlib.contextmanager
