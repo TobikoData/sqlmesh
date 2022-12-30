@@ -308,15 +308,20 @@ class Model(ModelMeta, frozen=True):
         )
 
     @property
-    def is_python(self) -> bool:
-        return not self.is_sql
+    def sorted_python_env(self) -> t.List[t.Tuple[str, Executable]]:
+        """Returns the python env sorted by executable kind and then var name."""
+        return sorted(self.python_env.items(), key=lambda x: (x[1].kind, x[0]))
 
     @property
     def is_sql(self) -> bool:
         return not isinstance(self.query, d.MacroVar)
 
-    def render(self) -> t.List[exp.Expression]:
-        """Returns the original list of sql expressions comprising the model."""
+    def render(self, show_python: bool = False) -> t.List[exp.Expression]:
+        """Returns the original list of sql expressions comprising the model.
+
+        Args:
+            show_python: Whether or not to show Python Code in the rendered model for SQL based models.
+        """
         expressions = []
         comment = None
         for field in ModelMeta.__fields__.values():
@@ -344,16 +349,26 @@ class Model(ModelMeta, frozen=True):
 
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
-        query: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja, d.PythonCode]
-        if self.is_python:
-            expressions = [
-                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                for k, v in sorted(self.python_env.items(), key=lambda x: x[1].kind)
-            ]
-            query = d.PythonCode(expressions=expressions)
-        else:
-            query = self.query
-        return [model, *self.expressions, query]
+
+        segments = [model, *self.expressions]
+
+        if show_python or not self.is_sql:
+            python_env = d.PythonCode(
+                expressions=[
+                    v.payload
+                    if v.is_import or v.is_definition
+                    else f"{k} = {v.payload}"
+                    for k, v in self.sorted_python_env
+                ]
+            )
+
+            if python_env.expressions:
+                segments.append(python_env)
+
+        if self.is_sql:
+            segments.append(self.query)
+
+        return segments
 
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
@@ -707,8 +722,8 @@ class Model(ModelMeta, frozen=True):
         Returns:
             A unified text diff showing additions and deletions.
         """
-        meta_a, *statements_a, query_a = self.render()
-        meta_b, *statements_b, query_b = other.render()
+        meta_a, *statements_a, query_a = self.render(show_python=True)
+        meta_b, *statements_b, query_b = other.render(show_python=True)
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),

@@ -287,7 +287,7 @@ class ExecutableKind(str, Enum):
     VALUE = "value"
     DEFINITION = "definition"
 
-    def __lt__(self, other):
+    def __lt__(self, other: t.Any) -> bool:
         if not isinstance(other, ExecutableKind):
             return NotImplemented
         values = list(ExecutableKind.__dict__.values())
