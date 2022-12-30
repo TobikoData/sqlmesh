@@ -453,7 +453,9 @@ class Model(ModelMeta, frozen=True):
                 try:
                     self._query_cache[key] = macro_evaluator.transform(query_)  # type: ignore
                 except MacroEvalError as ex:
-                    _raise_config_error(f"Failed to evaluate macro'. {ex}", self._path)
+                    _raise_config_error(
+                        f"Failed to evaluate macro '{definition}'. {ex}", self._path
+                    )
             else:
                 self._query_cache[key] = exp.select(
                     *(
