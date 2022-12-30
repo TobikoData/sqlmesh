@@ -404,7 +404,7 @@ class SnapshotEvaluator:
             self.adapter.create_schema(schema)
 
         view_name = qualified_view_name.for_environment(environment=environment)
-        table_name = snapshot.table_name()  # FIXME: support promotion of dev tables.
+        table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         if self.adapter.table_exists(table_name):
             logger.info(
                 "Updating view '%s' to point at table '%s'", view_name, table_name
