@@ -103,7 +103,7 @@ def test_forward_only(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
     validate_query_change(
-        sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, True
+        sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False
     )
 
 

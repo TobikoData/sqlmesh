@@ -300,17 +300,35 @@ class TerminalConsole(Console):
     def _prompt_backfill(
         self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
     ) -> None:
+        is_forward_only_dev = plan.is_dev and plan.forward_only
+        backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
+
         if not plan.override_start:
-            plan.start = Prompt.ask(
-                "Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history",
+            blank_meaning = (
+                "to preview starting from yesterday"
+                if is_forward_only_dev
+                else "for the beginning of history"
+            )
+            start = Prompt.ask(
+                f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
                 console=self.console,
             )
+            if start:
+                plan.start = start
         if not plan.override_end:
-            plan.end = Prompt.ask(
-                "Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank if unbounded",
+            blank_meaning = (
+                "to preview up until now" if is_forward_only_dev else "if unbounded"
+            )
+            end = Prompt.ask(
+                f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank {blank_meaning}",
                 console=self.console,
             )
-        if not auto_apply and Confirm.ask("Apply - Backfill Tables"):
+            if end:
+                plan.end = end
+
+        if not auto_apply and Confirm.ask(
+            f"Apply - {backfill_or_preview.capitalize()} Tables"
+        ):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
@@ -484,6 +502,10 @@ class NotebookMagicConsole(TerminalConsole):
 
         prompt = widgets.VBox()
 
+        backfill_or_preview = (
+            "Preview" if plan.is_dev and plan.forward_only else "Backfill"
+        )
+
         def _date_picker(
             plan: Plan, value: t.Any, on_change: t.Callable, disabled: bool = False
         ):
@@ -533,7 +555,9 @@ class NotebookMagicConsole(TerminalConsole):
             prompt,
             widgets.HBox(
                 [
-                    widgets.Label("Start Backfill Date:", layout={"width": "8rem"}),
+                    widgets.Label(
+                        f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}
+                    ),
                     _date_picker(plan, to_date(plan.start), start_change_callback),
                 ]
             ),
@@ -549,7 +573,9 @@ class NotebookMagicConsole(TerminalConsole):
             prompt,
             widgets.HBox(
                 [
-                    widgets.Label("End Backfill Date:", layout={"width": "8rem"}),
+                    widgets.Label(
+                        f"End {backfill_or_preview} Date:", layout={"width": "8rem"}
+                    ),
                     _date_picker(
                         plan,
                         to_date(plan.end),
@@ -565,7 +591,7 @@ class NotebookMagicConsole(TerminalConsole):
 
         if not auto_apply:
             button = widgets.Button(
-                description="Apply - Backfill Tables",
+                description=f"Apply - {backfill_or_preview} Tables",
                 disabled=False,
                 button_style="success",
             )

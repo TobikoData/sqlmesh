@@ -17,7 +17,14 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, make_inclusive, now, to_ds, validate_date_range
+from sqlmesh.utils.date import (
+    TimeLike,
+    make_inclusive,
+    now,
+    to_ds,
+    validate_date_range,
+    yesterday_ds,
+)
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -68,12 +75,19 @@ class Plan:
         self.skip_backfill = skip_backfill
         self.is_dev = is_dev
         self.forward_only = forward_only
-        self._start = start
+        self._start = (
+            start if start or not (is_dev and forward_only) else yesterday_ds()
+        )
         self._end = end if end or not is_dev else now()
         self._apply = apply
         self._dag = dag
         self._state_reader = state_reader
         self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
+
+        if not restate_models and is_dev and forward_only:
+            # Add model names for new forward-only snapshots to the restatement list
+            # in order to compute previews.
+            restate_models = [s.name for s in context_diff.new_snapshots]
 
         for table in restate_models or []:
             downstream = self._dag.downstream(table)
@@ -138,8 +152,8 @@ class Plan:
 
     @property
     def requires_backfill(self) -> bool:
-        return bool(self.restatements) or (
-            not self.skip_backfill and bool(self.missing_intervals)
+        return not self.skip_backfill and (
+            bool(self.restatements) or bool(self.missing_intervals)
         )
 
     @property
