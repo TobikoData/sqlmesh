@@ -50,9 +50,6 @@ class Console(abc.ABC):
     def complete_snapshot_progress(self) -> None:
         """Indicates that load progress is complete."""
 
-        self.log_success("All model batches have been executed successfully")
-        self.stop_snapshot_progress()
-
     @abc.abstractmethod
     def stop_snapshot_progress(self) -> None:
         """Stop the load progress"""
@@ -236,6 +233,9 @@ class TerminalConsole(Console):
             plan, auto_apply, unbounded_end=unbounded_end
         )
 
+        if auto_apply:
+            plan.apply()
+
     def _show_options_after_categorization(
         self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
     ) -> None:
@@ -244,9 +244,6 @@ class TerminalConsole(Console):
             self._prompt_backfill(plan, auto_apply, unbounded_end=unbounded_end)
         elif plan.context_diff.has_differences and not auto_apply:
             self._prompt_promote(plan)
-
-        if auto_apply:
-            plan.apply()
 
     def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
         """Get the user's change category for the directly modified models"""

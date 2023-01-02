@@ -187,6 +187,15 @@ def _plan_receiver_task(
         unpaused_dt = end
 
     all_snapshots = {**new_snapshots, **stored_snapshots}
+    if plan_conf.is_dev:
+        # Ignore all snapshots except for the ones in the plan when
+        # modifying / computing intervals in development mode.
+        snapshots_for_intervals = {
+            s.snapshot_id: all_snapshots[s.snapshot_id]
+            for s in plan_conf.environment.snapshots
+        }
+    else:
+        snapshots_for_intervals = all_snapshots
 
     if plan_conf.restatements:
         state_sync.remove_interval(
@@ -195,15 +204,16 @@ def _plan_receiver_task(
             end=end,
             all_snapshots=(
                 snapshot
-                for snapshot in all_snapshots.values()
+                for snapshot in snapshots_for_intervals.values()
                 if snapshot.name in plan_conf.restatements
+                and snapshot.snapshot_id not in new_snapshots
             ),
         )
 
     if not plan_conf.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
             plan_conf.environment.snapshots,
-            snapshots=all_snapshots,
+            snapshots=snapshots_for_intervals,
             start=plan_conf.environment.start,
             end=end,
             latest=end,

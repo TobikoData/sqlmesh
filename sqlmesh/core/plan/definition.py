@@ -34,7 +34,9 @@ class Plan:
         start: The start time to backfill data.
         end: The end time to backfill data.
         apply: The callback to apply the plan.
-        restate_from: A list of dependencies to globally restate.
+        restate_models: A list of models for which the data should be restated for the time range
+            specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
+            of the restatement.
         no_gaps:  Whether to ensure that new snapshots for models that are already a
             part of the target environment have no data gaps when compared against previous
             snapshots for same models.
@@ -51,7 +53,7 @@ class Plan:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
-        restate_from: t.Optional[t.Iterable[str]] = None,
+        restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
         is_dev: bool = False,
@@ -73,16 +75,15 @@ class Plan:
         self._state_reader = state_reader
         self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
 
-        for table in restate_from or []:
-            if table in context_diff.snapshots:
-                raise SQLMeshError(
-                    f"Cannot restate '{table}'. Restatement can only be done on upstream models outside of the scope of SQLMesh."
-                )
+        for table in restate_models or []:
             downstream = self._dag.downstream(table)
+            if table in self.context_diff.snapshots:
+                downstream.append(table)
 
             if not downstream:
-                raise SQLMeshError(f"Cannot restate '{table}'. No models reference it.")
-
+                raise PlanError(
+                    f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
+                )
             self.restatements.update(downstream)
 
         categorized_snapshots = self._categorize_snapshots()
@@ -137,7 +138,9 @@ class Plan:
 
     @property
     def requires_backfill(self) -> bool:
-        return not self.skip_backfill and bool(self.missing_intervals)
+        return bool(self.restatements) or (
+            not self.skip_backfill and bool(self.missing_intervals)
+        )
 
     @property
     def missing_intervals(self) -> t.List[MissingIntervals]:

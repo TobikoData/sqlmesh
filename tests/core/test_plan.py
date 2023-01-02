@@ -2,6 +2,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
+from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotDataVersion
@@ -87,3 +88,16 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
         match=r"Modified model 'b' depends on a paused version of model 'a'.*",
     ):
         Plan(context_diff_mock, dag, state_reader_mock, forward_only=False)
+
+
+def test_restate_models(sushi_context_pre_scheduling: Context):
+    plan = sushi_context_pre_scheduling.plan(
+        restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
+    )
+    assert plan.restatements == {"sushi.waiter_revenue_by_day", "sushi.top_waiters"}
+    assert plan.requires_backfill
+
+    with pytest.raises(PlanError, match=r"Cannot restate from 'unknown_model'.*"):
+        sushi_context_pre_scheduling.plan(
+            restate_models=["unknown_model"], no_prompts=True
+        )
