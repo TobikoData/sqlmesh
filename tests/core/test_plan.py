@@ -7,6 +7,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotDataVersion
 from sqlmesh.utils.dag import DAG
+from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import PlanError
 
 
@@ -39,6 +40,40 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
         PlanError, match="Choice setting is not supported by a forward-only plan."
     ):
         plan.set_choice(snapshot_b, SnapshotChangeCategory.BREAKING)
+
+
+def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+
+    expected_start = "2022-01-01"
+    expected_end = to_datetime("2022-01-02")
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+
+    state_reader_mock = mocker.Mock()
+
+    yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.definition.yesterday_ds")
+    yesterday_ds_mock.return_value = expected_start
+
+    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_ds_mock.return_value = expected_end
+
+    plan = Plan(
+        context_diff_mock, dag, state_reader_mock, forward_only=True, is_dev=True
+    )
+
+    assert plan.restatements == {"a"}
+    assert plan.start == expected_start
+    assert plan.end == expected_end
+
+    yesterday_ds_mock.assert_called_once()
+    now_ds_mock.assert_called_once()
 
 
 def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerFixture):
