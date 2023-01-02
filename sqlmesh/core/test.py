@@ -257,8 +257,7 @@ class ModelTest(unittest.TestCase):
 
     def execute(self, query: Expression) -> pd.DataFrame:
         """Execute the query with the engine adapter and return a DataFrame"""
-        self.engine_adapter.execute(query)
-        return self.engine_adapter.cursor.df()
+        return self.engine_adapter.fetchdf(query)
 
     def test_ctes(self) -> None:
         """Run CTE queries and compare output to expected output"""
