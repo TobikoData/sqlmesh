@@ -6,6 +6,10 @@ nav:
     - tutorial.md
   - Concepts:
     - models.md
+    - plans.md
+    - snapshots.md
+  - Integrations:
+    - airflow.md
 
 theme:
   name: material
