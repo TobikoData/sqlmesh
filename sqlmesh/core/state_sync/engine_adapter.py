@@ -27,7 +27,6 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
-from sqlmesh.utils import date as date_util
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.file_cache import FileCache
 
@@ -172,8 +171,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             json.dumps(
                                 [snapshot.dict() for snapshot in environment.snapshots]
                             ),
-                            date_util.to_str(environment.start_at),
-                            date_util.to_str(environment.end_at),
+                            environment.start_at,
+                            environment.end_at,
                             environment.plan_id,
                             environment.previous_plan_id,
                         )
