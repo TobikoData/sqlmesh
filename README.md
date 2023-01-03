@@ -41,7 +41,12 @@ SQLMesh supports both [audits](#audits) and [tests](#tests). Although unit tests
 
 Ready to jump in? Refer to `sqlmesh.docs.getting_started`.
 
-# Quick reference
+
+# Development
+## Prerequisites
+* Docker
+* Docker Compose V2
+* OpenJDK >= 11
 
 ## Commands
 
@@ -69,6 +74,8 @@ make web-serve
 ```
 make install-pre-commit
 ```
+
+# Quick reference
 ## Glossary
 
 **CI/CD**
