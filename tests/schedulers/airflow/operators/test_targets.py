@@ -43,10 +43,10 @@ def test_evaluation_target_execute(
     )
 
     snapshot = make_snapshot(model)
-    table_mapping = {"tbl": "another_tbl"}
+    parent_snapshots = {snapshot.name: snapshot}
 
     target = targets.SnapshotEvaluationTarget(
-        snapshot=snapshot, table_mapping=table_mapping, is_dev=False
+        snapshot=snapshot, parent_snapshots=parent_snapshots, is_dev=False
     )
     target.execute(context, lambda: mocker.Mock(), "spark")
 
@@ -55,7 +55,7 @@ def test_evaluation_target_execute(
         interval_ds,
         interval_ds,
         logical_ds,
-        mapping=table_mapping,
+        snapshots=parent_snapshots,
         is_dev=False,
     )
 

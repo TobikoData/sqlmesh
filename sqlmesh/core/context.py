@@ -46,6 +46,7 @@ from pathlib import Path
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
@@ -475,7 +476,6 @@ class Context(BaseContext):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Union[bool, t.Iterable[str]] = False,
         **kwargs,
     ) -> exp.Expression:
@@ -486,7 +486,6 @@ class Context(BaseContext):
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
-            mappings: A dictionary of table mappings.
             expand: Whether or not to use expand materialized models, defaults to False.
                 If True, all referenced models are expanded as raw queries.
                 If a list, only referenced models are expanded as raw queries.
@@ -510,7 +509,6 @@ class Context(BaseContext):
             end=end,
             latest=latest,
             snapshots=self.snapshots,
-            mapping=mapping,
             expand=expand,
             **kwargs,
         )
@@ -550,7 +548,7 @@ class Context(BaseContext):
             start,
             end,
             latest,
-            mapping=self._model_tables,
+            snapshots=self.snapshots,
             limit=limit,
         )
 
@@ -882,7 +880,12 @@ class Context(BaseContext):
         for path in self._glob_path(self.models_directory_path, ".sql"):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse_model(file.read(), default_dialect=self.dialect)
+                try:
+                    expressions = parse_model(file.read(), default_dialect=self.dialect)
+                except SqlglotError as ex:
+                    raise ConfigError(
+                        f"Failed to parse a model definition at '{path}': {ex}"
+                    )
                 model = Model.load(
                     expressions,
                     macros=self.macros,

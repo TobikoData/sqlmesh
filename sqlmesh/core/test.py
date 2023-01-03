@@ -190,11 +190,15 @@ class ModelTest(unittest.TestCase):
             self._raise_error(f"Model '{self.model_name}' was not found")
 
         self.snapshot = snapshots[self.model_name]
+
+        self.query = self.snapshot.model.render_query(
+            **self.body["outputs"].get("vars", {})
+        )
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {name: name for name in snapshots}
-        self.query = self.snapshot.model.render_query(
-            snapshots=snapshots, mapping=mapping, **self.body["outputs"].get("vars", {})
-        )
+        if mapping:
+            self.query = exp.replace_tables(self.query, mapping)
+
         self.ctes = {cte.alias: cte for cte in self.query.ctes}
 
         super().__init__()
