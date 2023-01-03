@@ -62,9 +62,7 @@ def test_columns(mocker: MockerFixture):
         "ds": "STRING",
     }
 
-    cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
-    )
+    cursor_mock.execute.assert_called_once_with("DESCRIBE `test_table`")
 
 
 def test_table_exists(mocker: MockerFixture):
@@ -75,7 +73,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
+        "DESCRIBE `test_table`",
     )
 
     cursor_mock = mocker.Mock()
@@ -85,7 +83,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert not adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
+        "DESCRIBE `test_table`",
     )
 
 
@@ -241,10 +239,10 @@ def test_alter_table(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call("BEGIN"),
-            call("""ALTER TABLE test_table ADD COLUMN a INT"""),
-            call("""ALTER TABLE test_table ADD COLUMN b TEXT"""),
-            call("""ALTER TABLE test_table DROP COLUMN c"""),
-            call("""ALTER TABLE test_table DROP COLUMN d"""),
+            call("""ALTER TABLE "test_table" ADD COLUMN "a" INT"""),
+            call("""ALTER TABLE "test_table" ADD COLUMN "b" TEXT"""),
+            call("""ALTER TABLE "test_table" DROP COLUMN "c\""""),
+            call("""ALTER TABLE "test_table" DROP COLUMN "d\""""),
             call("COMMIT"),
         ]
     )
@@ -278,12 +276,12 @@ def test_alter_table_spark(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             # 1st call.
-            call("""ALTER TABLE test_table ADD COLUMNS (a INT, b STRING)"""),
-            call("""ALTER TABLE test_table DROP COLUMNS (c, d)"""),
+            call("""ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"""),
+            call("""ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)"""),
             # 2nd call.
-            call("""ALTER TABLE test_table ADD COLUMNS (e DOUBLE)"""),
+            call("""ALTER TABLE `test_table` ADD COLUMNS (`e` DOUBLE)"""),
             # 3d call.
-            call("""ALTER TABLE test_table DROP COLUMNS (f)"""),
+            call("""ALTER TABLE `test_table` DROP COLUMNS (`f`)"""),
         ]
     )
 
