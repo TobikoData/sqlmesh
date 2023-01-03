@@ -590,7 +590,7 @@ class Context(BaseContext):
         end: t.Optional[TimeLike] = None,
         from_: t.Optional[str] = None,
         skip_tests: bool = False,
-        restate_from: t.Optional[t.Iterable[str]] = None,
+        restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
         forward_only: bool = False,
@@ -608,11 +608,12 @@ class Context(BaseContext):
             end: The end date of the backfill if there is one.
             from_: The environment to base the plan on instead of local files.
             skip_tests: Unit tests are run by default so this will skip them if enabled
-            restate_from: A list of upstream tables outside of the scope of SQLMesh that need to be restated
-                for the given plan interval. Restatement means ALL snapshots that depended on these
-                upstream tables will have their intervals deleted (even ones not in this current environment).
-                Only the snapshots in this environment will be backfilled whereas others need to be recovered
-                on a future plan application.
+            restate_models: A list of of either internal or external models that need to be restated
+                for the given plan interval. If the target environment is a production environment,
+                ALL snapshots that depended on these upstream tables will have their intervals deleted
+                (even ones not in this current environment). Only the snapshots in this environment will
+                be backfilled whereas others need to be recovered on a future plan application. For development
+                environments only snapshots that are part of this plan will be affected.
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
@@ -648,7 +649,7 @@ class Context(BaseContext):
                 for snapshot in self.state_reader.get_snapshots(env.snapshots).values()
             }
         else:
-            snapshots = {}
+            snapshots = None
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, snapshots),
@@ -657,7 +658,7 @@ class Context(BaseContext):
             start=start,
             end=end,
             apply=self.apply,
-            restate_from=restate_from,
+            restate_models=restate_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             is_dev=environment != c.PROD,
@@ -680,7 +681,7 @@ class Context(BaseContext):
         Args:
             plan: The plan to apply.
         """
-        if not plan.context_diff.has_differences:
+        if not plan.context_diff.has_differences and not plan.requires_backfill:
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
