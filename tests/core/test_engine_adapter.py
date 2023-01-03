@@ -62,9 +62,7 @@ def test_columns(mocker: MockerFixture):
         "ds": "STRING",
     }
 
-    cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
-    )
+    cursor_mock.execute.assert_called_once_with("DESCRIBE `test_table`")
 
 
 def test_table_exists(mocker: MockerFixture):

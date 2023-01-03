@@ -311,7 +311,7 @@ class EngineAdapter:
 
     def columns(self, table_name: str) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
-        self.execute(f"DESCRIBE TABLE {table_name}")
+        self.execute(exp.Describe(this=exp.to_table(table_name)))
         describe_output = self.cursor.fetchall()
         return {
             t[0]: t[1].upper()
