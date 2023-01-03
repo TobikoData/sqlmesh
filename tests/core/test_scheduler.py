@@ -123,7 +123,6 @@ def test_multi_version_snapshots(
     interval_params_dev_mode = scheduler._interval_params(
         [items_b], start_ds, end_ds, is_dev=True
     )
-    print(interval_params_dev_mode)
     assert len(interval_params_dev_mode) == 1
     assert interval_params_dev_mode[0][1] == [
         (to_datetime(start_ds), to_datetime("2022-01-20")),
