@@ -1,5 +1,4 @@
 import typing as t
-from datetime import timedelta
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -22,9 +21,8 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import now, to_date
 
-START = to_date(now()) - timedelta(weeks=1)
+START = "1 week ago"
 
 
 @pytest.fixture(autouse=True)
