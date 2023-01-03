@@ -194,11 +194,6 @@ def to_ds(obj: TimeLike) -> str:
     return to_datetime(obj).isoformat()[0:10]
 
 
-def to_timestamp_str(obj: TimeLike) -> str:
-    """Converts a TimeLike object into a ISO formatted string."""
-    return to_datetime(obj).isoformat()
-
-
 def is_date(obj: TimeLike) -> bool:
     """Checks if a TimeLike object should be treated like a date."""
     if isinstance(obj, date) and not isinstance(obj, datetime):
