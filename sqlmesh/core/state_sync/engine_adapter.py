@@ -69,8 +69,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return {
             "name": exp.DataType.build("text"),
             "snapshots": exp.DataType.build("text"),
-            "start_at": exp.DataType.build("timestamp"),
-            "end_at": exp.DataType.build("timestamp"),
+            "start_at": exp.DataType.build("text"),
+            "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),
             "previous_plan_id": exp.DataType.build("text"),
         }
