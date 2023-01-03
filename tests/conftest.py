@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from datetime import timedelta
 
 import duckdb
 import pytest
@@ -12,6 +13,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils import random_id
+from sqlmesh.utils.date import now, to_date
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -57,7 +59,7 @@ def init_and_plan_sushi_context(mocker: MockerFixture) -> t.Tuple[Context, Plan]
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 
-    plan = sushi_context.plan("prod", start="2022-01-01", end="2022-01-07")
+    plan = sushi_context.plan("prod", start=to_date(now()) - timedelta(weeks=1))
 
     return (sushi_context, plan)
 

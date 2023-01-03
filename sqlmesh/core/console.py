@@ -16,7 +16,7 @@ from rich.tree import Tree
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import now, to_date
+from sqlmesh.utils.date import to_date
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -227,21 +227,16 @@ class TerminalConsole(Console):
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
         """
-        unbounded_end = not plan.is_dev and plan.is_unbounded_end
         self._prompt_categorize(plan, auto_apply)
-        self._show_options_after_categorization(
-            plan, auto_apply, unbounded_end=unbounded_end
-        )
+        self._show_options_after_categorization(plan, auto_apply)
 
         if auto_apply:
             plan.apply()
 
-    def _show_options_after_categorization(
-        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
-    ) -> None:
+    def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
         if plan.requires_backfill:
             self._show_missing_dates(plan)
-            self._prompt_backfill(plan, auto_apply, unbounded_end=unbounded_end)
+            self._prompt_backfill(plan, auto_apply)
         elif plan.context_diff.has_differences and not auto_apply:
             self._prompt_promote(plan)
 
@@ -297,9 +292,7 @@ class TerminalConsole(Console):
             backfill.add(f"{missing.snapshot_name}: {missing.format_missing_range()}")
         self.console.print(backfill)
 
-    def _prompt_backfill(
-        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
-    ) -> None:
+    def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
 
@@ -315,12 +308,10 @@ class TerminalConsole(Console):
             )
             if start:
                 plan.start = start
-        if not plan.override_end:
-            blank_meaning = (
-                "to preview up until now" if is_forward_only_dev else "if unbounded"
-            )
+
+        if plan.is_end_allowed and not plan.override_end:
             end = Prompt.ask(
-                f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank {blank_meaning}",
+                f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
                 console=self.console,
             )
             if end:
@@ -495,9 +486,7 @@ class NotebookMagicConsole(TerminalConsole):
         button.on_click(self._apply)
         button.output = output
 
-    def _prompt_backfill(
-        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
-    ) -> None:
+    def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         import ipywidgets as widgets
 
         prompt = widgets.VBox()
@@ -531,25 +520,11 @@ class NotebookMagicConsole(TerminalConsole):
 
         def start_change_callback(change):
             plan.start = change["new"]
-            self._show_options_after_categorization(
-                plan, auto_apply, unbounded_end=unbounded_end
-            )
+            self._show_options_after_categorization(plan, auto_apply)
 
         def end_change_callback(change):
             plan.end = change["new"]
-            self._show_options_after_categorization(
-                plan, auto_apply, unbounded_end=unbounded_end
-            )
-
-        def unbounded_end_callback(change):
-            checked = change["new"]
-            if checked:
-                plan.end = None
-            else:
-                plan.end = now()
-            self._show_options_after_categorization(
-                plan, auto_apply, unbounded_end=checked
-            )
+            self._show_options_after_categorization(plan, auto_apply)
 
         add_to_layout_widget(
             prompt,
@@ -563,29 +538,22 @@ class NotebookMagicConsole(TerminalConsole):
             ),
         )
 
-        unbounded_end_date_widget = (
-            [_checkbox("Unbounded End Date", unbounded_end, unbounded_end_callback)]
-            if not plan.is_dev
-            else []
-        )
-
-        add_to_layout_widget(
-            prompt,
-            widgets.HBox(
-                [
-                    widgets.Label(
-                        f"End {backfill_or_preview} Date:", layout={"width": "8rem"}
-                    ),
-                    _date_picker(
-                        plan,
-                        to_date(plan.end),
-                        end_change_callback,
-                        disabled=unbounded_end,
-                    ),
-                    *unbounded_end_date_widget,
-                ]
-            ),
-        )
+        if plan.is_end_allowed:
+            add_to_layout_widget(
+                prompt,
+                widgets.HBox(
+                    [
+                        widgets.Label(
+                            f"End {backfill_or_preview} Date:", layout={"width": "8rem"}
+                        ),
+                        _date_picker(
+                            plan,
+                            to_date(plan.end),
+                            end_change_callback,
+                        ),
+                    ]
+                ),
+            )
 
         self._add_to_dynamic_options(prompt)
 
@@ -603,14 +571,10 @@ class NotebookMagicConsole(TerminalConsole):
             button.on_click(self._apply)
             button.output = output
 
-    def _show_options_after_categorization(
-        self, plan: Plan, auto_apply: bool, unbounded_end: bool = False
-    ) -> None:
+    def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
         self.dynamic_options_after_categorization_output.children = ()
         self.display(self.dynamic_options_after_categorization_output)
-        super()._show_options_after_categorization(
-            plan, auto_apply, unbounded_end=unbounded_end
-        )
+        super()._show_options_after_categorization(plan, auto_apply)
 
     def _add_to_dynamic_options(self, *widgets: widgets.Widget) -> None:
         add_to_layout_widget(self.dynamic_options_after_categorization_output, *widgets)

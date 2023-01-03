@@ -217,7 +217,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
             dag=sushi_context.dag,
             state_reader=sushi_context.state_reader,
             start="2022-01-01",
-            end="2022-01-01",
         )
     )
 
