@@ -431,10 +431,7 @@ class SnapshotDagGenerator:
         end: t.Optional[TimeLike] = None,
         is_dev: bool = False,
     ) -> BaseOperator:
-        parent_snapshots = {
-            sid.name: snapshots[sid]
-            for sid in [snapshot.snapshot_id, *snapshot.parents]
-        }
+        parent_snapshots = {sid.name: snapshots[sid] for sid in snapshot.parents}
 
         return self._engine_operator(
             **self._engine_operator_args,

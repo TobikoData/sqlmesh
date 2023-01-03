@@ -60,12 +60,16 @@ def evaluate(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = EvaluateCommandPayload.parse_raw(command_payload)
+
+    parent_snapshots = command_payload.parent_snapshots
+    parent_snapshots[command_payload.snapshot.name] = command_payload.snapshot
+
     evaluator.evaluate(
         command_payload.snapshot,
         command_payload.start,
         command_payload.end,
         command_payload.latest,
-        snapshots=command_payload.parent_snapshots,
+        snapshots=parent_snapshots,
         is_dev=command_payload.is_dev,
     )
     evaluator.audit(
@@ -73,7 +77,7 @@ def evaluate(
         start=command_payload.start,
         end=command_payload.end,
         latest=command_payload.latest,
-        snapshots=command_payload.parent_snapshots,
+        snapshots=parent_snapshots,
         is_dev=command_payload.is_dev,
     )
 
