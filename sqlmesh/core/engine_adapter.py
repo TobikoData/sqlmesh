@@ -15,7 +15,7 @@ import typing as t
 
 import duckdb
 import pandas as pd
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -212,13 +212,24 @@ class EngineAdapter:
         dropped_columns: t.Sequence[str],
     ) -> None:
         with self.transaction():
+            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+
             for column_name, column_type in added_columns.items():
-                self.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                add_column = exp.ColumnDef(
+                    this=exp.to_identifier(column_name),
+                    kind=parse_one(column_type, into=exp.DataType),  # type: ignore
                 )
+                alter_table.set("actions", [add_column])
+
+                self.execute(alter_table)
 
             for column_name in dropped_columns:
-                self.execute(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
+                drop_column = exp.Drop(
+                    this=exp.column(column_name, quoted=True), kind="COLUMN"
+                )
+                alter_table.set("actions", [drop_column])
+
+                self.execute(alter_table)
 
     def create_view(
         self,
@@ -295,12 +306,15 @@ class EngineAdapter:
 
     def drop_view(self, view_name: str, ignore_if_not_exists: bool = True) -> None:
         """Drop a view."""
-        if_exists = " IF EXISTS" if ignore_if_not_exists else ""
-        self.execute(f"DROP VIEW{if_exists} {view_name}")
+        self.execute(
+            exp.Drop(
+                this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW"
+            )
+        )
 
     def columns(self, table_name: str) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
-        self.execute(f"DESCRIBE TABLE {table_name}")
+        self.execute(exp.Describe(this=exp.to_table(table_name)))
         describe_output = self.cursor.fetchall()
         return {
             t[0]: t[1].upper()
@@ -312,7 +326,7 @@ class EngineAdapter:
 
     def table_exists(self, table_name: str) -> bool:
         try:
-            self.execute(f"DESCRIBE TABLE {table_name}")
+            self.execute(exp.Describe(this=exp.to_table(table_name)))
             return True
         except Exception:
             return False
@@ -604,18 +618,33 @@ class SparkEngineAdapter(EngineAdapter):
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:
+        alter_table = exp.AlterTable(this=exp.to_table(table_name))
+
         if added_columns:
-            added_columns_sql = ", ".join(
-                f"{column_name} {column_type}"
-                for column_name, column_type in added_columns.items()
+            add_columns = exp.Schema(
+                expressions=[
+                    exp.ColumnDef(
+                        this=exp.to_identifier(column_name),
+                        kind=parse_one(column_type, into=exp.DataType),  # type: ignore
+                    )
+                    for column_name, column_type in added_columns.items()
+                ],
             )
-            self.execute(f"ALTER TABLE {table_name} ADD COLUMNS ({added_columns_sql})")
+            alter_table.set("actions", [add_columns])
+            self.execute(alter_table)
 
         if dropped_columns:
-            dropped_columns_sql = ", ".join(dropped_columns)
-            self.execute(
-                f"ALTER TABLE {table_name} DROP COLUMNS ({dropped_columns_sql})"
+            drop_columns = exp.Drop(
+                this=exp.Schema(
+                    expressions=[
+                        exp.to_identifier(column_name)
+                        for column_name in dropped_columns
+                    ]
+                ),
+                kind="COLUMNS",
             )
+            alter_table.set("actions", [drop_columns])
+            self.execute(alter_table)
 
 
 def create_engine_adapter(
