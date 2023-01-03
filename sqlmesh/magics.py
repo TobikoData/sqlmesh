@@ -31,13 +31,13 @@ class SQLMeshMagics(Magics):
 
         if runtime_env.is_databricks:
             # Use Databrick's special display instead of the normal IPython display
-            return self.shell.user_ns["display"]
+            return self._shell.user_ns["display"]
         return display
 
     @property
     def context(self) -> Context:
         for variable_name in CONTEXT_VARIABLE_NAMES:
-            context = self.shell.user_ns.get(variable_name)
+            context = self._shell.user_ns.get(variable_name)
             if context:
                 return context
         raise MissingContextException(
@@ -76,7 +76,7 @@ class SQLMeshMagics(Magics):
 
         formatted = format_model_expressions(expressions, model.dialect)
 
-        self.shell.set_next_input(
+        self._shell.set_next_input(
             "\n".join(
                 [
                     " ".join(["%%model", line]),
@@ -134,7 +134,7 @@ class SQLMeshMagics(Magics):
         test_def = yaml.load(test_def_raw) if test_def_raw else test.body
         test_def_output = yaml_dumps(test_def)
 
-        self.shell.set_next_input(
+        self._shell.set_next_input(
             "\n".join(
                 [
                     " ".join(["%%test", line]),
@@ -270,7 +270,7 @@ class SQLMeshMagics(Magics):
         args = parse_argstring(self.fetchdf, line)
         df = self.context.fetchdf(sql)
         if args.df_var:
-            self.shell.user_ns[args.df_var] = df
+            self._shell.user_ns[args.df_var] = df
         self.display(df)
 
     @magic_arguments()
@@ -280,6 +280,13 @@ class SQLMeshMagics(Magics):
         self.context.refresh()
         dag = self.context.get_dag()
         self.display(HTML(dag.pipe().decode("utf-8")))
+
+    @property
+    def _shell(self) -> t.Any:
+        # Make mypy happy.
+        if not self.shell:
+            raise RuntimeError("IPython Magics are in invalid state")
+        return self.shell
 
 
 def register_magics() -> None:
