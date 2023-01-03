@@ -306,8 +306,11 @@ class EngineAdapter:
 
     def drop_view(self, view_name: str, ignore_if_not_exists: bool = True) -> None:
         """Drop a view."""
-        if_exists = " IF EXISTS" if ignore_if_not_exists else ""
-        self.execute(f"DROP VIEW{if_exists} {view_name}")
+        self.execute(
+            exp.Drop(
+                this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW"
+            )
+        )
 
     def columns(self, table_name: str) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
