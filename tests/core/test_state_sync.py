@@ -54,8 +54,8 @@ def promote_snapshots(
     env = Environment(
         name=environment,
         snapshots=[snapshot.table_info for snapshot in snapshots],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
     )
@@ -382,8 +382,8 @@ def test_promote_snapshots_parent_plan_id_mismatch(
     new_environment = Environment(
         name="prod",
         snapshots=[snapshot.table_info],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="new_plan_id",
         previous_plan_id="test_plan_id",
     )
@@ -391,8 +391,8 @@ def test_promote_snapshots_parent_plan_id_mismatch(
     stale_new_environment = Environment(
         name="prod",
         snapshots=[snapshot.table_info],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="stale_new_plan_id",
         previous_plan_id="test_plan_id",
     )

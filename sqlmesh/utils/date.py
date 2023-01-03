@@ -7,7 +7,13 @@ warnings.filterwarnings(
     message="The localize method is no longer necessary, as this time zone supports the fold attribute",
 )
 
+import sys
 from datetime import date, datetime, timedelta, timezone
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 import dateparser
 from sqlglot import exp
@@ -193,6 +199,32 @@ def date_dict(
 def to_ds(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD formatted string."""
     return to_datetime(obj).isoformat()[0:10]
+
+
+def to_timestamp_str(obj: TimeLike) -> str:
+    """Converts a TimeLike object into a ISO formatted string."""
+    return to_datetime(obj).isoformat()
+
+
+@t.overload
+def to_str(obj: Literal[None]) -> None:
+    ...
+
+
+@t.overload
+def to_str(obj: TimeLike) -> str:
+    ...
+
+
+def to_str(obj: t.Optional[TimeLike]) -> t.Optional[str]:
+    """
+    Converts a TimeLike object into YYYY-MM-DD or YYYY-MM-DD HH:MM:SS.mmmmmm formatted string.
+    """
+    if obj is None:
+        return None
+    if is_date(obj):
+        return to_ds(obj)
+    return to_timestamp_str(obj)
 
 
 def is_date(obj: TimeLike) -> bool:

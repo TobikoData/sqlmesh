@@ -510,3 +510,36 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_placeholder)
+
+
+def select_from_values(
+    values: t.Iterable[t.Tuple[t.Any, ...]],
+    columns_to_types: t.Dict[str, exp.DataType],
+    batch_size: int = 0,
+    alias: str = "t",
+) -> t.Generator[exp.Select, None, None]:
+    """Generate a VALUES expression that has a select wrapped around it to cast the values to their correct types.
+
+    Args:
+        values: List of values to use for the VALUES expression.
+        columns_to_types: Mapping of column names to types to assign to the values.
+        batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
+        alias: The alias to assign to the values expression. If not provided then will default to "t"
+
+    Returns:
+        This method operates as a generator and yields a VALUES expression.
+    """
+    casted_columns = [
+        exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
+        for column, kind in columns_to_types.items()
+    ]
+    batch = []
+    for row in values:
+        batch.append(row)
+        if batch_size > 0 and len(batch) > batch_size:
+            values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
+            yield exp.select(*casted_columns).from_(values_exp)
+            batch.clear()
+    if batch:
+        values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
+        yield exp.select(*casted_columns).from_(values_exp)

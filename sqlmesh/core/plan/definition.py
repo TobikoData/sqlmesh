@@ -220,8 +220,8 @@ class Plan:
         return Environment(
             name=self.context_diff.environment,
             snapshots=[snapshot.table_info for snapshot in self.snapshots],
-            start=self.start,
-            end=self._end,
+            start_at=self.start,
+            end_at=self._end,
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
         )

@@ -483,8 +483,8 @@ def promotion_update_state_task(
     environment = Environment(
         name=environment_name,
         snapshots=snapshots,
-        start=start,
-        end=end,
+        start_at=start,
+        end_at=end,
         plan_id=plan_id,
         previous_plan_id=previous_plan_id,
     )

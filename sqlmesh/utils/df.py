@@ -3,6 +3,8 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.dialect import select_from_values
+
 
 def pandas_to_sql(
     df: pd.DataFrame,
@@ -21,17 +23,9 @@ def pandas_to_sql(
     Returns:
         This method operates as a generator and yields a VALUES expression.
     """
-    casted_columns = [
-        exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
-        for column, kind in columns_to_types.items()
-    ]
-    batch = []
-    for row in df.itertuples():
-        batch.append(row[1:])
-        if batch_size > 0 and len(batch) > batch_size:
-            values = exp.values(batch, alias=alias, columns=columns_to_types)
-            yield exp.select(*casted_columns).from_(values)
-            batch.clear()
-    if batch:
-        values = exp.values(batch, alias=alias, columns=columns_to_types)
-        yield exp.select(*casted_columns).from_(values)
+    yield from select_from_values(
+        values=df.itertuples(index=False, name=None),
+        columns_to_types=columns_to_types,
+        batch_size=batch_size,
+        alias=alias,
+    )

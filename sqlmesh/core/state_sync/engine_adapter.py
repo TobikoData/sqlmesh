@@ -21,11 +21,13 @@ import typing as t
 
 from sqlglot import exp
 
+from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
+from sqlmesh.utils import date as date_util
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.file_cache import FileCache
 
@@ -54,29 +56,35 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.environments_table = f"{schema}._environments"
         self.table_info_cache = table_info_cache
 
+    @property
+    def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
+        return {
+            "name": exp.DataType.build("text"),
+            "fingerprint": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "snapshot": exp.DataType.build("text"),
+        }
+
+    @property
+    def environment_columns_to_types(self) -> t.Dict[str, exp.DataType]:
+        return {
+            "name": exp.DataType.build("text"),
+            "snapshots": exp.DataType.build("text"),
+            "start_at": exp.DataType.build("timestamp"),
+            "end_at": exp.DataType.build("timestamp"),
+            "plan_id": exp.DataType.build("text"),
+            "previous_plan_id": exp.DataType.build("text"),
+        }
+
     def init_schema(self) -> None:
         """Creates the schema and table to store state."""
         self.engine_adapter.create_schema(self.snapshots_table)
 
         self.engine_adapter.create_table(
-            self.snapshots_table,
-            {
-                "name": exp.DataType.build("text"),
-                "fingerprint": exp.DataType.build("text"),
-                "version": exp.DataType.build("text"),
-                "snapshot": exp.DataType.build("text"),
-            },
+            self.snapshots_table, self.snapshot_columns_to_types
         )
         self.engine_adapter.create_table(
-            self.environments_table,
-            {
-                "name": exp.DataType.build("text"),
-                "snapshots": exp.DataType.build("text"),
-                "start": exp.DataType.build("text"),
-                "end": exp.DataType.build("text"),
-                "plan_id": exp.DataType.build("text"),
-                "previous_plan_id": exp.DataType.build("text"),
-            },
+            self.environments_table, self.environment_columns_to_types
         )
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
@@ -115,16 +123,19 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.snapshots_table,
-            exp.values(
-                [
-                    (
-                        snapshot.name,
-                        snapshot.fingerprint,
-                        snapshot.version,
-                        snapshot.json(),
-                    )
-                    for snapshot in snapshots
-                ]
+            next(
+                select_from_values(
+                    [
+                        (
+                            snapshot.name,
+                            snapshot.fingerprint,
+                            snapshot.version,
+                            snapshot.json(),
+                        )
+                        for snapshot in snapshots
+                    ],
+                    columns_to_types=self.snapshot_columns_to_types,
+                )
             ),
         )
 
@@ -153,18 +164,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.environments_table,
-            exp.values(
-                [
-                    (
-                        environment.name,
-                        [snapshot.json() for snapshot in environment.snapshots],
-                        environment.start,
-                        environment.end,
-                        environment.plan_id,
-                        environment.previous_plan_id,
-                    )
-                ]
+            next(
+                select_from_values(
+                    [
+                        (
+                            environment.name,
+                            json.dumps(
+                                [snapshot.dict() for snapshot in environment.snapshots]
+                            ),
+                            date_util.to_str(environment.start_at),
+                            date_util.to_str(environment.end_at),
+                            environment.plan_id,
+                            environment.previous_plan_id,
+                        )
+                    ],
+                    columns_to_types=self.environment_columns_to_types,
+                )
             ),
+            columns_to_types=self.environment_columns_to_types,
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:

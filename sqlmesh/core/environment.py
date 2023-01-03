@@ -22,8 +22,8 @@ class Environment(PydanticModel):
 
     name: str
     snapshots: t.List[SnapshotTableInfo]
-    start: TimeLike
-    end: t.Optional[TimeLike]
+    start_at: TimeLike
+    end_at: t.Optional[TimeLike]
     plan_id: str
     previous_plan_id: t.Optional[str]
 
