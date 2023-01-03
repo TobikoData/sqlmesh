@@ -452,13 +452,14 @@ class SnapshotDagGenerator:
         output = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            output.append(
-                HighWaterMarkSensor(
-                    target_snapshot_info=upstream_snapshot.table_info,
-                    this_snapshot=snapshot,
-                    task_id=f"{upstream_snapshot.name}_{upstream_snapshot.version}_high_water_mark_sensor",
+            if not upstream_snapshot.is_embedded_kind:
+                output.append(
+                    HighWaterMarkSensor(
+                        target_snapshot_info=upstream_snapshot.table_info,
+                        this_snapshot=snapshot,
+                        task_id=f"{upstream_snapshot.name}_{upstream_snapshot.version}_high_water_mark_sensor",
+                    )
                 )
-            )
         return output
 
 
