@@ -73,7 +73,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
+        "DESCRIBE `test_table`",
     )
 
     cursor_mock = mocker.Mock()
@@ -83,7 +83,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "spark")  # type: ignore
     assert not adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE TABLE test_table",
+        "DESCRIBE `test_table`",
     )
 
 

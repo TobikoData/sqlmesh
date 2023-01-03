@@ -326,7 +326,7 @@ class EngineAdapter:
 
     def table_exists(self, table_name: str) -> bool:
         try:
-            self.execute(f"DESCRIBE TABLE {table_name}")
+            self.execute(exp.Describe(this=exp.to_table(table_name)))
             return True
         except Exception:
             return False
