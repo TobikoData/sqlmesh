@@ -25,6 +25,7 @@ from sqlglot.time import format_time
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
+from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import parse_model_name
 from sqlmesh.core.model.meta import ModelMeta
@@ -387,10 +388,10 @@ class Model(ModelMeta, frozen=True):
         latest: t.Optional[TimeLike] = None,
         add_incremental_filter: bool = False,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
         audit_name: t.Optional[str] = None,
         dialect: t.Optional[str] = None,
+        is_dev: bool = False,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -401,18 +402,20 @@ class Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             add_incremental_filter: Add an incremental filter to the query if the model is incremental.
-            snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
-                If passing snapshots is undesirable, mapping can be used instead to manually map tables.
-            mapping: Mapping to replace table names, if not set, the mapping will be created from snapshots.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
             audit_name: The name of audit if the query to render is for an audit.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The rendered expression.
         """
+        from sqlmesh.core.snapshot import to_table_mapping
+
         dates = (
             *make_inclusive(start or EPOCH_DS, end or EPOCH_DS),
             to_datetime(latest or EPOCH_DS),
@@ -420,11 +423,7 @@ class Model(ModelMeta, frozen=True):
         key = (audit_name or "", *dates)
 
         snapshots = snapshots or {}
-        mapping = mapping or {
-            name: snapshot.table_name()
-            for name, snapshot in snapshots.items()
-            if snapshot.version and not snapshot.is_embedded_kind
-        }
+        mapping = to_table_mapping(snapshots.values(), is_dev)
         # if a snapshot is provided but not mapped, we need to expand it or the query
         # won't be valid
         expand = set(expand) | {name for name in snapshots if name not in mapping}
@@ -511,8 +510,8 @@ class Model(ModelMeta, frozen=True):
                             end=end,
                             latest=latest,
                             snapshots=snapshots,
-                            mapping=mapping,
                             expand=expand,
+                            is_dev=is_dev,
                             **kwargs,
                         ).subquery(
                             alias=node.alias or model.view_name,
@@ -542,7 +541,9 @@ class Model(ModelMeta, frozen=True):
 
         return query
 
-    def ctas_query(self, mapping: t.Dict[str, str]) -> exp.Subqueryable:
+    def ctas_query(
+        self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
+    ) -> exp.Subqueryable:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -550,11 +551,13 @@ class Model(ModelMeta, frozen=True):
         SELECTS and hopefully the optimizer is smart enough to not do anything.
 
         Args:
-            mapping: Mapping for all upstream models to their physical tables.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            is_dev: Indicates whether the creation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(mapping=mapping, expand=mapping)
+        query = self._render_query(snapshots=snapshots, expand=snapshots, is_dev=is_dev)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)
@@ -568,8 +571,8 @@ class Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
         **kwargs,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -578,13 +581,13 @@ class Model(ModelMeta, frozen=True):
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All snapshots to use for expansion and mapping of physical locations.
-                If passing snapshots is undesirable, mapping can be used instead to manually map tables.
-            mapping: Mapping to replace table names, if not set, the mapping wil be created from snapshots.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
             audit_name: The name of audit if the query to render is for an audit.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -596,8 +599,8 @@ class Model(ModelMeta, frozen=True):
             latest=latest,
             add_incremental_filter=True,
             snapshots=snapshots,
-            mapping=mapping,
             expand=expand,
+            is_dev=is_dev,
             **kwargs,
         )
 
@@ -628,8 +631,6 @@ class Model(ModelMeta, frozen=True):
                 f"Model '{self.name}' is a SQL model and cannot be executed as a Python script."
             )
 
-        from sqlmesh.core.engine_adapter import pyspark
-
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or EPOCH_DS, end or EPOCH_DS)
         latest = to_datetime(latest or EPOCH_DS)
@@ -645,7 +646,9 @@ class Model(ModelMeta, frozen=True):
                 if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
-                    if pyspark and isinstance(df, pyspark.sql.DataFrame):
+                    if PySparkDataFrame and isinstance(df, PySparkDataFrame):
+                        import pyspark
+
                         df = df.where(
                             pyspark.sql.functions.col(self.time_column.column).between(
                                 pyspark.sql.functions.lit(
@@ -682,7 +685,7 @@ class Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
+        is_dev: bool = False,
         **kwargs,
     ) -> t.Generator[t.Tuple[Audit, exp.Subqueryable], None, None]:
         """Renders this model's audit queries, expanding macros with provided kwargs.
@@ -691,9 +694,9 @@ class Model(ModelMeta, frozen=True):
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All snapshots to use for expansion and mapping of physical locations.
-                If passing snapshots is undesirable, mapping can be used instead to manually map tables.
-            mapping: Mapping to replace table names, if not set, the mapping wil be created from snapshots.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -706,9 +709,9 @@ class Model(ModelMeta, frozen=True):
                 end=end,
                 latest=latest,
                 snapshots=snapshots,
-                mapping=mapping,
                 audit_name=audit.name,
                 dialect=audit.dialect,
+                is_dev=is_dev,
                 **kwargs,
             )
             yield audit, query

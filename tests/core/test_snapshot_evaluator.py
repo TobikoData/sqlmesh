@@ -59,7 +59,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         "2020-01-01",
         "2020-01-02",
         "2020-01-02",
-        mapping={},
+        snapshots={},
     )
 
     adapter_mock.create_schema.assert_has_calls(
@@ -113,6 +113,7 @@ def test_promote_model_info(mocker: MockerFixture):
                 fingerprint="1",
                 version="1",
                 parents=[],
+                is_materialized=True,
             )
         ],
         "test_env",
@@ -178,7 +179,7 @@ def test_evaluate_creation_duckdb(
         "2020-01-01",
         "2020-01-01",
         "2020-01-01",
-        mapping={},
+        snapshots={},
     )
     assert_tables_exist()
     assert duck_conn.execute(
@@ -191,7 +192,7 @@ def test_evaluate_creation_duckdb(
         "2020-01-01",
         "2020-01-01",
         "2020-01-01",
-        mapping={},
+        snapshots={},
     )
     assert_tables_exist()
     assert duck_conn.execute(
@@ -221,7 +222,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
         "2020-01-01",
         "2020-01-01",
         "2020-01-01",
-        mapping={},
+        snapshots={},
     )
 
     assert duck_conn.execute(

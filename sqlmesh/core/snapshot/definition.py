@@ -190,6 +190,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
+    is_materialized: bool
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -549,6 +550,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             parents=self.parents,
             previous_versions=self.previous_versions,
             change_category=self.change_category,
+            is_materialized=self.is_materialized,
         )
 
     @property
@@ -744,3 +746,11 @@ def remove_interval(
             modified.append((max(remove_end, start), end))
 
     return modified
+
+
+def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[str, str]:
+    return {
+        snapshot.name: snapshot.table_name(is_dev=is_dev, for_read=True)
+        for snapshot in snapshots
+        if snapshot.version and not snapshot.is_embedded_kind
+    }

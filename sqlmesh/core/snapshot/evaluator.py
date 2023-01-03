@@ -30,7 +30,12 @@ from sqlglot import exp, select
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
-from sqlmesh.core.snapshot.definition import Snapshot, SnapshotId, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotInfoLike,
+    to_table_mapping,
+)
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import AuditError, ConfigError
@@ -65,7 +70,7 @@ class SnapshotEvaluator:
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
-        mapping: t.Dict[str, str],
+        snapshots: t.Dict[str, Snapshot],
         limit: int = 0,
         is_dev: bool = False,
         **kwargs,
@@ -77,16 +82,17 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             latest: The latest datetime to use for non-incremental queries.
-            mapping: Mapping of model references to physical snapshots.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             limit: If limit is >= 0, the query will not be persisted but evaluated and returned
                 as a dataframe.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
         if snapshot.is_embedded_kind:
             return None
+
+        logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
 
         model = snapshot.model
         columns_to_types = model.columns_to_types
@@ -149,7 +155,8 @@ class SnapshotEvaluator:
                 start=start,
                 end=end,
                 latest=latest,
-                mapping=mapping,
+                snapshots=snapshots,
+                is_dev=is_dev,
                 **kwargs,
             )
 
@@ -163,7 +170,9 @@ class SnapshotEvaluator:
         with self.adapter.transaction():
             for index, df in enumerate(
                 model.exec_python(
-                    ExecutionContext(self.adapter, mapping),
+                    ExecutionContext(
+                        self.adapter, to_table_mapping(snapshots.values(), is_dev)
+                    ),
                     start=start,
                     end=end,
                     latest=latest,
@@ -264,7 +273,7 @@ class SnapshotEvaluator:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        mapping: t.Optional[t.Dict[str, str]] = None,
+        snapshots: t.Dict[str, Snapshot],
         raise_exception: bool = True,
         is_dev: bool = False,
         **kwargs,
@@ -275,7 +284,7 @@ class SnapshotEvaluator:
             snapshot: Snapshot to evaluate.  start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            mapping: Mapping of model references to physical snapshots.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             is_dev: Indicates whether the auditing happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
@@ -290,7 +299,8 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            mapping=mapping,
+            snapshots=snapshots,
+            is_dev=is_dev,
             **kwargs,
         ):
             count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(f"({query})"))
@@ -340,18 +350,17 @@ class SnapshotEvaluator:
         is_dev = not snapshot.is_new_version
         table_name = snapshot.table_name(is_dev=is_dev)
 
-        parent_tables_by_name = {
-            snapshots[p_sid].name: (
-                snapshots[p_sid].table_name(is_dev=is_dev, for_read=True)
-            )
-            for p_sid in snapshot.parents
+        parent_snapshots_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
         }
 
         if snapshot.is_view_kind:
             logger.info("Creating view '%s'", table_name)
             self.adapter.create_view(
                 table_name,
-                snapshot.model.render_query(mapping=parent_tables_by_name),
+                snapshot.model.render_query(
+                    snapshots=parent_snapshots_by_name, is_dev=is_dev
+                ),
             )
         else:
             logger.info("Creating table '%s'", table_name)
@@ -359,12 +368,15 @@ class SnapshotEvaluator:
                 table_name,
                 query_or_columns_to_types=snapshot.model.columns_to_types
                 if snapshot.model.annotated
-                else snapshot.model.ctas_query(parent_tables_by_name),
+                else snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
                 storage_format=snapshot.model.storage_format,
                 partitioned_by=snapshot.model.partitioned_by,
             )
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
+        if not snapshot.is_materialized or snapshot.is_new_version:
+            return
+
         tmp_table_name = snapshot.table_name(is_dev=True, for_read=True)
         target_table_name = snapshot.table_name()
 

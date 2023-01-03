@@ -126,6 +126,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "previous_versions": [],
                         "version": snapshot.version,
                         "parents": [],
+                        "is_materialized": True,
                     }
                 ],
                 "start": "2022-01-01",

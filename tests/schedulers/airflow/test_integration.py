@@ -136,6 +136,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         version="test_version",
         physical_schema="test_physical_schema",
         parents=[],
+        is_materialized=True,
     )
     old_environment = Environment(
         name=environment_name,
