@@ -620,7 +620,10 @@ class SparkEngineAdapter(EngineAdapter):
         if added_columns:
             add_columns = exp.Schema(
                 expressions=[
-                    exp.ColumnDef(this=exp.to_identifier(column_name), kind=column_type)
+                    exp.ColumnDef(
+                        this=exp.to_identifier(column_name),
+                        kind=parse_one(column_type, into=exp.DataType),  # type: ignore
+                    )
                     for column_name, column_type in added_columns.items()
                 ],
             )
