@@ -11,5 +11,6 @@ from sqlmesh.core.snapshot.definition import (
     fingerprint_from_model,
     merge_intervals,
     table_name,
+    to_table_mapping,
 )
 from sqlmesh.core.snapshot.evaluator import SnapshotEvaluator

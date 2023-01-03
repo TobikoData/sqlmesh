@@ -98,7 +98,7 @@ class SnapshotEvaluationTarget(
 
     Args:
         snapshot: The snapshot which should be evaluated.
-        table_mapping: The mapping from table names referenced in model queries to physical tables.
+        parent_snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
         start: The start of the interval to evaluate.
         end: The end of the interval to evaluate.
         latest: The latest time used for non incremental datasets.
@@ -113,7 +113,7 @@ class SnapshotEvaluationTarget(
     ddl_concurrent_tasks: int = 1
 
     snapshot: Snapshot
-    table_mapping: t.Dict[str, str]
+    parent_snapshots: t.Dict[str, Snapshot]
     start: t.Optional[TimeLike]
     end: t.Optional[TimeLike]
     latest: t.Optional[TimeLike]
@@ -135,7 +135,7 @@ class SnapshotEvaluationTarget(
     ) -> t.Optional[commands.EvaluateCommandPayload]:
         return commands.EvaluateCommandPayload(
             snapshot=self.snapshot,
-            table_mapping=self.table_mapping,
+            parent_snapshots=self.parent_snapshots,
             start=self._get_start(context),
             end=self._get_end(context),
             latest=self._get_latest(context),

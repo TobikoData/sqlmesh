@@ -82,14 +82,9 @@ class Scheduler:
         """
         validate_date_range(start, end)
 
-        mapping = {
-            **{
-                p_sid.name: self.snapshots[p_sid].table_name(
-                    is_dev=is_dev, for_read=True
-                )
-                for p_sid in snapshot.parents
-            },
-            snapshot.name: snapshot.table_name(is_dev=is_dev, for_read=True),
+        snapshots = {
+            **{p_sid.name: self.snapshots[p_sid] for p_sid in snapshot.parents},
+            snapshot.name: snapshot,
         }
 
         self.snapshot_evaluator.evaluate(
@@ -97,7 +92,7 @@ class Scheduler:
             start,
             end,
             latest,
-            mapping=mapping,
+            snapshots=snapshots,
             is_dev=is_dev,
             **kwargs,
         )
@@ -106,7 +101,7 @@ class Scheduler:
             start=start,
             end=end,
             latest=latest,
-            mapping=mapping,
+            snapshots=snapshots,
             is_dev=is_dev,
             **kwargs,
         )

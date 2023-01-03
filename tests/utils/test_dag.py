@@ -10,7 +10,7 @@ def test_downstream(sushi_context):
 
 
 def test_no_downstream(sushi_context):
-    assert sushi_context.dag.downstream("sushi.customers") == []
+    assert sushi_context.dag.downstream("sushi.top_waiters") == []
 
 
 def test_lineage(sushi_context):

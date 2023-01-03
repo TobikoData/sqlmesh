@@ -59,7 +59,7 @@ class SnapshotDagGenerator:
         return [
             self._create_incremental_dag_for_snapshot(s)
             for s in self._snapshots.values()
-            if s.unpaused_ts
+            if s.unpaused_ts and not s.is_embedded_kind
         ]
 
     def generate_apply(self, request: common.PlanApplicationRequest) -> DAG:
@@ -431,18 +431,16 @@ class SnapshotDagGenerator:
         end: t.Optional[TimeLike] = None,
         is_dev: bool = False,
     ) -> BaseOperator:
-        table_mapping = {}
-        for sid in [snapshot.snapshot_id, *snapshot.parents]:
-            parent_snapshot = snapshots[sid]
-            table_mapping[sid.name] = parent_snapshot.table_name(
-                is_dev=is_dev, for_read=True
-            )
+        parent_snapshots = {
+            sid.name: snapshots[sid]
+            for sid in [snapshot.snapshot_id, *snapshot.parents]
+        }
 
         return self._engine_operator(
             **self._engine_operator_args,
             target=targets.SnapshotEvaluationTarget(
                 snapshot=snapshot,
-                table_mapping=table_mapping,
+                parent_snapshots=parent_snapshots,
                 start=start,
                 end=end,
                 is_dev=is_dev,
