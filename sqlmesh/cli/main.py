@@ -153,11 +153,11 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     help="Skip tests prior to generating the plan if they are defined.",
 )
 @click.option(
-    "--restate-from",
+    "--restate-model",
     "-r",
     type=str,
-    nargs="*",
-    help="Restate all models that depend on these upstream tables. All snapshots that depend on these upstream tables will have their intervals wiped but only the current snapshots will be backfilled.",
+    multiple=True,
+    help="Restate data for specified models and models downstream from the one specified. For production environment all related model versions will have their intervals wiped but only the current versions will be backfilled. For development enviornment only the current model versions will be affected.",
 )
 @click.option(
     "--no-gaps",
@@ -189,7 +189,8 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
 def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
-    context.plan(environment, **kwargs)
+    restate_models = kwargs.pop("restate_model", None)
+    context.plan(environment, restate_models=restate_models, **kwargs)
 
 
 @cli.command("run")

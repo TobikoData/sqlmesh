@@ -62,14 +62,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self._push(plan)
 
         if plan.restatements:
-            self.state_sync.remove_interval(
-                [],
-                start=plan.start,
-                end=plan.end,
-                all_snapshots=self.state_sync.get_snapshots_by_models(
-                    *plan.restatements
-                ),
-            )
+            self._restate(plan)
 
         if plan.requires_backfill:
             snapshots = plan.snapshots
@@ -134,6 +127,19 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.snapshot_evaluator.demote(
             removed,
             environment=environment.name,
+        )
+
+    def _restate(self, plan: Plan) -> None:
+        all_snapshots = (
+            [s for s in plan.snapshots if s.name in plan.restatements]
+            if plan.is_dev
+            else self.state_sync.get_snapshots_by_models(*plan.restatements)
+        )
+        self.state_sync.remove_interval(
+            [],
+            start=plan.start,
+            end=plan.end,
+            all_snapshots=all_snapshots,
         )
 
 

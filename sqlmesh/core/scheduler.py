@@ -132,8 +132,8 @@ class Scheduler:
         validate_date_range(start, end)
 
         latest = latest or now()
-        batches = self.interval_params(
-            self.snapshot_per_version.values(), start, end, latest
+        batches = self._interval_params(
+            self.snapshot_per_version.values(), start, end, latest, is_dev=is_dev
         )
 
         intervals_per_snapshot_version = {
@@ -188,12 +188,13 @@ class Scheduler:
         for skipped in skipped_snapshots:
             self.console.log_status_update(f"SKIPPED snapshot {skipped}\n")
 
-    def interval_params(
+    def _interval_params(
         self,
         snapshots: t.Iterable[Snapshot],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
     ) -> SnapshotBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -210,14 +211,20 @@ class Scheduler:
             start: Start of the interval.
             end: End of the interval.
             latest: The latest datetime to use for non-incremental queries.
+            is_dev: Indicates whether the evaluation happens in the development mode.
 
         Returns:
             A list of tuples containing all snapshots needing to be run with their associated interval params.
         """
-        stored_snapshots = self.state_sync.get_snapshots_with_same_version(snapshots)
-        all_snapshots = {
-            s.snapshot_id: s for s in (list(self.snapshots.values()) + stored_snapshots)
-        }
+        all_snapshots = {s.snapshot_id: s for s in self.snapshots.values()}
+        if not is_dev:
+            # In development mode only consider intervals of snapshots that
+            # the scheduler was initialized with, otherwise source all snapshots
+            # associated with the same version from the state.
+            stored_snapshots = self.state_sync.get_snapshots_with_same_version(
+                snapshots
+            )
+            all_snapshots.update({s.snapshot_id: s for s in stored_snapshots})
         return compute_interval_params(
             snapshots,
             snapshots=all_snapshots,

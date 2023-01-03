@@ -171,14 +171,14 @@ class SQLMeshMagics(Magics):
         "--skip-tests",
         "-t",
         action="store_true",
-        help="Skip the unit tests defined for the model",
+        help="Skip the unit tests defined for the model.",
     )
     @argument(
-        "--restate-from",
+        "--restate-model",
         "-r",
         type=str,
         nargs="*",
-        help="Restate all models that depend on these upstream tables. All snapshots that depend on these upstream tables will have their intervals wiped but only the current snapshots will be backfilled.",
+        help="Restate data for specified models (and models downstream from the one specified). For production environment all related model versions will have their intervals wiped but only the current versions will be backfilled. For development enviornment only the current model versions will be affected.",
     )
     @argument(
         "--no-gaps",
@@ -222,7 +222,7 @@ class SQLMeshMagics(Magics):
             end=args.end,
             from_=args.from_,
             skip_tests=args.skip_tests,
-            restate_from=args.restate_from,
+            restate_models=args.restate_model,
             no_gaps=args.no_gaps,
             skip_backfill=args.skip_backfill,
             forward_only=args.forward_only,
