@@ -15,7 +15,7 @@ import typing as t
 
 import duckdb
 import pandas as pd
-from sqlglot import exp, parse_one
+from sqlglot import Dialect, Dialects, exp, parse_one
 
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -44,6 +44,10 @@ else:
 
 logger = logging.getLogger(__name__)
 
+DIALECT_DEFAULT_SQL_GEN_KWARGS = {
+    Dialects.SNOWFLAKE.value: {"identify": False},
+}
+
 
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
@@ -62,6 +66,7 @@ class EngineAdapter:
         self,
         connection_factory: t.Callable[[], t.Any],
         dialect: str,
+        sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
     ):
         self.dialect = dialect.lower()
@@ -69,6 +74,7 @@ class EngineAdapter:
             connection_factory, multithreaded
         )
         self._transaction = False
+        self.sql_gen_kwargs = sql_gen_kwargs or {}
 
     @property
     def cursor(self) -> t.Any:
@@ -264,9 +270,7 @@ class EngineAdapter:
                 )
             schema = exp.Schema(
                 this=schema,
-                expressions=[
-                    exp.column(column, quoted=True) for column in columns_to_types
-                ],
+                expressions=[exp.column(column) for column in columns_to_types],
             )
             query_or_df = next(
                 pandas_to_sql(query_or_df, columns_to_types=columns_to_types)
@@ -501,7 +505,7 @@ class EngineAdapter:
         else:
             into = exp.Schema(
                 this=exp.to_table(table_name),
-                expressions=[exp.column(c, quoted=True) for c in columns_to_types],
+                expressions=[exp.column(c) for c in columns_to_types],
             )
 
         connection = self._connection_pool.get()
@@ -594,14 +598,16 @@ class EngineAdapter:
         )
 
     def _to_sql(self, e: exp.Expression, **kwargs) -> str:
-        kwargs = {
+        sql_gen_kwargs = {
             "dialect": self.dialect,
             "pretty": False,
             "comments": False,
             "identify": True,
+            **DIALECT_DEFAULT_SQL_GEN_KWARGS.get(self.dialect, {}),
+            **self.sql_gen_kwargs,
             **kwargs,
         }
-        return e.sql(**kwargs)
+        return e.sql(**sql_gen_kwargs)  # type: ignore
 
 
 class SparkEngineAdapter(EngineAdapter):
