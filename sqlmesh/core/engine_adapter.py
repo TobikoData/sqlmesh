@@ -438,21 +438,6 @@ class EngineAdapter:
             return self.cursor.fetchdf()
         if hasattr(self.cursor, "fetchall_arrow"):
             return self.cursor.fetchall_arrow().to_pandas()
-        if hasattr(self.cursor, "fetch_pandas_all"):
-            df = self.cursor.fetch_pandas_all()
-            # Snowflake returns uppercase column names if the columns are not quoted (so case-insensitive)
-            # so replace the column names returned by Snowflake with the column names in the expression
-            # if the expression was a select expression
-            if self.dialect == "snowflake":
-                if isinstance(query, str):
-                    parsed_query = parse_one(query, read=self.dialect)
-                    if parsed_query is None:
-                        # If we didn't get a result from parsing we will just optimistically assume that the df is fine
-                        return df
-                    query = parsed_query
-                if isinstance(query, exp.Select):
-                    df.columns = [col.alias_or_name for col in query.expressions]
-            return df
         raise NotImplementedError(
             "The cursor does not have a way to return a Pandas DataFrame or PySpark DataFrame"
         )
@@ -673,9 +658,35 @@ class SparkEngineAdapter(EngineAdapter):
             self.execute(alter_table)
 
 
+class SnowflakeEngineAdapter(EngineAdapter):
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        multithreaded: bool = False,
+    ):
+        super().__init__(connection_factory, "snowflake", multithreaded=multithreaded)
+
+    def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+        df = self.cursor.fetch_pandas_all()
+        # Snowflake returns uppercase column names if the columns are not quoted (so case-insensitive)
+        # so replace the column names returned by Snowflake with the column names in the expression
+        # if the expression was a select expression
+        if isinstance(query, str):
+            parsed_query = parse_one(query, read=self.dialect)
+            if parsed_query is None:
+                # If we didn't get a result from parsing we will just optimistically assume that the df is fine
+                return df
+            query = parsed_query
+        if isinstance(query, exp.Select):
+            df.columns = [col.alias_or_name for col in query.expressions]
+        return df
+
+
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
 ) -> EngineAdapter:
     if dialect.lower() == "spark":
         return SparkEngineAdapter(connection_factory, multithreaded=multithreaded)
+    if dialect.lower() == "snowflake":
+        return SnowflakeEngineAdapter(connection_factory, multithreaded=multithreaded)
     return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
