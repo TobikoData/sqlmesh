@@ -367,9 +367,9 @@ def test_render_query(assert_exp_eq):
         FROM x
         WHERE
           y <= '2020-10-28'
-          AND y <= TIME_STR_TO_TIME('2020-10-28 23:59:59.999000+0000')
+          AND y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
           AND y >= '2020-10-28'
-          AND y >= TIME_STR_TO_TIME('2020-10-28 00:00:00.000000+0000')
+          AND y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
         """,
     )
     assert_exp_eq(
@@ -379,9 +379,9 @@ def test_render_query(assert_exp_eq):
         FROM x
         WHERE
           y <= '2020-10-28'
-          AND y <= TIME_STR_TO_TIME('2020-10-28 23:59:59.999000+0000')
+          AND y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
           AND y >= '2020-10-28'
-          AND y >= TIME_STR_TO_TIME('2020-10-28 00:00:00.000000+0000')
+          AND y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
         """,
     )
 
