@@ -1,5 +1,4 @@
 import typing as t
-from datetime import date
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -23,8 +22,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 
-START = date(2022, 1, 1)
-END = date(2022, 1, 7)
+START = "1 week ago"
 
 
 @pytest.fixture(autouse=True)
@@ -401,7 +399,7 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = sushi_context.plan("prod", start=START, end=END)
+    plan = sushi_context.plan("prod", start=START)
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
     waiter_revenue = plan.context_diff.snapshots["sushi.waiter_revenue_by_day"]
@@ -469,7 +467,7 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("prod", start=START, end=END)
+    plan = context.plan("prod", start=START)
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
     context.apply(plan)
@@ -486,7 +484,7 @@ def setup_rebase(
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = context.plan("dev", start=START, end=END)
+    plan = context.plan("dev", start=START)
     plan_choice(plan, local_choice)
     local_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
     context.apply(plan)
@@ -497,7 +495,7 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("dev", start=START, end=END)
+    plan = context.plan("dev", start=START)
 
     assert plan.categorized == [context.snapshots["sushi.items"]]
     assert plan.indirectly_modified == {
@@ -549,35 +547,14 @@ def setup_rebase(
 @pytest.mark.parametrize(
     "change_categories, expected",
     [
-        ([SnapshotChangeCategory.FORWARD_ONLY], SnapshotChangeCategory.FORWARD_ONLY),
         ([SnapshotChangeCategory.NON_BREAKING], SnapshotChangeCategory.NON_BREAKING),
         ([SnapshotChangeCategory.BREAKING], SnapshotChangeCategory.BREAKING),
-        (
-            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.FORWARD_ONLY],
-            SnapshotChangeCategory.FORWARD_ONLY,
-        ),
-        (
-            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.NON_BREAKING],
-            SnapshotChangeCategory.NON_BREAKING,
-        ),
-        (
-            [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.BREAKING],
-            SnapshotChangeCategory.BREAKING,
-        ),
-        (
-            [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.FORWARD_ONLY],
-            SnapshotChangeCategory.NON_BREAKING,
-        ),
         (
             [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.NON_BREAKING],
             SnapshotChangeCategory.NON_BREAKING,
         ),
         (
             [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.BREAKING],
-            SnapshotChangeCategory.BREAKING,
-        ),
-        (
-            [SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.FORWARD_ONLY],
             SnapshotChangeCategory.BREAKING,
         ),
         (
@@ -665,7 +642,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
-    plan = context.plan(environment, start=START, end=END)
+    plan = context.plan(environment, start=START)
     validate_plan_changes(plan, added=context.models)
 
     context.apply(plan)
@@ -685,7 +662,6 @@ def apply_to_environment(
     plan = context.plan(
         environment,
         start=START,
-        end=END,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
     )
     plan_choice(plan, choice)

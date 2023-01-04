@@ -4,6 +4,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core.context import Context
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.utils.date import yesterday_ds
 
 
 @pytest.fixture(autouse=True)
@@ -21,8 +22,7 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
     context = Context(path="./example", config=airflow_config)
     context.plan(
-        start="2022-01-01",
-        end="2022-01-01",
+        start=yesterday_ds(),
         skip_tests=True,
         no_prompts=True,
         auto_apply=True,

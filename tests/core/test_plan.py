@@ -136,3 +136,73 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         sushi_context_pre_scheduling.plan(
             restate_models=["unknown_model"], no_prompts=True
         )
+
+
+def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+
+    to_datetime("2022-01-02")
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError,
+        match=r"Model changes and restatements can't be a part of the same plan.*",
+    ):
+        Plan(context_diff_mock, dag, state_reader_mock, restate_models=["a"])
+
+
+def test_end_validation(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+
+    to_datetime("2022-01-02")
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+
+    state_reader_mock = mocker.Mock()
+
+    dev_plan = Plan(
+        context_diff_mock, dag, state_reader_mock, end="2022-01-03", is_dev=True
+    )
+    assert dev_plan.end == "2022-01-03"
+    dev_plan.end = "2022-01-04"
+    assert dev_plan.end == "2022-01-04"
+
+    with pytest.raises(
+        PlanError,
+        match="The end date can't be set for a production plan without restatements.",
+    ):
+        Plan(context_diff_mock, dag, state_reader_mock, end="2022-01-03")
+
+    prod_plan = Plan(context_diff_mock, dag, state_reader_mock)
+    with pytest.raises(
+        PlanError,
+        match="The end date can't be set for a production plan without restatements.",
+    ):
+        prod_plan.end = "2022-01-03"
+
+    context_diff_mock.new_snapshots = {}
+    restatement_prod_plan = Plan(
+        context_diff_mock,
+        dag,
+        state_reader_mock,
+        end="2022-01-03",
+        restate_models=["a"],
+    )
+    assert restatement_prod_plan.end == "2022-01-03"
+    restatement_prod_plan.end = "2022-01-04"
+    assert restatement_prod_plan.end == "2022-01-04"

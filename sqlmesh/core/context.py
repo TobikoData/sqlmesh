@@ -683,10 +683,6 @@ class Context(BaseContext):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-        if plan.environment.name != c.PROD and plan.is_unbounded_end:
-            raise PlanError(
-                "The unbounded end date is not allowed for non-production environments."
-            )
         self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
