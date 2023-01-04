@@ -677,8 +677,8 @@ class SnowflakeEngineAdapter(EngineAdapter):
                 # If we didn't get a result from parsing we will just optimistically assume that the df is fine
                 return df
             query = parsed_query
-        if isinstance(query, exp.Select):
-            df.columns = [col.alias_or_name for col in query.expressions]
+        if isinstance(query, exp.Subqueryable):
+            df.columns = query.named_selects
         return df
 
 
