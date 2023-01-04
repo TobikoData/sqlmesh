@@ -559,6 +559,8 @@ class Context(BaseContext):
     def format(self) -> None:
         """Format all models in a given directory."""
         for model in self.models.values():
+            if not model.is_sql:
+                continue
             with open(model._path, "r+", encoding="utf-8") as file:
                 expressions = parse_model(file.read(), default_dialect=self.dialect)
                 file.seek(0)

@@ -656,6 +656,7 @@ def fingerprint_from_model(
                 expression.sql(identify=True, comments=False)
                 for expression in model.expressions or []
             ),
+            model.stamp,
         ]
 
         parents = sorted(

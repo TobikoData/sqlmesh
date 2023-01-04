@@ -249,7 +249,7 @@ each_macro = lambda: "test"
 def test_fingerprint(model: Model, parent_model: Model):
     macro.get_registry()
     fingerprint = fingerprint_from_model(model, models={})
-    original_fingerprint = "1739502884_0"
+    original_fingerprint = "1600998605_0"
 
     assert fingerprint == original_fingerprint
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
@@ -279,6 +279,15 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     model = Model(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint == fingerprint_from_model(model, models={})
+
+
+def test_stamp(model: Model):
+    original_fingerprint = fingerprint_from_model(model, models={})
+
+    stamped_model = Model(**{**model.dict(), "stamp": "test_stamp"})
+    stamped_fingerprint = fingerprint_from_model(stamped_model, models={})
+
+    assert original_fingerprint != stamped_fingerprint
 
 
 def test_table_name(snapshot: Snapshot):

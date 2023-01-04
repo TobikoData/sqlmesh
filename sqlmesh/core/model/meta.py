@@ -43,6 +43,7 @@ class ModelMeta(PydanticModel):
     cron: str = "@daily"
     owner: t.Optional[str]
     description: t.Optional[str]
+    stamp: t.Optional[str]
     start: t.Optional[TimeLike]
     batch_size: t.Optional[int]
     storage_format: t.Optional[str]
