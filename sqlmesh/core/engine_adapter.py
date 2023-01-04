@@ -17,9 +17,9 @@ import duckdb
 import pandas as pd
 from sqlglot import Dialect, Dialects, exp, parse_one
 
+from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
-from sqlmesh.utils.df import pandas_to_sql
 from sqlmesh.utils.errors import SQLMeshError
 
 SOURCE_ALIAS = "__MERGE_SOURCE__"
