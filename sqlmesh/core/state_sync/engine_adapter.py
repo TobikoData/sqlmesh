@@ -208,7 +208,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _environments_query(self, where=None) -> exp.Select:
         return (
-            exp.select(*(f'"{field}"' for field in Environment.__fields__))
+            exp.select(*(exp.to_identifier(field) for field in Environment.__fields__))
             .from_(self.environments_table)
             .where(where)
         )
