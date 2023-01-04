@@ -26,7 +26,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = {}
-    context_diff_mock.modified_snapshots = {"b", (snapshot_b, snapshot_b)}
+    context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
 
     state_reader_mock = mocker.Mock()
@@ -113,7 +113,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = {}
-    context_diff_mock.modified_snapshots = {"b", (snapshot_b, snapshot_b)}
+    context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
 
     state_reader_mock = mocker.Mock()
@@ -206,3 +206,44 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     assert restatement_prod_plan.end == "2022-01-03"
     restatement_prod_plan.end = "2022-01-04"
     assert restatement_prod_plan.end == "2022-01-04"
+
+
+def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a.set_version()
+    assert not snapshot_a.is_forward_only
+
+    forward_only_snapshot_a = make_snapshot(
+        Model(name="a", query=parse_one("select 2, ds"))
+    )
+    forward_only_snapshot_a.set_version(snapshot_a.version)
+    assert forward_only_snapshot_a.is_forward_only
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = set()
+    context_diff_mock.modified_snapshots = {"a": (snapshot_a, forward_only_snapshot_a)}
+    context_diff_mock.new_snapshots = {}
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError,
+        match=r"Detected an existing version of model 'a' that has been previously superseded by a forward-only change.*",
+    ):
+        Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+
+    # Make sure the plan can be created if a new snapshot version was enforced.
+    new_version_snapshot_a = make_snapshot(
+        Model(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
+    )
+    new_version_snapshot_a.set_version()
+    context_diff_mock.modified_snapshots = {
+        "a": (new_version_snapshot_a, forward_only_snapshot_a)
+    }
+    context_diff_mock.new_snapshots = {
+        new_version_snapshot_a.snapshot_id: new_version_snapshot_a
+    }
+    Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
