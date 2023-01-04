@@ -107,6 +107,7 @@ class Plan:
             self._restatements.update(downstream)
 
         self._ensure_valid_end(self._end)
+        self._ensure_no_forward_only_revert()
 
         categorized_snapshots = self._categorize_snapshots()
         self.added_and_directly_modified = categorized_snapshots[0]
@@ -423,6 +424,28 @@ class Plan:
             raise PlanError(
                 "The end date can't be set for a production plan without restatements."
             )
+
+    def _ensure_no_forward_only_revert(self) -> None:
+        """Ensures that a previously superseded breaking / non-breaking snapshot is not being
+        used again to replace an existing forward-only snapshot with the same version.
+
+        In other words there is no going back to the original non-forward-only snapshot with
+        the same version once a forward-only change for that version has been introduced.
+        """
+        for name, (candidate, promoted) in self.context_diff.modified_snapshots.items():
+            if (
+                candidate.snapshot_id not in self.context_diff.new_snapshots
+                and promoted.is_forward_only
+                and not candidate.is_forward_only
+                and (
+                    promoted.version == candidate.version
+                    or candidate.data_version in promoted.previous_versions
+                )
+            ):
+                raise PlanError(
+                    f"Detected an existing version of model '{name}' that has been previously superseded by a forward-only change. "
+                    "To proceed with the change, restamp this model's definition to produce a new version."
+                )
 
 
 class PlanStatus(str, Enum):
