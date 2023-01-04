@@ -19,8 +19,8 @@ def init_state(airflow_client: AirflowClient) -> None:
         Environment(
             name="prod",
             snapshots=[],
-            start="2022-01-01",
-            end="2022-01-01",
+            start_at="2022-01-01",
+            end_at="2022-01-01",
             plan_id="init_plan_id",
             previous_plan_id=None,
         ),
@@ -109,8 +109,8 @@ def test_promote_snapshots(
         Environment(
             name=environment,
             snapshots=[snapshot.table_info],
-            start="2022-01-01",
-            end="2022-01-01",
+            start_at="2022-01-01",
+            end_at="2022-01-01",
             plan_id="test_plan_id",
             previous_plan_id=None,
         )
@@ -122,8 +122,8 @@ def test_promote_snapshots(
         Environment(
             name=environment,
             snapshots=[],
-            start="2022-01-01",
-            end="2022-01-01",
+            start_at="2022-01-01",
+            end_at="2022-01-01",
             plan_id="test_plan_id_2",
             previous_plan_id="test_plan_id",
         )
@@ -164,8 +164,8 @@ def test_remove_expired_snapshots(
         Environment(
             name=environment,
             snapshots=[expired_promoted_snapshot.table_info],
-            start="2022-01-01",
-            end="2022-01-01",
+            start_at="2022-01-01",
+            end_at="2022-01-01",
             plan_id="test_plan_id",
             previous_plan_id=None,
         )
@@ -189,8 +189,8 @@ def test_remove_expired_snapshots(
         Environment(
             name=environment,
             snapshots=[],
-            start="2022-01-01",
-            end="2022-01-01",
+            start_at="2022-01-01",
+            end_at="2022-01-01",
             plan_id="test_plan_id_2",
             previous_plan_id="test_plan_id",
         )

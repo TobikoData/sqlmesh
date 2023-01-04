@@ -59,8 +59,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
     environment = Environment(
         name="test_env",
         snapshots=[snapshot.table_info],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id="previous_plan_id",
     )
@@ -129,8 +129,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "is_materialized": True,
                     }
                 ],
-                "start": "2022-01-01",
-                "end": "2022-01-01",
+                "start_at": "2022-01-01",
+                "end_at": "2022-01-01",
                 "plan_id": "test_plan_id",
                 "previous_plan_id": "previous_plan_id",
             },
@@ -154,8 +154,8 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     environment = Environment(
         name="test",
         snapshots=[snapshot.table_info],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id=None,
     )

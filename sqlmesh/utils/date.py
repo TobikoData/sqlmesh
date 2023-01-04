@@ -6,7 +6,6 @@ warnings.filterwarnings(
     "ignore",
     message="The localize method is no longer necessary, as this time zone supports the fold attribute",
 )
-
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser

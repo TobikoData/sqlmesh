@@ -46,8 +46,8 @@ def test_apply_plan_create_backfill_promote(
 
     environment_name = _random_environment_name()
     environment = _create_environment(snapshot, name=environment_name)
-    environment.start = yesterday() - timedelta(days=1)
-    environment.end = None
+    environment.start_at = yesterday() - timedelta(days=1)
+    environment.end_at = None
 
     assert airflow_client.get_environment(environment_name) is None
 
@@ -141,8 +141,8 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
     old_environment = Environment(
         name=environment_name,
         snapshots=[deleted_snapshot],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id=None,
     )
@@ -251,7 +251,7 @@ def test_plan_receiver_task_unbounded_end(
 
     environment_name = _random_environment_name()
     new_environment = _create_environment(snapshot, name=environment_name)
-    new_environment.end = unbounded_end
+    new_environment.end_at = unbounded_end
 
     plan_conf = common.PlanReceiverDagConf(
         request_id="test_request_id",
@@ -355,8 +355,8 @@ def _create_environment(
     return Environment(
         name=name or _random_environment_name(),
         snapshots=[snapshot.table_info],
-        start="2022-01-01",
-        end="2022-01-01",
+        start_at="2022-01-01",
+        end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id=None,
     )

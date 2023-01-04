@@ -118,8 +118,8 @@ class StateReader(abc.ABC):
 
         if env:
             snapshots_by_id = self.get_snapshots(env.snapshots)
-            start = start or env.start
-            end = end or env.end
+            start = start or env.start_at
+            end = end or env.end_at
         elif isinstance(env_or_snapshots, str):
             snapshots_by_id = {}
         elif not isinstance(env_or_snapshots, Environment):

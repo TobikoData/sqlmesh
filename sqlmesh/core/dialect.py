@@ -5,6 +5,7 @@ import re
 import typing as t
 from difflib import unified_diff
 
+import pandas as pd
 from jinja2 import Environment
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
@@ -510,3 +511,61 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_placeholder)
+
+
+def select_from_values(
+    values: t.Iterable[t.Tuple[t.Any, ...]],
+    columns_to_types: t.Dict[str, exp.DataType],
+    batch_size: int = 0,
+    alias: str = "t",
+) -> t.Generator[exp.Select, None, None]:
+    """Generate a VALUES expression that has a select wrapped around it to cast the values to their correct types.
+
+    Args:
+        values: List of values to use for the VALUES expression.
+        columns_to_types: Mapping of column names to types to assign to the values.
+        batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
+        alias: The alias to assign to the values expression. If not provided then will default to "t"
+
+    Returns:
+        This method operates as a generator and yields a VALUES expression.
+    """
+    casted_columns = [
+        exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
+        for column, kind in columns_to_types.items()
+    ]
+    batch = []
+    for row in values:
+        batch.append(row)
+        if batch_size > 0 and len(batch) > batch_size:
+            values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
+            yield exp.select(*casted_columns).from_(values_exp)
+            batch.clear()
+    if batch:
+        values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
+        yield exp.select(*casted_columns).from_(values_exp)
+
+
+def pandas_to_sql(
+    df: pd.DataFrame,
+    columns_to_types: t.Dict[str, exp.DataType],
+    batch_size: int = 0,
+    alias: str = "t",
+) -> t.Generator[exp.Select, None, None]:
+    """Convert a pandas dataframe into a VALUES sql statement.
+
+    Args:
+        df: A pandas dataframe to convert.
+        columns_to_types: Mapping of column names to types to assign to the values.
+        batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
+        alias: The alias to assign to the values expression. If not provided then will default to "t"
+
+    Returns:
+        This method operates as a generator and yields a VALUES expression.
+    """
+    yield from select_from_values(
+        values=df.itertuples(index=False, name=None),
+        columns_to_types=columns_to_types,
+        batch_size=batch_size,
+        alias=alias,
+    )

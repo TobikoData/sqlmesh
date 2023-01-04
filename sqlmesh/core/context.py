@@ -642,8 +642,8 @@ class Context(BaseContext):
             if not env:
                 raise PlanError(f"Environment '{from_}' not found.")
 
-            start = start or env.start
-            end = end or env.end
+            start = start or env.start_at
+            end = end or env.end_at
             snapshots = {
                 snapshot.name: snapshot
                 for snapshot in self.state_reader.get_snapshots(env.snapshots).values()
