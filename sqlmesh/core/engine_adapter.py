@@ -438,6 +438,10 @@ class EngineAdapter:
             return self.cursor.fetchdf()
         if hasattr(self.cursor, "fetchall_arrow"):
             return self.cursor.fetchall_arrow().to_pandas()
+        if hasattr(self.cursor, "fetch_pandas_all"):
+            df = self.cursor.fetch_pandas_all()
+            # TODO: This is a temp hack to fix column case for Snowflake
+            return df.rename(columns=str.lower)
         raise NotImplementedError(
             "The cursor does not have a way to return a Pandas DataFrame or PySpark DataFrame"
         )
