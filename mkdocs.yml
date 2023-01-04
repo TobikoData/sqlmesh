@@ -6,6 +6,7 @@ nav:
     - tutorial.md
   - Concepts:
     - models.md
+    - model_kinds.md
     - plans.md
     - snapshots.md
   - Integrations:
