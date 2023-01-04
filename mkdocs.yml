@@ -1,9 +1,9 @@
-site_name: SQLMesh Documentation
+site_name: SQLMesh
 nav:
-  - Overview: index.md
   - Getting Started:
+    - "Introduction": index.md
+    - quick_start.md
     - getting_started.md
-    - tutorial.md
   - Concepts:
     - models.md
     - model_kinds.md
@@ -11,6 +11,8 @@ nav:
     - snapshots.md
   - Integrations:
     - airflow.md
+  - Advanced Topics:
+    - development.md
 
 theme:
   name: material

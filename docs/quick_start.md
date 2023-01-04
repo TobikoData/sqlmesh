@@ -1,32 +1,40 @@
-# Tutorial
+# Quick Start
+In this quick start guide, you'll learn how to get up and running with SQLMesh's scaffold generator. The example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
-This tutorial will run you through an example project using [DuckDB](https://duckdb.org/), an embedded database. You'll learn the basic concepts of SQLMesh with minimal setup. You can translate this project into a data warehouse like Snowflake or BigQuery with minimal effort by adding a new engine adapter.
+## Prerequisites
 
-## Install SQLMesh
-Install SQLMesh from pip by running:
+You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running
+```
+python3 --version
+```
 
-```pip install sqlmesh```
-
-It is recommended but not required to use a virtualenv. Run these commands in the directory of the tutorial project.
+or
 
 ```
-# optionally create your directory
-mkdir ~/sqlmesh-example
-cd ~/sqlmesh-example
+python --version
+```
 
-# setup the virtualenv
+If `python --version` returns 2.x, replace all `python` commands to `python3` and `pip` to `pip3`.
+
+## 1. Create a SQLMesh project
+Create a project directory and navigate to it.
+
+```
+mkdir sqlmesh-example
+cd sqlmesh-example
+```
+
+It is recommended but not required to use a virtual environment.
+
+```
 python -m venv .env
-source .env/bin/activate
-
-# install sqlmesh in your virtualenv
+source .env/bin/active
 pip install sqlmesh
 ```
 
-If you use venv, make sure to it is activated whenever you run SQLMesh commands. Your commandline prompt should show (.env) user@. Run `source .env/bin/activate` to reactivate your venv.
+When using a virtual environment, you need to make sure it's activated. You should see `(.env)` in your command line. If you don't see it, run `source .env/bin/activate` from your project directory to reactivate it.
 
-## Initialize the Starter Project
-
-From within your project folder, run:
+Now, we can create a SQLMesh scaffold.
 
 ```
 sqlmesh init
