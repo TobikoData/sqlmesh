@@ -5,13 +5,11 @@ import re
 import typing as t
 from difflib import unified_diff
 
+import pandas as pd
 from jinja2 import Environment
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 from sqlglot.tokens import Token
-
-if t.TYPE_CHECKING:
-    import pandas as pd
 
 
 class Model(exp.Expression):
