@@ -440,8 +440,19 @@ class EngineAdapter:
             return self.cursor.fetchall_arrow().to_pandas()
         if hasattr(self.cursor, "fetch_pandas_all"):
             df = self.cursor.fetch_pandas_all()
-            # TODO: This is a temp hack to fix column case for Snowflake
-            return df.rename(columns=str.lower)
+            # Snowflake returns uppercase column names if the columns are not quoted (so case-insensitive)
+            # so replace the column names returned by Snowflake with the column names in the expression
+            # if the expression was a select expression
+            if self.dialect == "snowflake":
+                if isinstance(query, str):
+                    parsed_query = parse_one(query, read=self.dialect)
+                    if parsed_query is None:
+                        # If we didn't get a result from parsing we will just optimistically assume that the df is fine
+                        return df
+                    query = parsed_query
+                if isinstance(query, exp.Select):
+                    df.columns = [col.alias_or_name for col in query.expressions]
+            return df
         raise NotImplementedError(
             "The cursor does not have a way to return a Pandas DataFrame or PySpark DataFrame"
         )
