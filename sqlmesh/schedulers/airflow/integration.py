@@ -45,7 +45,7 @@ class SQLMeshAirflow:
                 globals()[dag.dag_id] = dag
 
     Args:
-        engine_operarator: The type of the Airflow operator that will be used for model evaluation.
+        engine_operator: The type of the Airflow operator that will be used for model evaluation.
             If a string value is passed, an automatic operator discovery is attempted based
             on the engine name specified in the string. Supported string values are: spark.
         engine_operator_args: The dictionary of arguments that will be passed into the engine
@@ -177,8 +177,8 @@ def _plan_receiver_task(
             "Make sure your code base is up to date and try re-creating the plan"
         )
 
-    if plan_conf.environment.end:
-        end = plan_conf.environment.end
+    if plan_conf.environment.end_at:
+        end = plan_conf.environment.end_at
         unpaused_dt = None
     else:
         # Unbounded end date means we need to unpause all paused snapshots
@@ -200,7 +200,7 @@ def _plan_receiver_task(
     if plan_conf.restatements:
         state_sync.remove_interval(
             [],
-            start=plan_conf.environment.start,
+            start=plan_conf.environment.start_at,
             end=end,
             all_snapshots=(
                 snapshot
@@ -214,7 +214,7 @@ def _plan_receiver_task(
         backfill_batches = scheduler.compute_interval_params(
             plan_conf.environment.snapshots,
             snapshots=snapshots_for_intervals,
-            start=plan_conf.environment.start,
+            start=plan_conf.environment.start_at,
             end=end,
             latest=end,
         )
@@ -236,8 +236,8 @@ def _plan_receiver_task(
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
         promoted_snapshots=plan_conf.environment.snapshots,
         demoted_snapshots=_get_demoted_snapshots(plan_conf.environment, state_sync),
-        start=plan_conf.environment.start,
-        end=plan_conf.environment.end,
+        start=plan_conf.environment.start_at,
+        end=plan_conf.environment.end_at,
         unpaused_dt=unpaused_dt,
         no_gaps=plan_conf.no_gaps,
         plan_id=plan_conf.environment.plan_id,
