@@ -96,7 +96,7 @@ class ModelMeta(PydanticModel):
         except ValueError:
             raise ConfigError(f"Invalid model kind '{name}'")
 
-    @validator("dialect", "owner", "storage_format", "description", pre=True)
+    @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         if isinstance(v, exp.Expression):
             return v.name
