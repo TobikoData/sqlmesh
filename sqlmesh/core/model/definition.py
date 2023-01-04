@@ -90,13 +90,16 @@ class Model(ModelMeta, frozen=True):
           @var AS my_column #my second column,
         ;
     Args:
-        model: The name of the model, which is of the form [catalog].[db].table.
+        name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         dialect: The SQL dialect that the model's query is written in. By default,
             this is assumed to be the dialect of the context.
         owner: The owner of the model.
         cron: A cron string specifying how often the model should be refresh, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        description: The optional model description.
+        stamp: An optional arbitrary string sequence used to create new model versions without making
+            changes to any of the functional components of the definition.
         start: The earliest date that the model will be backfilled for. If this is None,
             then the date is inferred by taking the most recent start date's of its ancestors.
             The start date can be a static datetime or a realtive datetime like "1 year ago"
