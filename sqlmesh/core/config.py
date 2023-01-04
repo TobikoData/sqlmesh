@@ -263,9 +263,7 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
 
     @root_validator(pre=True)
     def check_supported_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        allowed_field_names = {
-            field.alias for field in cls.__fields__.values() if field.alias != "extra"
-        }
+        allowed_field_names = {field.alias for field in cls.__fields__.values()}
         allowed_field_names.add("session")
 
         for field_name in values:
