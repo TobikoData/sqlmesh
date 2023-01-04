@@ -667,6 +667,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         super().__init__(connection_factory, "snowflake", multithreaded=multithreaded)
 
     def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+        self.execute(query)
         df = self.cursor.fetch_pandas_all()
         # Snowflake returns uppercase column names if the columns are not quoted (so case-insensitive)
         # so replace the column names returned by Snowflake with the column names in the expression
