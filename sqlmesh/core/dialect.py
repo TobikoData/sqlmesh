@@ -11,9 +11,6 @@ from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 from sqlglot.tokens import Token
 
-if t.TYPE_CHECKING:
-    import pandas as pd
-
 
 class Model(exp.Expression):
     arg_types = {"expressions": True}
