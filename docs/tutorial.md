@@ -62,7 +62,7 @@ Models needing backfill (missing dates):
 ├── sqlmesh_example.example_incremental_model: (2020-01-01, 2022-12-29)
 └── sqlmesh_example.example_full_model: (2022-12-29, 2022-12-29)
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank if unbounded:
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 
 All model batches have been executed successfully
@@ -143,7 +143,7 @@ Directly Modified: sqlmesh_example.example_incremental_model
 Models needing backfill (missing dates):
 └── sqlmesh_example.example_incremental_model: (2020-01-01, 2022-12-29)
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank if unbounded: 2022-01-05
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 2022-01-05
 Apply - Backfill Tables [y/n]: y
 
 
@@ -223,7 +223,7 @@ Directly Modified: sqlmesh_example.example_incremental_model (Non-breaking)
 Models needing backfill (missing dates):
 └── sqlmesh_example.example_incremental_model: (2022-01-06, 2022-12-29)
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank if unbounded:
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 
 All model batches have been executed successfully
