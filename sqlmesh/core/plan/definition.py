@@ -70,7 +70,6 @@ class Plan:
         self.override_start = start is not None
         self.override_end = end is not None
         self.plan_id: str = random_id()
-        self.restatements = set()
         self.no_gaps = no_gaps
         self.skip_backfill = skip_backfill
         self.is_dev = is_dev
@@ -83,6 +82,13 @@ class Plan:
         self._dag = dag
         self._state_reader = state_reader
         self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
+        self._restatements = set()
+
+        if restate_models and context_diff.new_snapshots:
+            raise PlanError(
+                "Model changes and restatements can't be a part of the same plan. "
+                "Revert or apply changes before proceeding with restatements."
+            )
 
         if not restate_models and is_dev and forward_only:
             # Add model names for new forward-only snapshots to the restatement list
@@ -98,7 +104,9 @@ class Plan:
                 raise PlanError(
                     f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
                 )
-            self.restatements.update(downstream)
+            self._restatements.update(downstream)
+
+        self._ensure_valid_end(self._end)
 
         categorized_snapshots = self._categorize_snapshots()
         self.added_and_directly_modified = categorized_snapshots[0]
@@ -131,7 +139,7 @@ class Plan:
         return self._start or scheduler.earliest_start_date(self.snapshots)
 
     @start.setter
-    def start(self, new_start) -> None:
+    def start(self, new_start: TimeLike) -> None:
         self._start = new_start
         self._missing_intervals = None
 
@@ -142,13 +150,14 @@ class Plan:
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:
+        self._ensure_valid_end(new_end)
         self._end = new_end
         self._missing_intervals = None
 
     @property
-    def is_unbounded_end(self) -> bool:
-        """Indicates whether this plan has an unbounded end."""
-        return not self._end
+    def is_end_allowed(self) -> bool:
+        """Indicates whether this plan allows to set the end date."""
+        return self.is_dev or bool(self.restatements)
 
     @property
     def requires_backfill(self) -> bool:
@@ -216,6 +225,10 @@ class Plan:
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
         )
+
+    @property
+    def restatements(self) -> t.Set[str]:
+        return self._restatements
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
@@ -404,6 +417,12 @@ class Plan:
                     f"2) promote the current version of model '{upstream}' in the production environment; "
                     "3) recreate this plan in a forward-only mode."
                 )
+
+    def _ensure_valid_end(self, end: t.Optional[TimeLike]) -> None:
+        if end and not self.is_end_allowed:
+            raise PlanError(
+                "The end date can't be set for a production plan without restatements."
+            )
 
 
 class PlanStatus(str, Enum):

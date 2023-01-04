@@ -57,7 +57,7 @@ def init_and_plan_sushi_context(mocker: MockerFixture) -> t.Tuple[Context, Plan]
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 
-    plan = sushi_context.plan("prod", start="2022-01-01", end="2022-01-07")
+    plan = sushi_context.plan("prod", start="1 week ago")
 
     return (sushi_context, plan)
 
