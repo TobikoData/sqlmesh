@@ -682,6 +682,25 @@ class SnowflakeEngineAdapter(EngineAdapter):
             df.columns = query.named_selects
         return df
 
+    def columns(self, table_name: str) -> t.Dict[str, str]:
+        """Fetches column names and types for the target table."""
+        self.execute(f"DESCRIBE TABLE {table_name}")
+        describe_output = self.cursor.fetchall()
+        return {
+            t[0]: t[1].upper()
+            for t in itertools.takewhile(
+                lambda t: not t[0].startswith("#"),
+                describe_output,
+            )
+        }
+
+    def table_exists(self, table_name: str) -> bool:
+        try:
+            self.execute(f"DESCRIBE TABLE {table_name}")
+            return True
+        except Exception:
+            return False
+
 
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
