@@ -386,7 +386,7 @@ class EngineAdapter:
         on = exp.and_(
             *(
                 exp.EQ(
-                    this=exp.column(part, target_table),
+                    this=exp.column(part, target_table, quoted=False),
                     expression=exp.column(part, SOURCE_ALIAS),
                 )
                 for part in unique_key
@@ -397,7 +397,7 @@ class EngineAdapter:
             then=exp.update(
                 None,
                 properties={
-                    exp.column(col, target_table): exp.column(col, SOURCE_ALIAS)
+                    exp.column(col, quoted=False): exp.column(col, SOURCE_ALIAS)
                     for col in column_names
                 },
             ),

@@ -139,4 +139,6 @@ class IncrementalByUniqueKey(ModelKind):
     def _parse_unique_key(cls, v: t.Any) -> t.List[str]:
         if isinstance(v, exp.Identifier):
             return [v.this]
+        if isinstance(v, exp.Tuple):
+            return [e.this for e in v.expressions]
         return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
