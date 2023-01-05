@@ -318,7 +318,7 @@ class EngineAdapter:
 
     def columns(self, table_name: str) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
-        self.execute(exp.Describe(this=exp.to_table(table_name)))
+        self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
             t[0]: t[1].upper()
@@ -330,7 +330,7 @@ class EngineAdapter:
 
     def table_exists(self, table_name: str) -> bool:
         try:
-            self.execute(exp.Describe(this=exp.to_table(table_name)))
+            self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
             return True
         except Exception:
             return False
