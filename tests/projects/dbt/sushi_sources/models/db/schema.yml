@@ -1,0 +1,6 @@
+version: 2
+
+models:
+  - name: customer_revenue_by_day
+  - name: top_waiters
+  - name: waiter_revenue_by_day

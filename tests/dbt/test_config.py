@@ -59,7 +59,7 @@ def test_model_config():
         "waiter_revenue_by_day",
     }
 
-    model_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).models
+    model_configs = ProjectConfig.load(Path("tests/projects/dbt/sushi_sources")).models
     assert set(model_configs) == expected_models
 
     expected_config = {
@@ -83,7 +83,7 @@ def test_source_config():
         "order_items",
     }
 
-    source_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).sources
+    source_configs = ProjectConfig.load(Path("tests/projects/dbt/sushi_sources")).sources
     assert set(source_configs) == expected_sources
 
     expected_config = {

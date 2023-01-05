@@ -1,0 +1,13 @@
+sushi:
+  outputs:
+    dev:
+      account: redacted_account
+      database: sushi
+      password: redacted_password
+      role: accountadmin
+      schema: sushi
+      threads: 1
+      type: snowflake
+      user: redacted_user
+      warehouse: redacted_warehouse
+  target: dev
