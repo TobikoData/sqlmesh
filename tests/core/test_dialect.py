@@ -13,7 +13,7 @@ def test_format_model_expressions():
     x = format_model_expressions(
         parse(
             """
-    MODEL(name a.b)
+    MODEL(name a.b, kind full)
     ;
 
     @DEF(x
@@ -42,7 +42,8 @@ def test_format_model_expressions():
     assert (
         x
         == """MODEL (
-  name a.b
+  name a.b,
+  kind FULL
 );
 
 @DEF(x, 1);
@@ -68,6 +69,24 @@ SELECT
   SUM(n + 1)::INT AS n, /* n */
   o AS o,
   p + 1"""
+    )
+
+    x = format_model_expressions(
+        parse_model(
+            """
+            MODEL(name a.b, kind FULL);
+
+            SELECT * FROM x WHERE y = {{ 1 }} ;"""
+        )
+    )
+    assert (
+        x
+        == """MODEL (
+  name a.b,
+  kind FULL
+);
+
+SELECT * FROM x WHERE y = {{ 1 }} ;"""
     )
 
 

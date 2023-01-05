@@ -305,7 +305,7 @@ def _model_kind_sql(self, expression: ModelKind) -> str:
     )
     if props:
         return "\n".join([f"{expression.this} (", props, ")"])
-    return expression.name
+    return expression.name.upper()
 
 
 def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
@@ -483,6 +483,7 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
                     ModelKind: _model_kind_sql,
+                    Jinja: lambda self, e: e.name,
                     PythonCode: lambda self, e: self.expressions(e),
                 }
             )
