@@ -41,7 +41,7 @@ SQLMesh supports both [audits](#audits) and [tests](#tests). Although unit tests
 
 Ready to jump in? Refer to `sqlmesh.docs.getting_started`.
 
-# Community
+## Community
 
 We'd love to help guide you along your data journey. Follow the links below to connect with us:
 

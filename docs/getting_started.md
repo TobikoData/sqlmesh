@@ -9,7 +9,6 @@ SQLMesh also makes it easy to iterate, test, and deploy code and data changes, a
 Changing SQL query models can have dramatic effects downstream when working with complex pipelines. SQLMesh's plan command allows developers to understand the full scope of directly and indirectly-impacted workflows automatically, giving them a holistic view of the changes.
 
 ### The apply command
-Deploying new pipelines can be time-consuming, expensive, and error-prone. SQLMesh's apply command allows developers to deploy their changes to isolated environments for testing and validation, seamlessly handling backfilling and reuse of existing tables. When development is complete, promoting an environment to production is quick and has no downtime. SQLMesh is able to accomplish all of this regardless of your data warehouse or SQL engine's capabilities.
 
 ## Installing SQLMesh
 To get up and running, first install SQLMesh:
