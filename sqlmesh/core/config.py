@@ -104,7 +104,7 @@ import abc
 import typing as t
 
 import duckdb
-from pydantic import validator
+from pydantic import root_validator, validator
 from requests import Session
 
 from sqlmesh.core import constants as c
@@ -119,6 +119,8 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
+    from google.auth.transport.requests import AuthorizedSession
+
     from sqlmesh.core.context import Context
 
 
@@ -224,14 +226,19 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
 
 
 class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
-    from google.auth.transport.requests import AuthorizedSession
-
     airflow_url: str
     max_concurrent_requests: int = 2
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
-    _session: t.Optional[AuthorizedSession] = None
+
+    class Config:
+        # See `check_supported_fields` for the supported extra fields
+        extra = "allow"
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._session: t.Optional[AuthorizedSession] = data.get("session")
 
     @property
     def session(self):
@@ -253,6 +260,16 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
             session=self.session,
             console=console,
         )
+
+    @root_validator(pre=True)
+    def check_supported_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        allowed_field_names = {field.alias for field in cls.__fields__.values()}
+        allowed_field_names.add("session")
+
+        for field_name in values:
+            if field_name not in allowed_field_names:
+                raise ValueError(f"Unsupported Field: {field_name}")
+        return values
 
 
 class Config(PydanticModel):

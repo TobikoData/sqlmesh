@@ -3,11 +3,12 @@ from __future__ import annotations
 import datetime
 import typing as t
 
-from github.Repository import Repository
-
 from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.user import User
 from sqlmesh.utils.pydantic import PydanticModel
+
+if t.TYPE_CHECKING:
+    from github.Repository import Repository
 
 NOTIFICATION_STATUS_TO_EMOJI = {
     NotificationStatus.FAILURE: ":x:",
