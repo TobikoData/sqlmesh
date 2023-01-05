@@ -7,7 +7,12 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.model import IncrementalByTimeRange, Model, ModelKind, ModelKindName
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    Model,
+    ModelKind,
+    ModelKindName,
+)
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
 
@@ -43,7 +48,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
-        kind=IncrementalByTimeRange(time_column="a"),
+        kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
         query=parse_one(
             "SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"
@@ -83,7 +88,7 @@ def test_promote(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
-        kind=IncrementalByTimeRange(time_column="a"),
+        kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
@@ -141,7 +146,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     model = Model(
         name="test_schema.test_model",
-        kind=IncrementalByTimeRange(time_column="a"),
+        kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )

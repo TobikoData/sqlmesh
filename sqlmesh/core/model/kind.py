@@ -21,6 +21,7 @@ class ModelKindName(str, Enum):
     SNAPSHOT = "snapshot"
     VIEW = "view"
     EMBEDDED = "embedded"
+    SEED = "seed"
 
 
 class ModelKind(PydanticModel):
@@ -49,6 +50,10 @@ class ModelKind(PydanticModel):
     @property
     def is_embedded(self) -> bool:
         return self.name == ModelKindName.EMBEDDED
+
+    @property
+    def is_seed(self) -> bool:
+        return self.name == ModelKindName.SEED
 
     @property
     def is_materialized(self) -> bool:
@@ -97,7 +102,7 @@ class TimeColumn(PydanticModel):
         )
 
 
-class IncrementalByTimeRange(ModelKind):
+class IncrementalByTimeRangeKind(ModelKind):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_TIME_RANGE, const=True)
     time_column: TimeColumn = TimeColumn(column="ds")
 
@@ -131,7 +136,7 @@ class IncrementalByTimeRange(ModelKind):
         )
 
 
-class IncrementalByUniqueKey(ModelKind):
+class IncrementalByUniqueKeyKind(ModelKind):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_UNIQUE_KEY, const=True)
     unique_key: t.List[str]
 
@@ -140,3 +145,25 @@ class IncrementalByUniqueKey(ModelKind):
         if isinstance(v, exp.Identifier):
             return [v.this]
         return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+
+
+class SeedKind(ModelKind):
+    name: ModelKindName = Field(ModelKindName.SEED, const=True)
+    path: str
+    batch_size: int = 1000
+
+    @validator("batch_size", pre=True)
+    def _parse_batch_size(cls, v: t.Any) -> int:
+        if isinstance(v, exp.Literal) and not v.is_string:
+            v = int(v.this)
+        if not isinstance(v, int):
+            raise ValueError("Seed batch size must be an integer value")
+        if v <= 0:
+            raise ValueError("Seed batch size must be a positive integer")
+        return v
+
+    @validator("path", pre=True)
+    def _parse_path(cls, v: t.Any) -> str:
+        if isinstance(v, exp.Literal):
+            return v.this
+        return str(v)

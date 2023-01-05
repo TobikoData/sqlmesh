@@ -8,8 +8,8 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import (
-    IncrementalByTimeRange,
-    IncrementalByUniqueKey,
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
     TimeColumn,
@@ -259,11 +259,11 @@ def validate_model_kind_change(
     ]
     kind: ModelKind = ModelKind(name=kind_name)
     if kind_name == "incremental_by_time_range":
-        kind = IncrementalByTimeRange(
+        kind = IncrementalByTimeRangeKind(
             time_column=TimeColumn(column="ds", format="%Y-%m-%d")
         )
     elif kind_name == "incremental_by_unique_key":
-        kind = IncrementalByUniqueKey(unique_key="id")
+        kind = IncrementalByUniqueKeyKind(unique_key="id")
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)
