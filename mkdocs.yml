@@ -12,6 +12,7 @@ nav:
     - concepts/tests.md
     - concepts/audits.md
   - API:
+    - api/overview.md
     - api/cli.md
     - api/notebook.md
     - api/python.md

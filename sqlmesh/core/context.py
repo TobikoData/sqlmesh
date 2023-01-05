@@ -842,7 +842,7 @@ class Context(BaseContext):
             return config
         if not config_module:
             raise ConfigError(
-                "`config_module` must to be specified if not using a Config object."
+                "`config_module` must be specified if not using a Config object."
             )
         config = config or "config"
         try:

@@ -61,7 +61,7 @@ def test_config_parameter():
 def test_config_not_found():
     with pytest.raises(
         ConfigError,
-        match=r"^`config_module` must to be specified if not using a Config object.*",
+        match=r"^`config_module` must be specified if not using a Config object.*",
     ):
         Context(path="nonexistent/directory")
 
