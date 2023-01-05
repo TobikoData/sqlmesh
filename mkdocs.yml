@@ -3,19 +3,23 @@ nav:
   - Getting Started:
     - "Introduction": index.md
     - quick_start.md
-    - getting_started.md
   - Concepts:
-    - models.md
-    - model_kinds.md
-    - plans.md
-    - snapshots.md
+    - concepts/overview.md
+    - concepts/models.md
+    - concepts/model_kinds.md
+    - concepts/plans.md
+    - concepts/snapshots.md
   - Integrations:
-    - airflow.md
-  - Advanced Topics:
+    - integrations/airflow.md
+  - Extra Topics:
     - development.md
+    - glossary.md
 
 theme:
   name: material
+  features:
+    - navigation.tracking
+    - navigation.tabs
 plugins:
   - include-markdown
 copyright: Tobiko Data Inc.

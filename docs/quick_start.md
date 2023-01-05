@@ -53,7 +53,7 @@ This will create directories and files to organize your SQLMesh project code.
 - ./macros
     - Where you put macros.
 
-## Plan and Apply Environments
+## 2. Plan and Apply Environments
 ### Create a Production Environment
 The starter project has created a simple two model pipeline, where example_full_model depends on example_incremental_model. To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill, you can leave those blank for now to backfill all of history. Finally, it will ask you whether or not you want backfill the plan, type 'y'.
 
@@ -98,7 +98,7 @@ Apply - Logical Update [y/n]: y
 Logical Update executed successfully
 ```
 
-## Making Your First Update
+## 3. Making Your First Update
 ### Edit the file
 Let's add a new column to example_incremental_model. Open models/example_incremental_model.sql and add `1 AS new_column` under item_id.
 
