@@ -560,7 +560,7 @@ class Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(snapshots=snapshots, expand=snapshots, is_dev=is_dev)
+        query = self._render_query(snapshots=snapshots, is_dev=is_dev)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)
