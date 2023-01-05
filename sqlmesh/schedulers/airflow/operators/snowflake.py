@@ -24,12 +24,12 @@ class SQLMeshSnowflakeOperator(BaseOperator):
     ):
         super().__init__(**kwargs)
         self._target = target
-        self._databricks_conn_id = snowflake_conn_id
+        self._snowflake_conn_id = snowflake_conn_id
         self._hook_params = kwargs
 
     def get_db_hook(self) -> SnowflakeHook:
         """Gets the Snowflake Hook which contains the DB API connection object"""
-        return SnowflakeHook(self._databricks_conn_id, **self._hook_params)
+        return SnowflakeHook(self._snowflake_conn_id, **self._hook_params)
 
     def execute(self, context: Context) -> None:
         """Executes the desired target against the configured Snowflake connection"""
