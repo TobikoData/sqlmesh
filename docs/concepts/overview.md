@@ -12,15 +12,24 @@ There are three levels of data transformation processes.
 ### Manual
 If your data / organization is small, you may only have a couple of key metrics that you want to compute. In these scenariors, running SQL queries or Python scripts manually will get the job done. As your organization grows (more people / more data), a manual process quickly becomes unmaintainable.
 
-### Scheduler Based
+### Scheduler based
 A common approach for organizations that have grown past manual pipelines is to build around an orchestration framework like [Airflow](https://airflow.apache.org/) or [Prefect](https://www.prefect.io/). Although these frameworks handle dependencies and scheduling, they are very generic. Custom tooling needs to be developed in order to make it easier to work with these frameworks. Less technical data professionals may have trouble working with these tools directly because they are complex and geared towards engineers.
 
-### Model Aware
+### Model aware
 The final class of data transformation platforms provides more integrations to common data modeling patterns like **SQLMesh**, [dbt](https://www.getdbt.com/) and [coalesce](https://coalesce.io/). Unlike generic scheduling tools, these platforms provide automation around common patterns like natively supporting various materialization strategies.
 
 Read more about why SQLMesh is the most efficient and powerful data transformation platform [here](/#why-sqlmesh).
 
 ## How it works
-SQLMesh allows data analysts, scientists, and engineers to unify around common tooling while guaranteeing scalable modern data best practices.
+SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and schedulers](/integrations/overview). It was created with a focus on both data / organizational scale in mind.
 
-SQLMesh also makes it easy to iterate, test, and deploy code and data changes, and is built around two main commands: plan and apply.
+### Write models
+You begin by writing your business logic in SQL or Python which will result in a Table or View.
+
+### Plan
+Changing SQL query models can have dramatic effects downstream when working with complex pipelines. SQLMesh's plan command allows developers to understand the full scope of directly and indirectly-impacted workflows automatically, giving them a holistic view of the changes.
+
+You can interact with SQLMesh through a [CLI](/api/cli), [Notebook](/api/notebook), or [Python API](/api/python).
+
+### Apply
+Deploying new pipelines can be time-consuming, expensive, and error-prone. SQLMesh's apply command allows developers to deploy their changes to isolated environments for testing and validation, seamlessly handling backfilling and reuse of existing tables. When development is complete, promoting an environment to production is quick and has no downtime. SQLMesh is able to accomplish all of this regardless of your data warehouse or SQL engine's capabilities.
