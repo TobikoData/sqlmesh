@@ -95,3 +95,26 @@ sqlmesh_airflow = SQLMeshAirflow(
     },
 )
 ```
+
+## Snowflake
+**Engine Name:** `snowflake` / `snowflake-sql` / `snowflake_sql`.
+
+The SQLMesh Snowflake Operator is similar to the [SnowflakeOperator](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/operators/snowflake.html), and relies on the same [SnowflakeHook](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/_api/airflow/providers/snowflake/hooks/snowflake/index.html) implementation.
+
+To enable support for this operator, the Airflow Snowflake provider package should be installed on the target Airflow cluster along with the Snowflake connector with pandas extra:
+```
+pip install "apache-airflow-providers-snowflake[common.sql]"
+pip install "snowflake-connector-python[pandas]"
+```
+
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Please see [Snowflake connection](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/connections/snowflake.html) for more details.
+
+By default, the connection ID is set to `snowflake_default`, but can be overriden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python
+sqlmesh_airflow = SQLMeshAirflow(
+    "snowflake",
+    engine_operator_args={
+        "snowflake_conn_id": "<Connection ID>"
+    },
+)
+```

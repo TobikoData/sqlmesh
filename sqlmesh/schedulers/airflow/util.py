@@ -97,4 +97,15 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
             raise SQLMeshError(
                 "Failed to automatically discover an operator for Databricks"
             )
+    if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
+        try:
+            from sqlmesh.schedulers.airflow.operators.snowflake import (
+                SQLMeshSnowflakeOperator,
+            )
+
+            return SQLMeshSnowflakeOperator
+        except ImportError:
+            raise SQLMeshError(
+                "Failed to automatically discover an operator for Snowflake"
+            )
     raise ValueError(f"Unsupported engine name '{name}'")
