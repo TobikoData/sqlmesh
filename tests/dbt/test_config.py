@@ -83,7 +83,9 @@ def test_source_config():
         "order_items",
     }
 
-    source_configs = ProjectConfig.load(Path("tests/projects/dbt/sushi_sources")).sources
+    source_configs = ProjectConfig.load(
+        Path("tests/projects/dbt/sushi_sources")
+    ).sources
     assert set(source_configs) == expected_sources
 
     expected_config = {
