@@ -491,6 +491,9 @@ class EngineAdapter:
     def execute(self, sql: t.Union[str, exp.Expression]) -> None:
         """Execute a sql query."""
         sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
+        self._execute(sql)
+
+    def _execute(self, sql: str) -> None:
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql)
 
@@ -685,6 +688,58 @@ class SnowflakeEngineAdapter(EngineAdapter):
         return df
 
 
+class BigQueryEngineAdapter(EngineAdapter):
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        multithreaded: bool = False,
+    ):
+        super().__init__(connection_factory, "bigquery", multithreaded=multithreaded)
+        self._session_id = None
+
+    @contextlib.contextmanager
+    def transaction(self) -> t.Generator[None, None, None]:
+        """A transaction context manager."""
+        if self._session_id:
+            yield
+            return
+
+        self.execute(exp.Transaction())
+        job = self.cursor._query_job
+        self._session_id = job.session_info.session_id
+        try:
+            yield
+        except Exception as e:
+            self.execute(exp.Rollback())
+            raise e
+        else:
+            self.execute(exp.Commit())
+        finally:
+            self._session_id = None
+
+    def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
+        self.execute(query)
+        return self.cursor._query_job.to_dataframe()
+
+    def _execute(self, sql: str) -> None:
+        from google.cloud import bigquery
+
+        logger.debug(f"Executing SQL:\n{sql}")
+        job_config = (
+            bigquery.QueryJobConfig(create_session=True)
+            if not self._session_id
+            else bigquery.QueryJobConfig(
+                create_session=False,
+                connection_properties=[
+                    bigquery.query.ConnectionProperty(
+                        key="session_id", value=self._session_id
+                    )
+                ],
+            )
+        )
+        self.cursor.execute(sql, job_config=job_config)
+
+
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
 ) -> EngineAdapter:
@@ -692,4 +747,6 @@ def create_engine_adapter(
         return SparkEngineAdapter(connection_factory, multithreaded=multithreaded)
     if dialect.lower() == "snowflake":
         return SnowflakeEngineAdapter(connection_factory, multithreaded=multithreaded)
+    if dialect.lower() == "bigquery":
+        return BigQueryEngineAdapter(connection_factory, multithreaded=multithreaded)
     return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
