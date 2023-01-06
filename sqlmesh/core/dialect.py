@@ -483,7 +483,6 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
                     ModelKind: _model_kind_sql,
-                    Jinja: lambda self, e: e.name,
                     PythonCode: lambda self, e: self.expressions(e),
                 }
             )

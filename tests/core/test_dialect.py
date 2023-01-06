@@ -71,24 +71,6 @@ SELECT
   p + 1"""
     )
 
-    x = format_model_expressions(
-        parse_model(
-            """
-            MODEL(name a.b, kind FULL);
-
-            SELECT * FROM x WHERE y = {{ 1 }} ;"""
-        )
-    )
-    assert (
-        x
-        == """MODEL (
-  name a.b,
-  kind FULL
-);
-
-SELECT * FROM x WHERE y = {{ 1 }} ;"""
-    )
-
 
 def test_macro_format():
     assert parse_one("@EACH(ARRAY(1,2), x -> x)").sql() == "@EACH(ARRAY(1, 2), x -> x)"
