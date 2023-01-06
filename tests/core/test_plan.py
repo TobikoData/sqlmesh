@@ -258,6 +258,7 @@ def test_forward_only_plan_seed_models_not_allowed(
             name="a",
             kind=SeedKind(path="./path/to/seed"),
             seed=Seed(content="content"),
+            depends_on=set(),
         )
     )
     snapshot_a.set_version()
