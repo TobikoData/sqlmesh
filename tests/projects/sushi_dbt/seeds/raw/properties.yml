@@ -1,0 +1,6 @@
+version: 2
+
+seeds:
+  - name: raw_items
+    config:
+      alias: items

@@ -78,7 +78,6 @@ def test_model_config():
 
 def test_source_config():
     expected_sources = {
-        "items",
         "orders",
         "order_items",
     }
@@ -88,9 +87,11 @@ def test_source_config():
 
     expected_config = {
         "schema": "raw",
-        "identifier": "items",
+        "identifier": "order_items",
     }
     actual_config = {
-        k: v for k, v in source_configs["items"].dict().items() if k in expected_config
+        k: v
+        for k, v in source_configs["order_items"].dict().items()
+        if k in expected_config
     }
     assert actual_config == expected_config

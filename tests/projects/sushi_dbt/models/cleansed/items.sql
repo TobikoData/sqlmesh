@@ -12,7 +12,7 @@ SELECT
   name::TEXT AS name, /* Name of the sushi */
   price::DOUBLE AS price, /* Price of the sushi */
   ds::TEXT AS ds /* Date */
-FROM {{ source('raw', 'items') }}
+FROM {{ ref('raw_items') }}
 {% if is_incremental() %}
 WHERE
   ds > (select max(ds) from {{ this }})
