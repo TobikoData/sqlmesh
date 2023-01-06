@@ -528,6 +528,22 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         assert self.version
         return self._table_name(self.version, is_dev, for_read)
 
+    def table_name_for_mapping(self, is_dev: bool = False) -> str:
+        """Full table name used by a child snapshot for table mapping during evaluation.
+
+        Args:
+            is_dev: Whether the table name will be used in development mode.
+        """
+        self._ensure_version()
+        assert self.version
+
+        if is_dev and self.is_forward_only:
+            # If this snapshot is unpaused we shouldn't be using a temporary
+            # table for mapping purposes.
+            is_dev = self.is_paused
+
+        return self._table_name(self.version, is_dev, True)
+
     @property
     def snapshot_id(self) -> SnapshotId:
         """Helper method to get the SnapshotId from the Snapshot."""
@@ -766,7 +782,7 @@ def remove_interval(
 
 def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[str, str]:
     return {
-        snapshot.name: snapshot.table_name(is_dev=is_dev, for_read=True)
+        snapshot.name: snapshot.table_name_for_mapping(is_dev=is_dev)
         for snapshot in snapshots
         if snapshot.version and not snapshot.is_embedded_kind
     }

@@ -380,7 +380,7 @@ class SnapshotEvaluator:
         if not snapshot.is_materialized or snapshot.is_new_version:
             return
 
-        tmp_table_name = snapshot.table_name(is_dev=True, for_read=True)
+        tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
 
         schema_deltas = self._schema_diff_calculator.calculate(
