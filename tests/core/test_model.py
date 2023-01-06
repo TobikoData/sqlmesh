@@ -289,6 +289,42 @@ def test_seed():
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
+    assert model.columns_to_types == {
+        "id": exp.DataType.build("bigint"),
+        "name": exp.DataType.build("varchar"),
+    }
+
+
+def test_seed_provided_columns():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            ),
+            columns (
+              id double,
+              alias varchar
+            )
+        );
+    """
+    )
+
+    model = Model.load(expressions, path=Path("./example/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.path == "../seeds/waiter_names.csv"
+    assert model.kind.batch_size == 100
+    assert model.seed is not None
+    assert len(model.seed.content) > 0
+
+    assert model.columns_to_types == {
+        "id": exp.DataType.build("double"),
+        "alias": exp.DataType.build("varchar"),
+    }
+
 
 def test_description(sushi_context):
     assert sushi_context.models["sushi.orders"].description == "Table of sushi orders."
