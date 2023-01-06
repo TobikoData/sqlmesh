@@ -48,7 +48,7 @@ class Seed(PydanticModel):
 
         batch_size = batch_size or df.size
         batch_start = 0
-        while batch_start < df.size:
+        while batch_start < df.shape[0]:
             yield df.iloc[batch_start : batch_start + batch_size, :]
             batch_start += batch_size
 

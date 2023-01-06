@@ -154,8 +154,8 @@ class SeedKind(ModelKind):
 
     @validator("batch_size", pre=True)
     def _parse_batch_size(cls, v: t.Any) -> int:
-        if isinstance(v, exp.Literal) and not v.is_string:
-            v = int(v.this)
+        if isinstance(v, exp.Expression) and v.is_int:
+            v = int(v.name)
         if not isinstance(v, int):
             raise ValueError("Seed batch size must be an integer value")
         if v <= 0:

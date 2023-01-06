@@ -457,7 +457,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         start_dt, end_dt = make_inclusive(start, self.model.cron_floor(end))
 
-        if self.is_full_kind or self.is_view_kind:
+        if self.is_full_kind or self.is_view_kind or self.is_seed_kind:
             latest_dt = to_datetime(self.model.cron_floor(latest or now()))
             latest_ts = to_timestamp(latest_dt)
             # if the latest ts is stored in the last interval, nothing is missing
@@ -591,6 +591,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_embedded_kind(self) -> bool:
         return self.model.kind.is_embedded
+
+    @property
+    def is_seed_kind(self) -> bool:
+        return self.model.kind.is_seed
 
     @property
     def is_materialized(self) -> bool:

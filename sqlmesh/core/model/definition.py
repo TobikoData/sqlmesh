@@ -116,7 +116,9 @@ class Model(ModelMeta, frozen=True):
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
 
-    query_: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja, None] = Field(alias="query")
+    query_: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja, None] = Field(
+        default=None, alias="query"
+    )
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
@@ -349,7 +351,7 @@ class Model(ModelMeta, frozen=True):
 
     @property
     def is_sql(self) -> bool:
-        return self.seed is None and not isinstance(self.query, d.MacroVar)
+        return self.query_ is not None and not isinstance(self.query, d.MacroVar)
 
     @property
     def is_python(self) -> bool:
@@ -839,7 +841,7 @@ class Model(ModelMeta, frozen=True):
     @property
     def query(self) -> t.Union[exp.Subqueryable, d.MacroVar, d.Jinja]:
         if self.kind.is_seed:
-            raise SQLMeshError(f"Seed model '{self.name}' doesn't have a query")
+            raise SQLMeshError(f"Seed model '{self.name}' doesn't support a query.")
         assert self.query_
         return self.query_
 

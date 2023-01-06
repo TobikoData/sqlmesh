@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from sqlglot import exp
 
 from sqlmesh.core.model.seed import Seed
@@ -29,3 +30,6 @@ def test_read():
     dfs = seed.read(batch_size=2)
     pd.testing.assert_frame_equal(next(dfs), expected_df.iloc[:2, :])
     pd.testing.assert_frame_equal(next(dfs), expected_df.iloc[2:, :])
+
+    with pytest.raises(StopIteration):
+        next(dfs)

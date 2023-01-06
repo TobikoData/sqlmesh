@@ -3,7 +3,8 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SeedKind
+from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotDataVersion
 from sqlmesh.utils.dag import DAG
@@ -247,3 +248,32 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
         new_version_snapshot_a.snapshot_id: new_version_snapshot_a
     }
     Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+
+
+def test_forward_only_plan_seed_models_not_allowed(
+    make_snapshot, mocker: MockerFixture
+):
+    snapshot_a = make_snapshot(
+        Model(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="content"),
+        )
+    )
+    snapshot_a.set_version()
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError,
+        match="Seed model 'a' can't be updated as part of the forward-only plan.",
+    ):
+        Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
