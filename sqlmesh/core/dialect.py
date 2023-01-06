@@ -483,7 +483,9 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
                     ModelKind: _model_kind_sql,
-                    PythonCode: lambda self, e: self.expressions(e),
+                    PythonCode: lambda self, e: self.expressions(
+                        e, sep="\n", indent=False
+                    ),
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (
