@@ -13,7 +13,7 @@ def test_format_model_expressions():
     x = format_model_expressions(
         parse(
             """
-    MODEL(name a.b)
+    MODEL(name a.b, kind full)
     ;
 
     @DEF(x
@@ -42,7 +42,8 @@ def test_format_model_expressions():
     assert (
         x
         == """MODEL (
-  name a.b
+  name a.b,
+  kind FULL
 );
 
 @DEF(x, 1);
