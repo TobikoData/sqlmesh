@@ -221,7 +221,9 @@ class Scheduler:
         # When in development mode only consider intervals of the current forward-only snapshot and ignore
         # intervals of all snapshots with the same version that came before it.
         same_version_snapshots = (
-            [s for s in snapshots if not s.is_forward_only] if is_dev else snapshots
+            [s for s in snapshots if not s.is_forward_only or not s.is_paused]
+            if is_dev
+            else snapshots
         )
         stored_snapshots = self.state_sync.get_snapshots_with_same_version(
             same_version_snapshots
