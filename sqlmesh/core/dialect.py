@@ -259,6 +259,7 @@ def _create_parser(
                     if id_var in (
                         "incremental_by_time_range",
                         "incremental_by_unique_key",
+                        "seed",
                     ) and self._match(TokenType.L_PAREN):
                         self._retreat(index)
                         props = self._parse_wrapped_csv(

@@ -9,7 +9,7 @@ from croniter import croniter_range
 from pydantic import validator
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.model import Model, parse_model_name
+from sqlmesh.core.model import Model, kind, parse_model_name
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
@@ -457,7 +457,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         start_dt, end_dt = make_inclusive(start, self.model.cron_floor(end))
 
-        if self.is_full_kind or self.is_view_kind:
+        if self.is_full_kind or self.is_view_kind or self.is_seed_kind:
             latest_dt = to_datetime(self.model.cron_floor(latest or now()))
             latest_ts = to_timestamp(latest_dt)
             # if the latest ts is stored in the last interval, nothing is missing
@@ -593,6 +593,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.is_embedded
 
     @property
+    def is_seed_kind(self) -> bool:
+        return self.model.kind.is_seed
+
+    @property
     def is_materialized(self) -> bool:
         return self.model.kind.is_materialized
 
@@ -645,7 +649,9 @@ def fingerprint_from_model(
 
     if model.name not in cache:
         data = [
-            model.render_query().sql(identify=True, comments=False),
+            model.render_query().sql(identify=True, comments=False)
+            if not model.is_seed
+            else None,
             str(model.sorted_python_env),
             model.kind.name,
             model.cron,
@@ -658,6 +664,15 @@ def fingerprint_from_model(
             ),
             model.stamp,
         ]
+
+        if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
+            data.append(model.kind.time_column.column)
+            data.append(model.kind.time_column.format)
+        elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
+            data.extend(model.kind.unique_key)
+        elif isinstance(model.kind, kind.SeedKind) and model.seed is not None:
+            data.append(str(model.kind.batch_size))
+            data.append(model.seed.content)
 
         parents = sorted(
             fingerprint_from_model(

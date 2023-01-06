@@ -59,7 +59,7 @@ class SnapshotDagGenerator:
         return [
             self._create_incremental_dag_for_snapshot(s)
             for s in self._snapshots.values()
-            if s.unpaused_ts and not s.is_embedded_kind
+            if s.unpaused_ts and not s.is_embedded_kind and not s.is_seed_kind
         ]
 
     def generate_apply(self, request: common.PlanApplicationRequest) -> DAG:

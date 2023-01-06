@@ -28,7 +28,9 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import parse_model_name
+from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import ModelMeta
+from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
@@ -114,13 +116,16 @@ class Model(ModelMeta, frozen=True):
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
 
-    query: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja]
+    query_: t.Union[exp.Subqueryable, d.MacroVar, d.Jinja, None] = Field(
+        default=None, alias="query"
+    )
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(
         default=None, alias="python_env"
     )
+    seed: t.Optional[Seed] = None
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = Field(
@@ -133,14 +138,17 @@ class Model(ModelMeta, frozen=True):
     _schema: t.Optional[MappingSchema] = None
     audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
-    @validator("query", "expressions_", pre=True)
+    @validator("query_", "expressions_", pre=True)
     def _parse_expression(
         cls,
         v: t.Union[
-            t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable
+            t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None
         ],
-    ) -> t.List[exp.Expression] | exp.Expression | t.Callable:
+    ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
         """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
+        if v is None:
+            return None
+
         if callable(v):
             return v
 
@@ -174,12 +182,14 @@ class Model(ModelMeta, frozen=True):
             time_column_format: The default time column format to use if no model time column is configured.
                 The format must adhere to Python's strftime codes.
         """
-        if len(expressions) < 2:
+        if not expressions:
             _raise_config_error(
-                "Incomplete model definition, missing MODEL and QUERY", path
+                "Incomplete model definition, missing MODEL statement", path
             )
 
-        meta, *statements, query = expressions
+        meta = expressions[0]
+        query = expressions[-1] if len(expressions) > 1 else None
+        statements = expressions[1:-1]
 
         if not isinstance(meta, d.Model):
             _raise_config_error(
@@ -204,16 +214,17 @@ class Model(ModelMeta, frozen=True):
                 f"Invalid extra fields {extra_fields} in the model definition", path
             )
 
-        if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
-            _raise_config_error(
-                "A query is required and must be a SELECT or UNION statement.",
-                path,
-            )
+        if query:
+            if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
+                _raise_config_error(
+                    "A query is required and must be a SELECT or UNION statement.",
+                    path,
+                )
 
-        if not query.expressions and not isinstance(query, d.MacroVar):
-            _raise_config_error("Query missing select statements", path)
+            if not query.expressions and not isinstance(query, d.MacroVar):
+                _raise_config_error("Query missing select statements", path)
 
-        if not python_env:
+        if not python_env and query:
             python_env = _python_env(query, module_path, macros or macro.get_registry())
 
         try:
@@ -229,10 +240,28 @@ class Model(ModelMeta, frozen=True):
             )
 
             # find dependencies for python models by parsing code if they are not explicitly defined
-            if model_meta.depends_on_ is None and isinstance(query, d.MacroVar):
+            if (
+                model_meta.depends_on_ is None
+                and isinstance(query, d.MacroVar)
+                and python_env
+            ):
                 depends_on = _parse_depends_on(query, python_env)
             else:
                 depends_on = None
+
+            # If it's a seed model, load its payload.
+            if isinstance(model_meta.kind, SeedKind):
+                seed_path = Path(model_meta.kind.path)
+                if not seed_path.is_absolute():
+                    seed_path = (
+                        path / seed_path
+                        if path.is_dir()
+                        else path.parents[0] / seed_path
+                    )
+                seed = create_seed(seed_path)
+                depends_on = set()
+            else:
+                seed = None
 
             model = cls(
                 query=query,
@@ -241,6 +270,7 @@ class Model(ModelMeta, frozen=True):
                 **{
                     "dialect": dialect or "",
                     "depends_on": depends_on,
+                    "seed": seed,
                     **model_meta.dict(),
                 },
             )
@@ -287,18 +317,21 @@ class Model(ModelMeta, frozen=True):
         if self._columns_to_types is None or isinstance(
             self._columns_to_types, FieldInfo
         ):
-            query = annotate_types(self._render_query())
-            self._columns_to_types = {
-                expression.alias_or_name: expression.type
-                for expression in query.expressions
-            }
+            if self.seed is not None:
+                self._columns_to_types = self.seed.columns_to_types
+            else:
+                query = annotate_types(self._render_query())
+                self._columns_to_types = {
+                    expression.alias_or_name: expression.type
+                    for expression in query.expressions
+                }
 
         return self._columns_to_types
 
     @property
     def contains_star_query(self) -> bool:
         """Returns True if the model's query contains a star projection."""
-        return any(
+        return self.is_sql and any(
             isinstance(expression, exp.Star)
             for expression in self.render_query().expressions
         )
@@ -318,7 +351,15 @@ class Model(ModelMeta, frozen=True):
 
     @property
     def is_sql(self) -> bool:
-        return not isinstance(self.query, d.MacroVar)
+        return self.query_ is not None and not isinstance(self.query, d.MacroVar)
+
+    @property
+    def is_python(self) -> bool:
+        return self.query_ is not None and isinstance(self.query, d.MacroVar)
+
+    @property
+    def is_seed(self) -> bool:
+        return self.seed is not None
 
     def render(self, show_python: bool = False) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model.
@@ -629,10 +670,8 @@ class Model(ModelMeta, frozen=True):
         Returns:
             The return type must be a supported dataframe.
         """
-        if self.is_sql:
-            raise SQLMeshError(
-                f"Model '{self.name}' is a SQL model and cannot be executed as a Python script."
-            )
+        if not self.is_python:
+            raise SQLMeshError(f"Model '{self.name}' is not a Python model.")
 
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or EPOCH_DS, end or EPOCH_DS)
@@ -677,9 +716,18 @@ class Model(ModelMeta, frozen=True):
                 yield df
         except Exception as e:
             print_exception(e, self.python_env)
-            raise SQLMeshError(
-                f"Error executing Python model '{self.name}::{self.query.name}'"
-            )
+            raise SQLMeshError(f"Error executing Python model '{self.name}'")
+
+    def read_seed(self) -> t.Generator[DF, None, None]:
+        """Reads and parses the contents of the seed.
+
+        Note: the returned generator will only contain results if this model is a seed model.
+
+        Returns:
+            A generator which emits Pandas DataFrames.
+        """
+        if isinstance(self.kind, SeedKind) and self.seed:
+            yield from self.seed.read(batch_size=self.kind.batch_size)
 
     def render_audit_queries(
         self,
@@ -791,6 +839,13 @@ class Model(ModelMeta, frozen=True):
         return parse_model_name(self.name)[2]
 
     @property
+    def query(self) -> t.Union[exp.Subqueryable, d.MacroVar, d.Jinja]:
+        if self.kind.is_seed:
+            raise SQLMeshError(f"Seed model '{self.name}' doesn't support a query.")
+        assert self.query_
+        return self.query_
+
+    @property
     def expressions(self) -> t.List[exp.Expression]:
         return self.expressions_ or []
 
@@ -807,6 +862,9 @@ class Model(ModelMeta, frozen=True):
         Raises:
             ConfigError
         """
+        if self.seed:
+            return
+
         name_counts: t.Dict[str, int] = {}
         query = self._render_query()
 
@@ -857,9 +915,6 @@ class Model(ModelMeta, frozen=True):
                 self._path,
             )
 
-    def _validate_view(self, query: exp.Expression) -> None:
-        pass
-
     def _filter_time_column(
         self, query: exp.Select, start: TimeLike, end: TimeLike
     ) -> None:
@@ -889,6 +944,8 @@ class Model(ModelMeta, frozen=True):
         simplify(query)
 
     def __repr__(self):
+        if isinstance(self.kind, SeedKind):
+            return f"Model<name: {self.name}, seed: {self.kind.path}>"
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
 
 
