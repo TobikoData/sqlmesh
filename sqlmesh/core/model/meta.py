@@ -9,10 +9,11 @@ from sqlglot import exp, maybe_parse
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
-    IncrementalByTimeRange,
-    IncrementalByUniqueKey,
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
+    SeedKind,
     TimeColumn,
 )
 from sqlmesh.utils import unique
@@ -38,7 +39,7 @@ class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
     name: str
-    kind: ModelKind = IncrementalByTimeRange()
+    kind: ModelKind = IncrementalByTimeRangeKind()
     dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
@@ -74,18 +75,22 @@ class ModelMeta(PydanticModel):
             props = {prop.name: prop.args.get("value") for prop in v.expressions}
             klass: t.Type[ModelKind] = ModelKind
             if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRange
+                klass = IncrementalByTimeRangeKind
             elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKey
+                klass = IncrementalByUniqueKeyKind
+            elif name == ModelKindName.SEED:
+                klass = SeedKind
             else:
                 props["name"] = ModelKindName(name)
             return klass(**props)
 
         if isinstance(v, dict):
             if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRange
+                klass = IncrementalByTimeRangeKind
             elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKey
+                klass = IncrementalByUniqueKeyKind
+            elif v.get("name") == ModelKindName.SEED:
+                klass = SeedKind
             else:
                 klass = ModelKind
             return klass(**v)
@@ -166,13 +171,13 @@ class ModelMeta(PydanticModel):
 
     @property
     def time_column(self) -> t.Optional[TimeColumn]:
-        if isinstance(self.kind, IncrementalByTimeRange):
+        if isinstance(self.kind, IncrementalByTimeRangeKind):
             return self.kind.time_column
         return None
 
     @property
     def unique_key(self) -> t.List[str]:
-        if isinstance(self.kind, IncrementalByUniqueKey):
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.unique_key
         return []
 

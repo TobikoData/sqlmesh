@@ -108,6 +108,8 @@ class Plan:
 
         self._ensure_valid_end(self._end)
         self._ensure_no_forward_only_revert()
+        self._ensure_no_forward_only_new_models()
+        self._ensure_no_forward_only_seed_models()
 
         categorized_snapshots = self._categorize_snapshots()
         self.added_and_directly_modified = categorized_snapshots[0]
@@ -380,11 +382,6 @@ class Plan:
                         snapshot.set_version()
 
             elif model_name in self.context_diff.added:
-                if self.forward_only:
-                    raise PlanError(
-                        "New models can't be added as part of the forward-only plan."
-                    )
-
                 if self.is_new_snapshot(snapshot):
                     snapshot.set_version()
                 added_and_directly_modified.append(snapshot)
@@ -446,6 +443,20 @@ class Plan:
                     f"Detected an existing version of model '{name}' that has been previously superseded by a forward-only change. "
                     "To proceed with the change, restamp this model's definition to produce a new version."
                 )
+
+    def _ensure_no_forward_only_new_models(self) -> None:
+        if self.forward_only and self.context_diff.added:
+            raise PlanError(
+                "New models can't be added as part of the forward-only plan."
+            )
+
+    def _ensure_no_forward_only_seed_models(self) -> None:
+        if self.forward_only:
+            for snapshot in self.new_snapshots:
+                if snapshot.is_seed_kind:
+                    raise PlanError(
+                        f"Seed model '{snapshot.name}' can't be updated as part of the forward-only plan."
+                    )
 
 
 class PlanStatus(str, Enum):

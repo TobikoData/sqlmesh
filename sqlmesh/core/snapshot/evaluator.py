@@ -167,18 +167,21 @@ class SnapshotEvaluator:
 
         from sqlmesh.core.context import ExecutionContext
 
+        if model.is_python:
+            dfs = model.exec_python(
+                ExecutionContext(
+                    self.adapter, to_table_mapping(snapshots.values(), is_dev)
+                ),
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
+        else:
+            dfs = model.read_seed()
+
         with self.adapter.transaction():
-            for index, df in enumerate(
-                model.exec_python(
-                    ExecutionContext(
-                        self.adapter, to_table_mapping(snapshots.values(), is_dev)
-                    ),
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    **kwargs,
-                )
-            ):
+            for index, df in enumerate(dfs):
                 if limit > 0:
                     return df.head(limit)  # type: ignore
                 apply(df, index)
