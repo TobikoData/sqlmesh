@@ -6,3 +6,9 @@ models:
   - name: order_items
   - name: customers
   - name: waiters
+sources:
+  - name: raw
+    schema: sushi_raw
+    tables:
+      - name: orders
+      - name: order_items

@@ -59,7 +59,7 @@ def test_model_config():
         "waiter_revenue_by_day",
     }
 
-    model_configs = ProjectConfig.load(Path("tests/projects/dbt/sushi_sources")).models
+    model_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).models
     assert set(model_configs) == expected_models
 
     expected_config = {
@@ -78,21 +78,20 @@ def test_model_config():
 
 def test_source_config():
     expected_sources = {
-        "items",
         "orders",
         "order_items",
     }
 
     source_configs = ProjectConfig.load(
-        Path("tests/projects/dbt/sushi_sources")
+        Path("tests/projects/sushi_dbt")
     ).sources
     assert set(source_configs) == expected_sources
 
     expected_config = {
         "schema": "raw",
-        "identifier": "items",
+        "identifier": "order_items",
     }
     actual_config = {
-        k: v for k, v in source_configs["items"].dict().items() if k in expected_config
+        k: v for k, v in source_configs["order_items"].dict().items() if k in expected_config
     }
     assert actual_config == expected_config
