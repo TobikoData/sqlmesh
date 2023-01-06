@@ -153,8 +153,13 @@ class Scheduler:
                 )
             ]
             sid = snapshot.snapshot_id
-            for interval in intervals:
+            for i, interval in enumerate(intervals):
                 dag.add((sid, interval), upstream_dependencies)
+                if snapshot.is_incremental_by_unique_key_kind:
+                    dag.add(
+                        (sid, interval),
+                        [(sid, _interval) for _interval in intervals[:i]],
+                    )
             self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
