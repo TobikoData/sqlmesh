@@ -174,12 +174,12 @@ def test_serialize_env() -> None:
         return z + Z
     return closure(y) + other_func(Y)""",
         ),
-        "X": Executable(payload=1, kind=ExecutableKind.VALUE),
-        "Y": Executable(payload=2, kind=ExecutableKind.VALUE),
-        "Z": Executable(payload=3, kind=ExecutableKind.VALUE),
-        "KLASS_X": Executable(payload=1, kind=ExecutableKind.VALUE),
-        "KLASS_Y": Executable(payload=2, kind=ExecutableKind.VALUE),
-        "KLASS_Z": Executable(payload=3, kind=ExecutableKind.VALUE),
+        "X": Executable(payload="1", kind=ExecutableKind.VALUE),
+        "Y": Executable(payload="2", kind=ExecutableKind.VALUE),
+        "Z": Executable(payload="3", kind=ExecutableKind.VALUE),
+        "KLASS_X": Executable(payload="1", kind=ExecutableKind.VALUE),
+        "KLASS_Y": Executable(payload="2", kind=ExecutableKind.VALUE),
+        "KLASS_Z": Executable(payload="3", kind=ExecutableKind.VALUE),
         "to_table": Executable(
             kind=ExecutableKind.IMPORT,
             payload="from sqlglot.expressions import to_table",

@@ -354,7 +354,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 kind=ExecutableKind.IMPORT,
             )
         else:
-            serialized[k] = Executable(payload=v, kind=ExecutableKind.VALUE)
+            serialized[k] = Executable(payload=repr(v), kind=ExecutableKind.VALUE)
 
     return serialized
 
@@ -381,7 +381,7 @@ def prepare_env(
         python_env.items(), key=lambda item: 0 if item[1].is_import else 1
     ):
         if executable.is_value:
-            env[name] = executable.payload
+            env[name] = ast.literal_eval(executable.payload)
         else:
             exec(executable.payload, env)
     return env
