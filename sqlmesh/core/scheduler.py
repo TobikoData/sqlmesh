@@ -217,14 +217,17 @@ class Scheduler:
             A list of tuples containing all snapshots needing to be run with their associated interval params.
         """
         all_snapshots = {s.snapshot_id: s for s in self.snapshots.values()}
-        if not is_dev:
-            # In development mode only consider intervals of snapshots that
-            # the scheduler was initialized with, otherwise source all snapshots
-            # associated with the same version from the state.
-            stored_snapshots = self.state_sync.get_snapshots_with_same_version(
-                snapshots
-            )
-            all_snapshots.update({s.snapshot_id: s for s in stored_snapshots})
+
+        # When in development mode only consider intervals of the current forward-only snapshot and ignore
+        # intervals of all snapshots with the same version that came before it.
+        same_version_snapshots = (
+            [s for s in snapshots if not s.is_forward_only] if is_dev else snapshots
+        )
+        stored_snapshots = self.state_sync.get_snapshots_with_same_version(
+            same_version_snapshots
+        )
+        all_snapshots.update({s.snapshot_id: s for s in stored_snapshots})
+
         return compute_interval_params(
             snapshots,
             snapshots=all_snapshots,
