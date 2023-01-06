@@ -82,9 +82,7 @@ def test_source_config():
         "order_items",
     }
 
-    source_configs = ProjectConfig.load(
-        Path("tests/projects/sushi_dbt")
-    ).sources
+    source_configs = ProjectConfig.load(Path("tests/projects/sushi_dbt")).sources
     assert set(source_configs) == expected_sources
 
     expected_config = {
@@ -92,6 +90,8 @@ def test_source_config():
         "identifier": "order_items",
     }
     actual_config = {
-        k: v for k, v in source_configs["order_items"].dict().items() if k in expected_config
+        k: v
+        for k, v in source_configs["order_items"].dict().items()
+        if k in expected_config
     }
     assert actual_config == expected_config
