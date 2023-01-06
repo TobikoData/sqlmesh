@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import typing as t
+from collections import defaultdict
 from datetime import timedelta
 
 from airflow import DAG
@@ -186,16 +187,23 @@ def _plan_receiver_task(
         end = now()
         unpaused_dt = end
 
-    all_snapshots = {**new_snapshots, **stored_snapshots}
+    snapshots_for_intervals = {**new_snapshots, **stored_snapshots}
+    all_snapshots_by_version = defaultdict(set)
+    for snapshot in snapshots_for_intervals.values():
+        all_snapshots_by_version[(snapshot.name, snapshot.version)].add(
+            snapshot.snapshot_id
+        )
+
     if plan_conf.is_dev:
-        # Ignore all snapshots except for the ones in the plan when
-        # modifying / computing intervals in development mode.
-        snapshots_for_intervals = {
-            s.snapshot_id: all_snapshots[s.snapshot_id]
-            for s in plan_conf.environment.snapshots
-        }
-    else:
-        snapshots_for_intervals = all_snapshots
+        # When in development mode exclude snapshots that match the version of each
+        # paused forward-only snapshot that is a part of the plan.
+        for s in plan_conf.environment.snapshots:
+            if s.is_forward_only and snapshots_for_intervals[s.snapshot_id].is_paused:
+                previous_snapshot_ids = all_snapshots_by_version[
+                    (s.name, s.version)
+                ] - {s.snapshot_id}
+                for sid in previous_snapshot_ids:
+                    snapshots_for_intervals.pop(sid)
 
     if plan_conf.restatements:
         state_sync.remove_interval(
