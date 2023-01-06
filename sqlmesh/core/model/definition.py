@@ -249,10 +249,13 @@ class Model(ModelMeta, frozen=True):
 
             # If it's a seed model, load its payload.
             if isinstance(model_meta.kind, SeedKind):
-                seed_path = path.absolute()
-                if not seed_path.is_dir():
-                    seed_path = seed_path.parents[0]
-                seed_path /= model_meta.kind.path
+                seed_path = Path(model_meta.kind.path)
+                if not seed_path.is_absolute():
+                    seed_path = (
+                        path / seed_path
+                        if path.is_dir()
+                        else path.parents[0] / seed_path
+                    )
                 seed = create_seed(seed_path)
                 depends_on = set()
             else:
