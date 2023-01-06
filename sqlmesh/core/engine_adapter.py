@@ -22,6 +22,7 @@ from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.errors import SQLMeshError
 
+TARGET_ALIAS = "__MERGE_TARGET__"
 SOURCE_ALIAS = "__MERGE_SOURCE__"
 DF_TYPES: t.Tuple = (pd.DataFrame,)
 
@@ -382,11 +383,12 @@ class EngineAdapter:
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
     ):
+        this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
         using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
             *(
                 exp.EQ(
-                    this=exp.column(part, target_table),
+                    this=exp.column(part, TARGET_ALIAS),
                     expression=exp.column(part, SOURCE_ALIAS),
                 )
                 for part in unique_key
@@ -397,7 +399,7 @@ class EngineAdapter:
             then=exp.update(
                 None,
                 properties={
-                    exp.column(col, target_table): exp.column(col, SOURCE_ALIAS)
+                    exp.column(col, TARGET_ALIAS): exp.column(col, SOURCE_ALIAS)
                     for col in column_names
                 },
             ),
@@ -413,7 +415,7 @@ class EngineAdapter:
         )
         self.execute(
             exp.Merge(
-                this=target_table,
+                this=this,
                 using=using,
                 on=on,
                 expressions=[
