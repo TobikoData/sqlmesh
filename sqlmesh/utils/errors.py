@@ -1,4 +1,8 @@
+from __future__ import annotations
+
+import typing as t
 from enum import auto
+from pathlib import Path
 
 from sqlglot.helper import AutoName
 
@@ -51,3 +55,9 @@ class AuditError(SQLMeshError):
 
 class NotificationTargetError(SQLMeshError):
     pass
+
+
+def raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:
+    if location:
+        raise ConfigError(f"{msg} at '{location}'")
+    raise ConfigError(msg)
