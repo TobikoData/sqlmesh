@@ -1,6 +1,6 @@
 # Notebook
 
-SQLMesh supports JupyterLabs and Databricks Notebooks. Magics are loaded automatically and use the variable `context`
+SQLMesh supports JupyterLabs and Databricks Notebooks. Magics are loaded automatically and use the variable `context`.
 
 ```python
 from sqlmesh import Context

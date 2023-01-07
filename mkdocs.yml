@@ -1,8 +1,8 @@
 site_name: SQLMesh
 nav:
-  - Getting Started:
-    - "Introduction": index.md
-    - quick_start.md
+  - Introduction:
+    - "About SQLMesh": index.md
+    - "Quick start": quick_start.md
   - Concepts:
     - concepts/overview.md
     - concepts/models.md
@@ -19,7 +19,8 @@ nav:
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
-  - Extra Topics:
+  - Resources:
+    - community.md
     - development.md
     - glossary.md
 
