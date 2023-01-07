@@ -299,6 +299,8 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_1"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
     assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
 
     # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
@@ -308,6 +310,8 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_2__temp"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
     assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = "2_1"
@@ -316,3 +320,14 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
     assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__2_1__temp"
+
+    # Mimic a propmoted forward-only snapshot.
+    snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
