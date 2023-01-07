@@ -3,22 +3,15 @@ from __future__ import annotations
 import ast
 import types
 import typing as t
-from datetime import datetime
 from itertools import zip_longest
 from pathlib import Path
 
 from astor import to_source
-from jinja2 import Environment
 from pydantic import Field, validator
 from pydantic.fields import FieldInfo
-from sqlglot import exp, maybe_parse, parse_one
-from sqlglot.errors import SqlglotError
-from sqlglot.optimizer import optimize
+from sqlglot import exp, maybe_parse
 from sqlglot.optimizer.annotate_types import annotate_types
-from sqlglot.optimizer.qualify_columns import qualify_columns
-from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.scope import traverse_scope
-from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
 
@@ -26,14 +19,15 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import PySparkDataFrame
-from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import parse_model_name
 from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import ModelMeta
+from sqlmesh.core.model.renderer import QueryRenderer
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
-from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
+from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -64,8 +58,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 }
 
 EPOCH_DS = "1970-01-01"
-
-RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
 
 
 class Model(ModelMeta, frozen=True):
@@ -126,17 +118,15 @@ class Model(ModelMeta, frozen=True):
         default=None, alias="python_env"
     )
     seed: t.Optional[Seed] = None
+    audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
     )
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
-    _query_cache: t.Dict[
-        t.Tuple[str, datetime, datetime, datetime], exp.Subqueryable
-    ] = {}
-    _schema: t.Optional[MappingSchema] = None
-    audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
+    __query_renderer: t.Optional[QueryRenderer] = None
+    _audit_query_renderers: t.Dict[str, QueryRenderer] = {}
 
     @validator("query_", "expressions_", pre=True)
     def _parse_expression(
@@ -183,7 +173,7 @@ class Model(ModelMeta, frozen=True):
                 The format must adhere to Python's strftime codes.
         """
         if not expressions:
-            _raise_config_error(
+            raise_config_error(
                 "Incomplete model definition, missing MODEL statement", path
             )
 
@@ -192,7 +182,7 @@ class Model(ModelMeta, frozen=True):
         statements = expressions[1:-1]
 
         if not isinstance(meta, d.Model):
-            _raise_config_error(
+            raise_config_error(
                 "MODEL statement is required as the first statement in the definition",
                 path,
             )
@@ -203,26 +193,26 @@ class Model(ModelMeta, frozen=True):
             provided_meta_fields
         )
         if missing_required_fields:
-            _raise_config_error(
+            raise_config_error(
                 f"Missing required fields {missing_required_fields} in the model definition",
                 path,
             )
 
         extra_fields = ModelMeta.extra_fields(provided_meta_fields)
         if extra_fields:
-            _raise_config_error(
+            raise_config_error(
                 f"Invalid extra fields {extra_fields} in the model definition", path
             )
 
         if query:
             if not isinstance(query, (exp.Subqueryable, d.MacroVar, d.Jinja)):
-                _raise_config_error(
+                raise_config_error(
                     "A query is required and must be a SELECT or UNION statement.",
                     path,
                 )
 
             if not query.expressions and not isinstance(query, d.MacroVar):
-                _raise_config_error("Query missing select statements", path)
+                raise_config_error("Query missing select statements", path)
 
         if not python_env and query:
             python_env = _python_env(query, module_path, macros or macro.get_registry())
@@ -275,7 +265,7 @@ class Model(ModelMeta, frozen=True):
                 },
             )
         except Exception as ex:
-            _raise_config_error(str(ex), location=path)
+            raise_config_error(str(ex), location=path)
 
         model._path = path
         model.set_time_format(time_column_format)
@@ -294,18 +284,24 @@ class Model(ModelMeta, frozen=True):
             return self.depends_on_
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self._render_query()) - {self.name}
+            self._depends_on = _find_tables(self._query_renderer.render()) - {self.name}
         return self._depends_on
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
         """A dictionary of column names to annotation comments."""
         if self._column_descriptions is None:
-            self._column_descriptions = {
-                select.alias: "\n".join(comment.strip() for comment in select.comments)
-                for select in self._render_query().expressions
-                if select.comments
-            }
+            self._column_descriptions = (
+                {
+                    select.alias: "\n".join(
+                        comment.strip() for comment in select.comments
+                    )
+                    for select in self._query_renderer.render().expressions
+                    if select.comments
+                }
+                if self.is_sql
+                else {}
+            )
         return self._column_descriptions
 
     @property
@@ -320,21 +316,13 @@ class Model(ModelMeta, frozen=True):
             if self.seed is not None:
                 self._columns_to_types = self.seed.columns_to_types
             else:
-                query = annotate_types(self._render_query())
+                query = annotate_types(self._query_renderer.render())
                 self._columns_to_types = {
                     expression.alias_or_name: expression.type
                     for expression in query.expressions
                 }
 
         return self._columns_to_types
-
-    @property
-    def contains_star_query(self) -> bool:
-        """Returns True if the model's query contains a star projection."""
-        return self.is_sql and any(
-            isinstance(expression, exp.Star)
-            for expression in self.render_query().expressions
-        )
 
     @property
     def annotated(self) -> bool:
@@ -415,175 +403,16 @@ class Model(ModelMeta, frozen=True):
 
         return segments
 
+    @property
+    def contains_star_query(self) -> bool:
+        """Returns True if the model's query contains a star projection."""
+        if not self.is_sql:
+            return False
+        return self._query_renderer.contains_star_query
+
     def update_schema(self, schema: MappingSchema) -> None:
-        self._schema = schema
-
-        if self.contains_star_query:
-            # We need to re-render in order to expand the star projection
-            self._query_cache.clear()
-            self._render_query()
-
-    def _render_query(
-        self,
-        query_: t.Optional[exp.Expression] = None,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        add_incremental_filter: bool = False,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        audit_name: t.Optional[str] = None,
-        dialect: t.Optional[str] = None,
-        is_dev: bool = False,
-        **kwargs,
-    ) -> exp.Subqueryable:
-        """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
-
-        Args:
-            query_: The query to render, defaults to self.query.
-            start: The start datetime to render. Defaults to epoch start.
-            end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            add_incremental_filter: Add an incremental filter to the query if the model is incremental.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
-                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
-                end on the fly.
-            audit_name: The name of audit if the query to render is for an audit.
-            is_dev: Indicates whether the rendering happens in the development mode and temporary
-                tables / table clones should be used where applicable.
-            kwargs: Additional kwargs to pass to the renderer.
-
-        Returns:
-            The rendered expression.
-        """
-        from sqlmesh.core.snapshot import to_table_mapping
-
-        dates = (
-            *make_inclusive(start or EPOCH_DS, end or EPOCH_DS),
-            to_datetime(latest or EPOCH_DS),
-        )
-        key = (audit_name or "", *dates)
-
-        snapshots = snapshots or {}
-        mapping = to_table_mapping(snapshots.values(), is_dev)
-        # if a snapshot is provided but not mapped, we need to expand it or the query
-        # won't be valid
-        expand = set(expand) | {name for name in snapshots if name not in mapping}
-
-        if key not in self._query_cache:
-            if query_ or self.is_sql:
-                query_ = query_ or self.query
-                render_kwargs = {
-                    **date_dict(*dates, only_latest=self.kind.only_latest),
-                    **kwargs,
-                }
-
-                if isinstance(query_, d.Jinja):
-                    env = prepare_env(self.python_env)
-
-                    try:
-                        query_ = parse_one(
-                            Environment()
-                            .from_string(query_.name)
-                            .render(**env, **render_kwargs),
-                            read=self.dialect,
-                        )
-                    except Exception as ex:
-                        raise ConfigError(
-                            f"Invalid model query. {ex} at '{self._path}'"
-                        ) from ex
-
-                macro_evaluator = MacroEvaluator(
-                    dialect or self.dialect, self.python_env
-                )
-                macro_evaluator.locals.update(render_kwargs)
-
-                for definition in self.macro_definitions:
-                    try:
-                        macro_evaluator.evaluate(definition)
-                    except MacroEvalError as ex:
-                        _raise_config_error(
-                            f"Failed to evaluate macro '{definition}'. {ex}", self._path
-                        )
-
-                try:
-                    self._query_cache[key] = macro_evaluator.transform(query_)  # type: ignore
-                except MacroEvalError as ex:
-                    _raise_config_error(
-                        f"Failed to evaluate macro '{definition}'. {ex}", self._path
-                    )
-            else:
-                self._query_cache[key] = exp.select(
-                    *(
-                        exp.alias_(f"NULL::{column_type}", name)
-                        for name, column_type in self.columns_to_types.items()
-                    )
-                )
-
-            if self._schema:
-                # This takes care of expanding star projections
-                try:
-                    self._query_cache[key] = optimize(
-                        self._query_cache[key],
-                        schema=self._schema,
-                        rules=RENDER_OPTIMIZER_RULES,
-                    )
-                except SqlglotError as ex:
-                    _raise_config_error(f"Invalid model query. {ex}", self._path)
-
-                self._columns_to_types = {
-                    expression.alias_or_name: expression.type
-                    for expression in self._query_cache[key].expressions
-                }
-
-                self.validate_definition()
-
-        query = self._query_cache[key]
-
-        if expand:
-
-            def _expand(node: exp.Expression) -> exp.Expression:
-                if isinstance(node, exp.Table) and snapshots:
-                    name = exp.table_name(node)
-                    model = snapshots[name].model if name in snapshots else None
-                    if name in expand and model:
-                        return model._render_query(
-                            start=start,
-                            end=end,
-                            latest=latest,
-                            snapshots=snapshots,
-                            expand=expand,
-                            is_dev=is_dev,
-                            **kwargs,
-                        ).subquery(
-                            alias=node.alias or model.view_name,
-                            copy=False,
-                        )
-                return node
-
-            query = query.transform(_expand)
-
-        # Ensure there is no data leakage in incremental mode by filtering out all
-        # events that have data outside the time window of interest.
-        if add_incremental_filter and self.kind.is_incremental_by_time_range:
-            # expansion copies the query for us. if it doesn't occur, make sure to copy.
-            if not expand:
-                query = query.copy()
-            for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
-                if isinstance(node, exp.Select):
-                    self._filter_time_column(node, *dates[0:2])
-
-        if mapping:
-            return exp.replace_tables(query, mapping)
-
-        if not isinstance(query, exp.Subqueryable):
-            _raise_config_error(
-                f"Query needs to be a SELECT or a UNION {query}", self._path
-            )
-
-        return query
+        if self.is_sql:
+            self._query_renderer.update_schema(schema)
 
     def ctas_query(
         self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
@@ -601,7 +430,7 @@ class Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self._render_query(snapshots=snapshots, is_dev=is_dev)
+        query = self._query_renderer.render(snapshots=snapshots, is_dev=is_dev)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             select.where("FALSE", copy=False)
@@ -637,7 +466,9 @@ class Model(ModelMeta, frozen=True):
         Returns:
             The rendered expression.
         """
-        return self._render_query(
+        if self.is_python:
+            return self._python_query
+        return self._query_renderer.render(
             start=start,
             end=end,
             latest=latest,
@@ -753,15 +584,12 @@ class Model(ModelMeta, frozen=True):
         Returns:
             The rendered expression.
         """
-        for audit in self.audits.values():
-            query = self._render_query(
-                audit.query,
+        for audit_name, audit in self.audits.items():
+            query = self._get_audit_query_renderer(audit_name).render(
                 start=start,
                 end=end,
                 latest=latest,
                 snapshots=snapshots,
-                audit_name=audit.name,
-                dialect=audit.dialect,
                 is_dev=is_dev,
                 **kwargs,
             )
@@ -866,36 +694,36 @@ class Model(ModelMeta, frozen=True):
             return
 
         name_counts: t.Dict[str, int] = {}
-        query = self._render_query()
+        query = self._query_renderer.render() if self.is_sql else self._python_query
 
         if not isinstance(query, exp.Subqueryable):
-            _raise_config_error(
+            raise_config_error(
                 "Missing SELECT query in the model definition", self._path
             )
 
         if not query.expressions:
-            _raise_config_error("Query missing select statements", self._path)
+            raise_config_error("Query missing select statements", self._path)
 
         for expression in query.expressions:
             alias = expression.alias_or_name
             name_counts[alias] = name_counts.get(alias, 0) + 1
 
             if not alias:
-                _raise_config_error(
+                raise_config_error(
                     f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
                     self._path,
                 )
 
         for name, count in name_counts.items():
             if count > 1:
-                _raise_config_error(
+                raise_config_error(
                     f"Found duplicate outer select name `{name}`", self._path
                 )
 
         if self.partitioned_by:
             unique_partition_keys = {k.strip().lower() for k in self.partitioned_by}
             if len(self.partitioned_by) != len(unique_partition_keys):
-                _raise_config_error(
+                raise_config_error(
                     "All partition keys must be unique in the model definition",
                     self._path,
                 )
@@ -904,44 +732,55 @@ class Model(ModelMeta, frozen=True):
             missing_keys = unique_partition_keys - projections
             if missing_keys:
                 missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
-                _raise_config_error(
+                raise_config_error(
                     f"Partition keys [{missing_keys_str}] are missing in the query in the model definition",
                     self._path,
                 )
 
         if self.kind.is_incremental_by_time_range and not self.time_column:
-            _raise_config_error(
+            raise_config_error(
                 "Incremental by time range models must have a time_column field.",
                 self._path,
             )
 
-    def _filter_time_column(
-        self, query: exp.Select, start: TimeLike, end: TimeLike
-    ) -> None:
-        """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
-        if not self.time_column:
-            return
+    @property
+    def _query_renderer(self) -> QueryRenderer:
+        if self.__query_renderer is None:
+            self.__query_renderer = self._create_query_renderer(
+                self.query, self.dialect
+            )
+        return self.__query_renderer
 
-        low = self.convert_to_time_column(start)
-        high = self.convert_to_time_column(end)
+    def _get_audit_query_renderer(self, audit_name: str) -> QueryRenderer:
+        if audit_name not in self._audit_query_renderers:
+            audit = self.audits[audit_name]
+            self._audit_query_renderers[audit_name] = self._create_query_renderer(
+                audit.query, audit.dialect
+            )
+        return self._audit_query_renderers[audit_name]
 
-        time_column_projection = next(
-            select
-            for select in query.selects
-            if select.alias_or_name == self.time_column.column
+    def _create_query_renderer(
+        self, query: exp.Expression, dialect: str
+    ) -> QueryRenderer:
+        return QueryRenderer(
+            query,
+            dialect,
+            self.macro_definitions,
+            path=self._path,
+            python_env=self.python_env,
+            time_column=self.time_column,
+            time_converter=self.convert_to_time_column,
+            only_latest=self.kind.only_latest,
         )
 
-        if isinstance(time_column_projection, exp.Alias):
-            time_column_projection = time_column_projection.this
-
-        between = exp.Between(this=time_column_projection.copy(), low=low, high=high)
-
-        if not query.args.get("group"):
-            query.where(between, copy=False)
-        else:
-            query.having(between, copy=False)
-
-        simplify(query)
+    @property
+    def _python_query(self) -> exp.Subqueryable:
+        return exp.select(
+            *(
+                exp.alias_(f"NULL::{column_type}", name)
+                for name, column_type in self.columns_to_types.items()
+            )
+        )
 
     def __repr__(self):
         if isinstance(self.kind, SeedKind):
@@ -1037,9 +876,3 @@ def _parse_depends_on(
                 )
 
     return depends_on
-
-
-def _raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:
-    if location:
-        raise ConfigError(f"{msg} at '{location}'")
-    raise ConfigError(msg)
