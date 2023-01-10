@@ -1,5 +1,6 @@
-# About SQLMesh
-SQLMesh is a next-generation SQL transformation platform. It provides you with powerful automation for versioning, backfilling, deployment, and testing -- allowing you to focus on simply writing SQL.
+# Overview
+
+SQLMesh is a next-generation SQL transformation platform. It provides you with powerful automation for versioning, backfilling, deployment, and testing &mdash; allowing you to focus on simply writing SQL.
 
 SQLMesh is able to achieve all of this with minimal setup; there are no additional services or dependencies required to get started using SQLMesh other than a connection to your existing data warehouse or engine.
 
@@ -17,7 +18,7 @@ For example, if you have one year of history but only receive new data on a dail
 In addition, you may not be able to refresh particular tables all at once; they may need to be batched into smaller intervals. The cost of your data pipelines compound as more dependent pipelines are created. Therefore, writing your data pipelines incrementally as much as possible can result in exponential savings.
 
 ### Increased efficiency
-SQLMesh safely reuses physical tables across isolated environments. Some databases, such as Snowflake, have [zero-copy cloning](https://docs.snowflake.com/en/user-guide/tables-storage-considerations.html#label-cloning-tables) -- but this is a manual process, and not widely supported.
+SQLMesh safely reuses physical tables across isolated environments. Some databases, such as Snowflake, have [zero-copy cloning](https://docs.snowflake.com/en/user-guide/tables-storage-considerations.html#label-cloning-tables) &mdash; but this is a manual process, and not widely supported.
 
 SQLMesh is able to automatically reuse tables regardless of which data warehouse or engine you're using. This is achieved by storing fingerprints of your models and by employing [views](https://en.wikipedia.org/wiki/View_(SQL)) like pointers to physical locations. Therefore, spinning up a new development environment is fast and cheap; only models with incompatible changes need to be materialized, once again saving time and money.
 

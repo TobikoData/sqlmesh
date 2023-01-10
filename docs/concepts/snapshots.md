@@ -4,8 +4,8 @@ A snapshot is a record of a model at a given time. Along with a copy of the mode
 
 ## Fingerprints
 
-Snapshots have unique fingerprints that are derived from their models. SQLMesh use these fingerprints
-to determine when existing tables can be reused or whether a backfill is needed because a model's query
+Snapshots have unique fingerprints that are derived from their models. SQLMesh uses these fingerprints
+to determine when existing tables can be reused or whether a backfill is needed as a model's query
 has changed. Because SQLMesh can understand SQL with SQLGlot, it can generate fingerprints in more
 sophisticated ways where superficial changes to a model, such as applying formatting to its query, will not
 return a new fingerprint since nothing was meaningfully changed.

@@ -28,6 +28,14 @@ Data transformation is the process of converting data from one format to another
 <br>
 The repository that houses the single source of truth where data is stored, which is integrated from various sources. This repository, normally a relational database, is optimized for handling large volumes of data.
 
+**ELT**
+<br>
+Acronym for Extract, Load, and Transform. The process of retrieving data from various sources, loading it into a data warehouse, and then transforming it into a usable and reliable resource for data practitioners.
+
+**ETL**
+<br>
+Acronym for Extract, Transform, and Load. The process of retrieving data from various sources, transforming the data into a usable and reliable resource, and then loading it into a data warehouse for data practitioners.
+
 **Full refresh**
 <br>
 In a full data refresh, a complete dataset is deleted and then entirely overwritten with an updated dataset.

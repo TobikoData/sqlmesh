@@ -1,7 +1,7 @@
 site_name: SQLMesh
 nav:
   - Introduction:
-    - "About SQLMesh": index.md
+    - "Overview": index.md
     - "Quick start": quick_start.md
   - Concepts:
     - concepts/overview.md

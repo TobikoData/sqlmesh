@@ -1,13 +1,15 @@
 # Overview
 
-This section provides a high level overview about how SQLMesh works.
+The topics in this section provide a conceptual overview of how SQLMesh works.
 
-## What is a data transformation platform?
-Data is essential for understanding what is happening with your business or application; it helps you make informed decisions. However, data in its raw form (application logs, transactional database tables, and so forth) is not particularly useful for making decisions. By joining various tables together or computing aggregations, it's easier to interpret, analyze, and then take action on data. A data transformation platform makes it easy to create and organize complex data pipelines with many dependencies and relationships.
+## What is data transformation?
+Data is essential for understanding what is happening with your business or application; it helps you make informed decisions. However, data in its raw form (application logs, transactional database tables, and so forth) is not particularly useful for making decisions. By joining various tables together or computing aggregations, it's easier to interpret, analyze, and then take action on data.
 
-## Levels of data transformation processes
+This is where a data transformation platform comes in: to make it easy to create and organize complex data pipelines with many dependencies and relationships.
 
-There are three levels of data transformation processes: manual, scheduler-based, and model-aware.
+## Types of data transformation processes
+
+There are three types of data transformation processes: manual, scheduler-based, and model-aware.
 
 ### Manual
 If your data or organization are small, you may only have a couple of key metrics that you want to compute. In these scenarios, running SQL queries or Python scripts manually will get the job done. As your organization grows (more people/more data), a manual process quickly becomes unmaintainable.
@@ -23,7 +25,7 @@ Read more about why SQLMesh is the most efficient and powerful data transformati
 ## How SQLMesh works
 SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and schedulers](/integrations/overview). It was created with a focus on both data and organizational scale.
 
-### Write models
+### Create models
 You begin by writing your business logic in SQL or Python, which will result in a table or view.
 
 ### Plan and apply
