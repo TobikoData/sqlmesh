@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot import exp, maybe_parse
 from sqlglot.expressions import split_num_words
+
+from sqlmesh.utils.errors import ConfigError
 
 
 def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str]:
@@ -15,3 +18,23 @@ def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str
         A tuple consisting of catalog, schema, table name.
     """
     return split_num_words(name, ".", 3)  # type: ignore
+
+
+def parse_expression(
+    v: t.Union[
+        t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None
+    ],
+) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
+    """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
+    if v is None:
+        return None
+
+    if callable(v):
+        return v
+
+    if isinstance(v, list):
+        return [e for e in (maybe_parse(i) for i in v) if e]
+    expression = maybe_parse(v)
+    if not expression:
+        raise ConfigError(f"Could not parse {v}")
+    return expression

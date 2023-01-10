@@ -9,9 +9,9 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
-    Model,
     ModelKind,
     ModelKindName,
+    SqlModel,
 )
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
@@ -21,7 +21,7 @@ from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
 def snapshot(duck_conn, make_snapshot) -> Snapshot:
     duck_conn.execute("CREATE VIEW tbl AS SELECT 1 AS a")
 
-    model = Model(
+    model = SqlModel(
         name="db.model",
         kind=ModelKind(name=ModelKindName.SNAPSHOT),
         query=parse_one("SELECT a::int FROM tbl"),
@@ -42,11 +42,16 @@ def date_kwargs() -> t.Dict[str, str]:
 
 
 def test_evaluate(mocker: MockerFixture, make_snapshot):
+    transaction_mock = mocker.Mock()
+    transaction_mock.__enter__ = mocker.Mock()
+    transaction_mock.__exit__ = mocker.Mock()
+
     adapter_mock = mocker.Mock()
+    adapter_mock.transaction.return_value = transaction_mock
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = Model(
+    model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
@@ -86,7 +91,7 @@ def test_promote(mocker: MockerFixture, make_snapshot):
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = Model(
+    model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
@@ -144,7 +149,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = Model(
+    model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
@@ -214,7 +219,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
 
     updated_model_dict = snapshot.model.dict()
     updated_model_dict["query"] = "SELECT a AS b FROM tbl"
-    updated_model = Model.parse_obj(updated_model_dict)
+    updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
     new_snapshot.version = snapshot.version

@@ -30,12 +30,7 @@ from sqlglot import exp, select
 from sqlmesh.core.audit import AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotId,
-    SnapshotInfoLike,
-    to_table_mapping,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import AuditError, ConfigError
@@ -150,41 +145,21 @@ class SnapshotEvaluator:
         for sql_statement in model.sql_statements:
             self.adapter.execute(sql_statement)
 
-        if model.is_sql:
-            query = model.render_query(
-                start=start,
-                end=end,
-                latest=latest,
-                snapshots=snapshots,
-                is_dev=is_dev,
-                **kwargs,
-            )
-
-            if limit > 0:
-                return self.adapter._fetchdf(query.limit(limit))
-            apply(query)
-            return None
-
         from sqlmesh.core.context import ExecutionContext
 
-        if model.is_python:
-            dfs = model.exec_python(
-                ExecutionContext(
-                    self.adapter, to_table_mapping(snapshots.values(), is_dev)
-                ),
-                start=start,
-                end=end,
-                latest=latest,
-                **kwargs,
-            )
-        else:
-            dfs = model.read_seed()
+        queries_or_dfs = model.render(
+            ExecutionContext(self.adapter, snapshots, is_dev),
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
         with self.adapter.transaction():
-            for index, df in enumerate(dfs):
+            for index, query_or_df in enumerate(queries_or_dfs):
                 if limit > 0:
-                    return df.head(limit)  # type: ignore
-                apply(df, index)
+                    return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetchdf(query.limit(limit))  # type: ignore
+                apply(query_or_df, index)
             return None
 
     def promote(

@@ -5,7 +5,7 @@ from airflow.utils.session import create_session
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model, ModelKind, ModelKindName
+from sqlmesh.core.model import Model, ModelKind, ModelKindName, SqlModel
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
 from sqlmesh.utils.date import to_timestamp
@@ -208,7 +208,7 @@ def test_remove_expired_snapshots(
 def _create_model(name: str, query: t.Optional[str] = None) -> Model:
     if not query:
         query = "SELECT * FROM sqlmesh.orders"
-    return Model(
+    return SqlModel(
         name=name,
         kind=ModelKind(name=ModelKindName.FULL),
         query=query,

@@ -7,7 +7,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.definition import Model
+from sqlmesh.core.model.definition import Model, load_model
 from sqlmesh.utils import registry_decorator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import build_env, serialize_env
@@ -72,7 +72,7 @@ class model(registry_decorator):
             d.MacroVar(this=name),
         ]
 
-        return Model.load(
+        return load_model(
             expressions,
             path=path,
             time_column_format=time_column_format,

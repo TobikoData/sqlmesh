@@ -9,7 +9,7 @@ from croniter import croniter_range
 from pydantic import validator
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.model import Model, kind, parse_model_name
+from sqlmesh.core.model import Model, SeedModel, kind, parse_model_name
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
@@ -686,7 +686,7 @@ def fingerprint_from_model(
             data.append(model.kind.time_column.format)
         elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
             data.extend(model.kind.unique_key)
-        elif isinstance(model.kind, kind.SeedKind) and model.seed is not None:
+        elif isinstance(model, SeedModel):
             data.append(str(model.kind.batch_size))
             data.append(model.seed.content)
 
