@@ -29,18 +29,20 @@ theme:
     #logo: assets/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: deep purple
+      scheme: tobiko-light
+      primary: grey
+      accent: orange
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-sunny
         name: Switch to dark mode
 
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: deep purple
+      scheme: tobiko-dark
+      primary: grey
+      accent: orange
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-night
         name: Switch to light mode
 
   features:
@@ -49,3 +51,5 @@ theme:
 plugins:
   - include-markdown
 copyright: Tobiko Data Inc.
+
+extra_css: [extra.css]
