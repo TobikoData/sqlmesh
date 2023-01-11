@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import dialect as d
+from sqlmesh.core.model import Model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool
@@ -21,6 +23,7 @@ class SeedConfig(GeneralConfig):
 
     Args:
         path: The path to the csv file
+        target_schema: The schema for the profile target
         database: Database the seed is stored in
         schema: Custom schema name added to the seed schema name
         alias: Relation identifier for this seed instead of the seed filename
@@ -33,6 +36,7 @@ class SeedConfig(GeneralConfig):
 
     # sqlmesh fields
     path: Path = Path()
+    target_schema: str = ""
 
     # DBT configuration fields
     database: t.Optional[str] = None
@@ -75,8 +79,20 @@ class SeedConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(self, mapping: t.Dict[str, SeedConfig]) -> seed:
+    def to_sqlmesh(self, mapping: t.Dict[str, SeedConfig]) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
+        expressions = d.parse_model(
+            f"""
+            Model (
+                name {self.seed_name},
+                kind seed (
+                    path '{self.path}'
+                )
+            );
+            """
+        )
+
+        return Model.load(expressions, path=self.path)
 
     @property
     def seed_name(self) -> str:
@@ -86,6 +102,5 @@ class SeedConfig(GeneralConfig):
         Returns:
             The sqlmesh seed name
         """
-        return ".".join(
-            part for part in (self.schema_, self.alias or self.table_name) if part
-        )
+        schema = "_".join(part for part in (self.target_schema, self.schema_) if part)
+        return ".".join(part for part in (schema, self.alias or self.path.stem) if part)

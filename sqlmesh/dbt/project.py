@@ -92,7 +92,7 @@ class ProjectConfig:
         cls,
         project_root: Path,
         project_name: str,
-        project_schema: str,
+        target_schema: str,
         project_yaml: t.Dict[str, t.Any],
     ) -> t.Tuple[
         t.Dict[str, ModelConfig], t.Dict[str, SourceConfig], t.Dict[str, SeedConfig]
@@ -103,7 +103,7 @@ class ProjectConfig:
         Args:
             project_root: Path to the root directory of the DBT project
             project_name: Name of the DBT project as defined in the project yaml
-            project_schema: The target database schema
+            target_schema: The target database schema
             project_yaml: The yaml from the project file
 
         Returns:
@@ -115,7 +115,7 @@ class ProjectConfig:
 
         # Start with configs in the project file
         scoped_models, scoped_sources, scoped_seeds = cls._load_project_config(
-            project_yaml, project_schema
+            project_yaml, target_schema
         )
 
         models_dirs = project_yaml.get("model-paths") or ["models"]
@@ -169,7 +169,7 @@ class ProjectConfig:
     def _load_project_config(
         cls,
         project_yaml: t.Dict[str, t.Any],
-        project_schema: str,
+        target_schema: str,
     ) -> t.Tuple[ScopedModels, ScopedSources, ScopedSeeds]:
         def load_config(
             data: t.Dict[str, t.Any],
@@ -199,17 +199,17 @@ class ProjectConfig:
         return (
             load_config(
                 project_yaml.get("models", {}),
-                ModelConfig(project_schema=project_schema),
+                ModelConfig(target_schema=target_schema),
                 scope,
             ),
             load_config(
                 project_yaml.get("sources", {}),
-                SourceConfig(project_schema=project_schema),
+                SourceConfig(),
                 scope,
             ),
             load_config(
                 project_yaml.get("seeds", {}),
-                SeedConfig(project_schema=project_schema),
+                SeedConfig(target_schema=target_schema),
                 scope,
             ),
         )

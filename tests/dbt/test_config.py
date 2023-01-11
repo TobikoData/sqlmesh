@@ -65,6 +65,8 @@ def test_model_config(sushi_dbt_project: ProjectConfig):
         "waiter_revenue_by_day",
     }
 
+    customer_revenue_by_day_config = model_configs["customer_revenue_by_day"]
+
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
         "incremental_strategy": "delete+insert",
@@ -72,10 +74,14 @@ def test_model_config(sushi_dbt_project: ProjectConfig):
         "schema_": "db",
     }
     actual_config = {
-        k: getattr(model_configs["customer_revenue_by_day"], k)
+        k: getattr(customer_revenue_by_day_config, k)
         for k, v in expected_config.items()
     }
     assert actual_config == expected_config
+
+    assert (
+        customer_revenue_by_day_config.model_name == "sushi_db.customer_revenue_by_day"
+    )
 
 
 def test_source_config(sushi_dbt_project: ProjectConfig):
@@ -98,13 +104,14 @@ def test_source_config(sushi_dbt_project: ProjectConfig):
 def test_seed_config(sushi_dbt_project: ProjectConfig):
     seed_configs = sushi_dbt_project.seeds
     assert set(seed_configs) == {"raw_items"}
+    raw_items_seed = seed_configs["raw_items"]
 
     expected_config = {
         "path": Path(sushi_dbt_project.project_root, "seeds/raw/raw_items.csv"),
         "alias": "items",
         "schema_": "raw",
     }
-    actual_config = {
-        k: getattr(seed_configs["raw_items"], k) for k, v in expected_config.items()
-    }
+    actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
+
+    assert raw_items_seed.seed_name == "sushi_raw.items"
