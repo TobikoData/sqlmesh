@@ -19,3 +19,5 @@ DATA_VERSION_LIMIT = 10
 """Data version limit"""
 DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
+
+EPOCH_DS = "1970-01-01"

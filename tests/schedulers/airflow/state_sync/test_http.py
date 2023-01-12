@@ -4,7 +4,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import SqlModel
 from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.state_sync.http import HttpStateReader
@@ -12,8 +12,8 @@ from sqlmesh.utils.file_cache import FileCache
 
 
 @pytest.fixture
-def model() -> Model:
-    return Model(
+def model() -> SqlModel:
+    return SqlModel(
         name="test_model",
         storage_format="parquet",
         partitioned_by=["a"],
@@ -26,7 +26,7 @@ def model() -> Model:
 
 def test_get_snapshots(
     mocker: MockerFixture,
-    model: Model,
+    model: SqlModel,
     make_snapshot: t.Callable,
     mock_file_cache: FileCache,
     mock_airflow_client: AirflowClient,
@@ -48,7 +48,7 @@ def test_get_snapshots(
 
 def test_get_snapshots_with_same_version(
     mocker: MockerFixture,
-    model: Model,
+    model: SqlModel,
     make_snapshot: t.Callable,
     mock_file_cache: FileCache,
     mock_airflow_client: AirflowClient,
@@ -79,7 +79,7 @@ def test_get_snapshots_with_same_version(
 
 def test_snapshots_exist(
     mocker: MockerFixture,
-    model: Model,
+    model: SqlModel,
     make_snapshot: t.Callable,
     mock_file_cache: FileCache,
     mock_airflow_client: AirflowClient,

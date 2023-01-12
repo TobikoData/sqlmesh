@@ -6,14 +6,14 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.snapshot import Snapshot, fingerprint_from_model
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
 @pytest.fixture
 def parent_model():
-    return Model(
+    return SqlModel(
         name="parent.tbl",
         dialect="spark",
         query=parse_one("SELECT 1, ds"),
@@ -22,7 +22,7 @@ def parent_model():
 
 @pytest.fixture
 def model():
-    return Model(
+    return SqlModel(
         name="name",
         owner="owner",
         dialect="spark",
@@ -73,6 +73,7 @@ def test_json(snapshot: Snapshot):
             "name": "name",
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
+            "source_type": "sql",
         },
         "name": "name",
         "parents": [
@@ -265,7 +266,7 @@ def test_fingerprint(model: Model, parent_model: Model):
         fingerprint_from_model(
             model,
             models={
-                "parent.tbl": Model(
+                "parent.tbl": SqlModel(
                     **{**model.dict(), "query": parse_one("select 2, ds")}
                 )
             },
@@ -273,18 +274,20 @@ def test_fingerprint(model: Model, parent_model: Model):
         != with_parent_fingerprint
     )
 
-    model = Model(**{**model.dict(), "query": parse_one("select 1, ds")})
+    model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
     new_fingerprint = fingerprint_from_model(model, models={})
     assert new_fingerprint != fingerprint
 
-    model = Model(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
+    model = SqlModel(
+        **{**model.dict(), "query": parse_one("select 1, ds -- annotation")}
+    )
     assert new_fingerprint == fingerprint_from_model(model, models={})
 
 
 def test_stamp(model: Model):
     original_fingerprint = fingerprint_from_model(model, models={})
 
-    stamped_model = Model(**{**model.dict(), "stamp": "test_stamp"})
+    stamped_model = SqlModel(**{**model.dict(), "stamp": "test_stamp"})
     stamped_fingerprint = fingerprint_from_model(stamped_model, models={})
 
     assert original_fingerprint != stamped_fingerprint

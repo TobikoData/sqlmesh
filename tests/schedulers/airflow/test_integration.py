@@ -7,7 +7,7 @@ from sqlglot import parse_one
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -337,7 +337,7 @@ def _get_snapshot_dag(
 
 
 def _create_model(name: str) -> Model:
-    return Model(
+    return SqlModel(
         name=name,
         description="Dummy table",
         owner="jen",

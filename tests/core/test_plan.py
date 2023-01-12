@@ -3,7 +3,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import Model, SeedKind
+from sqlmesh.core.model import SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotDataVersion
@@ -13,10 +13,10 @@ from sqlmesh.utils.errors import PlanError
 
 
 def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.set_version()
 
-    snapshot_b = make_snapshot(Model(name="b", query=parse_one("select 2, ds")))
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     snapshot_b.previous_versions = (
         SnapshotDataVersion(fingerprint="test_fingerprint", version="test_version"),
     )
@@ -44,7 +44,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
     expected_start = "2022-01-01"
     expected_end = to_datetime("2022-01-02")
@@ -78,7 +78,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.set_version()
 
     dag = DAG[str]({"a": set()})
@@ -98,7 +98,7 @@ def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerF
 
 
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.previous_versions = (
         SnapshotDataVersion(
             fingerprint="test_fingerprint", version="test_version", change_category=None
@@ -106,7 +106,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     )
     snapshot_a.set_version(snapshot_a.previous_version)
 
-    snapshot_b = make_snapshot(Model(name="b", query=parse_one("select 2, ds")))
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     assert not snapshot_b.version
 
     dag = DAG[str]({"b": {"a"}})
@@ -140,7 +140,7 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
 
 
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
     to_datetime("2022-01-02")
 
@@ -162,7 +162,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
     to_datetime("2022-01-02")
 
@@ -210,12 +210,12 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(Model(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.set_version()
     assert not snapshot_a.is_forward_only
 
     forward_only_snapshot_a = make_snapshot(
-        Model(name="a", query=parse_one("select 2, ds"))
+        SqlModel(name="a", query=parse_one("select 2, ds"))
     )
     forward_only_snapshot_a.set_version(snapshot_a.version)
     assert forward_only_snapshot_a.is_forward_only
@@ -238,7 +238,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
 
     # Make sure the plan can be created if a new snapshot version was enforced.
     new_version_snapshot_a = make_snapshot(
-        Model(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
+        SqlModel(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
     )
     new_version_snapshot_a.set_version()
     context_diff_mock.modified_snapshots = {
@@ -254,7 +254,7 @@ def test_forward_only_plan_seed_models_not_allowed(
     make_snapshot, mocker: MockerFixture
 ):
     snapshot_a = make_snapshot(
-        Model(
+        SeedModel(
             name="a",
             kind=SeedKind(path="./path/to/seed"),
             seed=Seed(content="content"),

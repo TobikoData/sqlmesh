@@ -10,7 +10,7 @@ from IPython.core.magic_arguments import argument, magic_arguments, parse_argstr
 from sqlmesh.core.console import NotebookMagicConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse_model
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 from sqlmesh.utils.yaml import dumps as yaml_dumps
@@ -60,7 +60,7 @@ class SQLMeshMagics(Magics):
             raise SQLMeshError(f"Cannot find {model}")
 
         if sql:
-            loaded = Model.load(
+            loaded = load_model(
                 parse_model(sql, default_dialect=self.context.dialect),
                 macros=self.context.macros,
                 path=model._path,
@@ -72,7 +72,7 @@ class SQLMeshMagics(Magics):
                 model = loaded
 
         self.context.upsert_model(model)
-        expressions = model.render()
+        expressions = model.render_definition()
 
         formatted = format_model_expressions(expressions, model.dialect)
 
