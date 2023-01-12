@@ -12,6 +12,7 @@ import contextlib
 import itertools
 import logging
 import typing as t
+from enum import Enum
 
 import duckdb
 import pandas as pd
@@ -28,6 +29,7 @@ DF_TYPES: t.Tuple = (pd.DataFrame,)
 
 if t.TYPE_CHECKING:
     import pyspark
+    from google.cloud.bigquery.table import Table as BigQueryTable
 
     PySparkDataFrame = pyspark.sql.DataFrame
     DF = t.Union[pd.DataFrame, PySparkDataFrame]
@@ -48,6 +50,19 @@ logger = logging.getLogger(__name__)
 DIALECT_DEFAULT_SQL_GEN_KWARGS = {
     Dialects.SNOWFLAKE.value: {"identify": False},
 }
+
+
+class TransactionType(str, Enum):
+    DDL = "DDL"
+    DML = "DML"
+
+    @property
+    def is_ddl(self) -> bool:
+        return self == TransactionType.DDL
+
+    @property
+    def is_dml(self) -> bool:
+        return self == TransactionType.DML
 
 
 class EngineAdapter:
@@ -218,7 +233,7 @@ class EngineAdapter:
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:
-        with self.transaction():
+        with self.transaction(TransactionType.DDL):
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
 
             for column_name, column_type in added_columns.items():
@@ -461,9 +476,11 @@ class EngineAdapter:
         return df
 
     @contextlib.contextmanager
-    def transaction(self) -> t.Generator[None, None, None]:
+    def transaction(
+        self, transaction_type: TransactionType = TransactionType.DML
+    ) -> t.Generator[None, None, None]:
         """A transaction context manager."""
-        if self._transaction or not self.supports_transactions:
+        if self._transaction or not self.supports_transactions(transaction_type):
             yield
             return
         self._transaction = True
@@ -483,19 +500,20 @@ class EngineAdapter:
         """Whether or not the engine adapter supports partitions."""
         return self.dialect in ("hive", "spark")
 
-    @property
-    def supports_transactions(self) -> bool:
-        """Whether or not the engine adapter supports transactions."""
-        return self.dialect not in ("hive", "spark")
+    def supports_transactions(self, transaction_type: TransactionType) -> bool:
+        """Whether or not the engine adapter supports transactions for the given transaction type."""
+        non_transactional_dialects = ["hive", "spark"]
+        if transaction_type.is_dml:
+            return self.dialect not in non_transactional_dialects
+        elif transaction_type.is_ddl:
+            return self.dialect not in (non_transactional_dialects + ["bigquery"])
+        raise ValueError(f"Unknown transaction type: {transaction_type}")
 
-    def execute(self, sql: t.Union[str, exp.Expression]) -> None:
+    def execute(self, sql: t.Union[str, exp.Expression], **kwargs) -> None:
         """Execute a sql query."""
         sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
-        self._execute(sql)
-
-    def _execute(self, sql: str) -> None:
         logger.debug(f"Executing SQL:\n{sql}")
-        self.cursor.execute(sql)
+        self.cursor.execute(sql, **kwargs)
 
     def _insert(
         self,
@@ -503,7 +521,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
-        batch_size: int = 10000,
+        batch_size: int = 1000,
     ) -> None:
         if not columns_to_types:
             into: t.Optional[exp.Expression] = exp.to_table(table_name)
@@ -697,10 +715,16 @@ class BigQueryEngineAdapter(EngineAdapter):
         super().__init__(connection_factory, "bigquery", multithreaded=multithreaded)
         self._session_id = None
 
+    @property
+    def client(self):
+        return self.cursor.connection._client
+
     @contextlib.contextmanager
-    def transaction(self) -> t.Generator[None, None, None]:
+    def transaction(
+        self, transaction_type: TransactionType = TransactionType.DML
+    ) -> t.Generator[None, None, None]:
         """A transaction context manager."""
-        if self._session_id:
+        if self._session_id or transaction_type.is_ddl:
             yield
             return
 
@@ -717,18 +741,57 @@ class BigQueryEngineAdapter(EngineAdapter):
         finally:
             self._session_id = None
 
+    def columns(self, table_name: str) -> t.Dict[str, str]:
+        """Fetches column names and types for the target table."""
+        table = self._get_table(table_name)
+        return {field.name: field.field_type for field in table.schema}
+
+    def delete_insert_query(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        where: exp.Condition,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        """
+        BigQuery does not support multiple transactions with deletes against the same table. Short term
+        we are going to make this delete/insert non-idempotent. Long term I want to try out writing to a staging
+        table and then using API calls like copy partitions/write_truncate to see if we can implement idempotent
+        insert/overwrite.
+        """
+        self.delete_from(table_name, where=where)
+        self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
+
+    def table_exists(self, table_name: str) -> bool:
+        from google.cloud.exceptions import NotFound
+
+        try:
+            self.client.get_table(table_name)
+            return True
+        except NotFound:
+            return False
+
+    def _get_table(self, table_name: str) -> BigQueryTable:
+        """
+        Returns a BigQueryTable object for the given table name.
+
+        Raises: `google.cloud.exceptions.NotFound` if the table does not exist.
+        """
+        return self.client.get_table(table_name)
+
     def _fetchdf(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)
         return self.cursor._query_job.to_dataframe()
 
-    def _execute(self, sql: str) -> None:
+    def execute(self, sql: t.Union[str, exp.Expression], **kwargs) -> None:
         from google.cloud import bigquery
 
-        logger.debug(f"Executing SQL:\n{sql}")
-        job_config = (
-            bigquery.QueryJobConfig(create_session=True)
-            if not self._session_id
-            else bigquery.QueryJobConfig(
+        create_session = isinstance(sql, exp.Transaction) and self._session_id is None
+        job_config = None
+        if create_session:
+            job_config = bigquery.QueryJobConfig(create_session=create_session)
+        elif self._session_id:
+            job_config = bigquery.QueryJobConfig(
                 create_session=False,
                 connection_properties=[
                     bigquery.query.ConnectionProperty(
@@ -736,8 +799,7 @@ class BigQueryEngineAdapter(EngineAdapter):
                     )
                 ],
             )
-        )
-        self.cursor.execute(sql, job_config=job_config)
+        super().execute(sql, **{**kwargs, "job_config": job_config})
 
 
 def create_engine_adapter(
