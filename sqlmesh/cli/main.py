@@ -146,7 +146,7 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     "-f",
     "from_",
     type=str,
-    help="The environment to base the plan on instead of local files.",
+    help="The environment to base the plan on rather than local files.",
 )
 @click.option(
     "--skip-tests",
@@ -157,7 +157,7 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
     "-r",
     type=str,
     multiple=True,
-    help="Restate data for specified models and models downstream from the one specified. For production environment all related model versions will have their intervals wiped but only the current versions will be backfilled. For development enviornment only the current model versions will be affected.",
+    help="Restate data for specified models and models downstream from the one specified. For production environment, all related model versions will have their intervals wiped, but only the current versions will be backfilled. For development environment, only the current model versions will be affected.",
 )
 @click.option(
     "--no-gaps",
@@ -177,7 +177,7 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
 @click.option(
     "--no-prompts",
     is_flag=True,
-    help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
+    help="Disable interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
 )
 @click.option(
     "--auto-apply",
@@ -199,7 +199,7 @@ def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
 @click.option(
     "--global-state",
     is_flag=True,
-    help="If set loads the DAG from the persisted state, otherwise loads from the current local state.",
+    help="If set, loads the DAG from the persisted state, otherwise loads from the current local state.",
 )
 @click.pass_context
 @error_handler

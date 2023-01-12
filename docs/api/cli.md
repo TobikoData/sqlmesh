@@ -31,20 +31,20 @@ Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
   Plan a migration of the current context's models with the given environment.
 
 Options:
-  -s, --start TEXT          The start datetime of the interval this command
-                            will be applied for.
-  -e, --end TEXT            The end datetime of the interval this command will
-                            be applied for.
-  -f, --from TEXT           The environment to base the plan on instead of
+  -s, --start TEXT          The start datetime of the interval for which this
+                            command will be applied.
+  -e, --end TEXT            The end datetime of the interval for which this 
+                            command will be applied.
+  -f, --from TEXT           The environment to base the plan on rather than
                             local files.
   --skip-tests TEXT         Skip tests prior to generating the plan if they
                             are defined.
   -r, --restate-model TEXT  Restate data for specified models and models
                             downstream from the one specified. For production
-                            environment all related model versions will have
-                            their intervals wiped but only the current
+                            environment, all related model versions will have
+                            their intervals wiped, but only the current
                             versions will be backfilled. For development
-                            enviornment only the current model versions will
+                            environment, only the current model versions will
                             be affected.
   --no-gaps                 Ensure that new snapshots have no data gaps when
                             comparing to existing snapshots for matching
@@ -53,7 +53,7 @@ Options:
   --forward-only            Create a plan for forward-only changes.
   --no-prompts              Disable interactive prompts for the backfill time
                             range. Please note that if this flag is set and
-                            there are uncategorized changes the plan creation
+                            there are uncategorized changes, plan creation
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.
   --help                    Show this message and exit.
@@ -66,13 +66,13 @@ Usage: sqlmesh evaluate [OPTIONS] MODEL
   Evaluate a model and return a dataframe with a default limit of 1000.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval this command will be
-                     applied for.
-  -e, --end TEXT     The end datetime of the interval this command will be
-                     applied for.
-  -l, --latest TEXT  The latest time used for non incremental datasets
+  -s, --start TEXT   The start datetime of the interval for which this 
+                     command will be applied.
+  -e, --end TEXT     The end datetime of the interval for which this 
+                     command will be applied.
+  -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
-  --limit INTEGER    The number of rows which the query should be limited to.
+  --limit INTEGER    The number of rows the query should be limited to.
   --help             Show this message and exit.
 ```
 
@@ -83,11 +83,11 @@ Usage: sqlmesh render [OPTIONS] MODEL
   Renders a model's query, optionally expanding referenced models.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval this command will be
-                     applied for.
-  -e, --end TEXT     The end datetime of the interval this command will be
-                     applied for.
-  -l, --latest TEXT  The latest time used for non incremental datasets
+  -s, --start TEXT   The start datetime of the interval for which this 
+                     command will be applied.
+  -e, --end TEXT     The end datetime of the interval for which this 
+                     command will be applied.
+  -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
   --expand TEXT      Whether or not to expand materialized models (defaults to
                      False). If True, all referenced models are expanded as
@@ -126,11 +126,11 @@ Usage: sqlmesh audit [OPTIONS]
 
 Options:
   --model TEXT       A model to audit. Multiple models can be audited.
-  -s, --start TEXT   The start datetime of the interval this command will be
-                     applied for.
-  -e, --end TEXT     The end datetime of the interval this command will be
-                     applied for.
-  -l, --latest TEXT  The latest time used for non incremental datasets
+  -s, --start TEXT   The start datetime of the interval for which this 
+                     command will be applied.
+  -e, --end TEXT     The end datetime of the interval for which this 
+                     command will be applied.
+  -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
   --help             Show this message and exit.
 ```
@@ -165,6 +165,6 @@ Usage: sqlmesh dag [OPTIONS]
   graphviz package.
 
 Options:
-  --file TEXT  The file to write the dag image to.
+  --file TEXT  The file to which the dag image should be written.
   --help       Show this message and exit.
 ```
