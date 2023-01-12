@@ -66,7 +66,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
 class _Model(ModelMeta, frozen=True):
     """Model is the core abstraction for user defined datasets.
 
-    A model consists of a logic that fetches the data (a SQL query, a Python script or a seed) and a metadata
+    A model consists of logic that fetches the data (a SQL query, a Python script or a seed) and metadata
     associated with it. Models can be run on arbitrary cadences and support incremental or full refreshes.
     Models can also be materialized into physical tables or shared across other models as temporary views.
 
