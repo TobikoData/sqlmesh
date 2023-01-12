@@ -78,6 +78,8 @@ class EngineAdapter:
         multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
 
+    DEFAULT_BATCH_SIZE = 10000
+
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
@@ -521,7 +523,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
-        batch_size: int = 1000,
+        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         if not columns_to_types:
             into: t.Optional[exp.Expression] = exp.to_table(table_name)
@@ -707,6 +709,9 @@ class SnowflakeEngineAdapter(EngineAdapter):
 
 
 class BigQueryEngineAdapter(EngineAdapter):
+
+    DEFAULT_BATCH_SIZE = 1000
+
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
