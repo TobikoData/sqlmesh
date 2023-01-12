@@ -19,14 +19,14 @@ start_time = click.option(
     "-s",
     "--start",
     required=False,
-    help="The start datetime of the interval this command will be applied for.",
+    help="The start datetime of the interval for which this command will be applied.",
 )
 
 end_time = click.option(
     "-e",
     "--end",
     required=False,
-    help="The end datetime of the interval this command will be applied for.",
+    help="The end datetime of the interval for which this command will be applied.",
 )
 
 latest_time = click.option(
@@ -43,7 +43,7 @@ expand = click.option(
 
 file = click.option(
     "--file",
-    help="The file to write the dag image to.",
+    help="The file to which the dag image should be written.",
 )
 
 match_pattern = click.option(

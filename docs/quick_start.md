@@ -1,9 +1,9 @@
-# Quick Start
-In this quick start guide, you'll learn how to get up and running with SQLMesh's scaffold generator. The example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
+# Quick start
+In this quick start guide, you'll learn how to get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 ## Prerequisites
 
-You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running
+You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running the following command:
 ```
 python3 --version
 ```
@@ -14,17 +14,17 @@ or
 python --version
 ```
 
-If `python --version` returns 2.x, replace all `python` commands to `python3` and `pip` to `pip3`.
+If `python --version` returns 2.x, replace all `python` commands with `python3`, and `pip` with `pip3`.
 
-## 1. Create a SQLMesh project
-Create a project directory and navigate to it.
+## Create a SQLMesh project
+Create a project directory and navigate to it, as in the following example:
 
 ```
 mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
-It is recommended but not required to use a virtual environment.
+It is recommended, but not required, that you use a virtual environment:
 
 ```
 python -m venv .env
@@ -32,30 +32,30 @@ source .env/bin/active
 pip install sqlmesh
 ```
 
-When using a virtual environment, you need to make sure it's activated. You should see `(.env)` in your command line. If you don't see it, run `source .env/bin/activate` from your project directory to reactivate it.
+When using a virtual environment, you must ensure it's activated: you should see `(.env)` in your command line. If you don't, run `source .env/bin/activate` from your project directory to reactivate the environment.
 
-Now, we can create a SQLMesh scaffold.
+Now, we can create a SQLMesh scaffold by using the following command:
 
 ```
 sqlmesh init
 ```
 
-This will create directories and files to organize your SQLMesh project code.
+This will create directories and files that you can use to organize your SQLMesh project code.
 
 - config.py
     - The file for database configuration.
 - ./models
-    - Where you put your sql and python models.  # TODO add links
+    - The place for sql and python models.  # TODO add links
 - ./audits
-    - Where you put shared audits.
+    - The place for shared audits.
 - ./tests
-    - Where you put unit tests.
+    - The place for unit tests.
 - ./macros
-    - Where you put macros.
+    - The place for macros.
 
-## 2. Plan and Apply Environments
-### Create a Production Environment
-The starter project has created a simple two model pipeline, where example_full_model depends on example_incremental_model. To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill, you can leave those blank for now to backfill all of history. Finally, it will ask you whether or not you want backfill the plan, type 'y'.
+## Plan and apply environments
+### Create a prod environment
+The starter project structure is a two-model pipeline, where example_full_model depends on example_incremental_model. To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Type 'y'.
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan
@@ -81,8 +81,8 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 
 You've now created a new production environment with all of history backfilled.
 
-### Create a Dev Environment
-Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting prod. Run `sqlmesh plan dev` to create a development environment called 'dev'. Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt shows that no backfills are needed and you only need a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type 'y' and perform the logical update.
+### Create a dev environment
+Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called 'dev'. Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you only require a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type 'y' to perform the logical update.
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -98,8 +98,8 @@ Apply - Logical Update [y/n]: y
 Logical Update executed successfully
 ```
 
-## 3. Making Your First Update
-### Edit the file
+## Make your first update
+### Edit the configuration
 Let's add a new column to example_incremental_model. Open models/example_incremental_model.sql and add `1 AS new_column` under item_id.
 
 ```
@@ -117,8 +117,8 @@ index e1407e6..8154da2 100644
      (VALUES
 ```
 
-### Plan and Apply the Changes
-Once this change is created, we can preview it with plan and understand the impact that it had. Run `sqlmesh plan dev`.
+### Plan and apply changes
+Once this change is created, we can preview it with plan and understand the impact it had. Run `sqlmesh plan dev`.
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -160,11 +160,11 @@ All model batches have been executed successfully
 sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-As you can see, SQLMesh detected that you've added new_column. It also shows you that the downstream model 'sqlmesh_example.example_full_model' was indirectly modified. It asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column which shouldn't affect the full model, this change should be classified as `Non-Breaking`. Type '2' and then apply the change.
+As you can see, SQLMesh detected that you've added new_column. It also shows you that the downstream model 'sqlmesh_example.example_full_model' was indirectly modified. It asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column, which shouldn't affect the full model, this change should be classified as `Non-Breaking`. Type '2' and apply the change.
 
-As you can see, SQLMesh has applied the change to 'sqlmesh_example.example_incremental_model' and backfilled it but did not need to backfill 'sqlmesh_example.example_full_model' because the `Non-Breaking` change was selected.
+SQLMesh now applies the change to 'sqlmesh_example.example_incremental_model' and backfilled it. SQLMesh did not need to backfill 'sqlmesh_example.example_full_model', because `Non-Breaking` change was selected.
 
-### Validate the Change
+### Validate the changes in dev
 You can now view this change by running `sqlmesh fetchdf`
 
 ```
@@ -181,7 +181,7 @@ You can now view this change by running `sqlmesh fetchdf`
 7   7        1           1  2020-01-07
 ```
 
-You can see that new_column was added to your dataset. The production table was not modified and you can validate this by querying the table.
+You can see that new_column was added to your dataset. The production table was not modified; you can validate this by querying the table:
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
@@ -197,9 +197,9 @@ You can see that new_column was added to your dataset. The production table was 
 7   7        1  2020-01-07
 ```
 
-Notice that the production table doesn't have new_column.
+Notice that the production table does not have new_column.
 
-### Apply to Prod
+### Apply changes to prod
 Now that you've tested your changes in dev, it's time to move this change to prod. Run `sqlmesh plan` to plan and apply your changes to the prod environment.
 
 ```
@@ -239,8 +239,8 @@ All model batches have been executed successfully
 sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-### Validate the Change in Prod
-Finally, you can double check that the data did indeed land in prod.
+### Validate the changes in prod
+Finally, double-check that the data did indeed land in prod:
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
@@ -255,3 +255,11 @@ Finally, you can double check that the data did indeed land in prod.
 6   6        1           1  2020-01-06
 7   7        1           1  2020-01-07
 ```
+Congratulations, you've now conquered the basics of using SQLMesh!
+
+## Next steps
+
+* For more information about how SQLMesh works, refer to [concepts](concepts/overview.md).
+* For API documentation, refer to [API](api/overview.md).
+* For information about integrations with SQLMesh, refer to [integrations](integrations/overview.md).
+* For resources such as how to get involved in our community, refer to [community](community.md).

@@ -52,7 +52,7 @@ class SQLMeshMagics(Magics):
     @argument("--dialect", "-d", type=str, help="The rendered dialect.")
     @line_cell_magic
     def model(self, line: str, sql: t.Optional[str] = None):
-        """Render's the model and automatically fills in an editable cell with the model definition."""
+        """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
         model = self.context.models.get(args.model)
 
@@ -107,7 +107,7 @@ class SQLMeshMagics(Magics):
     @argument("--ls", action="store_true", help="List tests associated with a model")
     @line_cell_magic
     def test(self, line: str, test_def_raw: t.Optional[str] = None):
-        """Allow the user to list tests for a model, output a specific test and then write their changes back"""
+        """Allow the user to list tests for a model, output a specific test, and then write their changes back"""
         args = parse_argstring(self.test, line)
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
@@ -165,7 +165,7 @@ class SQLMeshMagics(Magics):
         "-f",
         dest="from_",
         type=str,
-        help="The environment to base the plan on instead of local files.",
+        help="The environment to base the plan on rather than local files.",
     )
     @argument(
         "--skip-tests",
@@ -178,7 +178,7 @@ class SQLMeshMagics(Magics):
         "-r",
         type=str,
         nargs="*",
-        help="Restate data for specified models (and models downstream from the one specified). For production environment all related model versions will have their intervals wiped but only the current versions will be backfilled. For development enviornment only the current model versions will be affected.",
+        help="Restate data for specified models (and models downstream from the one specified). For production environment, all related model versions will have their intervals wiped, but only the current versions will be backfilled. For development environment, only the current model versions will be affected.",
     )
     @argument(
         "--no-gaps",
@@ -199,7 +199,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--no-prompts",
         action="store_true",
-        help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes the plan creation will fail.",
+        help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
     )
     @argument(
         "--auto-apply",
@@ -262,7 +262,7 @@ class SQLMeshMagics(Magics):
         default=None,
         nargs="?",
         type=str,
-        help="An optional variable name to the store the resulting dataframe in.",
+        help="An optional variable name to store the resulting dataframe.",
     )
     @line_cell_magic
     def fetchdf(self, line, sql: str):

@@ -1,9 +1,9 @@
 # Overview
 
-SQLMesh can be used with a [cli](cli.md), [notebook](notebook.md), or directly through [Python](python.md). Each interface tries to have equivalent functionality and arguments.
+SQLMesh can be used with a [cli](cli.md), [notebook](notebook.md), or directly through [Python](python.md). Each interface aims to have parity in both functionality and arguments.
 
 ## plan
-Plan is the main command of SQLMesh. It allows you to interactively create a migration plan, understand the downstream impact, and apply it. All changes to models and environments will be materialized through plan.
+Plan is the main command of SQLMesh. It allows you to interactively create a migration plan, understand the downstream impact, and apply it. All changes to models and environments are materialized through plan.
 
 Read more about [plan](/concepts/plans).
 
@@ -29,4 +29,4 @@ Formats all SQL model files in place.
 Shows the diff between the local model and a model in an evironment.
 
 ## dag
-Shows the dag.
+Shows the [DAG](../glossary.md).
