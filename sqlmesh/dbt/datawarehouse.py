@@ -37,6 +37,8 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
         db_type = data["type"]
         if db_type == "snowflake":
             return SnowflakeConfig(**data)
+        elif db_type == "postgres":
+            return PostgresConfig(**data)
 
         # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
@@ -56,7 +58,7 @@ class SnowflakeConfig(DataWarehouseConfig):
         client_session_keep_alive: A boolean flag to extend the duration of the snowflake session beyond 4 hours
         query_tag: tag for the query in snowflake
         connect_retries: Number of times to retry if the snowflake connector encounters an error
-        connect_timeouts: Number of seconds to wait between failed attempts
+        connect_timeout: Number of seconds to wait between failed attempts
         retry_on_database_errors: A boolean flag to retry if a snowflake connector Database error is encountered
         retry_all: A boolean flag to retry on all snowflake connector errors
     """
@@ -74,3 +76,34 @@ class SnowflakeConfig(DataWarehouseConfig):
     connect_timeout: int = 10
     retry_on_database_errors: bool = False
     retry_all: bool = False
+
+
+class PostgresConfig(DataWarehouseConfig):
+    """
+    Project connection and operational configuration for the Postgres data warehouse
+
+    Args:
+        host: The Postgres host to connect to
+        user: Name of the user
+        password: User's password
+        port: The port to connect to
+        dbname: Name of the database
+        keepalives_idle: Seconds between TCP keepalive packets
+        connect_timeout: Number of seconds to wait between failed attempts
+        retries: Number of times to retry if the postgres connector encounters an error
+        search_path: Overrides the default search path
+        role: Role of the user
+        sslmode: SSL Mode used to connect to the database
+    """
+
+    host: str
+    user: str
+    password: str
+    port: int
+    dbname: str
+    keepalives_idle: int = 0
+    connect_timeout: int = 10
+    retries: int = 1
+    search_path: t.Optional[str] = None
+    role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
