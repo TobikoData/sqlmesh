@@ -8,7 +8,7 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model, ModelKindName
+from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool
@@ -164,7 +164,7 @@ class ModelConfig(GeneralConfig):
 
         python_env = {k: v for k, v in python_env.items() if k in self._calls}
 
-        return Model.load(
+        return load_model(
             expressions,
             path=self.path,
             python_env=python_env,

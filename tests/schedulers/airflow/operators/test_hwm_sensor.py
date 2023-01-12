@@ -3,7 +3,7 @@ from airflow.utils.context import Context
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import SqlModel
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.utils.date import to_datetime
 
@@ -11,10 +11,10 @@ from sqlmesh.utils.date import to_datetime
 @pytest.mark.airflow
 def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     this_snapshot = make_snapshot(
-        Model(name="this", query=parse_one("select 1, ds")), version="a"
+        SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
     )
     target_snapshot = make_snapshot(
-        Model(name="target", query=parse_one("select 2, ds")), version="b"
+        SqlModel(name="target", query=parse_one("select 2, ds")), version="b"
     )
 
     task = HighWaterMarkSensor(
@@ -42,13 +42,13 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
 @pytest.mark.airflow
 def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
-        Model(name="this", query=parse_one("select 1, ds")), version="a"
+        SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
     )
     target_snapshot_v1 = make_snapshot(
-        Model(name="that", query=parse_one("select 2, ds")), version="b"
+        SqlModel(name="that", query=parse_one("select 2, ds")), version="b"
     )
     target_snapshot_v2 = make_snapshot(
-        Model(name="that", query=parse_one("select 3, ds")), version="b"
+        SqlModel(name="that", query=parse_one("select 3, ds")), version="b"
     )
 
     target_snapshot_v2.add_interval("2022-01-01", "2022-01-01")
@@ -82,13 +82,13 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
 @pytest.mark.airflow
 def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
-        Model(name="this", query=parse_one("select 1, ds")), version="a"
+        SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
     )
     target_snapshot_v1 = make_snapshot(
-        Model(name="that", query=parse_one("select 2, ds")), version="b"
+        SqlModel(name="that", query=parse_one("select 2, ds")), version="b"
     )
     target_snapshot_v2 = make_snapshot(
-        Model(name="that", query=parse_one("select 3, ds")), version="b"
+        SqlModel(name="that", query=parse_one("select 3, ds")), version="b"
     )
 
     target_snapshot_v2.add_interval("2022-01-01", "2022-01-02")

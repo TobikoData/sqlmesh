@@ -7,14 +7,14 @@ from airflow.utils.context import Context
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
 
 
 @pytest.fixture
 def model() -> Model:
-    return Model(
+    return SqlModel(
         name="test_model",
         query=parse_one("SELECT a, ds FROM tbl"),
     )

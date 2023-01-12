@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -16,7 +16,7 @@ from sqlmesh.utils.date import to_datetime
 @pytest.fixture
 def snapshot() -> Snapshot:
     snapshot = Snapshot.from_model(
-        Model(
+        SqlModel(
             name="test_model",
             storage_format="parquet",
             partitioned_by=["a"],
@@ -107,6 +107,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "partitioned_by": ["a"],
                         "query": "SELECT a, ds FROM tbl",
                         "storage_format": "parquet",
+                        "source_type": "sql",
                     },
                     "name": "test_model",
                     "parents": [],

@@ -86,14 +86,14 @@ def test_multi_version_snapshots(
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    model = sushi_context_pre_scheduling.models["sushi.items"]
+    model = sushi_context_pre_scheduling.models["sushi.waiter_as_customer_by_day"]
 
     items_a = make_snapshot(
         model,
         models=sushi_context_pre_scheduling.models,
         version="1",
     )
-    items_a.fingerprint = 123
+    items_a.fingerprint = "123"
     items_a.add_interval("2022-01-10", "2022-01-15")
     sushi_context_pre_scheduling.state_sync.push_snapshots([items_a])
 

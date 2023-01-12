@@ -8,10 +8,11 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
-    Model,
     ModelMeta,
     SeedKind,
+    SqlModel,
     TimeColumn,
+    load_model,
     model,
 )
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
@@ -53,7 +54,7 @@ def test_load(assert_exp_eq):
         read="spark",
     )
 
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.name == "db.table"
     assert model.owner == "owner_name"
     assert model.dialect == "spark"
@@ -117,7 +118,7 @@ def test_model_validation(query, error):
     )
 
     with pytest.raises(ConfigError) as ex:
-        Model.load(expressions)
+        load_model(expressions)
     assert error in str(ex.value)
 
 
@@ -138,7 +139,7 @@ def test_partitioned_by():
     """
     )
 
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.partitioned_by == ["a", "b"]
 
 
@@ -153,7 +154,7 @@ def test_no_model_statement():
         ConfigError,
         match="MODEL statement is required as the first statement in the definition at '.",
     ):
-        Model.load(expressions)
+        load_model(expressions)
 
 
 def test_unordered_model_statements():
@@ -170,7 +171,7 @@ def test_unordered_model_statements():
     )
 
     with pytest.raises(ConfigError) as ex:
-        Model.load(expressions)
+        load_model(expressions)
     assert "MODEL statement is required" in str(ex.value)
 
 
@@ -188,7 +189,7 @@ def test_no_query():
     )
 
     with pytest.raises(ConfigError) as ex:
-        Model.load(expressions, path=Path("test_location"))
+        load_model(expressions, path=Path("test_location"))
     assert "must be a SELECT" in str(ex.value)
 
 
@@ -210,12 +211,12 @@ def test_partition_key_is_missing_in_query():
     )
 
     with pytest.raises(ConfigError) as ex:
-        Model.load(expressions)
+        load_model(expressions)
     assert "['c', 'd'] are missing" in str(ex.value)
 
 
 def test_json_serde():
-    model = Model(
+    model = SqlModel(
         name="test_model",
         owner="test_owner",
         dialect="spark",
@@ -229,7 +230,7 @@ def test_json_serde():
     )
     model_json_str = model.json()
 
-    deserialized_model = Model.parse_raw(model_json_str)
+    deserialized_model = SqlModel.parse_raw(model_json_str)
     assert deserialized_model == model
 
 
@@ -255,7 +256,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         FROM table
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
 
     assert_exp_eq(
         model.query,
@@ -281,7 +282,7 @@ def test_seed():
     """
     )
 
-    model = Model.load(expressions, path=Path("./example/models/test_model.sql"))
+    model = load_model(expressions, path=Path("./example/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
@@ -312,7 +313,7 @@ def test_seed_provided_columns():
     """
     )
 
-    model = Model.load(expressions, path=Path("./example/models/test_model.sql"))
+    model = load_model(expressions, path=Path("./example/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
@@ -366,10 +367,10 @@ def test_render():
         read="spark",
     )
 
-    model = Model.load(expressions)
-    assert format_model_expressions(model.render()) == format_model_expressions(
-        expressions
-    )
+    model = load_model(expressions)
+    assert format_model_expressions(
+        model.render_definition()
+    ) == format_model_expressions(expressions)
 
 
 def test_cron():
@@ -407,7 +408,7 @@ def test_cron():
 
 
 def test_render_query(assert_exp_eq):
-    model = Model(
+    model = SqlModel(
         name="test",
         cron="1 0 * * *",
         kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="y")),
@@ -460,7 +461,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m-%d"
     assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
@@ -477,7 +478,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m-%d"
     assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
@@ -495,7 +496,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m"
     assert model.time_column.expression == parse_one("(ds, '%Y-%m')")
@@ -514,7 +515,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, time_column_format="%Y")
+    model = load_model(expressions, time_column_format="%Y")
     assert model.time_column.format == "%Y"
 
     expressions = parse(
@@ -529,7 +530,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, time_column_format="%m")
+    model = load_model(expressions, time_column_format="%m")
     assert model.time_column.format == "%Y"
 
     expressions = parse(
@@ -545,7 +546,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = Model.load(expressions, dialect="duckdb", time_column_format="%Y")
+    model = load_model(expressions, dialect="duckdb", time_column_format="%Y")
     assert model.time_column.format == "%d"
 
 
@@ -562,7 +563,7 @@ def test_convert_to_time_column():
         SELECT ds::text
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one("'2022-01-01'")
     assert model.convert_to_time_column(to_datetime("2022-01-01")) == parse_one(
         "'2022-01-01'"
@@ -580,7 +581,7 @@ def test_convert_to_time_column():
         SELECT ds::text
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one("'01/01/2022'")
 
     expressions = parse(
@@ -595,7 +596,7 @@ def test_convert_to_time_column():
         SELECT di::int
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one("20220101")
 
     expressions = parse(
@@ -610,7 +611,7 @@ def test_convert_to_time_column():
         SELECT ds::date
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one(
         "CAST('20220101' AS date)"
     )
@@ -634,7 +635,7 @@ def test_filter_time_column(assert_exp_eq):
         FROM raw.items
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
 
     assert_exp_eq(
         model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
@@ -669,7 +670,7 @@ def test_filter_time_column(assert_exp_eq):
           CAST(ds AS TEXT) <= '20210101' AND CAST(ds as TEXT) >= '20210101'
     """
     )
-    model = Model.load(expressions)
+    model = load_model(expressions)
 
     assert_exp_eq(
         model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
@@ -704,14 +705,14 @@ def test_parse_model(assert_exp_eq):
         WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
     """
     )
-    model = Model.load(expressions, dialect="hive")
+    model = load_model(expressions, dialect="hive")
     assert model.columns_to_types == {
         "ds": exp.DataType.build("unknown"),
         "id": exp.DataType.build("int"),
     }
     assert model.dialect == ""
     assert isinstance(model.query, Jinja)
-    assert isinstance(Model.parse_raw(model.json()).query, Jinja)
+    assert isinstance(SqlModel.parse_raw(model.json()).query, Jinja)
     assert_exp_eq(
         model.render_query(),
         """
@@ -743,7 +744,7 @@ def test_python_model_deps() -> None:
 def test_star_expansion(assert_exp_eq) -> None:
     context = Context(config=Config())
 
-    model1 = Model.load(
+    model1 = load_model(
         parse_model(
             """
         MODEL (name db.model1, kind full);
@@ -769,7 +770,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         dialect=context.dialect,
     )
 
-    model2 = Model.load(
+    model2 = load_model(
         parse_model(
             """
         MODEL (name db.model2, kind full);
@@ -781,7 +782,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         dialect=context.dialect,
     )
 
-    model3 = Model.load(
+    model3 = load_model(
         parse_model(
             """
             MODEL(name db.model3, kind full);

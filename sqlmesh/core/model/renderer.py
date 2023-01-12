@@ -14,6 +14,7 @@ from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import MappingSchema
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import TimeColumn
@@ -23,8 +24,6 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
-
-EPOCH_DS = "1970-01-01"
 
 RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
 
@@ -89,8 +88,8 @@ class QueryRenderer:
         from sqlmesh.core.snapshot import to_table_mapping
 
         dates = (
-            *make_inclusive(start or EPOCH_DS, end or EPOCH_DS),
-            to_datetime(latest or EPOCH_DS),
+            *make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS),
+            to_datetime(latest or c.EPOCH_DS),
         )
         cache_key = dates
 

@@ -59,11 +59,11 @@ from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, to_table_mapping
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.core.user import User
@@ -84,7 +84,7 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core.engine_adapter import DF
 
-    MODEL_OR_SNAPSHOT = t.Union[str, Model, Snapshot]
+    ModelOrSnapshot = t.Union[str, Model, Snapshot]
 
 extend_sqlglot()
 
@@ -148,12 +148,21 @@ class ExecutionContext(BaseContext):
 
     Args:
         engine_adapter: The engine adapter to execute queries against.
-        mapping: A mapping of models to physical tables.
+        snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+        is_dev: Indicates whether the evaluation happens in the development mode and temporary
+            tables / table clones should be used where applicable.
     """
 
-    def __init__(self, engine_adapter: EngineAdapter, model_tables: t.Dict[str, str]):
+    def __init__(
+        self,
+        engine_adapter: EngineAdapter,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+    ):
+        self.snapshots = snapshots
+        self.is_dev = is_dev
         self._engine_adapter = engine_adapter
-        self.__model_tables = model_tables
+        self.__model_tables = to_table_mapping(snapshots.values(), is_dev)
 
     @property
     def engine_adapter(self) -> EngineAdapter:
@@ -300,24 +309,23 @@ class Context(BaseContext):
         """Returns an engine adapter."""
         return self._engine_adapter
 
-    def upsert_model(self, model: t.Union[str, Model] = "", **kwargs) -> Model:
+    def upsert_model(self, model: t.Union[str, Model], **kwargs) -> Model:
         """Update or insert a model.
 
         The context's models dictionary will be updated to include these changes.
 
         Args:
-            model: Model name or instance to update. If no model is passed in a new one is created.
+            model: Model name or instance to update.
             kwargs: The kwargs to update the model with.
 
         Returns:
             A new instance of the updated or inserted model.
         """
-        if not model:
-            model = Model(**kwargs)
-        elif isinstance(model, str):
+        if isinstance(model, str):
             model = self.models[model]
 
-        model = Model(**{**model.dict(), **kwargs})  # type: ignore
+        # model.copy() can't be used here due to a cached state that can be a part of a model instance.
+        model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
         self.models.update({model.name: model})
 
         self._add_model_to_dag(model)
@@ -471,7 +479,7 @@ class Context(BaseContext):
 
     def render(
         self,
-        model_or_snapshot: MODEL_OR_SNAPSHOT,
+        model_or_snapshot: ModelOrSnapshot,
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -515,7 +523,7 @@ class Context(BaseContext):
 
     def evaluate(
         self,
-        model_or_snapshot: MODEL_OR_SNAPSHOT,
+        model_or_snapshot: ModelOrSnapshot,
         start: TimeLike,
         end: TimeLike,
         latest: TimeLike,
@@ -535,10 +543,10 @@ class Context(BaseContext):
         """
         if isinstance(model_or_snapshot, str):
             snapshot = self.snapshots[model_or_snapshot]
-        elif isinstance(model_or_snapshot, Model):
-            snapshot = self.snapshots[model_or_snapshot.name]
-        else:
+        elif isinstance(model_or_snapshot, Snapshot):
             snapshot = model_or_snapshot
+        else:
+            snapshot = self.snapshots[model_or_snapshot.name]
 
         if not limit or limit <= 0:
             limit = 1000
@@ -884,7 +892,7 @@ class Context(BaseContext):
                     raise ConfigError(
                         f"Failed to parse a model definition at '{path}': {ex}"
                     )
-                model = Model.load(
+                model = load_model(
                     expressions,
                     macros=self.macros,
                     path=Path(path).absolute(),
