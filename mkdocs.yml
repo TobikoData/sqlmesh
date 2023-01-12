@@ -29,8 +29,8 @@ theme:
     #logo: assets/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
-      scheme: tobiko-light
-      primary: grey
+      scheme: default
+      primary: indigo
       accent: orange
       toggle:
         icon: material/weather-sunny
@@ -38,8 +38,8 @@ theme:
 
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: tobiko-dark
-      primary: grey
+      scheme: slate
+      primary: indigo
       accent: orange
       toggle:
         icon: material/weather-night
@@ -51,5 +51,3 @@ theme:
 plugins:
   - include-markdown
 copyright: Tobiko Data Inc.
-
-extra_css: [extra.css]

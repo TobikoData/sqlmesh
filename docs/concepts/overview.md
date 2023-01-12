@@ -35,7 +35,7 @@ Deploying new pipelines can be time-consuming, expensive, and error-prone. A SQL
 
 You can interact with SQLMesh through a [CLI](/api/cli), [Notebook](/api/notebook), or [Python API](/api/python).
 
-### Infrastructure and deployment
+## Infrastructure and deployment
 Every company's data infrastructure and situation is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use. The only requirement for SQLMesh is that you have access to a SQL engine.
 
 SQLMesh is able to keep track of model versions and intervals using your existing infrastructure. If SQLMesh is configured without a scheduler, it will automatically create a `sqlmesh` database in your warehouse. It will use this database for internal metadata and physical storage of SQLMesh managed tables. If SQLMesh is configured with Airflow, then it will store all metadata in [XComs](https://airflow.apache.org/docs/apache-airflow/stable/concepts/xcoms.html).
