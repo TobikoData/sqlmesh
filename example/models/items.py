@@ -6,6 +6,7 @@ import pandas as pd
 
 from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
+from sqlmesh.core.model import IncrementalByTimeRangeKind
 from sqlmesh.utils.date import to_ds
 
 ITEMS = [
@@ -45,23 +46,17 @@ ITEMS = [
 
 
 @model(
-    """
-    MODEL(
-        name sushi.items,
-        kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds,
-        ),
-        start 'Jan 1 2022',
-        cron '@daily',
-        batch_size 30,
-        columns (
-            id int,
-            name string,
-            price double,
-            ds text,
-        ),
-    )
-    """
+    "sushi.items",
+    kind=IncrementalByTimeRangeKind(time_column="ds"),
+    start="Jan 1 2022",
+    cron="@daily",
+    batch_size=30,
+    columns={
+        "id": "int",
+        "name": "text",
+        "price": "double",
+        "ds": "text",
+    },
 )
 def execute(
     context: ExecutionContext,
