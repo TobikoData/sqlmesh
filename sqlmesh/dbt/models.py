@@ -35,6 +35,7 @@ class ModelConfig(GeneralConfig):
 
     Args:
         path: The file path of the model
+        target_schema: The schema for the profile target
         sql: The model sql
         time_column: The name of the time column
         table_name: Table name as stored in the database instead of the model filename
@@ -55,6 +56,7 @@ class ModelConfig(GeneralConfig):
 
     # sqlmesh fields
     path: Path = Path()
+    target_schema: str = ""
     sql: str = ""
     time_column: t.Optional[str] = None
     table_name: t.Optional[str] = None
@@ -179,8 +181,9 @@ class ModelConfig(GeneralConfig):
         Returns:
             The sqlmesh model name
         """
+        schema = "_".join(part for part in (self.target_schema, self.schema_) if part)
         return ".".join(
-            part for part in (self.schema_, self.alias or self.table_name) if part
+            part for part in (schema, self.alias or self.table_name) if part
         )
 
     @property
