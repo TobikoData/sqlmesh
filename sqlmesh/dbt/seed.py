@@ -6,8 +6,7 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
-from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model, load_model
+from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool
@@ -81,18 +80,9 @@ class SeedConfig(GeneralConfig):
 
     def to_sqlmesh(self, mapping: t.Dict[str, SeedConfig]) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
-        expressions = d.parse_model(
-            f"""
-            Model (
-                name {self.seed_name},
-                kind seed (
-                    path '{self.path.absolute()}'
-                )
-            );
-            """
+        return create_seed_model(
+            SeedKind(path=self.path.absolute()), name=self.seed_name, path=self.path
         )
-
-        return load_model(expressions, path=self.path)
 
     @property
     def seed_name(self) -> str:

@@ -5,6 +5,9 @@ from sqlmesh.core.model.definition import (
     PythonModel,
     SeedModel,
     SqlModel,
+    create_python_model,
+    create_seed_model,
+    create_sql_model,
     load_model,
 )
 from sqlmesh.core.model.kind import (
