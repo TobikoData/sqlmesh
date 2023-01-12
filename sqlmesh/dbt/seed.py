@@ -86,7 +86,7 @@ class SeedConfig(GeneralConfig):
             Model (
                 name {self.seed_name},
                 kind seed (
-                    path '{self.path}'
+                    path '{self.path.absolute()}'
                 )
             );
             """
