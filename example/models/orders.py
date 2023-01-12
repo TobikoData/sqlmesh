@@ -2,9 +2,11 @@ import random
 from datetime import datetime, timedelta
 
 import pandas as pd
+from sqlglot import exp
 
 from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
+from sqlmesh.core.model import IncrementalByTimeRangeKind
 from sqlmesh.utils.date import to_ds
 
 CUSTOMERS = list(range(0, 100))
@@ -12,26 +14,20 @@ WAITERS = list(range(0, 10))
 
 
 @model(
-    """
-    -- Table of sushi orders.
-    MODEL(
-        name sushi.orders,
-        kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds,
-        ),
-        start '2022-01-01',
-        cron '@daily',
-        batch_size 30,
-        columns (
-            id int,
-            customer_id int,
-            waiter_id int,
-            start_ts int,
-            end_ts int,
-            ds text,
-        ),
-    )
-    """
+    "sushi.orders",
+    description="Table of sushi orders.",
+    kind=IncrementalByTimeRangeKind(time_column="ds"),
+    start="2022-01-01",
+    cron="@daily",
+    batch_size=30,
+    columns={
+        "id": exp.DataType.build("int"),
+        "customer_id": exp.DataType.build("int"),
+        "waiter_id": exp.DataType.build("int"),
+        "start_ts": exp.DataType.build("int"),
+        "end_ts": exp.DataType.build("int"),
+        "ds": exp.DataType.build("text"),
+    },
 )
 def execute(
     context: ExecutionContext,
