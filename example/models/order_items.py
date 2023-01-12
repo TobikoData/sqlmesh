@@ -4,7 +4,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from sqlglot import exp
 
 from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -20,11 +19,11 @@ ITEMS = "sushi.items"
     cron="@daily",
     batch_size=30,
     columns={
-        "id": exp.DataType.build("int"),
-        "order_id": exp.DataType.build("int"),
-        "item_id": exp.DataType.build("int"),
-        "quantity": exp.DataType.build("int"),
-        "ds": exp.DataType.build("text"),
+        "id": "int",
+        "order_id": "int",
+        "item_id": "int",
+        "quantity": "int",
+        "ds": "text",
     },
 )
 def execute(

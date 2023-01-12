@@ -3,7 +3,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from sqlglot import exp
 
 from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -53,10 +52,10 @@ ITEMS = [
     cron="@daily",
     batch_size=30,
     columns={
-        "id": exp.DataType.build("int"),
-        "name": exp.DataType.build("text"),
-        "price": exp.DataType.build("double"),
-        "ds": exp.DataType.build("text"),
+        "id": "int",
+        "name": "text",
+        "price": "double",
+        "ds": "text",
     },
 )
 def execute(

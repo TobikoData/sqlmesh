@@ -2,7 +2,6 @@ import random
 from datetime import datetime, timedelta
 
 import pandas as pd
-from sqlglot import exp
 
 from example.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -21,12 +20,12 @@ WAITERS = list(range(0, 10))
     cron="@daily",
     batch_size=30,
     columns={
-        "id": exp.DataType.build("int"),
-        "customer_id": exp.DataType.build("int"),
-        "waiter_id": exp.DataType.build("int"),
-        "start_ts": exp.DataType.build("int"),
-        "end_ts": exp.DataType.build("int"),
-        "ds": exp.DataType.build("text"),
+        "id": "int",
+        "customer_id": "int",
+        "waiter_id": "int",
+        "start_ts": "int",
+        "end_ts": "int",
+        "ds": "text",
     },
 )
 def execute(

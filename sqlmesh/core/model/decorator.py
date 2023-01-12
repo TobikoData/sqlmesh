@@ -3,6 +3,8 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+from sqlglot import exp
+
 from sqlmesh.core import constants as c
 from sqlmesh.core.model.definition import Model, create_python_model
 from sqlmesh.utils import registry_decorator
@@ -16,13 +18,20 @@ class model(registry_decorator):
     registry_name = "python_models"
 
     def __init__(self, name: str, **kwargs):
+        if not name:
+            raise ConfigError("Python model must have a name.")
+        if not "columns" in kwargs:
+            raise ConfigError("Python model must define column schema.")
+
         self.name = name
         self.kwargs = kwargs
 
-        if not self.name:
-            raise ConfigError("Python model must have a name.")
-        if not "columns" in self.kwargs:
-            raise ConfigError("Python model must define column schema.")
+        self.columns = {
+            column_name: column_type
+            if isinstance(column_type, exp.DataType)
+            else exp.DataType.build(str(column_type))
+            for column_name, column_type in self.kwargs.pop("columns").items()
+        }
 
     def model(
         self,
@@ -48,5 +57,6 @@ class model(registry_decorator):
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
             name=self.name,
+            columns=self.columns,
             **self.kwargs,
         )
