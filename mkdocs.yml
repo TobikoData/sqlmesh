@@ -30,7 +30,7 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
+      primary: deep purple
       accent: orange
       toggle:
         icon: material/weather-sunny
@@ -39,7 +39,7 @@ theme:
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
+      primary: deep purple
       accent: orange
       toggle:
         icon: material/weather-night
