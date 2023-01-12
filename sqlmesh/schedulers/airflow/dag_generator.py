@@ -4,7 +4,7 @@ import logging
 import typing as t
 
 from airflow import DAG
-from airflow.models import BaseOperator
+from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
@@ -320,7 +320,10 @@ class SnapshotDagGenerator:
             snapshot_end_task = EmptyOperator(
                 task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.fingerprint}__end"
             )
-            snapshot_start_task >> tasks >> snapshot_end_task
+            if snapshot.is_incremental_by_unique_key_kind:
+                baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
+            else:
+                snapshot_start_task >> tasks >> snapshot_end_task
             snapshot_to_tasks[snapshot.snapshot_id] = (
                 snapshot_start_task,
                 snapshot_end_task,
