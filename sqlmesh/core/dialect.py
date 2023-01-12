@@ -118,6 +118,10 @@ def _parse_macro(
                 )
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
         return self.expression(MacroFunc, this=field)
+
+    if field is None:
+        return None
+
     if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
         return self.expression(MacroStrReplace, this=exp.Literal.string(field.this))
     return self.expression(MacroVar, this=field.this)
@@ -219,7 +223,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     index = self._index
     if self._match(TokenType.L_PAREN):
         self._retreat(index)
-        value = self.expression(
+        value: t.Optional[exp.Expression] = self.expression(
             exp.Tuple,
             expressions=self._parse_wrapped_csv(
                 lambda: self._parse_string() or self._parse_id_var()
@@ -244,6 +248,8 @@ def _create_parser(
                 break
 
             key = key.name.lower()
+
+            value: t.Optional[exp.Expression | str]
 
             if key in table_keys:
                 value = exp.table_name(self._parse_table())
