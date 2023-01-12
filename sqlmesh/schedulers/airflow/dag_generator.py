@@ -44,7 +44,12 @@ DAG_DEFAULT_ARGS = {
     # `AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY` support added in 2.4.0
     # We can't use `AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY` because cloud composer doesn't allow you to set config
     # from an environment variable
-    "retry_delay": int(os.getenv("SQLMESH_AIRFLOW_DEFAULT_TASK_RETRY_DELAY", "300")),
+    "retry_delay": int(
+        os.getenv(
+            "SQLMESH_AIRFLOW_DEFAULT_TASK_RETRY_DELAY",
+            os.getenv("AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY", "300"),
+        )
+    ),
 }
 
 
