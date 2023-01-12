@@ -7,7 +7,7 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool
@@ -92,7 +92,7 @@ class SeedConfig(GeneralConfig):
             """
         )
 
-        return Model.load(expressions, path=self.path)
+        return load_model(expressions, path=self.path)
 
     @property
     def seed_name(self) -> str:
