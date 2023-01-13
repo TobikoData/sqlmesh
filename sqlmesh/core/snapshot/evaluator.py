@@ -156,9 +156,9 @@ class SnapshotEvaluator:
         )
 
         with self.adapter.transaction(
-                transaction_type=TransactionType.DDL
-                if model.kind.is_view or model.kind.is_full
-                else TransactionType.DML
+            transaction_type=TransactionType.DDL
+            if model.kind.is_view or model.kind.is_full
+            else TransactionType.DML
         ):
             for index, query_or_df in enumerate(queries_or_dfs):
                 if limit > 0:
