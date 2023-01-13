@@ -52,11 +52,11 @@ class model(registry_decorator):
         )
 
         return create_python_model(
+            self.name,
             entrypoint,
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
-            name=self.name,
             columns=self.columns,
             **self.kwargs,
         )
