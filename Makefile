@@ -62,5 +62,5 @@ api-docs:
 api-docs-serve:
 	pdoc/cli.py
 
-web-serve:
-	uvicorn web.main:app --port 8000 --reload
+ui:
+	uvicorn web.main:app --reload
