@@ -231,7 +231,7 @@ class _Model(ModelMeta, frozen=True):
                 exp.alias_(f"NULL::{column_type}", name)
                 for name, column_type in self.columns_to_types.items()
             )
-        )
+        ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]))
 
     def render_audit_queries(
         self,
