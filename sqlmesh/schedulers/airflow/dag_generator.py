@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing as t
 
 from airflow import DAG
@@ -37,6 +38,18 @@ NOTIFICATION_TARGET_TO_OPERATOR_PROVIDER: t.Dict[
     t.Type[NotificationTarget], BaseNotificationOperatorProvider
 ] = {
     GithubNotificationTarget: GithubNotificationOperatorProvider(),
+}
+
+DAG_DEFAULT_ARGS = {
+    # `AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY` support added in 2.4.0
+    # We can't use `AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY` because cloud composer doesn't allow you to set config
+    # from an environment variable
+    "retry_delay": int(
+        os.getenv(
+            "SQLMESH_AIRFLOW_DEFAULT_TASK_RETRY_DELAY",
+            os.getenv("AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY", "300"),
+        )
+    ),
 }
 
 
@@ -91,6 +104,7 @@ class SnapshotDagGenerator:
                 snapshot.name,
             ],
             default_args={
+                **DAG_DEFAULT_ARGS,
                 "email": snapshot.model.owner,
                 "email_on_failure": True,
             },
@@ -132,6 +146,7 @@ class SnapshotDagGenerator:
             max_active_tasks=request.backfill_concurrent_tasks,
             catchup=False,
             is_paused_upon_creation=False,
+            default_args=DAG_DEFAULT_ARGS,
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.PLAN_AIRFLOW_TAG,

@@ -102,6 +102,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS INT) AS start_ts,
             CAST(NULL AS INT) AS end_ts,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS o
         LEFT JOIN (
           SELECT
@@ -110,6 +112,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS INT) AS item_id,
             CAST(NULL AS INT) AS quantity,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS oi
           ON o.ds = oi.ds AND o.id = oi.order_id
         LEFT JOIN (
@@ -118,6 +122,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS TEXT) AS name,
             CAST(NULL AS DOUBLE) AS price,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS i
           ON oi.ds = i.ds AND oi.item_id = i.id
         WHERE
@@ -174,6 +180,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS INT) AS start_ts,
             CAST(NULL AS INT) AS end_ts,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS o
         LEFT JOIN (
           SELECT
@@ -182,6 +190,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS INT) AS item_id,
             CAST(NULL AS INT) AS quantity,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS oi
           ON o.ds = oi.ds AND o.id = oi.order_id
         LEFT JOIN (
@@ -190,6 +200,8 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
             CAST(NULL AS TEXT) AS name,
             CAST(NULL AS DOUBLE) AS price,
             CAST(NULL AS TEXT) AS ds
+          FROM (VALUES
+            (1)) AS t(dummy)
         ) AS i
           ON oi.ds = i.ds AND oi.item_id = i.id
         WHERE

@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from sqlglot import exp, select
 
 from sqlmesh.core.audit import AuditResult
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
@@ -155,7 +155,11 @@ class SnapshotEvaluator:
             **kwargs,
         )
 
-        with self.adapter.transaction():
+        with self.adapter.transaction(
+            transaction_type=TransactionType.DDL
+            if model.kind.is_view or model.kind.is_full
+            else TransactionType.DML
+        ):
             for index, query_or_df in enumerate(queries_or_dfs):
                 if limit > 0:
                     return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetchdf(query.limit(limit))  # type: ignore
