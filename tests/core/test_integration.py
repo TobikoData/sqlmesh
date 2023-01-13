@@ -12,6 +12,7 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
+    SqlModel,
     TimeColumn,
 )
 from sqlmesh.core.plan import Plan
@@ -51,7 +52,7 @@ def test_model_removed(sushi_context: Context):
 
     top_waiters_snapshot_id = sushi_context.snapshots["sushi.top_waiters"].snapshot_id
 
-    sushi_context.models.pop("sushi.top_waiters")
+    sushi_context._models.pop("sushi.top_waiters")
     removed = ["sushi.top_waiters"]
     [key for key in sushi_context.snapshots if key not in removed]
 
@@ -677,15 +678,16 @@ def apply_to_environment(
 def change_data_type(
     context: Context, model_name: str, old_type: DataType.Type, new_type: DataType.Type
 ) -> None:
-    model = context.models[model_name]
+    model = context.get_model(model_name)
+    assert model is not None
 
-    if model.is_sql:
+    if isinstance(model, SqlModel):
         data_types = model.query.find_all(DataType)
         for data_type in data_types:
             if data_type.this == old_type:
                 data_type.set("this", new_type)
         context.upsert_model(model_name, query=model.query)
-    else:
+    elif model.columns_to_types_ is not None:
         for k, v in model.columns_to_types_.items():
             if v.this == old_type:
                 model.columns_to_types_[k] = DataType.build(new_type)
