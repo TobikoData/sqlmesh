@@ -760,8 +760,8 @@ class BigQueryEngineAdapter(EngineAdapter):
     ) -> None:
         """
         BigQuery does not support multiple transactions with deletes against the same table. Short term
-        we are going to make this delete/insert non-idempotent. Long term I want to try out writing to a staging
-        table and then using API calls like copy partitions/write_truncate to see if we can implement idempotent
+        we are going to make this delete/insert non-transactional. Long term I want to try out writing to a staging
+        table and then using API calls like copy partitions/write_truncate to see if we can implement atomic
         insert/overwrite.
         """
         self.delete_from(table_name, where=where)
