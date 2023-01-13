@@ -784,6 +784,10 @@ def load_model(
         **kwargs,
     }
 
+    name = meta_fields.pop("name", "")
+    if not name:
+        raise_config_error("Model must have a name", path)
+
     if isinstance(query, d.MacroVar):
         if python_env is None:
             raise_config_error(
@@ -792,6 +796,7 @@ def load_model(
             raise
 
         return create_python_model(
+            name,
             query.name,
             python_env,
             path=path,
@@ -800,6 +805,7 @@ def load_model(
         )
     elif query is not None:
         return create_sql_model(
+            name,
             query,
             statements,
             path=path,
@@ -816,7 +822,7 @@ def load_model(
                 for p in meta_fields.pop("kind").expressions
             }
             return create_seed_model(
-                SeedKind(**seed_properties), path=path, **meta_fields
+                name, SeedKind(**seed_properties), path=path, **meta_fields
             )
         except Exception:
             raise_config_error(
@@ -827,6 +833,7 @@ def load_model(
 
 
 def create_sql_model(
+    name: str,
     query: exp.Expression,
     statements: t.List[exp.Expression],
     *,
@@ -841,6 +848,8 @@ def create_sql_model(
     """Creates a SQL model.
 
     Args:
+        name: The name of the model, which is of the form [catalog].[db].table.
+            The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
         statements: The list of all SQL statements that are not a query or a model definition.
         path: An optional path to the model definition file.
@@ -866,6 +875,7 @@ def create_sql_model(
 
     return _create_model(
         SqlModel,
+        name,
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
@@ -877,6 +887,7 @@ def create_sql_model(
 
 
 def create_seed_model(
+    name: str,
     seed_kind: SeedKind,
     *,
     path: Path = Path(),
@@ -885,6 +896,8 @@ def create_seed_model(
     """Creates a Seed model.
 
     Args:
+        name: The name of the model, which is of the form [catalog].[db].table.
+            The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
         path: An optional path to the model definition file.
     """
@@ -894,6 +907,7 @@ def create_seed_model(
     seed = create_seed(seed_path)
     return _create_model(
         SeedModel,
+        name,
         path=path,
         depends_on=set(),
         seed=seed,
@@ -903,6 +917,7 @@ def create_seed_model(
 
 
 def create_python_model(
+    name: str,
     entrypoint: str,
     python_env: t.Dict[str, Executable],
     *,
@@ -914,6 +929,8 @@ def create_python_model(
     """Creates a Python model.
 
     Args:
+        name: The name of the model, which is of the form [catalog].[db].table.
+            The catalog and db are optional.
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
         path: An optional path to the model definition file.
@@ -928,6 +945,7 @@ def create_python_model(
     )
     return _create_model(
         PythonModel,
+        name,
         path=path,
         time_column_format=time_column_format,
         depends_on=depends_on,
@@ -939,6 +957,7 @@ def create_python_model(
 
 def _create_model(
     klass: t.Type[_Model],
+    name: str,
     *,
     path: Path,
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -947,12 +966,13 @@ def _create_model(
     expressions: t.Optional[t.List[exp.Expression]] = None,
     **kwargs,
 ) -> Model:
-    _validate_model_fields(klass, set(kwargs), path)
+    _validate_model_fields(klass, {"name", *kwargs}, path)
 
     dialect = dialect or ""
 
     try:
         model = klass(
+            name=name,
             expressions=expressions or [],
             **{
                 "dialect": dialect,
