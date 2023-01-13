@@ -3,8 +3,10 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.dbt.datawarehouse import PostgresConfig, SnowflakeConfig
 from sqlmesh.dbt.models import Materialization, ModelConfig
 from sqlmesh.dbt.project import ProjectConfig
+from sqlmesh.utils.yaml import yaml
 
 
 @pytest.fixture
@@ -115,3 +117,56 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
     assert actual_config == expected_config
 
     assert raw_items_seed.seed_name == "sushi_raw.items"
+
+
+def test_postgres_config():
+    config = """
+        dbt-postgres:
+          target: dev
+          outputs:
+            dev:
+              type: postgres
+              host: postgres
+              user: postgres
+              password: postgres
+              port: 5432
+              dbname: postgres
+              schema: demo
+              threads: 3
+              keepalives_idle: 0
+    """
+
+    config_dict = yaml.load(config)["dbt-postgres"]["outputs"]["dev"]
+    postgres_config = PostgresConfig(**config_dict)
+
+    for key, value in postgres_config.dict().items():
+        input_value = config_dict.get(key)
+        if input_value is not None:
+            assert input_value == value
+
+
+def test_snowflake_config():
+    config = """
+        sushi:
+          outputs:
+            dev:
+              account: redacted_account
+              database: sushi
+              password: redacted_password
+              role: accountadmin
+              schema: sushi
+              threads: 1
+              type: snowflake
+              user: redacted_user
+              warehouse: redacted_warehouse
+          target: dev
+
+    """
+
+    config_dict = yaml.load(config)["sushi"]["outputs"]["dev"]
+    snowflake_config = SnowflakeConfig(**config_dict)
+
+    for key, value in snowflake_config.dict().items():
+        input_value = config_dict.get(key)
+        if input_value is not None:
+            assert input_value == value
