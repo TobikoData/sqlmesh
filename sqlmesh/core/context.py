@@ -43,6 +43,7 @@ import typing as t
 import unittest.result
 from io import StringIO
 from pathlib import Path
+from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
@@ -58,7 +59,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.plan import Plan
@@ -449,14 +450,14 @@ class Context(BaseContext):
         return self._models.get(name)
 
     @property
-    def models(self) -> t.Dict[str, Model]:
+    def models(self) -> MappingProxyType[str, Model]:
         """Returns all registered models in this context."""
-        return self._models.copy()
+        return MappingProxyType(self._models)
 
     @property
-    def macros(self) -> MacroRegistry:
+    def macros(self) -> MappingProxyType[str, macro]:
         """Returns all registered macros in this context."""
-        return self._macros.copy()
+        return MappingProxyType(self._macros)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:

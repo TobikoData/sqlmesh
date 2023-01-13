@@ -679,8 +679,7 @@ def change_data_type(
     context: Context, model_name: str, old_type: DataType.Type, new_type: DataType.Type
 ) -> None:
     model = context.get_model(model_name)
-    if not model:
-        raise RuntimeError(f"Model with name '{model_name}' was not found")
+    assert model is not None
 
     if isinstance(model, SqlModel):
         data_types = model.query.find_all(DataType)

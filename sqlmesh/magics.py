@@ -62,7 +62,7 @@ class SQLMeshMagics(Magics):
         if sql:
             loaded = load_model(
                 parse_model(sql, default_dialect=self.context.dialect),
-                macros=self.context.macros,
+                macros=dict(**self.context.macros),
                 path=model._path,
                 dialect=self.context.dialect,
                 time_column_format=self.context.config.time_column_format,
