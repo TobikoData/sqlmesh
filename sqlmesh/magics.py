@@ -54,7 +54,7 @@ class SQLMeshMagics(Magics):
     def model(self, line: str, sql: t.Optional[str] = None):
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
-        model = self.context.models.get(args.model)
+        model = self.context.get_model(args.model)
 
         if not model:
             raise SQLMeshError(f"Cannot find {model}")
@@ -89,7 +89,7 @@ class SQLMeshMagics(Magics):
         with open(model._path, "w", encoding="utf-8") as file:
             file.write(formatted)
 
-        self.context.models.update({model.name: model})
+        self.context.upsert_model(model)
         self.context.console.show_sql(
             self.context.render(
                 model.name,

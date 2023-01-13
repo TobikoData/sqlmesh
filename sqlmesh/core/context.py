@@ -58,7 +58,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.core.plan import Plan
@@ -249,8 +249,6 @@ class Context(BaseContext):
         self.snapshot_ttl = (
             snapshot_ttl or self.config.snapshot_ttl or c.DEFAULT_SNAPSHOT_TTL
         )
-        self.models = UniqueKeyDict("models")
-        self.macros = UniqueKeyDict("macros")
         self.dag: DAG[str] = DAG()
 
         self.backfill_concurrent_tasks = (
@@ -270,6 +268,9 @@ class Context(BaseContext):
             )
             > 1
         )
+
+        self._models = UniqueKeyDict("models")
+        self._macros = UniqueKeyDict("macros")
 
         self._engine_adapter = engine_adapter or create_engine_adapter(
             self.config.engine_connection_factory,
@@ -322,11 +323,11 @@ class Context(BaseContext):
             A new instance of the updated or inserted model.
         """
         if isinstance(model, str):
-            model = self.models[model]
+            model = self._models[model]
 
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
         model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
-        self.models.update({model.name: model})
+        self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
         self._update_model_schemas()
@@ -413,7 +414,7 @@ class Context(BaseContext):
             if path.stat().st_mtime > initial_mtime:
                 linecache.clearcache()
                 self._path_mtimes.clear()
-                self.models.clear()
+                self._models.clear()
                 self.load()
                 return
 
@@ -443,17 +444,31 @@ class Context(BaseContext):
         """
         return self.scheduler(global_state).run(start, end, latest)
 
+    def get_model(self, name: str) -> t.Optional[Model]:
+        """Returns a model with the given name or None if a model with such name doesn't exist."""
+        return self._models.get(name)
+
+    @property
+    def models(self) -> t.Dict[str, Model]:
+        """Returns all registered models in this context."""
+        return self._models.copy()
+
+    @property
+    def macros(self) -> MacroRegistry:
+        """Returns all registered macros in this context."""
+        return self._macros.copy()
+
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
-        """Gets all snapshots in this context."""
+        """Generates and returns snapshots based on models registered in this context."""
         snapshots = {}
         fingerprint_cache: t.Dict[str, str] = {}
         with self.table_info_cache as table_info_cache:
-            for model in self.models.values():
+            for model in self._models.values():
                 snapshot = Snapshot.from_model(
                     model,
                     physical_schema=self.physical_schema,
-                    models=self.models,
+                    models=self._models,
                     ttl=self.snapshot_ttl,
                     cache=fingerprint_cache,
                 )
@@ -504,7 +519,7 @@ class Context(BaseContext):
         latest = latest or yesterday_ds()
 
         if isinstance(model_or_snapshot, str):
-            model = self.models[model_or_snapshot]
+            model = self._models[model_or_snapshot]
         elif isinstance(model_or_snapshot, Snapshot):
             model = model_or_snapshot.model
         else:
@@ -566,7 +581,7 @@ class Context(BaseContext):
 
     def format(self) -> None:
         """Format all models in a given directory."""
-        for model in self.models.values():
+        for model in self._models.values():
             if not model.is_sql:
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
@@ -875,7 +890,7 @@ class Context(BaseContext):
         for path in self._glob_path(self.macro_directory_path, ".py"):
             if self._import_python_file(path):
                 self._path_mtimes[path] = path.stat().st_mtime
-        self.macros = macro.get_registry()
+        self._macros = macro.get_registry()
 
         # Restore the macro registry
         macro.set_registry(standard_macros)
@@ -894,13 +909,13 @@ class Context(BaseContext):
                     )
                 model = load_model(
                     expressions,
-                    macros=self.macros,
+                    macros=self._macros,
                     path=Path(path).absolute(),
                     module_path=self.path,
                     dialect=self.dialect,
                     time_column_format=self.config.time_column_format,
                 )
-                self.models[model.name] = model
+                self._models[model.name] = model
                 self._add_model_to_dag(model)
 
         registry = model_registry.registry()
@@ -919,7 +934,7 @@ class Context(BaseContext):
                     module_path=self.path,
                     time_column_format=self.config.time_column_format,
                 )
-                self.models[model.name] = model
+                self._models[model.name] = model
                 self._add_model_to_dag(model)
 
         self._update_model_schemas()
@@ -935,11 +950,11 @@ class Context(BaseContext):
                     dialect=self.dialect,
                 ):
                     if not audit.skip:
-                        if audit.model not in self.models:
+                        if audit.model not in self._models:
                             raise ConfigError(
                                 f"Model '{audit.model}' referenced in the audit '{audit.name}' ({path}) was not found"
                             )
-                        self.models[audit.model].audits[audit.name] = audit
+                        self._models[audit.model].audits[audit.name] = audit
 
     def _import_python_file(self, path: Path) -> types.ModuleType:
         module_name = str(path.relative_to(self.path).with_suffix("")).replace(
@@ -981,14 +996,14 @@ class Context(BaseContext):
     def _update_model_schemas(self):
         schema = MappingSchema(dialect=self.dialect)
         for name in self.dag.sorted():
-            model = self.models.get(name)
+            model = self._models.get(name)
 
             # External models don't exist in the context, so we need to skip them
             if not model:
                 continue
 
             if model.contains_star_query and any(
-                dep not in self.models for dep in model.depends_on
+                dep not in self._models for dep in model.depends_on
             ):
                 raise SQLMeshError(
                     f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
