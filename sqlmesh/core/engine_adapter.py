@@ -523,8 +523,9 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         overwrite: bool,
-        batch_size: int = DEFAULT_BATCH_SIZE,
+        batch_size: t.Optional[int] = None,
     ) -> None:
+        batch_size = batch_size if batch_size is not None else self.DEFAULT_BATCH_SIZE
         if not columns_to_types:
             into: t.Optional[exp.Expression] = exp.to_table(table_name)
         else:
@@ -740,6 +741,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             yield
         except Exception as e:
             self.execute(exp.Rollback())
+            self._session_id = None
             raise e
         else:
             self.execute(exp.Commit())

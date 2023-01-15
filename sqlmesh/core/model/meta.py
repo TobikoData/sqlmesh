@@ -95,7 +95,7 @@ class ModelMeta(PydanticModel):
                 klass = ModelKind
             return klass(**v)
 
-        name = v.name if isinstance(v, exp.Expression) else str(v)
+        name = v.name.lower() if isinstance(v, exp.Expression) else str(v).lower()
         try:
             return ModelKind(name=ModelKindName(name))
         except ValueError:
