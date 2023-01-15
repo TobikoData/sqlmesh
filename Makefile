@@ -63,4 +63,4 @@ api-docs-serve:
 	pdoc/cli.py
 
 ui:
-	uvicorn web.main:app --reload
+	docker compose -f ./web/docker-compose.yml up -d

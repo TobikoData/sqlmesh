@@ -15,10 +15,8 @@ export default defineConfig({
     environment: "jsdom",
   },
   server: {
-    host: "127.0.0.1",
-    port: 8001,
     proxy: {
-      "/api": "http://127.0.0.1:8000",
+      "/api": "http://api:8000",
     },
   },
 });
