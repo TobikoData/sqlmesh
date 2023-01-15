@@ -3,7 +3,7 @@ name: tobiko-development
 services:
   app:
     build: 
-      context: ./app
+      context: ./client
       dockerfile: Dockerfile
     container_name: tobiko-app
     image: image-tobiko-app
@@ -13,7 +13,7 @@ services:
     ports:
       - 8001:8001
     volumes:
-      - ./app/src:/app/src
+      - ./client/src:/app/src
     networks:
       - tobiko-development
     depends_on:
@@ -21,7 +21,7 @@ services:
 
   api:
     build: 
-      context: ./api
+      context: ./server
       dockerfile: Dockerfile
     container_name: tobiko-api
     image: image-tobiko-api
@@ -29,7 +29,7 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - ./api/v1:/api/v1
+      - ./server/api:/api/api
       - ../example:/api/example
     networks:
       - tobiko-development      

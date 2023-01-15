@@ -1,5 +1,5 @@
+from api.v1.resources import project
 from fastapi import APIRouter
-from v1.resources import project
 
 api_router = APIRouter()
 
