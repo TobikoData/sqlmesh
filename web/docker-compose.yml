@@ -29,7 +29,7 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - ./server/api:/api/api
+      - ./server:/api
       - ../example:/api/example
     networks:
       - tobiko-development      
