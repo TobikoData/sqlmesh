@@ -38,7 +38,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
-    from sqlmesh.core.engine_adapter import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
 
 if sys.version_info >= (3, 9):

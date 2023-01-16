@@ -32,11 +32,11 @@ from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
-from sqlmesh.utils.date import TimeLike, make_inclusive
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError, ConfigError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -107,27 +107,17 @@ class SnapshotEvaluator:
                 self.adapter.replace_query(table_name, query_or_df, columns_to_types)
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
-                if self.adapter.supports_partitions:
-                    self.adapter.insert_overwrite(
-                        table_name, query_or_df, columns_to_types=columns_to_types
-                    )
-                elif snapshot.is_incremental_by_time_range_kind:
+                if snapshot.is_incremental_by_time_range_kind:
                     # A model's time_column could be None but
                     # it shouldn't be for an incremental by time range model
                     assert model.time_column
-                    low, high = [
-                        model.convert_to_time_column(dt)
-                        for dt in make_inclusive(start, end)
-                    ]
-                    where = exp.Between(
-                        this=exp.to_column(model.time_column.column),
-                        low=low,
-                        high=high,
-                    )
-                    self.adapter.delete_insert_query(
+                    self.adapter.insert_overwrite_by_time_partition(
                         table_name,
                         query_or_df,
-                        where=where,
+                        start=start,
+                        end=end,
+                        formatter=model.convert_to_time_column,
+                        time_column=model.time_column,
                         columns_to_types=columns_to_types,
                     )
                 elif snapshot.is_incremental_by_unique_key_kind:
@@ -162,7 +152,7 @@ class SnapshotEvaluator:
         ):
             for index, query_or_df in enumerate(queries_or_dfs):
                 if limit > 0:
-                    return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetchdf(query.limit(limit))  # type: ignore
+                    return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetch_native_df(query.limit(limit))  # type: ignore
                 apply(query_or_df, index)
             return None
 
