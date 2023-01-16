@@ -63,4 +63,4 @@ api-docs-serve:
 	pdoc/cli.py
 
 ui:
-	docker compose -f ./web/docker-compose.yml up -d
+	docker compose -f ./web/docker-compose.yml up -d && open http://localhost:8001
