@@ -4,9 +4,11 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import hive_create_table_properties
+from sqlmesh.core.engine_adapter.shared import (
+    TransactionType,
+    hive_create_table_properties,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF

@@ -5,10 +5,12 @@ import typing as t
 import pandas as pd
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, pyspark
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import hive_create_table_properties
+from sqlmesh.core.engine_adapter.shared import (
+    TransactionType,
+    hive_create_table_properties,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
@@ -45,9 +47,8 @@ class SparkEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
         if isinstance(query_or_df, (pd.DataFrame, PySparkDataFrame)):
-            df = self._ensure_pyspark_df(query_or_df)
-            df.select(*self.spark.table(table_name).columns).write.insertInto(
-                table_name, overwrite=True
+            self._insert_pyspark_df(
+                table_name, self._ensure_pyspark_df(query_or_df), overwrite=True
             )
         else:
             self.execute(
@@ -57,6 +58,17 @@ class SparkEngineAdapter(EngineAdapter):
                     overwrite=True,
                 )
             )
+
+    def insert_append(
+        self,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        if isinstance(query_or_df, PySparkDataFrame):
+            self._insert_append_pyspark_df(table_name, query_or_df)
+        else:
+            super().insert_append(table_name, query_or_df, columns_to_types)
 
     def _insert_append_pandas_df(
         self,
@@ -72,7 +84,6 @@ class SparkEngineAdapter(EngineAdapter):
         self,
         table_name: str,
         df: PySparkDataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
         self._insert_pyspark_df(table_name, df, overwrite=False)
 

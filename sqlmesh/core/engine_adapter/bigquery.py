@@ -5,8 +5,8 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import TransactionType
 
 if t.TYPE_CHECKING:
     from google.cloud.bigquery.client import Client as BigQueryClient

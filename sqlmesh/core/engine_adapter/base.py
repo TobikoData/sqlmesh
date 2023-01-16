@@ -17,7 +17,6 @@ import pandas as pd
 from sqlglot import Dialect, exp, parse_one
 
 from sqlmesh.core.dialect import pandas_to_sql
-from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter._typing import (
     DF_TYPES,
     QUERY_TYPES,
@@ -27,6 +26,7 @@ from sqlmesh.core.engine_adapter._typing import (
     Query,
     pyspark,
 )
+from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -333,12 +333,8 @@ class EngineAdapter:
         if isinstance(query_or_df, QUERY_TYPES):
             query_or_df = t.cast(Query, query_or_df)
             return self._insert_append_query(table_name, query_or_df, columns_to_types)
-        elif isinstance(query_or_df, pd.DataFrame):
+        if isinstance(query_or_df, pd.DataFrame):
             return self._insert_append_pandas_df(
-                table_name, query_or_df, columns_to_types
-            )
-        elif isinstance(query_or_df, PySparkDataFrame):
-            return self._insert_append_pyspark_df(
                 table_name, query_or_df, columns_to_types
             )
         raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
@@ -393,14 +389,6 @@ class EngineAdapter:
                             overwrite=False,
                         )
                     )
-
-    def _insert_append_pyspark_df(
-        self,
-        table_name: str,
-        df: PySparkDataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
-        raise NotImplementedError(f"Pyspark not supported by engine: {type(self)}")
 
     def insert_overwrite_by_time_partition(
         self,
