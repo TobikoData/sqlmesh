@@ -712,6 +712,8 @@ def test_parse_model(assert_exp_eq):
     }
     assert model.dialect == ""
     assert isinstance(model.query, Jinja)
+    # print(type(SqlModel.parse_raw(model.json()).query))
+    # assert 1 == 0
     assert isinstance(SqlModel.parse_raw(model.json()).query, Jinja)
     assert_exp_eq(
         model.render_query(),
