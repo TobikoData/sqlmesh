@@ -40,8 +40,8 @@ def project_folders():
     }
 
 
-suppurted_extensions = {".py", ".sql", ".yaml"}
-suppurted_folders = {"audits", "tests", "models", "macros"}
+supported_extensions = {".py", ".sql", ".yaml"}
+supported_folders = {"audits", "tests", "models", "macros"}
 
 
 def file_browser(path: str) -> t.Tuple[t.List[Folder], t.List[File]]:
@@ -80,7 +80,7 @@ def file_browser(path: str) -> t.Tuple[t.List[Folder], t.List[File]]:
             files.append(
                 File(
                     id=id_file,
-                    is_supported=extension in suppurted_extensions,
+                    is_supported=extension in supported_extensions,
                     name=entry.name,
                 )
             )
