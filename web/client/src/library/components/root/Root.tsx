@@ -1,5 +1,5 @@
-import FolderTree from '../FolderTree/FolderTree';
-import LogoTobiko from '../Logo/Tobiko'
+import FolderTree from '../folderTree/FolderTree';
+import LogoTobiko from '../logo/Tobiko'
 import "./Root.css";
 
 export default function Root() {
