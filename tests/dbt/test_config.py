@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.datawarehouse import PostgresConfig, SnowflakeConfig
+from sqlmesh.dbt.datawarehouse import PostgresConfig, RedshiftConfig, SnowflakeConfig
 from sqlmesh.dbt.models import Materialization, ModelConfig
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils.yaml import yaml
@@ -119,6 +119,33 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
     assert raw_items_seed.seed_name == "sushi_raw.items"
 
 
+def test_snowflake_config():
+    config = """
+        sushi:
+          target: dev
+          outputs:
+            dev:
+              account: redacted_account
+              database: sushi
+              password: redacted_password
+              role: accountadmin
+              schema: sushi
+              threads: 1
+              type: snowflake
+              user: redacted_user
+              warehouse: redacted_warehouse
+
+    """
+
+    config_dict = yaml.load(config)["sushi"]["outputs"]["dev"]
+    snowflake_config = SnowflakeConfig(**config_dict)
+
+    for key, value in snowflake_config.dict().items():
+        input_value = config_dict.get(key)
+        if input_value is not None:
+            assert input_value == value
+
+
 def test_postgres_config():
     config = """
         dbt-postgres:
@@ -145,28 +172,27 @@ def test_postgres_config():
             assert input_value == value
 
 
-def test_snowflake_config():
+def test_redshift_config():
     config = """
-        sushi:
+        dbt-redshift:
+          target: dev
           outputs:
             dev:
-              account: redacted_account
-              database: sushi
-              password: redacted_password
-              role: accountadmin
-              schema: sushi
-              threads: 1
-              type: snowflake
-              user: redacted_user
-              warehouse: redacted_warehouse
-          target: dev
-
+              type: redshift
+              host: hostname.region.redshift.amazonaws.com
+              user: username
+              password: password1
+              port: 5439
+              dbname: analytics
+              schema: analytics
+              threads: 4
+              ra3_node: false
     """
 
-    config_dict = yaml.load(config)["sushi"]["outputs"]["dev"]
-    snowflake_config = SnowflakeConfig(**config_dict)
+    config_dict = yaml.load(config)["dbt-redshift"]["outputs"]["dev"]
+    redshift_config = RedshiftConfig(**config_dict)
 
-    for key, value in snowflake_config.dict().items():
+    for key, value in redshift_config.dict().items():
         input_value = config_dict.get(key)
         if input_value is not None:
             assert input_value == value
