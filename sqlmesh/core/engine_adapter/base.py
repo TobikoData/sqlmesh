@@ -17,6 +17,7 @@ import pandas as pd
 from sqlglot import Dialect, exp, parse_one
 
 from sqlmesh.core.dialect import pandas_to_sql
+from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter._typing import (
     DF_TYPES,
     QUERY_TYPES,
@@ -26,7 +27,6 @@ from sqlmesh.core.engine_adapter._typing import (
     Query,
     pyspark,
 )
-from sqlmesh.core.engine_adapter.transaction_type import TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -229,7 +229,9 @@ class EngineAdapter:
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
 
         if isinstance(query_or_df, DF_TYPES):
-            if PySparkDataFrame and isinstance(query_or_df, PySparkDataFrame):
+            if PySparkDataFrame is not None and isinstance(
+                query_or_df, PySparkDataFrame
+            ):
                 query_or_df = query_or_df.toPandas()
 
             if not isinstance(query_or_df, pd.DataFrame):
@@ -406,11 +408,11 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         start: TimeLike,
         end: TimeLike,
-        formatter: t.Callable[[TimeLike], exp.Expression],
+        time_formatter: t.Callable[[TimeLike], exp.Expression],
         time_column: TimeColumn | exp.Column | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
-        low, high = [formatter(dt) for dt in make_inclusive(start, end)]
+        low, high = [time_formatter(dt) for dt in make_inclusive(start, end)]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
         where = exp.Between(

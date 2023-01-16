@@ -5,10 +5,10 @@ import typing as t
 import pandas as pd
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, pyspark
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import hive_create_table_properties
-from sqlmesh.core.engine_adapter.transaction_type import TransactionType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
@@ -49,15 +49,14 @@ class SparkEngineAdapter(EngineAdapter):
             df.select(*self.spark.table(table_name).columns).write.insertInto(
                 table_name, overwrite=True
             )
-            return
-
-        self.execute(
-            exp.Insert(
-                this=self._insert_into_expression(table_name, columns_to_types),
-                expression=query_or_df,
-                overwrite=True,
+        else:
+            self.execute(
+                exp.Insert(
+                    this=self._insert_into_expression(table_name, columns_to_types),
+                    expression=query_or_df,
+                    overwrite=True,
+                )
             )
-        )
 
     def _insert_append_pandas_df(
         self,

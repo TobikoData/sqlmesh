@@ -5,10 +5,11 @@ import typing as t
 
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.transaction_type import TransactionType
 
 if t.TYPE_CHECKING:
+    from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
@@ -27,7 +28,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self._session_id = None
 
     @property
-    def client(self):
+    def client(self) -> BigQueryClient:
         return self.cursor.connection._client
 
     @contextlib.contextmanager

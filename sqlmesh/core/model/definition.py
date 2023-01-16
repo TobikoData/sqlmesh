@@ -679,7 +679,9 @@ class PythonModel(_Model):
                 if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
-                    if PySparkDataFrame and isinstance(df, PySparkDataFrame):
+                    if PySparkDataFrame is not None and isinstance(
+                        df, PySparkDataFrame
+                    ):
                         import pyspark
 
                         df = df.where(

@@ -1,8 +1,22 @@
 from __future__ import annotations
 
 import typing as t
+from enum import Enum
 
 from sqlglot import exp
+
+
+class TransactionType(str, Enum):
+    DDL = "DDL"
+    DML = "DML"
+
+    @property
+    def is_ddl(self) -> bool:
+        return self == TransactionType.DDL
+
+    @property
+    def is_dml(self) -> bool:
+        return self == TransactionType.DML
 
 
 def hive_create_table_properties(

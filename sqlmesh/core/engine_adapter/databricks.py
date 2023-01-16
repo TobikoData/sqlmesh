@@ -4,9 +4,9 @@ import typing as t
 
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter import TransactionType
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import hive_create_table_properties
-from sqlmesh.core.engine_adapter.transaction_type import TransactionType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -18,7 +18,7 @@ class DatabricksEngineAdapter(EngineAdapter):
         connection_factory: t.Callable[[], t.Any],
         multithreaded: bool = False,
     ):
-        super().__init__(connection_factory, "spark", multithreaded=multithreaded)
+        super().__init__(connection_factory, "databricks", multithreaded=multithreaded)
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """

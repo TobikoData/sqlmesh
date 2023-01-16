@@ -116,7 +116,7 @@ class SnapshotEvaluator:
                         query_or_df,
                         start=start,
                         end=end,
-                        formatter=model.convert_to_time_column,
+                        time_formatter=model.convert_to_time_column,
                         time_column=model.time_column,
                         columns_to_types=columns_to_types,
                     )

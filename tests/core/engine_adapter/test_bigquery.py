@@ -18,7 +18,7 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
         parse_one("SELECT a, ds FROM tbl"),  # type: ignore
         start="2022-01-01",
         end="2022-01-05",
-        formatter=lambda x: exp.Literal.string(x.strftime("%Y-%m-%d")),  # type: ignore
+        time_formatter=lambda x: exp.Literal.string(x.strftime("%Y-%m-%d")),  # type: ignore
         time_column="ds",
         columns_to_types={
             "a": exp.DataType.build("int"),

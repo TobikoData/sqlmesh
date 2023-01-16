@@ -5,9 +5,9 @@ from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
+from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
-from sqlmesh.core.engine_adapter.transaction_type import TransactionType
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "spark": SparkEngineAdapter,
