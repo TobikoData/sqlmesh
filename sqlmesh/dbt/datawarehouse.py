@@ -39,6 +39,8 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
             return SnowflakeConfig(**data)
         elif db_type == "postgres":
             return PostgresConfig(**data)
+        elif db_type == "redshift":
+            return RedshiftConfig(**data)
 
         # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
@@ -106,4 +108,34 @@ class PostgresConfig(DataWarehouseConfig):
     retries: int = 1
     search_path: t.Optional[str] = None
     role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
+
+
+class RedshiftConfig(DataWarehouseConfig):
+    """
+    Project connection and operational configuration for the Redshift data warehouse
+
+    Args:
+        host: The Redshift host to connect to
+        user: Name of the user
+        password: User's password
+        port: The port to connect to
+        dbname: Name of the database
+        keepalives_idle: Seconds between TCP keepalive packets
+        connect_timeout: Number of seconds to wait between failed attempts
+        ra3_node: Enables cross-database sources
+        search_path: Overrides the default search path
+        sslmode: SSL Mode used to connect to the database
+    """
+
+    # TODO add other forms of authentication
+    host: str
+    user: str
+    password: str
+    port: int
+    dbname: str
+    keepalives_idle: int = 240
+    connect_timeout: int = 10
+    ra3_node: bool = True
+    search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
