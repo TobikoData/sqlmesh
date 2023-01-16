@@ -34,10 +34,10 @@ class SparkEngineAdapter(EngineAdapter):
         return df
 
     def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
-        return self._fetch_native_df(query).toPandas()  # type: ignore
+        return t.cast(PySparkDataFrame, self._fetch_native_df(query)).toPandas()
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
-        return self._fetch_native_df(query)  # type: ignore
+        return t.cast(PySparkDataFrame, self._fetch_native_df(query))
 
     def _insert_overwrite_by_time_partition(
         self,
