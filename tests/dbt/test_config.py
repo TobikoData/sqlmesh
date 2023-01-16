@@ -100,7 +100,7 @@ def test_source_config(sushi_dbt_project: ProjectConfig):
     }
 
     expected_config = {
-        "schema_": "raw",
+        "schema_": "sushi_raw",
         "identifier": "order_items",
     }
     actual_config = {

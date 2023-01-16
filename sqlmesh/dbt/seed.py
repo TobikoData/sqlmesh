@@ -78,7 +78,7 @@ class SeedConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(self, mapping: t.Dict[str, SeedConfig]) -> Model:
+    def to_sqlmesh(self) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         return create_seed_model(
             self.seed_name, SeedKind(path=self.path.absolute()), path=self.path

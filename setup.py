@@ -33,6 +33,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
+        "snowflake-connector-python",
         "sqlglot>=10.5.2",
     ],
     extras_require={

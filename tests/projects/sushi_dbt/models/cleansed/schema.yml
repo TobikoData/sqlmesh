@@ -8,7 +8,8 @@ models:
   - name: waiters
 sources:
   - name: raw
-    schema: sushi_raw
+    config:
+      schema: sushi_raw
     tables:
       - name: orders
       - name: order_items

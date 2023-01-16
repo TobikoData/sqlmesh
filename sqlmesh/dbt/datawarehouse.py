@@ -3,8 +3,10 @@ from __future__ import annotations
 import abc
 import typing as t
 
+import snowflake.connector
 from pydantic import Field
 
+from sqlmesh.core.config import Config
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -80,6 +82,18 @@ class SnowflakeConfig(DataWarehouseConfig):
     connect_timeout: int = 10
     retry_on_database_errors: bool = False
     retry_all: bool = False
+
+    def to_sqlmesh(self) -> Config:
+        context = snowflake.connector.connect(
+            user=self.user,
+            password=self.password,
+            account=self.account,
+            warehouse=self.warehouse,
+            database=self.database,
+        )
+        return Config(
+            engine_connection_factory=lambda: context, engine_dialect="snowflake"
+        )
 
 
 class PostgresConfig(DataWarehouseConfig):
