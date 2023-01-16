@@ -39,6 +39,7 @@ class ModelConfig(GeneralConfig):
         sql: The model sql
         time_column: The name of the time column
         table_name: Table name as stored in the database instead of the model filename
+        start: The earliest date that the model will be backfileld for
         alias: Relation identifier for this model instead of the model filename
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         database: Database the model is stored in
@@ -65,6 +66,7 @@ class ModelConfig(GeneralConfig):
     _sources: t.Set[str] = set()
 
     # DBT configuration fields
+    start: t.Optional[str] = None
     alias: t.Optional[str] = None
     cluster_by: t.Optional[t.List[str]] = None
     database: t.Optional[str] = None
@@ -180,6 +182,7 @@ class ModelConfig(GeneralConfig):
             path=self.path,
             python_env=python_env,
             depends_on={model_mapping[model] for model in self._depends_on},
+            start=self.start,
         )
 
     @property
