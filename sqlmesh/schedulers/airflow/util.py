@@ -108,4 +108,15 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
             raise SQLMeshError(
                 "Failed to automatically discover an operator for Snowflake"
             )
+    if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
+        try:
+            from sqlmesh.schedulers.airflow.operators.bigquery import (
+                SQLMeshBigQueryOperator,
+            )
+
+            return SQLMeshBigQueryOperator
+        except ImportError:
+            raise SQLMeshError(
+                "Failed to automatically discover an operator for BigQuery"
+            )
     raise ValueError(f"Unsupported engine name '{name}'")
