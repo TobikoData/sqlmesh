@@ -3,7 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.datawarehouse import PostgresConfig, RedshiftConfig, SnowflakeConfig
+from sqlmesh.dbt.datawarehouse import (
+    DatabricksConfig,
+    DataWarehouseConfig,
+    PostgresConfig,
+    RedshiftConfig,
+    SnowflakeConfig,
+)
 from sqlmesh.dbt.models import Materialization, ModelConfig
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils.yaml import yaml
@@ -119,8 +125,24 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
     assert raw_items_seed.seed_name == "sushi_raw.items"
 
 
+def _test_warehouse_config(
+    config_yaml: str, config_model: t.Type[DataWarehouseConfig], *params_path: str
+):
+    config_dict = yaml.load(config_yaml)
+    for path in params_path:
+        config_dict = config_dict[path]
+
+    config = config_model(**config_dict)
+
+    for key, value in config.dict().items():
+        input_value = config_dict.get(key)
+        if input_value is not None:
+            assert input_value == value
+
+
 def test_snowflake_config():
-    config = """
+    _test_warehouse_config(
+        """
         sushi:
           target: dev
           outputs:
@@ -135,19 +157,17 @@ def test_snowflake_config():
               user: redacted_user
               warehouse: redacted_warehouse
 
-    """
-
-    config_dict = yaml.load(config)["sushi"]["outputs"]["dev"]
-    snowflake_config = SnowflakeConfig(**config_dict)
-
-    for key, value in snowflake_config.dict().items():
-        input_value = config_dict.get(key)
-        if input_value is not None:
-            assert input_value == value
+        """,
+        SnowflakeConfig,
+        "sushi",
+        "outputs",
+        "dev",
+    )
 
 
 def test_postgres_config():
-    config = """
+    _test_warehouse_config(
+        """
         dbt-postgres:
           target: dev
           outputs:
@@ -161,19 +181,17 @@ def test_postgres_config():
               schema: demo
               threads: 3
               keepalives_idle: 0
-    """
-
-    config_dict = yaml.load(config)["dbt-postgres"]["outputs"]["dev"]
-    postgres_config = PostgresConfig(**config_dict)
-
-    for key, value in postgres_config.dict().items():
-        input_value = config_dict.get(key)
-        if input_value is not None:
-            assert input_value == value
+        """,
+        PostgresConfig,
+        "dbt-postgres",
+        "outputs",
+        "dev",
+    )
 
 
 def test_redshift_config():
-    config = """
+    _test_warehouse_config(
+        """
         dbt-redshift:
           target: dev
           outputs:
@@ -187,12 +205,30 @@ def test_redshift_config():
               schema: analytics
               threads: 4
               ra3_node: false
-    """
+        """,
+        RedshiftConfig,
+        "dbt-redshift",
+        "outputs",
+        "dev",
+    )
 
-    config_dict = yaml.load(config)["dbt-redshift"]["outputs"]["dev"]
-    redshift_config = RedshiftConfig(**config_dict)
 
-    for key, value in redshift_config.dict().items():
-        input_value = config_dict.get(key)
-        if input_value is not None:
-            assert input_value == value
+def test_databricks_config():
+    _test_warehouse_config(
+        """
+        dbt-databricks:
+          target: dev
+          outputs:
+            dev:
+              type: databricks
+              catalog: test_catalog
+              schema: analytics
+              host: yourorg.databrickshost.com
+              http_path: /sql/your/http/path
+              token: dapi01234567890123456789012
+        """,
+        DatabricksConfig,
+        "dbt-databricks",
+        "outputs",
+        "dev",
+    )
