@@ -1,4 +1,5 @@
 import os
+import sys
 from os.path import exists
 
 from setuptools import find_packages, setup
@@ -55,7 +56,7 @@ setup(
             "pytest",
             "pytest-mock",
             "pyspark",
-            "snowflake-connector-python",
+            *(["snowflake-connector-python"] if sys.version_info < (3, 11) else []),
             "sqlalchemy-stubs",
             "tenacity",
             "types-croniter",
