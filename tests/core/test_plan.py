@@ -121,7 +121,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
 
     with pytest.raises(
         PlanError,
-        match=r"Modified model 'b' depends on a paused version of model 'a'.*",
+        match=r"Model 'b' depends on a paused version of model 'a'.*",
     ):
         Plan(context_diff_mock, dag, state_reader_mock, forward_only=False)
 

@@ -15,6 +15,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
+from sqlmesh.utils.errors import SQLMeshError
 
 
 @pytest.fixture
@@ -84,6 +85,29 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         storage_format="parquet",
         partitioned_by=["a"],
     )
+
+
+def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
+    model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
+    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot.version = snapshot.fingerprint
+
+    parent_snapshot = make_snapshot(
+        SqlModel(name="test_parent_model", query=parse_one("SELECT b, ds"))
+    )
+    parent_snapshot.set_version("test_version")
+
+    evaluator = SnapshotEvaluator(mocker.Mock())
+    with pytest.raises(
+        SQLMeshError, match=r".*Create and apply a new plan to fix this issue."
+    ):
+        evaluator.evaluate(
+            snapshot,
+            "2020-01-01",
+            "2020-01-02",
+            "2020-01-02",
+            snapshots={parent_snapshot.name: parent_snapshot},
+        )
 
 
 def test_promote(mocker: MockerFixture, make_snapshot):
