@@ -46,9 +46,10 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
         from google.cloud.bigquery import Client
         from google.cloud.bigquery.dbapi import Connection
 
+        # This method is private in older versions of the BigQuery library and public later. So we check for both
         try:
-            creds, project_id = self._get_credentials_and_project_id()
+            creds, project_id = self._get_credentials_and_project_id()  # type: ignore
         except AttributeError:
-            creds, project_id = self.get_credentials_and_project_id()
+            creds, project_id = self.get_credentials_and_project_id()  # type: ignore
         client = Client(project=project_id, credentials=creds)
         return Connection(client=client)
