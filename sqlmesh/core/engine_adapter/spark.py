@@ -47,12 +47,8 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
                 table_name, self._ensure_pyspark_df(query_or_df), overwrite=True
             )
         else:
-            self.execute(
-                exp.Insert(
-                    this=self._insert_into_expression(table_name, columns_to_types),
-                    expression=query_or_df,
-                    overwrite=True,
-                )
+            super()._insert_overwrite_by_condition(
+                table_name, query_or_df, where, columns_to_types
             )
 
     def insert_append(
