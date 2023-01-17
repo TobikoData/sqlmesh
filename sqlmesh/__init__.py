@@ -16,7 +16,7 @@ from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot
 
 try:
-    from sqlmesh._version import __version__, __version_tuple__
+    from sqlmesh._version import __version__, __version_tuple__  # type: ignore
 except ImportError:
     pass
 
