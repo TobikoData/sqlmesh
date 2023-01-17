@@ -33,7 +33,7 @@ from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import AuditError, ConfigError
+from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
@@ -86,6 +86,9 @@ class SnapshotEvaluator:
         """
         if snapshot.is_embedded_kind:
             return None
+
+        if not snapshot.is_forward_only:
+            self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
 
@@ -418,3 +421,12 @@ class SnapshotEvaluator:
             else:
                 self.adapter.drop_view(table_name)
                 logger.info("Dropped view '%s'", table_name)
+
+    def _ensure_no_paused_forward_only_upstream(
+        self, snapshot: Snapshot, parent_snapshots: t.Dict[str, Snapshot]
+    ) -> None:
+        for p in parent_snapshots.values():
+            if p.is_forward_only and p.is_paused:
+                raise SQLMeshError(
+                    f"Snapshot {snapshot.snapshot_id} depends on a paused forward-only snapshot {p.snapshot_id}. Create and apply a new plan to fix this issue."
+                )
