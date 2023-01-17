@@ -93,7 +93,7 @@ jobs:
             REPO_OWNER="$CIRCLE_PROJECT_USERNAME" \
             REPO_NAME="$CIRCLE_PROJECT_REPONAME" \
             CONTINUE_ON_ERROR="false" \
-            npx https://github.com/tobikodata/circleci-gh-conventional-release
+            npx https://github.com/izeigerman/circleci-gh-conventional-release
 
 workflows:
   main_pr:
