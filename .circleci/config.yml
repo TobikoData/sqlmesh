@@ -9,7 +9,6 @@ on_tag_filter: &on_tag_filter
 
 orbs:
   python: circleci/python@1.5.0
-  gh-release: escaletech/gh-conventional-release@0.1.0
 
 jobs:
   style_and_unit_tests:
@@ -82,6 +81,20 @@ jobs:
           name: Publish Python package
           command: make publish
 
+  gh-release:
+    docker:
+      - image: cimg/node:16.14
+    steps:
+      - run:
+          name: Create release on GitHub
+          command: |
+            GITHUB_TOKEN="$GITHUB_TOKEN" \
+            TARGET_TAG="$CIRCLE_TAG" \
+            REPO_OWNER="$CIRCLE_PROJECT_USERNAME" \
+            REPO_NAME="$CIRCLE_PROJECT_REPONAME" \
+            CONTINUE_ON_ERROR="false" \
+            npx https://github.com/tobikodata/circleci-gh-conventional-release
+
 workflows:
   main_pr:
     jobs:
@@ -100,9 +113,9 @@ workflows:
 
   release:
     jobs:
-      - gh-release/create-release:
+      - gh-release:
           <<: *on_tag_filter
       - publish:
           <<: *on_tag_filter
           requires:
-            - gh-release/create-release
+            - gh-release
