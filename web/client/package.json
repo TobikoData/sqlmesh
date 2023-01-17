@@ -1,0 +1,43 @@
+{
+  "name": "tobiko",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "prettier": "prettier --write .",
+    "lint:fix": "eslint --fix",
+    "format": "npm run prettier && npm run lint:fix",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^4.22.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.6.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.26",
+    "@types/react-dom": "^18.0.9",
+    "@typescript-eslint/eslint-plugin": "^5.48.1",
+    "@vitejs/plugin-react-swc": "^3.0.0",
+    "@tanstack/react-query-devtools": "^4.22.0",
+    "autoprefixer": "^10.4.13",
+    "eslint": "^8.31.0",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-config-standard-with-typescript": "^27.0.1",
+    "eslint-plugin-import": "^2.27.4",
+    "eslint-plugin-n": "^15.6.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-react": "^7.32.0",
+    "jsdom": "^21.0.0",
+    "postcss": "^8.4.21",
+    "prettier": "2.8.2",
+    "tailwindcss": "^3.2.4",
+    "typescript": "^4.9.4",
+    "vite": "^4.0.0",
+    "vitest": "^0.27.1"
+  }
+}
