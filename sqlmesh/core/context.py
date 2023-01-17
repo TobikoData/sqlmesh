@@ -83,7 +83,7 @@ if t.TYPE_CHECKING:
     import graphviz
     import pyspark
 
-    from sqlmesh.core.engine_adapter import DF
+    from sqlmesh.core.engine_adapter._typing import DF
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
 

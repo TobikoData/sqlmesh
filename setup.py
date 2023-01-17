@@ -41,6 +41,7 @@ setup(
             "autoflake==1.7.7",
             "black==22.6.0",
             "google-auth",
+            "google-cloud-bigquery",
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin",
             "mkdocs-material",
