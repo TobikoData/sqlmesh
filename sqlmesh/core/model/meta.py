@@ -143,7 +143,7 @@ class ModelMeta(PydanticModel):
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
         if isinstance(v, exp.Expression):
             v = v.name
-        if not to_datetime(v):
+        if v and not to_datetime(v):
             raise ConfigError(f"'{v}' not a valid date time")
         return v
 

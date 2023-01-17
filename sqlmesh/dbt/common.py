@@ -153,6 +153,7 @@ class GeneralConfig(BaseConfig):
         meta: Dictionary of metadata for the element
     """
 
+    start: t.Optional[str] = None
     description: t.Optional[str] = None
     # TODO add test support
     tests: t.Dict[str, t.Any] = {}

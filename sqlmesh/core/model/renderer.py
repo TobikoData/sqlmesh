@@ -109,6 +109,7 @@ class QueryRenderer:
 
             if isinstance(query, d.Jinja):
                 env = prepare_env(self._python_env)
+                env["sqlmesh"] = True
 
                 try:
                     parsed_query = parse_one(
