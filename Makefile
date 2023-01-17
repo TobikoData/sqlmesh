@@ -24,6 +24,12 @@ it-test-docker: core-it-test airflow-it-test-docker-with-env
 
 test: unit-test it-test doc-test
 
+package:
+	pip install wheel && python setup.py sdist bdist_wheel
+
+publish: package
+	pip install twine && python -m twine upload dist/*
+
 airflow-init:
 	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./example/airflow init
 
