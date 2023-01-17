@@ -22,4 +22,5 @@ class DatabricksEngineAdapter(BaseSparkEngineAdapter):
         """
         Currently returns a Pandas DataFrame. Need to figure out how to return a PySpark DataFrame
         """
+        self.execute(query)
         return self.cursor.fetchall_arrow().to_pandas()
