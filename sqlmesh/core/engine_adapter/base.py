@@ -23,6 +23,7 @@ from sqlmesh.core.engine_adapter._typing import (
     SOURCE_ALIAS,
     TARGET_ALIAS,
     PySparkDataFrame,
+    PySparkSession,
     Query,
 )
 from sqlmesh.core.engine_adapter.shared import TransactionType
@@ -33,7 +34,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF, pyspark
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class EngineAdapter:
         return self._connection_pool.get_cursor()
 
     @property
-    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
+    def spark(self) -> t.Optional[PySparkSession]:
         return None
 
     def recycle(self) -> t.Any:

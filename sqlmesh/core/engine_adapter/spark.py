@@ -5,7 +5,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, pyspark
+from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, PySparkSession
 from sqlmesh.core.engine_adapter.base_spark import BaseSparkEngineAdapter
 
 if t.TYPE_CHECKING:
@@ -21,7 +21,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         super().__init__(connection_factory, "spark", multithreaded=multithreaded)
 
     @property
-    def spark(self) -> pyspark.sql.SparkSession:
+    def spark(self) -> PySparkSession:
         return self._connection_pool.get().spark
 
     def _ensure_pyspark_df(self, df: DF) -> PySparkDataFrame:
