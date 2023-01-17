@@ -20,6 +20,10 @@ setup(
             "sqlmesh = sqlmesh.cli.main:cli",
         ],
     },
+    use_scm_version={
+        "write_to": "sqlmesh/_version.py"
+    },
+    setup_requires=["setuptools_scm"],
     install_requires=[
         "astor",
         "click",

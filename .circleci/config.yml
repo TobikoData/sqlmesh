@@ -1,7 +1,13 @@
 version: 2.1
 
+on_tag_filter: &on_tag_filter
+  filters:
+    tags:
+      only: /v.+/
+
 orbs:
   python: circleci/python@1.5.0
+  gh-release: escaletech/gh-conventional-release@0.1.0
 
 jobs:
   style_and_unit_tests:
@@ -65,6 +71,15 @@ jobs:
       - store_artifacts:
           path: /tmp/airflow_logs
 
+  publish:
+    docker:
+      - image: cimg/python:3.7
+    steps:
+      - checkout
+      - run:
+          name: Publish Python package
+          command: make publish
+
 workflows:
   main_pr:
     jobs:
@@ -80,3 +95,12 @@ workflows:
             branches:
               only:
                 - main
+
+  release:
+    jobs:
+      - gh-release/create-release:
+          <<: *on_tag_filter
+      - publish:
+          <<: *on_tag_filter
+          requires:
+            - gh-release/create-release
