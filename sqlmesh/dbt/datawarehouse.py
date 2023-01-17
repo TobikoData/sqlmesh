@@ -41,6 +41,8 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
             return PostgresConfig(**data)
         elif db_type == "redshift":
             return RedshiftConfig(**data)
+        elif db_type == "databricks":
+            return DatabricksConfig(**data)
 
         # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
@@ -57,12 +59,12 @@ class SnowflakeConfig(DataWarehouseConfig):
         user: Name of the user
         password: User's password
         role: Role of the user
-        client_session_keep_alive: A boolean flag to extend the duration of the snowflake session beyond 4 hours
-        query_tag: tag for the query in snowflake
-        connect_retries: Number of times to retry if the snowflake connector encounters an error
+        client_session_keep_alive: A boolean flag to extend the duration of the Snowflake session beyond 4 hours
+        query_tag: tag for the query in Snowflake
+        connect_retries: Number of times to retry if the Snowflake connector encounters an error
         connect_timeout: Number of seconds to wait between failed attempts
-        retry_on_database_errors: A boolean flag to retry if a snowflake connector Database error is encountered
-        retry_all: A boolean flag to retry on all snowflake connector errors
+        retry_on_database_errors: A boolean flag to retry if a Snowflake connector Database error is encountered
+        retry_all: A boolean flag to retry on all Snowflake connector errors
     """
 
     # TODO add other forms of authentication
@@ -92,7 +94,7 @@ class PostgresConfig(DataWarehouseConfig):
         dbname: Name of the database
         keepalives_idle: Seconds between TCP keepalive packets
         connect_timeout: Number of seconds to wait between failed attempts
-        retries: Number of times to retry if the postgres connector encounters an error
+        retries: Number of times to retry if the Postgres connector encounters an error
         search_path: Overrides the default search path
         role: Role of the user
         sslmode: SSL Mode used to connect to the database
@@ -139,3 +141,20 @@ class RedshiftConfig(DataWarehouseConfig):
     ra3_node: bool = True
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
+
+
+class DatabricksConfig(DataWarehouseConfig):
+    """
+    Project connection and operational configuration for the Databricks data warehouse
+
+    Args:
+        catalog: Catalog name to use for Unity Catalog
+        host: The Databricks host to connect to
+        http_path: The Databricks compute resources URL
+        token: Personal access token
+    """
+
+    catalog: t.Optional[str] = None
+    host: str
+    http_path: str
+    token: str
