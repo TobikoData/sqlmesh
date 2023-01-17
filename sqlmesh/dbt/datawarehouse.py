@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import typing as t
 
-import snowflake.connector
 from pydantic import Field
 
 from sqlmesh.core.config import Config
@@ -84,15 +83,19 @@ class SnowflakeConfig(DataWarehouseConfig):
     retry_all: bool = False
 
     def to_sqlmesh(self) -> Config:
-        context = snowflake.connector.connect(
-            user=self.user,
-            password=self.password,
-            account=self.account,
-            warehouse=self.warehouse,
-            database=self.database,
-        )
+        import snowflake.connector as sf_conn
+
+        kwargs = {
+            "user": self.user,
+            "password": self.password,
+            "account": self.account,
+            "warehouse": self.warehouse,
+            "database": self.database,
+        }
+
         return Config(
-            engine_connection_factory=lambda: context, engine_dialect="snowflake"
+            engine_connection_factory=lambda: sf_conn.connect(**kwargs),
+            engine_dialect="snowflake",
         )
 
 

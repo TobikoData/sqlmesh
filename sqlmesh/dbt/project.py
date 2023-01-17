@@ -337,9 +337,9 @@ class ProjectConfig:
 
     @property
     def model_mapping(self) -> t.Dict[str, str]:
-        return {name: config.model_name for name, config in self.models.items()} | {
-            name: config.seed_name for name, config in self.seeds.items()
-        }
+        mapping = {name: config.model_name for name, config in self.models.items()}
+        mapping.update({name: config.seed_name for name, config in self.seeds.items()})
+        return mapping
 
     @property
     def source_mapping(self) -> t.Dict[str, str]:

@@ -33,7 +33,6 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "snowflake-connector-python",
         "sqlglot>=10.5.2",
     ],
     extras_require={
@@ -56,6 +55,7 @@ setup(
             "pytest",
             "pytest-mock",
             "pyspark",
+            "snowflake-connector-python",
             "sqlalchemy-stubs",
             "tenacity",
             "types-croniter",
