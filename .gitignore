@@ -147,3 +147,4 @@ example/airflow/warehouse
 
 
 **/.DS_Store
+**/node_modules

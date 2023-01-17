@@ -13,8 +13,18 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.1.3",
+    "@codemirror/lang-python": "^6.1.1",
+    "@codemirror/lang-sql": "^6.3.3",
+    "@codemirror/language": "^6.4.0",
+    "@codemirror/legacy-modes": "^6.3.1",
+    "@codemirror/state": "^6.2.0",
+    "@codemirror/view": "^6.7.3",
+    "@headlessui/react": "^1.7.7",
     "@heroicons/react": "^2.0.13",
     "@tanstack/react-query": "^4.22.0",
+    "@uiw/react-codemirror": "^4.19.7",
+    "clsx": "^1.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.6.2"

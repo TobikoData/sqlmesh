@@ -28,7 +28,7 @@ def projects():
 
 @router.get("/{id}/structure")
 def project_folders():
-    (folders, files) = file_browser("example")
+    (folders, files) = file_browser("../../example")
 
     return {
         "ok": True,
