@@ -38,7 +38,7 @@ from sqlmesh.utils.metaprogramming import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
-    from sqlmesh.core.engine_adapter import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
 
 if sys.version_info >= (3, 9):
@@ -679,7 +679,9 @@ class PythonModel(_Model):
                 if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
-                    if PySparkDataFrame and isinstance(df, PySparkDataFrame):
+                    if PySparkDataFrame is not None and isinstance(
+                        df, PySparkDataFrame
+                    ):
                         import pyspark
 
                         df = df.where(
