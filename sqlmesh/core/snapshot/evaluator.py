@@ -395,8 +395,8 @@ class SnapshotEvaluator:
             self.adapter.create_schema(schema)
 
         view_name = qualified_view_name.for_environment(environment=environment)
-        table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
-        if self.adapter.table_exists(table_name):
+        if not snapshot.is_embedded_kind:
+            table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
             logger.info(
                 "Updating view '%s' to point at table '%s'", view_name, table_name
             )
@@ -409,9 +409,8 @@ class SnapshotEvaluator:
         view_name = snapshot.qualified_view_name.for_environment(
             environment=environment
         )
-        if self.adapter.table_exists(view_name):
-            logger.info("Dropping view '%s'", view_name)
-            self.adapter.drop_view(view_name)
+        logger.info("Dropping view '%s'", view_name)
+        self.adapter.drop_view(view_name)
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
@@ -420,10 +419,9 @@ class SnapshotEvaluator:
             table_names.append(snapshot.table_name(is_dev=True))
 
         for table_name in table_names:
-            if self.adapter.table_exists(table_name):
-                try:
-                    self.adapter.drop_table(table_name)
-                    logger.info("Dropped table '%s'", table_name)
-                except Exception:
-                    self.adapter.drop_view(table_name)
-                    logger.info("Dropped view '%s'", table_name)
+            try:
+                self.adapter.drop_table(table_name)
+                logger.info("Dropped table '%s'", table_name)
+            except Exception:
+                self.adapter.drop_view(table_name)
+                logger.info("Dropped view '%s'", table_name)

@@ -191,6 +191,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
     is_materialized: bool
+    is_embedded_kind: bool
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -567,6 +568,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             previous_versions=self.previous_versions,
             change_category=self.change_category,
             is_materialized=self.is_materialized,
+            is_embedded_kind=self.is_embedded_kind,
         )
 
     @property

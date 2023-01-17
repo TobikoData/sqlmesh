@@ -124,6 +124,7 @@ def test_promote_model_info(mocker: MockerFixture):
                 version="1",
                 parents=[],
                 is_materialized=True,
+                is_embedded_kind=False,
             )
         ],
         "test_env",
