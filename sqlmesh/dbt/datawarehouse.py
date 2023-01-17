@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import abc
+import sys
 import typing as t
 
 from pydantic import Field
 
 from sqlmesh.core.config import Config
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, MissingDependencyError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -83,6 +84,11 @@ class SnowflakeConfig(DataWarehouseConfig):
     retry_all: bool = False
 
     def to_sqlmesh(self) -> Config:
+        if sys.version_info >= (3, 11):
+            raise MissingDependencyError(
+                "Snowflake connector not supported in Python 3.11 or greater"
+            )
+
         import snowflake.connector as sf_conn
 
         kwargs = {
