@@ -19,6 +19,10 @@ WITH order_total AS (
   WHERE
     oi.ds > (select max(ds) from {{ this }})
 {% endif %}
+{% if sqlmesh is defined %}
+  WHERE
+      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+{% endif %}
   GROUP BY
     oi.order_id,
     oi.ds
@@ -33,6 +37,10 @@ LEFT JOIN order_total AS ot
 {% if is_incremental() %}
 WHERE
   o.ds > (select max(ds) from {{ this }})
+{% endif %}
+{% if sqlmesh is defined %}
+  WHERE
+      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
 {% endif %}
 GROUP BY
   o.customer_id,

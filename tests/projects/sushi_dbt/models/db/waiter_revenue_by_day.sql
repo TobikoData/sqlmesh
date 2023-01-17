@@ -20,6 +20,10 @@ LEFT JOIN {{ ref('items') }} AS i
   WHERE
     o.ds > (select max(ds) from {{ this }})
 {% endif %}
+{% if sqlmesh is defined %}
+  WHERE
+      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+{% endif %}
 GROUP BY
   o.waiter_id,
   o.ds

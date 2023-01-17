@@ -66,6 +66,9 @@ setup(
             "hyperscript==0.0.1",
             "uvicorn==0.18.3",
         ],
+        "snowflake": [
+            "snowflake-connector-python",
+        ],
     },
     classifiers=[
         "Intended Audience :: Developers",

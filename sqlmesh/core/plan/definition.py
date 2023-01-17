@@ -352,6 +352,13 @@ class Plan:
             if model_name not in self.context_diff.snapshots:
                 continue
 
+            upstream_model_names = self._dag.upstream(model_name)
+
+            if not self.forward_only:
+                self._ensure_no_paused_forward_only_upstream(
+                    model_name, upstream_model_names
+                )
+
             snapshot = self.context_diff.snapshots[model_name]
 
             if model_name in self.context_diff.modified_snapshots:
@@ -360,14 +367,8 @@ class Plan:
                     # previous version.
                     snapshot.set_version(snapshot.previous_version)
 
-                upstream_model_names = self._dag.upstream(model_name)
-
                 if self.context_diff.directly_modified(model_name):
                     added_and_directly_modified.append(snapshot)
-                    if not self.forward_only:
-                        self._ensure_no_paused_forward_only_upstream(
-                            model_name, upstream_model_names
-                        )
                 else:
                     all_indirectly_modified.add(model_name)
 
@@ -409,7 +410,7 @@ class Plan:
                 and upstream_snapshot.is_paused
             ):
                 raise PlanError(
-                    f"Modified model '{model_name}' depends on a paused version of model '{upstream}'. "
+                    f"Model '{model_name}' depends on a paused version of model '{upstream}'. "
                     "Possible remedies: "
                     "1) make sure your codebase is up-to-date; "
                     f"2) promote the current version of model '{upstream}' in the production environment; "
