@@ -252,10 +252,10 @@ class ProjectConfig:
         configs = {}
 
         for source in sources_yaml:
-            schema = source["name"]
-            source_config = cls._config_for_scope((*scope, schema), scoped_configs)
+            source_name = source["name"]
+            source_config = cls._config_for_scope((*scope, source_name), scoped_configs)
 
-            source_config.schema_ = schema
+            source_config.schema_ = source_name
             config_fields = source.get("config")
             if config_fields:
                 source_config = source_config.update_with(config_fields)
@@ -269,6 +269,7 @@ class ProjectConfig:
                 if config_fields:
                     table_config = table_config.update_with(config_fields)
 
+                table_config.config_name = f"{source_name}.{table_name}"
                 configs[table_name] = table_config
 
         return configs
@@ -286,6 +287,7 @@ class ProjectConfig:
 
         depends_on = set()
         calls = set()
+        sources = set()
 
         for method, args, kwargs in capture_jinja(sql).calls:
             calls.add(method)
@@ -299,10 +301,15 @@ class ProjectConfig:
                 dep = ".".join(args + tuple(kwargs.values()))
                 if dep:
                     depends_on.add(dep)
+            elif method == "source":
+                source = ".".join(args + tuple(kwargs.values()))
+                if source:
+                    sources.add(source)
 
         model_config.sql = cls._remove_config_jinja(sql)
         model_config._depends_on = depends_on
         model_config._calls = calls
+        model_config._sources = sources
 
         return model_config
 
@@ -327,3 +334,15 @@ class ProjectConfig:
     @classmethod
     def _remove_config_jinja(cls, query: str) -> str:
         return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
+
+    @property
+    def model_mapping(self) -> t.Dict[str, str]:
+        mapping = {name: config.model_name for name, config in self.models.items()}
+        mapping.update({name: config.seed_name for name, config in self.seeds.items()})
+        return mapping
+
+    @property
+    def source_mapping(self) -> t.Dict[str, str]:
+        return {
+            config.config_name: config.source_name for config in self.sources.values()
+        }

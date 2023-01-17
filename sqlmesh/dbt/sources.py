@@ -12,6 +12,7 @@ from sqlmesh.utils.conversions import ensure_bool
 class SourceConfig(GeneralConfig):
     """
     Args:
+        config_name: The schema.table_name names declared in source config
         name: The name of the source or table
         database: Name of the database where the table is stored. By default, the project's target database is used.
         schema: The scehma name as stored in the database. If not specified, the source name is used.
@@ -25,6 +26,10 @@ class SourceConfig(GeneralConfig):
         columns: Columns within the source
     """
 
+    # sqlmesh fields
+    config_name: str = ""
+
+    # DBT configuration fields
     name: t.Optional[str] = None
     database: t.Optional[str] = None
     schema_: t.Optional[str] = Field(None, alias="schema")
@@ -49,3 +54,9 @@ class SourceConfig(GeneralConfig):
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{"columns": UpdateStrategy.KEY_APPEND},
     }
+
+    @property
+    def source_name(self) -> str:
+        return ".".join(
+            part for part in (self.schema_, self.identifier or self.name) if part
+        )

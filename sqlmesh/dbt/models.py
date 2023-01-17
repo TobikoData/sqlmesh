@@ -39,6 +39,7 @@ class ModelConfig(GeneralConfig):
         sql: The model sql
         time_column: The name of the time column
         table_name: Table name as stored in the database instead of the model filename
+        start: The earliest date that the model will be backfileld for
         alias: Relation identifier for this model instead of the model filename
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         database: Database the model is stored in
@@ -62,8 +63,10 @@ class ModelConfig(GeneralConfig):
     table_name: t.Optional[str] = None
     _depends_on: t.Set[str] = set()
     _calls: t.Set[str] = set()
+    _sources: t.Set[str] = set()
 
     # DBT configuration fields
+    start: t.Optional[str] = None
     alias: t.Optional[str] = None
     cluster_by: t.Optional[t.List[str]] = None
     database: t.Optional[str] = None
@@ -117,7 +120,9 @@ class ModelConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(self, mapping: t.Dict[str, ModelConfig]) -> Model:
+    def to_sqlmesh(
+        self, source_mapping: t.Dict[str, str], model_mapping: t.Dict[str, str]
+    ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
             f"""
@@ -135,16 +140,22 @@ class ModelConfig(GeneralConfig):
             if isinstance(jinja, d.Jinja):
                 pass
 
-        def ref_code() -> str:
+        def source_map() -> str:
             deps = ", ".join(
-                f"'{dep}': '{mapping[dep].model_name}'" for dep in self._depends_on
+                f"'{dep}': '{source_mapping[dep]}'" for dep in self._sources
             )
-            return f"{{{deps}}}[model_name]"
+            return f"{{{deps}}}"
+
+        def ref_map() -> str:
+            deps = ", ".join(
+                f"'{dep}': '{model_mapping[dep]}'" for dep in self._depends_on
+            )
+            return f"{{{deps}}}"
 
         python_env = {
             "source": Executable(
-                payload="""def source(source_name, table_name):
-    return ".".join((source_name, table_name))
+                payload=f"""def source(source_name, table_name):
+    return {source_map()}[".".join([source_name, table_name])]
 """,
             ),
             "ref": Executable(
@@ -152,7 +163,7 @@ class ModelConfig(GeneralConfig):
     if model_name:
         raise Exception("Package not supported.")
     model_name = package_name
-    return {ref_code()}
+    return {ref_map()}[model_name]
 """,
             ),
             "sqlmesh": Executable(
@@ -170,7 +181,8 @@ class ModelConfig(GeneralConfig):
             expressions,
             path=self.path,
             python_env=python_env,
-            depends_on=self._depends_on,
+            depends_on={model_mapping[model] for model in self._depends_on},
+            start=self.start,
         )
 
     @property
