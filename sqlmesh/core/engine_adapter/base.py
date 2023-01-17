@@ -23,8 +23,8 @@ from sqlmesh.core.engine_adapter._typing import (
     SOURCE_ALIAS,
     TARGET_ALIAS,
     PySparkDataFrame,
+    PySparkSession,
     Query,
-    pyspark,
 )
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.model.kind import TimeColumn
@@ -74,7 +74,7 @@ class EngineAdapter:
         return self._connection_pool.get_cursor()
 
     @property
-    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
+    def spark(self) -> t.Optional[PySparkSession]:
         return None
 
     def recycle(self) -> t.Any:
@@ -408,17 +408,21 @@ class EngineAdapter:
             low=low,
             high=high,
         )
-        return self._insert_overwrite_by_time_partition(
+        return self._insert_overwrite_by_condition(
             table_name, query_or_df, where, columns_to_types
         )
 
-    def _insert_overwrite_by_time_partition(
+    def _insert_overwrite_by_condition(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        where: exp.Condition,
+        where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
+        if where is None:
+            raise SQLMeshError(
+                "Where condition is required when doing a delete/insert for insert/overwrite"
+            )
         with self.transaction():
             self.delete_from(table_name, where=where)
             self.insert_append(

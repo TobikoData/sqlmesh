@@ -13,6 +13,7 @@ QUERY_TYPES: t.Tuple = (exp.Subqueryable, exp.DerivedTable)
 if t.TYPE_CHECKING:
     import pyspark
 
+    PySparkSession = pyspark.sql.SparkSession
     PySparkDataFrame = pyspark.sql.DataFrame
     DF = t.Union[pd.DataFrame, PySparkDataFrame]
     QueryOrDF = t.Union[Query, DF]
@@ -20,7 +21,9 @@ else:
     try:
         import pyspark
 
+        PySparkSession = pyspark.sql.SparkSession
         PySparkDataFrame = pyspark.sql.DataFrame
         DF_TYPES += (PySparkDataFrame,)
     except ImportError:
+        PySparkSession = None
         PySparkDataFrame = None
