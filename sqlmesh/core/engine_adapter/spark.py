@@ -35,11 +35,11 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         return t.cast(PySparkDataFrame, self._fetch_native_df(query))
 
-    def _insert_overwrite_by_time_partition(
+    def _insert_overwrite_by_condition(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        where: exp.Condition,
+        where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
         if isinstance(query_or_df, (pd.DataFrame, PySparkDataFrame)):

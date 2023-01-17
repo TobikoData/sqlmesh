@@ -24,7 +24,6 @@ from sqlmesh.core.engine_adapter._typing import (
     TARGET_ALIAS,
     PySparkDataFrame,
     Query,
-    pyspark,
 )
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.model.kind import TimeColumn
@@ -34,7 +33,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF, pyspark
 
 logger = logging.getLogger(__name__)
 
@@ -408,17 +407,21 @@ class EngineAdapter:
             low=low,
             high=high,
         )
-        return self._insert_overwrite_by_time_partition(
+        return self._insert_overwrite_by_condition(
             table_name, query_or_df, where, columns_to_types
         )
 
-    def _insert_overwrite_by_time_partition(
+    def _insert_overwrite_by_condition(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        where: exp.Condition,
+        where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
+        if where is None:
+            raise SQLMeshError(
+                "Where condition is required when doing a delete/insert for insert/overwrite"
+            )
         with self.transaction():
             self.delete_from(table_name, where=where)
             self.insert_append(
