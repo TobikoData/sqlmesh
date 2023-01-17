@@ -33,7 +33,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         if isinstance(query_or_df, pd.DataFrame):
             if columns_to_types is None:
                 raise SQLMeshError(
