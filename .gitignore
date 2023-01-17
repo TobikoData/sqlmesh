@@ -145,5 +145,7 @@ example/airflow/warehouse
 *.duckdb
 *.duckdb.wal
 
-
 **/.DS_Store
+
+# Version file
+sqlmesh/_version.py

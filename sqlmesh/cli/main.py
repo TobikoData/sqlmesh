@@ -20,6 +20,9 @@ from sqlmesh.utils.date import TimeLike
 @error_handler
 def cli(ctx, path, config=None) -> None:
     """SQLMesh command line tool."""
+    if ctx.invoked_subcommand == "version":
+        return
+
     path = os.path.abspath(path)
     if ctx.invoked_subcommand == "init":
         ctx.obj = path
@@ -283,6 +286,18 @@ def fetchdf(ctx, sql: str) -> None:
     """Runs a sql query and displays the results."""
     context = ctx.obj
     context.console.log_success(context.fetchdf(sql))
+
+
+@cli.command("version")
+@error_handler
+def version() -> None:
+    """Print version."""
+    try:
+        from sqlmesh import __version__
+
+        print(__version__)
+    except ImportError:
+        print("Version is not available")
 
 
 if __name__ == "__main__":
