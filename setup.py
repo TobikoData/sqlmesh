@@ -1,5 +1,4 @@
 import os
-import sys
 from os.path import exists
 
 from setuptools import find_packages, setup
@@ -56,7 +55,6 @@ setup(
             "pytest",
             "pytest-mock",
             "pyspark",
-            *(["snowflake-connector-python"] if sys.version_info < (3, 11) else []),
             "sqlalchemy-stubs",
             "tenacity",
             "types-croniter",
@@ -67,6 +65,9 @@ setup(
             "fastapi==0.85.0",
             "hyperscript==0.0.1",
             "uvicorn==0.18.3",
+        ],
+        "snowflake": [
+            "snowflake-connector-python",
         ],
     },
     classifiers=[
