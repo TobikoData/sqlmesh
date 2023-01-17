@@ -413,15 +413,18 @@ class SnapshotEvaluator:
         self.adapter.drop_view(view_name)
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
+        if snapshot.is_embedded_kind:
+            return
+
         snapshot = snapshot.table_info
         table_names = [snapshot.table_name()]
         if snapshot.version != snapshot.fingerprint:
             table_names.append(snapshot.table_name(is_dev=True))
 
         for table_name in table_names:
-            try:
+            if snapshot.is_materialized:
                 self.adapter.drop_table(table_name)
                 logger.info("Dropped table '%s'", table_name)
-            except Exception:
+            else:
                 self.adapter.drop_view(table_name)
                 logger.info("Dropped view '%s'", table_name)
