@@ -91,6 +91,7 @@ class SnowflakeConfig(DataWarehouseConfig):
             "account": self.account,
             "warehouse": self.warehouse,
             "database": self.database,
+            "role": self.role,
         }
 
         return Config(
