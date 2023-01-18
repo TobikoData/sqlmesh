@@ -21,6 +21,7 @@ nav:
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
+    - integrations/dbt.md
   - Resources:
     - community.md
     - development.md
