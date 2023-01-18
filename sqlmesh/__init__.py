@@ -15,7 +15,10 @@ from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot
 
-__version__ = "0.0.1"
+try:
+    from sqlmesh._version import __version__, __version_tuple__  # type: ignore
+except ImportError:
+    pass
 
 
 class RuntimeEnv(str, Enum):

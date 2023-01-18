@@ -1,7 +1,9 @@
+# type: ignore
 from unittest.mock import call
 
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
+from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 
@@ -16,7 +18,7 @@ def test_create_table_properties(mocker: MockerFixture):
         "colb": exp.DataType.build("TEXT"),
     }
 
-    adapter = SparkEngineAdapter(lambda: connection_mock)  # type: ignore
+    adapter = SparkEngineAdapter(lambda: connection_mock)
     adapter.create_table(
         "test_table",
         columns_to_types,
@@ -34,7 +36,7 @@ def test_alter_table(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = SparkEngineAdapter(lambda: connection_mock)  # type: ignore
+    adapter = SparkEngineAdapter(lambda: connection_mock)
 
     adapter.alter_table(
         "test_table",
@@ -64,4 +66,17 @@ def test_alter_table(mocker: MockerFixture):
             # 3d call.
             call("""ALTER TABLE `test_table` DROP COLUMNS (`f`)"""),
         ]
+    )
+
+
+def test_replace_query(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM `tbl`"
     )

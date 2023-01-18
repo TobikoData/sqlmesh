@@ -1,5 +1,12 @@
 version: 2.1
 
+on_tag_filter: &on_tag_filter
+  filters:
+    branches:
+      ignore: /.*/
+    tags:
+      only: /^v.+/
+
 orbs:
   python: circleci/python@1.5.0
 
@@ -65,6 +72,29 @@ jobs:
       - store_artifacts:
           path: /tmp/airflow_logs
 
+  publish:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Publish Python package
+          command: make publish
+
+  gh-release:
+    docker:
+      - image: cimg/node:16.14
+    steps:
+      - run:
+          name: Create release on GitHub
+          command: |
+            GITHUB_TOKEN="$GITHUB_TOKEN" \
+            TARGET_TAG="$CIRCLE_TAG" \
+            REPO_OWNER="$CIRCLE_PROJECT_USERNAME" \
+            REPO_NAME="$CIRCLE_PROJECT_REPONAME" \
+            CONTINUE_ON_ERROR="false" \
+            npx https://github.com/TobikoData/circleci-gh-conventional-release
+
 workflows:
   main_pr:
     jobs:
@@ -80,3 +110,12 @@ workflows:
             branches:
               only:
                 - main
+
+  release:
+    jobs:
+      - gh-release:
+          <<: *on_tag_filter
+      - publish:
+          <<: *on_tag_filter
+          requires:
+            - gh-release

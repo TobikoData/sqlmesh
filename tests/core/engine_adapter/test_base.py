@@ -97,7 +97,7 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
-    adapter._insert_overwrite_by_time_partition(
+    adapter._insert_overwrite_by_condition(
         "test_table",
         parse_one("SELECT a FROM tbl"),
         where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
@@ -254,4 +254,31 @@ def test_merge(mocker: MockerFixture):
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
+    )
+
+
+def test_replace_query(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+
+    cursor_mock.execute.assert_called_once_with(
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
+    )
+
+
+def test_replace_query_pandas(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+
+    cursor_mock.execute.assert_called_once_with(
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS int) AS "a", CAST("b" AS int) AS "b" FROM (VALUES (CAST(1 AS int), CAST(4 AS int)), (2, 5), (3, 6)) AS "test_table"("a", "b")'
     )

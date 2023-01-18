@@ -6,6 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
@@ -300,7 +301,7 @@ def _apply_plan_and_block(
 ) -> None:
     plan_request_id = random_id()
     plan_receiver_dag_run_id = airflow_client.apply_plan(
-        new_snapshots, environment, plan_request_id
+        new_snapshots, environment, plan_request_id, is_dev=environment.name != c.PROD
     )
     assert airflow_client.wait_for_dag_run_completion(
         common.PLAN_RECEIVER_DAG_ID, plan_receiver_dag_run_id, DAG_RUN_POLL_INTERVAL

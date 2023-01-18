@@ -7,6 +7,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from google.cloud.bigquery.client import Client as BigQueryClient
@@ -59,11 +60,11 @@ class BigQueryEngineAdapter(EngineAdapter):
         table = self._get_table(table_name)
         return {field.name: field.field_type for field in table.schema}
 
-    def _insert_overwrite_by_time_partition(
+    def _insert_overwrite_by_condition(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        where: exp.Condition,
+        where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
         """
@@ -72,6 +73,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         table and then using API calls like copy partitions/write_truncate to see if we can implement atomic
         insert/overwrite.
         """
+        if where is None:
+            raise SQLMeshError(
+                "Where condition is required when doing a BigQuery insert overwrite"
+            )
         self.delete_from(table_name, where=where)
         self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 

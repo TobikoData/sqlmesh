@@ -5,7 +5,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, pyspark
+from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, PySparkSession
 from sqlmesh.core.engine_adapter.base_spark import BaseSparkEngineAdapter
 
 if t.TYPE_CHECKING:
@@ -21,7 +21,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         super().__init__(connection_factory, "spark", multithreaded=multithreaded)
 
     @property
-    def spark(self) -> pyspark.sql.SparkSession:
+    def spark(self) -> PySparkSession:
         return self._connection_pool.get().spark
 
     def _ensure_pyspark_df(self, df: DF) -> PySparkDataFrame:
@@ -35,11 +35,11 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         return t.cast(PySparkDataFrame, self._fetch_native_df(query))
 
-    def _insert_overwrite_by_time_partition(
+    def _insert_overwrite_by_condition(
         self,
         table_name: str,
         query_or_df: QueryOrDF,
-        where: exp.Condition,
+        where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ):
         if isinstance(query_or_df, (pd.DataFrame, PySparkDataFrame)):
@@ -47,12 +47,8 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
                 table_name, self._ensure_pyspark_df(query_or_df), overwrite=True
             )
         else:
-            self.execute(
-                exp.Insert(
-                    this=self._insert_into_expression(table_name, columns_to_types),
-                    expression=query_or_df,
-                    overwrite=True,
-                )
+            super()._insert_overwrite_by_condition(
+                table_name, query_or_df, where, columns_to_types
             )
 
     def insert_append(
