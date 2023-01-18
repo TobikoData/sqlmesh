@@ -82,7 +82,7 @@ class Plan:
         self._dag = dag
         self._state_reader = state_reader
         self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
-        self._restatements = set()
+        self._restatements: t.Set[str] = set()
 
         if restate_models and context_diff.new_snapshots:
             raise PlanError(
@@ -93,18 +93,13 @@ class Plan:
         if not restate_models and is_dev and forward_only:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
-            restate_models = [s.name for s in context_diff.new_snapshots]
+            restate_models = [
+                s.name
+                for s in context_diff.new_snapshots.values()
+                if s.is_materialized and not s.is_incremental_by_unique_key_kind
+            ]
 
-        for table in restate_models or []:
-            downstream = self._dag.downstream(table)
-            if table in self.context_diff.snapshots:
-                downstream.append(table)
-
-            if not downstream:
-                raise PlanError(
-                    f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
-                )
-            self._restatements.update(downstream)
+        self._add_restatements(restate_models or [])
 
         self._ensure_valid_end(self._end)
         self._ensure_no_forward_only_revert()
@@ -339,6 +334,26 @@ class Plan:
         ]
         # Return the most conservative categorization found in the snapshot's history
         return min(change_categories, key=lambda x: x.value)
+
+    def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
+        for table in restate_models:
+            downstream = self._dag.downstream(table)
+            if table in self.context_diff.snapshots:
+                downstream.append(table)
+
+            snapshots = self.context_diff.snapshots
+            downstream = [
+                d
+                for d in downstream
+                if snapshots[d].is_materialized
+                and not snapshots[d].is_incremental_by_unique_key_kind
+            ]
+
+            if not downstream:
+                raise PlanError(
+                    f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
+                )
+            self._restatements.update(downstream)
 
     def _categorize_snapshots(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
         """Automatically categorizes snapshots that can be automatically categorized and

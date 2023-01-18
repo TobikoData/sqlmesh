@@ -3,7 +3,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import SeedKind, SeedModel, SqlModel
+from sqlmesh.core.model import IncrementalByUniqueKeyKind, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotDataVersion
@@ -130,7 +130,7 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
     )
-    assert plan.restatements == {"sushi.waiter_revenue_by_day", "sushi.top_waiters"}
+    assert plan.restatements == {"sushi.waiter_revenue_by_day"}
     assert plan.requires_backfill
 
     with pytest.raises(PlanError, match=r"Cannot restate from 'unknown_model'.*"):
@@ -139,10 +139,34 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
         )
 
 
+def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, key"),
+            kind=IncrementalByUniqueKeyKind(unique_key=["key"]),
+        )
+    )
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError,
+        match=r"Cannot restate from 'a'. Either such model doesn't exist or no other model references it.",
+    ):
+        Plan(context_diff_mock, dag, state_reader_mock, restate_models=["a"])
+
+
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-
-    to_datetime("2022-01-02")
 
     dag = DAG[str]({"a": set()})
 
@@ -163,8 +187,6 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-
-    to_datetime("2022-01-02")
 
     dag = DAG[str]({"a": set()})
 
