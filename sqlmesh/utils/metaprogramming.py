@@ -80,20 +80,20 @@ class ClassFoundException(Exception):
 
 
 class _ClassFinder(ast.NodeVisitor):
-    def __init__(self, qualname):
-        self.stack = []
+    def __init__(self, qualname: str) -> None:
+        self.stack: t.List[str] = []
         self.qualname = qualname
 
-    def visit_FunctionDef(self, node):
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.stack.append(node.name)
         self.stack.append("<locals>")
         self.generic_visit(node)
         self.stack.pop()
         self.stack.pop()
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore
 
-    def visit_ClassDef(self, node):
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.stack.append(node.name)
         if self.qualname == ".".join(self.stack):
             # Return the decorator for the class if present
@@ -301,15 +301,15 @@ class Executable(PydanticModel):
     path: t.Optional[str] = None
 
     @property
-    def is_definition(self):
+    def is_definition(self) -> bool:
         return self.kind == ExecutableKind.DEFINITION
 
     @property
-    def is_import(self):
+    def is_import(self) -> bool:
         return self.kind == ExecutableKind.IMPORT
 
     @property
-    def is_value(self):
+    def is_value(self) -> bool:
         return self.kind == ExecutableKind.VALUE
 
 
@@ -390,7 +390,7 @@ def prepare_env(
 def print_exception(
     exception: Exception,
     python_env: t.Dict[str, Executable],
-    out=sys.stderr,
+    out: t.TextIO = sys.stderr,
 ) -> None:
     """Formats exceptions that occur from evaled code.
 
@@ -400,6 +400,7 @@ def print_exception(
     Args:
         exception: The exception to print the stack trace for.
         python_env: The environment containing stringified python code.
+        out: The output stream to write to.
     """
     tb: t.List[str] = []
 

@@ -236,12 +236,12 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
         # See `check_supported_fields` for the supported extra fields
         extra = "allow"
 
-    def __init__(self, **data):
+    def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
         self._session: t.Optional[AuthorizedSession] = data.get("session")
 
     @property
-    def session(self):
+    def session(self) -> AuthorizedSession:
         import google.auth
         from google.auth.transport.requests import AuthorizedSession
 

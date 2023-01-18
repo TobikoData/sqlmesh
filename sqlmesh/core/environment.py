@@ -29,17 +29,17 @@ class Environment(PydanticModel):
 
     @validator("snapshots", pre=True)
     @classmethod
-    def _convert_snapshots(cls, v: t.Any):
+    def _convert_snapshots(
+        cls, v: str | t.List[SnapshotTableInfo]
+    ) -> t.List[SnapshotTableInfo]:
         if isinstance(v, str):
             return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
         return v
 
     @validator("name", pre=True)
     @classmethod
-    def _normalize_name(cls, v: t.Any):
-        if isinstance(v, str):
-            return word_characters_only(v).lower()
-        return v
+    def _normalize_name(cls, v: str) -> str:
+        return word_characters_only(v).lower()
 
     @t.overload
     @classmethod

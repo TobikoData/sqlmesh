@@ -41,7 +41,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         if isinstance(query_or_df, (pd.DataFrame, PySparkDataFrame)):
             self._insert_pyspark_df(
                 table_name, self._ensure_pyspark_df(query_or_df), overwrite=True
@@ -67,7 +67,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         table_name: str,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         self._insert_pyspark_df(
             table_name, self._ensure_pyspark_df(df), overwrite=False
         )
@@ -76,7 +76,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         self,
         table_name: str,
         df: PySparkDataFrame,
-    ):
+    ) -> None:
         self._insert_pyspark_df(table_name, df, overwrite=False)
 
     def _insert_pyspark_df(
@@ -84,7 +84,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         table_name: str,
         df: PySparkDataFrame,
         overwrite: bool = False,
-    ):
+    ) -> None:
         df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
             table_name, overwrite=overwrite
         )

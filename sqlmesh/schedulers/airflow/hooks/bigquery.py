@@ -32,7 +32,7 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
         gcp_conn_id: str = default_conn_name,
         delegate_to: str | None = None,
         impersonation_chain: str | t.Sequence[str] | None = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> None:
         GoogleBaseHook.__init__(
             self,

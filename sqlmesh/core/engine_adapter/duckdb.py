@@ -19,7 +19,7 @@ class DuckDBEngineAdapter(EngineAdapter):
         table_name: str,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         self.execute(
             exp.Insert(
                 this=self._insert_into_expression(table_name, columns_to_types),

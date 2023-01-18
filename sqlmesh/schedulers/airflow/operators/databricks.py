@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 from airflow.models import BaseOperator
 from airflow.providers.databricks.hooks.databricks_base import BaseDatabricksHook
 from airflow.providers.databricks.hooks.databricks_sql import DatabricksSqlHook
@@ -21,8 +23,8 @@ class SQLMeshDatabricksSQLOperator(BaseOperator):
         *,
         target: BaseTarget,
         databricks_conn_id: str = BaseDatabricksHook.default_conn_name,
-        **kwargs,
-    ):
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._target = target
         self._databricks_conn_id = databricks_conn_id

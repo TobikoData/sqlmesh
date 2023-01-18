@@ -27,7 +27,7 @@ class GithubNotificationOperatorProvider(
         target: GithubNotificationTarget,
         plan_status: PlanStatus,
         plan_application_request: common.PlanApplicationRequest,
-        **dag_kwargs,
+        **dag_kwargs: t.Any,
     ) -> GithubOperator:
         from airflow.providers.github.operators.github import GithubOperator
 

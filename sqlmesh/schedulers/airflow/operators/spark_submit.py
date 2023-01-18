@@ -49,8 +49,8 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         principal: t.Optional[str] = None,
         proxy_user: t.Optional[str] = None,
         num_executors: t.Optional[int] = None,
-        **kwargs,
-    ):
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._target = target
         self._application_name = application_name

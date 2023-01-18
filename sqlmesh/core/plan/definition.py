@@ -473,15 +473,15 @@ class PlanStatus(str, Enum):
     FAILED = "failed"
 
     @property
-    def is_started(self):
+    def is_started(self) -> bool:
         return self == PlanStatus.STARTED
 
     @property
-    def is_failed(self):
+    def is_failed(self) -> bool:
         return self == PlanStatus.FAILED
 
     @property
-    def is_finished(self):
+    def is_finished(self) -> bool:
         return self == PlanStatus.FINISHED
 
 

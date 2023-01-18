@@ -115,7 +115,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self._update_cache(snapshots)
             self._push_snapshots(snapshots)
 
-    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite=False) -> None:
+    def _push_snapshots(
+        self, snapshots: t.Iterable[Snapshot], overwrite: bool = False
+    ) -> None:
         if overwrite:
             snapshots = tuple(snapshots)
             self.delete_snapshots(snapshots)
@@ -206,7 +208,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             **{field: row[i] for i, field in enumerate(Environment.__fields__)}
         )
 
-    def _environments_query(self, where=None) -> exp.Select:
+    def _environments_query(
+        self, where: t.Optional[str | exp.Expression] = None
+    ) -> exp.Select:
         return (
             exp.select(*(exp.to_identifier(field) for field in Environment.__fields__))
             .from_(self.environments_table)

@@ -43,11 +43,11 @@ class FingerprintMixin:
     fingerprint: str
 
     @property
-    def data_hash(self):
+    def data_hash(self) -> str:
         return self._hashes[0]
 
     @property
-    def parent_hash(self):
+    def parent_hash(self) -> str:
         return self._hashes[1]
 
     @property
@@ -495,7 +495,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[
             str | SnapshotDataVersion | SnapshotTableInfo | Snapshot
         ] = None,
-    ):
+    ) -> None:
         """Set the version of this snapshot.
 
         If no version is passed, the fingerprint of the snapshot will be used.
@@ -599,7 +599,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.is_incremental_by_time_range
 
     @property
-    def is_incremental_by_unique_key_kind(self):
+    def is_incremental_by_unique_key_kind(self) -> bool:
         return self.model.kind.is_incremental_by_unique_key
 
     @property

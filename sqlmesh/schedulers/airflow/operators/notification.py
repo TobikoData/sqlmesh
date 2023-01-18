@@ -17,7 +17,7 @@ class BaseNotificationOperatorProvider(abc.ABC, t.Generic[NT]):
         target: NT,
         plan_status: PlanStatus,
         plan_application_request: common.PlanApplicationRequest,
-        **dag_kwargs,
+        **dag_kwargs: t.Any,
     ) -> t.Optional[BaseOperator]:
         pass
 

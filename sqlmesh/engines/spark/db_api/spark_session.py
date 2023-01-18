@@ -32,7 +32,7 @@ class SparkSessionCursor:
     def fetchall(self) -> t.List[t.Tuple]:
         return self._fetch()
 
-    def close(self):
+    def close(self) -> None:
         pass
 
     def fetchdf(self) -> t.Optional[DataFrame]:

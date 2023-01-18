@@ -51,7 +51,7 @@ class SQLMeshMagics(Magics):
     @argument("--latest", "-l", type=str, help="Latest date to render.")
     @argument("--dialect", "-d", type=str, help="The rendered dialect.")
     @line_cell_magic
-    def model(self, line: str, sql: t.Optional[str] = None):
+    def model(self, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
         model = self.context.get_model(args.model)
@@ -106,7 +106,7 @@ class SQLMeshMagics(Magics):
     )
     @argument("--ls", action="store_true", help="List tests associated with a model")
     @line_cell_magic
-    def test(self, line: str, test_def_raw: t.Optional[str] = None):
+    def test(self, line: str, test_def_raw: t.Optional[str] = None) -> None:
         """Allow the user to list tests for a model, output a specific test, and then write their changes back"""
         args = parse_argstring(self.test, line)
         if not args.test_name and not args.ls:
@@ -207,7 +207,7 @@ class SQLMeshMagics(Magics):
         help="Automatically applies the new plan after creation.",
     )
     @line_magic
-    def plan(self, line) -> None:
+    def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
         self.context.refresh()
         args = parse_argstring(self.plan, line)
@@ -242,7 +242,7 @@ class SQLMeshMagics(Magics):
         help="The number of rows which the query should be limited to.",
     )
     @line_magic
-    def evaluate(self, line):
+    def evaluate(self, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
         self.context.refresh()
         args = parse_argstring(self.evaluate, line)
@@ -265,7 +265,7 @@ class SQLMeshMagics(Magics):
         help="An optional variable name to store the resulting dataframe.",
     )
     @line_cell_magic
-    def fetchdf(self, line, sql: str):
+    def fetchdf(self, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
         df = self.context.fetchdf(sql)
@@ -275,7 +275,7 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @line_magic
-    def dag(self, line):
+    def dag(self, line: str) -> None:
         """Displays the dag"""
         self.context.refresh()
         dag = self.context.get_dag()

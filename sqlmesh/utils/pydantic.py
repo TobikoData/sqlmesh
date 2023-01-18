@@ -16,13 +16,13 @@ class PydanticModel(BaseModel):
 
     def dict(
         self,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> t.Dict[str, t.Any]:
         return super().dict(**{**DEFAULT_ARGS, **kwargs})  # type: ignore
 
     def json(
         self,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> str:
         return super().json(**{**DEFAULT_ARGS, **kwargs})  # type: ignore
 
