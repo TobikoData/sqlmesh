@@ -1,28 +1,30 @@
+import hashlib
 import os
 import pathlib
-import random
-import string
 import typing as t
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+
+from sqlmesh.utils.pydantic import PydanticModel
 
 router = APIRouter()
 
 
-class File(BaseModel):
+class File(PydanticModel):
     id: str
     is_supported: bool = True
     name: str
     extension: str
-    value: str
+    path: str
+    value: str = ""
 
 
-class Folder(BaseModel):
+class Folder(PydanticModel):
     id: str
     name: str
     folders: t.List["Folder"]
     files: t.List[File]
+    path: str
 
 
 @router.get("/")
@@ -64,43 +66,43 @@ def file_browser(path: str) -> t.Tuple[t.List[Folder], t.List[File]]:
 
             folders.append(
                 Folder(
-                    id=id(),
+                    id=get_id(entry.path),
                     name=entry.name,
                     folders=subfolders,
                     files=subfiles,
+                    path=entry.path,
                 )
             )
         else:
-
             extension = pathlib.Path(entry.path).suffix
 
             if extension in SUPPORTED_EXTENSIONS:
-                if os.path.exists(entry.path):
-                    with open(entry.path, "r") as f:
-                        files.append(
-                            File(
-                                id=id(),
-                                is_supported=extension in SUPPORTED_EXTENSIONS,
-                                name=entry.name,
-                                extension=extension,
-                                value=f.read(),
-                            )
+                with open(entry.path, "r") as f:
+                    files.append(
+                        File(
+                            id=get_id(entry.path),
+                            is_supported=True,
+                            name=entry.name,
+                            extension=extension,
+                            value=f.read(),
+                            path=entry.path,
                         )
-                else:
-                    print("File does not exist.")
+                    )
             else:
                 files.append(
                     File(
-                        id=id(),
+                        id=get_id(entry.path),
                         is_supported=False,
                         name=entry.name,
                         extension=extension,
-                        value="",
+                        path=entry.path,
                     )
                 )
 
     return (folders, files)
 
 
-def id(length=10) -> str:
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
+def get_id(path: str) -> str:
+    result = hashlib.blake2b(path.encode())
+
+    return result.hexdigest()
