@@ -9,6 +9,7 @@ nav:
     - concepts/model_kinds.md
     - concepts/plans.md
     - concepts/snapshots.md
+    - concepts/configs.md
     - concepts/tests.md
     - concepts/audits.md
   - API:
