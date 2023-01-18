@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useProjectStructure, type Folder, type File } from '../../../api';
-import { FolderOpenIcon, DocumentIcon, } from '@heroicons/react/24/solid'
+import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/20/solid'
 import { useContext, useState } from 'react';
@@ -69,17 +69,34 @@ function Folder(props: { folder: Folder, selectFile?: any, activeFile?: File, ac
   const [isOpen, setOpen] = useState(false);
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon;
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon;
+  const withFolders = Array.isArray(props.folder.folders) && Boolean(props.folder.folders.length)
+  const withFiles = Array.isArray(props.folder.files) && Boolean(props.folder.files.length)
 
   return (
     <>
-      <span className='text-base block whitespace-nowrap pb-1 cursor-pointer hover:bg-gray-800 group text-secondary-500 hover:text-gray-100' onClick={() => setOpen(!isOpen)}>
-        <IconChevron className={`inline-block ${CSS_ICON_SIZE} mr-2`} />
-        <IconFolder  className={`inline-block ${CSS_ICON_SIZE} mr-3`} />
-        <span className='inline-block text-gray-800 group-hover:text-gray-100'>
-          {props.folder.name}
+      <span
+        className='text-base whitespace-nowrap pb-1 px-2 hover:bg-secondary-100 group flex justify-between rounded-md'
+      >
+        <span>
+          <IconChevron className={clsx(
+            `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500 cursor-pointer`,
+            { 'invisible pointer-events-none cursor-default': !withFolders && !withFiles }
+          )} onClick={() => setOpen(!isOpen)} />
+          <span className='cursor-pointer' onClick={() => setOpen(!isOpen)}>
+            <IconFolder className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`} />
+            <p className='inline-block font-light text-gray-600 group-hover:text-secondary-500'>
+              {props.folder.name}
+            </p>
+          </span>
         </span>
+
+        <span className='hidden group-hover:block'>
+            <DocumentPlusIcon className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+            <FolderPlusIcon  className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+            <XCircleIcon  className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500 cursor-pointer`} />
+          </span>
       </span>
-      {isOpen && Array.isArray(props.folder.folders) && Boolean(props.folder.folders.length) && (
+      {isOpen && withFolders && (
         <Folders
           folders={props.folder.folders}
           withIndent={true}
@@ -88,7 +105,7 @@ function Folder(props: { folder: Folder, selectFile?: any, activeFile?: File, ac
           activeFiles={props.activeFiles}
         />
       )}
-      {isOpen && Array.isArray(props.folder.files) && Boolean(props.folder.files.length) && (
+      {isOpen && withFiles && (
         <Files
           files={props.folder.files}
           selectFile={props.selectFile}
@@ -111,18 +128,24 @@ function Files(props: { files: File[], selectFile?: any, activeFile?: File, acti
           onClick={() => f.is_supported && props.selectFile(f)}
         >
           <span className={clsx(
-            'text-base block whitespace-nowrap pb-1 ',
-            !f.is_supported
-              ? 'opacity-50 cursor-not-allowed'
-              : 'group cursor-pointer hover:bg-gray-800 hover:text-gray-100',
-            f.id === props.activeFile?.id ? ' text-secondary-500' : 'text-gray-800',
-            
+            'text-base whitespace-nowrap pb-1 group/file px-2 flex justify-between rounded-md',
+            f.id === props.activeFile?.id ? 'text-secondary-500' : 'text-gray-800',
+            f.is_supported && 'group cursor-pointer hover:bg-secondary-100',
           )}>
-            {props.activeFiles?.has(f) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
-            {!props.activeFiles?.has(f) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}            
-            
-            <span className='inline-block  group-hover:text-gray-100'>
-              {f.name}
+            <span className={clsx(
+              'flex w-full items-center overflow-hidden overflow-ellipsis',
+              !f.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
+            )}>
+              {props.activeFiles?.has(f) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+              {!props.activeFiles?.has(f) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+
+              <span className='w-full overflow-hidden overflow-ellipsis group-hover:text-secondary-500'>
+                {f.name}
+              </span>              
+            </span>
+
+            <span className='invisible group-hover/file:visible min-w-8'>
+              <XCircleIcon  className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500 cursor-pointer`} />
             </span>
           </span>
         </li>

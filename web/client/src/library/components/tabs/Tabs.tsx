@@ -5,7 +5,7 @@ import clsx from 'clsx'
 export default function Example() {
   let [categories] = useState({
     Table: [],
-    DAG: [],
+    // DAG: [],
     'Query Preview': []
   })
 
