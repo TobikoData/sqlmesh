@@ -1,7 +1,7 @@
 .PHONY: docs
 
 install-dev:
-	pip install -e ".[dev,web]"
+	pip install -e ".[dev,snowflake,web]"
 
 install-pre-commit:
 	pre-commit install

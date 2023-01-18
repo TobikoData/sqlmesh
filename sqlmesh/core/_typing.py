@@ -15,5 +15,5 @@ from sqlmesh.integrations.github.notification_target import GithubNotificationTa
 
 NotificationTarget = Annotated[
     t.Union[ConsoleNotificationTarget, GithubNotificationTarget],
-    Field(discriminator="kind"),
+    Field(discriminator="type_"),
 ]
