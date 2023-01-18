@@ -3,7 +3,9 @@ import { UseQueryResult, useQuery } from "@tanstack/react-query";
 export type File = {
   id: number;
   name: string;
-  is_suported: boolean;
+  is_supported: boolean;
+  value: string;
+  extension: string;
 };
 
 export type Folder = {

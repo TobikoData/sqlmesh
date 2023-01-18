@@ -4,7 +4,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import SplitPaneContext from "./SplitPaneContext";
+import SplitPaneContext from "../../../context/SplitPaneContext";
 
 export function SplitPane({ children, ...props }: { children: React.ReactNode }) {
   const [clientHeight, setClientHeight] = useState(0)

@@ -1,5 +1,7 @@
 import os
 import pathlib
+import random
+import string
 import typing as t
 
 from fastapi import APIRouter
@@ -9,13 +11,15 @@ router = APIRouter()
 
 
 class File(BaseModel):
-    id: int
+    id: str
     is_supported: bool = True
     name: str
+    extension: str
+    value: str
 
 
 class Folder(BaseModel):
-    id: int
+    id: str
     name: str
     folders: t.List["Folder"]
     files: t.List[File]
@@ -47,9 +51,6 @@ def file_browser(path: str) -> t.Tuple[t.List[Folder], t.List[File]]:
     folders = []
     files = []
 
-    id_dir = 0
-    id_file = 0
-
     for entry in os.scandir(path):
         if (
             entry.name == "__pycache__"
@@ -59,29 +60,47 @@ def file_browser(path: str) -> t.Tuple[t.List[Folder], t.List[File]]:
             continue
 
         if entry.is_dir(follow_symlinks=False):
-            id_dir += 1
-
             (subfolders, subfiles) = file_browser(entry.path)
 
             folders.append(
                 Folder(
-                    id=id_dir,
+                    id=id(),
                     name=entry.name,
                     folders=subfolders,
                     files=subfiles,
                 )
             )
         else:
-            id_file += 1
 
             extension = pathlib.Path(entry.path).suffix
 
-            files.append(
-                File(
-                    id=id_file,
-                    is_supported=extension in SUPPORTED_EXTENSIONS,
-                    name=entry.name,
+            if extension in SUPPORTED_EXTENSIONS:
+                if os.path.exists(entry.path):
+                    with open(entry.path, "r") as f:
+                        files.append(
+                            File(
+                                id=id(),
+                                is_supported=extension in SUPPORTED_EXTENSIONS,
+                                name=entry.name,
+                                extension=extension,
+                                value=f.read(),
+                            )
+                        )
+                else:
+                    print("File does not exist.")
+            else:
+                files.append(
+                    File(
+                        id=id(),
+                        is_supported=False,
+                        name=entry.name,
+                        extension=extension,
+                        value="",
+                    )
                 )
-            )
 
     return (folders, files)
+
+
+def id(length=10) -> str:
+    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
