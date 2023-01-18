@@ -19,5 +19,5 @@ WHERE
 {% endif %}
 {% if sqlmesh is defined %}
   WHERE
-      ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+      ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 {% endif %}

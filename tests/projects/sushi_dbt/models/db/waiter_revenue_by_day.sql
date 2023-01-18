@@ -22,7 +22,7 @@ LEFT JOIN {{ ref('items') }} AS i
 {% endif %}
 {% if sqlmesh is defined %}
   WHERE
-      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+      o.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 {% endif %}
 GROUP BY
   o.waiter_id,
