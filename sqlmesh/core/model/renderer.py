@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment
 from sqlglot import exp, parse_one
-from sqlglot.errors import SqlglotError
+from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
@@ -146,12 +146,15 @@ class QueryRenderer:
 
             if self._schema:
                 # This takes care of expanding star projections
+
                 try:
                     self._query_cache[cache_key] = optimize(
                         self._query_cache[cache_key],
                         schema=self._schema,
                         rules=RENDER_OPTIMIZER_RULES,
                     )
+                except SchemaError:
+                    pass
                 except SqlglotError as ex:
                     raise_config_error(f"Invalid model query. {ex}", self._path)
 
