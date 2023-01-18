@@ -296,7 +296,7 @@ class Plan:
         A snapshot may be modified (directly or indirectly) multiple times. Each time
         it is directly changed, the categorization is stored in its history. Look
         through the snapshot's history to find where it deviated from the previous
-        snapshot and then find the most severe categorization recorded.
+        snapshot and then find the most conservative categorization recorded.
 
         Args:
             snapshot: The snapshot within this plan
@@ -337,7 +337,7 @@ class Plan:
         change_categories = [
             version.change_category for version in versions if version.change_category
         ]
-        # Return the most severe categorization found in the snapshot's history
+        # Return the most conservative categorization found in the snapshot's history
         return min(change_categories, key=lambda x: x.value)
 
     def _categorize_snapshots(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
