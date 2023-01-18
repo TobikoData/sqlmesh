@@ -1,6 +1,6 @@
 # Plans
 
-A plan is a set of changes that summarizes the difference between the local state of a project and the state of a target environment. In order for any model changes to take effect in a target environment a plan needs to be created and applied.
+A plan is a set of changes that summarizes the difference between the local state of a project and the state of a target [environment](/concepts/environments). In order for any model changes to take effect in a target environment a plan needs to be created and applied.
 
 During plan creation, the local state of the SQLMesh project is compared against the state of a target environment. The difference computed this way is what constitutes a plan. Additionally, a user is prompted to categorize changes (see [Change categories](#change-categories)) to existing models in order for SQLMesh to devise a backfill strategy for models that have been affected indirectly (by being downstream dependencies of updated models). Finally, each plan requires a date range to which it will be applied. If not specified, the date range is derived automatically based on model definitions and the target environment.
 
