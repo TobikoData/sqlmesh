@@ -24,14 +24,15 @@ def create_engine_adapter(
 ) -> EngineAdapter:
     dialect = dialect.lower()
     # TODO: Update in follow up PR
-    engine_adapter: t.Optional[t.Type[EngineAdapter]]
     if dialect == "databricks":
         try:
             from pyspark.sql import SparkSession
 
             spark = SparkSession.getActiveSession()
             if spark:
-                engine_adapter = DatabricksEngineAdapter
+                engine_adapter: t.Optional[
+                    t.Type[EngineAdapter]
+                ] = DatabricksEngineAdapter
             else:
                 engine_adapter = DatabricksAPIEngineAdapter
         except ImportError:
