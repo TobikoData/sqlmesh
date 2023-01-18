@@ -109,7 +109,7 @@ class MacroEvaluator:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
 
     def send(
-        self, name: str, *args
+        self, name: str, *args: t.Any
     ) -> t.Union[None, exp.Expression, t.List[exp.Expression]]:
         func = self.macros.get(normalize_macro_name(name))
 
@@ -207,7 +207,7 @@ class MacroEvaluator:
             ) from e
 
     def parse_one(
-        self, sql: str, into: t.Optional[exp.Expression] = None, **opts
+        self, sql: str, into: t.Optional[exp.Expression] = None, **opts: t.Any
     ) -> t.Optional[exp.Expression]:
         """Parses the given SQL string and returns a syntax tree for the first
         parsed SQL statement.
@@ -257,7 +257,7 @@ MacroRegistry = t.Dict[str, macro]
 
 
 def norm_var_arg_lambda(
-    evaluator: MacroEvaluator, func: exp.Lambda, *items
+    evaluator: MacroEvaluator, func: exp.Lambda, *items: t.Any
 ) -> t.Tuple[t.Iterable, t.Callable]:
     """
     Converts sql literal array and lambda into actual python iterable + callable.
@@ -273,7 +273,7 @@ def norm_var_arg_lambda(
 
     def substitute(
         node: exp.Expression, arg_index: t.Dict[str, int], *items: exp.Expression
-    ):
+    ) -> exp.Expression | t.List[exp.Expression] | None:
         if (
             isinstance(node, exp.Identifier)
             and node.name in arg_index

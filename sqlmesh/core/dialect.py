@@ -35,7 +35,7 @@ class MacroVar(exp.Var):
 
 class MacroFunc(exp.Func):
     @property
-    def name(self):
+    def name(self) -> str:
         return self.this.name
 
 
@@ -296,7 +296,7 @@ _parse_audit = _create_parser(Audit, ["model"])
 PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
 
 
-def _model_sql(self, expression: exp.Expression) -> str:
+def _model_sql(self: Generator, expression: exp.Expression) -> str:
     props = ",\n".join(
         self.indent(f"{prop.name} {self.sql(prop, 'value')}")
         for prop in expression.expressions
@@ -304,7 +304,7 @@ def _model_sql(self, expression: exp.Expression) -> str:
     return "\n".join(["MODEL (", props, ")"])
 
 
-def _model_kind_sql(self, expression: ModelKind) -> str:
+def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
     props = ",\n".join(
         self.indent(f"{prop.this} {self.sql(prop, 'value')}")
         for prop in expression.expressions
@@ -314,7 +314,7 @@ def _model_kind_sql(self, expression: ModelKind) -> str:
     return expression.name.upper()
 
 
-def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
+def _macro_keyword_func_sql(self: Generator, expression: exp.Expression) -> str:
     name = expression.name
     keyword = name.replace("_", " ")
     *args, clause = expression.expressions
@@ -322,7 +322,7 @@ def _macro_keyword_func_sql(self, expression: exp.Expression) -> str:
     return self.sql(clause).replace(keyword, macro, 1)
 
 
-def _macro_func_sql(self, expression: exp.Expression) -> str:
+def _macro_func_sql(self: Generator, expression: exp.Expression) -> str:
     expression = expression.this
     name = expression.name
     if name in KEYWORD_MACROS:

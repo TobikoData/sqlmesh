@@ -52,17 +52,18 @@ class EngineAdapter:
         multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
 
+    DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
 
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
-        dialect: str,
+        dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
     ):
-        self.dialect = dialect.lower()
+        self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(
             connection_factory, multithreaded
         )
@@ -135,7 +136,7 @@ class EngineAdapter:
         table_name: str,
         query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> None:
         """Create a table using a DDL statement or a CTAS.
 
@@ -344,7 +345,7 @@ class EngineAdapter:
         table_name: str,
         query: Query,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         self.execute(
             exp.Insert(
                 this=self._insert_into_expression(table_name, columns_to_types),
@@ -358,7 +359,7 @@ class EngineAdapter:
         table_name: str,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         connection = self._connection_pool.get()
         into = self._insert_into_expression(table_name, columns_to_types)
 
@@ -399,7 +400,7 @@ class EngineAdapter:
         time_formatter: t.Callable[[TimeLike], exp.Expression],
         time_column: TimeColumn | exp.Column | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         low, high = [time_formatter(dt) for dt in make_inclusive(start, end)]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
@@ -418,7 +419,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         if where is None:
             raise SQLMeshError(
                 "Where condition is required when doing a delete/insert for insert/overwrite"
@@ -443,7 +444,7 @@ class EngineAdapter:
         source_table: QueryOrDF,
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
-    ):
+    ) -> None:
         this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
         using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
@@ -538,7 +539,7 @@ class EngineAdapter:
         """Whether or not the engine adapter supports transactions for the given transaction type."""
         return True
 
-    def execute(self, sql: t.Union[str, exp.Expression], **kwargs) -> None:
+    def execute(self, sql: t.Union[str, exp.Expression], **kwargs: t.Any) -> None:
         """Execute a sql query."""
         sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
         logger.debug(f"Executing SQL:\n{sql}")
@@ -551,7 +552,7 @@ class EngineAdapter:
     ) -> t.Optional[exp.Properties]:
         return None
 
-    def _to_sql(self, e: exp.Expression, **kwargs) -> str:
+    def _to_sql(self, e: exp.Expression, **kwargs: t.Any) -> str:
         """
         Converts an expression to a SQL string. Has a set of default kwargs to apply, and then default
         kwargs defined for the given dialect, and then kwargs provided by the user when defining the engine

@@ -64,7 +64,7 @@ class ModelKind(PydanticModel):
         """Whether or not this model only cares about latest date to render."""
         return self.name in (ModelKindName.VIEW, ModelKindName.FULL)
 
-    def to_expression(self, *args, **kwargs) -> d.ModelKind:
+    def to_expression(self, *args: t.Any, **kwargs: t.Any) -> d.ModelKind:
         return d.ModelKind(
             this=self.name.value,
         )

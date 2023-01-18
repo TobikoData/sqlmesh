@@ -1,103 +1,3 @@
-"""
-# Configuring SQLMesh
-
-You can configure your project in multiple places, and SQLMesh will prioritize configurations according to
-the following order. From least to greatest precedence:
-
-- A Config object defined in a config.py file at the root of your project:
-    ```python
-    # config.py
-    import duckdb
-    from sqlmesh.core.engine_adapter import EngineAdapter
-    local_config = Config(
-        engine_connection_factory=duckdb.connect,
-        engine_dialect="duckdb"
-    )
-    # End config.py
-
-    >>> from sqlmesh import Context
-    >>> context = Context(path="example", config="local_config")
-
-    ```
-- A Config object used when initializing a Context:
-    ```python
-    >>> from sqlmesh import Context
-    >>> from sqlmesh.core.config import Config
-    >>> my_config = Config(
-    ...     engine_connection_factory=duckdb.connect,
-    ...     engine_dialect="duckdb"
-    ... )
-    >>> context = Context(path="example", config=my_config)
-
-    ```
-- Individual config parameters used when initializing a Context:
-    ```python
-    >>> from sqlmesh import Context
-    >>> from sqlmesh.core.engine_adapter import create_engine_adapter
-    >>> adapter = create_engine_adapter(duckdb.connect, "duckdb")
-    >>> context = Context(
-    ...     path="example",
-    ...     engine_adapter=adapter,
-    ...     dialect="duckdb",
-    ... )
-
-    ```
-
-# Using Config
-
-The most common way to configure your SQLMesh project is with a `config.py` module at the root of the
-project. A SQLMesh Context will automatically look for Config objects there. You can have multiple
-Config objects defined, and then tell Context which one to use. For example, you can have different
-Configs for local and production environments, Airflow, and Model tests.
-
-Example config.py:
-```python
-import duckdb
-
-from sqlmesh.core.config import Config, AirflowSchedulerBackend
-
-from my_project.utils import load_test_data
-
-
-DEFAULT_KWARGS = {
-    "engine_dialect": "duckdb",
-    "engine_connection_factory": duckdb.connect,
-}
-
-# An in memory DuckDB config.
-config = Config(**DEFAULT_KWARGS)
-
-# A stateful DuckDB config.
-local_config = Config(
-    **{
-        **DEFAULT_KWARGS,
-        "engine_connection_factory": lambda: duckdb.connect(
-            database=f"{DATA_DIR}/local.duckdb"
-        ),
-    }
-)
-
-# The config to run model tests.
-test_config = Config(
-    **DEFAULT_KWARGS,
-)
-
-# A config that uses Airflow
-airflow_config = Config(
-    "scheduler_backend": AirflowSchedulerBackend(),
-    **DEFAULT_KWARGS,
-)
-```
-
-To use a Config, pass in its variable name to Context.
-```python
->>> from sqlmesh import Context
->>> context = Context(path="example", config="local_config")
-
-```
-
-For more information about the Config class and its parameters, see `sqlmesh.core.config.Config`.
-"""
 from __future__ import annotations
 
 import abc
@@ -236,12 +136,12 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
         # See `check_supported_fields` for the supported extra fields
         extra = "allow"
 
-    def __init__(self, **data):
+    def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
         self._session: t.Optional[AuthorizedSession] = data.get("session")
 
     @property
-    def session(self):
+    def session(self) -> AuthorizedSession:
         import google.auth
         from google.auth.transport.requests import AuthorizedSession
 

@@ -58,7 +58,7 @@ class ModelMeta(PydanticModel):
     _croniter: t.Optional[croniter] = None
 
     @validator("partitioned_by_", pre=True)
-    def _value_or_tuple_validator(cls, v):
+    def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, exp.Tuple):
             return [i.name for i in v.expressions]
         if isinstance(v, exp.Expression):

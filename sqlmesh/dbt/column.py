@@ -9,9 +9,12 @@ from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 
 
-def yaml_to_columns(yaml):
+def yaml_to_columns(
+    yaml: t.Dict[str, ColumnConfig] | t.List[t.Dict[str, ColumnConfig]]
+) -> t.Dict[str, ColumnConfig]:
     columns = {}
-    for column in ensure_list(yaml):
+    mappings: t.List[t.Dict[str, ColumnConfig]] = ensure_list(yaml)
+    for column in mappings:
         config = ColumnConfig(**column)
         columns[config.name] = config
 

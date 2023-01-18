@@ -167,8 +167,8 @@ class ModelTest(unittest.TestCase):
             actual_df = self.execute(self.query)
             self.assert_equal(expected_df, actual_df)
 
-    def __str__(self):
-        return f"{self.test_name} ({self.path}:{self.body.lc.line})"
+    def __str__(self) -> str:
+        return f"{self.test_name} ({self.path}:{self.body.lc.line})"  # type: ignore
 
     def _raise_error(self, msg: str) -> None:
         raise TestError(f"{msg} at {self.path}")

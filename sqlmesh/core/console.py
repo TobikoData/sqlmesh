@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import datetime
 import typing as t
 import unittest
 import uuid
@@ -497,7 +498,7 @@ class NotebookMagicConsole(TerminalConsole):
 
         def _date_picker(
             plan: Plan, value: t.Any, on_change: t.Callable, disabled: bool = False
-        ):
+        ) -> widgets.DatePicker:
             picker = widgets.DatePicker(
                 disabled=disabled,
                 value=value,
@@ -507,7 +508,9 @@ class NotebookMagicConsole(TerminalConsole):
             picker.observe(on_change, "value")
             return picker
 
-        def _checkbox(description: str, value: bool, on_change: t.Callable):
+        def _checkbox(
+            description: str, value: bool, on_change: t.Callable
+        ) -> widgets.Checkbox:
             checkbox = widgets.Checkbox(
                 value=value,
                 description=description,
@@ -518,11 +521,11 @@ class NotebookMagicConsole(TerminalConsole):
             checkbox.observe(on_change, "value")
             return checkbox
 
-        def start_change_callback(change):
+        def start_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.start = change["new"]
             self._show_options_after_categorization(plan, auto_apply)
 
-        def end_change_callback(change):
+        def end_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.end = change["new"]
             self._show_options_after_categorization(plan, auto_apply)
 
@@ -584,7 +587,7 @@ class NotebookMagicConsole(TerminalConsole):
     ) -> None:
         import ipywidgets as widgets
 
-        def radio_button_selected(change):
+        def radio_button_selected(change: t.Dict[str, t.Any]) -> None:
             plan.set_choice(snapshot, choices[change["owner"].index])
             self._show_options_after_categorization(plan, auto_apply)
 

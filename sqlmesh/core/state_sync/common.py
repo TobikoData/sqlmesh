@@ -35,7 +35,7 @@ class CommonStateSyncMixin(StateSync):
         return self._get_environment(environment)
 
     def get_snapshots_by_models(
-        self, *names: str, lock_for_update=False
+        self, *names: str, lock_for_update: bool = False
     ) -> t.List[Snapshot]:
         """
         Get all snapshots by model name.
@@ -126,7 +126,7 @@ class CommonStateSyncMixin(StateSync):
             for snapshot in environment.snapshots
         }
 
-        def _is_snapshot_used(snapshot):
+        def _is_snapshot_used(snapshot: Snapshot) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
                 or to_datetime(

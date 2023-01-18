@@ -12,13 +12,7 @@ if t.TYPE_CHECKING:
 
 class SnowflakeEngineAdapter(EngineAdapter):
     DEFAULT_SQL_GEN_KWARGS = {"identify": False}
-
-    def __init__(
-        self,
-        connection_factory: t.Callable[[], t.Any],
-        multithreaded: bool = False,
-    ):
-        super().__init__(connection_factory, "snowflake", multithreaded=multithreaded)
+    DIALECT = "snowflake"
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)

@@ -21,7 +21,7 @@ WITH order_total AS (
 {% endif %}
 {% if sqlmesh is defined %}
   WHERE
-      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+      oi.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 {% endif %}
   GROUP BY
     oi.order_id,
@@ -40,7 +40,7 @@ WHERE
 {% endif %}
 {% if sqlmesh is defined %}
   WHERE
-      o.ds BETWEEN {{ start_ds }} AND {{ end_ds }}
+      o.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 {% endif %}
 GROUP BY
   o.customer_id,
