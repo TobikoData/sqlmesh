@@ -270,8 +270,8 @@ class Context(BaseContext):
             > 1
         )
 
-        self._models = UniqueKeyDict("models")
-        self._macros = UniqueKeyDict("macros")
+        self._models: UniqueKeyDict = UniqueKeyDict("models")
+        self._macros: UniqueKeyDict = UniqueKeyDict("macros")
 
         self._engine_adapter = engine_adapter or create_engine_adapter(
             self.config.engine_connection_factory,

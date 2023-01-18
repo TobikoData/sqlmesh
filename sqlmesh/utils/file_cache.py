@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 from types import TracebackType
 
-KEY = t.TypeVar("KEY")
+KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
 
 

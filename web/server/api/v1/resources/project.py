@@ -29,9 +29,7 @@ def projects() -> t.Dict[str, bool | int]:
 
 
 @router.get("/{id}/structure")
-def project_folders() -> t.Dict[
-    str, bool | int | t.Dict[str, t.List[Folder] | t.List[File]]
-]:
+def project_folders() -> t.Dict[str, t.Any]:
     (folders, files) = file_browser("example")
 
     return {

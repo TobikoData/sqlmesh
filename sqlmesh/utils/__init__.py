@@ -12,6 +12,8 @@ from functools import wraps
 from pathlib import Path
 
 T = t.TypeVar("T")
+KEY = t.TypeVar("KEY", bound=t.Hashable)
+VALUE = t.TypeVar("VALUE")
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
 
@@ -40,14 +42,14 @@ def random_id() -> str:
     return str(uuid.uuid4()).replace("-", "_")
 
 
-class UniqueKeyDict(dict):
+class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
     """Dict that raises when a duplicate key is set."""
 
-    def __init__(self, name: str, *args: t.Any, **kwargs: t.Any) -> None:
+    def __init__(self, name: str, *args: t.Dict[KEY, VALUE], **kwargs: VALUE) -> None:
         self.name = name
         super().__init__(*args, **kwargs)
 
-    def __setitem__(self, k: t.Any, v: t.Any) -> None:
+    def __setitem__(self, k: KEY, v: VALUE) -> None:
         if k in self:
             raise ValueError(
                 f"Duplicate key '{k}' found in UniqueKeyDict<{self.name}>. Call dict.update(...) if this is intentional."
