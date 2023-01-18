@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectStructure, type Folder, type File } from '../../../api';
+import { useApiFiles, type Directory, type File } from '../../../api';
 import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/20/solid'
@@ -14,7 +14,7 @@ export function FolderTree() {
 
   const { setFile, file, files } = useContext(Ide);
 
-  const { status, data } = useProjectStructure();
+  const { status, data } = useApiFiles();
 
   if (status === 'loading') {
     return <h3>Loading...</h3>;
@@ -27,9 +27,9 @@ export function FolderTree() {
 
   return (
     <div className='py-4 px-2 overflow-hidden'>
-      {Boolean(data?.folders?.length) && (
-        <Folders
-          folders={data.folders}
+      {Boolean(data?.directories?.length) && (
+        <Directories
+        directories={data.directories}
           withIndent={false}
           selectFile={setFile}
           activeFile={file}
@@ -48,16 +48,31 @@ export function FolderTree() {
   );
 }
 
-function Folders(props: { folders: Folder[], withIndent: boolean, selectFile?: any, activeFile?: File, activeFiles?: Set<File> } = { folders: [], withIndent: false }) {
+interface PropsDirectories {
+  directories: Directory[];
+  withIndent: boolean;
+  selectFile?: (file: File) => void;
+  activeFile?: File;
+  activeFiles?: Set<File>;
+}
+
+interface PropsDirectory {
+  directory: Directory;
+  selectFile?: (file: File) => void;
+  activeFile?: File;
+  activeFiles?: Set<File>;
+}
+
+function Directories({ directories = [], withIndent = false, selectFile, activeFile, activeFiles }: PropsDirectories) {
   return (
-    <ul className={`${props.withIndent ? 'ml-4': '' } mr-1 overflow-hidden`}>
-      {props.folders.map((folder) => (
-        <li key={folder.id} title={folder.name}>
-          <Folder
-            folder={folder}
-            selectFile={props.selectFile}
-            activeFile={props.activeFile}
-            activeFiles={props.activeFiles}
+    <ul className={`${withIndent ? 'ml-4': '' } mr-1 overflow-hidden`}>
+      {directories.map(directory => (
+        <li key={directory.path} title={directory.name}>
+          <Directory
+            directory={directory}
+            selectFile={selectFile}
+            activeFile={activeFile}
+            activeFiles={activeFiles}
           />
         </li>
       ))}
@@ -65,12 +80,12 @@ function Folders(props: { folders: Folder[], withIndent: boolean, selectFile?: a
   )
 }
 
-function Folder(props: { folder: Folder, selectFile?: any, activeFile?: File, activeFiles?: Set<File> }) {
+function Directory({ directory, selectFile, activeFile, activeFiles }: PropsDirectory) {
   const [isOpen, setOpen] = useState(false);
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon;
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon;
-  const withFolders = Array.isArray(props.folder.folders) && Boolean(props.folder.folders.length)
-  const withFiles = Array.isArray(props.folder.files) && Boolean(props.folder.files.length)
+  const withFolders = Array.isArray(directory.directories) && Boolean(directory.directories.length)
+  const withFiles = Array.isArray(directory.files) && Boolean(directory.files.length)
 
   return (
     <>
@@ -85,7 +100,7 @@ function Folder(props: { folder: Folder, selectFile?: any, activeFile?: File, ac
           <span className='cursor-pointer' onClick={() => setOpen(!isOpen)}>
             <IconFolder className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`} />
             <p className='inline-block font-light text-gray-600 group-hover:text-secondary-500'>
-              {props.folder.name}
+              {directory.name}
             </p>
           </span>
         </span>
@@ -97,20 +112,20 @@ function Folder(props: { folder: Folder, selectFile?: any, activeFile?: File, ac
           </span>
       </span>
       {isOpen && withFolders && (
-        <Folders
-          folders={props.folder.folders}
+        <Directories
+          directories={directory.directories}
           withIndent={true}
-          selectFile={props.selectFile}
-          activeFile={props.activeFile}
-          activeFiles={props.activeFiles}
+          selectFile={selectFile}
+          activeFile={activeFile}
+          activeFiles={activeFiles}
         />
       )}
       {isOpen && withFiles && (
         <Files
-          files={props.folder.files}
-          selectFile={props.selectFile}
-          activeFile={props.activeFile}
-          activeFiles={props.activeFiles}
+          files={directory.files}
+          selectFile={selectFile}
+          activeFile={activeFile}
+          activeFiles={activeFiles}
         />
       )}
     </>
@@ -123,13 +138,13 @@ function Files(props: { files: File[], selectFile?: any, activeFile?: File, acti
     <ul className='ml-4 mr-1 overflow-hidden'>
       {props.files.map((f) => (
         <li
-          key={f.id}
+          key={f.path}
           title={f.name}
           onClick={() => f.is_supported && props.selectFile(f)}
         >
           <span className={clsx(
             'text-base whitespace-nowrap pb-1 group/file px-2 flex justify-between rounded-md',
-            f.id === props.activeFile?.id ? 'text-secondary-500' : 'text-gray-800',
+            f.path === props.activeFile?.path ? 'text-secondary-500' : 'text-gray-800',
             f.is_supported && 'group cursor-pointer hover:bg-secondary-100',
           )}>
             <span className={clsx(

@@ -1,36 +1,37 @@
 import { UseQueryResult, useQuery } from "@tanstack/react-query";
 
 export type File = {
-  id: number;
-  name: string;
-  is_supported: boolean;
-  value: string;
-  extension: string;
+  name: string
+  path: string
+  is_supported: boolean
+  content: string
+  extension: string
 };
 
-export type Folder = {
-  id: number;
-  name: string;
-  files: File[];
-  folders: Folder[];
+export type Directory = {
+  name: string
+  path: string
+  directories: Directory[]
+  files: File[]
 };
 
 type Payload = {
-  folders: Folder[];
-  files: File[];
-};
-
-export async function getProjectStructure(): Promise<Payload> {
-  const data = await (await fetch("/api/v1/projects/1/structure")).json();
-
-  if (data.ok) return data.payload;
-
-  return { folders: [], files: [] };
+  directories: Directory[]
+  files: File[]
 }
 
-export function useProjectStructure(): UseQueryResult<Payload> {
+export async function getProjectStructure(): Promise<Payload> {
+  const [ directories = [], files = [] ] = await (await fetch("/api/files")).json();
+
+  return {
+    directories,
+    files
+  };
+}
+
+export function useApiFiles(): UseQueryResult<Payload> {
   return useQuery({
-    queryKey: ["/api/v1/projects/1/structure"],
+    queryKey: ["/api/v1/files"],
     queryFn: getProjectStructure,
   });
 }

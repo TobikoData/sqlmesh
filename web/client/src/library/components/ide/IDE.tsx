@@ -12,15 +12,19 @@ import clsx from "clsx";
 import { XCircleIcon } from "@heroicons/react/24/solid";
 
 export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
-  const [files, setFiles] = useState<Set<any>>(new Set())
+  const [files, setFiles] = useState<Set<File>>(new Set())
   const [file, setFile] = useState<File>()
 
   useEffect(() => {
+    console.log({files, file}, files.has(file as File))
+
+
     if (files.size === 0) {
       setFile(undefined)
-    } else if (!files.has(file)) {
+    } else if (!file || !files.has(file)) {
       setFile([...files][0])
     }
+
 
     
   }, [files])
@@ -78,20 +82,23 @@ export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
               <div className='w-full h-full flex overflow-hidden'>
                 <div className='w-full flex flex-col overflow-hidden overflow-x-auto'>
                   <div className='w-full flex min-h-[2rem] overflow-hidden overflow-x-auto'> 
-                    <ul className='w-full whitespace-nowrap flex'>
+                    <ul className='w-full whitespace-nowrap'>
                       {files.size > 0 && [...files].map((f) => (
                         <li key={f.name} className={clsx(
-                          'flex justify-between items-center py-1 px-3 overflow-hidden min-w-[10rem] text-center overflow-ellipsis cursor-pointer',
-                          f.id === file?.id ? 'bg-white' : 'bg-gray-300'
+                          'inline-block justify-between items-center py-1 px-3 overflow-hidden min-w-[10rem] text-center overflow-ellipsis cursor-pointer',
+                          f.path === file?.path ? 'bg-white' : 'bg-gray-300'
                         )} onClick={() =>  setFile(f)}>
-                          <small>{f.name}</small>
-                          <XCircleIcon
-                            onClick={() => {
-                              files.delete(f)
-                              setFiles(new Set(files))
-                            }}
-                            className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`} 
-                          />                          
+                          <span className='flex justify-between items-center'>
+                            <small>{f.name}</small>
+                            <XCircleIcon
+                              onClick={e => {
+                                e.stopPropagation()
+                                files.delete(f)
+                                setFiles(new Set(files))
+                              }}
+                              className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`} 
+                            /> 
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -114,9 +121,9 @@ export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
                       <Editor
                         className='h-full w-full'
                         extension={file?.extension}
-                        value={file?.value}
+                        value={file?.content ?? ""}
                         onChange={(value: string, viewUpdate: ViewUpdate) => {
-                          // console.log(value, viewUpdate);
+                          console.log(value, viewUpdate);
                         }}
                       />
                     </div>
