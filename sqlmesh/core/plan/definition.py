@@ -290,7 +290,13 @@ class Plan:
         self._uncategorized = None
 
     def snapshot_change_category(self, snapshot: Snapshot) -> SnapshotChangeCategory:
-        """Returns the SnapshotChangeCategory for the specified snapshot within this plan.
+        """
+        Determines the SnapshotChangeCategory for a modified snapshot using its available history.
+
+        A snapshot may be modified (directly or indirectly) multiple times. Each time
+        it is directly changed, the categorization is stored in its history. Look
+        through the snapshot's history to find where it deviated from the previous
+        snapshot and then find the most conservative categorization recorded.
 
         Args:
             snapshot: The snapshot within this plan
@@ -312,16 +318,16 @@ class Plan:
 
         current, previous = self.context_diff.modified_snapshots[snapshot.name]
         if current.version == previous.version:
+            # Versions match, so no further history to check
             return SnapshotChangeCategory.FORWARD_ONLY
-
-        if current.data_hash_matches(previous):
-            return SnapshotChangeCategory.BREAKING
-
-        if previous.data_version in current.all_versions:
+        elif previous.data_version in current.all_versions:
+            # Previous snapshot in the current snapshot's history. Get all versions
+            # since the two matched.
             index = current.all_versions.index(previous.data_version)
             versions = current.all_versions[index + 1 :]
         elif current.data_version in previous.all_versions:
-            # Snapshot is a revert to a previous snapshot
+            # Snapshot is a revert. Look through the previous snapshot's history
+            # and get all versions since it matched the current snapshot.
             index = previous.all_versions.index(current.data_version)
             versions = previous.all_versions[index:]
         else:
@@ -331,6 +337,7 @@ class Plan:
         change_categories = [
             version.change_category for version in versions if version.change_category
         ]
+        # Return the most conservative categorization found in the snapshot's history
         return min(change_categories, key=lambda x: x.value)
 
     def _categorize_snapshots(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
