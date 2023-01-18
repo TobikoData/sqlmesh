@@ -149,7 +149,7 @@ class QueryRenderer:
 
                 try:
                     self._query_cache[cache_key] = optimize(
-                        self._query_cache[cache_key].copy(),
+                        self._query_cache[cache_key],
                         schema=self._schema,
                         rules=RENDER_OPTIMIZER_RULES,
                     )
