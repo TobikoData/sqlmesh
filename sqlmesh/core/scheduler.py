@@ -67,7 +67,7 @@ class Scheduler:
         end: TimeLike,
         latest: TimeLike,
         is_dev: bool = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
 

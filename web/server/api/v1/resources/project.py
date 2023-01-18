@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pathlib
 import typing as t
@@ -22,12 +24,14 @@ class Folder(BaseModel):
 
 
 @router.get("/")
-def projects():
+def projects() -> t.Dict[str, bool | int]:
     return {"ok": True, "status": 200}
 
 
 @router.get("/{id}/structure")
-def project_folders():
+def project_folders() -> t.Dict[
+    str, bool | int | t.Dict[str, t.List[Folder] | t.List[File]]
+]:
     (folders, files) = file_browser("example")
 
     return {

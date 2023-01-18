@@ -27,7 +27,7 @@ class PullRequestInfo(PydanticModel):
     pr_number: int
 
     @property
-    def full_repo_path(self):
+    def full_repo_path(self) -> str:
         return "/".join([self.owner, self.repo])
 
     @classmethod

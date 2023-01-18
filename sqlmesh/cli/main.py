@@ -18,7 +18,7 @@ from sqlmesh.utils.date import TimeLike
 @opt.config
 @click.pass_context
 @error_handler
-def cli(ctx, path, config=None) -> None:
+def cli(ctx: click.Context, path: str, config: t.Optional[str] = None) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
         return
@@ -49,7 +49,7 @@ def cli(ctx, path, config=None) -> None:
 )
 @click.pass_context
 @error_handler
-def init(ctx, template: t.Optional[str] = None) -> None:
+def init(ctx: click.Context, template: t.Optional[str] = None) -> None:
     """Create a new SQLMesh repository."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
@@ -67,7 +67,7 @@ def init(ctx, template: t.Optional[str] = None) -> None:
 @click.pass_context
 @error_handler
 def render(
-    ctx,
+    ctx: click.Context,
     model: str,
     start: TimeLike,
     end: TimeLike,
@@ -105,7 +105,7 @@ def render(
 @click.pass_context
 @error_handler
 def evaluate(
-    ctx,
+    ctx: click.Context,
     model: str,
     start: TimeLike,
     end: TimeLike,
@@ -126,7 +126,7 @@ def evaluate(
 @cli.command("format")
 @click.pass_context
 @error_handler
-def format(ctx) -> None:
+def format(ctx: click.Context) -> None:
     """Format all models in a given directory."""
     ctx.obj.format()
 
@@ -135,7 +135,7 @@ def format(ctx) -> None:
 @click.argument("environment")
 @click.pass_context
 @error_handler
-def diff(ctx, environment: t.Optional[str] = None) -> None:
+def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     """Show the diff between the current context and a given environment."""
     ctx.obj.diff(environment)
 
@@ -189,7 +189,9 @@ def diff(ctx, environment: t.Optional[str] = None) -> None:
 )
 @click.pass_context
 @error_handler
-def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
+def plan(
+    ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
+) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
@@ -206,7 +208,9 @@ def plan(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
 )
 @click.pass_context
 @error_handler
-def run(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
+def run(
+    ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
+) -> None:
     """Evaluates the DAG of models using the built-in scheduler."""
     context = ctx.obj
     context.run(**kwargs)
@@ -216,7 +220,7 @@ def run(ctx, environment: t.Optional[str] = None, **kwargs) -> None:
 @opt.file
 @click.pass_context
 @error_handler
-def dag(ctx, file) -> None:
+def dag(ctx: click.Context, file: str) -> None:
     """
     Renders the dag using graphviz.
 
@@ -231,7 +235,7 @@ def dag(ctx, file) -> None:
 @click.argument("tests", nargs=-1)
 @click.pass_obj
 @error_handler
-def test(obj, k, verbose, tests) -> None:
+def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> None:
     """Run model unit tests."""
     # Set Python unittest verbosity level
     verbosity = 2 if verbose else 1
@@ -268,8 +272,8 @@ def test(obj, k, verbose, tests) -> None:
 @click.pass_obj
 @error_handler
 def audit(
-    obj,
-    models: t.Tuple[str],
+    obj: Context,
+    models: t.Iterator[str],
     start: TimeLike,
     end: TimeLike,
     latest: t.Optional[TimeLike] = None,
@@ -282,7 +286,7 @@ def audit(
 @click.argument("sql")
 @click.pass_context
 @error_handler
-def fetchdf(ctx, sql: str) -> None:
+def fetchdf(ctx: click.Context, sql: str) -> None:
     """Runs a sql query and displays the results."""
     context = ctx.obj
     context.console.log_success(context.fetchdf(sql))

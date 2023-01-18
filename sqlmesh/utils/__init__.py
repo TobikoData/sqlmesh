@@ -12,6 +12,7 @@ from functools import wraps
 from pathlib import Path
 
 T = t.TypeVar("T")
+DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
 
 def optional_import(name: str) -> t.Optional[types.ModuleType]:
@@ -42,11 +43,11 @@ def random_id() -> str:
 class UniqueKeyDict(dict):
     """Dict that raises when a duplicate key is set."""
 
-    def __init__(self, name: str, *args, **kwargs):
+    def __init__(self, name: str, *args: t.Any, **kwargs: t.Any) -> None:
         self.name = name
         super().__init__(*args, **kwargs)
 
-    def __setitem__(self, k, v):
+    def __setitem__(self, k: t.Any, v: t.Any) -> None:
         if k in self:
             raise ValueError(
                 f"Duplicate key '{k}' found in UniqueKeyDict<{self.name}>. Call dict.update(...) if this is intentional."
@@ -61,20 +62,22 @@ class registry_decorator:
     _registry: t.Optional[UniqueKeyDict] = None
 
     @classmethod
-    def registry(cls):
+    def registry(cls) -> UniqueKeyDict:
         if cls._registry is None:
             cls._registry = UniqueKeyDict(cls.registry_name)
         return cls._registry
 
-    def __init__(self, name: str = ""):
+    def __init__(self, name: str = "") -> None:
         self.name = name
 
-    def __call__(self, func: t.Callable) -> t.Callable:
+    def __call__(
+        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
+    ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         self.func = func
         self.registry()[(self.name or func.__name__)] = self
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
             return func(*args, **kwargs)
 
         return wrapper
@@ -91,7 +94,7 @@ class registry_decorator:
 
 
 @contextmanager
-def sys_path(path: Path):
+def sys_path(path: Path) -> t.Generator[None, None, None]:
     """A context manager to temporarily add a path to 'sys.path'."""
     path_str = str(path.absolute())
 

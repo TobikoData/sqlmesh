@@ -1,4 +1,5 @@
 import logging
+import typing as t
 from datetime import datetime
 
 from airflow.models import DagRun
@@ -23,8 +24,8 @@ class HighWaterMarkSensor(BaseSensorOperator):
         poke_interval: float = 60.0,
         timeout: float = 7.0 * 24.0 * 60.0 * 60.0,  # 7 days
         mode: str = "reschedule",
-        **kwargs,
-    ):
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(
             poke_interval=poke_interval,
             timeout=timeout,

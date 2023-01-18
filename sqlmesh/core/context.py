@@ -242,7 +242,7 @@ class Context(BaseContext):
         # Initialize cache
         cache_path = self.path / c.CACHE_PATH
         cache_path.mkdir(exist_ok=True)
-        self.table_info_cache = FileCache(cache_path / c.TABLE_INFO_CACHE)
+        self.table_info_cache: FileCache = FileCache(cache_path / c.TABLE_INFO_CACHE)
         self.dialect = dialect or self.config.dialect or self.config.engine_dialect
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
@@ -311,7 +311,7 @@ class Context(BaseContext):
         """Returns an engine adapter."""
         return self._engine_adapter
 
-    def upsert_model(self, model: t.Union[str, Model], **kwargs) -> Model:
+    def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:
         """Update or insert a model.
 
         The context's models dictionary will be updated to include these changes.
@@ -501,7 +501,7 @@ class Context(BaseContext):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         expand: t.Union[bool, t.Iterable[str]] = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> exp.Expression:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
@@ -544,7 +544,7 @@ class Context(BaseContext):
         end: TimeLike,
         latest: TimeLike,
         limit: t.Optional[int] = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> DF:
         """Evaluate a model or snapshot (running its query against a DB/Engine).
 
@@ -842,7 +842,7 @@ class Context(BaseContext):
             self.console.show_sql(f"{error.query}")
         self.console.log_status_update("Done.")
 
-    def close(self):
+    def close(self) -> None:
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
 
@@ -896,7 +896,7 @@ class Context(BaseContext):
         # Restore the macro registry
         macro.set_registry(standard_macros)
 
-    def _load_models(self):
+    def _load_models(self) -> None:
         """Load all models."""
 
         for path in self._glob_path(self.models_directory_path, ".sql"):
@@ -921,7 +921,7 @@ class Context(BaseContext):
 
         registry = model_registry.registry()
         registry.clear()
-        registered = set()
+        registered: t.Set[str] = set()
 
         for path in self._glob_path(self.models_directory_path, ".py"):
             self._path_mtimes[path] = path.stat().st_mtime
@@ -994,7 +994,7 @@ class Context(BaseContext):
 
         self.dag.add(model.name, model.depends_on)
 
-    def _update_model_schemas(self):
+    def _update_model_schemas(self) -> None:
         schema = MappingSchema(dialect=self.dialect)
         for name in self.dag.sorted():
             model = self._models.get(name)

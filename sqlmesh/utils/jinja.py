@@ -7,7 +7,7 @@ from jinja2 import Environment, Undefined
 
 
 class Placeholder(str):
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
         return ""
 
 
@@ -33,7 +33,9 @@ def capture_jinja(query: str) -> CapturedQuery:
     calls = []
 
     class UndefinedSpy(Undefined):
-        def _fail_with_undefined_error(self, *args, **kwargs):
+        def _fail_with_undefined_error(  # type: ignore
+            self, *args: t.Any, **kwargs: t.Any
+        ):
             calls.append((self._undefined_name, args, kwargs))
             return Placeholder()
 
@@ -50,5 +52,5 @@ def capture_jinja(query: str) -> CapturedQuery:
 
     return CapturedQuery(
         query=Environment(undefined=UndefinedSpy).from_string(query).render(),
-        calls=calls,
+        calls=calls,  # type: ignore
     )

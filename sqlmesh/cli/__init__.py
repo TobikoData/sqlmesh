@@ -7,10 +7,14 @@ from sqlglot.errors import SqlglotError
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import SQLMeshError
 
+DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
-def error_handler(func: t.Callable) -> t.Callable:
+
+def error_handler(
+    func: t.Callable[..., DECORATOR_RETURN_TYPE]
+) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
         try:
             return func(*args, **kwargs)
         except NodeExecutionFailedError as ex:
