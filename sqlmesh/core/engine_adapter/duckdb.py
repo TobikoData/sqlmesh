@@ -7,12 +7,7 @@ from sqlmesh.core.engine_adapter.base import EngineAdapter
 
 
 class DuckDBEngineAdapter(EngineAdapter):
-    def __init__(
-        self,
-        connection_factory: t.Callable[[], t.Any],
-        multithreaded: bool = False,
-    ):
-        super().__init__(connection_factory, "duckdb", multithreaded=multithreaded)
+    DIALECT = "duckdb"
 
     def _insert_append_pandas_df(
         self,

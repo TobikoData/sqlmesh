@@ -4,6 +4,7 @@ from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
+from sqlmesh.core.engine_adapter.databricks_api import DatabricksAPIEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
@@ -21,7 +22,23 @@ DIALECT_TO_ENGINE_ADAPTER = {
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
 ) -> EngineAdapter:
-    engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
+    dialect = dialect.lower()
+    # TODO: Update in follow up PR
+    if dialect == "databricks":
+        try:
+            from pyspark.sql import SparkSession
+
+            spark = SparkSession.getActiveSession()
+            if spark:
+                engine_adapter: t.Optional[
+                    t.Type[EngineAdapter]
+                ] = DatabricksEngineAdapter
+            else:
+                engine_adapter = DatabricksAPIEngineAdapter
+        except ImportError:
+            engine_adapter = DatabricksAPIEngineAdapter
+    else:
+        engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
     if engine_adapter is None:
         return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
     return engine_adapter(connection_factory, multithreaded=multithreaded)
