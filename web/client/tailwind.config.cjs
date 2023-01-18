@@ -26,16 +26,21 @@ module.exports = {
         700: '#cc5100',
       },
       secondary: {
-        500: '#0c81f2',
+        100: 'hsl(264, 100%, 98%)',
+        300: 'hsl(260, 100%, 80%)',
+        400: 'hsl(260, 100%, 70%)',
+        500: 'hsl(264, 100%, 60%)',
+        600: 'hsl(264, 100%, 50%)',
       },
       alternative: {
-        500: '#8331ff',
+        500: '#0c81f2',
       },
-      succsess: {
+      success: {
         500: '#0ad96e',
       },
       danger: {
-        500: '#f32224',
+        300: 'hsl(0, 90%, 72%)',
+        500: 'hsl(0, 90%, 54%)',
       },
       warning: {
         500: '#f3a322',
@@ -48,5 +53,7 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
 };
