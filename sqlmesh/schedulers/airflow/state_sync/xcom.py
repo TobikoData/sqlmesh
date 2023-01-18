@@ -90,7 +90,7 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
     def _get_snapshots_with_same_version(
         self,
         snapshots: t.Iterable[SnapshotInfoLike],
-        lock_for_update=False,
+        lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
         snapshots_dict = self._get_snapshots(
             snapshot_ids=(snapshot.snapshot_id for snapshot in snapshots),

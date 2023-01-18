@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import pickle
 import typing as t
-from collections.abc import MutableMapping
 from pathlib import Path
+from types import TracebackType
+
+KEY = t.TypeVar("KEY", bound=t.Hashable)
+VALUE = t.TypeVar("VALUE")
 
 
-class FileCache(MutableMapping):
+class FileCache(t.MutableMapping[KEY, VALUE]):
     """A simple file persisted dictionary.
 
     FileCache uses pickle to serialize itself.
@@ -22,25 +25,25 @@ class FileCache(MutableMapping):
         file: The file path to store the data.
     """
 
-    def __init__(self, file: Path, *args, **kwargs):
+    def __init__(self, file: Path, *args: t.Dict[KEY, VALUE], **kwargs: VALUE) -> None:
         self.file = file
-        self.store: t.Dict[t.Any, t.Any] = {}
-        self.update(dict(*args, **kwargs))
+        self.store: t.Dict[KEY, VALUE] = {}
+        self.update(*args, **kwargs)
         self.sync()
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: KEY) -> VALUE:
         return self.store[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: KEY, value: VALUE) -> None:
         self.store[key] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: KEY) -> None:
         del self.store[key]
 
-    def __iter__(self):
+    def __iter__(self) -> t.Iterator[KEY]:
         return iter(self.store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.store)
 
     def __enter__(self) -> FileCache:
@@ -48,10 +51,15 @@ class FileCache(MutableMapping):
             self._load(f)
         return self
 
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: t.Optional[t.Type[BaseException]],
+        exc_value: t.Optional[BaseException],
+        exc_traceback: t.Optional[TracebackType],
+    ) -> None:
         self.sync()
 
-    def _load(self, f) -> None:
+    def _load(self, f: t.BinaryIO) -> None:
         for k, v in pickle.load(f).items():
             if k not in self.store:
                 self.store[k] = v
@@ -61,7 +69,7 @@ class FileCache(MutableMapping):
         self.store.clear()
         self.sync(True)
 
-    def sync(self, overwrite=False) -> None:
+    def sync(self, overwrite: bool = False) -> None:
         """Load the file if it exists and add new keys that don't exist in memory and then overwrite the file.
 
         Args:

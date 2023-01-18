@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 from airflow.models import BaseOperator
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.utils.context import Context
@@ -20,8 +22,8 @@ class SQLMeshSnowflakeOperator(BaseOperator):
         *,
         target: BaseTarget,
         snowflake_conn_id: str = SnowflakeHook.default_conn_name,
-        **kwargs,
-    ):
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._target = target
         self._snowflake_conn_id = snowflake_conn_id

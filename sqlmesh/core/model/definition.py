@@ -135,7 +135,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
         be fetched, or a dataframe object which contains the data itself.
@@ -206,7 +206,7 @@ class _Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
@@ -241,7 +241,7 @@ class _Model(ModelMeta, frozen=True):
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         is_dev: bool = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> t.Generator[t.Tuple[Audit, exp.Subqueryable], None, None]:
         """Renders this model's audit queries, expanding macros with provided kwargs.
 
@@ -514,7 +514,7 @@ class SqlModel(_Model):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> exp.Subqueryable:
         return self._query_renderer.render(
             start=start,
@@ -605,7 +605,7 @@ class SqlModel(_Model):
             )
         return self.__query_renderer
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
 
 
@@ -627,7 +627,7 @@ class SeedModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         yield from self.seed.read(batch_size=self.kind.batch_size)
 
@@ -641,7 +641,7 @@ class SeedModel(_Model):
     def is_seed(self) -> bool:
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
 
 
@@ -662,7 +662,7 @@ class PythonModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> t.Generator[DF, None, None]:
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
@@ -730,7 +730,7 @@ class PythonModel(_Model):
     def is_python(self) -> bool:
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
 
@@ -748,7 +748,7 @@ def load_model(
     macros: t.Optional[MacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model file.
 
@@ -845,7 +845,7 @@ def create_sql_model(
     macros: t.Optional[MacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
 
@@ -893,7 +893,7 @@ def create_seed_model(
     seed_kind: SeedKind,
     *,
     path: Path = Path(),
-    **kwargs,
+    **kwargs: t.Any,
 ) -> Model:
     """Creates a Seed model.
 
@@ -926,7 +926,7 @@ def create_python_model(
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> Model:
     """Creates a Python model.
 
@@ -966,7 +966,7 @@ def _create_model(
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     expressions: t.Optional[t.List[exp.Expression]] = None,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs}, path)
 

@@ -66,7 +66,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ):
+    ) -> None:
         """
         BigQuery does not support multiple transactions with deletes against the same table. Short term
         we are going to make this delete/insert non-transactional. Long term I want to try out writing to a staging
@@ -101,7 +101,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self.execute(query)
         return self.cursor._query_job.to_dataframe()
 
-    def execute(self, sql: t.Union[str, exp.Expression], **kwargs) -> None:
+    def execute(self, sql: t.Union[str, exp.Expression], **kwargs: t.Any) -> None:
         from google.cloud import bigquery  # type: ignore
 
         create_session = isinstance(sql, exp.Transaction) and self._session_id is None

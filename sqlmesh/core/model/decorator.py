@@ -17,7 +17,7 @@ class model(registry_decorator):
 
     registry_name = "python_models"
 
-    def __init__(self, name: str, **kwargs):
+    def __init__(self, name: str, **kwargs: t.Any) -> None:
         if not name:
             raise ConfigError("Python model must have a name.")
         if not "columns" in kwargs:

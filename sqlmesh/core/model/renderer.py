@@ -63,7 +63,7 @@ class QueryRenderer:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 

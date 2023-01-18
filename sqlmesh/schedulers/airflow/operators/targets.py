@@ -63,7 +63,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         finally:
             snapshot_evaluator.close()
 
-    def post_hook(self, context: Context, **kwargs) -> None:
+    def post_hook(self, context: Context, **kwargs: t.Any) -> None:
         """The hook that should be invoked once the processing of this target
         is complete.
 
@@ -121,7 +121,10 @@ class SnapshotEvaluationTarget(
 
     @provide_session
     def post_hook(
-        self, context: Context, session: Session = util.PROVIDED_SESSION, **kwargs
+        self,
+        context: Context,
+        session: Session = util.PROVIDED_SESSION,
+        **kwargs: t.Any
     ) -> None:
         XComStateSync(session).add_interval(
             self.snapshot.snapshot_id,
@@ -230,7 +233,10 @@ class SnapshotTableCleanupTarget(
 
     @provide_session
     def post_hook(
-        self, context: Context, session: Session = util.PROVIDED_SESSION, **kwargs
+        self,
+        context: Context,
+        session: Session = util.PROVIDED_SESSION,
+        **kwargs: t.Any
     ) -> None:
         _delete_xcom(
             common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,

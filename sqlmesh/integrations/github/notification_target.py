@@ -29,7 +29,7 @@ class GithubNotificationTarget(BaseNotificationTarget):
         notification_status: NotificationStatus,
         msg: str,
         user_to_append_to: t.Optional[User] = None,
-        **kwargs,
+        **kwargs: t.Any,
     ) -> None:
         from github import Github
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 from airflow.models import BaseOperator
 from airflow.utils.context import Context
 
@@ -20,8 +22,8 @@ class SQLMeshBigQueryOperator(BaseOperator):
         *,
         target: BaseTarget,
         bigquery_conn_id: str = SQLMeshBigQueryHook.default_conn_name,
-        **kwargs,
-    ):
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._target = target
         self._bigquery_conn_id = bigquery_conn_id
