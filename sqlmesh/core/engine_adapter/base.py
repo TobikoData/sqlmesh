@@ -52,17 +52,18 @@ class EngineAdapter:
         multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
 
+    DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
 
     def __init__(
         self,
         connection_factory: t.Callable[[], t.Any],
-        dialect: str,
+        dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
     ):
-        self.dialect = dialect.lower()
+        self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(
             connection_factory, multithreaded
         )

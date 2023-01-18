@@ -18,6 +18,7 @@ if t.TYPE_CHECKING:
 
 class BigQueryEngineAdapter(EngineAdapter):
 
+    DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
 
     def __init__(
@@ -25,7 +26,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         connection_factory: t.Callable[[], t.Any],
         multithreaded: bool = False,
     ):
-        super().__init__(connection_factory, "bigquery", multithreaded=multithreaded)
+        super().__init__(connection_factory, multithreaded=multithreaded)
         self._session_id = None
 
     @property

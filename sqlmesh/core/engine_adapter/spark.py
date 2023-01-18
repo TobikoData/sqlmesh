@@ -13,12 +13,8 @@ if t.TYPE_CHECKING:
 
 
 class SparkEngineAdapter(BaseSparkEngineAdapter):
-    def __init__(
-        self,
-        connection_factory: t.Callable[[], t.Any],
-        multithreaded: bool = False,
-    ):
-        super().__init__(connection_factory, "spark", multithreaded=multithreaded)
+
+    DIALECT = "spark"
 
     @property
     def spark(self) -> PySparkSession:
@@ -30,7 +26,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         return df
 
     def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
-        return t.cast(PySparkDataFrame, self._fetch_native_df(query)).toPandas()
+        return self.fetch_pyspark_df(query).toPandas()
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         return t.cast(PySparkDataFrame, self._fetch_native_df(query))
