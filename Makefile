@@ -31,29 +31,29 @@ publish: package
 	pip install twine && python -m twine upload dist/*
 
 airflow-init:
-	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./example/airflow init
+	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./examples/airflow init
 
 airflow-run:
-	make -C ./example/airflow run
+	make -C ./examples/airflow run
 
 airflow-stop:
-	make -C ./example/airflow stop
+	make -C ./examples/airflow stop
 
 airflow-clean:
-	make -C ./example/airflow clean
+	make -C ./examples/airflow clean
 
 airflow-psql:
-	make -C ./example/airflow psql
+	make -C ./examples/airflow psql
 
 airflow-spark-sql:
-	make -C ./example/airflow spark-sql
+	make -C ./examples/airflow spark-sql
 
 airflow-it-test:
 	export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost/airflow && \
 		pytest -m "airflow_integration"
 
 airflow-it-test-docker:
-	make -C ./example/airflow it-test-docker
+	make -C ./examples/airflow it-test-docker
 
 airflow-it-test-with-env: airflow-clean airflow-init airflow-run airflow-it-test airflow-stop
 
