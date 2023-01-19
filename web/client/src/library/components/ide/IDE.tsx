@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { type File } from '../../../api';
 import clsx from "clsx";
 import { XCircleIcon } from "@heroicons/react/24/solid";
+import { EnumSize } from "../../../types/enum";
 
 export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
   const [files, setFiles] = useState<Set<File>>(new Set())
@@ -55,7 +56,7 @@ export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
         <div className='px-4 flex items-center'>
           <DropdownPlan />
           <DropdownAudits />
-          <Button size="small" variant='alternative'>
+          <Button size={EnumSize.sm} variant='alternative'>
             Run Tests
           </Button>        
           
@@ -135,10 +136,10 @@ export function IDE({ project_name = 'Wursthall' }: { project_name?: string }) {
                       validation: ok
                     </small>
                     <div className='flex'>
-                        <Button size='small' variant='secondary'>Run Query</Button>
-                        <Button size='small' variant='alternative'>Validate</Button>
-                        <Button size='small' variant='alternative'>Format</Button>
-                        <Button size='small' variant='success'>Save</Button>
+                        <Button size={EnumSize.sm} variant='secondary'>Run Query</Button>
+                        <Button size={EnumSize.sm} variant='alternative'>Validate</Button>
+                        <Button size={EnumSize.sm} variant='alternative'>Format</Button>
+                        <Button size={EnumSize.sm} variant='success'>Save</Button>
                       </div>
                   </div>           
                 </div>

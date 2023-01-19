@@ -1,13 +1,14 @@
 import { Menu, Transition } from '@headlessui/react'
 import { PlayIcon, PlusCircleIcon, EllipsisVerticalIcon  } from '@heroicons/react/24/solid'
 import { Fragment } from 'react'
+import { EnumSize } from '../../../types/enum'
 import { Button } from '../button/Button'
 
 
 export function DropdownPlan() {
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <Button size='small'>
+      <Button size={EnumSize.sm}>
         <Menu.Button as={'div'} className={'flex items-center'}>
           <span className='inline-block mr-3'>Run Plan</span>
           <PlayIcon className='w-4 h-4 text-gray-100' />
@@ -44,7 +45,7 @@ export function DropdownPlan() {
 export function DropdownAudits() {
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <Button size='small' variant='alternative'>
+      <Button size={EnumSize.sm} variant='alternative'>
         <Menu.Button as={'div'}>
           Run Audits
         </Menu.Button>    
