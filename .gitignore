@@ -134,13 +134,13 @@ dmypy.json
 *#
 
 # Airflow example
-example/airflow/Dockerfile
-example/airflow/docker-compose.yaml
-example/airflow/airflow.sh
-example/airflow/.env
-example/airflow/logs
-example/airflow/plugins
-example/airflow/warehouse
+examples/airflow/Dockerfile
+examples/airflow/docker-compose.yaml
+examples/airflow/airflow.sh
+examples/airflow/.env
+examples/airflow/logs
+examples/airflow/plugins
+examples/airflow/warehouse
 
 *.duckdb
 *.duckdb.wal
