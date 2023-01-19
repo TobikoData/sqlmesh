@@ -3,7 +3,7 @@ Configs define settings for things like engines (eg. Snowflake or Spark), schedu
 
 ## Settings
 ### connections
-A dictionary of supported connection and their configurations. The key represents a unique connection name.
+A dictionary of supported connection and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly omitting the dictionary.
 
 ```python
 import duckdb
