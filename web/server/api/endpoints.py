@@ -73,7 +73,7 @@ async def write_file(
     settings: Settings = Depends(get_settings),
 ) -> File:
     """Create or update a file."""
-    with open(settings.project_path / path, "w") as f:
+    with open(settings.project_path / path, "w", encoding="utf-8") as f:
         f.write(content)
     return File(name=os.path.basename(path), path=path, content=content)
 
