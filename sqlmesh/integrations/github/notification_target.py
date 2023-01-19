@@ -8,6 +8,8 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal
 
+from pydantic import Field
+
 from sqlmesh.core.notification_target import BaseNotificationTarget, NotificationStatus
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.shared import PullRequestInfo, add_comment_to_pr
@@ -18,7 +20,7 @@ class GithubNotificationTarget(BaseNotificationTarget):
     Github Notification Target that sends notifications to pull requests
     """
 
-    kind: Literal["github"] = "github"
+    type_: Literal["github"] = Field(alias="type", default="github")
     token: str
     github_url: t.Optional[str] = None
     pull_request_url: str

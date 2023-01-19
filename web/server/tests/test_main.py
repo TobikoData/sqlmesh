@@ -7,7 +7,7 @@ client = TestClient(app)
 
 
 def get_settings_override() -> Settings:
-    return Settings(project_path="example")
+    return Settings(project_path="examples/sushi")
 
 
 app.dependency_overrides[get_settings] = get_settings_override

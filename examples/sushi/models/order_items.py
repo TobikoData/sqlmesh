@@ -5,7 +5,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from example.helper import iter_dates
+from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind
 from sqlmesh.utils.date import to_ds

@@ -5,7 +5,7 @@ import typing as t
 
 from pydantic import Field
 
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, SnowflakeConnectionConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -83,21 +83,17 @@ class SnowflakeConfig(DataWarehouseConfig):
     retry_all: bool = False
 
     def to_sqlmesh(self) -> Config:
-        import snowflake.connector as sf_conn
-
-        kwargs = {
-            "user": self.user,
-            "password": self.password,
-            "account": self.account,
-            "warehouse": self.warehouse,
-            "database": self.database,
-            "role": self.role,
-        }
-
-        return Config(
-            engine_connection_factory=lambda: sf_conn.connect(**kwargs),
-            engine_dialect="snowflake",
+        snowflake_connection_config = SnowflakeConnectionConfig(
+            user=self.user,
+            password=self.password,
+            account=self.account,
+            warehouse=self.warehouse,
+            database=self.database,
+            role=self.role,
+            concurrent_tasks=self.threads,
         )
+
+        return Config(connections=snowflake_connection_config)
 
 
 class PostgresConfig(DataWarehouseConfig):

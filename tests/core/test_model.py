@@ -282,7 +282,7 @@ def test_seed():
     """
     )
 
-    model = load_model(expressions, path=Path("./example/models/test_model.sql"))
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
@@ -313,7 +313,7 @@ def test_seed_provided_columns():
     """
     )
 
-    model = load_model(expressions, path=Path("./example/models/test_model.sql"))
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"

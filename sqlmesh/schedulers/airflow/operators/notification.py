@@ -27,4 +27,4 @@ class BaseNotificationOperatorProvider(abc.ABC, t.Generic[NT]):
         return "all_success"
 
     def get_task_id(self, target: NT, plan_status: PlanStatus) -> str:
-        return f"plan_{plan_status.value}_{target.kind}_notification"
+        return f"plan_{plan_status.value}_{target.type_}_notification"

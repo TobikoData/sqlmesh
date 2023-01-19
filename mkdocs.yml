@@ -10,6 +10,7 @@ nav:
     - concepts/plans.md
     - concepts/snapshots.md
     - concepts/configs.md
+    - concepts/environments.md
     - concepts/tests.md
     - concepts/audits.md
   - API:
@@ -20,6 +21,7 @@ nav:
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
+    - integrations/dbt.md
   - Resources:
     - community.md
     - development.md

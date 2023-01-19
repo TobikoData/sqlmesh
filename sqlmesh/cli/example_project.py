@@ -5,38 +5,34 @@ from pathlib import Path
 import click
 
 DEFAULT_CONFIG = """import duckdb
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, DuckDBConnectionConfig
 
 
 config = Config(
-    engine_connection_factory=lambda: duckdb.connect("db.duckdb"),
-    engine_dialect="duckdb",
+    connections=DuckDBConnectionConfig(database="db.duckdb")
 )
 
+
 test_config = Config(
-    engine_connection_factory=duckdb.connect,
-    engine_dialect="duckdb",
+    connections=DuckDBConnectionConfig(),
 )
 """
 
 
 DEFAULT_AIRFLOW_CONFIG = """import duckdb
-from sqlmesh.core.config import AirflowSchedulerBackend, Config
+from sqlmesh.core.config import AirflowSchedulerConfig, Config
 
 config = Config(
-    scheduler_backend=AirflowSchedulerBackend(
+    scheduler=AirflowSchedulerConfig(
         airflow_url="http://localhost:8080/",
         username="airflow",
         password="airflow",
     ),
-    backfill_concurrent_tasks=4,
-    ddl_concurrent_tasks=4,
 )
 
 
 test_config = Config(
-    engine_connection_factory=duckdb.connect,
-    engine_dialect="duckdb",
+    connections= DuckDBConnectionConfig(),
 )
 """
 
