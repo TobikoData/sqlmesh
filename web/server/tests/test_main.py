@@ -14,6 +14,13 @@ def project_tmp_path(tmp_path: Path) -> Path:
     def get_settings_override() -> Settings:
         return Settings(project_path=tmp_path)
 
+    config = tmp_path / "config.py"
+    config.write_text(
+        """from sqlmesh.core.config import Config
+config = Config()
+    """
+    )
+
     app.dependency_overrides[get_settings] = get_settings_override
     return tmp_path
 
@@ -22,7 +29,7 @@ def test_get_files(project_tmp_path: Path) -> None:
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
     sql_file = models_dir / "foo.sql"
-    sql_file.touch()
+    sql_file.write_text("MODEL (name foo); SELECT ds;")
 
     response = client.get("/api/files")
     assert response.status_code == 200
@@ -45,7 +52,15 @@ def test_get_files(project_tmp_path: Path) -> None:
                 ],
             }
         ],
-        "files": [],
+        "files": [
+            {
+                "name": "config.py",
+                "path": "config.py",
+                "extension": ".py",
+                "is_supported": True,
+                "content": None,
+            }
+        ],
     }
 
 

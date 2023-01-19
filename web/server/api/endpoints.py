@@ -6,10 +6,17 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
+from sqlmesh.core.context import Context
 from web.server.models import Directory, File
 from web.server.settings import Settings, get_settings
 
 router = APIRouter()
+
+
+def _validate_path(path: str, context: Context) -> None:
+    _path = Path(path)
+    if any(_path.match(pattern) for pattern in context._ignore_patterns):
+        raise HTTPException(status_code=404)
 
 
 @router.get("/files")
@@ -23,7 +30,15 @@ def get_files(
         files = []
         with os.scandir(path) as entries:
             for entry in entries:
-                if entry.name == "__pycache__" or entry.name.startswith("."):
+                entry_path = Path(entry.path)
+                if (
+                    entry.name == "__pycache__"
+                    or entry.name.startswith(".")
+                    or any(
+                        entry_path.match(pattern)
+                        for pattern in settings.context._ignore_patterns
+                    )
+                ):
                     continue
 
                 relative_path = os.path.relpath(entry.path, settings.project_path)
@@ -58,6 +73,7 @@ def get_file(
     settings: Settings = Depends(get_settings),
 ) -> File:
     """Get a file, including its contents."""
+    _validate_path(path, settings.context)
     try:
         with open(settings.project_path / path) as f:
             content = f.read()
@@ -73,6 +89,7 @@ async def write_file(
     settings: Settings = Depends(get_settings),
 ) -> File:
     """Create or update a file."""
+    _validate_path(path, settings.context)
     with open(settings.project_path / path, "w", encoding="utf-8") as f:
         f.write(content)
     return File(name=os.path.basename(path), path=path, content=content)
@@ -85,6 +102,7 @@ async def delete_file(
     settings: Settings = Depends(get_settings),
 ) -> None:
     """Delete a file."""
+    _validate_path(path, settings.context)
     try:
         (settings.project_path / path).unlink()
         response.status_code = status.HTTP_204_NO_CONTENT
