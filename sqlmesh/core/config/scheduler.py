@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import abc
+import sys
 import typing as t
 
-import duckdb
-from pydantic import root_validator, validator
+from pydantic import Field, root_validator
 from requests import Session
 
-from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
-from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -23,8 +19,13 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core.context import Context
 
+if sys.version_info >= (3, 9):
+    from typing import Annotated, Literal
+else:
+    from typing_extensions import Annotated, Literal
 
-class SchedulerBackend(abc.ABC):
+
+class _SchedulerConfig(abc.ABC):
     """Abstract base class for Scheduler configurations."""
 
     @abc.abstractmethod
@@ -61,8 +62,10 @@ class SchedulerBackend(abc.ABC):
         return None
 
 
-class BuiltInSchedulerBackend(SchedulerBackend):
+class BuiltInSchedulerConfig(_SchedulerConfig, PydanticModel):
     """The Built-In Scheduler configuration."""
+
+    type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
         return EngineAdapterStateSync(
@@ -78,27 +81,15 @@ class BuiltInSchedulerBackend(SchedulerBackend):
         )
 
 
-class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
-    """The Airflow Scheduler configuration."""
+class _BaseAirflowSchedulerConfig(_SchedulerConfig):
+    max_concurrent_requests: int
+    dag_run_poll_interval_secs: int
+    dag_creation_poll_interval_secs: int
+    dag_creation_max_retry_attempts: int
 
-    airflow_url: str = AIRFLOW_LOCAL_URL
-    username: str = "airflow"
-    password: str = "airflow"
-    max_concurrent_requests: int = 2
-    dag_run_poll_interval_secs: int = 10
-    dag_creation_poll_interval_secs: int = 30
-    dag_creation_max_retry_attempts: int = 10
-
+    @abc.abstractmethod
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
-        session = Session()
-        session.headers.update({"Content-Type": "application/json"})
-        session.auth = (self.username, self.password)
-
-        return AirflowClient(
-            session=session,
-            airflow_url=self.airflow_url,
-            console=console,
-        )
+        """Constructs the Airflow Client instance."""
 
     def create_state_reader(self, context: Context) -> t.Optional[StateReader]:
         from sqlmesh.schedulers.airflow.state_sync import HttpStateReader
@@ -125,16 +116,39 @@ class AirflowSchedulerBackend(SchedulerBackend, PydanticModel):
         )
 
 
-class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
+class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
+    """The Airflow Scheduler configuration."""
+
+    airflow_url: str = AIRFLOW_LOCAL_URL
+    username: str = "airflow"
+    password: str = "airflow"
+    max_concurrent_requests: int = 2
+    dag_run_poll_interval_secs: int = 10
+    dag_creation_poll_interval_secs: int = 30
+    dag_creation_max_retry_attempts: int = 10
+
+    type_: Literal["airflow"] = Field(alias="type", default="airflow")
+
+    def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
+        session = Session()
+        session.headers.update({"Content-Type": "application/json"})
+        session.auth = (self.username, self.password)
+
+        return AirflowClient(
+            session=session,
+            airflow_url=self.airflow_url,
+            console=console,
+        )
+
+
+class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
     airflow_url: str
     max_concurrent_requests: int = 2
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
 
-    class Config:
-        # See `check_supported_fields` for the supported extra fields
-        extra = "allow"
+    type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
     def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
@@ -172,55 +186,9 @@ class CloudComposerSchedulerBackend(AirflowSchedulerBackend, PydanticModel):
         return values
 
 
-class Config(PydanticModel):
-    """
-    An object used by a Context to configure your SQLMesh project.
-
-    Args:
-        engine_connection_factory: The calllable which creates a new engine connection on each call.
-        engine_dialect: The engine dialect.
-        scheduler_backend: Identifies which scheduler backend to use.
-        notification_targets: The notification targets to use.
-        dialect: The default sql dialect of model queries. Default: same as engine dialect.
-        physical_schema: The default schema used to store materialized tables.
-        snapshot_ttl: Duration before unpromoted snapshots are removed.
-        time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
-            This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
-        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
-            plan application. Default: 1.
-        ddl_concurrent_tasks: The number of concurrent tasks used for DDL
-            operations (table / view creation, deletion, etc). Default: 1.
-        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
-            running with the built-in scheduler. Default: 1.
-        users: A list of users that can be used for approvals/notifications.
-    """
-
-    engine_connection_factory: t.Callable[[], t.Any] = duckdb.connect
-    engine_dialect: str = "duckdb"
-    scheduler_backend: SchedulerBackend = BuiltInSchedulerBackend()
-    notification_targets: t.List[NotificationTarget] = []
-    dialect: str = ""
-    physical_schema: str = ""
-    snapshot_ttl: str = ""
-    ignore_patterns: t.List[str] = []
-    time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
-    backfill_concurrent_tasks: int = 1
-    ddl_concurrent_tasks: int = 1
-    evaluation_concurrent_tasks: int = 1
-    users: t.List[User] = []
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    @validator(
-        "backfill_concurrent_tasks",
-        "ddl_concurrent_tasks",
-        "evaluation_concurrent_tasks",
-        pre=True,
-    )
-    def _concurrent_tasks_validator(cls, v: t.Any) -> int:
-        if not isinstance(v, int) or v <= 0:
-            raise ConfigError(
-                f"The number of concurrent tasks must be an integer value greater than 0. '{v}' was provided"
-            )
-        return v
+SchedulerConfig = Annotated[
+    t.Union[
+        BuiltInSchedulerConfig, AirflowSchedulerConfig, CloudComposerSchedulerConfig
+    ],
+    Field(discriminator="type_"),
+]

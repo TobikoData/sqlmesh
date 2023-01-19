@@ -2,43 +2,28 @@
 Configs define settings for things like engines (eg. Snowflake or Spark), schedulers (eg. Airflow or Dagster), and the SQL dialect. The config file is defined in config.py in the root directory of your SQLMesh project.
 
 ## Settings
-### engine_connection_factory
-The calllable which creates a new engine connection on each call. Connections will be automatically created when needed by SQLMesh.
+### connections
+A dictionary of supported connection and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly omitting the dictionary.
 
 ```python
 import duckdb
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, DuckDBConnectionConfig
 
 Config(
-    engine_connection_factory=lambda: duckdb.connect(
-        database=f"{DATA_DIR}/local.duckdb"
-    )
+    connections={
+        "default": DuckDBConnectionConfig(database="local.duckdb"),
+    },
 )
 ```
 
-### engine_dialect
-The engine's SQL dialect. In general, the engine_dialect should match the engine_connection.
-
-```python
-import duckdb
-from sqlmesh.core.config import Config
-
-Config(
-    engine_connection_factory=lambda: duckdb.connect(
-        database=f"{DATA_DIR}/local.duckdb"
-    ),
-    engine_dialect="duckdb",
-)
-```
-
-### scheduler_backend
+### scheduler
 Identifies which scheduler backend to use. The scheduler backend is used for both storing metadata and executing [plans](/concepts/plans). By default, the `BuiltinSchedulerBackend` is used which uses the existing SQL engine to store metadata and has a simple scheduler. The `AirflowSchedulerBackend` should be used if you want to integrate with Airflow.
 
 
 ```python
-from sqlmesh.core.config import AirflowSchedulerBackend, Config
+from sqlmesh.core.config import AirflowSchedulerConfig, Config
 
-Config(scheduler_backend=AirflowSchedulerBackend())
+Config(scheduler=AirflowSchedulerConfig())
 ```
 
 ### notification_targets
@@ -82,8 +67,7 @@ the following order. From least to greatest precedence:
 import duckdb
 from sqlmesh.core.engine_adapter import EngineAdapter
 local_config = Config(
-    engine_connection_factory=duckdb.connect,
-    engine_dialect="duckdb"
+    connections=DuckDBConnectionConfig(database="local.duckdb"),
 )
 # End config.py
 
@@ -97,10 +81,7 @@ local_config = Config(
 ```python
 >>> from sqlmesh import Context
 >>> from sqlmesh.core.config import Config
->>> my_config = Config(
-...     engine_connection_factory=duckdb.connect,
-...     engine_dialect="duckdb"
-... )
+>>> my_config = Config()
 >>> context = Context(path="example", config=my_config)
 
 ```
@@ -134,33 +115,20 @@ from sqlmesh.core.config import Config, AirflowSchedulerBackend
 from my_project.utils import load_test_data
 
 
-DEFAULT_KWARGS = {
-    "engine_dialect": "duckdb",
-    "engine_connection_factory": duckdb.connect,
-}
-
 # An in memory DuckDB config.
-config = Config(**DEFAULT_KWARGS)
+config = Config()
 
 # A stateful DuckDB config.
 local_config = Config(
-    **{
-        **DEFAULT_KWARGS,
-        "engine_connection_factory": lambda: duckdb.connect(
-            database=f"{DATA_DIR}/local.duckdb"
-        ),
-    }
+    connections=DuckDBConnectionConfig(database="local.duckdb"),
 )
 
 # The config to run model tests.
-test_config = Config(
-    **DEFAULT_KWARGS,
-)
+test_config = Config()
 
 # A config that uses Airflow
 airflow_config = Config(
-    "scheduler_backend": AirflowSchedulerBackend(),
-    **DEFAULT_KWARGS,
+    scheduler_backend=AirflowSchedulerBackend(),
 )
 ```
 

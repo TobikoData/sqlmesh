@@ -4,7 +4,7 @@ import os
 import pytest
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from sqlmesh.core.config import AirflowSchedulerBackend
+from sqlmesh.core.config import AirflowSchedulerConfig
 from sqlmesh.schedulers.airflow.client import AirflowClient
 
 logger = logging.getLogger(__name__)
@@ -21,18 +21,18 @@ def airflow_host(is_docker: bool) -> str:
 
 
 @pytest.fixture(scope="session")
-def airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerBackend:
+def airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerConfig:
     return _get_airflow_scheduler_backend(airflow_host)
 
 
 @pytest.fixture(scope="session")
-def airflow_client(airflow_scheduler_backend: AirflowSchedulerBackend) -> AirflowClient:
+def airflow_client(airflow_scheduler_backend: AirflowSchedulerConfig) -> AirflowClient:
     return airflow_scheduler_backend.get_client()
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(10), reraise=True)
-def _get_airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerBackend:
-    backend = AirflowSchedulerBackend(airflow_url=f"http://{airflow_host}:8080/")
+def _get_airflow_scheduler_backend(airflow_host: str) -> AirflowSchedulerConfig:
+    backend = AirflowSchedulerConfig(airflow_url=f"http://{airflow_host}:8080/")
     client = backend.get_client()
 
     try:

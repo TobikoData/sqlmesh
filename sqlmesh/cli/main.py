@@ -16,9 +16,25 @@ from sqlmesh.utils.date import TimeLike
 @click.group(no_args_is_help=True)
 @opt.path
 @opt.config
+@click.option(
+    "--connection",
+    type=str,
+    help="The name of the connection.",
+)
+@click.option(
+    "--test-connection",
+    type=str,
+    help="The name of the connection to use for tests.",
+)
 @click.pass_context
 @error_handler
-def cli(ctx: click.Context, path: str, config: t.Optional[str] = None) -> None:
+def cli(
+    ctx: click.Context,
+    path: str,
+    config: t.Optional[str] = None,
+    connection: t.Optional[str] = None,
+    test_connection: t.Optional[str] = None,
+) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
         return
@@ -30,7 +46,12 @@ def cli(ctx: click.Context, path: str, config: t.Optional[str] = None) -> None:
 
     if ctx.invoked_subcommand == "test" and not config:
         config = "test_config"
-    context = Context(path=path, config=config)
+    context = Context(
+        path=path,
+        config=config,
+        connection_name=connection,
+        test_connection_name=test_connection,
+    )
 
     if not context.models:
         raise click.ClickException(
