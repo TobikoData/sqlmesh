@@ -20,7 +20,7 @@ def wait_for_airflow(airflow_client: AirflowClient):
 @pytest.mark.airflow_integration
 def test_sushi(mocker: MockerFixture, is_docker: bool):
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
-    context = Context(path="./example", config=airflow_config)
+    context = Context(path="./examples/sushi", config=airflow_config)
     context.plan(
         start=yesterday_ds(),
         skip_tests=True,
