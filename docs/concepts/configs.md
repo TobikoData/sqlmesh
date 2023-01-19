@@ -43,15 +43,6 @@ The default format to use for all model time columns. Defaults to %Y-%m-%d.
 
 This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
 
-### backfill_concurrent_tasks
-The number of concurrent tasks used for model backfilling during plan application. Default: 1.
-
-### ddl_concurrent_tasks
-The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc). Default: 1.
-
-### evaluation_concurrent_tasks
-The number of concurrent tasks used for model evaluation when running with the built-in scheduler. Default: 1.
-
 ### users
 A list of users that can be used for approvals/notifications.
 
