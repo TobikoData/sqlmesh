@@ -21,7 +21,7 @@ init-airflow-dockerfile:
 	export AIRFLOW_VERSION=$(AIRFLOW_VERSION) AIRFLOW_UID=$(AIRFLOW_UID) && cat Dockerfile.template | envsubst '$$AIRFLOW_VERSION,$$AIRFLOW_UID' > Dockerfile
 
 build-airflow-image: init-airflow-dockerfile
-	cd ../../ && docker build -t $(AIRFLOW_IMAGE_NAME) -f ./example/airflow/Dockerfile .
+	cd ../../ && docker build -t $(AIRFLOW_IMAGE_NAME) -f ./examples/airflow/Dockerfile .
 
 create-metastore-db: build-airflow-image decorate-docker-compose
 	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up create-metastore-db

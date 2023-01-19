@@ -82,10 +82,10 @@ test_customer_revenue_by_day:
 ### The CLI test command
 You can execute your tests with the `sqlmesh test` command.
 ```
-% sqlmesh --path example test
+% sqlmesh --path examples/sushi test
 ...F
 ======================================================================
-FAIL: test_customer_revenue_by_day (example/models/tests/test_customer_revenue_by_day.yaml:1)
+FAIL: test_customer_revenue_by_day (examples/sushi/models/tests/test_customer_revenue_by_day.yaml:1)
 ----------------------------------------------------------------------
 AssertionError: Data differs
 - {'customer_id': 1, 'revenue': 26.2, 'ds': '2022-01-01'}
