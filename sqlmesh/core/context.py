@@ -187,11 +187,11 @@ class Context(BaseContext):
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         path: The directory containing SQLMesh files.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
-            plan application. Default: 1.
+            plan application.
         ddl_concurrent_task: The number of concurrent tasks used for DDL
-            operations (table / view creation, deletion, etc). Default: 1.
+            operations (table / view creation, deletion, etc).
         evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
-            running with the built-in scheduler. Default: 1.
+            running with the built-in scheduler.
         config: A Config object or the name of a Config object in config.py.
         test_config: A Config object or name of a Config object in config.py to use for testing only
         connection_name: The name of a connection. If not specified the first connection as it appears
@@ -257,14 +257,19 @@ class Context(BaseContext):
         )
         self.dag: DAG[str] = DAG()
 
+        self._models: UniqueKeyDict = UniqueKeyDict("models")
+        self._macros: UniqueKeyDict = UniqueKeyDict("macros")
+
+        connection_config = self.config.get_connection_config(connection_name)
+
         self.backfill_concurrent_tasks = (
-            backfill_concurrent_tasks or self.config.backfill_concurrent_tasks
+            backfill_concurrent_tasks or connection_config.backfill_concurrent_tasks
         )
         self.ddl_concurrent_tasks = (
-            ddl_concurrent_tasks or self.config.ddl_concurrent_tasks
+            ddl_concurrent_tasks or connection_config.ddl_concurrent_tasks
         )
         self.evaluation_concurrent_tasks = (
-            evaluation_concurrent_tasks or self.config.evaluation_concurrent_tasks
+            evaluation_concurrent_tasks or connection_config.evaluation_concurrent_tasks
         )
         self.is_multithreaded = (
             max(
@@ -275,13 +280,8 @@ class Context(BaseContext):
             > 1
         )
 
-        self._models: UniqueKeyDict = UniqueKeyDict("models")
-        self._macros: UniqueKeyDict = UniqueKeyDict("macros")
-
         self._engine_adapter = engine_adapter or (
-            self.config.get_connection_config(connection_name).create_engine_adapter(
-                self.is_multithreaded
-            )
+            connection_config.create_engine_adapter(self.is_multithreaded)
         )
         self.test_engine_adapter = (
             self.test_config.get_connection_config(

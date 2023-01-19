@@ -17,26 +17,9 @@ local_config = Config(
 test_config = Config()
 
 
-# A config that uses Airflow + Spark.
-DEFAULT_AIRFLOW_KWARGS = {
-    "backfill_concurrent_tasks": 4,
-    "ddl_concurrent_tasks": 4,
-}
-
-
-airflow_config = Config(
-    **{
-        **DEFAULT_AIRFLOW_KWARGS,
-        "scheduler": AirflowSchedulerConfig(),
-    }
-)
+airflow_config = Config(scheduler=AirflowSchedulerConfig())
 
 
 airflow_config_docker = Config(
-    **{
-        **DEFAULT_AIRFLOW_KWARGS,
-        "scheduler": AirflowSchedulerConfig(
-            airflow_url="http://airflow-webserver:8080/"
-        ),
-    }
+    scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
 )

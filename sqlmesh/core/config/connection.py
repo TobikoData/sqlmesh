@@ -7,6 +7,7 @@ import typing as t
 from pydantic import Field
 
 from sqlmesh.core import engine_adapter
+from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -18,6 +19,10 @@ else:
 
 
 class _ConnectionConfig(abc.ABC):
+    backfill_concurrent_tasks: int
+    ddl_concurrent_tasks: int
+    evaluation_concurrent_tasks: int
+
     @abc.abstractmethod
     def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter.
@@ -29,9 +34,20 @@ class _ConnectionConfig(abc.ABC):
 
 
 class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
-    """Configuration for the DuckDB connection."""
+    """Configuration for the DuckDB connection.
+
+    Args:
+        database: The optional database name. If not specified the in-memory database will be used.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation.
+    """
 
     database: t.Optional[str]
+
+    backfill_concurrent_tasks: Literal[1] = 1
+    ddl_concurrent_tasks: Literal[1] = 1
+    evaluation_concurrent_tasks: Literal[1] = 1
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
@@ -52,7 +68,19 @@ class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
 
 
 class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
-    """Configuration for the Snowflake connection."""
+    """Configuration for the Snowflake connection.
+
+    Args:
+        user: The Snowflake username.
+        password: The Snowflake password.
+        account: The Snowflake account name.
+        warehouse: The optional warehouse name.
+        database: The optional database name.
+        role: The optional role name.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation.
+    """
 
     user: str
     password: str
@@ -61,7 +89,13 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
     database: t.Optional[str]
     role: t.Optional[str]
 
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+    evaluation_concurrent_tasks: int = 4
+
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
 
     def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
         from snowflake import connector

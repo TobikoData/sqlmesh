@@ -7,6 +7,7 @@ import typing as t
 from pydantic import Field, root_validator
 from requests import Session
 
+from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
@@ -87,6 +88,9 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
     dag_creation_poll_interval_secs: int
     dag_creation_max_retry_attempts: int
 
+    backfill_concurrent_tasks: int
+    ddl_concurrent_tasks: int
+
     @abc.abstractmethod
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         """Constructs the Airflow Client instance."""
@@ -110,14 +114,28 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
             dag_creation_max_retry_attempts=self.dag_creation_max_retry_attempts,
             console=context.console,
             notification_targets=context.notification_targets,
-            backfill_concurrent_tasks=context.backfill_concurrent_tasks,
-            ddl_concurrent_tasks=context.ddl_concurrent_tasks,
+            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=context.users,
         )
 
 
 class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
-    """The Airflow Scheduler configuration."""
+    """The Airflow Scheduler configuration.
+
+    Args:
+        airflow_url: The URL of the Airflow Webserver.
+        username: The Airflow username.
+        password: The Airflow password.
+        max_concurrent_requests: The maximum number of concurrent requests when interacting with
+            the Airflow Webserver.
+        dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
+        dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
+        dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
+            whether a DAG has been created.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+    """
 
     airflow_url: str = AIRFLOW_LOCAL_URL
     username: str = "airflow"
@@ -127,7 +145,12 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
 
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+
     type_: Literal["airflow"] = Field(alias="type", default="airflow")
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
 
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         session = Session()
@@ -142,13 +165,32 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
 
 
 class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
+    """The Google Cloud Composer configuration.
+
+    Args:
+        airflow_url: The URL of the Airflow Webserver.
+        max_concurrent_requests: The maximum number of concurrent requests when interacting with
+            the Airflow Webserver.
+        dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
+        dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
+        dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
+            whether a DAG has been created.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+    """
+
     airflow_url: str
     max_concurrent_requests: int = 2
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
 
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
 
     def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
