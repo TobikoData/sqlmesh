@@ -33,7 +33,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
 
     def _insert_overwrite_by_condition(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -49,7 +49,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
 
     def insert_append(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -60,7 +60,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
 
     def _insert_append_pandas_df(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -70,17 +70,20 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
 
     def _insert_append_pyspark_df(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         df: PySparkDataFrame,
     ) -> None:
         self._insert_pyspark_df(table_name, df, overwrite=False)
 
     def _insert_pyspark_df(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         df: PySparkDataFrame,
         overwrite: bool = False,
     ) -> None:
+        if isinstance(table_name, exp.Table):
+            table_name = table_name.sql(dialect=self.dialect)
+
         df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
             table_name, overwrite=overwrite
         )

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing as t
 
 import pandas as pd
@@ -11,7 +13,7 @@ class DuckDBEngineAdapter(EngineAdapter):
 
     def _insert_append_pandas_df(
         self,
-        table_name: str,
+        table_name: str | exp.Table,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:

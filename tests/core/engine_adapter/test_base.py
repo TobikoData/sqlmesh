@@ -282,3 +282,29 @@ def test_replace_query_pandas(mocker: MockerFixture):
     cursor_mock.execute.assert_called_once_with(
         'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS int) AS "a", CAST("b" AS int) AS "b" FROM (VALUES (CAST(1 AS int), CAST(4 AS int)), (2, 5), (3, 6)) AS "test_table"("a", "b")'
     )
+
+
+def test_create_table_like(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.create_table_like("target_table", "source_table")
+
+    cursor_mock.execute.assert_called_once_with(
+        'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
+    )
+
+
+def test_rename_table(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.rename_table("old_table", "new_table")
+
+    cursor_mock.execute.assert_called_once_with(
+        'ALTER TABLE "old_table" RENAME TO "new_table"'
+    )
