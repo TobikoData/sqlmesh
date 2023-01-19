@@ -4,6 +4,8 @@ import sys
 import typing as t
 from enum import Enum
 
+from pydantic import Field
+
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -48,7 +50,7 @@ class BaseNotificationTarget(PydanticModel):
     to create the notification constructs appropriate for the scheduler.
     """
 
-    kind: str
+    type_: str
 
     def send(
         self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any
@@ -63,7 +65,7 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
     Example console notification target. Keeping this around for testing purposes.
     """
 
-    kind: Literal["console"] = "console"
+    type_: Literal["console"] = Field(alias="type", default="console")
     _console: t.Optional[Console] = None
 
     @property

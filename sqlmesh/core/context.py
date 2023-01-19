@@ -57,7 +57,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
-from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, load_model
@@ -194,6 +194,10 @@ class Context(BaseContext):
             running with the built-in scheduler. Default: 1.
         config: A Config object or the name of a Config object in config.py.
         test_config: A Config object or name of a Config object in config.py to use for testing only
+        connection_name: The name of a connection. If not specified the first connection as it appears
+            in configuration will be used.
+        test_connection_name: The name of a connection to use for tests. If not specified the first
+            connection as it appears in configuration will be used.
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
@@ -213,6 +217,8 @@ class Context(BaseContext):
         evaluation_concurrent_tasks: t.Optional[int] = None,
         config: t.Optional[t.Union[Config, str]] = None,
         test_config: t.Optional[t.Union[Config, str]] = None,
+        connection_name: t.Optional[str] = None,
+        test_connection_name: t.Optional[str] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -243,7 +249,6 @@ class Context(BaseContext):
         cache_path = self.path / c.CACHE_PATH
         cache_path.mkdir(exist_ok=True)
         self.table_info_cache: FileCache = FileCache(cache_path / c.TABLE_INFO_CACHE)
-        self.dialect = dialect or self.config.dialect or self.config.engine_dialect
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
         )
@@ -273,19 +278,20 @@ class Context(BaseContext):
         self._models: UniqueKeyDict = UniqueKeyDict("models")
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
 
-        self._engine_adapter = engine_adapter or create_engine_adapter(
-            self.config.engine_connection_factory,
-            self.config.engine_dialect,
-            multithreaded=self.is_multithreaded,
+        self._engine_adapter = engine_adapter or (
+            self.config.get_connection_config(connection_name).create_engine_adapter(
+                self.is_multithreaded
+            )
         )
         self.test_engine_adapter = (
-            create_engine_adapter(
-                self.test_config.engine_connection_factory,
-                self.test_config.engine_dialect,
-            )
+            self.test_config.get_connection_config(
+                test_connection_name
+            ).create_engine_adapter(False)
             if self.test_config
             else None
         )
+
+        self.dialect = dialect or self.config.dialect or self._engine_adapter.dialect
 
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.ddl_concurrent_tasks
@@ -367,7 +373,7 @@ class Context(BaseContext):
         if not self._state_sync:
             self._state_sync = (
                 self._provided_state_sync
-                or self.config.scheduler_backend.create_state_sync(self)
+                or self.config.scheduler.create_state_sync(self)
             )
             if not self._state_sync:
                 raise ConfigError(
@@ -382,9 +388,7 @@ class Context(BaseContext):
             try:
                 self._state_reader = self.state_sync
             except ConfigError:
-                self._state_reader = self.config.scheduler_backend.create_state_reader(
-                    self
-                )
+                self._state_reader = self.config.scheduler.create_state_reader(self)
             if not self._state_reader:
                 raise ConfigError(
                     "Invalid configuration: neither State Sync nor Reader has been configured"
@@ -709,7 +713,7 @@ class Context(BaseContext):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-        self.config.scheduler_backend.create_plan_evaluator(self).evaluate(plan)
+        self.config.scheduler.create_plan_evaluator(self).evaluate(plan)
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.
