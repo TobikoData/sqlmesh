@@ -18,7 +18,7 @@ def _concurrent_tasks_validator(v: t.Any) -> int:
 concurrent_tasks_validator = validator(
     "backfill_concurrent_tasks",
     "ddl_concurrent_tasks",
-    "evaluation_concurrent_tasks",
+    "concurrent_tasks",
     pre=True,
     allow_reuse=True,
     check_fields=False,

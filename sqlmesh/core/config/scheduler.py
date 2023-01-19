@@ -77,7 +77,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, PydanticModel):
         return BuiltInPlanEvaluator(
             state_sync=context.state_sync,
             snapshot_evaluator=context.snapshot_evaluator,
-            backfill_concurrent_tasks=context.backfill_concurrent_tasks,
+            backfill_concurrent_tasks=context.concurrent_tasks,
             console=context.console,
         )
 

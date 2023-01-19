@@ -9,7 +9,6 @@ from pydantic import Field
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
@@ -19,18 +18,11 @@ else:
 
 
 class _ConnectionConfig(abc.ABC):
-    backfill_concurrent_tasks: int
-    ddl_concurrent_tasks: int
-    evaluation_concurrent_tasks: int
+    concurrent_tasks: int
 
     @abc.abstractmethod
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
-        """Returns a new instance of the Engine Adapter.
-
-        Args:
-            multithreaded: Indicates whether this adapter will be used by more than one thread.
-
-        """
+    def create_engine_adapter(self) -> EngineAdapter:
+        """Returns a new instance of the Engine Adapter."""
 
 
 class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
@@ -38,25 +30,16 @@ class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
 
     Args:
         database: The optional database name. If not specified the in-memory database will be used.
-        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
-        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation.
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
     database: t.Optional[str]
 
-    backfill_concurrent_tasks: Literal[1] = 1
-    ddl_concurrent_tasks: Literal[1] = 1
-    evaluation_concurrent_tasks: Literal[1] = 1
+    concurrent_tasks: Literal[1] = 1
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
-        if multithreaded:
-            raise ConfigError(
-                "The DuckDB connection can't be used with multiple threads."
-            )
-
+    def create_engine_adapter(self) -> EngineAdapter:
         import duckdb
 
         if self.database:
@@ -77,9 +60,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
         warehouse: The optional warehouse name.
         database: The optional database name.
         role: The optional role name.
-        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
-        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation.
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
     user: str
@@ -89,15 +70,13 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
     database: t.Optional[str]
     role: t.Optional[str]
 
-    backfill_concurrent_tasks: int = 4
-    ddl_concurrent_tasks: int = 4
-    evaluation_concurrent_tasks: int = 4
+    concurrent_tasks: int = 4
 
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
+    def create_engine_adapter(self) -> EngineAdapter:
         from snowflake import connector
 
         kwargs = {
@@ -113,7 +92,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
             kwargs["role"] = self.role
 
         return engine_adapter.SnowflakeEngineAdapter(
-            lambda: connector.connect(**kwargs), multithreaded=multithreaded
+            lambda: connector.connect(**kwargs), multithreaded=self.concurrent_tasks > 1
         )
 
 

@@ -90,9 +90,7 @@ class SnowflakeConfig(DataWarehouseConfig):
             warehouse=self.warehouse,
             database=self.database,
             role=self.role,
-            backfill_concurrent_tasks=self.threads,
-            ddl_concurrent_tasks=self.threads,
-            evaluation_concurrent_tasks=self.threads,
+            concurrent_tasks=self.threads,
         )
 
         return Config(connections=snowflake_connection_config)

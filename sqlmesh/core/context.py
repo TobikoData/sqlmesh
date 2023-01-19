@@ -186,18 +186,13 @@ class Context(BaseContext):
         physical_schema: The schema used to store physical materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         path: The directory containing SQLMesh files.
-        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during
-            plan application.
-        ddl_concurrent_task: The number of concurrent tasks used for DDL
-            operations (table / view creation, deletion, etc).
-        evaluation_concurrent_tasks: The number of concurrent tasks used for model evaluation when
-            running with the built-in scheduler.
         config: A Config object or the name of a Config object in config.py.
         test_config: A Config object or name of a Config object in config.py to use for testing only
-        connection_name: The name of a connection. If not specified the first connection as it appears
+        connection: The name of the connection. If not specified the first connection as it appears
             in configuration will be used.
-        test_connection_name: The name of a connection to use for tests. If not specified the first
+        test_connection: The name of the connection to use for tests. If not specified the first
             connection as it appears in configuration will be used.
+        concurrent_tasks: The maximum number of tasks that can use the connection concurrently.
         load: Whether or not to automatically load all models and macros (default True).
         console: The rich instance used for printing out CLI command results.
         users: A list of users to make known to SQLMesh.
@@ -212,13 +207,11 @@ class Context(BaseContext):
         physical_schema: str = "",
         snapshot_ttl: str = "",
         path: str = "",
-        backfill_concurrent_tasks: t.Optional[int] = None,
-        ddl_concurrent_tasks: t.Optional[int] = None,
-        evaluation_concurrent_tasks: t.Optional[int] = None,
         config: t.Optional[t.Union[Config, str]] = None,
         test_config: t.Optional[t.Union[Config, str]] = None,
-        connection_name: t.Optional[str] = None,
-        test_connection_name: t.Optional[str] = None,
+        connection: t.Optional[str] = None,
+        test_connection: t.Optional[str] = None,
+        concurrent_tasks: t.Optional[int] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -260,33 +253,17 @@ class Context(BaseContext):
         self._models: UniqueKeyDict = UniqueKeyDict("models")
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
 
-        connection_config = self.config.get_connection_config(connection_name)
+        connection_config = self.config.get_connection_config(connection)
 
-        self.backfill_concurrent_tasks = (
-            backfill_concurrent_tasks or connection_config.backfill_concurrent_tasks
-        )
-        self.ddl_concurrent_tasks = (
-            ddl_concurrent_tasks or connection_config.ddl_concurrent_tasks
-        )
-        self.evaluation_concurrent_tasks = (
-            evaluation_concurrent_tasks or connection_config.evaluation_concurrent_tasks
-        )
-        self.is_multithreaded = (
-            max(
-                self.backfill_concurrent_tasks,
-                self.ddl_concurrent_tasks,
-                self.evaluation_concurrent_tasks,
-            )
-            > 1
-        )
+        self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
 
-        self._engine_adapter = engine_adapter or (
-            connection_config.create_engine_adapter(self.is_multithreaded)
+        self._engine_adapter = (
+            engine_adapter or connection_config.create_engine_adapter()
         )
         self.test_engine_adapter = (
             self.test_config.get_connection_config(
-                test_connection_name
-            ).create_engine_adapter(False)
+                test_connection
+            ).create_engine_adapter()
             if self.test_config
             else None
         )
@@ -294,7 +271,7 @@ class Context(BaseContext):
         self.dialect = dialect or self.config.dialect or self._engine_adapter.dialect
 
         self.snapshot_evaluator = SnapshotEvaluator(
-            self.engine_adapter, ddl_concurrent_tasks=self.ddl_concurrent_tasks
+            self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks
         )
 
         self.notification_targets = self.config.notification_targets + (
@@ -364,7 +341,7 @@ class Context(BaseContext):
             snapshots,
             self.snapshot_evaluator,
             self.state_sync,
-            max_workers=self.evaluation_concurrent_tasks,
+            max_workers=self.concurrent_tasks,
             console=self.console,
         )
 
