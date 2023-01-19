@@ -7,8 +7,8 @@ import typing as t
 from pydantic import Field
 
 from sqlmesh.core import engine_adapter
+from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
@@ -18,29 +18,28 @@ else:
 
 
 class _ConnectionConfig(abc.ABC):
+    concurrent_tasks: int
+
     @abc.abstractmethod
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
-        """Returns a new instance of the Engine Adapter.
-
-        Args:
-            multithreaded: Indicates whether this adapter will be used by more than one thread.
-
-        """
+    def create_engine_adapter(self) -> EngineAdapter:
+        """Returns a new instance of the Engine Adapter."""
 
 
 class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
-    """Configuration for the DuckDB connection."""
+    """Configuration for the DuckDB connection.
+
+    Args:
+        database: The optional database name. If not specified the in-memory database will be used.
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+    """
 
     database: t.Optional[str]
 
+    concurrent_tasks: Literal[1] = 1
+
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
-        if multithreaded:
-            raise ConfigError(
-                "The DuckDB connection can't be used with multiple threads."
-            )
-
+    def create_engine_adapter(self) -> EngineAdapter:
         import duckdb
 
         if self.database:
@@ -52,7 +51,17 @@ class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
 
 
 class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
-    """Configuration for the Snowflake connection."""
+    """Configuration for the Snowflake connection.
+
+    Args:
+        user: The Snowflake username.
+        password: The Snowflake password.
+        account: The Snowflake account name.
+        warehouse: The optional warehouse name.
+        database: The optional database name.
+        role: The optional role name.
+        concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+    """
 
     user: str
     password: str
@@ -61,9 +70,13 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
     database: t.Optional[str]
     role: t.Optional[str]
 
+    concurrent_tasks: int = 4
+
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
-    def create_engine_adapter(self, multithreaded: bool) -> EngineAdapter:
+    _concurrent_tasks_validator = concurrent_tasks_validator
+
+    def create_engine_adapter(self) -> EngineAdapter:
         from snowflake import connector
 
         kwargs = {
@@ -79,7 +92,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
             kwargs["role"] = self.role
 
         return engine_adapter.SnowflakeEngineAdapter(
-            lambda: connector.connect(**kwargs), multithreaded=multithreaded
+            lambda: connector.connect(**kwargs), multithreaded=self.concurrent_tasks > 1
         )
 
 

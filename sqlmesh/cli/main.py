@@ -49,8 +49,8 @@ def cli(
     context = Context(
         path=path,
         config=config,
-        connection_name=connection,
-        test_connection_name=test_connection,
+        connection=connection,
+        test_connection=test_connection,
     )
 
     if not context.models:

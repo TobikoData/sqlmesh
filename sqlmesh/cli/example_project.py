@@ -28,8 +28,6 @@ config = Config(
         username="airflow",
         password="airflow",
     ),
-    backfill_concurrent_tasks=4,
-    ddl_concurrent_tasks=4,
 )
 
 

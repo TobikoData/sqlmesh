@@ -90,11 +90,10 @@ class SnowflakeConfig(DataWarehouseConfig):
             warehouse=self.warehouse,
             database=self.database,
             role=self.role,
+            concurrent_tasks=self.threads,
         )
 
-        return Config(
-            connections={"default": snowflake_connection_config},
-        )
+        return Config(connections=snowflake_connection_config)
 
 
 class PostgresConfig(DataWarehouseConfig):
