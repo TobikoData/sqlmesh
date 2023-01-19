@@ -1,5 +1,5 @@
 import { Menu, Transition } from '@headlessui/react'
-import { PlayIcon, PlusCircleIcon, EllipsisVerticalIcon  } from '@heroicons/react/24/solid'
+import { PlayIcon } from '@heroicons/react/24/solid'
 import { Fragment } from 'react'
 import { EnumSize } from '../../../types/enum'
 import { Button } from '../button/Button'
