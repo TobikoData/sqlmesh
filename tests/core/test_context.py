@@ -14,13 +14,13 @@ from tests.utils.test_filesystem import create_temp_file
 
 
 def test_global_config():
-    context = Context(path="example")
+    context = Context(path="examples/sushi")
     assert context.dialect == "duckdb"
     assert context.physical_schema == "sqlmesh"
 
 
 def test_named_config():
-    context = Context(path="example", config="local_config")
+    context = Context(path="examples/sushi", config="local_config")
     assert context.dialect == "duckdb"
 
 
@@ -29,23 +29,23 @@ def test_invalid_named_config():
         ConfigError,
         match=r"^Config blah not found.*",
     ):
-        Context(path="example", config="blah")
+        Context(path="examples/sushi", config="blah")
 
 
 def test_missing_named_config():
     with pytest.raises(ConfigError, match="Config imaginary_config not found."):
-        Context(path="example", config="imaginary_config")
+        Context(path="examples/sushi", config="imaginary_config")
 
 
 def test_config_precedence():
-    context = Context(path="example", dialect="spark", physical_schema="test")
+    context = Context(path="examples/sushi", dialect="spark", physical_schema="test")
     assert context.dialect == "spark"
     assert context.physical_schema == "test"
 
     # Context parameters take precedence over config
     config = Config(dialect="presto", physical_schema="dev")
     context = Context(
-        path="example", dialect="spark", physical_schema="test", config=config
+        path="examples/sushi", dialect="spark", physical_schema="test", config=config
     )
     assert context.dialect == "spark"
     assert context.physical_schema == "test"
@@ -53,7 +53,7 @@ def test_config_precedence():
 
 def test_config_parameter():
     config = Config(dialect="presto", physical_schema="dev")
-    context = Context(path="example", config=config)
+    context = Context(path="examples/sushi", config=config)
     assert context.dialect == "presto"
     assert context.physical_schema == "dev"
 
@@ -163,7 +163,7 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
     )
 
     # unpushed render still works
-    unpushed = Context(path="example")
+    unpushed = Context(path="examples/sushi")
     unpushed.table_info_cache.clear()
     assert_exp_eq(
         unpushed.render(snapshot.name),

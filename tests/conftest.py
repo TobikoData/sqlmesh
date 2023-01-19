@@ -48,7 +48,7 @@ def sushi_context(mocker: MockerFixture) -> Context:
 
 
 def init_and_plan_sushi_context(mocker: MockerFixture) -> t.Tuple[Context, Plan]:
-    sushi_context = Context(path="example")
+    sushi_context = Context(path="examples/sushi")
 
     for snapshot in sushi_context.snapshots.values():
         snapshot.version = snapshot.fingerprint
