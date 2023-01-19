@@ -39,7 +39,9 @@ class Config(PydanticModel):
         users: A list of users that can be used for approvals/notifications.
     """
 
-    connections: t.Dict[str, ConnectionConfig] = {"default": DuckDBConnectionConfig()}
+    connections: t.Union[
+        t.Dict[str, ConnectionConfig], ConnectionConfig
+    ] = DuckDBConnectionConfig()
     scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     notification_targets: t.List[NotificationTarget] = []
     dialect: str = ""
@@ -53,17 +55,20 @@ class Config(PydanticModel):
     users: t.List[User] = []
 
     def get_connection_config(self, name: t.Optional[str] = None) -> ConnectionConfig:
-        if name is None:
-            return self.first_connection_config
+        if isinstance(self.connections, dict):
+            if name is None:
+                return next(iter(self.connections.values()))
 
-        if name not in self.connections:
-            raise ConfigError(f"Missing connection with name '{name}'")
+            if name not in self.connections:
+                raise ConfigError(f"Missing connection with name '{name}'.")
 
-        return self.connections[name]
-
-    @property
-    def first_connection_config(self) -> ConnectionConfig:
-        return next(iter(self.connections.values()))
+            return self.connections[name]
+        else:
+            if name is not None:
+                raise ConfigError(
+                    "Connection name is not supported when only one connection is configured."
+                )
+            return self.connections
 
     @validator(
         "backfill_concurrent_tasks",

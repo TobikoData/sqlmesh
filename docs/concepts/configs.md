@@ -67,9 +67,7 @@ the following order. From least to greatest precedence:
 import duckdb
 from sqlmesh.core.engine_adapter import EngineAdapter
 local_config = Config(
-    connections={
-        "default": DuckDBConnectionConfig(database="local.duckdb"),
-    },
+    connections=DuckDBConnectionConfig(database="local.duckdb"),
 )
 # End config.py
 
@@ -122,9 +120,7 @@ config = Config()
 
 # A stateful DuckDB config.
 local_config = Config(
-    connections={
-        "default": DuckDBConnectionConfig(database="local.duckdb"),
-    },
+    connections=DuckDBConnectionConfig(database="local.duckdb"),
 )
 
 # The config to run model tests.

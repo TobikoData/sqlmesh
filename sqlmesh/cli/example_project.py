@@ -9,16 +9,12 @@ from sqlmesh.core.config import Config, DuckDBConnectionConfig
 
 
 config = Config(
-    connections={
-        "default": DuckDBConnectionConfig(database="db.duckdb"),
-    }
+    connections=DuckDBConnectionConfig(database="db.duckdb")
 )
 
 
 test_config = Config(
-    connections={
-        "default": DuckDBConnectionConfig(),
-    }
+    connections=DuckDBConnectionConfig(),
 )
 """
 
@@ -38,9 +34,7 @@ config = Config(
 
 
 test_config = Config(
-    connections={
-        "default": DuckDBConnectionConfig(),
-    }
+    connections= DuckDBConnectionConfig(),
 )
 """
 
