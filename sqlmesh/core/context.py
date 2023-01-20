@@ -35,7 +35,6 @@ from __future__ import annotations
 import abc
 import contextlib
 import importlib
-import linecache
 import os
 import sys
 import types
@@ -47,21 +46,19 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
-from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, load_model
-from sqlmesh.core.model import model as model_registry
+from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, to_table_mapping
@@ -212,6 +209,7 @@ class Context(BaseContext):
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
+        loader: t.Optional[Loader] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -283,8 +281,9 @@ class Context(BaseContext):
         self._state_reader: t.Optional[StateReader] = None
 
         self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
-        self._path_mtimes: t.Dict[Path, float] = {}
         self.users = self.config.users + (users or [])
+
+        self._loader = loader or SqlMeshLoader()
 
         if load:
             self.load()
@@ -314,7 +313,7 @@ class Context(BaseContext):
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
-        self._update_model_schemas()
+        update_model_schemas(self.dialect, self.dag, self._models)
 
         return model
 
@@ -392,20 +391,14 @@ class Context(BaseContext):
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
-        for path, initial_mtime in self._path_mtimes.items():
-            if path.stat().st_mtime > initial_mtime:
-                linecache.clearcache()
-                self._path_mtimes.clear()
-                self._models.clear()
-                self.load()
-                return
+        if self._loader.reload_needed():
+            self.load()
 
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._load_macros()
-            self._load_models()
-            self._load_audits()
+            self._macros, self._models, self.dag = self._loader.load(self)
+
         return self
 
     def run(
@@ -864,80 +857,6 @@ class Context(BaseContext):
             )
         return config_obj
 
-    def _load_macros(self) -> None:
-        # Store a copy of the macro registry
-        standard_macros = macro.get_registry()
-
-        # Import project python files so custom macros will be registered
-        for path in self._glob_path(self.macro_directory_path, ".py"):
-            if self._import_python_file(path):
-                self._path_mtimes[path] = path.stat().st_mtime
-        self._macros = macro.get_registry()
-
-        # Restore the macro registry
-        macro.set_registry(standard_macros)
-
-    def _load_models(self) -> None:
-        """Load all models."""
-
-        for path in self._glob_path(self.models_directory_path, ".sql"):
-            self._path_mtimes[path] = path.stat().st_mtime
-            with open(path, "r", encoding="utf-8") as file:
-                try:
-                    expressions = parse_model(file.read(), default_dialect=self.dialect)
-                except SqlglotError as ex:
-                    raise ConfigError(
-                        f"Failed to parse a model definition at '{path}': {ex}"
-                    )
-                model = load_model(
-                    expressions,
-                    macros=self._macros,
-                    path=Path(path).absolute(),
-                    module_path=self.path,
-                    dialect=self.dialect,
-                    time_column_format=self.config.time_column_format,
-                )
-                self._models[model.name] = model
-                self._add_model_to_dag(model)
-
-        registry = model_registry.registry()
-        registry.clear()
-        registered: t.Set[str] = set()
-
-        for path in self._glob_path(self.models_directory_path, ".py"):
-            self._path_mtimes[path] = path.stat().st_mtime
-            if self._import_python_file(path):
-                self._path_mtimes[path] = path.stat().st_mtime
-            new = registry.keys() - registered
-            registered |= new
-            for name in new:
-                model = registry[name].model(
-                    path=path,
-                    module_path=self.path,
-                    time_column_format=self.config.time_column_format,
-                )
-                self._models[model.name] = model
-                self._add_model_to_dag(model)
-
-        self._update_model_schemas()
-
-    def _load_audits(self) -> None:
-        for path in self._glob_path(self.audits_directory_path, ".sql"):
-            self._path_mtimes[path] = path.stat().st_mtime
-            with open(path, "r", encoding="utf-8") as file:
-                expressions = parse_model(file.read(), default_dialect=self.dialect)
-                for audit in Audit.load_multiple(
-                    expressions=expressions,
-                    path=path,
-                    dialect=self.dialect,
-                ):
-                    if not audit.skip:
-                        if audit.model not in self._models:
-                            raise ConfigError(
-                                f"Model '{audit.model}' referenced in the audit '{audit.name}' ({path}) was not found"
-                            )
-                        self._models[audit.model].audits[audit.name] = audit
-
     def _import_python_file(self, path: Path) -> types.ModuleType:
         module_name = str(path.relative_to(self.path).with_suffix("")).replace(
             os.path.sep, "."
@@ -949,7 +868,7 @@ class Context(BaseContext):
 
         return importlib.import_module(module_name)
 
-    def _glob_path(
+    def glob_path(
         self, path: Path, file_extension: str
     ) -> t.Generator[Path, None, None]:
         """
@@ -975,21 +894,22 @@ class Context(BaseContext):
 
         self.dag.add(model.name, model.depends_on)
 
-    def _update_model_schemas(self) -> None:
-        schema = MappingSchema(dialect=self.dialect)
-        for name in self.dag.sorted():
-            model = self._models.get(name)
 
-            # External models don't exist in the context, so we need to skip them
-            if not model:
-                continue
+def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
+    schema = MappingSchema(dialect=dialect)
+    for name in dag.sorted():
+        model = models.get(name)
 
-            if model.contains_star_query and any(
-                dep not in self._models for dep in model.depends_on
-            ):
-                raise SQLMeshError(
-                    f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
-                )
+        # External models don't exist in the context, so we need to skip them
+        if not model:
+            continue
 
-            model.update_schema(schema)
-            schema.add_table(name, model.columns_to_types)
+        if model.contains_star_query and any(
+            dep not in models for dep in model.depends_on
+        ):
+            raise SQLMeshError(
+                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+            )
+
+        model.update_schema(schema)
+        schema.add_table(name, model.columns_to_types)
