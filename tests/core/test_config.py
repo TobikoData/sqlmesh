@@ -42,7 +42,7 @@ config = Config(connection=DuckDBConnectionConfig())
     return config_path
 
 
-def test_root_update_with_connections():
+def test_update_with_connections():
     conn0_config = DuckDBConnectionConfig()
     conn1_config = DuckDBConnectionConfig(database="test")
 
@@ -87,6 +87,42 @@ def test_update_with_notification_targets():
     assert Config(notification_targets=[target]).update_with(
         Config(notification_targets=[target])
     ) == Config(notification_targets=[target] * 2)
+
+
+def test_default_connection():
+    conn_a = DuckDBConnectionConfig(database="test_db_a")
+    conn_b = DuckDBConnectionConfig(database="test_db_b")
+    conn_c = DuckDBConnectionConfig(database="test_db_c")
+
+    config = Config(
+        connections={
+            "conn1": conn_b,
+            "conn2": conn_c,
+            "": conn_a,
+        },
+    )
+
+    assert config.get_connection() == conn_a
+
+    assert (
+        config.copy(update={"default_connection": "conn2"}).get_connection() == conn_c
+    )
+
+    assert (
+        Config(
+            connections={
+                "conn1": conn_b,
+                "conn2": conn_c,
+            },
+        ).get_connection()
+        == conn_b
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Missing connection with name 'missing'",
+    ):
+        config.copy(update={"default_connection": "missing"}).get_connection()
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
