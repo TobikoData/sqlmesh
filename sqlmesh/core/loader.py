@@ -14,9 +14,10 @@ import sqlmesh.core.context as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import Model, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -25,16 +26,17 @@ class Loader(abc.ABC):
 
     def __init__(self) -> None:
         self._path_mtimes: t.Dict[Path, float] = {}
+        self._dag: DAG[str] = DAG()
 
     @abc.abstractmethod
-    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
         """
         Loads all macros and models in the context's path
 
         Args:
             context: The context to load macros and models for
         Returns:
-            A tuple containing a dict of loaded macros and dict of loaded models
+            A tuple containing a dict of loaded macros, adict of loaded models, and the dag
         """
 
     def reload_needed(self) -> bool:
@@ -45,20 +47,24 @@ class Loader(abc.ABC):
         Returns:
             True if a modification is found; False otherwise
         """
-        for path, initial_mtime in self._path_mtimes.items():
-            if path.stat().st_mtime > initial_mtime:
-                return True
+        return any(
+            path.stat().st_mtime > initial_mtime
+            for path, initial_mtime in self._path_mtimes.items()
+        )
 
-        return False
+    def _add_model_to_dag(self, model: Model) -> None:
+        self._dag.graph[model.name] = set()
+        self._dag.add(model.name, model.depends_on)
 
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
         self._path_mtimes.clear()
+        self._dag = DAG()
         macros = self._load_macros(context)
-        return (macros, self._load_models(context, macros))
+        return (macros, self._load_models(context, macros), self._dag)
 
     def _load_macros(self, context: c.Context) -> UniqueKeyDict:
         """Loads all of the macros within the macro directory"""
@@ -77,10 +83,18 @@ class SqlMeshLoader(Loader):
         return macros
 
     def _load_models(self, context: c.Context, macros: UniqueKeyDict) -> UniqueKeyDict:
-        """Loads all of the models within the model directory and their associated audits into a Dict"""
+        """
+        Loads all of the models within the model directory with their associated
+        audits into a Dict and creates the dag
+        """
         models = self._load_sql_models(context, macros)
         models.update(self._load_python_models(context))
         self._load_model_audits(context, models)
+
+        for model in models.values():
+            self._add_model_to_dag(model)
+        c.update_model_schemas(context.dialect, self._dag, models)
+
         return models
 
     def _load_sql_models(

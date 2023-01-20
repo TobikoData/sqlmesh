@@ -313,7 +313,7 @@ class Context(BaseContext):
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
-        self._update_model_schemas()
+        update_model_schemas(self.dialect, self.dag, self._models)
 
         return model
 
@@ -393,15 +393,11 @@ class Context(BaseContext):
         """Refresh all models that have been updated."""
         if self._loader.reload_needed():
             self.load()
-            return
 
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._macros, self._models = self._loader.load(self)
-            for model in self._models.values():
-                self._add_model_to_dag(model)
-            self._update_model_schemas()
+            self._macros, self._models, self.dag = self._loader.load(self)
 
         return self
 
@@ -898,21 +894,22 @@ class Context(BaseContext):
 
         self.dag.add(model.name, model.depends_on)
 
-    def _update_model_schemas(self) -> None:
-        schema = MappingSchema(dialect=self.dialect)
-        for name in self.dag.sorted():
-            model = self._models.get(name)
 
-            # External models don't exist in the context, so we need to skip them
-            if not model:
-                continue
+def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
+    schema = MappingSchema(dialect=dialect)
+    for name in dag.sorted():
+        model = models.get(name)
 
-            if model.contains_star_query and any(
-                dep not in self._models for dep in model.depends_on
-            ):
-                raise SQLMeshError(
-                    f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
-                )
+        # External models don't exist in the context, so we need to skip them
+        if not model:
+            continue
 
-            model.update_schema(schema)
-            schema.add_table(name, model.columns_to_types)
+        if model.contains_star_query and any(
+            dep not in models for dep in model.depends_on
+        ):
+            raise SQLMeshError(
+                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+            )
+
+        model.update_schema(schema)
+        schema.add_table(name, model.columns_to_types)
