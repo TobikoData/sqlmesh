@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import validator
+from pydantic import Field, root_validator, validator
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
@@ -18,7 +18,8 @@ class Config(BaseConfig):
 
     Args:
         connections: Supported connections and their configurations. Key represents a unique name of a connection.
-            Only applicable when used with the built-in scheduler.
+        test_connection: The connection settings for tests. Can be a name which refers to an existing configuration
+            in `connections`.
         scheduler: The scheduler configuration.
         notification_targets: The notification targets to use.
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
@@ -32,6 +33,9 @@ class Config(BaseConfig):
     connections: t.Union[
         t.Dict[str, ConnectionConfig], ConnectionConfig
     ] = DuckDBConnectionConfig()
+    test_connection_: t.Union[ConnectionConfig, str] = Field(
+        alias="test_connection", default=DuckDBConnectionConfig()
+    )
     scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     notification_targets: t.List[NotificationTarget] = []
     dialect: str = ""
@@ -56,7 +60,14 @@ class Config(BaseConfig):
             return {"": value}
         return value
 
-    def get_connection_config(self, name: t.Optional[str] = None) -> ConnectionConfig:
+    @root_validator(pre=True)
+    def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if "connections" not in values and "connection" in values:
+            values["connections"] = values.pop("connection")
+
+        return values
+
+    def get_connection(self, name: t.Optional[str] = None) -> ConnectionConfig:
         if isinstance(self.connections, dict):
             if name is None:
                 if "" in self.connections:
@@ -73,3 +84,9 @@ class Config(BaseConfig):
                     "Connection name is not supported when only one connection is configured."
                 )
             return self.connections
+
+    @property
+    def test_connection(self) -> ConnectionConfig:
+        if isinstance(self.test_connection_, str):
+            return self.get_connection(self.test_connection_)
+        return self.test_connection_

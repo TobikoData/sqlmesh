@@ -9,12 +9,7 @@ from sqlmesh.core.config import Config, DuckDBConnectionConfig
 
 
 config = Config(
-    connections=DuckDBConnectionConfig(database="db.duckdb")
-)
-
-
-test_config = Config(
-    connections=DuckDBConnectionConfig(),
+    connection=DuckDBConnectionConfig(database="db.duckdb")
 )
 """
 
@@ -28,11 +23,6 @@ config = Config(
         username="airflow",
         password="airflow",
     ),
-)
-
-
-test_config = Config(
-    connections= DuckDBConnectionConfig(),
 )
 """
 

@@ -27,13 +27,13 @@ def test_named_config():
 def test_invalid_named_config():
     with pytest.raises(
         ConfigError,
-        match=r"^Config blah not found.*",
+        match="Config 'blah' was not found.",
     ):
         Context(path="examples/sushi", config="blah")
 
 
 def test_missing_named_config():
-    with pytest.raises(ConfigError, match="Config imaginary_config not found."):
+    with pytest.raises(ConfigError, match=r"Config 'imaginary_config' was not found."):
         Context(path="examples/sushi", config="imaginary_config")
 
 
@@ -61,7 +61,7 @@ def test_config_parameter():
 def test_config_not_found():
     with pytest.raises(
         ConfigError,
-        match=r"^`config_module` must be specified if not using a Config object.*",
+        match=r"^SQLMesh config could not be found.*",
     ):
         Context(path="nonexistent/directory")
 

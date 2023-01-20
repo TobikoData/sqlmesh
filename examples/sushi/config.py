@@ -10,11 +10,8 @@ config = Config()
 
 # A stateful DuckDB config.
 local_config = Config(
-    connections=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb")
+    connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb")
 )
-
-# The config to run model tests.
-test_config = Config()
 
 
 airflow_config = Config(scheduler=AirflowSchedulerConfig())
