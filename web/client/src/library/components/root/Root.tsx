@@ -1,5 +1,3 @@
-
-import { FolderTree } from '../folderTree/FolderTree';
 import { Divider } from '../divider/Divider';
 
 import { IDE } from '../ide/IDE';

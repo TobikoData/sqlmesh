@@ -20,18 +20,13 @@ type Payload = {
   files: File[]
 }
 
-export async function getProjectStructure(): Promise<Payload> {
-  const [ directories = [], files = [] ] = await (await fetch("/api/files")).json();
-
-  return {
-    directories,
-    files
-  };
+export async function getFiles(): Promise<Payload> {
+  return await (await fetch("/api/files")).json();
 }
 
 export function useApiFiles(): UseQueryResult<Payload> {
   return useQuery({
     queryKey: ["/api/v1/files"],
-    queryFn: getProjectStructure,
+    queryFn: getFiles,
   });
 }
