@@ -8,9 +8,10 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
@@ -110,13 +111,13 @@ class ModelConfig(GeneralConfig):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{
-            "grants": UpdateStrategy.KEY_APPEND,
+            "grants": UpdateStrategy.KEY_EXTEND,
             "path": UpdateStrategy.IMMUTABLE,
-            "post-hook": UpdateStrategy.APPEND,
-            "pre-hook": UpdateStrategy.APPEND,
+            "post-hook": UpdateStrategy.EXTEND,
+            "pre-hook": UpdateStrategy.EXTEND,
             "sql": UpdateStrategy.IMMUTABLE,
             "time_column": UpdateStrategy.IMMUTABLE,
-            "columns": UpdateStrategy.KEY_APPEND,
+            "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
 

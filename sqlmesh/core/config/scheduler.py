@@ -7,13 +7,13 @@ import typing as t
 from pydantic import Field, root_validator
 from requests import Session
 
+from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
-from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
@@ -63,7 +63,7 @@ class _SchedulerConfig(abc.ABC):
         return None
 
 
-class BuiltInSchedulerConfig(_SchedulerConfig, PydanticModel):
+class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
     """The Built-In Scheduler configuration."""
 
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
@@ -120,7 +120,7 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
         )
 
 
-class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
+class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     """The Airflow Scheduler configuration.
 
     Args:
@@ -164,7 +164,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
         )
 
 
-class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, PydanticModel):
+class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     """The Google Cloud Composer configuration.
 
     Args:
