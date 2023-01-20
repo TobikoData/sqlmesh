@@ -14,8 +14,14 @@ router = APIRouter()
 
 
 def _validate_path(path: str, context: Context) -> None:
-    _path = Path(path)
-    if any(_path.match(pattern) for pattern in context._ignore_patterns):
+    resolved_context_path = context.path.resolve()
+    full_path = (resolved_context_path / path).resolve()
+    try:
+        full_path.relative_to(resolved_context_path)
+    except ValueError:
+        raise HTTPException(status_code=404)
+
+    if any(full_path.match(pattern) for pattern in context._ignore_patterns):
         raise HTTPException(status_code=404)
 
 
