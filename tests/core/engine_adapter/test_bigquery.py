@@ -30,6 +30,8 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
     )
     sql_calls = [
         call.args[0].sql(dialect="bigquery", identify=True)
+        if not isinstance(call.args[0], str)
+        else call.args[0]
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
@@ -51,6 +53,8 @@ def test_replace_query(mocker: MockerFixture):
 
     sql_calls = [
         call.args[0].sql(dialect="bigquery", identify=True)
+        if not isinstance(call.args[0], str)
+        else call.args[0]
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
@@ -72,6 +76,8 @@ def test_replace_query_pandas(mocker: MockerFixture):
 
     sql_calls = [
         call.args[0].sql(dialect="bigquery", identify=True)
+        if not isinstance(call.args[0], str)
+        else call.args[0]
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
