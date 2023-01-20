@@ -232,7 +232,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
 
     @property
     def has_spark_session_access(self) -> bool:
-        if self._has_spark_session_access is None:
+        if not getattr(self, "_has_spark_session_access", None):
             try:
                 from pyspark.sql import SparkSession
 
