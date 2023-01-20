@@ -192,6 +192,10 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
+    class Config:
+        # See `check_supported_fields` for the supported extra fields
+        extra = "allow"
+
     def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
         self._session: t.Optional[AuthorizedSession] = data.get("session")
