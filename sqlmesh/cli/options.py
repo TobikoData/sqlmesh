@@ -12,7 +12,7 @@ path = click.option(
 
 config = click.option(
     "--config",
-    help="Name of the config object.",
+    help="Name of the config object. Only applicable to configuration defined using Python script.",
 )
 
 start_time = click.option(

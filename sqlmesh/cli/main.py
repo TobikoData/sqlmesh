@@ -44,8 +44,6 @@ def cli(
         ctx.obj = path
         return
 
-    if ctx.invoked_subcommand == "test" and not config:
-        config = "test_config"
     context = Context(
         path=path,
         config=config,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import dis
+import importlib
 import inspect
 import linecache
 import os
@@ -446,3 +447,15 @@ def print_exception(
         )
 
     out.write(os.linesep.join(tb))
+
+
+def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:
+    module_name = str(
+        path.absolute().relative_to(relative_base.absolute()).with_suffix("")
+    ).replace(os.path.sep, ".")
+    # remove the entire module hierarchy in case they were already loaded
+    parts = module_name.split(".")
+    for i in range(len(parts)):
+        sys.modules.pop(".".join(parts[0 : i + 1]), None)
+
+    return importlib.import_module(module_name)
