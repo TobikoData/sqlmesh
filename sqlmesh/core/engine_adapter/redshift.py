@@ -42,6 +42,10 @@ class RedshiftEngineAdapter(EngineAdapter):
         Redshift doesn't support `VALUES` expressions outside of a `INSERT` statement. Currently sqlglot cannot
         performantly convert a values expression into a series of `UNION ALL` statements. Therefore we just don't
         support views for Redshift until sqlglot is updated to performantly support large union statements.
+
+        Also Redshift views are "binding" by default to their underlying table which means you can't drop that
+        underlying table without dropping the view first. This is a problem for us since we want to be able to
+        swap tables out from under views. Therefore we create the view as non-binding.
         """
         if isinstance(query_or_df, DF_TYPES):
             raise NotImplementedError(
@@ -114,20 +118,25 @@ class RedshiftEngineAdapter(EngineAdapter):
         target_table = exp.to_table(table_name)
         target_exists = self.table_exists(target_table)
         if target_exists:
-            temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
-            temp_table = target_table.copy()
-            temp_table.set("this", exp.to_identifier(temp_table_name))
-            old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
-            old_table = target_table.copy()
-            old_table.set("this", exp.to_identifier(old_table_name))
-            self.create_table(temp_table, columns_to_types, exists=False)
-            for expression in self._pandas_to_sql(
-                query_or_df, columns_to_types, self.DEFAULT_BATCH_SIZE
-            ):
-                self._insert_append_query(temp_table, expression, columns_to_types)
-            self.rename_table(target_table, old_table)
-            self.rename_table(temp_table, target_table)
-            self.drop_table(old_table)
+            with self.transaction():
+                temp_table_name = (
+                    f"{target_table.alias_or_name}_temp_{self._short_hash()}"
+                )
+                temp_table = target_table.copy()
+                temp_table.set("this", exp.to_identifier(temp_table_name))
+                old_table_name = (
+                    f"{target_table.alias_or_name}_old_{self._short_hash()}"
+                )
+                old_table = target_table.copy()
+                old_table.set("this", exp.to_identifier(old_table_name))
+                self.create_table(temp_table, columns_to_types, exists=False)
+                for expression in self._pandas_to_sql(
+                    query_or_df, columns_to_types, self.DEFAULT_BATCH_SIZE
+                ):
+                    self._insert_append_query(temp_table, expression, columns_to_types)
+                self.rename_table(target_table, old_table)
+                self.rename_table(temp_table, target_table)
+                self.drop_table(old_table)
         else:
             self.create_table(target_table, columns_to_types, exists=False)
             for expression in self._pandas_to_sql(

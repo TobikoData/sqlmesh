@@ -135,6 +135,7 @@ def test_replace_query_with_df_table_exists(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
+            call("BEGIN"),
             call('CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)'),
             call(
                 'INSERT INTO "test_table_temp_1234" ("a", "b") VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)'
@@ -142,6 +143,7 @@ def test_replace_query_with_df_table_exists(mocker: MockerFixture):
             call('ALTER TABLE "test_table" RENAME TO "test_table_old_1234"'),
             call('ALTER TABLE "test_table_temp_1234" RENAME TO "test_table"'),
             call('DROP TABLE IF EXISTS "test_table_old_1234"'),
+            call("COMMIT"),
         ]
     )
 
