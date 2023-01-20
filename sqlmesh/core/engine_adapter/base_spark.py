@@ -11,13 +11,14 @@ from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
 class BaseSparkEngineAdapter(EngineAdapter):
     def replace_query(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -29,11 +30,12 @@ class BaseSparkEngineAdapter(EngineAdapter):
 
     def _insert_overwrite_by_condition(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
+        table = exp.to_table(table_name)
         if isinstance(query_or_df, pd.DataFrame):
             if columns_to_types is None:
                 raise SQLMeshError(
@@ -42,7 +44,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
             query_or_df = next(
                 pandas_to_sql(
                     query_or_df,
-                    alias=table_name.split(".")[-1],
+                    alias=table.alias_or_name,
                     columns_to_types=columns_to_types,
                 )
             )
@@ -56,7 +58,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
 
     def alter_table(
         self,
-        table_name: str,
+        table_name: TableName,
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:

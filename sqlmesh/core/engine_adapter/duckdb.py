@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing as t
 
 import pandas as pd
@@ -5,13 +7,16 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
+
 
 class DuckDBEngineAdapter(EngineAdapter):
     DIALECT = "duckdb"
 
     def _insert_append_pandas_df(
         self,
-        table_name: str,
+        table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:

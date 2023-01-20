@@ -35,7 +35,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.5.3",
+        "sqlglot>=10.5.6",
     ],
     extras_require={
         "dev": [
@@ -43,7 +43,6 @@ setup(
             "autoflake==1.7.7",
             "black==22.6.0",
             "google-auth",
-            "google-cloud-bigquery",
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin",
             "mkdocs-material",
@@ -69,7 +68,16 @@ setup(
             "uvicorn==0.18.3",
         ],
         "snowflake": [
-            "snowflake-connector-python",
+            "snowflake-connector-python[pandas]",
+        ],
+        "bigquery": [
+            "google-cloud-bigquery[pandas]",
+        ],
+        "databricks": [
+            "databricks-sql-connector",
+        ],
+        "redshift": [
+            "redshift_connector",
         ],
     },
     classifiers=[

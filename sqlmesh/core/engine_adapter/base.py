@@ -34,6 +34,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ class EngineAdapter:
 
     def replace_query(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -108,9 +109,9 @@ class EngineAdapter:
             if not columns_to_types:
                 raise ValueError("columns_to_types must be provided for dataframes")
             expression = next(
-                pandas_to_sql(
+                self._pandas_to_sql(
                     query_or_df,
-                    alias=table_name.split(".")[-1],
+                    alias=table.alias_or_name,
                     columns_to_types=columns_to_types,
                 )
             )
@@ -120,8 +121,6 @@ class EngineAdapter:
                 replace=True,
                 expression=expression,
             )
-        # TODO: A PySpark DataFrame is unhandled here. Probably the solution is to error here if pyspark and
-        # have the spark engine adapter provide a native way to handle it
         else:
             create = exp.Create(
                 this=table,
@@ -133,7 +132,7 @@ class EngineAdapter:
 
     def create_table(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs: t.Any,
@@ -148,28 +147,95 @@ class EngineAdapter:
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        properties = self._create_table_properties(**kwargs)
-
-        query = None
-        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
-
         if isinstance(query_or_columns_to_types, dict):
-            schema = exp.Schema(
-                this=schema,
-                expressions=[
-                    exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
-                    for column, kind in query_or_columns_to_types.items()
-                ],
+            return self._create_table_from_columns(
+                table_name, query_or_columns_to_types, exists, **kwargs
             )
-        else:
-            query = query_or_columns_to_types
+        return self._create_table_from_query(
+            table_name, query_or_columns_to_types, exists, **kwargs
+        )
 
+    def _create_table_from_columns(
+        self,
+        table_name: TableName,
+        columns_to_types: t.Dict[str, exp.DataType],
+        exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Create a table using a DDL statement.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            columns_to_types: Mapping between the column name and its data type.
+            exists: Indicates whether to include the IF NOT EXISTS check.
+            kwargs: Optional create table properties.
+        """
+        properties = self._create_table_properties(**kwargs)
+        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
+        schema = exp.Schema(
+            this=schema,
+            expressions=[
+                exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
+                for column, kind in columns_to_types.items()
+            ],
+        )
+        create_expression = exp.Create(
+            this=schema,
+            kind="TABLE",
+            exists=exists,
+            properties=properties,
+            expression=None,
+        )
+        self.execute(create_expression)
+
+    def _create_table_from_query(
+        self,
+        table_name: TableName,
+        query: Query,
+        exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        Create a table using a DDL statement.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            query: The query to use for creating the table
+            exists: Indicates whether to include the IF NOT EXISTS check.
+            kwargs: Optional create table properties.
+        """
+        properties = self._create_table_properties(**kwargs)
+        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
         create_expression = exp.Create(
             this=schema,
             kind="TABLE",
             exists=exists,
             properties=properties,
             expression=query,
+        )
+        self.execute(create_expression)
+
+    def create_table_like(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        exists: bool = True,
+    ) -> None:
+        """
+        Create a table like another table or view.
+        """
+        target_table = exp.to_table(target_table_name)
+        source_table = exp.to_table(source_table_name)
+        create_expression = exp.Create(
+            this=target_table,
+            kind="TABLE",
+            exists=exists,
+            properties=exp.Properties(
+                expressions=[
+                    exp.LikeProperty(this=source_table),
+                ]
+            ),
         )
         self.execute(create_expression)
 
@@ -185,7 +251,7 @@ class EngineAdapter:
 
     def alter_table(
         self,
-        table_name: str,
+        table_name: TableName,
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:
@@ -211,10 +277,11 @@ class EngineAdapter:
 
     def create_view(
         self,
-        view_name: str,
+        view_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
 
@@ -226,6 +293,7 @@ class EngineAdapter:
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
+            create_kwargs: Additional kwargs to pass into the Create expression
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
 
@@ -247,7 +315,7 @@ class EngineAdapter:
                 expressions=[exp.column(column) for column in columns_to_types],
             )
             query_or_df = next(
-                pandas_to_sql(query_or_df, columns_to_types=columns_to_types)
+                self._pandas_to_sql(query_or_df, columns_to_types=columns_to_types)
             )
 
         self.execute(
@@ -256,6 +324,7 @@ class EngineAdapter:
                 kind="VIEW",
                 replace=replace,
                 expression=query_or_df,
+                **create_kwargs,
             )
         )
 
@@ -282,7 +351,9 @@ class EngineAdapter:
             )
         )
 
-    def drop_view(self, view_name: str, ignore_if_not_exists: bool = True) -> None:
+    def drop_view(
+        self, view_name: TableName, ignore_if_not_exists: bool = True
+    ) -> None:
         """Drop a view."""
         self.execute(
             exp.Drop(
@@ -290,7 +361,7 @@ class EngineAdapter:
             )
         )
 
-    def columns(self, table_name: str) -> t.Dict[str, str]:
+    def columns(self, table_name: TableName) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
@@ -302,20 +373,22 @@ class EngineAdapter:
             )
         }
 
-    def table_exists(self, table_name: str) -> bool:
+    def table_exists(self, table_name: TableName) -> bool:
         try:
             self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
             return True
         except Exception:
             return False
 
-    def delete_from(self, table_name: str, where: t.Union[str, exp.Expression]) -> None:
+    def delete_from(
+        self, table_name: TableName, where: t.Union[str, exp.Expression]
+    ) -> None:
         self.execute(exp.delete(table_name, where))
 
     @classmethod
     def _insert_into_expression(
         cls,
-        table_name: str,
+        table_name: TableName,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Optional[exp.Table] | exp.Schema:
         if not columns_to_types:
@@ -327,7 +400,7 @@ class EngineAdapter:
 
     def insert_append(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -342,7 +415,7 @@ class EngineAdapter:
 
     def _insert_append_query(
         self,
-        table_name: str,
+        table_name: TableName,
         query: Query,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -356,18 +429,19 @@ class EngineAdapter:
 
     def _insert_append_pandas_df(
         self,
-        table_name: str,
+        table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         connection = self._connection_pool.get()
+        table = exp.to_table(table_name)
         into = self._insert_into_expression(table_name, columns_to_types)
 
         sqlalchemy = optional_import("sqlalchemy")
         # pandas to_sql doesn't support insert overwrite, it only supports deleting the table or appending
         if sqlalchemy and isinstance(connection, sqlalchemy.engine.Connectable):
             df.to_sql(
-                table_name,
+                table.sql(dialect=self.dialect),
                 connection,
                 if_exists="append",
                 index=False,
@@ -381,7 +455,7 @@ class EngineAdapter:
                 )
             with self.transaction():
                 for i, expression in enumerate(
-                    pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE)
+                    self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE)
                 ):
                     self.execute(
                         exp.Insert(
@@ -393,7 +467,7 @@ class EngineAdapter:
 
     def insert_overwrite_by_time_partition(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         start: TimeLike,
         end: TimeLike,
@@ -413,9 +487,19 @@ class EngineAdapter:
             table_name, query_or_df, where, columns_to_types
         )
 
+    @classmethod
+    def _pandas_to_sql(
+        cls,
+        df: pd.DataFrame,
+        columns_to_types: t.Dict[str, exp.DataType],
+        batch_size: int = 0,
+        alias: str = "t",
+    ) -> t.Generator[exp.Select, None, None]:
+        yield from pandas_to_sql(df, columns_to_types, batch_size, alias)
+
     def _insert_overwrite_by_condition(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -432,7 +516,7 @@ class EngineAdapter:
 
     def update_table(
         self,
-        table_name: str,
+        table_name: TableName,
         properties: t.Optional[t.Dict[str, t.Any]] = None,
         where: t.Optional[str | exp.Condition] = None,
     ) -> None:
@@ -440,7 +524,7 @@ class EngineAdapter:
 
     def merge(
         self,
-        target_table: str,
+        target_table: TableName,
         source_table: QueryOrDF,
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
@@ -486,6 +570,13 @@ class EngineAdapter:
                 ],
             )
         )
+
+    def rename_table(
+        self,
+        old_table_name: TableName,
+        new_table_name: TableName,
+    ) -> None:
+        self.execute(exp.rename_table(old_table_name, new_table_name))
 
     def fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
         self.execute(query)
