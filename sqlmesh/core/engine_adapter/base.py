@@ -236,7 +236,6 @@ class EngineAdapter:
                 ]
             ),
         )
-        print(create_expression.sql(dialect=self.dialect))
         self.execute(create_expression)
 
     def drop_table(self, table_name: str, exists: bool = True) -> None:

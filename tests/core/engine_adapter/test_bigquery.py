@@ -29,9 +29,10 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
         },
     )
     sql_calls = [
-        call.args[0].sql(dialect="bigquery", identify=True)
-        if not isinstance(call.args[0], str)
-        else call.args[0]
+        # Python 3.7 support
+        call[0][0].sql(dialect="bigquery", identify=True)
+        if isinstance(call[0], tuple)
+        else call[0].sql(dialect="bigquery", identify=True)
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
@@ -52,9 +53,10 @@ def test_replace_query(mocker: MockerFixture):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     sql_calls = [
-        call.args[0].sql(dialect="bigquery", identify=True)
-        if not isinstance(call.args[0], str)
-        else call.args[0]
+        # Python 3.7 support
+        call[0][0].sql(dialect="bigquery", identify=True)
+        if isinstance(call[0], tuple)
+        else call[0].sql(dialect="bigquery", identify=True)
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
@@ -75,9 +77,10 @@ def test_replace_query_pandas(mocker: MockerFixture):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     sql_calls = [
-        call.args[0].sql(dialect="bigquery", identify=True)
-        if not isinstance(call.args[0], str)
-        else call.args[0]
+        # Python 3.7 support
+        call[0][0].sql(dialect="bigquery", identify=True)
+        if isinstance(call[0], tuple)
+        else call[0].sql(dialect="bigquery", identify=True)
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
