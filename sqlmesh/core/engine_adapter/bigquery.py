@@ -13,6 +13,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.table import Table as BigQueryTable
 
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 
@@ -56,14 +57,14 @@ class BigQueryEngineAdapter(EngineAdapter):
         finally:
             self._session_id = None
 
-    def columns(self, table_name: str) -> t.Dict[str, str]:
+    def columns(self, table_name: TableName) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
         table = self._get_table(table_name)
         return {field.name: field.field_type for field in table.schema}
 
     def _insert_overwrite_by_condition(
         self,
-        table_name: str,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -81,21 +82,24 @@ class BigQueryEngineAdapter(EngineAdapter):
         self.delete_from(table_name, where=where)
         self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 
-    def table_exists(self, table_name: str) -> bool:
+    def table_exists(self, table_name: TableName) -> bool:
         from google.cloud.exceptions import NotFound
 
         try:
-            self.client.get_table(table_name)
+            self._get_table(table_name)
             return True
         except NotFound:
             return False
 
-    def _get_table(self, table_name: str) -> BigQueryTable:
+    def _get_table(self, table_name: TableName) -> BigQueryTable:
         """
         Returns a BigQueryTable object for the given table name.
 
         Raises: `google.cloud.exceptions.NotFound` if the table does not exist.
         """
+        if isinstance(table_name, exp.Table):
+            table_name = table_name.sql(dialect=self.dialect)
+
         return self.client.get_table(table_name)
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:

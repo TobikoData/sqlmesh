@@ -119,4 +119,15 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
             raise SQLMeshError(
                 "Failed to automatically discover an operator for BigQuery"
             )
+    if name in ("redshift", "redshift-sql", "redshift_sql"):
+        try:
+            from sqlmesh.schedulers.airflow.operators.redshift import (
+                SQLMeshRedshiftOperator,
+            )
+
+            return SQLMeshRedshiftOperator
+        except ImportError:
+            raise SQLMeshError(
+                "Failed to automatically discover an operator for Redshift"
+            )
     raise ValueError(f"Unsupported engine name '{name}'")
