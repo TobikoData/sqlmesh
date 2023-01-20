@@ -43,9 +43,9 @@ class Config(BaseConfig):
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "connections": UpdateStrategy.KEY_UPDATE,
-        "notification_targets": UpdateStrategy.APPEND,
-        "ignore_patterns": UpdateStrategy.APPEND,
-        "users": UpdateStrategy.APPEND,
+        "notification_targets": UpdateStrategy.EXTEND,
+        "ignore_patterns": UpdateStrategy.EXTEND,
+        "users": UpdateStrategy.EXTEND,
     }
 
     @validator("connections", always=True)

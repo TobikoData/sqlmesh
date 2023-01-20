@@ -111,13 +111,13 @@ class ModelConfig(GeneralConfig):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{
-            "grants": UpdateStrategy.KEY_APPEND,
+            "grants": UpdateStrategy.KEY_EXTEND,
             "path": UpdateStrategy.IMMUTABLE,
-            "post-hook": UpdateStrategy.APPEND,
-            "pre-hook": UpdateStrategy.APPEND,
+            "post-hook": UpdateStrategy.EXTEND,
+            "pre-hook": UpdateStrategy.EXTEND,
             "sql": UpdateStrategy.IMMUTABLE,
             "time_column": UpdateStrategy.IMMUTABLE,
-            "columns": UpdateStrategy.KEY_APPEND,
+            "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
 

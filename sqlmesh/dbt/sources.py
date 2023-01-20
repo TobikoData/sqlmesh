@@ -53,7 +53,7 @@ class SourceConfig(GeneralConfig):
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
-        **{"columns": UpdateStrategy.KEY_APPEND},
+        **{"columns": UpdateStrategy.KEY_EXTEND},
     }
 
     @property

@@ -13,9 +13,9 @@ class UpdateStrategy(Enum):
     """Supported strategies for adding new config to existing config"""
 
     REPLACE = auto()  # Replace with new value
-    APPEND = auto()  # Append list to existing list
+    EXTEND = auto()  # Extend list to existing list
     KEY_UPDATE = auto()  # Update dict key value with new dict key value
-    KEY_APPEND = auto()  # Append dict key value to existing dict key value
+    KEY_EXTEND = auto()  # Extend dict key value to existing dict key value
     IMMUTABLE = auto()  # Raise if a key tries to change this value
 
 
@@ -45,9 +45,9 @@ def update_field(
 
     if update_strategy == UpdateStrategy.REPLACE:
         return new
-    if update_strategy == UpdateStrategy.APPEND:
+    if update_strategy == UpdateStrategy.EXTEND:
         if not isinstance(old, list) or not isinstance(new, list):
-            raise ConfigError("APPEND behavior requires list field")
+            raise ConfigError("EXTEND behavior requires list field")
 
         return old + new
     if update_strategy == UpdateStrategy.KEY_UPDATE:
@@ -57,22 +57,22 @@ def update_field(
         combined = old.copy()
         combined.update(new)
         return combined
-    if update_strategy == UpdateStrategy.KEY_APPEND:
+    if update_strategy == UpdateStrategy.KEY_EXTEND:
         if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_APPEND behavior requires dictionary field")
+            raise ConfigError("KEY_EXTEND behavior requires dictionary field")
 
         combined = old.copy()
         for key, value in new.items():
             if not isinstance(value, list):
                 raise ConfigError(
-                    "KEY_APPEND behavior requires list values in dictionary"
+                    "KEY_EXTEND behavior requires list values in dictionary"
                 )
 
             old_value = combined.get(key)
             if old_value:
                 if not isinstance(old_value, list):
                     raise ConfigError(
-                        "KEY_APPEND behavior requires list values in dictionary"
+                        "KEY_EXTEND behavior requires list values in dictionary"
                     )
 
                 combined[key] = old_value + value

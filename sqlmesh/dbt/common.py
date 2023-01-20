@@ -69,7 +69,7 @@ class GeneralConfig(BaseConfig):
             "tests": UpdateStrategy.KEY_UPDATE,
             "docs": UpdateStrategy.KEY_UPDATE,
             "persist_docs": UpdateStrategy.KEY_UPDATE,
-            "tags": UpdateStrategy.APPEND,
+            "tags": UpdateStrategy.EXTEND,
             "meta": UpdateStrategy.KEY_UPDATE,
         },
     }

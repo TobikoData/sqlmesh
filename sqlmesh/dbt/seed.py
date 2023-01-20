@@ -71,11 +71,11 @@ class SeedConfig(GeneralConfig):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{
-            "grants": UpdateStrategy.KEY_APPEND,
+            "grants": UpdateStrategy.KEY_EXTEND,
             "path": UpdateStrategy.IMMUTABLE,
-            "pre-hook": UpdateStrategy.APPEND,
-            "post-hook": UpdateStrategy.APPEND,
-            "columns": UpdateStrategy.KEY_APPEND,
+            "pre-hook": UpdateStrategy.EXTEND,
+            "post-hook": UpdateStrategy.EXTEND,
+            "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
 
