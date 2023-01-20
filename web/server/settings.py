@@ -7,7 +7,7 @@ from sqlmesh.core.context import Context
 
 
 class Settings(BaseSettings):
-    project_path: Path = Path("../../examples/sushi")
+    project_path: Path = Path("examples/sushi")
 
     @property
     def context(self) -> Context:

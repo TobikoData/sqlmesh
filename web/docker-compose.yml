@@ -24,8 +24,8 @@ services:
       context: ..
     container_name: tobiko-api
     image: image-tobiko-api
-    working_dir: /sqlmesh/web/server
-    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /sqlmesh
+    command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - 8000:8000
     volumes:
