@@ -8,6 +8,8 @@ from sqlmesh.utils.errors import ConfigError
 
 
 def _concurrent_tasks_validator(v: t.Any) -> int:
+    if isinstance(v, str):
+        v = int(v)
     if not isinstance(v, int) or v <= 0:
         raise ConfigError(
             f"The number of concurrent tasks must be an integer value greater than 0. '{v}' was provided"

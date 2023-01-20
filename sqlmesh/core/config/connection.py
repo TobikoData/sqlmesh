@@ -7,9 +7,9 @@ import typing as t
 from pydantic import Field
 
 from sqlmesh.core import engine_adapter
+from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -25,7 +25,7 @@ class _ConnectionConfig(abc.ABC):
         """Returns a new instance of the Engine Adapter."""
 
 
-class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
+class DuckDBConnectionConfig(_ConnectionConfig, BaseConfig):
     """Configuration for the DuckDB connection.
 
     Args:
@@ -50,7 +50,7 @@ class DuckDBConnectionConfig(_ConnectionConfig, PydanticModel):
         return engine_adapter.DuckDBEngineAdapter(connection_factory)
 
 
-class SnowflakeConnectionConfig(_ConnectionConfig, PydanticModel):
+class SnowflakeConnectionConfig(_ConnectionConfig, BaseConfig):
     """Configuration for the Snowflake connection.
 
     Args:

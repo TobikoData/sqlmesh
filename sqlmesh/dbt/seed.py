@@ -6,9 +6,10 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 
 
@@ -70,11 +71,11 @@ class SeedConfig(GeneralConfig):
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{
-            "grants": UpdateStrategy.KEY_APPEND,
+            "grants": UpdateStrategy.KEY_EXTEND,
             "path": UpdateStrategy.IMMUTABLE,
-            "pre-hook": UpdateStrategy.APPEND,
-            "post-hook": UpdateStrategy.APPEND,
-            "columns": UpdateStrategy.KEY_APPEND,
+            "pre-hook": UpdateStrategy.EXTEND,
+            "post-hook": UpdateStrategy.EXTEND,
+            "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
 

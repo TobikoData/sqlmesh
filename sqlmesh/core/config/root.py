@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import typing as t
 
+from pydantic import validator
+
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
+from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import PydanticModel
 
 
-class Config(PydanticModel):
+class Config(BaseConfig):
     """An object used by a Context to configure your SQLMesh project.
 
     Args:
@@ -39,9 +41,26 @@ class Config(PydanticModel):
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
 
+    _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
+        "connections": UpdateStrategy.KEY_UPDATE,
+        "notification_targets": UpdateStrategy.EXTEND,
+        "ignore_patterns": UpdateStrategy.EXTEND,
+        "users": UpdateStrategy.EXTEND,
+    }
+
+    @validator("connections", always=True)
+    def _connections_ensure_dict(
+        cls, value: t.Union[t.Dict[str, ConnectionConfig], ConnectionConfig]
+    ) -> t.Dict[str, ConnectionConfig]:
+        if not isinstance(value, dict):
+            return {"": value}
+        return value
+
     def get_connection_config(self, name: t.Optional[str] = None) -> ConnectionConfig:
         if isinstance(self.connections, dict):
             if name is None:
+                if "" in self.connections:
+                    return self.connections[""]
                 return next(iter(self.connections.values()))
 
             if name not in self.connections:
