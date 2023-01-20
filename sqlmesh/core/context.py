@@ -26,7 +26,7 @@ context.audit("yesterday", "now")
 Running tests on your models.
 ```python
 from sqlmesh.core.context import Context
-context = Context(path="example", config="test_config")
+context = Context(path="example")
 context.run_tests()
 ```
 """
@@ -34,10 +34,6 @@ from __future__ import annotations
 
 import abc
 import contextlib
-import importlib
-import os
-import sys
-import types
 import typing as t
 import unittest.result
 from io import StringIO
@@ -50,7 +46,7 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
@@ -184,7 +180,6 @@ class Context(BaseContext):
         snapshot_ttl: Duration before unpromoted snapshots are removed.
         path: The directory containing SQLMesh files.
         config: A Config object or the name of a Config object in config.py.
-        test_config: A Config object or name of a Config object in config.py to use for testing only
         connection: The name of the connection. If not specified the first connection as it appears
             in configuration will be used.
         test_connection: The name of the connection to use for tests. If not specified the first
@@ -205,7 +200,6 @@ class Context(BaseContext):
         snapshot_ttl: str = "",
         path: str = "",
         config: t.Optional[t.Union[Config, str]] = None,
-        test_config: t.Optional[t.Union[Config, str]] = None,
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
@@ -217,24 +211,7 @@ class Context(BaseContext):
         self.console = console or get_console()
         self.path = Path(path).absolute()
 
-        with sys_path(self.path):
-            try:
-                config_module = self._import_python_file(self.path / "config.py")
-            except ImportError:
-                config_module = None
-
-        self.config = self._load_config(config, config_module)
-        self.test_config = None
-
-        try:
-            self.test_config = self._load_config(
-                test_config or "test_config", config_module
-            )
-        except ConfigError:
-            self.console.log_error(
-                "Running without test support since `test_config` was not provided and ` "
-                "test_config` variable was not found in the namespace"
-            )
+        self.config = self._load_config(config or "config")
 
         # Initialize cache
         cache_path = self.path / c.CACHE_PATH
@@ -251,20 +228,18 @@ class Context(BaseContext):
         self._models: UniqueKeyDict = UniqueKeyDict("models")
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
 
-        connection_config = self.config.get_connection_config(connection)
-
+        connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
-
         self._engine_adapter = (
             engine_adapter or connection_config.create_engine_adapter()
         )
-        self.test_engine_adapter = (
-            self.test_config.get_connection_config(
-                test_connection
-            ).create_engine_adapter()
-            if self.test_config
-            else None
+
+        test_connection_config = (
+            self.config.test_connection
+            if test_connection is None
+            else self.config.get_connection(test_connection)
         )
+        self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
         self.dialect = dialect or self.config.dialect or self._engine_adapter.dialect
 
@@ -370,6 +345,11 @@ class Context(BaseContext):
                     "Invalid configuration: neither State Sync nor Reader has been configured"
                 )
         return self._state_reader
+
+    @property
+    def sqlmesh_path(self) -> Path:
+        """Path to the SQLMesh home directory."""
+        return Path.home() / ".sqlmesh"
 
     @property
     def models_directory_path(self) -> Path:
@@ -568,10 +548,10 @@ class Context(BaseContext):
     def _run_plan_tests(
         self, skip_tests: bool = False
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
-        if self.test_engine_adapter and not skip_tests:
+        if self._test_engine_adapter and not skip_tests:
             result, test_output = self.run_tests()
             self.console.log_test_results(
-                result, test_output, self.test_engine_adapter.dialect
+                result, test_output, self._test_engine_adapter.dialect
             )
             if not result.wasSuccessful():
                 raise PlanError(
@@ -754,16 +734,17 @@ class Context(BaseContext):
         self, path: t.Optional[str] = None
     ) -> t.Tuple[unittest.result.TestResult, str]:
         """Discover and run model tests"""
-        if not self.test_engine_adapter:
-            raise ConfigError("Tried to run tests but test_config is not defined")
         test_output = StringIO()
         with contextlib.redirect_stderr(test_output):
-            result = run_all_model_tests(
-                path=Path(path) if path else self.test_directory_path,
-                snapshots=self.snapshots,
-                engine_adapter=self.test_engine_adapter,
-                ignore_patterns=self._ignore_patterns,
-            )
+            try:
+                result = run_all_model_tests(
+                    path=Path(path) if path else self.test_directory_path,
+                    snapshots=self.snapshots,
+                    engine_adapter=self._test_engine_adapter,
+                    ignore_patterns=self._ignore_patterns,
+                )
+            finally:
+                self._test_engine_adapter.close()
         return result, test_output.getvalue()
 
     def audit(
@@ -831,42 +812,18 @@ class Context(BaseContext):
             environment, snapshots or self.snapshots, self.state_reader
         )
 
-    def _load_config(
-        self,
-        config: t.Optional[t.Union[Config, str]],
-        config_module: t.Optional[types.ModuleType],
-    ) -> Config:
+    def _load_config(self, config: t.Union[str, Config]) -> Config:
         if isinstance(config, Config):
             return config
-        if not config_module:
-            raise ConfigError(
-                "`config_module` must be specified if not using a Config object."
-            )
-        config = config or "config"
-        try:
-            config_obj = getattr(config_module, config)
-        except AttributeError:
-            raise ConfigError(f"Config {config} not found.")
-        if config_obj is None:
-            raise ConfigError(
-                "SQLMesh Config could not be found. Point the cli to the right path with `sqlmesh --path`. If you haven't set up SQLMesh, run `sqlmesh init`."
-            )
-        if not isinstance(config_obj, Config):
-            raise ConfigError(
-                f"Config needs to be of type sqlmesh.core.config.Config. Found `{config_obj}` instead."
-            )
-        return config_obj
 
-    def _import_python_file(self, path: Path) -> types.ModuleType:
-        module_name = str(path.relative_to(self.path).with_suffix("")).replace(
-            os.path.sep, "."
-        )
-        # remove the entire module hierarchy in case they were already loaded
-        parts = module_name.split(".")
-        for i in range(len(parts)):
-            sys.modules.pop(".".join(parts[0 : i + 1]), None)
-
-        return importlib.import_module(module_name)
+        lookup_paths = [
+            self.sqlmesh_path / "config.yml",
+            self.sqlmesh_path / "config.yaml",
+            self.path / "config.py",
+            self.path / "config.yml",
+            self.path / "config.yaml",
+        ]
+        return load_config_from_paths(*lookup_paths, config_name=config)
 
     def glob_path(
         self, path: Path, file_extension: str
