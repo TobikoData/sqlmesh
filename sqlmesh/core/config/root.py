@@ -18,6 +18,7 @@ class Config(BaseConfig):
 
     Args:
         connections: Supported connections and their configurations. Key represents a unique name of a connection.
+        default_connection: The name of a connection to use by default.
         test_connection: The connection settings for tests. Can be a name which refers to an existing configuration
             in `connections`.
         scheduler: The scheduler configuration.
@@ -33,6 +34,7 @@ class Config(BaseConfig):
     connections: t.Union[
         t.Dict[str, ConnectionConfig], ConnectionConfig
     ] = DuckDBConnectionConfig()
+    default_connection: str = ""
     test_connection_: t.Union[ConnectionConfig, str] = Field(
         alias="test_connection", default=DuckDBConnectionConfig()
     )
@@ -70,8 +72,16 @@ class Config(BaseConfig):
     def get_connection(self, name: t.Optional[str] = None) -> ConnectionConfig:
         if isinstance(self.connections, dict):
             if name is None:
+                if self.default_connection:
+                    if self.default_connection not in self.connections:
+                        raise ConfigError(
+                            f"Missing connection with name '{self.default_connection}'"
+                        )
+                    return self.connections[self.default_connection]
+
                 if "" in self.connections:
                     return self.connections[""]
+
                 return next(iter(self.connections.values()))
 
             if name not in self.connections:
