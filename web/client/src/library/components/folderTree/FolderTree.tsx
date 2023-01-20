@@ -1,44 +1,30 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useApiFiles, type Directory, type File } from '../../../api';
+import { type Directory, type File } from '../../../api';
 import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/20/solid'
-import { useContext, useState } from 'react';
-import Ide from '../../../context/Ide';
+import { useContext, useEffect, useState } from 'react';
+import ContextIDE from '../../../context/Ide';
 import clsx from 'clsx';
 
 const CSS_ICON_SIZE = 'w-4 h-4';
 
-export function FolderTree() {
-  useQueryClient();
-
-  const { setFile, file, files } = useContext(Ide);
-
-  const { status, data } = useApiFiles();
-
-  if (status === 'loading') {
-    return <h3>Loading...</h3>;
-  }
-
-  if (status === 'error') {
-    return <h3>Error</h3>;
-  }
-
+export function FolderTree({ project }: { project: any }) {
+  const { setFile, file, files } = useContext(ContextIDE);
 
   return (
     <div className='py-4 px-2 overflow-hidden'>
-      {Boolean(data?.directories?.length) && (
+      {Boolean(project?.directories?.length) && (
         <Directories
-        directories={data.directories}
+          directories={project.directories}
           withIndent={false}
           selectFile={setFile}
           activeFile={file}
           activeFiles={files}
          />
       )}
-      {Boolean(data?.files?.length) && (
+      {Boolean(project?.files?.length) && (
         <Files
-          files={data.files}
+          files={project.files}
           selectFile={setFile}
           activeFile={file}
           activeFiles={files}
@@ -140,7 +126,7 @@ function Files(props: { files: File[], selectFile?: any, activeFile?: File, acti
         <li
           key={f.path}
           title={f.name}
-          onClick={() => f.is_supported && props.selectFile(f)}
+          onClick={() => f.is_supported && f !== props.activeFile && props.selectFile(f)}
         >
           <span className={clsx(
             'text-base whitespace-nowrap pb-1 group/file px-2 flex justify-between rounded-md',
