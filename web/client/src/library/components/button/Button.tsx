@@ -1,5 +1,6 @@
 import clsx from "clsx"
 import { EnumSize } from "../../../types/enum";
+import { Menu } from '@headlessui/react'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'alternative';
 export type ButtonSize = Subset<Size, typeof EnumSize.sm | typeof EnumSize.md | typeof EnumSize.lg>;
@@ -45,5 +46,19 @@ export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSi
     >
       {children}
     </button>
+  )
+};
+
+export function ButtonMenu({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [] }: PropsButton) {
+  return (
+    <Menu.Button
+      className={clsx(
+      'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
+      VARIANT.get(variant),
+      SHAPE.get(shape),
+      SIZE.get(size),
+    )}>
+      {children}
+    </Menu.Button> 
   )
 };
