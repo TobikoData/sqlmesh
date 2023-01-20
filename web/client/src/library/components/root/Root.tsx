@@ -1,5 +1,4 @@
 import { Divider } from '../divider/Divider';
-
 import { IDE } from '../ide/IDE';
 import { LogoTobiko } from '../logo/Tobiko'
 import { LogoSqlMesh } from '../logo/SqlMesh';
@@ -19,7 +18,6 @@ export default function Root() {
     </>
   );
 }
-
 
 function Header() {
   return (
@@ -50,8 +48,6 @@ function Main({ children }: { children: React.ReactNode }) {
     </main>
   )
 }
-
-
 
 function Footer() {
   return (
