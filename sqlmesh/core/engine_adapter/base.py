@@ -34,6 +34,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ class EngineAdapter:
 
     def replace_query(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -131,7 +132,7 @@ class EngineAdapter:
 
     def create_table(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs: t.Any,
@@ -156,7 +157,7 @@ class EngineAdapter:
 
     def _create_table_from_columns(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
         exists: bool = True,
         **kwargs: t.Any,
@@ -190,7 +191,7 @@ class EngineAdapter:
 
     def _create_table_from_query(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query: Query,
         exists: bool = True,
         **kwargs: t.Any,
@@ -217,8 +218,8 @@ class EngineAdapter:
 
     def create_table_like(
         self,
-        target_table_name: str | exp.Table,
-        source_table_name: str | exp.Table,
+        target_table_name: TableName,
+        source_table_name: TableName,
         exists: bool = True,
     ) -> None:
         """
@@ -250,7 +251,7 @@ class EngineAdapter:
 
     def alter_table(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         added_columns: t.Dict[str, str],
         dropped_columns: t.Sequence[str],
     ) -> None:
@@ -276,7 +277,7 @@ class EngineAdapter:
 
     def create_view(
         self,
-        view_name: str | exp.Table,
+        view_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
@@ -351,7 +352,7 @@ class EngineAdapter:
         )
 
     def drop_view(
-        self, view_name: str | exp.Table, ignore_if_not_exists: bool = True
+        self, view_name: TableName, ignore_if_not_exists: bool = True
     ) -> None:
         """Drop a view."""
         self.execute(
@@ -360,7 +361,7 @@ class EngineAdapter:
             )
         )
 
-    def columns(self, table_name: str | exp.Table) -> t.Dict[str, str]:
+    def columns(self, table_name: TableName) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
@@ -372,7 +373,7 @@ class EngineAdapter:
             )
         }
 
-    def table_exists(self, table_name: str | exp.Table) -> bool:
+    def table_exists(self, table_name: TableName) -> bool:
         try:
             self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
             return True
@@ -380,14 +381,14 @@ class EngineAdapter:
             return False
 
     def delete_from(
-        self, table_name: str | exp.Table, where: t.Union[str, exp.Expression]
+        self, table_name: TableName, where: t.Union[str, exp.Expression]
     ) -> None:
         self.execute(exp.delete(table_name, where))
 
     @classmethod
     def _insert_into_expression(
         cls,
-        table_name: str | exp.Table,
+        table_name: TableName,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Optional[exp.Table] | exp.Schema:
         if not columns_to_types:
@@ -399,7 +400,7 @@ class EngineAdapter:
 
     def insert_append(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -414,7 +415,7 @@ class EngineAdapter:
 
     def _insert_append_query(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query: Query,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -428,7 +429,7 @@ class EngineAdapter:
 
     def _insert_append_pandas_df(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -466,7 +467,7 @@ class EngineAdapter:
 
     def insert_overwrite_by_time_partition(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         start: TimeLike,
         end: TimeLike,
@@ -498,7 +499,7 @@ class EngineAdapter:
 
     def _insert_overwrite_by_condition(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -515,7 +516,7 @@ class EngineAdapter:
 
     def update_table(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         properties: t.Optional[t.Dict[str, t.Any]] = None,
         where: t.Optional[str | exp.Condition] = None,
     ) -> None:
@@ -523,7 +524,7 @@ class EngineAdapter:
 
     def merge(
         self,
-        target_table: str | exp.Table,
+        target_table: TableName,
         source_table: QueryOrDF,
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
@@ -572,8 +573,8 @@ class EngineAdapter:
 
     def rename_table(
         self,
-        old_table_name: str | exp.Table,
-        new_table_name: str | exp.Table,
+        old_table_name: TableName,
+        new_table_name: TableName,
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 

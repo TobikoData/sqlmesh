@@ -11,7 +11,8 @@ from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
 class RedshiftEngineAdapter(EngineAdapter):
@@ -32,7 +33,7 @@ class RedshiftEngineAdapter(EngineAdapter):
 
     def create_view(
         self,
-        view_name: str | exp.Table,
+        view_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
@@ -56,14 +57,14 @@ class RedshiftEngineAdapter(EngineAdapter):
             view_name, query_or_df, columns_to_types, replace, no_schema_binding=True
         )
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
-        """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
+    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+        """Fetches a Pandas DataFrame from the cursor"""
         self.execute(query)
         return self.cursor.fetch_dataframe()
 
     def _create_table_from_query(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query: Query,
         exists: bool = True,
         **kwargs: t.Any,
@@ -99,7 +100,7 @@ class RedshiftEngineAdapter(EngineAdapter):
 
     def replace_query(
         self,
-        table_name: str | exp.Table,
+        table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
@@ -147,7 +148,7 @@ class RedshiftEngineAdapter(EngineAdapter):
     def _short_hash(self) -> str:
         return str(uuid.uuid4())[:8]
 
-    def table_exists(self, table_name: str | exp.Table) -> bool:
+    def table_exists(self, table_name: TableName) -> bool:
         """
         Redshift doesn't support describe so I'm using what the redshift cursor does to check if a table
         exists. We don't use this directly because we still want all execution to go through our execute method
