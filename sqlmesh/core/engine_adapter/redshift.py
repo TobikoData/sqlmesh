@@ -20,6 +20,9 @@ class RedshiftEngineAdapter(EngineAdapter):
 
     @property
     def cursor(self) -> t.Any:
+        connection = self._connection_pool.get()
+        # The SQLMesh implementation relies on autocommit being set to True
+        connection.autocommit = True
         cursor = self._connection_pool.get_cursor()
         # Redshift by default uses a `format` paramstyle that has issues when we try to write our snapshot
         # data to snapshot table. There doesn't seem to be a way to disable parameter overriding so we just
@@ -33,6 +36,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        **create_kwargs: t.Any,
     ) -> None:
         """
         Redshift doesn't support `VALUES` expressions outside of a `INSERT` statement. Currently sqlglot cannot
@@ -44,7 +48,9 @@ class RedshiftEngineAdapter(EngineAdapter):
                 "DataFrames are not supported for Redshift views because Redshift doesn't"
                 "support using `VALUES` in a `CREATE VIEW` statement."
             )
-        return super().create_view(view_name, query_or_df, columns_to_types, replace)
+        return super().create_view(
+            view_name, query_or_df, columns_to_types, replace, no_schema_binding=True
+        )
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
@@ -110,10 +116,10 @@ class RedshiftEngineAdapter(EngineAdapter):
         if target_exists:
             temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
             temp_table = target_table.copy()
-            temp_table.set("this", temp_table_name)
+            temp_table.set("this", exp.to_identifier(temp_table_name))
             old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
             old_table = target_table.copy()
-            old_table.set("this", old_table_name)
+            old_table.set("this", exp.to_identifier(old_table_name))
             self.create_table(temp_table, columns_to_types, exists=False)
             for expression in self._pandas_to_sql(
                 query_or_df, columns_to_types, self.DEFAULT_BATCH_SIZE

@@ -281,6 +281,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
 
@@ -292,6 +293,7 @@ class EngineAdapter:
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
+            create_kwargs: Additional kwargs to pass into the Create expression
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
 
@@ -322,6 +324,7 @@ class EngineAdapter:
                 kind="VIEW",
                 replace=replace,
                 expression=query_or_df,
+                **create_kwargs,
             )
         )
 
@@ -631,8 +634,6 @@ class EngineAdapter:
         """Execute a sql query."""
         sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
         logger.debug(f"Executing SQL:\n{sql}")
-        if "VIEW" in sql:
-            print(sql)
         self.cursor.execute(sql, **kwargs)
 
     def _create_table_properties(
