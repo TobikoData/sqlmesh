@@ -4,27 +4,22 @@ from pathlib import Path
 
 import click
 
-DEFAULT_CONFIG = """import duckdb
-from sqlmesh.core.config import Config, DuckDBConnectionConfig
+DEFAULT_CONFIG = """connections:
+    local:
+        type: duckdb
+        database: db.duckdb
 
-
-config = Config(
-    connection=DuckDBConnectionConfig(database="db.duckdb")
-)
+default_connection: local
 """
 
 
-DEFAULT_AIRFLOW_CONFIG = """import duckdb
-from sqlmesh.core.config import AirflowSchedulerConfig, Config
-
-config = Config(
-    scheduler=AirflowSchedulerConfig(
-        airflow_url="http://localhost:8080/",
-        username="airflow",
-        password="airflow",
-    ),
-)
+DEFAULT_AIRFLOW_CONFIG = """scheduler:
+    type: airflow
+    airflow_url: http://localhost:8080/
+    username: airflow
+    password: airflow
 """
+
 
 EXAMPLE_SCHEMA_NAME = "sqlmesh_example"
 EXAMPLE_FULL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.example_full_model"
@@ -118,7 +113,7 @@ def init_example_project(
     path: t.Union[str, Path], template: ProjectTemplate = ProjectTemplate.DEFAULT
 ) -> None:
     root_path = Path(path)
-    config_path = root_path / "config.py"
+    config_path = root_path / "config.yaml"
     audits_path = root_path / "audits"
     macros_path = root_path / "macros"
     models_path = root_path / "models"
