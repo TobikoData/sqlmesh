@@ -6,9 +6,10 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 
 

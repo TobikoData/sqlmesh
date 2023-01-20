@@ -4,8 +4,9 @@ import typing as t
 
 from pydantic import Field, validator
 
+from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 
 

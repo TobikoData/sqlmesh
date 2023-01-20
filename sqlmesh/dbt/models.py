@@ -8,9 +8,10 @@ from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig, UpdateStrategy
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
