@@ -22,34 +22,34 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
 
     @property
     @abc.abstractmethod
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         """keywords that should be passed into the connection"""
 
     @property
     @abc.abstractmethod
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         """The engine adapter for this connection"""
 
     @property
     @abc.abstractmethod
-    def connector(self) -> t.Callable:
-        """The connector for this connection"""
+    def _connection_factory(self) -> t.Callable:
+        """A function that is called to return a connection object for the given Engine Adapter"""
 
     @property
-    def static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         """The static connection kwargs for this connection"""
         return {}
 
     def create_engine_adapter(self) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
-        return self.engine_adapter(
-            lambda: self.connector(
+        return self._engine_adapter(
+            lambda: self._connection_factory(
                 **{
-                    **self.static_connection_kwargs,
+                    **self._static_connection_kwargs,
                     **{
                         k: v
                         for k, v in self.dict().items()
-                        if k in self.connection_kwargs
+                        if k in self._connection_kwargs
                     },
                 }
             ),
@@ -67,19 +67,20 @@ class DuckDBConnectionConfig(_ConnectionConfig):
 
     database: t.Optional[str]
 
-    type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
     concurrent_tasks: Literal[1] = 1
 
+    type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
+
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return {"database"}
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.DuckDBEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         import duckdb
 
         return duckdb.connect
@@ -105,20 +106,22 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     database: t.Optional[str]
     role: t.Optional[str]
 
-    type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
     concurrent_tasks: int = 4
+
+    type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
+
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return {"user", "password", "account", "warehouse", "database", "role"}
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.SnowflakeEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         from snowflake import connector
 
         return connector.connect
@@ -148,11 +151,13 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
     session_configuration: t.Optional[t.Dict[str, t.Any]]
 
     concurrent_tasks: int = 4
+
     type_: Literal["databricks_api"] = Field(alias="type", default="databricks_api")
+
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return {
             "server_hostname",
             "http_path",
@@ -162,11 +167,11 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
         }
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.DatabricksAPIEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         from databricks import sql
 
         return sql.connect
@@ -176,30 +181,46 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     """
     Configuration for the Databricks connection. This connection is used to access the Databricks
     when you have access to a SparkSession. Ex: Running in a Databricks notebook or cluster
+
+    Args:
+        spark_config: An optional dictionary of Spark session parameters. Defaults to None.
     """
 
-    type_: Literal["databricks"] = Field(alias="type", default="databricks")
+    spark_config: t.Optional[t.Dict[str, str]] = None
+
     concurrent_tasks: Literal[1] = 1
 
+    type_: Literal["databricks"] = Field(alias="type", default="databricks")
+
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return set()
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.DatabricksEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         from sqlmesh.engines.spark.db_api.spark_session import connection
 
         return connection
 
     @property
-    def static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from pyspark import SparkConf
         from pyspark.sql import SparkSession
 
-        return dict(spark=SparkSession.builder.enableHiveSupport().getOrCreate())
+        spark_config = SparkConf()
+        if self.spark_config:
+            for k, v in self.spark_config.items():
+                spark_config.set(k, v)
+
+        return dict(
+            spark=SparkSession.builder.config(conf=spark_config)
+            .enableHiveSupport()
+            .getOrCreate()
+        )
 
 
 class DatabricksAutoConnectionConfig(_ConnectionConfig):
@@ -215,6 +236,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
         http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
         session_configuration: An optional dictionary of Spark session parameters. Defaults to None.
                Execute the SQL command `SET -v` to get a full list of available commands.
+        spark_config: An optional dictionary of Spark session parameters. Defaults to None.
     """
 
     server_hostname: str
@@ -222,9 +244,12 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
     access_token: str
     http_headers: t.Optional[t.List[t.Tuple[str, str]]]
     session_configuration: t.Optional[t.Dict[str, t.Any]]
+    spark_config: t.Optional[t.Dict[str, str]] = None
 
     concurrent_tasks: int = 4
+
     type_: Literal["databricks_auto"] = Field(alias="type", default="databricks_auto")
+
     _has_spark_session_access: bool
 
     class Config:
@@ -247,7 +272,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
         return self._has_spark_session_access
 
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         if self.has_spark_session_access:
             return set()
         return {
@@ -259,13 +284,13 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
         }
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         if self.has_spark_session_access:
             return engine_adapter.DatabricksEngineAdapter
         return engine_adapter.DatabricksAPIEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         if self.has_spark_session_access:
             from sqlmesh.engines.spark.db_api.spark_session import connection
 
@@ -275,11 +300,21 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
         return sql.connect
 
     @property
-    def static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
         if self.has_spark_session_access:
+            from pyspark import SparkConf
             from pyspark.sql import SparkSession
 
-            return dict(spark=SparkSession.builder.enableHiveSupport().getOrCreate())
+            spark_config = SparkConf()
+            if self.spark_config:
+                for k, v in self.spark_config.items():
+                    spark_config.set(k, v)
+
+            return dict(
+                spark=SparkSession.builder.config(conf=spark_config)
+                .enableHiveSupport()
+                .getOrCreate()
+            )
         return {}
 
 
@@ -290,19 +325,20 @@ class BigQueryConnectionConfig(_ConnectionConfig):
     TODO: Need to update to support all the different authentication options
     """
 
-    type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
     concurrent_tasks: int = 4
 
+    type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
+
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return set()
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.BigQueryEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         from google.cloud.bigquery.dbapi import connect
 
         return connect
@@ -360,11 +396,12 @@ class RedshiftConnectionConfig(_ConnectionConfig):
     serverless_acct_id: t.Optional[str]
     serverless_work_group: t.Optional[str]
 
-    type_: Literal["redshift"] = Field(alias="type", default="redshift")
     concurrent_tasks: int = 4
 
+    type_: Literal["redshift"] = Field(alias="type", default="redshift")
+
     @property
-    def connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs(self) -> t.Set[str]:
         return {
             "user",
             "password",
@@ -390,11 +427,11 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         }
 
     @property
-    def engine_adapter(self) -> t.Type[EngineAdapter]:
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.RedshiftEngineAdapter
 
     @property
-    def connector(self) -> t.Callable:
+    def _connection_factory(self) -> t.Callable:
         from redshift_connector import connect
 
         return connect
