@@ -3,7 +3,7 @@ import typing as t
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
-from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
+from sqlmesh.core.engine_adapter.databricks import DatabricksSparkSessionEngineAdapter
 from sqlmesh.core.engine_adapter.databricks_api import DatabricksAPIEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
@@ -16,7 +16,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "bigquery": BigQueryEngineAdapter,
     "duckdb": DuckDBEngineAdapter,
     "snowflake": SnowflakeEngineAdapter,
-    "databricks": DatabricksEngineAdapter,
+    "databricks": DatabricksSparkSessionEngineAdapter,
     "redshift": RedshiftEngineAdapter,
 }
 
@@ -34,7 +34,7 @@ def create_engine_adapter(
             if spark:
                 engine_adapter: t.Optional[
                     t.Type[EngineAdapter]
-                ] = DatabricksEngineAdapter
+                ] = DatabricksSparkSessionEngineAdapter
             else:
                 engine_adapter = DatabricksAPIEngineAdapter
         except ImportError:
