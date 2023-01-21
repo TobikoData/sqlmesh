@@ -1,11 +1,10 @@
-# Tests
-Tests are one of the tools SQLMesh provides to validate your models. Along with audits, they are a great way to ensure the quality of your data and to build trust in it across your organization. Similar to unit tests in software engineering, tests take inputs and compare the expected output with the actual output from your model query. A comprehensive suite of tests can empower your data engineers and analysts to work with confidence since downstream models are behaving as expcted when changes are made to models.
+# Testing
+Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](/guides/audits), they are a great way to ensure the quality of your data and to build trust in it across your organization. 
 
-## What exactly are tests?
-Tests are input and output data fixtures defined in YAML files in a test directory in your project. SQLMesh
-even allows you to test individual CTEs in your model queries.
+Similar to unit tests in software engineering, SQLMesh tests compare inputs and the expected outputs with the output from your model query; you can even test individual CTEs in your model queries. These tests are input and output data fixtures defined in YAML files in a test directory in your project. A comprehensive suite of tests can empower your data engineers and analysts to work with confidence, since you can validate that downstream models are behaving as expcted when model changes are made.
 
-In the following example, we define a model test for the `sushi.customer_revenue_by_day` model to ensure the model query behaves as expcted. The test provides upstream data as input for the model as well as expected output for the model and a CTE used by the model. SQLMesh will load the input rows, execute your model's CTE and query, and compare them to the output rows.
+## Example test
+In the following example, we define a model test for the `sushi.customer_revenue_by_day` model to ensure the model query behaves as expcted. The test provides upstream data as input for the model, as well as expected output for the model and a CTE used by the model. SQLMesh will load the input rows, execute your model's CTE and query, and compare them to the output rows:
 
 ```yaml
 test_customer_revenue_by_day:
@@ -80,7 +79,7 @@ test_customer_revenue_by_day:
 
 ## Running tests
 ### The CLI test command
-You can execute your tests with the `sqlmesh test` command.
+You can execute tests with the `sqlmesh test` command as follows:
 ```
 % sqlmesh --path examples/sushi test
 ...F
@@ -100,13 +99,13 @@ Ran 4 tests in 0.030s
 
 FAILED (failures=1)
 ```
-SQLMesh will run your tests and identify any that fail.
 
-You can run a specific model test by passing in the module followed by `::` and the name of the test, such as
-`project.tests.test_order_items::test_single_order_item`. You can also run tests that match a pattern or
-substring using a glob pathname expansion syntax. For example, `project.tests.test_order*` will match
-`project.tests.test_orders` and `project.tests.test_order_items`.
+As the tests run, SQLMesh will identify any that fail.
+
+To run a specific model test, pass in the module followed by `::` and the name of the test, such as
+`project.tests.test_order_items::test_single_order_item`. 
+
+You can also run tests that match a pattern or substring using a glob pathname expansion syntax. For example, `project.tests.test_order*` will match `project.tests.test_orders` and `project.tests.test_order_items`.
 
 ## Advanced usage
 ### Reusable Data Fixtures
-TODO

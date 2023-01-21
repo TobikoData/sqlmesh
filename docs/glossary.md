@@ -2,11 +2,11 @@
 
 **CI/CD**
 <br>
-An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](concepts/tests.md) and [audits](concepts/audits.md).
+An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](guides/tests.md) and [audits](guides/audits.md).
 
 **CTE**
 <br>
-A Common Table Expression is a temporary named result set created from a SELECT statement, which can then be used in a subsequent SELECT statement. For more information, refer to [tests](concepts/tests.md).
+A Common Table Expression is a temporary named result set created from a SELECT statement, which can then be used in a subsequent SELECT statement. For more information, refer to [tests](guides/tests.md).
 
 **DAG**
 <br>
@@ -46,7 +46,7 @@ The property that, given a particular operation, the same outputs will be produc
 
 **Incremental refresh**
 <br>
-In an incremental data refresh, incoming data is compared to existing data, and only changes are updated. In SQLMesh, this is referred to as a logical update. For more information, refer to [plans](concepts/plans.md).
+In an incremental data refresh, incoming data is compared to existing data, and only changes are updated. In SQLMesh, this is referred to as a logical update. For more information, refer to [plans](/concepts/plans).
 
 **Integration**
 <br>

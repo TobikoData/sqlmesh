@@ -1,6 +1,6 @@
 # Overview
 
-The topics in this section provide a conceptual overview of how SQLMesh works.
+The collection of topics in this section provide a conceptual overview of how SQLMesh works and its different components.
 
 ## What is data transformation?
 Data is essential for understanding what is happening with your business or application; it helps you make informed decisions. However, data in its raw form (application logs, transactional database tables, and so forth) is not particularly useful for making decisions. By joining various tables together or computing aggregations, it's easier to interpret, analyze, and then take action on data.
