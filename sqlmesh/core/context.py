@@ -52,6 +52,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
@@ -227,6 +228,7 @@ class Context(BaseContext):
 
         self._models: UniqueKeyDict = UniqueKeyDict("models")
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
+        self._hooks: UniqueKeyDict = UniqueKeyDict("hooks")
 
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
@@ -358,8 +360,13 @@ class Context(BaseContext):
 
     @property
     def macro_directory_path(self) -> Path:
-        """Path to the drectory where the macros are defined"""
+        """Path to the directory where macros are defined"""
         return self.path / "macros"
+
+    @property
+    def hook_directory_path(self) -> Path:
+        """Path to the directory where hooks are defined"""
+        return self.path / "hooks"
 
     @property
     def test_directory_path(self) -> Path:
@@ -377,8 +384,7 @@ class Context(BaseContext):
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._macros, self._models, self.dag = self._loader.load(self)
-
+            self._hooks, self._macros, self._models, self.dag = self._loader.load(self)
         return self
 
     def run(
@@ -412,6 +418,11 @@ class Context(BaseContext):
     def macros(self) -> MappingProxyType[str, macro]:
         """Returns all registered macros in this context."""
         return MappingProxyType(self._macros)
+
+    @property
+    def hooks(self) -> MappingProxyType[str, hook]:
+        """Returns all registered hooks in this context."""
+        return MappingProxyType(self._hooks)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:

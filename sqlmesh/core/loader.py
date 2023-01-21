@@ -13,6 +13,7 @@ from sqlglot.errors import SqlglotError
 import sqlmesh.core.context as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
@@ -29,9 +30,11 @@ class Loader(abc.ABC):
         self._dag: DAG[str] = DAG()
 
     @abc.abstractmethod
-    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
+    def load(
+        self, context: c.Context
+    ) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, UniqueKeyDict, DAG]:
         """
-        Loads all macros and models in the context's path
+        Loads all hooks, macros, and models in the context's path
 
         Args:
             context: The context to load macros and models for
@@ -60,34 +63,44 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
+    def load(
+        self, context: c.Context
+    ) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, UniqueKeyDict, DAG]:
         self._path_mtimes.clear()
         self._dag = DAG()
-        macros = self._load_macros(context)
-        return (macros, self._load_models(context, macros), self._dag)
+        hooks, macros = self._load_scripts(context)
+        return (hooks, macros, self._load_models(context, macros, hooks), self._dag)
 
-    def _load_macros(self, context: c.Context) -> UniqueKeyDict:
-        """Loads all of the macros within the macro directory"""
+    def _load_scripts(
+        self, context: c.Context
+    ) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+        """Loads all user defined hooks and macros."""
         # Store a copy of the macro registry
+        standard_hooks = hook.get_registry()
         standard_macros = macro.get_registry()
 
-        # Import project python files so custom macros will be registered
-        for path in context.glob_path(context.macro_directory_path, ".py"):
+        for path in tuple(
+            context.glob_path(context.macro_directory_path, ".py")
+        ) + tuple(context.glob_path(context.hook_directory_path, ".py")):
             if self._import_python_file(path.relative_to(context.path)):
                 self._path_mtimes[path] = path.stat().st_mtime
+
+        hooks = hook.get_registry()
         macros = macro.get_registry()
 
-        # Restore the macro registry
+        hook.set_registry(standard_hooks)
         macro.set_registry(standard_macros)
 
-        return macros
+        return hooks, macros
 
-    def _load_models(self, context: c.Context, macros: UniqueKeyDict) -> UniqueKeyDict:
+    def _load_models(
+        self, context: c.Context, macros: UniqueKeyDict, hooks: UniqueKeyDict
+    ) -> UniqueKeyDict:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(context, macros)
+        models = self._load_sql_models(context, macros, hooks)
         models.update(self._load_python_models(context))
         self._load_model_audits(context, models)
 
@@ -98,7 +111,7 @@ class SqlMeshLoader(Loader):
         return models
 
     def _load_sql_models(
-        self, context: c.Context, macros: UniqueKeyDict
+        self, context: c.Context, macros: UniqueKeyDict, hooks: UniqueKeyDict
     ) -> UniqueKeyDict:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
@@ -117,6 +130,7 @@ class SqlMeshLoader(Loader):
                     expressions,
                     defaults=context.config.model_defaults.dict(),
                     macros=macros,
+                    hooks=hooks,
                     path=Path(path).absolute(),
                     module_path=context.path,
                     dialect=context.dialect,

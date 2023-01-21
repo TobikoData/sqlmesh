@@ -37,6 +37,7 @@ from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.model.meta import HookCall
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +141,22 @@ class SnapshotEvaluator:
 
         from sqlmesh.core.context import ExecutionContext
 
+        context = ExecutionContext(self.adapter, snapshots, is_dev)
+
+        def run_hooks(hooks: t.List[HookCall]) -> None:
+            model.run_hooks(
+                hooks,
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
+
+        run_hooks(model.pre)
+
         queries_or_dfs = model.render(
-            ExecutionContext(self.adapter, snapshots, is_dev),
+            context,
             start=start,
             end=end,
             latest=latest,
@@ -157,6 +172,7 @@ class SnapshotEvaluator:
                 if limit > 0:
                     return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetch_native_df(query.limit(limit))  # type: ignore
                 apply(query_or_df, index)
+            run_hooks(model.post)
             return None
 
     def promote(
