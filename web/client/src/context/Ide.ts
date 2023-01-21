@@ -2,15 +2,15 @@ import { createContext } from "react";
 import { type File } from '../api';
 
 interface IDE {
-  files: Set<File>
-  file?: File
-  setFile: (file?: File) => void
-  setFiles: (files: Set<File>) => void
+  openedFiles: Set<File>
+  activeFile: File | null
+  setActiveFile: (file: File | null) => void
+  setOpenedFiles: (files: Set<File>) => void
 }
 
 export default createContext<IDE>({
-  files: new Set(),
-  file: undefined,
-  setFile: () => {},
-  setFiles: () => {}
+  openedFiles: new Set(),
+  activeFile: null,
+  setActiveFile: () => {},
+  setOpenedFiles: () => {}
 })

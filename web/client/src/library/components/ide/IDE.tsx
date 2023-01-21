@@ -32,8 +32,8 @@ const plans = [
 export function IDE() {
   const client = useQueryClient();
   
-  const [files, setFiles] = useState<Set<File>>(new Set())
-  const [file, setFile] = useState<File>()
+  const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
+  const [activeFile, setActiveFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
   const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
   const [activePlan, setActivePlan] = useState<{ text: string, value: string }>()
@@ -42,8 +42,8 @@ export function IDE() {
 
   const mutationSaveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles();
-  const { data: fileData } = useApiFileByPath(client, file?.path)
-
+  const { data: fileData } = useApiFileByPath(activeFile?.path)
+  
   useEffect(() => {
     setFileContent(fileData?.content ?? '')
   }, [fileData])
@@ -51,28 +51,28 @@ export function IDE() {
   function closeIdeTab(f: File) {
     if (!f) return
 
-    files.delete(f)
+    openedFiles.delete(f)
 
-    if (files.size === 0) {
-      setFile(undefined)
-    } else if (!file || !files.has(file)) {
-      setFile([...files][0])
+    if (openedFiles.size === 0) {
+      setActiveFile(null)
+    } else if (!activeFile || !openedFiles.has(activeFile)) {
+      setActiveFile([...openedFiles][0])
     }
 
-    setFiles(new Set([...files]))
+    setOpenedFiles(new Set([...openedFiles]))
   }
 
   return (
     <ContextIDE.Provider value={{
-      files,
-      file,
-      setFile: file => {
-        if (!file) return setFile(undefined)
+      openedFiles,
+      activeFile,
+      setActiveFile: file => {
+        if (!file) return setActiveFile(null)
 
-        setFile(file)
-        setFiles(new Set([...files, file]))
+        setActiveFile(file)
+        setOpenedFiles(new Set([...openedFiles, file]))
       },
-      setFiles,
+      setOpenedFiles,
     }}>
       <div className='w-full flex justify-between items-center min-h-[2rem] z-50'>
         
@@ -120,24 +120,24 @@ export function IDE() {
           </div>
           <Divider /> */}
 
-          {Boolean(file) && (
+          {Boolean(activeFile) && (
             <>
               <div className='w-full h-full flex overflow-hidden'>
                 <div className='w-full flex flex-col overflow-hidden overflow-x-auto'>
                   <div className='w-full flex min-h-[2rem] overflow-hidden overflow-x-auto'> 
                     <ul className='w-full whitespace-nowrap'>
-                      {files.size > 0 && [...files].map((f) => (
-                        <li key={f.name} className={clsx(
+                      {openedFiles.size > 0 && [...openedFiles].map(file => (
+                        <li key={file.path} className={clsx(
                           'inline-block justify-between items-center py-1 px-3 overflow-hidden min-w-[10rem] text-center overflow-ellipsis cursor-pointer',
-                          f.path === file?.path ? 'bg-white' : 'bg-gray-300'
-                        )} onClick={() =>  setFile(f)}>
+                          file.path === activeFile?.path ? 'bg-white' : 'bg-gray-300'
+                        )} onClick={() =>  setActiveFile(file)}>
                           <span className='flex justify-between items-center'>
-                            <small>{f.name}</small>
+                            <small>{file.name}</small>
                             <XCircleIcon
                               onClick={e => {
                                 e.stopPropagation()
 
-                                closeIdeTab(f)
+                                closeIdeTab(file)
                               }}
                               className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`} 
                             /> 
@@ -163,14 +163,14 @@ export function IDE() {
                     <div className='w-full h-full overflow-hidden'>
                       <Editor
                         className='h-full w-full'
-                        extension={file?.extension}
+                        extension={activeFile?.extension}
                         value={fileContent}
                         onChange={debounce((value: string, viewUpdate: ViewUpdate) => {
                           const shouldMutate = Boolean(value) && value !== fileContent
 
                           if (shouldMutate) {
                             mutationSaveFile.mutate({
-                              path: file?.path,
+                              path: activeFile?.path,
                               body: viewUpdate.state.doc.toString()
                             })
 
@@ -179,7 +179,7 @@ export function IDE() {
                             setStatus('editing')
                           }
                         }, () => {
-                          setStatus('savind')
+                          setStatus('saving...')
                         }, 2000)}
                       />
                     </div>
@@ -224,7 +224,7 @@ export function IDE() {
             </>
           )}
 
-          {!Boolean(file) && (
+          {!Boolean(activeFile) && (
             <div className='w-full h-full flex justify-center items-center text-center'>
               <div className="prose">
                 <h2>Instractions on how to start</h2>
