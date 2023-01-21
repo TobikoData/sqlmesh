@@ -22,7 +22,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
 
     @property
     @abc.abstractmethod
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         """keywords that should be passed into the connection"""
 
     @property
@@ -49,7 +49,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
                     **{
                         k: v
                         for k, v in self.dict().items()
-                        if k in self._connection_kwargs
+                        if k in self._connection_kwargs_keys
                     },
                 }
             ),
@@ -72,7 +72,7 @@ class DuckDBConnectionConfig(_ConnectionConfig):
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return {"database"}
 
     @property
@@ -113,7 +113,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return {"user", "password", "account", "warehouse", "database", "role"}
 
     @property
@@ -157,7 +157,7 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
             "server_hostname",
             "http_path",
@@ -177,7 +177,7 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
         return sql.connect
 
 
-class DatabricksConnectionConfig(_ConnectionConfig):
+class DatabricksSparkSessionConnectionConfig(_ConnectionConfig):
     """
     Configuration for the Databricks connection. This connection is used to access the Databricks
     when you have access to a SparkSession. Ex: Running in a Databricks notebook or cluster
@@ -190,15 +190,17 @@ class DatabricksConnectionConfig(_ConnectionConfig):
 
     concurrent_tasks: Literal[1] = 1
 
-    type_: Literal["databricks"] = Field(alias="type", default="databricks")
+    type_: Literal["databricks_spark_session"] = Field(
+        alias="type", default="databricks_spark_session"
+    )
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return set()
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DatabricksEngineAdapter
+        return engine_adapter.DatabricksSparkSessionEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -223,7 +225,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         )
 
 
-class DatabricksAutoConnectionConfig(_ConnectionConfig):
+class DatabricksConnectionConfig(_ConnectionConfig):
     """
     Databricks connection that prefers to use SparkSession if available, otherwise it will use the Databricks API.
 
@@ -248,7 +250,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
 
     concurrent_tasks: int = 4
 
-    type_: Literal["databricks_auto"] = Field(alias="type", default="databricks_auto")
+    type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
     _has_spark_session_access: bool
 
@@ -272,7 +274,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
         return self._has_spark_session_access
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         if self.has_spark_session_access:
             return set()
         return {
@@ -286,7 +288,7 @@ class DatabricksAutoConnectionConfig(_ConnectionConfig):
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         if self.has_spark_session_access:
-            return engine_adapter.DatabricksEngineAdapter
+            return engine_adapter.DatabricksSparkSessionEngineAdapter
         return engine_adapter.DatabricksAPIEngineAdapter
 
     @property
@@ -330,7 +332,7 @@ class BigQueryConnectionConfig(_ConnectionConfig):
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return set()
 
     @property
@@ -401,7 +403,7 @@ class RedshiftConnectionConfig(_ConnectionConfig):
     type_: Literal["redshift"] = Field(alias="type", default="redshift")
 
     @property
-    def _connection_kwargs(self) -> t.Set[str]:
+    def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
             "user",
             "password",
@@ -442,8 +444,8 @@ ConnectionConfig = Annotated[
         DuckDBConnectionConfig,
         SnowflakeConnectionConfig,
         DatabricksAPIConnectionConfig,
+        DatabricksSparkSessionConnectionConfig,
         DatabricksConnectionConfig,
-        DatabricksAutoConnectionConfig,
         BigQueryConnectionConfig,
         RedshiftConnectionConfig,
     ],
