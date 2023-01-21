@@ -5,7 +5,7 @@ import typing as t
 
 from pydantic import Field
 
-from sqlmesh.core.config import Config, SnowflakeConnectionConfig
+from sqlmesh.core.config import ConnectionConfig, SnowflakeConnectionConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -48,6 +48,10 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
         # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        """Converts DBT datawarehouse connection config to SQLMesh connection config"""
+        raise NotImplementedError
+
 
 class SnowflakeConfig(DataWarehouseConfig):
     """
@@ -82,8 +86,8 @@ class SnowflakeConfig(DataWarehouseConfig):
     retry_on_database_errors: bool = False
     retry_all: bool = False
 
-    def to_sqlmesh(self) -> Config:
-        snowflake_connection_config = SnowflakeConnectionConfig(
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return SnowflakeConnectionConfig(
             user=self.user,
             password=self.password,
             account=self.account,
@@ -92,8 +96,6 @@ class SnowflakeConfig(DataWarehouseConfig):
             role=self.role,
             concurrent_tasks=self.threads,
         )
-
-        return Config(connections=snowflake_connection_config)
 
 
 class PostgresConfig(DataWarehouseConfig):
@@ -126,6 +128,9 @@ class PostgresConfig(DataWarehouseConfig):
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError
+
 
 class RedshiftConfig(DataWarehouseConfig):
     """
@@ -156,6 +161,9 @@ class RedshiftConfig(DataWarehouseConfig):
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError
+
 
 class DatabricksConfig(DataWarehouseConfig):
     """
@@ -172,3 +180,6 @@ class DatabricksConfig(DataWarehouseConfig):
     host: str
     http_path: str
     token: str
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError

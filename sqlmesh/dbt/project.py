@@ -4,10 +4,9 @@ import re
 import typing as t
 from pathlib import Path
 
+import sqlmesh.dbt.profile as p
 from sqlmesh.dbt.common import BaseConfig
-from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
 from sqlmesh.dbt.models import ModelConfig
-from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.sources import SourceConfig
 from sqlmesh.utils.errors import ConfigError
@@ -31,29 +30,45 @@ class ProjectConfig:
         self,
         project_root: Path,
         project_name: str,
-        datawarehouse: DataWarehouseConfig,
+        profile: p.Profile,
         models: t.Dict[str, ModelConfig],
         sources: t.Dict[str, SourceConfig],
         seeds: t.Dict[str, SeedConfig],
+        config_paths: t.List[Path],
     ):
         """
         Args:
             project_root: Path to the root directory of the DBT project
             project_name: The name of the DBT project within the project file yaml
-            datawarehouse: The project's DataWarehouse configuration for the specified target
+            profile: The profile associated with the project
             models: Dict of model name to model config for all models within this project
             sources: Dict of source name to source config for all sources within this project
             seeds: Dict of seed name to seed config for all seeds within this project
+            config_paths: Paths to all the config files used by the project
         """
         self.project_root = project_root
         self.project_name = project_name
-        self.datawarehouse_config = datawarehouse
+        self.profile = profile
         self.models = models
         self.sources = sources
         self.seeds = seeds
+        self.config_paths = config_paths
 
     @classmethod
-    def load(cls, project_root: t.Optional[Path] = None) -> ProjectConfig:
+    def project_file(cls, project_root: t.Optional[Path] = None) -> Path:
+        project_root = project_root or Path()
+        project_config_path = Path(project_root, cls.DEFAULT_PROJECT_FILE)
+        if not project_config_path.exists():
+            raise ConfigError(
+                f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
+            )
+
+        return project_config_path
+
+    @classmethod
+    def load(
+        cls, project_root: t.Optional[Path] = None, target: t.Optional[str] = None
+    ) -> ProjectConfig:
         """
         Loads the configuration for the specified DBT project
 
@@ -65,26 +80,31 @@ class ProjectConfig:
             ProjectConfig instance for the specified DBT project
         """
         project_root = project_root or Path()
-        project_config_path = Path(project_root, cls.DEFAULT_PROJECT_FILE)
-        if not project_config_path.exists():
-            raise ConfigError(
-                f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
-            )
-
-        project_yaml = yaml_load(project_config_path)
+        project_file_path = cls.project_file(project_root)
+        project_yaml = yaml_load(project_file_path)
 
         project_name = project_yaml.get("name")
         if not project_name:
             raise ConfigError(f"{cls.DEFAULT_PROJECT_FILE} must include project name")
 
-        dw_config = Profile.load(project_root, project_name).datawarehouse_config
-
-        models, sources, seeds = cls._load_models_and_sources(
-            project_root, project_name, dw_config.schema_, project_yaml
+        profile = p.Profile.load(project_root, project_name)
+        connection = (
+            profile.connections[target]
+            if target
+            else profile.connections[profile.default_target]
         )
 
+        models, sources, seeds, config_paths = cls._load_models_and_sources(
+            project_root,
+            project_name,
+            connection.schema_,
+            project_yaml,
+        )
+
+        config_paths.append(project_file_path)
+
         return ProjectConfig(
-            project_root, project_name, dw_config, models, sources, seeds
+            project_root, project_name, profile, models, sources, seeds, config_paths
         )
 
     @classmethod
@@ -95,7 +115,10 @@ class ProjectConfig:
         target_schema: str,
         project_yaml: t.Dict[str, t.Any],
     ) -> t.Tuple[
-        t.Dict[str, ModelConfig], t.Dict[str, SourceConfig], t.Dict[str, SeedConfig]
+        t.Dict[str, ModelConfig],
+        t.Dict[str, SourceConfig],
+        t.Dict[str, SeedConfig],
+        t.List[Path],
     ]:
         """
         Loads the configuration of all models within the specified DBT project.
@@ -107,11 +130,13 @@ class ProjectConfig:
             project_yaml: The yaml from the project file
 
         Returns:
-            Tuple of Dict of model names to model configuration and Dict of
+            Tuple containing Dicts of model configs, source configs, and seed configs
+            and list of config files used by them
         """
         model_configs: t.Dict[str, ModelConfig] = {}
         source_configs: t.Dict[str, SourceConfig] = {}
         seed_configs: t.Dict[str, SeedConfig] = {}
+        config_paths: t.List[Path] = []
 
         # Start with configs in the project file
         scoped_models, scoped_sources, scoped_seeds = cls._load_project_config(
@@ -123,6 +148,8 @@ class ProjectConfig:
             dirpath = Path(project_root, dir)
             # Layer on configs in properties files
             for filepath in dirpath.glob("**/*.yml"):
+                config_paths.append(filepath)
+
                 scope = cls._scope_from_path(filepath, dirpath, project_name)
                 properties_yaml = yaml_load(filepath)
 
@@ -149,6 +176,8 @@ class ProjectConfig:
             dirpath = Path(project_root, dir)
             # Layer on configs in properties files
             for filepath in dirpath.glob("**/*.yml"):
+                config_paths.append(filepath)
+
                 scope = cls._scope_from_path(filepath, dirpath, project_name)
                 properties_yaml = yaml_load(filepath)
 
@@ -163,7 +192,7 @@ class ProjectConfig:
                 seed_config.path = filepath
                 seed_configs[filepath.stem] = seed_config
 
-        return (model_configs, source_configs, seed_configs)
+        return (model_configs, source_configs, seed_configs, config_paths)
 
     @classmethod
     def _load_project_config(
@@ -346,3 +375,12 @@ class ProjectConfig:
         return {
             config.config_name: config.source_name for config in self.sources.values()
         }
+
+    @property
+    def project_files(self) -> t.List[Path]:
+        paths = self.config_paths.copy()
+        paths.append(self.profile.path)
+        paths.extend(model.path for model in self.models.values())
+        paths.extend(seed.path for seed in self.seeds.values())
+
+        return paths

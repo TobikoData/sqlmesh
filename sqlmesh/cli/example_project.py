@@ -106,7 +106,15 @@ EXAMPLE_TEST = f"""test_example_full_model:
 
 class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
+    DBT = "dbt"
     DEFAULT = "default"
+
+
+DEFAULT_CONFIGS = {
+    ProjectTemplate.AIRFLOW: DEFAULT_AIRFLOW_CONFIG,
+    ProjectTemplate.DBT: DEFAULT_DBT_CONFIG,
+    ProjectTemplate.DEFAULT: DEFAULT_CONFIG,
+}
 
 
 def init_example_project(
@@ -122,8 +130,11 @@ def init_example_project(
     if config_path.exists():
         raise click.ClickException(f"Found an existing config in '{config_path}'")
 
-    _create_folders([audits_path, macros_path, models_path, tests_path])
     _create_config(config_path, template)
+    if template == ProjectTemplate.DBT:
+        return
+
+    _create_folders([audits_path, macros_path, models_path, tests_path])
     _create_audits(audits_path)
     _create_models(models_path)
     _create_tests(tests_path)
@@ -138,9 +149,7 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
 def _create_config(config_path: Path, template: ProjectTemplate) -> None:
     _write_file(
         config_path,
-        DEFAULT_AIRFLOW_CONFIG
-        if template == ProjectTemplate.AIRFLOW
-        else DEFAULT_CONFIG,
+        DEFAULT_CONFIGS[template],
     )
 
 

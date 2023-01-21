@@ -235,6 +235,7 @@ class Context(BaseContext):
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
         self._hooks: UniqueKeyDict = UniqueKeyDict("hooks")
 
+        self.connection = connection
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = (
