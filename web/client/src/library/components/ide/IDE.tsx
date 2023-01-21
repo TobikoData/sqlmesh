@@ -227,7 +227,7 @@ export function IDE() {
           {!Boolean(activeFile) && (
             <div className='w-full h-full flex justify-center items-center text-center'>
               <div className="prose">
-                <h2>Instractions on how to start</h2>
+                <h2>Instructions on how to start</h2>
                 <p>
                   Select file
                 </p>
