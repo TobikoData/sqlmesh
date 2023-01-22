@@ -1,9 +1,6 @@
 # Overview
 
-## Integrations
-SQLMesh integrates with the following:
+SQLMesh supports integrations with the following:
 
 * [Airflow](airflow.md)
 * [dbt](dbt.md)
-
-Follow this page for upcoming integrations.

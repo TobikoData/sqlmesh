@@ -77,7 +77,7 @@ test_customer_revenue_by_day:
         ds: '2022-01-01'
 ```
 
-## Running tests
+## Run a test
 ### The CLI test command
 You can execute tests with the `sqlmesh test` command as follows:
 ```

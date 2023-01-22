@@ -2,8 +2,11 @@ site_name: SQLMesh
 nav:
   - Get Started:
     - "Overview": index.md
-    - "Quickstart": quick_start.md
+    - quick_start.md
   - Guides:
+    - guides/projects.md
+    - guides/development.md
+    - guides/dag.md
     - guides/tests.md
     - guides/audits.md
   - Concepts:
@@ -17,7 +20,8 @@ nav:
       - concepts/plan_kinds.md
     - concepts/configs.md
     - concepts/environments.md
-  - API:
+    - concepts/glossary.md
+  - Reference:
     - api/overview.md
     - api/cli.md
     - api/notebook.md
@@ -29,7 +33,6 @@ nav:
   - Resources:
     - community.md
     - development.md
-    - glossary.md
 
 theme:
   name: material

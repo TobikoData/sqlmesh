@@ -23,7 +23,7 @@ In the example, we defined an audit named `assert_item_price_is_not_null` on the
 
 While the query can technically be on any model or even multiple models, the model specified in the audit definition tells SQLMesh when to run the audit during your pipeline's execution. If the query returns any records, it means there is a potential issue requiring your attention.
 
-## Running audits
+## Run an audit
 ### The CLI audit command
 
 You can execute audits with the `sqlmesh audit` command as follows:

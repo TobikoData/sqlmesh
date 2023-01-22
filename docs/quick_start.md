@@ -83,7 +83,9 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called 'dev'. Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type `y` to perform the logical update:
+Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called **dev**. 
+
+Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type `y` to perform the logical update:
 
 ```
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -101,7 +103,7 @@ Logical Update executed successfully
 
 ## 3. Make your first update
 ### 3.1 Edit the configuration
-Now, let's add a new column to example_incremental_model. Open the models/example_incremental_model.sql file and add `1 AS new_column` under item_id as follows:
+Now, let's add a new column. Open the **models/example_incremental_model.sql** file and add `1 AS new_column` under item_id as follows:
 
 ```
 diff --git a/models/example_incremental_model.sql b/models/example_incremental_model.sql
@@ -163,7 +165,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 
 Notice that SQLMesh has detected that you've added **new_column**. It also shows you that the downstream model **sqlmesh_example.example_full_model** was indirectly modified. It asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column, this change should be classified as `Non-Breaking`. Type `2`.
 
-SQLMesh now applies the change to **sqlmesh_example.example_incremental_model** and backfills the model. SQLMesh did not need to backfill **sqlmesh_example.example_full_model** because `Non-Breaking` change was selected.
+SQLMesh now applies the change to **sqlmesh_example.example_incremental_model** and backfills the model. SQLMesh did not need to backfill **sqlmesh_example.example_full_model** since `Non-Breaking` change was selected.
 
 ### 4.1 Validate updates in dev
 You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_example__dev.example_incremental_model"`:
@@ -259,8 +261,10 @@ Finally, double-check that the data did indeed land in prod by running `sqlmesh 
 
 ## 8. Next steps
 
-Congratulations, you've now conquered the basics of using SQLMesh! Feel free to explore [guides](/guides/tests) and [concepts](/concepts/overview) for more details about how SQLMesh works, or peruse the following resources:
+Congratulations, you've now conquered the basics of using SQLMesh! 
 
-* For API documentation, refer to [API](api/overview.md).
+Feel free to explore [guides](/guides/tests) and [concepts](/concepts/overview) for more details about how SQLMesh works, or peruse the following resources:
+
+* For API documentation, refer to [API overview](api/overview.md).
 * For information about integrations with SQLMesh, refer to [integrations](integrations/overview.md).
 * To get involved in our community, refer to [community](community.md).
