@@ -115,6 +115,7 @@ class SqlMeshLoader(Loader):
                     )
                 model = load_model(
                     expressions,
+                    defaults=context.config.model_defaults.dict(),
                     macros=macros,
                     path=Path(path).absolute(),
                     module_path=context.path,
@@ -142,6 +143,7 @@ class SqlMeshLoader(Loader):
                 model = registry[name].model(
                     path=path,
                     module_path=context.path,
+                    defaults=context.config.model_defaults.dict(),
                     time_column_format=context.config.time_column_format,
                 )
                 models[model.name] = model

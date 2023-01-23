@@ -38,6 +38,7 @@ class model(registry_decorator):
         *,
         module_path: Path,
         path: Path,
+        defaults: t.Optional[t.Dict[str, t.Any]] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     ) -> Model:
         """Get the model registered by this function."""
@@ -54,6 +55,7 @@ class model(registry_decorator):
         return create_python_model(
             self.name,
             entrypoint,
+            defaults=defaults,
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),

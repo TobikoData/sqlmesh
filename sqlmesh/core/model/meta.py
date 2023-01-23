@@ -7,14 +7,12 @@ from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse
 
-from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     ModelKind,
-    ModelKindName,
-    SeedKind,
     TimeColumn,
+    model_kind_validator,
 )
 from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike, preserve_time_like_kind, to_datetime
@@ -57,6 +55,8 @@ class ModelMeta(PydanticModel):
     )
     _croniter: t.Optional[croniter] = None
 
+    _model_kind_validator = model_kind_validator
+
     @validator("partitioned_by_", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, exp.Tuple):
@@ -64,42 +64,6 @@ class ModelMeta(PydanticModel):
         if isinstance(v, exp.Expression):
             return [v.name]
         return v
-
-    @validator("kind", pre=True)
-    def _model_kind_validator(cls, v: t.Any) -> ModelKind:
-        if isinstance(v, ModelKind):
-            return v
-
-        if isinstance(v, d.ModelKind):
-            name = v.this
-            props = {prop.name: prop.args.get("value") for prop in v.expressions}
-            klass: t.Type[ModelKind] = ModelKind
-            if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRangeKind
-            elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKeyKind
-            elif name == ModelKindName.SEED:
-                klass = SeedKind
-            else:
-                props["name"] = ModelKindName(name)
-            return klass(**props)
-
-        if isinstance(v, dict):
-            if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRangeKind
-            elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKeyKind
-            elif v.get("name") == ModelKindName.SEED:
-                klass = SeedKind
-            else:
-                klass = ModelKind
-            return klass(**v)
-
-        name = (v.name if isinstance(v, exp.Expression) else str(v)).lower()
-        try:
-            return ModelKind(name=ModelKindName(name))
-        except ValueError:
-            raise ConfigError(f"Invalid model kind '{name}'")
 
     @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:

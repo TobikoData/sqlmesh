@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from sqlmesh.core.config import Config, DuckDBConnectionConfig
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -87,6 +87,17 @@ def test_update_with_notification_targets():
     assert Config(notification_targets=[target]).update_with(
         Config(notification_targets=[target])
     ) == Config(notification_targets=[target] * 2)
+
+
+def test_update_with_model_defaults():
+    config_a = Config(
+        model_defaults=ModelDefaultsConfig(start="2022-01-01", dialect="duckdb")
+    )
+    config_b = Config(model_defaults=ModelDefaultsConfig(dialect="spark"))
+
+    assert config_a.update_with(config_b) == Config(
+        model_defaults=ModelDefaultsConfig(start="2022-01-01", dialect="spark")
+    )
 
 
 def test_default_connection():
