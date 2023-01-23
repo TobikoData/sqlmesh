@@ -1,3 +1,4 @@
+import typing as t
 from functools import lru_cache
 from pathlib import Path
 
@@ -8,10 +9,16 @@ from sqlmesh.core.context import Context
 
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
+    _context: t.Optional[Context] = None
+
+    class Config:
+        underscore_attrs_are_private = True
 
     @property
     def context(self) -> Context:
-        return Context(path=str(self.project_path))
+        if not self._context:
+            self._context = Context(path=str(self.project_path))
+        return self._context
 
 
 @lru_cache()
