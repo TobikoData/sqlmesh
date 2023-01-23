@@ -93,14 +93,14 @@ class _Model(ModelMeta, frozen=True):
         dialect: The SQL dialect that the model's query is written in. By default,
             this is assumed to be the dialect of the context.
         owner: The owner of the model.
-        cron: A cron string specifying how often the model should be refresh, leveraging the
+        cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         description: The optional model description.
         stamp: An optional arbitrary string sequence used to create new model versions without making
             changes to any of the functional components of the definition.
         start: The earliest date that the model will be backfilled for. If this is None,
-            then the date is inferred by taking the most recent start date's of its ancestors.
-            The start date can be a static datetime or a realtive datetime like "1 year ago"
+            then the date is inferred by taking the most recent start date of its ancestors.
+            The start date can be a static datetime or a relative datetime like "1 year ago"
         batch_size: The maximum number of intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
@@ -755,7 +755,7 @@ def load_model(
 
     Args:
         expressions: Model, *Statements, Query.
-        defautls: Definition default values.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -863,7 +863,7 @@ def create_sql_model(
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
         statements: The list of all SQL statements that are not a query or a model definition.
-        defautls: Definition default values.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -913,7 +913,7 @@ def create_seed_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
-        defautls: Definition default values.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
     """
     seed_path = Path(seed_kind.path)
@@ -950,7 +950,7 @@ def create_python_model(
             The catalog and db are optional.
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
-        defautls: Definition default values.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
