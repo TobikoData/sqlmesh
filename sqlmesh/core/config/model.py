@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
+from sqlmesh.core.model.kind import ModelKind, model_kind_validator
 from sqlmesh.utils.date import TimeLike
 
 
@@ -10,6 +11,7 @@ class ModelDefaultsConfig(BaseConfig):
     """A config object for default values applied to model definitions.
 
     Args:
+        kind: The model kind.
         dialect: The SQL dialect that the model's query is written in. By default,
             this is assumed to be the dialect of the context.
         owner: The owner of the model.
@@ -25,9 +27,12 @@ class ModelDefaultsConfig(BaseConfig):
             (eg. 'parquet')
     """
 
+    kind: t.Optional[ModelKind]
     dialect: t.Optional[str]
     cron: t.Optional[str]
     owner: t.Optional[str]
     start: t.Optional[TimeLike]
     batch_size: t.Optional[int]
     storage_format: t.Optional[str]
+
+    _model_kind_validator = model_kind_validator
