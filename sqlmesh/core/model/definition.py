@@ -742,6 +742,7 @@ Model = Annotated[
 def load_model(
     expressions: t.List[exp.Expression],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -754,6 +755,7 @@ def load_model(
 
     Args:
         expressions: Model, *Statements, Query.
+        defautls: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -801,6 +803,7 @@ def load_model(
             name,
             query.name,
             python_env,
+            defaults=defaults,
             path=path,
             time_column_format=time_column_format,
             **meta_fields,
@@ -810,6 +813,7 @@ def load_model(
             name,
             query,
             statements,
+            defaults=defaults,
             path=path,
             module_path=module_path,
             time_column_format=time_column_format,
@@ -824,7 +828,11 @@ def load_model(
                 for p in meta_fields.pop("kind").expressions
             }
             return create_seed_model(
-                name, SeedKind(**seed_properties), path=path, **meta_fields
+                name,
+                SeedKind(**seed_properties),
+                defaults=defaults,
+                path=path,
+                **meta_fields,
             )
         except Exception:
             raise_config_error(
@@ -839,6 +847,7 @@ def create_sql_model(
     query: exp.Expression,
     statements: t.List[exp.Expression],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
@@ -854,6 +863,7 @@ def create_sql_model(
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
         statements: The list of all SQL statements that are not a query or a model definition.
+        defautls: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
@@ -878,6 +888,7 @@ def create_sql_model(
     return _create_model(
         SqlModel,
         name,
+        defaults=defaults,
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
@@ -892,6 +903,7 @@ def create_seed_model(
     name: str,
     seed_kind: SeedKind,
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     **kwargs: t.Any,
 ) -> Model:
@@ -901,6 +913,7 @@ def create_seed_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
+        defautls: Definition default values.
         path: An optional path to the model definition file.
     """
     seed_path = Path(seed_kind.path)
@@ -910,6 +923,7 @@ def create_seed_model(
     return _create_model(
         SeedModel,
         name,
+        defaults=defaults,
         path=path,
         depends_on=set(),
         seed=seed,
@@ -923,6 +937,7 @@ def create_python_model(
     entrypoint: str,
     python_env: t.Dict[str, Executable],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
@@ -935,6 +950,7 @@ def create_python_model(
             The catalog and db are optional.
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
+        defautls: Definition default values.
         path: An optional path to the model definition file.
         time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
@@ -948,6 +964,7 @@ def create_python_model(
     return _create_model(
         PythonModel,
         name,
+        defaults=defaults,
         path=path,
         time_column_format=time_column_format,
         depends_on=depends_on,
@@ -961,7 +978,8 @@ def _create_model(
     klass: t.Type[_Model],
     name: str,
     *,
-    path: Path,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
@@ -977,6 +995,7 @@ def _create_model(
             name=name,
             expressions=expressions or [],
             **{
+                **(defaults or {}),
                 "dialect": dialect,
                 "depends_on": depends_on,
                 **kwargs,

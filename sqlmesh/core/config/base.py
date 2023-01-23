@@ -17,6 +17,7 @@ class UpdateStrategy(Enum):
     KEY_UPDATE = auto()  # Update dict key value with new dict key value
     KEY_EXTEND = auto()  # Extend dict key value to existing dict key value
     IMMUTABLE = auto()  # Raise if a key tries to change this value
+    NESTED_UPDATE = auto()  # Recursively updates the nested config
 
 
 def update_field(
@@ -41,38 +42,38 @@ def update_field(
     update_strategy = update_strategy or UpdateStrategy.REPLACE
 
     if update_strategy == UpdateStrategy.IMMUTABLE:
-        raise ConfigError("Cannot modify property: {old}")
+        raise ConfigError(f"Cannot modify property: {old}.")
 
     if update_strategy == UpdateStrategy.REPLACE:
         return new
     if update_strategy == UpdateStrategy.EXTEND:
         if not isinstance(old, list) or not isinstance(new, list):
-            raise ConfigError("EXTEND behavior requires list field")
+            raise ConfigError("EXTEND behavior requires list field.")
 
         return old + new
     if update_strategy == UpdateStrategy.KEY_UPDATE:
         if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_UPDATE behavior requires dictionary field")
+            raise ConfigError("KEY_UPDATE behavior requires dictionary field.")
 
         combined = old.copy()
         combined.update(new)
         return combined
     if update_strategy == UpdateStrategy.KEY_EXTEND:
         if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ConfigError("KEY_EXTEND behavior requires dictionary field")
+            raise ConfigError("KEY_EXTEND behavior requires dictionary field.")
 
         combined = old.copy()
         for key, value in new.items():
             if not isinstance(value, list):
                 raise ConfigError(
-                    "KEY_EXTEND behavior requires list values in dictionary"
+                    "KEY_EXTEND behavior requires list values in dictionary."
                 )
 
             old_value = combined.get(key)
             if old_value:
                 if not isinstance(old_value, list):
                     raise ConfigError(
-                        "KEY_EXTEND behavior requires list values in dictionary"
+                        "KEY_EXTEND behavior requires list values in dictionary."
                     )
 
                 combined[key] = old_value + value
@@ -80,8 +81,21 @@ def update_field(
                 combined[key] = value
 
         return combined
+    if update_strategy == UpdateStrategy.NESTED_UPDATE:
+        if not isinstance(old, BaseConfig):
+            raise ConfigError(
+                f"NESTED_UPDATE behavior requires a config object. {type(old)} was given instead."
+            )
 
-    raise ConfigError(f"Unknown update strategy {update_strategy}")
+        if type(new) != type(old):
+            raise ConfigError(
+                "NESTED_UPDATE behavior requires both values to have the same type. "
+                f"{type(old)} and {type(new)} were given instead."
+            )
+
+        return old.update_with(new)
+
+    raise ConfigError(f"Unknown update strategy {update_strategy}.")
 
 
 class BaseConfig(PydanticModel):

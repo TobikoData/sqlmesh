@@ -8,6 +8,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
@@ -46,12 +47,14 @@ class Config(BaseConfig):
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
+    model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "connections": UpdateStrategy.KEY_UPDATE,
         "notification_targets": UpdateStrategy.EXTEND,
         "ignore_patterns": UpdateStrategy.EXTEND,
         "users": UpdateStrategy.EXTEND,
+        "model_defaults": UpdateStrategy.NESTED_UPDATE,
     }
 
     @validator("connections", always=True)
