@@ -4,9 +4,9 @@ import re
 import typing as t
 from pathlib import Path
 
-import sqlmesh.dbt.profile as p
-from sqlmesh.dbt.common import BaseConfig
+from sqlmesh.dbt.common import BaseConfig, project_config_path
 from sqlmesh.dbt.models import ModelConfig
+from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.sources import SourceConfig
 from sqlmesh.utils.errors import ConfigError
@@ -24,13 +24,11 @@ if t.TYPE_CHECKING:
 class ProjectConfig:
     """Configuration for a DBT project"""
 
-    DEFAULT_PROJECT_FILE = "dbt_project.yml"
-
     def __init__(
         self,
         project_root: Path,
         project_name: str,
-        profile: p.Profile,
+        profile: Profile,
         models: t.Dict[str, ModelConfig],
         sources: t.Dict[str, SourceConfig],
         seeds: t.Dict[str, SeedConfig],
@@ -55,17 +53,6 @@ class ProjectConfig:
         self.config_paths = config_paths
 
     @classmethod
-    def project_file(cls, project_root: t.Optional[Path] = None) -> Path:
-        project_root = project_root or Path()
-        project_config_path = Path(project_root, cls.DEFAULT_PROJECT_FILE)
-        if not project_config_path.exists():
-            raise ConfigError(
-                f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
-            )
-
-        return project_config_path
-
-    @classmethod
     def load(
         cls, project_root: t.Optional[Path] = None, target: t.Optional[str] = None
     ) -> ProjectConfig:
@@ -80,14 +67,14 @@ class ProjectConfig:
             ProjectConfig instance for the specified DBT project
         """
         project_root = project_root or Path()
-        project_file_path = cls.project_file(project_root)
+        project_file_path = project_config_path(project_root)
         project_yaml = yaml_load(project_file_path)
 
         project_name = project_yaml.get("name")
         if not project_name:
-            raise ConfigError(f"{cls.DEFAULT_PROJECT_FILE} must include project name")
+            raise ConfigError(f"{project_file_path.stem} must include project name")
 
-        profile = p.Profile.load(project_root, project_name)
+        profile = Profile.load(project_root, project_name)
         connection = (
             profile.connections[target]
             if target

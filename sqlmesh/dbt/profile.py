@@ -3,10 +3,9 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-import sqlmesh.dbt.project as p
-from sqlmesh.core.config import Config
+from sqlmesh.core.config.connection import ConnectionConfig
+from sqlmesh.dbt.common import project_config_path
 from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
-from sqlmesh.dbt.loader import DbtLoader
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -55,7 +54,7 @@ class Profile:
         project_root = project_root or Path()
 
         if not project_name:
-            project_file = p.ProjectConfig.project_file(project_root)
+            project_file = project_config_path(project_root)
             project_name = yaml.load(project_file).get("name")
             if not project_name:
                 raise ConfigError(f"{project_file.stem} must include project name")
@@ -105,15 +104,10 @@ class Profile:
 
         return (connections, default_target)
 
-    def to_sqlmesh(self) -> Config:
+    def to_sqlmesh(self) -> t.Dict[str, ConnectionConfig]:
         # Default target must be first
         targets = list(self.connections)
         targets.remove(self.default_target)
         targets.insert(0, self.default_target)
 
-        return Config(
-            connections={
-                target: self.connections[target].to_sqlmesh() for target in targets
-            },
-            loader=DbtLoader(),
-        )
+        return {target: self.connections[target].to_sqlmesh() for target in targets}

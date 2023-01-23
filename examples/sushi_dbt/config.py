@@ -1,3 +1,3 @@
-from sqlmesh.dbt.profile import Profile
+from sqlmesh.dbt.loader import sqlmesh_config
 
-config = Profile.load().to_sqlmesh()
+config = sqlmesh_config()

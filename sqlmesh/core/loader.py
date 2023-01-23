@@ -9,8 +9,8 @@ import typing as t
 from pathlib import Path
 
 from sqlglot.errors import SqlglotError
+from sqlglot.schema import MappingSchema
 
-import sqlmesh.core.context as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
 from sqlmesh.core.hooks import hook
@@ -19,7 +19,30 @@ from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import Context
+
+
+def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
+    schema = MappingSchema(dialect=dialect)
+    for name in dag.sorted():
+        model = models.get(name)
+
+        # External models don't exist in the context, so we need to skip them
+        if not model:
+            continue
+
+        if model.contains_star_query and any(
+            dep not in models for dep in model.depends_on
+        ):
+            raise SQLMeshError(
+                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+            )
+
+        model.update_schema(schema)
+        schema.add_table(name, model.columns_to_types)
 
 
 class Loader(abc.ABC):
@@ -30,7 +53,7 @@ class Loader(abc.ABC):
         self._dag: DAG[str] = DAG()
 
     @abc.abstractmethod
-    def load(self, context: c.Context) -> None:
+    def load(self, context: Context) -> None:
         """
         Loads all hooks, macros, and models in the context's path
 
@@ -45,7 +68,7 @@ class Loader(abc.ABC):
         models = self._load_models(macros)
         for model in models.values():
             self._add_model_to_dag(model)
-        c.update_model_schemas(self._context.dialect, self._dag, models)
+        update_model_schemas(self._context.dialect, self._dag, models)
 
         return (macros, models, self._dag)
 

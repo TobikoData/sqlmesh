@@ -20,6 +20,10 @@ DEFAULT_AIRFLOW_CONFIG = """scheduler:
     password: airflow
 """
 
+DEFAULT_DBT_CONFIG = """from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config()
+"""
 
 EXAMPLE_SCHEMA_NAME = "sqlmesh_example"
 EXAMPLE_FULL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.example_full_model"
