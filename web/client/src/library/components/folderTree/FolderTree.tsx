@@ -1,66 +1,56 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useApiFiles, type Directory, type File } from '../../../api';
+import { type Directory, type File } from '../../../api/endpoints';
 import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/20/solid'
 import { useContext, useState } from 'react';
-import Ide from '../../../context/Ide';
+import ContextIDE from '../../../context/Ide';
 import clsx from 'clsx';
 
 const CSS_ICON_SIZE = 'w-4 h-4';
 
-export function FolderTree() {
-  useQueryClient();
-
-  const { setFile, file, files } = useContext(Ide);
-
-  const { status, data } = useApiFiles();
-
-  if (status === 'loading') {
-    return <h3>Loading...</h3>;
-  }
-
-  if (status === 'error') {
-    return <h3>Error</h3>;
-  }
-
+export function FolderTree({ project }: { project: any }) {
+  const { setActiveFile, activeFile, openedFiles } = useContext(ContextIDE);
 
   return (
     <div className='py-4 px-2 overflow-hidden'>
-      {Boolean(data?.directories?.length) && (
+      {Boolean(project?.directories?.length) && (
         <Directories
-        directories={data.directories}
+          directories={project.directories}
           withIndent={false}
-          selectFile={setFile}
-          activeFile={file}
-          activeFiles={files}
+          selectFile={setActiveFile}
+          activeFile={activeFile}
+          activeFiles={openedFiles}
          />
       )}
-      {Boolean(data?.files?.length) && (
+      {Boolean(project?.files?.length) && (
         <Files
-          files={data.files}
-          selectFile={setFile}
-          activeFile={file}
-          activeFiles={files}
+          files={project.files}
+          selectFile={setActiveFile}
+          activeFile={activeFile}
+          activeFiles={openedFiles}
         />
       )}
     </div>
   );
 }
 
-interface PropsDirectories {
-  directories: Directory[];
-  withIndent: boolean;
-  selectFile?: (file: File) => void;
-  activeFile?: File;
+interface PropsArtifacts {
+  activeFile: File | null;
   activeFiles?: Set<File>;
+  selectFile: (file: File) => void;
 }
 
-interface PropsDirectory {
+interface PropsDirectories extends PropsArtifacts {
+  directories: Directory[];
+  withIndent: boolean;
+}
+
+interface PropsDirectory  extends PropsArtifacts {
   directory: Directory;
-  selectFile?: (file: File) => void;
-  activeFile?: File;
-  activeFiles?: Set<File>;
+}
+
+interface PropsFiles extends PropsArtifacts {
+  files: File[];
 }
 
 function Directories({ directories = [], withIndent = false, selectFile, activeFile, activeFiles }: PropsDirectories) {
@@ -132,30 +122,29 @@ function Directory({ directory, selectFile, activeFile, activeFiles }: PropsDire
   )
 }
 
-function Files(props: { files: File[], selectFile?: any, activeFile?: File, activeFiles?: Set<File>} 
-  = { files: [] }) {
+function Files({ files = [], activeFiles, activeFile, selectFile, }: PropsFiles) {
   return (
     <ul className='ml-4 mr-1 overflow-hidden'>
-      {props.files.map((f) => (
+      {files.map(file => (
         <li
-          key={f.path}
-          title={f.name}
-          onClick={() => f.is_supported && props.selectFile(f)}
+          key={file.path}
+          title={file.name}
+          onClick={() => file.is_supported && file !== activeFile && selectFile(file)}
         >
           <span className={clsx(
             'text-base whitespace-nowrap pb-1 group/file px-2 flex justify-between rounded-md',
-            f.path === props.activeFile?.path ? 'text-secondary-500' : 'text-gray-800',
-            f.is_supported && 'group cursor-pointer hover:bg-secondary-100',
+            file.path === activeFile?.path ? 'text-secondary-500' : 'text-gray-800',
+            file.is_supported && 'group cursor-pointer hover:bg-secondary-100',
           )}>
             <span className={clsx(
               'flex w-full items-center overflow-hidden overflow-ellipsis',
-              !f.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
+              !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
             )}>
-              {props.activeFiles?.has(f) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
-              {!props.activeFiles?.has(f) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+              {activeFiles?.has(file) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+              {!activeFiles?.has(file) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
 
               <span className='w-full overflow-hidden overflow-ellipsis group-hover:text-secondary-500'>
-                {f.name}
+                {file.name}
               </span>              
             </span>
 
