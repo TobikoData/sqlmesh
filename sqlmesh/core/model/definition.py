@@ -24,8 +24,8 @@ from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import parse_expression, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import ModelMeta
-from sqlmesh.core.model.renderer import QueryRenderer
 from sqlmesh.core.model.seed import Seed, create_seed
+from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
@@ -123,7 +123,6 @@ class _Model(ModelMeta, frozen=True):
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
-    _audit_query_renderers: t.Dict[str, QueryRenderer] = {}
 
     _expressions_validator = validator("expressions_", pre=True, allow_reuse=True)(
         parse_expression
@@ -233,41 +232,6 @@ class _Model(ModelMeta, frozen=True):
                 for name, column_type in self.columns_to_types.items()
             )
         ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]))
-
-    def render_audit_queries(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        is_dev: bool = False,
-        **kwargs: t.Any,
-    ) -> t.Generator[t.Tuple[Audit, exp.Subqueryable], None, None]:
-        """Renders this model's audit queries, expanding macros with provided kwargs.
-
-        Args:
-            start: The start datetime to render. Defaults to epoch start.
-            end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-            is_dev: Indicates whether the rendering happens in the development mode and temporary
-                tables / table clones should be used where applicable.
-            kwargs: Additional kwargs to pass to the renderer.
-
-        Returns:
-            The rendered expression.
-        """
-        for audit_name, audit in self.audits.items():
-            query = self._get_audit_query_renderer(audit_name).render(
-                start=start,
-                end=end,
-                latest=latest,
-                snapshots=snapshots,
-                is_dev=is_dev,
-                **kwargs,
-            )
-            yield audit, query
 
     def ctas_query(
         self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
@@ -400,12 +364,12 @@ class _Model(ModelMeta, frozen=True):
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
-        return [s for s in (self.expressions or []) if isinstance(s, d.MacroDef)]
+        return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
     @property
     def sql_statements(self) -> t.List[exp.Expression]:
         """All sql statements from the list of expressions."""
-        return [s for s in (self.expressions or []) if not isinstance(s, d.MacroDef)]
+        return [s for s in self.expressions if not isinstance(s, d.MacroDef)]
 
     @property
     def view_name(self) -> str:
@@ -467,28 +431,6 @@ class _Model(ModelMeta, frozen=True):
                 "Incremental by time range models must have a time_column field.",
                 self._path,
             )
-
-    def _get_audit_query_renderer(self, audit_name: str) -> QueryRenderer:
-        if audit_name not in self._audit_query_renderers:
-            audit = self.audits[audit_name]
-            self._audit_query_renderers[audit_name] = self._create_query_renderer(
-                audit.query, audit.dialect
-            )
-        return self._audit_query_renderers[audit_name]
-
-    def _create_query_renderer(
-        self, query: exp.Expression, dialect: str
-    ) -> QueryRenderer:
-        return QueryRenderer(
-            query,
-            dialect,
-            self.macro_definitions,
-            path=self._path,
-            python_env=self.python_env,
-            time_column=self.time_column,
-            time_converter=self.convert_to_time_column,
-            only_latest=self.kind.only_latest,
-        )
 
 
 class SqlModel(_Model):
@@ -601,8 +543,15 @@ class SqlModel(_Model):
     @property
     def _query_renderer(self) -> QueryRenderer:
         if self.__query_renderer is None:
-            self.__query_renderer = self._create_query_renderer(
-                self.query, self.dialect
+            self.__query_renderer = QueryRenderer(
+                self.query,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                python_env=self.python_env,
+                time_column=self.time_column,
+                time_converter=self.convert_to_time_column,
+                only_latest=self.kind.only_latest,
             )
         return self.__query_renderer
 

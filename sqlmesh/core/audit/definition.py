@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import pathlib
 import typing as t
+from pathlib import Path
 
 from pydantic import Field, validator
 from sqlglot import exp, maybe_parse
 
 from sqlmesh.core import dialect as d
-from sqlmesh.utils.errors import AuditConfigError
+from sqlmesh.core.renderer import QueryRenderer
+from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.errors import AuditConfigError, raise_config_error
 from sqlmesh.utils.pydantic import PydanticModel
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.snapshot import Snapshot
 
 
 class AuditMeta(PydanticModel):
@@ -47,11 +53,12 @@ class Audit(AuditMeta, frozen=True):
     """
 
     query: exp.Subqueryable
-    """The audit query."""
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
+
     _path: t.Optional[pathlib.Path] = None
+    __query_renderer: t.Optional[QueryRenderer] = None
 
     @validator("query", pre=True)
     def _parse_expression(cls, v: str) -> exp.Expression:
@@ -78,7 +85,7 @@ class Audit(AuditMeta, frozen=True):
         """
         if len(expressions) < 2:
             _raise_config_error(
-                "Incomplete audit definition, missing AUDIT and QUERY", path
+                "Incomplete audit definition, missing AUDIT or QUERY", path
             )
 
         meta, *statements, query = expressions
@@ -160,6 +167,60 @@ class Audit(AuditMeta, frozen=True):
             dialect=dialect,
         )
 
+    def render_query(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        is_dev: bool = False,
+        **kwargs: t.Any,
+    ) -> exp.Subqueryable:
+        """Renders the audit's query.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            snapshots: All snapshots (by model name) to use for mapping of physical locations.
+            audit_name: The name of audit if the query to render is for an audit.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered expression.
+        """
+        return self._query_renderer.render(
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            **kwargs,
+        )
+
+    @property
+    def expressions(self) -> t.List[exp.Expression]:
+        return self.expressions_ or []
+
+    @property
+    def macro_definitions(self) -> t.List[d.MacroDef]:
+        """All macro definitions from the list of expressions."""
+        return [s for s in self.expressions if isinstance(s, d.MacroDef)]
+
+    @property
+    def _query_renderer(self) -> QueryRenderer:
+        if self.__query_renderer is None:
+            self.__query_renderer = QueryRenderer(
+                self.query,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path or Path(),
+            )
+        return self.__query_renderer
+
 
 class AuditResult(PydanticModel):
     audit: Audit
@@ -171,4 +232,4 @@ class AuditResult(PydanticModel):
 
 
 def _raise_config_error(msg: str, path: pathlib.Path) -> None:
-    raise AuditConfigError(f"{msg}: '{path}'")
+    raise_config_error(msg, location=path, error_type=AuditConfigError)
