@@ -4,6 +4,7 @@ import os
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
 from sqlmesh.utils import sys_path
 from sqlmesh.utils.errors import ConfigError
@@ -89,7 +90,7 @@ def load_config_from_env() -> Config:
 
     for key, value in os.environ.items():
         key = key.lower()
-        if key.startswith("sqlmesh__"):
+        if key.startswith(f"{c.SQLMESH}__"):
             segments = key.split("__")[1:]
             if not segments or not segments[-1]:
                 raise ConfigError(f"Invalid SQLMesh configuration variable '{key}'.")
