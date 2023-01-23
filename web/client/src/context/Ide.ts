@@ -1,13 +1,16 @@
 import { createContext } from "react";
-import { type File } from '../api';
-interface IdeContext {
-  files?: Set<File>
-  file?: File
-  setFile?: (file: File) => void
+import { type File } from '../api/endpoints';
+
+interface IDE {
+  openedFiles: Set<File>
+  activeFile: File | null
+  setActiveFile: (file: File | null) => void
+  setOpenedFiles: (files: Set<File>) => void
 }
 
-const IdeContext = createContext<IdeContext>({
-  files: new Set()
-});
-
-export default IdeContext;
+export default createContext<IDE>({
+  openedFiles: new Set(),
+  activeFile: null,
+  setActiveFile: () => {},
+  setOpenedFiles: () => {}
+})
