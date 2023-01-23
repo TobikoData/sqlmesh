@@ -8,6 +8,7 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -169,3 +170,44 @@ class SeedKind(ModelKind):
         if isinstance(v, exp.Literal):
             return v.this
         return str(v)
+
+
+def _model_kind_validator(v: t.Any) -> ModelKind:
+    if isinstance(v, ModelKind):
+        return v
+
+    if isinstance(v, d.ModelKind):
+        name = v.this
+        props = {prop.name: prop.args.get("value") for prop in v.expressions}
+        klass: t.Type[ModelKind] = ModelKind
+        if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+            klass = IncrementalByTimeRangeKind
+        elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+            klass = IncrementalByUniqueKeyKind
+        elif name == ModelKindName.SEED:
+            klass = SeedKind
+        else:
+            props["name"] = ModelKindName(name)
+        return klass(**props)
+
+    if isinstance(v, dict):
+        if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+            klass = IncrementalByTimeRangeKind
+        elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+            klass = IncrementalByUniqueKeyKind
+        elif v.get("name") == ModelKindName.SEED:
+            klass = SeedKind
+        else:
+            klass = ModelKind
+        return klass(**v)
+
+    name = (v.name if isinstance(v, exp.Expression) else str(v)).lower()
+    try:
+        return ModelKind(name=ModelKindName(name))
+    except ValueError:
+        raise ConfigError(f"Invalid model kind '{name}'")
+
+
+model_kind_validator = validator("kind", pre=True, allow_reuse=True)(
+    _model_kind_validator
+)
