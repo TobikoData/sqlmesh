@@ -11,7 +11,8 @@ import clsx from "clsx";
 import { XCircleIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { EnumSize } from "../../../types/enum";
 import { Transition, Dialog, RadioGroup } from "@headlessui/react";
-import { useApiFileByPath, useMutationApiSaveFile, type File, useApiFiles } from '../../../api';
+import { useApiFileByPath, useMutationApiSaveFile, useApiFiles } from '../../../api';
+import { type File } from '../../../api/endpoints';
 import { useQueryClient } from "@tanstack/react-query";
 
 const plans = [

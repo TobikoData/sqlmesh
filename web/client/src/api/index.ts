@@ -1,39 +1,8 @@
-import { UseQueryResult, useQuery, useMutation, QueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, QueryClient } from "@tanstack/react-query";
+import { getFileByPath, getFiles, saveFileByPath } from "./endpoints";
 
-export type File = {
-  name: string
-  path: string
-  is_supported: boolean
-  content: string
-  extension: string
-};
 
-export type Directory = {
-  name: string
-  path: string
-  directories: Directory[]
-  files: File[]
-};
-
-type Payload = {
-  name: string,
-  directories: Directory[]
-  files: File[]
-}
-
-export async function getFiles(): Promise<Payload | null> {
-  return await (await fetch("/api/files")).json()
-}
-
-export async function getFileByPath(path: string): Promise<File | null> {
-  return await (await fetch(`/api/files/${path}`)).json()
-}
-
-export async function saveFileByPath({ path, body = '' }: any): Promise<void> {
-  await fetch(`/api/files/${path}`, { method: 'post', body })
-}
-
-export function useApiFileByPath(path?: string): UseQueryResult<File> {
+export function useApiFileByPath(path?: string) {
   return useQuery({
     queryKey: [`/api/files`, path],
     queryFn: path ? () => getFileByPath(path) : undefined,
@@ -41,7 +10,7 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
   });
 }
 
-export function useApiFiles(): UseQueryResult<Payload> {
+export function useApiFiles() {
   return useQuery({
     queryKey: ["/api/files"],
     queryFn: getFiles,
@@ -55,4 +24,4 @@ export function useMutationApiSaveFile(client: QueryClient) {
       await client.cancelQueries({ queryKey: [`/api/files`, path] })
     }
   })
-} 
+}
