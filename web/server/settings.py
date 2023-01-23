@@ -1,20 +1,22 @@
+import typing as t
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseSettings, Extra
+from pydantic import BaseSettings
 
 from sqlmesh.core.context import Context
 
 
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
+    _context: t.Optional[Context] = None
 
     class Config:
-        extra = Extra.allow
+        underscore_attrs_are_private = True
 
     @property
     def context(self) -> Context:
-        if not hasattr(self, "_context"):
+        if not self._context:
             self._context = Context(path=str(self.project_path))
         return self._context
 
