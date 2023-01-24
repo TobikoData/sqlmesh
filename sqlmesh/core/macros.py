@@ -89,17 +89,17 @@ class MacroEvaluator:
 
     Args:
         dialect: Dialect of the SQL to evaluate.
-        env: Python execution environment including global variables
+        python_env: Serialized Python environment.
     """
 
     def __init__(
-        self, dialect: str = "", env: t.Optional[t.Dict[str, Executable]] = None
+        self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
         self.env = {**ENV, "self": self}
-        self.python_env = env or {}
+        self.python_env = python_env or {}
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
@@ -239,18 +239,9 @@ class macro(registry_decorator):
 
     Args:
         name: A custom name for the macro, the default is the name of the function.
-        serialize: Whether or not to serialize this macro when used in a model, defaults to True.
     """
 
     registry_name = "macros"
-
-    def __init__(
-        self,
-        name: str = "",
-        serialize: bool = True,
-    ):
-        super().__init__(name)
-        self.serialize = serialize
 
 
 MacroRegistry = t.Dict[str, macro]
@@ -305,7 +296,7 @@ def norm_var_arg_lambda(
     return expressions, func
 
 
-@macro(serialize=False)
+@macro()
 def each(
     evaluator: MacroEvaluator,
     *args: t.Any,
@@ -327,7 +318,7 @@ def each(
     return [item for item in map(func, items) if item is not None]
 
 
-@macro("REDUCE", serialize=False)
+@macro("REDUCE")
 def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
     """Iterates through items applying provided function that takes two arguments
     cumulatively to the items of iterable items, from left to right, so as to reduce
@@ -352,7 +343,7 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
     return reduce(func, items)
 
 
-@macro("FILTER", serialize=False)
+@macro("FILTER")
 def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
     """Iterates through items, applying provided function to each item and removing
     all items where the function returns False
@@ -376,7 +367,7 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
     return list(filter(func, items))
 
 
-@macro("WITH", serialize=False)
+@macro("WITH")
 def with_(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -401,7 +392,7 @@ def with_(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def join(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -430,7 +421,7 @@ def join(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def where(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -455,7 +446,7 @@ def where(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def group_by(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -480,7 +471,7 @@ def group_by(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def having(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -505,7 +496,7 @@ def having(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def order_by(
     evaluator: MacroEvaluator,
     condition: exp.Condition,

@@ -33,6 +33,9 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
+HookCall = t.Tuple[str, t.Dict[str, str]]
+
+
 class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
@@ -46,9 +49,9 @@ class ModelMeta(PydanticModel):
     start: t.Optional[TimeLike]
     batch_size: t.Optional[int]
     storage_format: t.Optional[str]
-    partitioned_by_: t.Optional[t.List[str]] = Field(
-        default=None, alias="partitioned_by"
-    )
+    partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
+    pre: t.List[HookCall] = []
+    post: t.List[HookCall] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
@@ -57,12 +60,32 @@ class ModelMeta(PydanticModel):
 
     _model_kind_validator = model_kind_validator
 
-    @validator("partitioned_by_", pre=True)
+    @validator("partitioned_by_", "pre", "post", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
-        if isinstance(v, exp.Tuple):
-            return [i.name for i in v.expressions]
+        def extract(v: exp.Expression) -> str | t.Tuple[str, t.Dict[str, str]]:
+            kwargs = {}
+
+            if isinstance(v, exp.Anonymous):
+                func = v.name
+                args = v.expressions
+            elif isinstance(v, exp.Func):
+                func = v.sql_name()
+                args = list(v.args.values())
+            else:
+                return v.name
+
+            for arg in args:
+                if not isinstance(arg, exp.EQ):
+                    raise ConfigError(
+                        f"Function '{func}' must be called with kwargs like {func}(arg=value)"
+                    )
+                kwargs[arg.left.name] = arg.right.name
+            return (func, kwargs)
+
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return [extract(i) for i in v.expressions]
         if isinstance(v, exp.Expression):
-            return [v.name]
+            return [extract(v)]
         return v
 
     @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
@@ -148,7 +171,7 @@ class ModelMeta(PydanticModel):
     @property
     def partitioned_by(self) -> t.List[str]:
         time_column = [self.time_column.column] if self.time_column else []
-        return unique([*time_column, *(self.partitioned_by_ or [])])
+        return unique([*time_column, *self.partitioned_by_])
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

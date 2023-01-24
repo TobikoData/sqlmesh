@@ -370,7 +370,6 @@ def test_render():
                 time_column (a, 'yyyymmdd')
             ),
             dialect spark,
-            cron '@daily',
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,

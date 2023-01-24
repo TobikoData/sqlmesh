@@ -11,6 +11,7 @@ from enum import Enum
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot

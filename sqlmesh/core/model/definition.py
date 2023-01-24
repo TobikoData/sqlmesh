@@ -20,10 +20,11 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import PySparkDataFrame
+from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import parse_expression, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
-from sqlmesh.core.model.meta import ModelMeta
+from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils import UniqueKeyDict
@@ -56,6 +57,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
     ),
     "depends_on_": lambda value: exp.Tuple(expressions=value),
+    "pre": lambda value: exp.Tuple(expressions=value),
+    "post": lambda value: exp.Tuple(expressions=value),
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[
             exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
@@ -108,6 +111,8 @@ class _Model(ModelMeta, frozen=True):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         partitioned_by: The partition columns, only applicable in certain engines. (eg. (ds, hour))
+        pre: Pre-hooks to run before the model executes.
+        post: Post-hooks to run after the model executes.
         expressions: All of the expressions between the model definition and final query, used for setting certain variables or environments.
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
@@ -172,7 +177,7 @@ class _Model(ModelMeta, frozen=True):
         for field in ModelMeta.__fields__.values():
             field_value = getattr(self, field.name)
 
-            if field_value is not None:
+            if field_value != field.default:
                 if field.name == "description":
                     comment = field_value
                 elif field.name == "kind":
@@ -266,6 +271,69 @@ class _Model(ModelMeta, frozen=True):
             select.where("FALSE", copy=False)
 
         return query
+
+    def run_pre_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.pre, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def run_post_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.post, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def _run_hooks(
+        self,
+        hooks: t.List[HookCall],
+        *,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        env = prepare_env(self.python_env)
+        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
+        latest = to_datetime(latest or c.EPOCH_DS)
+
+        for hook, hook_kwargs in hooks:
+            env[hook](
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **{**kwargs, **hook_kwargs},
+            )
 
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema associated with this model.
@@ -721,6 +789,7 @@ def load_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -734,10 +803,12 @@ def load_model(
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
+        hooks: The custom registry of hooks. If not provided the default registry will be used.
+        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
+        kwargs: Additional kwargs to pass to the loader.
     """
     if not expressions:
         raise_config_error("Incomplete model definition, missing MODEL statement", path)
@@ -792,6 +863,7 @@ def load_model(
             module_path=module_path,
             time_column_format=time_column_format,
             macros=macros,
+            hooks=hooks,
             python_env=python_env,
             **meta_fields,
         )
@@ -826,6 +898,7 @@ def create_sql_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -842,7 +915,8 @@ def create_sql_model(
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
+        hooks: The custom registry of hooks. If not provided the default registry will be used.
+        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
@@ -857,7 +931,13 @@ def create_sql_model(
         raise_config_error("Query missing select statements", path)
 
     if not python_env:
-        python_env = _python_env(query, module_path, macros or macro.get_registry())
+        python_env = _python_env(
+            query,
+            _extract_hooks(kwargs),
+            module_path,
+            macros or macro.get_registry(),
+            hooks or hook.get_registry(),
+        )
 
     return _create_model(
         SqlModel,
@@ -1022,7 +1102,11 @@ def _find_tables(query: exp.Expression) -> t.Set[str]:
 
 
 def _python_env(
-    query: exp.Expression, module_path: Path, macros: MacroRegistry
+    query: exp.Expression,
+    hook_calls: t.List[HookCall],
+    module_path: Path,
+    macros: MacroRegistry,
+    hooks: HookRegistry,
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
 
@@ -1039,13 +1123,21 @@ def _python_env(
                 used_macros[name] = macros[name]
 
     for name, macro in used_macros.items():
-        if macro.serialize:
+        if not macro.func.__module__.startswith("sqlmesh."):
             build_env(
                 macro.func,
                 env=python_env,
                 name=name,
                 path=module_path,
             )
+
+    for hook, _ in hook_calls:
+        build_env(
+            hooks[hook].func,
+            env=python_env,
+            name=hook,
+            path=module_path,
+        )
 
     return serialize_env(python_env, path=module_path)
 
@@ -1091,3 +1183,9 @@ def _parse_depends_on(
                 )
 
     return depends_on
+
+
+def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
+    return (ModelMeta._value_or_tuple_validator(kwargs.get("pre")) or []) + (
+        ModelMeta._value_or_tuple_validator(kwargs.get("post")) or []
+    )

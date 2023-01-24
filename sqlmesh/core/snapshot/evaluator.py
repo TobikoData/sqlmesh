@@ -140,8 +140,18 @@ class SnapshotEvaluator:
 
         from sqlmesh.core.context import ExecutionContext
 
+        context = ExecutionContext(self.adapter, snapshots, is_dev)
+
+        model.run_pre_hooks(
+            context=context,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
+
         queries_or_dfs = model.render(
-            ExecutionContext(self.adapter, snapshots, is_dev),
+            context,
             start=start,
             end=end,
             latest=latest,
@@ -157,6 +167,14 @@ class SnapshotEvaluator:
                 if limit > 0:
                     return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetch_native_df(query.limit(limit))  # type: ignore
                 apply(query_or_df, index)
+
+            model.run_post_hooks(
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
             return None
 
     def promote(

@@ -99,6 +99,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "cron": "@daily",
                         "dialect": "",
                         "expressions": ["@DEF(key, " "'value')"],
+                        "pre": [],
+                        "post": [],
                         "kind": {
                             "name": "incremental_by_time_range",
                             "time_column": {"column": "ds"},

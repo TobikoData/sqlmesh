@@ -1,17 +1,21 @@
 import typing as t
+from datetime import datetime
 from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
-from sqlglot import parse_one
+from sqlglot import parse, parse_one
 
+from sqlmesh.core.context import ExecutionContext
 from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
     ModelKindName,
     SqlModel,
+    load_model,
 )
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
@@ -52,13 +56,37 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = SqlModel(
-        name="test_schema.test_model",
-        kind=IncrementalByTimeRangeKind(time_column="a"),
-        storage_format="parquet",
-        query=parse_one(
-            "SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"
+    payload = {"calls": 0}
+
+    @hook()
+    def x(
+        context: ExecutionContext,
+        start: datetime,
+        end: datetime,
+        latest: datetime,
+        **kwargs,
+    ) -> None:
+        payload = kwargs["payload"]
+        payload["calls"] += 1
+
+        if "y" in kwargs:
+            payload["y"] = kwargs["y"]
+
+    model = load_model(
+        parse(  # type: ignore
+            """
+        MODEL (
+            name test_schea.test_model,
+            kind INCREMENTAL_BY_TIME_RANGE (time_column a),
+            storage_format 'parquet',
+            pre x(),
+            post [x(), x(y='a')],
+        );
+
+        SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds
+        """
         ),
+        hooks=hook.get_registry(),
     )
 
     snapshot = make_snapshot(model, physical_schema="physical_schema")
@@ -70,8 +98,12 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         "2020-01-01",
         "2020-01-02",
         "2020-01-02",
+        payload=payload,
         snapshots={},
     )
+
+    assert payload["calls"] == 3
+    assert payload["y"] == "a"
 
     adapter_mock.create_schema.assert_has_calls(
         [
