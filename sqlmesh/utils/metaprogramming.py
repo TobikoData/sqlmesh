@@ -20,7 +20,7 @@ from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
-IGNORE_DECORATORS = {"macro", "model"}
+IGNORE_DECORATORS = {"hook", "macro", "model"}
 
 
 def _is_relative_to(
