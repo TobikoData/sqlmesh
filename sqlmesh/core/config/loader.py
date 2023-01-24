@@ -9,7 +9,7 @@ from sqlmesh.core.config.root import Config
 from sqlmesh.utils import sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
@@ -56,10 +56,7 @@ def load_config_from_paths(
 
 
 def load_config_from_yaml(path: Path) -> Config:
-    config_dict = yaml.load(path)
-    if config_dict is None:
-        raise ConfigError(f"Config file '{path}' can't be empty.")
-
+    config_dict = yaml_load(path)
     return Config.parse_obj(config_dict)
 
 

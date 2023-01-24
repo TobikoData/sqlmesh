@@ -12,7 +12,7 @@ from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.sources import SourceConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import capture_jinja
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
     C = t.TypeVar("C", bound=BaseConfig)
@@ -71,7 +71,7 @@ class ProjectConfig:
                 f"Could not find {cls.DEFAULT_PROJECT_FILE} for this project"
             )
 
-        project_yaml = yaml.load(project_config_path)
+        project_yaml = yaml_load(project_config_path)
 
         project_name = project_yaml.get("name")
         if not project_name:
@@ -124,7 +124,7 @@ class ProjectConfig:
             # Layer on configs in properties files
             for filepath in dirpath.glob("**/*.yml"):
                 scope = cls._scope_from_path(filepath, dirpath, project_name)
-                properties_yaml = yaml.load(filepath)
+                properties_yaml = yaml_load(filepath)
 
                 scoped_models = cls._load_config_section_from_properties(
                     properties_yaml, "models", scope, scoped_models
@@ -150,7 +150,7 @@ class ProjectConfig:
             # Layer on configs in properties files
             for filepath in dirpath.glob("**/*.yml"):
                 scope = cls._scope_from_path(filepath, dirpath, project_name)
-                properties_yaml = yaml.load(filepath)
+                properties_yaml = yaml_load(filepath)
 
                 scoped_seeds = cls._load_config_section_from_properties(
                     properties_yaml, "seeds", scope, scoped_seeds
