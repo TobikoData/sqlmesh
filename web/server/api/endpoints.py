@@ -47,7 +47,8 @@ def get_files(
                 ):
                     continue
 
-                relative_path = os.path.relpath(entry.path, settings.project_path)
+                relative_path = os.path.relpath(
+                    entry.path, settings.project_path)
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
@@ -114,3 +115,25 @@ async def delete_file(
         response.status_code = status.HTTP_204_NO_CONTENT
     except FileNotFoundError:
         raise HTTPException(status_code=404)
+
+
+@router.get("/plan")
+def get_plan(
+    settings: Settings = Depends(get_settings),
+) -> t.List[t.Dict[str, t.Any]]:
+    """Get the plan for a file."""
+
+    return {
+        "concurrent_tasks": settings.context.concurrent_tasks,
+        "models": settings.context.models,
+        "snapshots": settings.context.snapshots,
+        "tables": list(settings.context._model_tables.values()),
+        "engine_adapter": settings.context.engine_adapter.dialect,
+        "dialect": settings.context.dialect,
+        "path": settings.context.path,
+        "scheduler": settings.context.config.scheduler.type_,
+        "users": settings.context.config.users,
+        "time_column_format": settings.context.config.time_column_format,
+        "diff": settings.context.diff(),
+        "changes": None
+    }
