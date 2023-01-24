@@ -109,7 +109,7 @@ class ModelTest(unittest.TestCase):
                 table_name(
                     self.snapshot.physical_schema,
                     snapshot_id.name,
-                    snapshot_id.fingerprint,
+                    snapshot_id.identifier,
                 )
             )
             self.engine_adapter.create_view(

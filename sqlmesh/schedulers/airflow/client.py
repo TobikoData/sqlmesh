@@ -84,16 +84,16 @@ class AirflowClient:
         for xcom_entry in xcom_entries_response["xcom_entries"]:
             xcom_key = xcom_entry["key"]
             if xcom_key.startswith(common.SNAPSHOT_PAYLOAD_KEY_PREFIX):
-                name_fingerprint = xcom_key.replace(
+                name_identifier = xcom_key.replace(
                     f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__", ""
                 )
-                sep_index = name_fingerprint.rindex("__")
-                name = name_fingerprint[:sep_index]
-                fingerprint = name_fingerprint[sep_index + 2 :]
-                result.append(SnapshotId(name=name, fingerprint=fingerprint))
+                sep_index = name_identifier.rindex("__")
+                name = name_identifier[:sep_index]
+                identifier = name_identifier[sep_index + 2 :]
+                result.append(SnapshotId(name=name, identifier=identifier))
         return result
 
-    def get_snapshot_fingerprints_for_version(
+    def get_snapshot_identifiers_for_version(
         self, name: str, version: t.Optional[str] = None
     ) -> t.List[str]:
         if not version:
@@ -120,8 +120,8 @@ class AirflowClient:
     def get_environments(self) -> t.List[Environment]:
         raise NotImplementedError
 
-    def get_snapshot(self, name: str, fingerprint: str) -> t.Optional[Snapshot]:
-        xcom_key = common.snapshot_xcom_key_from_name_fingerprint(name, fingerprint)
+    def get_snapshot(self, name: str, identifier: str) -> t.Optional[Snapshot]:
+        xcom_key = common.snapshot_xcom_key_from_name_identifier(name, identifier)
         try:
             xcom_entry = self._get(f"{STATE_XCOM_PATH}/{xcom_key}")
             return Snapshot.parse_raw(xcom_entry["value"])

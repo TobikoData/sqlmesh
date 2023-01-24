@@ -316,7 +316,7 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
 
             task_id_prefix = (
-                f"snapshot_evaluator__{snapshot.name}__{snapshot.fingerprint}"
+                f"snapshot_evaluator__{snapshot.name}__{snapshot.identifier}"
             )
             tasks = [
                 self._create_snapshot_evaluator_operator(
@@ -330,10 +330,10 @@ class SnapshotDagGenerator:
                 for (start, end) in intervals_per_snapshot.intervals
             ]
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.fingerprint}__start"
+                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__start"
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.fingerprint}__end"
+                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__end"
             )
             if snapshot.is_incremental_by_unique_key_kind:
                 baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)

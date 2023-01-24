@@ -43,7 +43,7 @@ def test_get_snapshots(
         snapshot.snapshot_id: snapshot
     }
 
-    get_snapshot_mock.assert_called_once_with(snapshot.name, snapshot.fingerprint)
+    get_snapshot_mock.assert_called_once_with(snapshot.name, snapshot.identifier)
 
 
 def test_get_snapshots_with_same_version(
@@ -61,17 +61,21 @@ def test_get_snapshots_with_same_version(
     get_snapshot_mock.return_value = snapshot
 
     get_snapshot_for_version_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.client.AirflowClient.get_snapshot_fingerprints_for_version"
+        "sqlmesh.schedulers.airflow.client.AirflowClient.get_snapshot_identifiers_for_version"
     )
-    get_snapshot_for_version_mock.return_value = [snapshot.fingerprint]
+    get_snapshot_for_version_mock.return_value = [snapshot.fingerprint.to_identifier()]
 
     new_snapshot = make_snapshot(model, version="1")
-    new_snapshot.fingerprint = "new_fingerprint"
+    new_snapshot.fingerprint = snapshot.fingerprint.copy(
+        update={"data_hash": "new_snapshot"}
+    )
 
     state_reader = HttpStateReader(mock_file_cache, mock_airflow_client)
     assert state_reader.get_snapshots_with_same_version([new_snapshot]) == [snapshot]
 
-    get_snapshot_mock.assert_called_once_with(snapshot.name, snapshot.fingerprint)
+    get_snapshot_mock.assert_called_once_with(
+        snapshot.name, snapshot.fingerprint.to_identifier()
+    )
     get_snapshot_for_version_mock.assert_called_once_with(
         snapshot.name, version=snapshot.version
     )
@@ -99,7 +103,7 @@ def test_snapshots_exist(
 
     assert (
         state_reader.snapshots_exist(
-            [SnapshotId(name="test_name", fingerprint="test_fingerprint")]
+            [SnapshotId(name="test_name", identifier="test_identifier")]
         )
         == set()
     )

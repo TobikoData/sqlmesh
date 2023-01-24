@@ -10,6 +10,7 @@ theme = Theme(
         "removed": "red",
         "direct": "magenta",  # directly modified
         "indirect": "yellow",  # indirectly modified
+        "metadata": "cyan",  # metadata updated
     }
 )
 

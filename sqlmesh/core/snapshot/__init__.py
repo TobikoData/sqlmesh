@@ -4,6 +4,7 @@ from sqlmesh.core.snapshot.definition import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotDataVersion,
+    SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,

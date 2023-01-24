@@ -80,11 +80,11 @@ class PlanApplicationRequest(PydanticModel):
 
 
 def snapshot_xcom_key(snapshot: SnapshotIdLike) -> str:
-    return snapshot_xcom_key_from_name_fingerprint(snapshot.name, snapshot.fingerprint)
+    return snapshot_xcom_key_from_name_identifier(snapshot.name, snapshot.identifier)
 
 
-def snapshot_xcom_key_from_name_fingerprint(name: str, fingerprint: str) -> str:
-    return f"{SNAPSHOT_PAYLOAD_KEY_PREFIX}__{name}__{fingerprint}"
+def snapshot_xcom_key_from_name_identifier(name: str, identifier: str) -> str:
+    return f"{SNAPSHOT_PAYLOAD_KEY_PREFIX}__{name}__{identifier}"
 
 
 def snapshot_version_xcom_key(name: str, version: t.Optional[str] = None) -> str:
