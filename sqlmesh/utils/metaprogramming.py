@@ -151,6 +151,7 @@ def getsource(obj: t.Any) -> str:
                         raise OSError("lineno is out of bounds")
                     if pat.match(line):
                         break
+                    lnum = lnum - 1
                 return join_source(lnum)
     raise SQLMeshError(f"Cannot find source for {obj}")
 
