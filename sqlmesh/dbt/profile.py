@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 
 class Profile:
@@ -62,7 +62,8 @@ class Profile:
     def _read_profile(
         cls, path: Path, project: str, target: t.Optional[str]
     ) -> t.Dict[str, t.Any]:
-        contents = yaml.load(path)
+        contents = yaml_load(path)
+
         project_data = contents.get(project)
         if not project_data:
             raise ConfigError(f"Project '{project}' does not exist in profile")
