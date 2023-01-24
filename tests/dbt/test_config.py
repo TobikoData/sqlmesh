@@ -12,7 +12,7 @@ from sqlmesh.dbt.datawarehouse import (
 )
 from sqlmesh.dbt.models import Materialization, ModelConfig
 from sqlmesh.dbt.project import ProjectConfig
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
 def _test_warehouse_config(
     config_yaml: str, config_model: t.Type[DataWarehouseConfig], *params_path: str
 ):
-    config_dict = yaml.load(config_yaml)
+    config_dict = yaml_load(config_yaml)
     for path in params_path:
         config_dict = config_dict[path]
 

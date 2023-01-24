@@ -14,7 +14,7 @@ from sqlmesh.core.snapshot import Snapshot, table_name
 from sqlmesh.utils import unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 
 class ModelTestMetadata(PydanticModel):
@@ -186,12 +186,12 @@ def load_model_test_file(
         A list of ModelTestMetadata named tuples.
     """
     model_test_metadata = {}
-    with open(path) as f:
-        contents = yaml.load(f.read())
-        for test_name, value in contents.items():
-            model_test_metadata[test_name] = ModelTestMetadata(
-                path=path, test_name=test_name, body=value
-            )
+    contents = yaml_load(path)
+
+    for test_name, value in contents.items():
+        model_test_metadata[test_name] = ModelTestMetadata(
+            path=path, test_name=test_name, body=value
+        )
     return model_test_metadata
 
 
