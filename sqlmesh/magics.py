@@ -115,7 +115,7 @@ class SQLMeshMagics(Magics):
 
         model_test_metadatas = get_all_model_tests(
             self.context.test_directory_path,
-            ignore_patterns=self.context._ignore_patterns,
+            ignore_patterns=self.context.ignore_patterns,
         )
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in model_test_metadatas:

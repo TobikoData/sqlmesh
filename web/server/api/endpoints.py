@@ -6,7 +6,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server.models import Directory, File
 from web.server.settings import Settings, get_context, get_settings
@@ -25,8 +24,7 @@ def validate_path(
     except ValueError:
         raise HTTPException(status_code=404)
 
-    ignore_patterns = context._ignore_patterns if context else c.IGNORE_PATTERNS
-    if any(full_path.match(pattern) for pattern in ignore_patterns):
+    if any(full_path.match(pattern) for pattern in context.ignore_patterns):
         raise HTTPException(status_code=404)
 
     return path
@@ -48,10 +46,7 @@ def get_files(
                     entry.name == "__pycache__"
                     or entry.name.startswith(".")
                     or any(
-                        entry_path.match(pattern)
-                        for pattern in (
-                            context._ignore_patterns if context else c.IGNORE_PATTERNS
-                        )
+                        entry_path.match(pattern) for pattern in context.ignore_patterns
                     )
                 ):
                     continue
