@@ -1,5 +1,5 @@
-import { createContext } from "react";
-import { type File } from '../api/endpoints';
+import { createContext } from 'react'
+import { type File } from '../api/endpoints'
 
 interface IDE {
   openedFiles: Set<File>
@@ -12,5 +12,5 @@ export default createContext<IDE>({
   openedFiles: new Set(),
   activeFile: null,
   setActiveFile: () => {},
-  setOpenedFiles: () => {}
+  setOpenedFiles: () => {},
 })

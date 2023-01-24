@@ -5,3 +5,4 @@ WORKDIR /app
 COPY . .
 
 RUN npm install --no-optional ---no-audit --no-fund --no-package-lock
+RUN npm run format

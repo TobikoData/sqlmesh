@@ -6,14 +6,14 @@ export default function Example() {
   let [categories] = useState({
     Table: [],
     // DAG: [],
-    'Query Preview': []
+    'Query Preview': [],
   })
 
   return (
     <div className="h-full w-full bg-gray-800/5 sm:px-0 ">
       <Tab.Group>
         <Tab.List className="w-full whitespace-nowrap px-4 rounded-xl bg-blue-900/20 p-1 ">
-          <div className='w-full overflow-hidden overflow-x-auto'>
+          <div className="w-full overflow-hidden overflow-x-auto">
             {Object.keys(categories).map((category) => (
               <Tab
                 key={category}
@@ -39,21 +39,21 @@ export default function Example() {
             )}
           >
             Table
-         </Tab.Panel>
-         <Tab.Panel
+          </Tab.Panel>
+          <Tab.Panel
             className={clsx(
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
             )}
           >
             DAG
-         </Tab.Panel>
-         <Tab.Panel
+          </Tab.Panel>
+          <Tab.Panel
             className={clsx(
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
             )}
           >
             Query Preview
-         </Tab.Panel>              
+          </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>
     </div>

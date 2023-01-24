@@ -1,3 +1,3 @@
-type Size = typeof EnumSize[keyof typeof EnumSize]
+type Size = (typeof EnumSize)[keyof typeof EnumSize]
 type Subset<T, S extends T> = S
 type Path = string
