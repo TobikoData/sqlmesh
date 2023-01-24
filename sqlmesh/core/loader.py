@@ -163,7 +163,7 @@ class SqlMeshLoader(Loader):
                     )
                 model = load_model(
                     expressions,
-                    defaults=context.config.model_defaults.dict(),
+                    defaults=self._context.config.model_defaults.dict(),
                     macros=macros,
                     hooks=hooks,
                     path=Path(path).absolute(),

@@ -8,6 +8,7 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.utils.errors import ConfigError
 
 T = t.TypeVar("T", bound="BaseConfig")
 

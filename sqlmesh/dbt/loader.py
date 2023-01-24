@@ -15,7 +15,7 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 
     return Config(
         connections=Profile.load(project_root).to_sqlmesh(),
-        loader=DbtLoader(),
+        loader=DbtLoader,
     )
 
 

@@ -48,7 +48,7 @@ class Config(BaseConfig):
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
-    loader: Loader = SqlMeshLoader()
+    loader: t.Type[Loader] = SqlMeshLoader
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {

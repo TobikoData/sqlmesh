@@ -203,7 +203,7 @@ class Context(BaseContext):
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
-        loader: t.Optional[Loader] = None,
+        loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -259,7 +259,7 @@ class Context(BaseContext):
 
         self.users = self.config.users + (users or [])
 
-        self._loader = loader or self.config.loader or SqlMeshLoader()
+        self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
         if load:
             self.load()
