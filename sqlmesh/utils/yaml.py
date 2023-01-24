@@ -26,7 +26,7 @@ def load(source: str | Path, raise_if_empty: bool = True) -> t.OrderedDict:
     contents = yaml.load(yaml_env.from_string(source).render())
     if contents is None:
         if raise_if_empty:
-            raise SQLMeshError(f"YAML source '{source}'cant be empty.")
+            raise SQLMeshError(f"YAML source '{source}' can't be empty.")
         return OrderedDict()
 
     return contents
