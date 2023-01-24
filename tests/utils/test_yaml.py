@@ -35,7 +35,6 @@ def test_yaml() -> None:
     os.environ["__SQLMESH_TEST_ENV_USER__"] = "user"
     os.environ["__SQLMESH_TEST_ENV_PASSWORD__"] = "password"
 
-    print(yaml.dumps(yaml.load(contents)))
     assert expected_contents == yaml.dumps(yaml.load(contents))
 
     # Return the environment to its previous state
