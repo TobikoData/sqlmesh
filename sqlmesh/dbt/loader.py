@@ -20,10 +20,12 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 
 
 class DbtLoader(Loader):
-    def _load_macros(self) -> UniqueKeyDict:
-        return UniqueKeyDict("macros")
+    def _load_scripts(self) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+        return (UniqueKeyDict("macros"), UniqueKeyDict("hooks"))
 
-    def _load_models(self, macros: UniqueKeyDict) -> UniqueKeyDict:
+    def _load_models(
+        self, macros: UniqueKeyDict, hooks: UniqueKeyDict
+    ) -> UniqueKeyDict:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
         config = ProjectConfig.load(self._context.path, self._context.connection)
