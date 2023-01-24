@@ -9,17 +9,16 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server.models import Directory, File
-from web.server.settings import Settings, get_context_or_none, get_settings
+from web.server.settings import Settings, get_context, get_settings
 
 router = APIRouter()
 
 
 def validate_path(
     path: str,
-    context: t.Optional[Context] = Depends(get_context_or_none),
-    settings: Settings = Depends(get_settings),
+    context: Context = Depends(get_context),
 ) -> str:
-    resolved_path = settings.project_path.resolve()
+    resolved_path = context.path.resolve()
     full_path = (resolved_path / path).resolve()
     try:
         full_path.relative_to(resolved_path)
@@ -35,8 +34,7 @@ def validate_path(
 
 @router.get("/files")
 def get_files(
-    context: t.Optional[Context] = Depends(get_context_or_none),
-    settings: Settings = Depends(get_settings),
+    context: Context = Depends(get_context),
 ) -> Directory:
     """Get all project files."""
 
@@ -58,7 +56,7 @@ def get_files(
                 ):
                     continue
 
-                relative_path = os.path.relpath(entry.path, settings.project_path)
+                relative_path = os.path.relpath(entry.path, context.path)
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
@@ -75,9 +73,9 @@ def get_files(
             files, key=lambda x: x.name
         )
 
-    directories, files = walk_path(settings.project_path)
+    directories, files = walk_path(context.path)
     return Directory(
-        name=os.path.basename(settings.project_path),
+        name=os.path.basename(context.path),
         path="",
         directories=directories,
         files=files,
