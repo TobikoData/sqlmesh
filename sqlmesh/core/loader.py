@@ -14,7 +14,7 @@ import sqlmesh.core.context as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, load_model
+from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
@@ -123,6 +123,10 @@ class SqlMeshLoader(Loader):
                     time_column_format=context.config.time_column_format,
                 )
                 models[model.name] = model
+
+                if isinstance(model, SeedModel):
+                    seed_path = model.seed_path
+                    self._path_mtimes[seed_path] = seed_path.stat().st_mtime
 
         return models
 

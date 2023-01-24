@@ -4,6 +4,7 @@ import ast
 import sys
 import types
 import typing as t
+from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
 
@@ -161,7 +162,7 @@ class _Model(ModelMeta, frozen=True):
             **kwargs,
         )
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
+    def render_definition(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
@@ -307,8 +308,8 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A unified text diff showing additions and deletions.
         """
-        meta_a, *statements_a, query_a = self.render_definition(show_python=True)
-        meta_b, *statements_b, query_b = other.render_definition(show_python=True)
+        meta_a, *statements_a, query_a = self.render_definition()
+        meta_b, *statements_b, query_b = other.render_definition()
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),
@@ -527,8 +528,8 @@ class SqlModel(_Model):
             **kwargs,
         )
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
-        result = super().render_definition(show_python=show_python)
+    def render_definition(self) -> t.List[exp.Expression]:
+        result = super().render_definition()
         result.append(self.query)
         return result
 
@@ -631,6 +632,27 @@ class SeedModel(_Model):
     ) -> t.Generator[QueryOrDF, None, None]:
         yield from self.seed.read(batch_size=self.kind.batch_size)
 
+    def render_definition(self) -> t.List[exp.Expression]:
+        result = super().render_definition()
+        result.append(exp.Literal.string(self.seed.content))
+        return result
+
+    def text_diff(self, other: Model) -> str:
+        if not isinstance(other, SeedModel):
+            return super().text_diff(other)
+
+        meta_a = self.render_definition()[0]
+        meta_b = other.render_definition()[0]
+        return "\n".join(
+            (
+                d.text_diff(meta_a, meta_b, self.dialect),
+                *unified_diff(
+                    self.seed.content.split("\n"),
+                    other.seed.content.split("\n"),
+                ),
+            )
+        ).strip()
+
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         if self.columns_to_types_ is not None:
@@ -640,6 +662,13 @@ class SeedModel(_Model):
     @property
     def is_seed(self) -> bool:
         return True
+
+    @property
+    def seed_path(self) -> Path:
+        seed_path = Path(self.kind.path)
+        if not seed_path.is_absolute():
+            return self._path.parent / seed_path
+        return seed_path
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
@@ -711,8 +740,8 @@ class PythonModel(_Model):
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
-        result = super().render_definition(show_python=show_python)
+    def render_definition(self) -> t.List[exp.Expression]:
+        result = super().render_definition()
 
         python_env = d.PythonCode(
             expressions=[
