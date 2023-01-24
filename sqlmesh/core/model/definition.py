@@ -196,7 +196,18 @@ class _Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
 
-        return [model, *self.expressions]
+        python_env = d.PythonCode(
+            expressions=[
+                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+                for k, v in self.sorted_python_env
+            ]
+        )
+
+        return [
+            model,
+            *self.expressions,
+            *([python_env] if python_env.expressions else []),
+        ]
 
     def render_query(
         self,
@@ -739,21 +750,6 @@ class PythonModel(_Model):
         except Exception as e:
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
-
-    def render_definition(self) -> t.List[exp.Expression]:
-        result = super().render_definition()
-
-        python_env = d.PythonCode(
-            expressions=[
-                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                for k, v in self.sorted_python_env
-            ]
-        )
-
-        if python_env.expressions:
-            result.append(python_env)
-
-        return result
 
     @property
     def is_python(self) -> bool:
