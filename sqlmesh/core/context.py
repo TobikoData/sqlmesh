@@ -384,7 +384,7 @@ class Context(BaseContext):
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._hooks, self._macros, self._models, self.dag = self._loader.load(self)
+            self._loader.load(self)
         return self
 
     def run(

@@ -30,16 +30,12 @@ class Loader(abc.ABC):
         self._dag: DAG[str] = DAG()
 
     @abc.abstractmethod
-    def load(
-        self, context: c.Context
-    ) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, UniqueKeyDict, DAG]:
+    def load(self, context: c.Context) -> None:
         """
         Loads all hooks, macros, and models in the context's path
 
         Args:
             context: The context to load macros and models for
-        Returns:
-            A tuple containing a dict of loaded macros, adict of loaded models, and the dag
         """
 
     def reload_needed(self) -> bool:
@@ -63,13 +59,14 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def load(
-        self, context: c.Context
-    ) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, UniqueKeyDict, DAG]:
+    def load(self, context: c.Context) -> None:
         self._path_mtimes.clear()
         self._dag = DAG()
         hooks, macros = self._load_scripts(context)
-        return (hooks, macros, self._load_models(context, macros, hooks), self._dag)
+        context._hooks = hooks
+        context._macros = macros
+        context._models = self._load_models(context, macros, hooks)
+        context.dag = self._dag
 
     def _load_scripts(
         self, context: c.Context

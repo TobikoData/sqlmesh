@@ -272,7 +272,47 @@ class _Model(ModelMeta, frozen=True):
 
         return query
 
-    def run_hooks(
+    def run_pre_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.pre, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def run_post_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.post, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def _run_hooks(
         self,
         hooks: t.List[HookCall],
         *,
@@ -282,18 +322,17 @@ class _Model(ModelMeta, frozen=True):
         latest: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        """Runs all passed in hooks.
-
-        Args:
-            hooks: A list of hook calls.
-        """
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
         latest = to_datetime(latest or c.EPOCH_DS)
 
         for hook, hook_kwargs in hooks:
             env[hook](
-                context=context, start=start, end=end, latest=latest, **hook_kwargs
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **{**kwargs, **hook_kwargs},
             )
 
     def update_schema(self, schema: MappingSchema) -> None:
@@ -769,6 +808,7 @@ def load_model(
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
+        kwargs: Additional kwargs to pass to the loader.
     """
     if not expressions:
         raise_config_error("Incomplete model definition, missing MODEL statement", path)
@@ -893,8 +933,7 @@ def create_sql_model(
     if not python_env:
         python_env = _python_env(
             query,
-            (ModelMeta._value_or_tuple_validator(kwargs.get("pre")) or [])
-            + (ModelMeta._value_or_tuple_validator(kwargs.get("post")) or []),
+            _extract_hooks(kwargs),
             module_path,
             macros or macro.get_registry(),
             hooks or hook.get_registry(),
@@ -1144,3 +1183,9 @@ def _parse_depends_on(
                 )
 
     return depends_on
+
+
+def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
+    return (ModelMeta._value_or_tuple_validator(kwargs.get("pre")) or []) + (
+        ModelMeta._value_or_tuple_validator(kwargs.get("post")) or []
+    )
