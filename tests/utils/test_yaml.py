@@ -1,6 +1,9 @@
 import os
 
+import pytest
+
 import sqlmesh.utils.yaml as yaml
+from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_yaml() -> None:
@@ -38,3 +41,7 @@ def test_yaml() -> None:
     # Return the environment to its previous state
     del os.environ["__SQLMESH_TEST_ENV_USER__"]
     del os.environ["__SQLMESH_TEST_ENV_PASSWORD__"]
+
+    with pytest.raises(SQLMeshError) as ex:
+        yaml.load("")
+    assert "YAML source can't be empty." in str(ex.value)
