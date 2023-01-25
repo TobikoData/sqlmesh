@@ -1,6 +1,6 @@
 from sqlglot import expressions as exp
 
-from sqlmesh.core.macros import macro, MacroEvaluator
+from sqlmesh.core.macros import MacroEvaluator, macro
 
 
 @macro()

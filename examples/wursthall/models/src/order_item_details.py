@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 from faker import Faker
 
-from examples.wursthall.models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed
+from examples.wursthall.models.src.shared import (
+    DATA_START_DATE_STR,
+    iter_dates,
+    set_seed,
+)
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
 from sqlmesh.utils.date import to_ds
@@ -44,7 +48,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> pd.DataFrame:
     customer_details_table_name = context.table("src.customer_details")
     menu_item_details_table_name = context.table("src.menu_item_details")

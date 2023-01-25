@@ -1,11 +1,16 @@
 import random
+import typing as t
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pandas as pd
 from faker import Faker
 
-from examples.wursthall.models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed
+from examples.wursthall.models.src.shared import (
+    DATA_START_DATE_STR,
+    iter_dates,
+    set_seed,
+)
 from sqlmesh import model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
 
@@ -38,7 +43,7 @@ class CustomerDetails:
 def execute(
     start: datetime,
     end: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> pd.DataFrame:
     customer_details = []
     for register_date in iter_dates(start, end):

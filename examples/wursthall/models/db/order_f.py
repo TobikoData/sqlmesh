@@ -37,7 +37,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> pd.DataFrame:
 
     item_d_table_name = context.table("db.item_d")
@@ -99,5 +99,4 @@ def execute(
         df_order_item_f.loc[i, "num_guests"] = np.random.choice(
             range(1, 10), p=[0.1, 0.2, 0.3, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
         )
-
     return df_order_item_f[list(COLUMN_TO_TYPE)]
