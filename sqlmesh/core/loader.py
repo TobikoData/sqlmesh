@@ -26,7 +26,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
-def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
+def update_model_schemas(
+    dialect: str, dag: DAG[str], models: UniqueKeyDict[str, Model]
+) -> None:
     schema = MappingSchema(dialect=dialect)
     for name in dag.sorted():
         model = models.get(name)
@@ -46,11 +48,11 @@ def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
         schema.add_table(name, model.columns_to_types)
 
 
-class LoadedData(PydanticModel):
-    macros: UniqueKeyDict
-    hooks: UniqueKeyDict
-    models: UniqueKeyDict
-    dag: DAG
+class LoadedProject(PydanticModel):
+    macros: UniqueKeyDict[str, macro]
+    hooks: UniqueKeyDict[str, hook]
+    models: UniqueKeyDict[str, Model]
+    dag: DAG[str]
 
 
 class Loader(abc.ABC):
@@ -60,7 +62,7 @@ class Loader(abc.ABC):
         self._path_mtimes: t.Dict[Path, float] = {}
         self._dag: DAG[str] = DAG()
 
-    def load(self, context: Context) -> LoadedData:
+    def load(self, context: Context) -> LoadedProject:
         """
         Loads all hooks, macros, and models in the context's path
 
@@ -77,7 +79,7 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
         update_model_schemas(self._context.dialect, self._dag, models)
 
-        return LoadedData(hooks=hooks, macros=macros, models=models, dag=self._dag)
+        return LoadedProject(hooks=hooks, macros=macros, models=models, dag=self._dag)
 
     def reload_needed(self) -> bool:
         """
@@ -93,13 +95,13 @@ class Loader(abc.ABC):
         )
 
     @abc.abstractmethod
-    def _load_scripts(self) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+    def _load_scripts(self) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
         """Loads all user defined hooks and macros."""
 
     @abc.abstractmethod
     def _load_models(
-        self, macros: UniqueKeyDict, hooks: UniqueKeyDict
-    ) -> UniqueKeyDict:
+        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+    ) -> UniqueKeyDict[str, Model]:
         """Loads all user models"""
 
     def _add_model_to_dag(self, model: Model) -> None:
@@ -110,7 +112,7 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def _load_scripts(self) -> t.Tuple[UniqueKeyDict, UniqueKeyDict]:
+    def _load_scripts(self) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
         """Loads all user defined hooks and macros."""
         # Store a copy of the macro registry
         standard_hooks = hook.get_registry()
@@ -131,8 +133,8 @@ class SqlMeshLoader(Loader):
         return hooks, macros
 
     def _load_models(
-        self, macros: UniqueKeyDict, hooks: UniqueKeyDict
-    ) -> UniqueKeyDict:
+        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+    ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
@@ -144,8 +146,8 @@ class SqlMeshLoader(Loader):
         return models
 
     def _load_sql_models(
-        self, macros: UniqueKeyDict, hooks: UniqueKeyDict
-    ) -> UniqueKeyDict:
+        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+    ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
         for path in self._context.glob_path(
@@ -179,7 +181,7 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_python_models(self) -> UniqueKeyDict:
+    def _load_python_models(self) -> UniqueKeyDict[str, Model]:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
         registry = model_registry.registry()
@@ -203,7 +205,7 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_model_audits(self, models: UniqueKeyDict) -> None:
+    def _load_model_audits(self, models: UniqueKeyDict[str, Model]) -> None:
         """Loads all the model audits and adds them to the associated model"""
         for path in self._context.glob_path(
             self._context.audits_directory_path, ".sql"
