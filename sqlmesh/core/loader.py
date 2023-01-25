@@ -7,6 +7,7 @@ import sys
 import types
 import typing as t
 from pathlib import Path
+from dataclasses import dataclass
 
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
@@ -48,7 +49,8 @@ def update_model_schemas(
         schema.add_table(name, model.columns_to_types)
 
 
-class LoadedProject(PydanticModel):
+@dataclass
+class LoadedProject:
     macros: UniqueKeyDict[str, macro]
     hooks: UniqueKeyDict[str, hook]
     models: UniqueKeyDict[str, Model]
@@ -79,7 +81,8 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
         update_model_schemas(self._context.dialect, self._dag, models)
 
-        return LoadedProject(hooks=hooks, macros=macros, models=models, dag=self._dag)
+        project = LoadedProject(hooks=hooks, macros=macros, models=models, dag=self._dag)
+        return project
 
     def reload_needed(self) -> bool:
         """
@@ -95,7 +98,9 @@ class Loader(abc.ABC):
         )
 
     @abc.abstractmethod
-    def _load_scripts(self) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    def _load_scripts(
+        self,
+    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
         """Loads all user defined hooks and macros."""
 
     @abc.abstractmethod
@@ -112,7 +117,9 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def _load_scripts(self) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    def _load_scripts(
+        self,
+    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
         """Loads all user defined hooks and macros."""
         # Store a copy of the macro registry
         standard_hooks = hook.get_registry()
