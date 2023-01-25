@@ -3,6 +3,8 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core.config.connection import ConnectionConfig
+from sqlmesh.dbt.common import project_config_path
 from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
@@ -15,35 +17,54 @@ class Profile:
 
     PROFILE_FILE = "profiles.yml"
 
-    def __init__(self, datawarehouse_config: DataWarehouseConfig):
+    def __init__(
+        self,
+        path: Path,
+        connections: t.Dict[str, DataWarehouseConfig],
+        default_target: str,
+    ):
         """
         Args:
+            path: Path to the profile file
+            dataware_config
             datwarehouse_config: The data warehouse configuration for the project's target
         """
-        self.datawarehouse_config = datawarehouse_config
+        self.path = path
+        self.connections = connections
+        self.default_target = default_target
 
     @classmethod
     def load(
-        cls, project_root: Path, project_name: str, *, target: t.Optional[str] = None
+        cls,
+        project_root: t.Optional[Path] = None,
+        project_name: t.Optional[str] = None,
     ) -> Profile:
         """
         Loads the profile for the specified project
 
         Args:
-            project_root: Path to the root of the DBT project
-            project_name: Name of the DBT project specified in the project yaml
-            target: The project's profile target to load. If not specified,
-                    the target defined in the project's profile will be used.
+            project_root: Path to the root of the DBT project. If not specified,
+                          the current directory is used.
+            project_name: Name of the DBT project from the project yaml file. If not
+                          specified, the name is read from the project yaml file.
 
         Returns:
-            The profile configuration for the specified project and target
+            The profile connection configurations for the specified project and the profile's default target
         """
+        project_root = project_root or Path()
+
+        if not project_name:
+            project_file = project_config_path(project_root)
+            project_name = yaml_load(project_file).get("name")
+            if not project_name:
+                raise ConfigError(f"{project_file.stem} must include project name")
+
         profile_filepath = cls._find_profile(project_root)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found")
 
-        profile_data = cls._read_profile(profile_filepath, project_name, target)
-        return Profile(DataWarehouseConfig.load(profile_data))
+        connections, default_target = cls._read_profile(profile_filepath, project_name)
+        return Profile(profile_filepath, connections, default_target)
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
@@ -60,27 +81,31 @@ class Profile:
 
     @classmethod
     def _read_profile(
-        cls, path: Path, project: str, target: t.Optional[str]
-    ) -> t.Dict[str, t.Any]:
+        cls, path: Path, project: str
+    ) -> t.Tuple[t.Dict[str, DataWarehouseConfig], str]:
         contents = yaml_load(path)
 
         project_data = contents.get(project)
         if not project_data:
-            raise ConfigError(f"Project '{project}' does not exist in profile")
+            raise ConfigError(f"Project '{project}' does not exist in profiles")
 
-        if not target:
-            target = project_data.get("target")
-            if not target:
-                raise ConfigError(
-                    f"No targets found in profile for Project '{project}'"
-                )
+        outputs = project_data.get("outputs")
+        if not outputs:
+            raise ConfigError(f"No outputs exist in profiles for Project '{project}'")
 
-        profile_data = project_data.get("outputs")
-        if profile_data:
-            profile_data = profile_data.get(target)
-        if not profile_data:
+        connections = {
+            name: DataWarehouseConfig.load(output) for name, output in outputs.items()
+        }
+        default_target = project_data.get("target")
+        if default_target not in connections:
             raise ConfigError(
-                f"Target '{target}' does not exist in profile for Project '{project}'"
+                f"Default target '#{default_target}' not specified in profiles for Project '{project}'"
             )
 
-        return profile_data
+        return (connections, default_target)
+
+    def to_sqlmesh(self) -> t.Dict[str, ConnectionConfig]:
+        return {
+            target: connection.to_sqlmesh()
+            for target, connection in self.connections.items()
+        }

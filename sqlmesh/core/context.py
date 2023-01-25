@@ -42,7 +42,6 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
@@ -53,7 +52,7 @@ from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
@@ -70,12 +69,7 @@ from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
-from sqlmesh.utils.errors import (
-    ConfigError,
-    MissingDependencyError,
-    PlanError,
-    SQLMeshError,
-)
+from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache
 
 if t.TYPE_CHECKING:
@@ -209,7 +203,7 @@ class Context(BaseContext):
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
-        loader: t.Optional[Loader] = None,
+        loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -235,6 +229,7 @@ class Context(BaseContext):
         self._macros: UniqueKeyDict = UniqueKeyDict("macros")
         self._hooks: UniqueKeyDict = UniqueKeyDict("hooks")
 
+        self.connection = connection
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = (
@@ -264,7 +259,7 @@ class Context(BaseContext):
 
         self.users = self.config.users + (users or [])
 
-        self._loader = loader or SqlMeshLoader()
+        self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
         if load:
             self.load()
@@ -392,7 +387,12 @@ class Context(BaseContext):
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._loader.load(self)
+            project = self._loader.load(self)
+            self._hooks = project.hooks
+            self._macros = project.macros
+            self._models = project.models
+            self.dag = project.dag
+
         return self
 
     def run(
@@ -869,23 +869,3 @@ class Context(BaseContext):
         self.dag.graph[model.name] = set()
 
         self.dag.add(model.name, model.depends_on)
-
-
-def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
-    schema = MappingSchema(dialect=dialect)
-    for name in dag.sorted():
-        model = models.get(name)
-
-        # External models don't exist in the context, so we need to skip them
-        if not model:
-            continue
-
-        if model.contains_star_query and any(
-            dep not in models for dep in model.depends_on
-        ):
-            raise SQLMeshError(
-                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
-            )
-
-        model.update_schema(schema)
-        schema.add_table(name, model.columns_to_types)
