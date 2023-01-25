@@ -120,7 +120,7 @@ async def delete_file(
 @router.get("/context")
 def get_context(
     settings: Settings = Depends(get_settings),
-) -> t.List[t.Dict[str, t.Any]]:
+) -> t.Dict[str, t.Any]:
     """Get the context"""
 
     return {
@@ -136,13 +136,11 @@ def get_context(
 
 
 @router.get("/context/{environment:path}")
-def get_context_by_enviroment(
+def get_context_by_environment(
     environment: str = "",
     settings: Settings = Depends(get_settings),
-) -> t.List[t.Dict[str, t.Any]]:
+) -> t.Dict[str, t.Any]:
     """Get the context for a environment."""
-
-    settings.context.refresh()
 
     plan = settings.context.plan(environment=environment, no_prompts=True)
     backfills = map(
@@ -150,10 +148,9 @@ def get_context_by_enviroment(
                    ), plan.missing_intervals
     )
     payload = {
-        "restatements": plan.restatements,
         "environment": plan.environment.name,
         "backfills": list(backfills),
-    }
+    }  # type: t.Dict[str, t.Any]
 
     if plan.context_diff.has_differences:
         payload["changes"] = {
