@@ -6,6 +6,7 @@ import { useApiContextByEnvironment } from "../../../api";
 import { EnumSize } from "../../../types/enum";
 import { Button } from "../button/Button";
 import { Divider } from "../divider/Divider";
+import { Progress } from "../progress/Progress";
 
 const strategies = [
   {
@@ -29,6 +30,8 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
   const [shouldShowBackfill, setShouldShowBackfill] = useState(true)
   const [selected, setSelected] = useState(strategies[0])
   const [environment, setEnvironment] = useState<string>()
+  const [backfillStatus, setBackfillStatus] = useState(false)
+  const [backfillTasks, setBackfillTasks] = useState<Array<[string, number]>>([])
 
   const { data: context } = useApiContextByEnvironment(environment)
 
@@ -50,6 +53,16 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
     setEnvironment(String(data.get('environment')))
 
     elForm.reset()
+  }
+
+  function backfill() {
+    context?.backfills && setBackfillTasks(context?.backfills.map(([name]) => [name, Math.round(Math.random() * 40)]))
+
+    setTimeout(() => {
+      setBackfillStatus(true)
+    }, 200)
+
+    setShouldShowBackfill(Boolean(selected == null))
   }
 
   return (
@@ -77,7 +90,7 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
       </PlanWizardStep>
       <PlanWizardStep step={2} title='Review Models' disabled={context?.environment == null}>
         <div className='ml-4 mb-4'>
-          {context?.changes.added && (
+          {context?.changes?.added && (
             <>
               <h4 className='text-success-500'>Added Models</h4>
               <ul className='ml-4'>
@@ -88,26 +101,50 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
             </>
           )}
         </div>
-        {context?.backfills && shouldShowBackfill && (
+        {context?.backfills && (
           <div className='ml-4 mb-4 p-8 bg-secondary-100 rounded-lg overflow-hidden'>
+            {shouldShowBackfill ? (
+              <>
+                <h4 className='text-gray-700'>Models needing backfill (missing dates):</h4>
+                <ul className='ml-4'>
+                  {context?.backfills.map(([modelName, dates]) => (
+                    <li key={modelName} className='text-gray-600 font-light'>
+                      <p>{modelName}: <b><small>{dates}</small></b></p>
+                    </li>
+                  ))}
+                </ul>
+                <PlanDates refDates={elFormBackfillDates} prefix='Backfill' />
+                <div className='flex justify-end mt-4'>
+                  <Button size={EnumSize.sm} onClick={backfill}>
+                    Backfill
+                  </Button>
+                  <Button size={EnumSize.sm} variant='alternative' onClick={() => setShouldShowBackfill(Boolean(selected == null))}>
+                    Skip
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div>
+                <h4 className='text-gray-700 mb-4'>Backfilling Models</h4>
+                <ul>
+                  {backfillTasks?.map(([name, count]) => (
+                    <li key={name} className="mb-4">
+                      <p className="flex justify-between">
+                        <small>{name}</small>
+                        <small>{count} batch{count < 1 || count > 1 ? 'es' : ''}</small>
+                      </p>
 
-            <h4 className='text-gray-700'>Models needing backfill (missing dates):</h4>
-            <ul className='ml-4'>
-              {context?.backfills.map(([modelName, dates]) => (
-                <li key={modelName} className='text-gray-600 font-light'>
-                  <p>{modelName}: <b><small>{dates}</small></b></p>
-                </li>
-              ))}
-            </ul>
-            <PlanDates ref={elFormBackfillDates} prefix='Backfill' />
-            <div className='flex justify-end mt-4'>
-              <Button size={EnumSize.sm} onClick={() => setShouldShowBackfill(Boolean(selected == null))}>
-                Backfill
-              </Button>
-              <Button size={EnumSize.sm} variant='alternative' onClick={() => setShouldShowBackfill(Boolean(selected == null))}>
-                Skip
-              </Button>
-            </div>
+                      {/* Fake Progress for now. Remove once API works */}
+                      <Progress
+                        progress={backfillStatus ? 100 : 2}
+                        delay={Math.round(Math.random() * 1000)}
+                        duration={Math.round(Math.random() * 1000)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </PlanWizardStep>
@@ -167,7 +204,7 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
         </RadioGroup>
       </PlanWizardStep>
       <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
-        <PlanDates ref={elFormOverrideDates} />
+        <PlanDates refDates={elFormOverrideDates} />
       </PlanWizardStep>
     </ul >
   )
@@ -194,12 +231,12 @@ function PlanWizardStepHeader({ disabled = false, step = 1, children = '' }: any
   )
 }
 
-function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', ref }: { prefix?: string, hint?: string, ref: React.RefObject<HTMLFormElement> }) {
+function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement> }) {
   const labelStartDate = `${prefix} Start Date (Optional)`.trim()
   const labelEndDate = `${prefix} End Date (Optional)`.trim()
 
   return (
-    <form ref={ref} className='flex mt-4'>
+    <form ref={refDates} className='flex mt-4'>
       <label className='mx-4'>
         <small>{labelStartDate}</small>
         <input
