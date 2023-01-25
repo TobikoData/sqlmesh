@@ -7,7 +7,6 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
-from web.server.settings import Settings, get_context, get_settings
 from web.server.models import (
     APIContext,
     APIContextEnvironment,
@@ -15,7 +14,7 @@ from web.server.models import (
     Directory,
     File,
 )
-from web.server.settings import Settings, get_settings
+from web.server.settings import Settings, get_context, get_settings
 
 router = APIRouter()
 
