@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from airflow.api.common.experimental.delete_dag import delete_dag
 from airflow.exceptions import AirflowException, DagNotFound
-from airflow.models import BaseOperator, DagRun, DagTag, XCom
+from airflow.models import BaseOperator, DagRun, DagTag, Variable, XCom
 from airflow.utils.session import provide_session
 from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
@@ -72,6 +72,18 @@ def delete_xcoms(
     if run_id is not None:
         query = query.filter_by(run_id=run_id)
     query.delete(synchronize_session=False)
+
+
+@provide_session
+def delete_variables(
+    keys: t.Set[str],
+    session: Session = PROVIDED_SESSION,
+) -> None:
+    (
+        session.query(Variable)
+        .filter(Variable.key.in_(keys))
+        .delete(synchronize_session=False)
+    )
 
 
 def discover_engine_operator(name: str) -> t.Type[BaseOperator]:

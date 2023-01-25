@@ -4,7 +4,7 @@ import typing as t
 from functools import reduce
 from operator import or_
 
-from airflow.models import DagRun, XCom
+from airflow.models import Variable
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.environment import Environment
@@ -16,7 +16,7 @@ from sqlmesh.utils import unique
 logger = logging.getLogger(__name__)
 
 
-class XComStateSync(CommonStateSyncMixin, StateSync):
+class VariableStateSync(CommonStateSyncMixin, StateSync):
     def __init__(
         self,
         session: Session,
@@ -29,21 +29,19 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         snapshot_version_index = self._get_snapshot_versions(
-            {common.snapshot_version_xcom_key(s.name, s.version) for s in snapshots}
+            {common.snapshot_version_key(s.name, s.version) for s in snapshots}
         )
 
         for snapshot in snapshots:
             logger.info("Storing model snapshot %s", snapshot.snapshot_id)
             # TODO: consider inserting records in bulk using the DB session directly
             # instead of the TaskInstance API.
-            self._xcom_set(
-                key=common.snapshot_xcom_key(snapshot),
+            self._set_record(
+                key=common.snapshot_key(snapshot),
                 value=snapshot.json(),
             )
 
-            version_key = common.snapshot_version_xcom_key(
-                snapshot.name, snapshot.version
-            )
+            version_key = common.snapshot_version_key(snapshot.name, snapshot.version)
             if version_key in snapshot_version_index:
                 snapshot_version_index[version_key].append(snapshot.identifier)
             else:
@@ -51,7 +49,7 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
 
         for key, value in snapshot_version_index.items():
             logger.info("Storing the snapshot version index '%s'", key)
-            self._xcom_set(
+            self._set_record(
                 key=key,
                 value=unique(value),
             )
@@ -59,22 +57,20 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         for snapshot_id in snapshot_ids:
             logger.info("Removing snapshot %s", snapshot_id.snapshot_id)
-        self._delete_xcom_records(
-            target_keys={common.snapshot_xcom_key(s.snapshot_id) for s in snapshot_ids}
+        self._delete_records(
+            target_keys={common.snapshot_key(s.snapshot_id) for s in snapshot_ids}
         )
 
     def get_environments(self) -> t.List[Environment]:
         return [
             Environment.parse_raw(value)
-            for value in self._get_xcom_records(
-                key_prefix=common.ENV_KEY_PREFIX
-            ).values()
+            for value in self._get_records(key_prefix=common.ENV_KEY_PREFIX).values()
         ]
 
     def snapshots_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Set[SnapshotId]:
-        target_keys = {common.snapshot_xcom_key(s): s for s in snapshot_ids}
+        target_keys = {common.snapshot_key(s): s for s in snapshot_ids}
         raw_snapshots = self._get_snapshots_raw(target_keys=set(target_keys))
         return {
             snapshot_id.snapshot_id
@@ -99,7 +95,7 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
         )
         version_index = self._get_snapshot_versions(
             target_keys={
-                common.snapshot_version_xcom_key(s.name, s.version)
+                common.snapshot_version_key(s.name, s.version)
                 for s in snapshots_dict.values()
             }
         )
@@ -109,7 +105,7 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
             [
                 {
                     SnapshotId(
-                        name=common.name_from_snapshot_version_xcom_key(key),
+                        name=common.name_from_snapshot_version_key(key),
                         identifier=i,
                     )
                     for i in identifiers
@@ -128,54 +124,25 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
     ) -> t.Optional[Environment]:
-        model_env_state_xcom_value = self._get_one_xcom_record(
-            common.environment_xcom_key(environment), lock_for_update=lock_for_update
+        model_env_state_value = self._get_one_record(
+            common.environment_key(environment), lock_for_update=lock_for_update
         )
 
-        if model_env_state_xcom_value:
-            return Environment.parse_raw(model_env_state_xcom_value)
+        if model_env_state_value:
+            return Environment.parse_raw(model_env_state_value)
         return None
 
     def _update_environment(self, environment: Environment) -> None:
-        self._xcom_set(
-            common.environment_xcom_key(environment.name),
+        self._set_record(
+            common.environment_key(environment.name),
             environment.dict(),
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
-        self._xcom_set(
-            key=common.snapshot_xcom_key(snapshot),
+        self._set_record(
+            key=common.snapshot_key(snapshot),
             value=snapshot.json(),
         )
-
-    def _xcom_set(self, key: str, value: t.Any) -> None:
-        if not isinstance(value, str):
-            value = json.dumps(value)
-        serialized_value = _serialize_xcom_value(value)
-
-        existing_xcom = (
-            self._session.query(XCom)
-            .filter_by(
-                dag_run_id=self._get_receiver_dag_run_id(),
-                task_id=common.SQLMESH_XCOM_TASK_ID,
-                map_index=-1,
-                key=key,
-            )
-            .one_or_none()
-        )
-        if existing_xcom is not None:
-            existing_xcom.value = serialized_value
-        else:
-            new_xcom = XCom(  # type: ignore
-                dag_run_id=self._get_receiver_dag_run_id(),
-                key=key,
-                value=serialized_value,
-                task_id=common.SQLMESH_XCOM_TASK_ID,
-                dag_id=common.SQLMESH_XCOM_DAG_ID,
-                run_id=common.INIT_RUN_ID,
-            )
-            self._session.add(new_xcom)
-        self._session.flush()
 
     def _get_snapshots(
         self,
@@ -195,7 +162,7 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
         """
         target_keys = None
         if snapshot_ids is not None:
-            target_keys = {common.snapshot_xcom_key(s) for s in snapshot_ids}
+            target_keys = {common.snapshot_key(s) for s in snapshot_ids}
         raw_snapshots = self._get_snapshots_raw(
             target_keys=target_keys, lock_for_update=lock_for_update
         )
@@ -211,17 +178,17 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
         """Fetches snapshot payloads.
 
         Args:
-            target_keys: The list of target XCom keys.
+            target_keys: The list of target Variable keys.
                 If not specified all keys will be fetched.
             lock_for_update: Indicates whether fetched records should be locked
                 to prevent race conditions while updating them concurrently.
 
         Returns:
-            A dictionary of XCom keys to snapshot payloads associated with them.
+            A dictionary of Variable keys to snapshot payloads associated with them.
         """
         return {
-            xcom_key: json.loads(xcom_value)
-            for xcom_key, xcom_value in self._get_xcom_records(
+            key: json.loads(value)
+            for key, value in self._get_records(
                 target_keys=target_keys,
                 key_prefix=common.SNAPSHOT_PAYLOAD_KEY_PREFIX,
                 lock_for_update=lock_for_update,
@@ -234,100 +201,86 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
         """Fetches snapshot version indexes.
 
         Args:
-            target_keys: The list of target XCom keys.
+            target_keys: The list of target Variable keys.
             lock_for_update: Indicates whether fetched records should be locked
                 to prevent race conditions while updating them concurrently.
 
         Returns:
-            A dictionary of XCom keys to version indexes associated with them.
+            A dictionary of Variable keys to version indexes associated with them.
         """
         return {
-            xcom_key: json.loads(xcom_value)
-            for xcom_key, xcom_value in self._get_xcom_records(
+            key: json.loads(value)
+            for key, value in self._get_records(
                 target_keys=target_keys,
                 key_prefix=common.SNAPSHOT_VERSION_KEY_PREFIX,
                 lock_for_update=lock_for_update,
             ).items()
         }  # type: ignore
 
-    def _get_one_xcom_record(
+    def _get_one_record(
         self, target_key: str, lock_for_update: bool = False
     ) -> t.Optional[str]:
-        """Fetches a single raw XCom value.
+        """Fetches a single raw Variable value.
 
         Args:
-            target_key: The target XCom key.
+            target_key: The target Variable key.
             lock_for_update: Indicates whether the fetched record should be locked
                 to prevent race conditions while updating it concurrently.
 
         Returns:
-            The XCom value associated with the target key.
+            The Variable value associated with the target key.
         """
-        query = self._session.query(XCom.value).filter(
-            XCom.dag_id == common.SQLMESH_XCOM_DAG_ID,
-            XCom.key == target_key,
-        )
+        query = self._session.query(Variable.val).filter(Variable.key == target_key)
         if lock_for_update:
             query = query.with_for_update()
         result = query.one_or_none()
-        return _deserialize_xcom_value(result[0]) if result is not None else None
+        return result[0] if result is not None else None
 
-    def _get_xcom_records(
+    def _get_records(
         self,
         target_keys: t.Optional[t.Set[str]] = None,
         key_prefix: t.Optional[str] = None,
         key_suffix: t.Optional[str] = None,
         lock_for_update: bool = False,
     ) -> t.Dict[str, str]:
-        """Fetches raw XCom values.
+        """Fetches raw Variable values.
 
         Args:
-            target_keys: The list of target XCom keys.
+            target_keys: The list of target Variable keys.
                 If not specified all keys will be fetched.
-            key_prefix: The optional prefix to filter XCom keys by.
-            key_suffix: The optional suffix to filter XCom keys by.
+            key_prefix: The optional prefix to filter Variable keys by.
+            key_suffix: The optional suffix to filter Variable keys by.
             lock_for_update: Indicates whether fetched records should be locked
                 to prevent race conditions while updating them concurrently.
 
         Returns:
-            A dictionary of XCom keys to values associated with them.
+            A dictionary of Variable keys to values associated with them.
         """
-        query = self._session.query(XCom.key, XCom.value).filter(
-            XCom.dag_id == common.SQLMESH_XCOM_DAG_ID
-        )
+        query = self._session.query(Variable.key, Variable.val)
         if target_keys is not None:
-            query = query.filter(XCom.key.in_(target_keys))
+            query = query.filter(Variable.key.in_(target_keys))
         else:
             if key_prefix is not None:
-                query = query.filter(XCom.key.like(f"{key_prefix}%"))
+                query = query.filter(Variable.key.like(f"{key_prefix}%"))
             if key_suffix is not None:
-                query = query.filter(XCom.key.like(f"%{key_suffix}"))
+                query = query.filter(Variable.key.like(f"%{key_suffix}"))
         if lock_for_update:
             query = query.with_for_update()
-        xcoms = query.all()
-        return {x[0]: _deserialize_xcom_value(x[1]) for x in xcoms}
+        variables = query.all()
+        return {v[0]: v[1] for v in variables}
 
-    def _delete_xcom_records(self, target_keys: t.Set[str]) -> None:
-        util.delete_xcoms(
-            common.SQLMESH_XCOM_DAG_ID, target_keys, session=self._session
+    def _set_record(self, key: str, value: t.Any) -> None:
+        if not isinstance(value, str):
+            value = json.dumps(value)
+
+        self._delete_records({key})
+        new_variable = Variable(
+            key=key,
+            val=value,
+            description=None,
         )
+        self._session.add(new_variable)
+        self._session.flush()
 
-    def _get_receiver_dag_run_id(self) -> int:
-        if self._receiver_dag_run_id is None:
-            self._receiver_dag_run_id = (
-                self._session.query(DagRun.id)  # type: ignore
-                .filter_by(dag_id=common.SQLMESH_XCOM_DAG_ID, run_id=common.INIT_RUN_ID)
-                .scalar()
-            )
-        return self._receiver_dag_run_id
-
-
-def _serialize_xcom_value(value: str) -> bytes:
-    # Serialize the input string as JSON again to prevent Airflow
-    # from producing a malformed JSON string when it returns the XCom
-    # record via REST API.
-    return json.dumps(value).encode("UTF-8")
-
-
-def _deserialize_xcom_value(value: bytes) -> str:
-    return json.loads(value.decode("UTF-8"))
+    def _delete_records(self, target_keys: t.Set[str]) -> None:
+        util.delete_variables(target_keys, session=self._session)

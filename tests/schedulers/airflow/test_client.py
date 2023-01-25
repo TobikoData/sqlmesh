@@ -35,26 +35,13 @@ def snapshot() -> Snapshot:
     return snapshot
 
 
-@pytest.mark.parametrize("dag_run_entries", [0, 1])
-def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: int):
+def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     post_dag_run_response_mock = mocker.Mock()
     post_dag_run_response_mock.json.return_value = {"dag_run_id": "test_dag_run_id"}
     post_dag_run_mock = mocker.patch("requests.Session.post")
     post_dag_run_mock.return_value = post_dag_run_response_mock
 
-    get_dag_runs_response_mock = mocker.Mock()
-    get_dag_runs_response_mock.json.return_value = {
-        "total_entries": dag_run_entries,
-        "dag_runs": [] if dag_run_entries == 0 else [{"dag_run_id": "init_run"}],
-    }
-    get_dag_runs_mock = mocker.patch("requests.Session.get")
-    get_dag_runs_mock.return_value = get_dag_runs_response_mock
-
     timestamp = to_datetime("2022-08-16T02:40:19.000000Z")
-
-    expected_dag_run_id = (
-        "init_run" if dag_run_entries == 0 else "2022-08-16T02:40:19.000000Z"
-    )
 
     environment = Environment(
         name="test_env",
@@ -73,10 +60,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
     result = client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
 
     assert result == "test_dag_run_id"
-
-    get_dag_runs_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns?limit=1"
-    )
 
     post_dag_run_mock.assert_called_once()
     args, data = post_dag_run_mock.call_args_list[0]
@@ -148,7 +131,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
             "users": [],
             "is_dev": False,
         },
-        "dag_run_id": expected_dag_run_id,
+        "dag_run_id": "2022-08-16T02:40:19.000000Z",
         "logical_date": "2022-08-16T02:40:19.000000Z",
     }
 
@@ -175,7 +158,7 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     assert result == environment
 
     get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/environment__dev"
+        "http://localhost:8080/api/v1/variables/sqlmesh__environment__dev"
     )
 
 
@@ -193,14 +176,14 @@ def test_get_snapshot(mocker: MockerFixture, snapshot: Snapshot):
     assert result == snapshot
 
     get_snapshot_mock.assert_called_once_with(
-        f"http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/snapshot_payload__test_model__{snapshot.identifier}"
+        f"http://localhost:8080/api/v1/variables/sqlmesh__snapshot_payload__test_model__{snapshot.identifier}"
     )
 
 
 def test_get_snapshot_ids(mocker: MockerFixture):
     get_snapshot_response_mock = mocker.Mock()
     get_snapshot_response_mock.json.return_value = {
-        "xcom_entries": [
+        "variables": [
             {
                 "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name__test_identifier"
             },
@@ -223,7 +206,7 @@ def test_get_snapshot_ids(mocker: MockerFixture):
     ]
 
     get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries?limit=10000000"
+        "http://localhost:8080/api/v1/variables?limit=10000000"
     )
 
 
@@ -250,7 +233,7 @@ def test_get_snapshot_fingerprints_for_version(mocker: MockerFixture):
     assert result == expected_identifiers
 
     get_snapshots_for_version_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/snapshot_version_index__test_name__test_version"
+        "http://localhost:8080/api/v1/variables/sqlmesh__snapshot_version_index__test_name__test_version"
     )
 
 

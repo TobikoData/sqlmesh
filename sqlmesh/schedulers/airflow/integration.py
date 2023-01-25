@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from airflow import DAG
-from airflow.models import BaseOperator, DagRun, TaskInstance, XCom
+from airflow.models import BaseOperator, DagRun, TaskInstance, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -162,10 +162,9 @@ class SQLMeshAirflow:
 @provide_session
 def _plan_receiver_task(
     dag_run: DagRun,
-    ti: TaskInstance,
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
-    state_sync = XComStateSync(session)
+    state_sync = VariableStateSync(session)
     plan_conf = common.PlanReceiverDagConf.parse_obj(dag_run.conf)
 
     new_snapshots = {s.snapshot_id: s for s in plan_conf.new_snapshots}
@@ -257,8 +256,8 @@ def _plan_receiver_task(
         is_dev=plan_conf.is_dev,
     )
 
-    ti.xcom_push(
-        common.plan_application_request_xcom_key(plan_conf.request_id), request.json()
+    Variable.set(
+        common.plan_application_request_key(plan_conf.request_id), request.json()
     )
 
 
@@ -268,7 +267,7 @@ def _janitor_task(
     ti: TaskInstance,
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
-    state_sync = XComStateSync(session)
+    state_sync = VariableStateSync(session)
 
     expired_snapshots = state_sync.remove_expired_snapshots()
     ti.xcom_push(
@@ -290,10 +289,9 @@ def _janitor_task(
         ttl=plan_application_dag_ttl, session=session
     )
     logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
-    util.delete_xcoms(
-        common.PLAN_RECEIVER_DAG_ID,
+    util.delete_variables(
         {
-            common.plan_application_request_xcom_key_from_dag_id(dag_id)
+            common.plan_application_request_key_from_dag_id(dag_id)
             for dag_id in plan_application_dag_ids
         },
         session=session,
@@ -305,20 +303,19 @@ def _janitor_task(
 def _get_all_snapshots(
     session: Session = util.PROVIDED_SESSION,
 ) -> t.Dict[SnapshotId, Snapshot]:
-    return XComStateSync(session).get_all_snapshots()
+    return VariableStateSync(session).get_all_snapshots()
 
 
 @provide_session
 def _get_plan_application_requests(
     session: Session = util.PROVIDED_SESSION,
 ) -> t.List[common.PlanApplicationRequest]:
-    xcoms = (
-        session.query(XCom)
-        .filter(XCom.dag_id == common.PLAN_RECEIVER_DAG_ID)
-        .filter(XCom.key.like(f"{common.PLAN_APPLICATION_REQUEST_KEY_PREFIX}%"))
+    records = (
+        session.query(Variable)
+        .filter(Variable.key.like(f"{common.PLAN_APPLICATION_REQUEST_KEY_PREFIX}%"))
         .all()
     )
-    return [common.PlanApplicationRequest.parse_raw(xcom.value) for xcom in xcoms]
+    return [common.PlanApplicationRequest.parse_raw(r.val) for r in records]
 
 
 def _get_demoted_snapshots(

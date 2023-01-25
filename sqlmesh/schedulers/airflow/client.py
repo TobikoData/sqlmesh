@@ -20,7 +20,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
 PLAN_RECEIVER_DAG_RUN_PATH = DAG_RUN_PATH_TEMPLATE.format(common.PLAN_RECEIVER_DAG_ID)
-STATE_XCOM_PATH: str = f"{DAG_RUN_PATH_TEMPLATE.format(common.SQLMESH_XCOM_DAG_ID)}/{common.INIT_RUN_ID}/taskInstances/{common.SQLMESH_XCOM_TASK_ID}/xcomEntries"
+VARIABLES_PATH: str = "api/v1/variables"
 
 
 DagConf = common.PlanReceiverDagConf
@@ -58,7 +58,6 @@ class AirflowClient:
         users: t.Optional[t.List[User]] = None,
         is_dev: bool = False,
     ) -> str:
-        is_first_run = self._get_first_dag_run_id(common.PLAN_RECEIVER_DAG_ID) is None
         return self._trigger_dag_run(
             PLAN_RECEIVER_DAG_RUN_PATH,
             common.PlanReceiverDagConf(
@@ -74,17 +73,16 @@ class AirflowClient:
                 users=users or [],
                 is_dev=is_dev,
             ),
-            dag_run_id=common.INIT_RUN_ID if is_first_run else None,
             timestamp=timestamp,
         )
 
     def get_snapshot_ids(self) -> t.List[SnapshotId]:
-        xcom_entries_response = self._get(f"{STATE_XCOM_PATH}?limit=10000000")
+        response = self._get(f"{VARIABLES_PATH}?limit=10000000")
         result = []
-        for xcom_entry in xcom_entries_response["xcom_entries"]:
-            xcom_key = xcom_entry["key"]
-            if xcom_key.startswith(common.SNAPSHOT_PAYLOAD_KEY_PREFIX):
-                name_identifier = xcom_key.replace(
+        for entry in response["variables"]:
+            key = entry["key"]
+            if key.startswith(common.SNAPSHOT_PAYLOAD_KEY_PREFIX):
+                name_identifier = key.replace(
                     f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__", ""
                 )
                 sep_index = name_identifier.rindex("__")
@@ -98,33 +96,30 @@ class AirflowClient:
     ) -> t.List[str]:
         if not version:
             raise SQLMeshError("Version cannot be empty")
-        xcom_key = common.snapshot_version_xcom_key(name, version)
+        key = common.snapshot_version_key(name, version)
         try:
-            xcom_entry = self._get(f"{STATE_XCOM_PATH}/{xcom_key}")
-            return json.loads(xcom_entry["value"])
+            entry = self._get(f"{VARIABLES_PATH}/{key}")
+            return json.loads(entry["value"])
         except HTTPError as e:
             if not _is_not_found(e):
                 raise
             return []
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
-        xcom_key = common.environment_xcom_key(environment)
+        key = common.environment_key(environment)
         try:
-            xcom_entry = self._get(f"{STATE_XCOM_PATH}/{xcom_key}")
-            return Environment.parse_raw(xcom_entry["value"])
+            entry = self._get(f"{VARIABLES_PATH}/{key}")
+            return Environment.parse_raw(entry["value"])
         except HTTPError as e:
             if not _is_not_found(e):
                 raise
             return None
 
-    def get_environments(self) -> t.List[Environment]:
-        raise NotImplementedError
-
     def get_snapshot(self, name: str, identifier: str) -> t.Optional[Snapshot]:
-        xcom_key = common.snapshot_xcom_key_from_name_identifier(name, identifier)
+        key = common.snapshot_key_from_name_identifier(name, identifier)
         try:
-            xcom_entry = self._get(f"{STATE_XCOM_PATH}/{xcom_key}")
-            return Snapshot.parse_raw(xcom_entry["value"])
+            entry = self._get(f"{VARIABLES_PATH}/{key}")
+            return Snapshot.parse_raw(entry["value"])
         except HTTPError as e:
             if not _is_not_found(e):
                 raise

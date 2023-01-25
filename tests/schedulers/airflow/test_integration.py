@@ -153,30 +153,31 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         previous_plan_id=None,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {}
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
     get_environment_mock.return_value = old_environment
 
-    _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+    set_variable_mock = mocker.patch("airflow.models.Variable.set")
+
+    _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
     get_environment_mock.assert_called_once()
 
-    task_instance_mock.xcom_push.assert_called_once()
-    ((_, xcom_value), _) = task_instance_mock.xcom_push.call_args_list[0]
+    set_variable_mock.assert_called_once()
+
+    ((_, value), _) = set_variable_mock.call_args_list[0]
     assert common.PlanApplicationRequest.parse_raw(
-        xcom_value
+        value
     ) == common.PlanApplicationRequest(
         request_id="test_request_id",
         environment_name=environment_name,
@@ -227,22 +228,20 @@ def test_plan_receiver_task_duplicated_snapshot(
         is_dev=False,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
 
     with pytest.raises(SQLMeshError):
-        _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+        _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
 
@@ -273,13 +272,11 @@ def test_plan_receiver_task_unbounded_end(
         is_dev=False,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {
         snapshot.snapshot_id: snapshot,
@@ -287,15 +284,17 @@ def test_plan_receiver_task_unbounded_end(
     }
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
 
-    _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+    set_variable_mock = mocker.patch("airflow.models.Variable.set")
+
+    _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
     get_environment_mock.assert_called_once()
 
-    task_instance_mock.xcom_push.assert_called_once()
+    set_variable_mock.assert_called_once()
 
 
 def _apply_plan_and_block(
