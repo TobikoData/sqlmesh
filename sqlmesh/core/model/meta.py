@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import typing as t
 from enum import Enum
 
@@ -33,7 +34,7 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
-HookCall = t.Tuple[str, t.Dict[str, str]]
+HookCall = t.Tuple[str, t.Dict[str, t.Any]]
 
 
 class ModelMeta(PydanticModel):
@@ -79,7 +80,9 @@ class ModelMeta(PydanticModel):
                     raise ConfigError(
                         f"Function '{func}' must be called with kwargs like {func}(arg=value)"
                     )
-                kwargs[arg.left.name] = arg.right.name
+                kwargs[arg.left.name] = ast.literal_eval(
+                    arg.right.sql(dialect="python")
+                )
             return (func, kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):

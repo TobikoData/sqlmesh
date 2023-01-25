@@ -85,7 +85,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
             kind INCREMENTAL_BY_TIME_RANGE (time_column a),
             storage_format 'parquet',
             pre x(),
-            post [x(), x(y='a')],
+            post [x(), x(y=['a', 2, TRUE])],
         );
 
         SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds
@@ -108,7 +108,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
     )
 
     assert payload["calls"] == 3
-    assert payload["y"] == "a"
+    assert payload["y"] == ["a", 2, True]
 
     adapter_mock.create_schema.assert_has_calls(
         [
