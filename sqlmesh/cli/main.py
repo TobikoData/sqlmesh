@@ -265,7 +265,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
             engine_adapter=obj.engine_adapter,
             verbosity=verbosity,
             patterns=k,
-            ignore_patterns=obj._ignore_patterns,
+            ignore_patterns=obj.ignore_patterns,
         )
     else:
         run_all_model_tests(
@@ -274,7 +274,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
             engine_adapter=obj.engine_adapter,
             verbosity=verbosity,
             patterns=k,
-            ignore_patterns=obj._ignore_patterns,
+            ignore_patterns=obj.ignore_patterns,
         )
 
 

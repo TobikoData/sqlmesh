@@ -262,7 +262,6 @@ class Context(BaseContext):
         self._state_sync: t.Optional[StateSync] = None
         self._state_reader: t.Optional[StateReader] = None
 
-        self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
         self.users = self.config.users + (users or [])
 
         self._loader = loader or SqlMeshLoader()
@@ -380,6 +379,10 @@ class Context(BaseContext):
     @property
     def audits_directory_path(self) -> Path:
         return self.path / "audits"
+
+    @property
+    def ignore_patterns(self) -> t.List[str]:
+        return c.IGNORE_PATTERNS + self.config.ignore_patterns
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
@@ -757,7 +760,7 @@ class Context(BaseContext):
                     path=Path(path) if path else self.test_directory_path,
                     snapshots=self.snapshots,
                     engine_adapter=self._test_engine_adapter,
-                    ignore_patterns=self._ignore_patterns,
+                    ignore_patterns=self.ignore_patterns,
                 )
             finally:
                 self._test_engine_adapter.close()
@@ -856,7 +859,7 @@ class Context(BaseContext):
             Matched paths that are not ignored
         """
         for filepath in path.glob(f"**/*{file_extension}"):
-            for ignore_pattern in self._ignore_patterns:
+            for ignore_pattern in self.ignore_patterns:
                 if filepath.match(ignore_pattern):
                     break
             else:
