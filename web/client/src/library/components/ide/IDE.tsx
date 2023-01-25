@@ -31,10 +31,6 @@ export function IDE() {
   const [activeFile, setActiveFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
   const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
-  const [activePlan, setActivePlan] = useState<{
-    text: string
-    value: string
-  }>()
 
   const [status, setStatus] = useState('editing')
 
@@ -92,12 +88,14 @@ export function IDE() {
 
         <div className="px-4 flex items-center">
           <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)}>
-            <span className="inline-block mr-3">Run Plan</span>
+            <span className="inline-block mr-3">Plan</span>
             <PlayIcon className="w-4 h-4 text-gray-100" />
           </Button>
-          <DropdownAudits />
+          <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} variant="alternative">
+            <span className="inline-block">Audits</span>
+          </Button>
           <Button size={EnumSize.sm} variant="alternative">
-            Run Tests
+            Tests
           </Button>
         </div>
       </div>
