@@ -59,7 +59,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
         return {
             "name": exp.DataType.build("text"),
-            "fingerprint": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
             "snapshot": exp.DataType.build("text"),
         }
@@ -129,7 +129,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     [
                         (
                             snapshot.name,
-                            snapshot.fingerprint,
+                            snapshot.identifier,
                             snapshot.version,
                             snapshot.json(),
                         )
@@ -149,9 +149,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Set[SnapshotId]:
         return {
-            SnapshotId(name=name, fingerprint=fingerprint)
-            for name, fingerprint in self.engine_adapter.fetchall(
-                exp.select("name", "fingerprint")
+            SnapshotId(name=name, identifier=identifier)
+            for name, identifier in self.engine_adapter.fetchall(
+                exp.select("name", "identifier")
                 .from_(self.snapshots_table)
                 .where(self._filter_condition(snapshot_ids))
             )
@@ -279,7 +279,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
-        The output includes the snapshots with the specified fingerprints.
+        The output includes the snapshots with the specified identifiers.
 
         Args:
             snapshots: The list of snapshots or table infos.
@@ -338,7 +338,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             *(
                 exp.and_(
                     f"name = '{snapshot_id.name}'",
-                    f"fingerprint = '{snapshot_id.fingerprint}'",
+                    f"identifier = '{snapshot_id.identifier}'",
                 )
                 for snapshot_id in snapshot_ids
             )

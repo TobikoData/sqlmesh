@@ -155,7 +155,7 @@ class ContextDiff(PydanticModel):
         """Returns whether or not a model was directly modified in this context.
 
         Args:
-            model_name: The model_name to check.
+            model_name: The model name to check.
 
         Returns:
             Whether or not the model was directly modified.
@@ -165,7 +165,43 @@ class ContextDiff(PydanticModel):
             return False
 
         current, previous = self.modified_snapshots[model_name]
-        return not current.data_hash_matches(previous)
+        return current.fingerprint.data_hash != previous.fingerprint.data_hash
+
+    def indirectly_modified(self, model_name: str) -> bool:
+        """Returns whether or not a model was indirectly modified in this context.
+
+        Args:
+            model_name: The model name to check.
+
+        Returns:
+            Whether or not the model was indirectly modified.
+        """
+
+        if model_name not in self.modified_snapshots:
+            return False
+
+        current, previous = self.modified_snapshots[model_name]
+        return (
+            current.fingerprint.data_hash == previous.fingerprint.data_hash
+            and current.fingerprint.parent_data_hash
+            != previous.fingerprint.parent_data_hash
+        )
+
+    def metadata_updated(self, model_name: str) -> bool:
+        """Returns whether or not the given model's metadata has been updated.
+
+        Args:
+            model_name: The model name to check.
+
+        Returns:
+            Whether or not the model's metadata has been updated.
+        """
+
+        if model_name not in self.modified_snapshots:
+            return False
+
+        current, previous = self.modified_snapshots[model_name]
+        return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
 
     def text_diff(self, model: str) -> str:
         """Finds the difference of a model between the current and remote environment.

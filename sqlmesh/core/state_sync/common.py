@@ -106,7 +106,7 @@ class CommonStateSyncMixin(StateSync):
             for parent in snapshot.parents:
                 if parent not in snapshot_ids:
                     raise SQLMeshError(
-                        f"Cannot promote snapshot `{snapshot.name}` because its parent `{parent.name}:{parent.fingerprint}` is not promoted. Did you mean to promote all snapshots instead of a subset?"
+                        f"Cannot promote snapshot `{snapshot.name}` because its parent `{parent.name}:{parent.identifier}` is not promoted. Did you mean to promote all snapshots instead of a subset?"
                     )
 
         table_infos = [s.table_info for s in snapshots]
@@ -291,7 +291,7 @@ class CommonStateSyncMixin(StateSync):
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
-        The output includes the snapshots with the specified fingerprints.
+        The output includes the snapshots with the specified version.
 
         Args:
             snapshots: The list of snapshots or table infos.

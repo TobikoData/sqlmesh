@@ -88,7 +88,7 @@ class HttpStateReader(StateReader):
             snapshots = executor.map(
                 lambda snapshot_id: self._client.get_snapshot(
                     snapshot_id.name,
-                    snapshot_id.fingerprint,
+                    snapshot_id.identifier,
                 ),
                 snapshot_ids,
             )
@@ -111,7 +111,7 @@ class HttpStateReader(StateReader):
             A set of existing snapshot IDs.
         """
         target_ids = {
-            SnapshotId(name=s.name, fingerprint=s.fingerprint) for s in snapshot_ids
+            SnapshotId(name=s.name, identifier=s.identifier) for s in snapshot_ids
         }
         return target_ids.intersection(set(self._client.get_snapshot_ids()))
 
@@ -123,10 +123,10 @@ class HttpStateReader(StateReader):
 
         target_snapshot_ids = set()
         for s in snapshots:
-            for f in self._client.get_snapshot_fingerprints_for_version(
+            for i in self._client.get_snapshot_identifiers_for_version(
                 s.name, version=s.version
             ):
-                target_snapshot_ids.add(SnapshotId(name=s.name, fingerprint=f))
+                target_snapshot_ids.add(SnapshotId(name=s.name, identifier=i))
         return list(self.get_snapshots(target_snapshot_ids).values())
 
     def get_snapshots_by_models(self, *names: str) -> t.List[Snapshot]:

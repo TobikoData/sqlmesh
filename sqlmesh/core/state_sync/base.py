@@ -40,7 +40,7 @@ class StateReader(abc.ABC):
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
-        The output includes the snapshots with the specified fingerprints.
+        The output includes the snapshots with the specified version.
 
         Args:
             snapshots: The list of snapshots or table infos.

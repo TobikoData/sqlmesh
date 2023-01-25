@@ -3,7 +3,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint
 from sqlmesh.utils.date import to_datetime
 
 
@@ -93,7 +93,9 @@ def test_multi_version_snapshots(
         models=sushi_context_pre_scheduling.models,
         version="1",
     )
-    items_a.fingerprint = "123"
+    items_a.fingerprint = SnapshotFingerprint(
+        data_hash="data", metadata_hash="metadata"
+    )
     items_a.add_interval("2022-01-10", "2022-01-15")
     sushi_context_pre_scheduling.state_sync.push_snapshots([items_a])
 
