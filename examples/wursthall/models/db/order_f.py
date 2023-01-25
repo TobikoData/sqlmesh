@@ -100,4 +100,4 @@ def execute(
             range(1, 10), p=[0.1, 0.2, 0.3, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
         )
 
-    return df_order_item_f[list(COLUMN_TO_TYPE.keys())]
+    return df_order_item_f[list(COLUMN_TO_TYPE)]
