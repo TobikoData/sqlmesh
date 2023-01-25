@@ -145,8 +145,10 @@ def get_context_by_enviroment(
     settings.context.refresh()
 
     plan = settings.context.plan(environment=environment, no_prompts=True)
-    backfills = map(lambda x: (x.snapshot_name,
-                    x.format_missing_range()), plan.missing_intervals)
+    backfills = map(
+        lambda x: (x.snapshot_name, x.format_missing_range()
+                   ), plan.missing_intervals
+    )
     payload = {
         "restatements": plan.restatements,
         "environment": plan.environment.name,
