@@ -31,18 +31,28 @@ export async function saveFileByPath({ path, body = '' }: any) {
   return await fetchApi<File>(`files/${path}`, { method: 'post', body })
 }
 
-export async function getPlan() {
+export async function getContext() {
   return await fetchApi<{
-    tables: Array<string>
+    models: Array<string>
     engine_adapter: string
     path: string
     dialect: string
     scheduler: string
     time_column_format: string
     concurrent_tasks: number
-    changes: Array<string>
-    diff: Array<string>
-  }>(`plan`)
+  }>('context')
+}
+
+export async function getContextByEnvironment(environment: string = '') {
+  return await fetchApi<{
+    environment: string
+    backfills: Array<[string, string]>,
+    changes: {
+      added: Array<string>,
+      removed: Array<string>,
+      modified: Array<string>,
+    }
+  }>(`context/${environment}`)
 }
 
 type FetchResponse<T> = Promise<T | null>
