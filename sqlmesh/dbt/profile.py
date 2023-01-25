@@ -55,7 +55,7 @@ class Profile:
 
         if not project_name:
             project_file = project_config_path(project_root)
-            project_name = yaml.load(project_file).get("name")
+            project_name = yaml_load(project_file).get("name")
             if not project_name:
                 raise ConfigError(f"{project_file.stem} must include project name")
 
