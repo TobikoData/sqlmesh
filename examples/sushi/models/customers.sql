@@ -4,7 +4,7 @@ MODEL (
   owner jen,
   cron '@daily',
   pre noop(x=1),
-  post (noop(), noop(y=2)),
+  post (noop(), noop(y=['a', 2])),
 );
 
 SELECT DISTINCT
