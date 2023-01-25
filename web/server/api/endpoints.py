@@ -8,26 +8,31 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
 from web.server.models import Directory, File
-from web.server.settings import Settings, get_settings
+from web.server.settings import Settings, get_context, get_settings
 
 router = APIRouter()
 
 
-def _validate_path(path: str, context: Context) -> None:
-    resolved_context_path = context.path.resolve()
-    full_path = (resolved_context_path / path).resolve()
+def validate_path(
+    path: str,
+    context: Context = Depends(get_context),
+) -> str:
+    resolved_path = context.path.resolve()
+    full_path = (resolved_path / path).resolve()
     try:
-        full_path.relative_to(resolved_context_path)
+        full_path.relative_to(resolved_path)
     except ValueError:
         raise HTTPException(status_code=404)
 
-    if any(full_path.match(pattern) for pattern in context._ignore_patterns):
+    if any(full_path.match(pattern) for pattern in context.ignore_patterns):
         raise HTTPException(status_code=404)
+
+    return path
 
 
 @router.get("/files")
 def get_files(
-    settings: Settings = Depends(get_settings),
+    context: Context = Depends(get_context),
 ) -> Directory:
     """Get all project files."""
 
@@ -41,13 +46,12 @@ def get_files(
                     entry.name == "__pycache__"
                     or entry.name.startswith(".")
                     or any(
-                        entry_path.match(pattern)
-                        for pattern in settings.context._ignore_patterns
+                        entry_path.match(pattern) for pattern in context.ignore_patterns
                     )
                 ):
                     continue
 
-                relative_path = os.path.relpath(entry.path, settings.project_path)
+                relative_path = os.path.relpath(entry.path, context.path)
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
@@ -64,9 +68,9 @@ def get_files(
             files, key=lambda x: x.name
         )
 
-    directories, files = walk_path(settings.project_path)
+    directories, files = walk_path(context.path)
     return Directory(
-        name=os.path.basename(settings.project_path),
+        name=os.path.basename(context.path),
         path="",
         directories=directories,
         files=files,
@@ -75,11 +79,10 @@ def get_files(
 
 @router.get("/files/{path:path}")
 def get_file(
-    path: str,
+    path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
 ) -> File:
     """Get a file, including its contents."""
-    _validate_path(path, settings.context)
     try:
         with open(settings.project_path / path) as f:
             content = f.read()
@@ -90,12 +93,11 @@ def get_file(
 
 @router.post("/files/{path:path}")
 async def write_file(
-    path: str,
     content: str = Body(),
+    path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
 ) -> File:
     """Create or update a file."""
-    _validate_path(path, settings.context)
     with open(settings.project_path / path, "w", encoding="utf-8") as f:
         f.write(content)
     return File(name=os.path.basename(path), path=path, content=content)
@@ -103,12 +105,11 @@ async def write_file(
 
 @router.delete("/files/{path:path}")
 async def delete_file(
-    path: str,
     response: Response,
+    path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
 ) -> None:
     """Delete a file."""
-    _validate_path(path, settings.context)
     try:
         (settings.project_path / path).unlink()
         response.status_code = status.HTTP_204_NO_CONTENT
