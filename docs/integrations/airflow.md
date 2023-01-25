@@ -4,7 +4,7 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 
 * A Directed Acyclic Graph (DAG) is generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
 * Each Plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
-* The Airflow XCom mechanism is used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
+* The Airflow [Variables](https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html) are used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 

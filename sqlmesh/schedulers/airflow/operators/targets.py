@@ -16,7 +16,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
-from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -126,7 +126,7 @@ class SnapshotEvaluationTarget(
         session: Session = util.PROVIDED_SESSION,
         **kwargs: t.Any
     ) -> None:
-        XComStateSync(session).add_interval(
+        VariableStateSync(session).add_interval(
             self.snapshot.snapshot_id,
             self._get_start(context),
             self._get_end(context),
@@ -295,7 +295,7 @@ class SnapshotCreateTablesTarget(
     def _get_stored_snapshots(
         self, snapshot_ids: t.Set[SnapshotId], session: Session = util.PROVIDED_SESSION
     ) -> t.List[Snapshot]:
-        return list(XComStateSync(session).get_snapshots(snapshot_ids).values())
+        return list(VariableStateSync(session).get_snapshots(snapshot_ids).values())
 
 
 class SnapshotMigrateTablesTarget(

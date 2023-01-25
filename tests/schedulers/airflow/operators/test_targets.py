@@ -39,7 +39,7 @@ def test_evaluation_target_execute(
     )
 
     add_interval_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.add_interval"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.add_interval"
     )
 
     snapshot = make_snapshot(model)
