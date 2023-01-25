@@ -132,7 +132,7 @@ class Scheduler:
         )
 
         intervals_per_snapshot_version = {
-            (snapshot.name, snapshot.version_get_or_generate): intervals
+            (snapshot.name, snapshot.version_get_or_generate()): intervals
             for snapshot, intervals in batches
         }
 
@@ -147,7 +147,7 @@ class Scheduler:
                 for interval in intervals_per_snapshot_version.get(
                     (
                         self.snapshots[p_sid].name,
-                        self.snapshots[p_sid].version_get_or_generate,
+                        self.snapshots[p_sid].version_get_or_generate(),
                     ),
                     [],
                 )
@@ -359,7 +359,7 @@ def _resolve_one_snapshot_per_version(
 ) -> t.Dict[t.Tuple[str, str], Snapshot]:
     snapshot_per_version: t.Dict[t.Tuple[str, str], Snapshot] = {}
     for snapshot in snapshots:
-        key = (snapshot.name, snapshot.version_get_or_generate)
+        key = (snapshot.name, snapshot.version_get_or_generate())
         if key not in snapshot_per_version:
             snapshot_per_version[key] = snapshot
         else:

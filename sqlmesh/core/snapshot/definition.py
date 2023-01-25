@@ -557,7 +557,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return self._table_name(self.version, is_dev, True)
 
-    @property
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
@@ -684,9 +683,7 @@ def fingerprint_from_model(
             if table in models
         ]
 
-        parent_data_hash = _hash(
-            sorted(h for p in parents for h in (p.data_hash, p.parent_data_hash))
-        )
+        parent_data_hash = _hash(sorted(p.to_version() for p in parents))
 
         parent_metadata_hash = _hash(
             sorted(
@@ -747,12 +744,17 @@ def _model_metadata_hash(model: Model) -> str:
         metadata.extend(
             [
                 audit.name,
-                audit.render_query().sql(identify=True, comments=False),
+                audit.render_query().sql(identify=True, comments=True),
                 audit.dialect,
                 str(audit.skip),
                 str(audit.blocking),
             ]
         )
+
+    # Add comments from the model query.
+    for e, _, _ in model.render_query().walk():
+        if e.comments:
+            metadata.extend(e.comments)
 
     return _hash(metadata)
 

@@ -286,7 +286,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     model = SqlModel(
         **{**model.dict(), "query": parse_one("select 1, ds -- annotation")}
     )
-    assert new_fingerprint == fingerprint_from_model(model, models={})
+    assert new_fingerprint != fingerprint_from_model(model, models={})
 
 
 def test_stamp(model: Model):
