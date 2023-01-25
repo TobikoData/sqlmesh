@@ -117,23 +117,47 @@ async def delete_file(
         raise HTTPException(status_code=404)
 
 
-@router.get("/plan")
-def get_plan(
+@router.get("/context")
+def get_context(
     settings: Settings = Depends(get_settings),
 ) -> t.List[t.Dict[str, t.Any]]:
-    """Get the plan for a file."""
+    """Get the context"""
 
     return {
         "concurrent_tasks": settings.context.concurrent_tasks,
-        "models": settings.context.models,
-        "snapshots": settings.context.snapshots,
-        "tables": list(settings.context._model_tables.values()),
+        "models": list(map(lambda x: x.name, settings.context.models.values())),
         "engine_adapter": settings.context.engine_adapter.dialect,
         "dialect": settings.context.dialect,
         "path": settings.context.path,
         "scheduler": settings.context.config.scheduler.type_,
         "users": settings.context.config.users,
         "time_column_format": settings.context.config.time_column_format,
-        "diff": settings.context.diff(),
-        "changes": None
     }
+
+
+@router.get("/context/{environment:path}")
+def get_context_by_enviroment(
+    environment: str = "",
+    settings: Settings = Depends(get_settings),
+) -> t.List[t.Dict[str, t.Any]]:
+    """Get the context for a environment."""
+
+    settings.context.refresh()
+
+    plan = settings.context.plan(environment=environment, no_prompts=True)
+    backfills = map(lambda x: (x.snapshot_name,
+                    x.format_missing_range()), plan.missing_intervals)
+    payload = {
+        "restatements": plan.restatements,
+        "environment": plan.environment.name,
+        "backfills": list(backfills),
+    }
+
+    if plan.context_diff.has_differences:
+        payload["changes"] = {
+            "removed": plan.context_diff.removed,
+            "added": plan.context_diff.added,
+            "modified": plan.context_diff.modified_snapshots,
+        }
+
+    return payload
