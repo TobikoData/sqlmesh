@@ -1,10 +1,9 @@
 AUDIT (
-  name assert_order_items_quantity_positive,
-  model sushi.order_items
+  name assert_order_items_quantity_exceeds_threshold
 );
 
 SELECT *
-FROM sushi.order_items
+FROM @this_model
 WHERE
   ds BETWEEN @start_ds AND @end_ds AND
-  quantity < 1
+  quantity <= @quantity

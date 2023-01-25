@@ -25,6 +25,9 @@ ITEMS = "sushi.items"
         "quantity": "int",
         "ds": "text",
     },
+    audits=[
+        ("assert_order_items_quantity_exceeds_threshold", {"quantity": 0}),
+    ],
 )
 def execute(
     context: ExecutionContext,

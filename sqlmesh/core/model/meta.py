@@ -35,6 +35,7 @@ class IntervalUnit(str, Enum):
 
 
 HookCall = t.Tuple[str, t.Dict[str, t.Any]]
+AuditReference = t.Tuple[str, t.Dict[str, t.Any]]
 
 
 class ModelMeta(PydanticModel):
@@ -57,13 +58,15 @@ class ModelMeta(PydanticModel):
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
     )
+    audits: t.List[AuditReference] = []
+
     _croniter: t.Optional[croniter] = None
 
     _model_kind_validator = model_kind_validator
 
-    @validator("partitioned_by_", "pre", "post", pre=True)
-    def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
-        def extract(v: exp.Expression) -> str | t.Tuple[str, t.Dict[str, str]]:
+    @validator("pre", "post", "audits", pre=True)
+    def _value_or_tuple_with_args_validator(cls, v: t.Any) -> t.Any:
+        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
             kwargs = {}
 
             if isinstance(v, exp.Anonymous):
@@ -73,12 +76,12 @@ class ModelMeta(PydanticModel):
                 func = v.sql_name()
                 args = list(v.args.values())
             else:
-                return v.name
+                return v.name, {}
 
             for arg in args:
                 if not isinstance(arg, exp.EQ):
                     raise ConfigError(
-                        f"Function '{func}' must be called with kwargs like {func}(arg=value)"
+                        f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
                 kwargs[arg.left.name] = ast.literal_eval(
                     arg.right.sql(dialect="python")
@@ -89,6 +92,14 @@ class ModelMeta(PydanticModel):
             return [extract(i) for i in v.expressions]
         if isinstance(v, exp.Expression):
             return [extract(v)]
+        return v
+
+    @validator("partitioned_by_", pre=True)
+    def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return [e.name for e in v.expressions]
+        if isinstance(v, exp.Expression):
+            return [v.name]
         return v
 
     @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)

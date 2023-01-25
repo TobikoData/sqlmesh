@@ -9,6 +9,7 @@ from croniter import croniter_range
 from pydantic import validator
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.model import Model, SeedModel, kind, parse_model_name
 from sqlmesh.utils.date import (
     TimeLike,
@@ -253,6 +254,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         physical_schema: The physical schema that the snapshot is stored in.
         model: Model object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
+        audits: The list of audits used by the model.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
         created_ts: Epoch millis timestamp when a snapshot was first created.
         updated_ts: Epoch millis timestamp when a snapshot was last updated.
@@ -272,6 +274,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     physical_schema: str
     model: Model
     parents: t.Tuple[SnapshotId, ...]
+    audits: t.Tuple[Audit, ...]
     intervals: Intervals
     dev_intervals: Intervals
     created_ts: int
@@ -338,6 +341,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         models: t.Dict[str, Model],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
+        audits: t.Optional[t.Dict[str, Audit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a model.
@@ -349,6 +353,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
+            audits: Available audits by name.
             cache: Cache of model name to fingerprints.
 
         Returns:
@@ -356,12 +361,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         created_ts = now_timestamp()
 
+        audits = audits or {}
+
         return cls(
             name=model.name,
             fingerprint=fingerprint_from_model(
                 model,
                 physical_schema=physical_schema,
                 models=models,
+                audits=audits,
                 cache=cache,
             ),
             physical_schema=physical_schema,
@@ -373,11 +381,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                         models[name],
                         physical_schema=physical_schema,
                         models=models,
+                        audits=audits,
                         cache=cache,
                     ).to_identifier(),
                 )
                 for name in _parents_from_model(model, models)
             ),
+            audits=tuple(model.referenced_audits(audits)),
             intervals=[],
             dev_intervals=[],
             created_ts=created_ts,
@@ -651,6 +661,7 @@ def fingerprint_from_model(
     *,
     models: t.Dict[str, Model],
     physical_schema: str = "",
+    audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on a model's query and environment.
@@ -664,6 +675,7 @@ def fingerprint_from_model(
         physical_schema: The physical_schema of the snapshot which represents where it is stored.
         models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
+        audits: Available audits by name.
         cache: Cache of model name to fingerprints.
 
     Returns:
@@ -677,6 +689,7 @@ def fingerprint_from_model(
                 models[table],
                 models=models,
                 physical_schema=physical_schema,
+                audits=audits,
                 cache=cache,
             )
             for table in model.depends_on
@@ -693,7 +706,7 @@ def fingerprint_from_model(
 
         cache[model.name] = SnapshotFingerprint(
             data_hash=_model_data_hash(model, physical_schema),
-            metadata_hash=_model_metadata_hash(model),
+            metadata_hash=_model_metadata_hash(model, audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,
         )
@@ -731,7 +744,7 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
     return _hash(data)
 
 
-def _model_metadata_hash(model: Model) -> str:
+def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
     metadata = [
         model.dialect,
         model.owner,
@@ -740,11 +753,14 @@ def _model_metadata_hash(model: Model) -> str:
         str(model.batch_size) if model.batch_size is not None else None,
     ]
 
-    for audit in sorted(model.audits.values(), key=lambda a: a.name):
+    for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
+        audit = audits[audit_name]
         metadata.extend(
             [
                 audit.name,
-                audit.render_query().sql(identify=True, comments=True),
+                audit.render_query(this_model=model.name, **audit_args).sql(
+                    identify=True, comments=True
+                ),
                 audit.dialect,
                 str(audit.skip),
                 str(audit.blocking),

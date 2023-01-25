@@ -22,8 +22,6 @@ class AuditMeta(PydanticModel):
 
     name: str
     """The name of this audit."""
-    model: str
-    """The model being audited."""
     dialect: str = ""
     """The dialect of the audit query."""
     skip: bool = False
@@ -58,7 +56,6 @@ class Audit(AuditMeta, frozen=True):
     )
 
     _path: t.Optional[pathlib.Path] = None
-    __query_renderer: t.Optional[QueryRenderer] = None
 
     @validator("query", pre=True)
     def _parse_expression(cls, v: str) -> exp.Expression:
@@ -170,6 +167,7 @@ class Audit(AuditMeta, frozen=True):
     def render_query(
         self,
         *,
+        this_model: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
@@ -180,6 +178,7 @@ class Audit(AuditMeta, frozen=True):
         """Renders the audit's query.
 
         Args:
+            this_model: The name of a model that is being audited.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
@@ -192,12 +191,13 @@ class Audit(AuditMeta, frozen=True):
         Returns:
             The rendered expression.
         """
-        return self._query_renderer.render(
+        return self._create_query_renderer().render(
             start=start,
             end=end,
             latest=latest,
             snapshots=snapshots,
             is_dev=is_dev,
+            this_model=exp.to_table(this_model),
             **kwargs,
         )
 
@@ -210,16 +210,13 @@ class Audit(AuditMeta, frozen=True):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    @property
-    def _query_renderer(self) -> QueryRenderer:
-        if self.__query_renderer is None:
-            self.__query_renderer = QueryRenderer(
-                self.query,
-                self.dialect,
-                self.macro_definitions,
-                path=self._path or Path(),
-            )
-        return self.__query_renderer
+    def _create_query_renderer(self) -> QueryRenderer:
+        return QueryRenderer(
+            self.query,
+            self.dialect,
+            self.macro_definitions,
+            path=self._path or Path(),
+        )
 
 
 class AuditResult(PydanticModel):

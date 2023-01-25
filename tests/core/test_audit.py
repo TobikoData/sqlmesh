@@ -10,7 +10,6 @@ def test_load(assert_exp_eq):
         """
         Audit (
             name my_audit,
-            model db.table,
             dialect spark,
             blocking false,
         );
@@ -25,7 +24,6 @@ def test_load(assert_exp_eq):
     )
 
     audit = Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
-    assert audit.model == "db.table"
     assert audit.dialect == "spark"
     assert audit.blocking is False
     assert audit.skip is False
@@ -47,7 +45,6 @@ def test_load_multiple(assert_exp_eq):
         """
         Audit (
             name first_audit,
-            model db.table,
             dialect spark,
         );
 
@@ -57,7 +54,6 @@ def test_load_multiple(assert_exp_eq):
 
         Audit (
             name second_audit,
-            model db.table,
             dialect duckdb,
             blocking false,
         );
@@ -69,7 +65,6 @@ def test_load_multiple(assert_exp_eq):
     )
 
     first_audit, second_audit = Audit.load_multiple(expressions, path="/path/to/audit")
-    assert first_audit.model == "db.table"
     assert first_audit.dialect == "spark"
     assert first_audit.blocking is True
     assert first_audit.skip is False
@@ -82,7 +77,6 @@ def test_load_multiple(assert_exp_eq):
     """,
     )
 
-    assert second_audit.model == "db.table"
     assert second_audit.dialect == "duckdb"
     assert second_audit.blocking is False
     assert second_audit.skip is False
@@ -114,7 +108,6 @@ def test_unordered_audit_statements():
 
         AUDIT (
             name my_audit,
-            model db.table
         );
     """
     )
@@ -129,7 +122,6 @@ def test_no_query():
         """
         AUDIT (
             name my_audit,
-            model db.table
         );
 
         @DEF(x, 1)

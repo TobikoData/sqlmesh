@@ -18,7 +18,6 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
@@ -27,7 +26,6 @@ from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import QueryRenderer
-from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import (
@@ -39,6 +37,7 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import Audit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
@@ -47,24 +46,6 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
-
-META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
-    "name": lambda value: exp.to_table(value),
-    "start": lambda value: exp.Literal.string(value),
-    "cron": lambda value: exp.Literal.string(value),
-    "batch_size": lambda value: exp.Literal.number(value),
-    "partitioned_by_": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
-    "depends_on_": lambda value: exp.Tuple(expressions=value),
-    "pre": lambda value: exp.Tuple(expressions=value),
-    "post": lambda value: exp.Tuple(expressions=value),
-    "columns_to_types_": lambda value: exp.Schema(
-        expressions=[
-            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
-        ]
-    ),
-}
 
 
 class _Model(ModelMeta, frozen=True):
@@ -123,7 +104,6 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(
         default=None, alias="python_env"
     )
-    audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -312,28 +292,21 @@ class _Model(ModelMeta, frozen=True):
             self.post, context=context, start=start, end=end, latest=latest, **kwargs
         )
 
-    def _run_hooks(
-        self,
-        hooks: t.List[HookCall],
-        *,
-        context: ExecutionContext,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        env = prepare_env(self.python_env)
-        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
-        latest = to_datetime(latest or c.EPOCH_DS)
+    def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
+        """Returns audits referenced in this model.
 
-        for hook, hook_kwargs in hooks:
-            env[hook](
-                context=context,
-                start=start,
-                end=end,
-                latest=latest,
-                **{**kwargs, **hook_kwargs},
-            )
+        Args:
+            audits: Available audits by name.
+        """
+        referenced_audits = []
+        for audit_name, _ in self.audits:
+            if audit_name not in audits:
+                raise_config_error(
+                    f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
+                    self._path,
+                )
+            referenced_audits.append(audits[audit_name])
+        return referenced_audits
 
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema associated with this model.
@@ -509,6 +482,29 @@ class _Model(ModelMeta, frozen=True):
             raise_config_error(
                 "Incremental by time range models must have a time_column field.",
                 self._path,
+            )
+
+    def _run_hooks(
+        self,
+        hooks: t.List[HookCall],
+        *,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        env = prepare_env(self.python_env)
+        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
+        latest = to_datetime(latest or c.EPOCH_DS)
+
+        for hook, hook_kwargs in hooks:
+            env[hook](
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **{**kwargs, **hook_kwargs},
             )
 
 
@@ -1186,6 +1182,43 @@ def _parse_depends_on(
 
 
 def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
-    return (ModelMeta._value_or_tuple_validator(kwargs.get("pre")) or []) + (
-        ModelMeta._value_or_tuple_validator(kwargs.get("post")) or []
+    return (ModelMeta._value_or_tuple_with_args_validator(kwargs.get("pre")) or []) + (
+        ModelMeta._value_or_tuple_with_args_validator(kwargs.get("post")) or []
     )
+
+
+def _list_of_calls_to_exp(
+    value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]
+) -> exp.Expression:
+    return exp.Tuple(
+        expressions=[
+            exp.Anonymous(
+                this=v[0],
+                expressions=[
+                    exp.EQ(this=exp.convert(left), expression=exp.convert(right))
+                    for left, right in v[1].items()
+                ],
+            )
+            for v in value
+        ]
+    )
+
+
+META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
+    "name": lambda value: exp.to_table(value),
+    "start": lambda value: exp.Literal.string(value),
+    "cron": lambda value: exp.Literal.string(value),
+    "batch_size": lambda value: exp.Literal.number(value),
+    "partitioned_by_": lambda value: (
+        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
+    ),
+    "depends_on_": lambda value: exp.Tuple(expressions=value),
+    "pre": _list_of_calls_to_exp,
+    "post": _list_of_calls_to_exp,
+    "audits": _list_of_calls_to_exp,
+    "columns_to_types_": lambda value: exp.Schema(
+        expressions=[
+            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
+        ]
+    ),
+}

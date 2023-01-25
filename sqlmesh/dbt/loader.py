@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader
@@ -54,3 +55,6 @@ class DbtLoader(Loader):
         )
 
         return models
+
+    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+        return UniqueKeyDict("audits")

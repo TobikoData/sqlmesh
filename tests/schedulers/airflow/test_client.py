@@ -78,7 +78,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "intervals": [],
                     "dev_intervals": [],
                     "model": {
-                        "audits": {},
+                        "audits": [],
                         "cron": "@daily",
                         "dialect": "",
                         "expressions": ["@DEF(key, " "'value')"],
@@ -94,6 +94,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "storage_format": "parquet",
                         "source_type": "sql",
                     },
+                    "audits": [],
                     "name": "test_model",
                     "parents": [],
                     "previous_versions": [],

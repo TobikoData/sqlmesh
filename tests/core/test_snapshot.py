@@ -61,7 +61,7 @@ def test_json(snapshot: Snapshot):
         "intervals": [],
         "dev_intervals": [],
         "model": {
-            "audits": {},
+            "audits": [],
             "cron": "1 0 * * *",
             "batch_size": 30,
             "kind": {
@@ -78,6 +78,7 @@ def test_json(snapshot: Snapshot):
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
             "source_type": "sql",
         },
+        "audits": [],
         "name": "name",
         "parents": [
             {"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}
