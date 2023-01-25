@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, ModelKind, ModelKindName, SqlModel
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import to_timestamp
 
 
@@ -35,14 +35,14 @@ def airflow_db_session():
 
 
 @pytest.fixture()
-def state_sync(init_state, airflow_db_session: Session) -> XComStateSync:
-    return XComStateSync(airflow_db_session)
+def state_sync(init_state, airflow_db_session: Session) -> VariableStateSync:
+    return VariableStateSync(airflow_db_session)
 
 
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_push_snapshots(
-    make_snapshot: t.Callable, state_sync: XComStateSync, random_name: t.Callable
+    make_snapshot: t.Callable, state_sync: VariableStateSync, random_name: t.Callable
 ):
     model_name = random_name()
     snapshot = make_snapshot(_create_model(model_name), version="1")
@@ -66,7 +66,7 @@ def test_push_snapshots(
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_add_interval(
-    make_snapshot: t.Callable, state_sync: XComStateSync, random_name: t.Callable
+    make_snapshot: t.Callable, state_sync: VariableStateSync, random_name: t.Callable
 ):
     model_name = random_name()
     model = _create_model(model_name)
@@ -95,7 +95,7 @@ def test_add_interval(
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_promote_snapshots(
-    make_snapshot: t.Callable, state_sync: XComStateSync, random_name: t.Callable
+    make_snapshot: t.Callable, state_sync: VariableStateSync, random_name: t.Callable
 ):
     environment = random_name()
     model_name = random_name()
@@ -134,7 +134,7 @@ def test_promote_snapshots(
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_remove_expired_snapshots(
-    make_snapshot: t.Callable, state_sync: XComStateSync, random_name: t.Callable
+    make_snapshot: t.Callable, state_sync: VariableStateSync, random_name: t.Callable
 ):
     environment = random_name()
     model_name = random_name()
