@@ -1,0 +1,44 @@
+test_order_item_f:
+  model: db.order_item_f
+  inputs:
+    src.order_item_details:
+      rows:
+      - id: 1
+        customer_id: '12345'
+        item_id: 'XX'
+        quantity: 2
+        table_id: 1
+        order_ds: '2022-10-01'
+      - id: 2
+        item_id: 'XY'
+        quantity: 1
+        table_id: 0
+        order_ds: '2022-10-01'
+    db.item_d:
+      rows:
+      - item_id: 'XX'
+        item_name: Pretzel
+        item_group: SNACKS
+        item_price: 7.00
+      - item_id: 'XY'
+        item_name: Schnitzel Poppers
+        item_group: SNACKS
+        item_price: 10.00
+  outputs:
+    vars:
+      start: 2022-10-01
+      end: 2022-10-01
+      latest: 2022-10-01
+    query:
+      rows:
+      - order_id: 1
+        customer_id: '12345'
+        item_id: 'XX'
+        quantity: 2
+        order_amount: 14.00
+        order_ds: '2022-10-01'
+      - order_id: 2
+        item_id: 'XY'
+        quantity: 1
+        order_amount: 10.00
+        order_ds: '2022-10-01'

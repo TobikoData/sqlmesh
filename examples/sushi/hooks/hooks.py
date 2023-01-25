@@ -1,3 +1,4 @@
+import typing as t
 from datetime import datetime
 
 from sqlmesh import ExecutionContext, hook
@@ -9,6 +10,6 @@ def noop(
     start: datetime,
     end: datetime,
     latest: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> None:
     pass

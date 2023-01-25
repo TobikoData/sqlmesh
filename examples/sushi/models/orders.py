@@ -1,4 +1,5 @@
 import random
+import typing as t
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -33,7 +34,7 @@ def execute(
     start: datetime,
     end: datetime,
     latest: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> pd.DataFrame:
     dfs = []
     for dt in iter_dates(start, end):

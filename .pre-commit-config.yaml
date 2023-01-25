@@ -7,20 +7,20 @@ repos:
         language: system
         "types": [ python ]
         require_serial: true
-        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+        files: &files ^(sqlmesh/|tests/|web/|examples/|setup.py)
       - id: isort
         name: isort
         entry: isort
         language: system
         "types": [ python ]
-        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+        files: *files
         require_serial: true
       - id: black
         name: black
         language: system
         entry: black
         require_serial: true
-        files: ^(sqlmesh/|tests/|web/|example/|setup.py)
+        files: *files
         types_or:
           - python
           - pyi
@@ -29,5 +29,5 @@ repos:
         language: system
         entry: mypy
         "types": [ python ]
-        files: ^(sqlmesh/|tests/|web/|setup.py)
+        files: *files
         require_serial: true
