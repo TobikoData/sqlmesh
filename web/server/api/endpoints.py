@@ -7,8 +7,15 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
-from web.server.models import Directory, File
 from web.server.settings import Settings, get_context, get_settings
+from web.server.models import (
+    APIContext,
+    APIContextEnvironment,
+    APIContextEnvironmentChanges,
+    Directory,
+    File,
+)
+from web.server.settings import Settings, get_settings
 
 router = APIRouter()
 
@@ -118,45 +125,42 @@ async def delete_file(
 
 
 @router.get("/context")
-def get_context(
-    settings: Settings = Depends(get_settings),
-) -> t.Dict[str, t.Any]:
+def get_api_context(
+    context: Context = Depends(get_context),
+) -> APIContext:
     """Get the context"""
 
-    return {
-        "concurrent_tasks": settings.context.concurrent_tasks,
-        "models": list(map(lambda x: x.name, settings.context.models.values())),
-        "engine_adapter": settings.context.engine_adapter.dialect,
-        "dialect": settings.context.dialect,
-        "path": settings.context.path,
-        "scheduler": settings.context.config.scheduler.type_,
-        "users": settings.context.config.users,
-        "time_column_format": settings.context.config.time_column_format,
-    }
+    return APIContext(
+        concurrent_tasks=context.concurrent_tasks,
+        engine_adapter=context.engine_adapter.dialect,
+        dialect=context.dialect,
+        path=str(context.path),
+        scheduler=context.config.scheduler.type_,
+        time_column_format=context.config.time_column_format,
+        models=[x.name for x in context.models.values()],
+    )
 
 
 @router.get("/context/{environment:path}")
-def get_context_by_environment(
+def get_api_context_by_environment(
     environment: str = "",
-    settings: Settings = Depends(get_settings),
-) -> t.Dict[str, t.Any]:
+    context: Context = Depends(get_context),
+) -> APIContextEnvironment:
     """Get the context for a environment."""
 
-    plan = settings.context.plan(environment=environment, no_prompts=True)
-    backfills = map(
-        lambda x: (x.snapshot_name, x.format_missing_range()
-                   ), plan.missing_intervals
+    plan = context.plan(environment=environment, no_prompts=True)
+    payload = APIContextEnvironment(
+        environment=plan.environment.name,
+        backfills=[
+            (x.snapshot_name, x.format_missing_range()) for x in plan.missing_intervals
+        ],
     )
-    payload = {
-        "environment": plan.environment.name,
-        "backfills": list(backfills),
-    }  # type: t.Dict[str, t.Any]
 
     if plan.context_diff.has_differences:
-        payload["changes"] = {
-            "removed": plan.context_diff.removed,
-            "added": plan.context_diff.added,
-            "modified": plan.context_diff.modified_snapshots,
-        }
+        payload.changes = APIContextEnvironmentChanges(
+            removed=plan.context_diff.removed,
+            added=plan.context_diff.added,
+            modified=plan.context_diff.modified_snapshots,
+        )
 
     return payload
