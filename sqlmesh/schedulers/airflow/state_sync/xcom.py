@@ -45,9 +45,9 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
                 snapshot.name, snapshot.version
             )
             if version_key in snapshot_version_index:
-                snapshot_version_index[version_key].append(snapshot.fingerprint)
+                snapshot_version_index[version_key].append(snapshot.identifier)
             else:
-                snapshot_version_index[version_key] = [snapshot.fingerprint]
+                snapshot_version_index[version_key] = [snapshot.identifier]
 
         for key, value in snapshot_version_index.items():
             logger.info("Storing the snapshot version index '%s'", key)
@@ -74,11 +74,12 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
     def snapshots_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Set[SnapshotId]:
-        target_keys = {common.snapshot_xcom_key(s) for s in snapshot_ids}
-        raw_snapshots = self._get_snapshots_raw(target_keys=target_keys)
+        target_keys = {common.snapshot_xcom_key(s): s for s in snapshot_ids}
+        raw_snapshots = self._get_snapshots_raw(target_keys=set(target_keys))
         return {
-            SnapshotId(name=s["name"], fingerprint=s["fingerprint"])
-            for s in raw_snapshots.values()
+            snapshot_id.snapshot_id
+            for key, snapshot_id in target_keys.items()
+            if key in raw_snapshots
         }
 
     def get_all_snapshots_raw(self) -> t.List[t.Dict]:
@@ -109,11 +110,11 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
                 {
                     SnapshotId(
                         name=common.name_from_snapshot_version_xcom_key(key),
-                        fingerprint=f,
+                        identifier=i,
                     )
-                    for f in fingerprints
+                    for i in identifiers
                 }
-                for key, fingerprints in version_index.items()
+                for key, identifiers in version_index.items()
             ],
         )
         missing_keys = all_snapshot_ids - snapshots_dict.keys()
@@ -198,12 +199,11 @@ class XComStateSync(CommonStateSyncMixin, StateSync):
         raw_snapshots = self._get_snapshots_raw(
             target_keys=target_keys, lock_for_update=lock_for_update
         )
-        return {
-            SnapshotId(
-                name=s["name"], fingerprint=s["fingerprint"]
-            ): Snapshot.parse_obj(s)
-            for s in raw_snapshots.values()
-        }
+        result = {}
+        for raw_snapshot in raw_snapshots.values():
+            snapshot = Snapshot.parse_obj(raw_snapshot)
+            result[snapshot.snapshot_id] = snapshot
+        return result
 
     def _get_snapshots_raw(
         self, target_keys: t.Optional[t.Set[str]] = None, lock_for_update: bool = False

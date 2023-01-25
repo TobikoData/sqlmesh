@@ -170,7 +170,7 @@ class Plan:
             previous_ids = [
                 SnapshotId(
                     name=snapshot.name,
-                    fingerprint=snapshot.previous_version.fingerprint,
+                    identifier=snapshot.previous_version.fingerprint.to_identifier(),
                 )
                 for snapshot in self.snapshots
                 if snapshot.previous_version
@@ -184,7 +184,7 @@ class Plan:
 
             end = self.end
             self._missing_intervals = {
-                snapshot.version_or_fingerprint: missing
+                snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
                     previous_snapshots + list(self.snapshots),
                     start=self.start,
@@ -196,10 +196,10 @@ class Plan:
         return [
             MissingIntervals(
                 snapshot_name=snapshot.name,
-                intervals=self._missing_intervals[snapshot.version_or_fingerprint],
+                intervals=self._missing_intervals[snapshot.version_get_or_generate()],
             )
             for snapshot in self.snapshots
-            if snapshot.version_or_fingerprint in self._missing_intervals
+            if snapshot.version_get_or_generate() in self._missing_intervals
         ]
 
     @property

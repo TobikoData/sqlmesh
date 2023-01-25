@@ -18,7 +18,12 @@ from sqlmesh.core.model import (
     load_model,
 )
 from sqlmesh.core.schema_diff import SchemaDelta
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotFingerprint,
+    SnapshotTableInfo,
+)
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -33,7 +38,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
     )
 
     snapshot = make_snapshot(model)
-    snapshot.version = snapshot.fingerprint
+    snapshot.set_version()
     return snapshot
 
 
@@ -90,7 +95,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
     )
 
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.version = snapshot.fingerprint
+    snapshot.version = snapshot.fingerprint.to_version()
 
     evaluator.create([snapshot], {})
     evaluator.evaluate(
@@ -122,7 +127,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
     model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.version = snapshot.fingerprint
+    snapshot.set_version()
 
     parent_snapshot = make_snapshot(
         SqlModel(name="test_parent_model", query=parse_one("SELECT b, ds"))
@@ -176,7 +181,7 @@ def test_promote_model_info(mocker: MockerFixture):
             SnapshotTableInfo(
                 physical_schema="physical_schema",
                 name="test_schema.test_model",
-                fingerprint="1",
+                fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
                 version="1",
                 parents=[],
                 is_materialized=True,
@@ -279,7 +284,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
-    new_snapshot.version = snapshot.version
+    new_snapshot.set_version(snapshot.version)
 
     evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot])

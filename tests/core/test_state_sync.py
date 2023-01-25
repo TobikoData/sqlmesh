@@ -86,8 +86,8 @@ def test_push_snapshots(
     ):
         state_sync.push_snapshots([snapshot_a, snapshot_b])
 
-    snapshot_a.version = snapshot_a.fingerprint
-    snapshot_b.version = "2"
+    snapshot_a.set_version()
+    snapshot_b.set_version("2")
     state_sync.push_snapshots([snapshot_a, snapshot_b])
 
     assert state_sync.get_snapshots(
@@ -421,14 +421,16 @@ def test_promote_snapshots_no_gaps(
     promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 
     new_snapshot_same_version = make_snapshot(model, version="a")
-    new_snapshot_same_version.fingerprint = "new_snapshot_same_version_fingerprint"
+    new_snapshot_same_version.fingerprint = snapshot.fingerprint.copy(
+        update={"data_hash": "new_snapshot_same_version"}
+    )
     new_snapshot_same_version.add_interval("2022-01-03", "2022-01-03")
     state_sync.push_snapshots([new_snapshot_same_version])
     promote_snapshots(state_sync, [new_snapshot_same_version], "prod", no_gaps=True)
 
     new_snapshot_missing_interval = make_snapshot(model, version="b")
-    new_snapshot_missing_interval.fingerprint = (
-        "new_snapshot_missing_interval_fingerprint"
+    new_snapshot_missing_interval.fingerprint = snapshot.fingerprint.copy(
+        update={"data_hash": "new_snapshot_missing_interval"}
     )
     new_snapshot_missing_interval.add_interval("2022-01-01", "2022-01-02")
     state_sync.push_snapshots([new_snapshot_missing_interval])
@@ -441,7 +443,9 @@ def test_promote_snapshots_no_gaps(
         )
 
     new_snapshot_same_interval = make_snapshot(model, version="c")
-    new_snapshot_same_interval.fingerprint = "new_snapshot_same_interval_fingerprint"
+    new_snapshot_same_interval.fingerprint = snapshot.fingerprint.copy(
+        update={"data_hash": "new_snapshot_same_interval"}
+    )
     new_snapshot_same_interval.add_interval("2022-01-01", "2022-01-03")
     state_sync.push_snapshots([new_snapshot_same_interval])
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)

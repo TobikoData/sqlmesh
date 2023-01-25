@@ -203,6 +203,7 @@ class TerminalConsole(Console):
         if context_diff.modified_snapshots:
             direct = Tree(f"[bold][direct]Directly Modified:")
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
+            metadata = Tree(f"[bold][metadata]Metadata Updated:")
             for model in context_diff.modified_snapshots:
                 if context_diff.directly_modified(model):
                     direct.add(
@@ -210,12 +211,16 @@ class TerminalConsole(Console):
                         if detailed
                         else f"[direct]{model}"
                     )
-                else:
+                elif context_diff.indirectly_modified(model):
                     indirect.add(f"[indirect]{model}")
+                elif context_diff.metadata_updated(model):
+                    metadata.add(f"[metadata]{model}")
             if direct.children:
                 tree.add(direct)
             if indirect.children:
                 tree.add(indirect)
+            if metadata.children:
+                tree.add(metadata)
         self.console.print(tree)
 
     def plan(self, plan: Plan, auto_apply: bool) -> None:
