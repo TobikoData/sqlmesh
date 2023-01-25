@@ -15,7 +15,6 @@ def mask(
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> from sqlmesh.utils.metaprogramming import Executable
         >>> sql = "@mask('sensitive_col')"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'MD5(sensitive_col)'
