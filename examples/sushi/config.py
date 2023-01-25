@@ -10,7 +10,7 @@ config = Config()
 
 # A stateful DuckDB config.
 local_config = Config(
-    connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb")
+    connections=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
 )
 
 

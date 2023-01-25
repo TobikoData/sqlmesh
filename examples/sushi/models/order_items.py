@@ -31,7 +31,7 @@ def execute(
     start: datetime,
     end: datetime,
     latest: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")
     items_table = context.table(ITEMS)

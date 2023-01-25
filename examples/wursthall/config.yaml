@@ -1,0 +1,4 @@
+default_connection: duckdb
+connection:
+  duckdb:
+    type: duckdb
