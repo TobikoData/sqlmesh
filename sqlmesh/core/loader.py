@@ -6,8 +6,8 @@ import os
 import sys
 import types
 import typing as t
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
@@ -21,7 +21,6 @@ from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -81,7 +80,9 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
         update_model_schemas(self._context.dialect, self._dag, models)
 
-        project = LoadedProject(hooks=hooks, macros=macros, models=models, dag=self._dag)
+        project = LoadedProject(
+            hooks=hooks, macros=macros, models=models, dag=self._dag
+        )
         return project
 
     def reload_needed(self) -> bool:
