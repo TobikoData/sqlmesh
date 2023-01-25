@@ -3,8 +3,6 @@ import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { useApiContextByEnvironment } from "../../../api";
-import { EnumSize } from "../../../types/enum";
-import { Button } from "../button/Button";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
 
@@ -23,15 +21,28 @@ const strategies = [
   },
 ]
 
-export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: string, setShouldShowApply: any, setShouldShowNext: any }) {
+export function PlanWizard({
+  id,
+  setShouldShowNext,
+  setShouldShowBackfill,
+  setShouldShowApply,
+  shouldShowBackfill,
+  backfillTasks,
+  backfillStatus,
+}: {
+  id: string,
+  setShouldShowNext: any,
+  setShouldShowBackfill: any,
+  setShouldShowApply: any,
+  shouldShowBackfill: boolean,
+  backfillTasks?: Array<[string, number]>,
+  backfillStatus?: boolean,
+}) {
   const elFormOverrideDates = useRef(null)
   const elFormBackfillDates = useRef(null)
 
-  const [shouldShowBackfill, setShouldShowBackfill] = useState(true)
   const [selected, setSelected] = useState(strategies[0])
   const [environment, setEnvironment] = useState<string>()
-  const [backfillStatus, setBackfillStatus] = useState(false)
-  const [backfillTasks, setBackfillTasks] = useState<Array<[string, number]>>([])
 
   const { data: context } = useApiContextByEnvironment(environment)
 
@@ -40,8 +51,12 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
   }, [context?.environment])
 
   useEffect(() => {
-    setShouldShowApply(!shouldShowBackfill)
-  }, [shouldShowBackfill])
+    setShouldShowBackfill(Boolean(context?.backfills))
+  }, [context?.backfills])
+
+  useEffect(() => {
+    setShouldShowApply(Boolean(context?.environment) && !Boolean(context?.backfills))
+  }, [context?.environment, context?.backfills])
 
   function getContext(e: any) {
     e.preventDefault()
@@ -53,16 +68,6 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
     setEnvironment(String(data.get('environment')))
 
     elForm.reset()
-  }
-
-  function backfill() {
-    context?.backfills && setBackfillTasks(context?.backfills.map(([name]) => [name, Math.round(Math.random() * 40)]))
-
-    setTimeout(() => {
-      setBackfillStatus(true)
-    }, 200)
-
-    setShouldShowBackfill(Boolean(selected == null))
   }
 
   return (
@@ -113,15 +118,7 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
                     </li>
                   ))}
                 </ul>
-                <PlanDates refDates={elFormBackfillDates} prefix='Backfill' />
-                <div className='flex justify-end mt-4'>
-                  <Button size={EnumSize.sm} onClick={backfill}>
-                    Backfill
-                  </Button>
-                  <Button size={EnumSize.sm} variant='alternative' onClick={() => setShouldShowBackfill(Boolean(selected == null))}>
-                    Skip
-                  </Button>
-                </div>
+                <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} />
               </>
             ) : (
               <div>
@@ -136,7 +133,7 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
 
                       {/* Fake Progress for now. Remove once API works */}
                       <Progress
-                        progress={backfillStatus ? 100 : 2}
+                        progress={backfillStatus != null ? 100 : 2}
                         delay={Math.round(Math.random() * 1000)}
                         duration={Math.round(Math.random() * 1000)}
                       />
@@ -148,64 +145,68 @@ export function PlanWizard({ id, setShouldShowApply, setShouldShowNext }: { id: 
           </div>
         )}
       </PlanWizardStep>
-      <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
-        <RadioGroup
-          className='p-4 bg-secondary-900 rounded-lg'
-          value={selected}
-          onChange={setSelected}
-        >
-          {strategies.map((strategy) => (
-            <RadioGroup.Option
-              key={strategy.title}
-              value={strategy}
-              className={({ active, checked }) =>
-                `${active
-                  ? 'ring-2 ring-white ring-opacity-60 ring-offset-2 ring-offset-sky-300'
-                  : ''
-                }
+      {!context?.changes?.added && (
+        <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
+          <RadioGroup
+            className='p-4 bg-secondary-900 rounded-lg'
+            value={selected}
+            onChange={setSelected}
+          >
+            {strategies.map((strategy) => (
+              <RadioGroup.Option
+                key={strategy.title}
+                value={strategy}
+                className={({ active, checked }) =>
+                  `${active
+                    ? 'ring-2 ring-white ring-opacity-60 ring-offset-2 ring-offset-sky-300'
+                    : ''
+                  }
                   ${checked
-                  ? 'bg-sky-900 bg-opacity-75 text-white'
-                  : 'bg-white'
-                }
+                    ? 'bg-sky-900 bg-opacity-75 text-white'
+                    : 'bg-white'
+                  }
                 relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
-              }
-            >
-              {({ active, checked }) => (
-                <>
-                  <div className="flex w-full items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="text-sm">
-                        <RadioGroup.Label
-                          as="p"
-                          className={`font-medium  ${checked ? 'text-white' : 'text-gray-900'
-                            }`}
-                        >
-                          {strategy.title}
-                        </RadioGroup.Label>
-                        <RadioGroup.Description
-                          as="span"
-                          className={`inline ${checked ? 'text-sky-100' : 'text-gray-500'
-                            }`}
-                        >
-                          <span>{strategy.description}</span>
-                        </RadioGroup.Description>
+                }
+              >
+                {({ active, checked }) => (
+                  <>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="text-sm">
+                          <RadioGroup.Label
+                            as="p"
+                            className={`font-medium  ${checked ? 'text-white' : 'text-gray-900'
+                              }`}
+                          >
+                            {strategy.title}
+                          </RadioGroup.Label>
+                          <RadioGroup.Description
+                            as="span"
+                            className={`inline ${checked ? 'text-sky-100' : 'text-gray-500'
+                              }`}
+                          >
+                            <span>{strategy.description}</span>
+                          </RadioGroup.Description>
+                        </div>
                       </div>
+                      {checked && (
+                        <div className="shrink-0 text-white">
+                          <CheckCircleIcon className="h-6 w-6" />
+                        </div>
+                      )}
                     </div>
-                    {checked && (
-                      <div className="shrink-0 text-white">
-                        <CheckCircleIcon className="h-6 w-6" />
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </RadioGroup.Option>
-          ))}
-        </RadioGroup>
-      </PlanWizardStep>
-      <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
-        <PlanDates refDates={elFormOverrideDates} />
-      </PlanWizardStep>
+                  </>
+                )}
+              </RadioGroup.Option>
+            ))}
+          </RadioGroup>
+        </PlanWizardStep>
+      )}
+      {!context?.changes?.added && (
+        <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
+          <PlanDates refDates={elFormOverrideDates} show={[true, false]} />
+        </PlanWizardStep>
+      )}
     </ul >
   )
 }
@@ -231,30 +232,35 @@ function PlanWizardStepHeader({ disabled = false, step = 1, children = '' }: any
   )
 }
 
-function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement> }) {
+function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates, show = [true, true] }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement>, show: [boolean, boolean] }) {
   const labelStartDate = `${prefix} Start Date (Optional)`.trim()
   const labelEndDate = `${prefix} End Date (Optional)`.trim()
+  const [showStartDate, showEndDate] = show;
 
   return (
     <form ref={refDates} className='flex mt-4'>
-      <label className='mx-4'>
-        <small>{labelStartDate}</small>
-        <input
-          type="text"
-          name="start_date"
-          className="block bg-gray-100 px-2 py-1 rounded-md"
-        />
-        <small>eg. '1 year', '2020-01-01'</small>
-      </label>
-      <label className='mx-4'>
-        <small>{labelEndDate}</small>
-        <input
-          type="text"
-          name="end_date"
-          className="block bg-gray-100 px-2 py-1 rounded-md"
-        />
-        <small>{hint}</small>
-      </label>
+      {showStartDate && (
+        <label className='mx-4'>
+          <small>{labelStartDate}</small>
+          <input
+            type="text"
+            name="start_date"
+            className="block bg-gray-100 px-2 py-1 rounded-md"
+          />
+          <small>eg. '1 year', '2020-01-01'</small>
+        </label>
+      )}
+      {showEndDate && (
+        <label className='mx-4'>
+          <small>{labelEndDate}</small>
+          <input
+            type="text"
+            name="end_date"
+            className="block bg-gray-100 px-2 py-1 rounded-md"
+          />
+          <small>{hint}</small>
+        </label>
+      )}
     </form>
   )
 }
