@@ -59,7 +59,7 @@ ITEMS = [
         "ds": "text",
     },
     audits=[
-        ("assert_items_name_not_null", {}),
+        ("not_null", {"columns": ["name", "price"]}),
         ("assert_items_price_exceeds_threshold", {"price": 0}),
     ],
 )

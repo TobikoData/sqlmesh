@@ -296,14 +296,17 @@ class _Model(ModelMeta, frozen=True):
         Args:
             audits: Available audits by name.
         """
+        from sqlmesh.core.audit import BUILT_IN_AUDITS
+
         referenced_audits = []
         for audit_name, _ in self.audits:
-            if audit_name not in audits:
+            if audit_name in audits:
+                referenced_audits.append(audits[audit_name])
+            elif audit_name not in BUILT_IN_AUDITS:
                 raise_config_error(
                     f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
                     self._path,
                 )
-            referenced_audits.append(audits[audit_name])
         return referenced_audits
 
     def update_schema(self, schema: MappingSchema) -> None:

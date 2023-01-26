@@ -2,7 +2,10 @@
 MODEL (
   name sushi.waiter_as_customer_by_day,
   owner jen,
-  cron '@daily'
+  cron '@daily',
+  audits (
+    not_null(columns=['waiter_id'])
+  )
 );
 
 SELECT
