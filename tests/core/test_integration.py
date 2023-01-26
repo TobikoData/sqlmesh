@@ -239,7 +239,7 @@ def change_model_kind(context: Context, kind: ModelKindName):
         context.upsert_model(
             "sushi.items",
             partitioned_by=[],
-            audits={},
+            audits=[],
         )
     context.upsert_model("sushi.items", kind=ModelKind(name=kind))
 

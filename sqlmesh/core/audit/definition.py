@@ -5,9 +5,10 @@ import typing as t
 from pathlib import Path
 
 from pydantic import Field, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.model.definition import Model, _Model, expression_validator
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, raise_config_error
@@ -22,8 +23,6 @@ class AuditMeta(PydanticModel):
 
     name: str
     """The name of this audit."""
-    model: str
-    """The model being audited."""
     dialect: str = ""
     """The dialect of the audit query."""
     skip: bool = False
@@ -52,21 +51,14 @@ class Audit(AuditMeta, frozen=True):
     An audit is a SQL query that returns bad records.
     """
 
-    query: exp.Subqueryable
+    query: t.Union[exp.Subqueryable, d.Jinja]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
 
     _path: t.Optional[pathlib.Path] = None
-    __query_renderer: t.Optional[QueryRenderer] = None
 
-    @validator("query", pre=True)
-    def _parse_expression(cls, v: str) -> exp.Expression:
-        """Helper method to deserialize SQLGlot expressions in Pydantic models."""
-        expression = maybe_parse(v)
-        if not expression:
-            raise ValueError(f"Could not parse {v}")
-        return expression
+    _query_validator = expression_validator
 
     @classmethod
     def load(
@@ -169,6 +161,7 @@ class Audit(AuditMeta, frozen=True):
 
     def render_query(
         self,
+        snapshot_or_model: t.Union[Snapshot, Model],
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -180,6 +173,7 @@ class Audit(AuditMeta, frozen=True):
         """Renders the audit's query.
 
         Args:
+            snapshot_or_model: The snapshot or model which is being audited.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
@@ -192,12 +186,22 @@ class Audit(AuditMeta, frozen=True):
         Returns:
             The rendered expression.
         """
-        return self._query_renderer.render(
+
+        if isinstance(snapshot_or_model, _Model):
+            model = snapshot_or_model
+            this_model = snapshot_or_model.name
+        else:
+            model = snapshot_or_model.model
+            this_model = snapshot_or_model.table_name(is_dev=is_dev, for_read=True)
+
+        return self._create_query_renderer(model).render(
             start=start,
             end=end,
             latest=latest,
+            add_incremental_filter=True,
             snapshots=snapshots,
             is_dev=is_dev,
+            this_model=exp.to_table(this_model),
             **kwargs,
         )
 
@@ -210,16 +214,16 @@ class Audit(AuditMeta, frozen=True):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    @property
-    def _query_renderer(self) -> QueryRenderer:
-        if self.__query_renderer is None:
-            self.__query_renderer = QueryRenderer(
-                self.query,
-                self.dialect,
-                self.macro_definitions,
-                path=self._path or Path(),
-            )
-        return self.__query_renderer
+    def _create_query_renderer(self, model: Model) -> QueryRenderer:
+        return QueryRenderer(
+            self.query,
+            self.dialect,
+            self.macro_definitions,
+            path=self._path or Path(),
+            time_column=model.time_column,
+            time_converter=model.convert_to_time_column,
+            only_latest=model.kind.only_latest,
+        )
 
 
 class AuditResult(PydanticModel):

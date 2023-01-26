@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from pydantic import validator
 from sqlglot import exp, maybe_parse
 from sqlglot.expressions import split_num_words
 from sqlglot.helper import seq_get
@@ -44,3 +45,8 @@ def parse_expression(
         raise ConfigError(f"Could not parse {v}")
 
     return v
+
+
+expression_validator = validator(
+    "query", "expressions_", pre=True, allow_reuse=True, check_fields=False
+)(parse_expression)

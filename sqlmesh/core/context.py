@@ -45,6 +45,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -225,9 +226,10 @@ class Context(BaseContext):
         )
         self.dag: DAG[str] = DAG()
 
-        self._models: UniqueKeyDict = UniqueKeyDict("models")
-        self._macros: UniqueKeyDict = UniqueKeyDict("macros")
-        self._hooks: UniqueKeyDict = UniqueKeyDict("hooks")
+        self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+        self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        self._macros: UniqueKeyDict[str, macro] = UniqueKeyDict("macros")
+        self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.connection = connection
         connection_config = self.config.get_connection(connection)
@@ -391,6 +393,7 @@ class Context(BaseContext):
             self._hooks = project.hooks
             self._macros = project.macros
             self._models = project.models
+            self._audits = project.audits
             self.dag = project.dag
 
         return self
@@ -444,6 +447,7 @@ class Context(BaseContext):
                     physical_schema=self.physical_schema,
                     models=self._models,
                     ttl=self.snapshot_ttl,
+                    audits=self._audits,
                     cache=fingerprint_cache,
                 )
                 cached = table_info_cache.get(snapshot.snapshot_id)
@@ -810,7 +814,7 @@ class Context(BaseContext):
         self.console.log_status_update(f"\nFinished with {len(errors)} audit error(s).")
         for error in errors:
             self.console.log_status_update(
-                f"\nFailure in audit {error.audit.name} for model {error.audit.model} ({error.audit._path})."
+                f"\nFailure in audit {error.audit.name} ({error.audit._path})."
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
