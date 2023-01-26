@@ -133,8 +133,6 @@ def get_api_context(
 ) -> APIContext:
     """Get the context"""
 
-    print(context._model_tables)
-
     return APIContext(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
@@ -144,6 +142,9 @@ def get_api_context(
         time_column_format=context.config.time_column_format,
         models=[x.name for x in context.models.values()],
     )
+
+
+print(router.redirect_slashes)
 
 
 @router.get(

@@ -51,10 +51,10 @@ class APIContext(PydanticModel):
 class APIContextEnvironmentChanges(PydanticModel):
     added: t.Set[str]
     removed: t.Set[str]
-    modified: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
+    modified: t.Dict[str, t.Tuple[t.Type[Snapshot], t.Type[Snapshot]]]
 
 
 class APIContextEnvironment(PydanticModel):
     environment: str
-    changes: t.Optional[APIContextEnvironmentChanges] = None
+    changes: t.Optional[APIContextEnvironmentChanges]
     backfills: t.List[t.Tuple[str, str]] = []
