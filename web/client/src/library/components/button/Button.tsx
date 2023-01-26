@@ -11,6 +11,7 @@ export interface PropsButton extends React.ButtonHTMLAttributes<HTMLButtonElemen
   size?: ButtonSize
   shape?: ButtonShape
   value?: string
+  form?: string
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
 }
 
@@ -33,9 +34,10 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg`],
 ]);
 
-export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], onClick }: PropsButton) {
+export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], form, onClick }: PropsButton) {
   return (
-    <button 
+    <button
+      form={form}
       className={clsx(
         'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         VARIANT.get(variant),
@@ -53,12 +55,12 @@ export function ButtonMenu({ variant = 'secondary', shape = 'rounded', size = En
   return (
     <Menu.Button
       className={clsx(
-      'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
-      VARIANT.get(variant),
-      SHAPE.get(shape),
-      SIZE.get(size),
-    )}>
+        'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
+        VARIANT.get(variant),
+        SHAPE.get(shape),
+        SIZE.get(size),
+      )}>
       {children}
-    </Menu.Button> 
+    </Menu.Button>
   )
 };
