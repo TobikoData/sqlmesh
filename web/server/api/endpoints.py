@@ -7,8 +7,14 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
-from web.server.models import Directory, File
-from web.server.settings import Settings, get_context, get_settings
+from web.server.models import (
+    APIContext,
+    APIContextEnvironment,
+    APIContextEnvironmentChanges,
+    Directory,
+    File,
+)
+from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 
 router = APIRouter()
 
@@ -115,3 +121,53 @@ async def delete_file(
         response.status_code = status.HTTP_204_NO_CONTENT
     except FileNotFoundError:
         raise HTTPException(status_code=404)
+
+
+@router.get(
+    "/context",
+    response_model=APIContext,
+    response_model_exclude_unset=True,
+)
+def get_api_context(
+    context: Context = Depends(get_loaded_context),
+) -> APIContext:
+    """Get the context"""
+
+    return APIContext(
+        concurrent_tasks=context.concurrent_tasks,
+        engine_adapter=context.engine_adapter.dialect,
+        dialect=context.dialect,
+        path=str(context.path),
+        scheduler=context.config.scheduler.type_,
+        time_column_format=context.config.time_column_format,
+        models=list(context.models.keys()),
+    )
+
+
+@router.get(
+    "/context/{environment:str}",
+    response_model=APIContextEnvironment,
+    response_model_exclude_unset=True,
+)
+def get_api_context_by_environment(
+    environment: str = "",
+    context: Context = Depends(get_loaded_context),
+) -> APIContextEnvironment:
+    """Get the context for a environment."""
+
+    plan = context.plan(environment=environment, no_prompts=True)
+    payload = APIContextEnvironment(
+        environment=plan.environment.name,
+        backfills=[
+            (x.snapshot_name, x.format_missing_range()) for x in plan.missing_intervals
+        ],
+    )
+
+    if plan.context_diff.has_differences:
+        payload.changes = APIContextEnvironmentChanges(
+            removed=plan.context_diff.removed,
+            added=plan.context_diff.added,
+            modified=plan.context_diff.modified_snapshots,
+        )
+
+    return payload
