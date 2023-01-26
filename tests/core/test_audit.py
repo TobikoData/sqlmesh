@@ -1,7 +1,8 @@
 import pytest
-from sqlglot import parse
+from sqlglot import parse, parse_one
 
 from sqlmesh.core.audit import Audit
+from sqlmesh.core.model import create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
 
@@ -131,3 +132,22 @@ def test_no_query():
     with pytest.raises(AuditConfigError) as ex:
         Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Missing SELECT query" in str(ex.value)
+
+
+def test_macro():
+    model = create_sql_model("db.test_model", parse_one("SELECT a, ds"), [])
+
+    expected_query = "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+
+    audit = Audit(
+        name="test_audit",
+        query="SELECT * FROM @this_model WHERE a IS NULL",
+    )
+
+    audit_jinja = Audit(
+        name="test_audit",
+        query="SELECT * FROM {{ this_model }} WHERE a IS NULL",
+    )
+
+    assert audit.render_query(model).sql() == expected_query
+    assert audit_jinja.render_query(model).sql() == expected_query

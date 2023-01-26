@@ -51,7 +51,7 @@ class Audit(AuditMeta, frozen=True):
     An audit is a SQL query that returns bad records.
     """
 
-    query: exp.Subqueryable
+    query: t.Union[exp.Subqueryable, d.Jinja]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="expressions"
     )
