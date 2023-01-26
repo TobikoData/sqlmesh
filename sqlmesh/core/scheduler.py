@@ -60,58 +60,6 @@ class Scheduler:
         self.max_workers = max_workers
         self.console: Console = console or get_console()
 
-    def _dag(
-        self,
-        batches: SnapshotBatches,
-        callbackForEachBatch: t.Optional[
-            t.Callable[[Snapshot, t.List[t.Tuple[datetime, datetime]]], None]
-        ] = None,
-    ) -> DAG[SchedulingUnit]:
-        """Builds a DAG of snapshot intervals to be evaluated.
-
-        Args:
-            batches: The batches of snapshots and intervals to evaluate.
-            callbackForEachBatch: A callback to be called for each batch.
-
-        Returns:
-            A DAG of snapshot intervals to be evaluated.
-        """
-
-        intervals_per_snapshot_version = {
-            (snapshot.name, snapshot.version_get_or_generate()): intervals
-            for snapshot, intervals in batches
-        }
-
-        dag = DAG[SchedulingUnit]()
-        for snapshot, intervals in batches:
-            if not intervals:
-                continue
-            upstream_dependencies = [
-                (p_sid, interval)
-                for p_sid in snapshot.parents
-                if p_sid in self.snapshots
-                for interval in intervals_per_snapshot_version.get(
-                    (
-                        self.snapshots[p_sid].name,
-                        self.snapshots[p_sid].version_get_or_generate(),
-                    ),
-                    [],
-                )
-            ]
-            sid = snapshot.snapshot_id
-            for i, interval in enumerate(intervals):
-                dag.add((sid, interval), upstream_dependencies)
-                if snapshot.is_incremental_by_unique_key_kind:
-                    dag.add(
-                        (sid, interval),
-                        [(sid, _interval) for _interval in intervals[:i]],
-                    )
-
-            if callbackForEachBatch:
-                callbackForEachBatch(snapshot, intervals)
-
-        return dag
-
     def batches(
         self,
         start: t.Optional[TimeLike] = None,
@@ -289,6 +237,58 @@ class Scheduler:
             end=end or now(),
             latest=latest or now(),
         )
+
+    def _dag(
+        self,
+        batches: SnapshotBatches,
+        callbackForEachBatch: t.Optional[
+            t.Callable[[Snapshot, t.List[t.Tuple[datetime, datetime]]], None]
+        ] = None,
+    ) -> DAG[SchedulingUnit]:
+        """Builds a DAG of snapshot intervals to be evaluated.
+
+        Args:
+            batches: The batches of snapshots and intervals to evaluate.
+            callbackForEachBatch: A callback to be called for each batch.
+
+        Returns:
+            A DAG of snapshot intervals to be evaluated.
+        """
+
+        intervals_per_snapshot_version = {
+            (snapshot.name, snapshot.version_get_or_generate()): intervals
+            for snapshot, intervals in batches
+        }
+
+        dag = DAG[SchedulingUnit]()
+        for snapshot, intervals in batches:
+            if not intervals:
+                continue
+            upstream_dependencies = [
+                (p_sid, interval)
+                for p_sid in snapshot.parents
+                if p_sid in self.snapshots
+                for interval in intervals_per_snapshot_version.get(
+                    (
+                        self.snapshots[p_sid].name,
+                        self.snapshots[p_sid].version_get_or_generate(),
+                    ),
+                    [],
+                )
+            ]
+            sid = snapshot.snapshot_id
+            for i, interval in enumerate(intervals):
+                dag.add((sid, interval), upstream_dependencies)
+                if snapshot.is_incremental_by_unique_key_kind:
+                    dag.add(
+                        (sid, interval),
+                        [(sid, _interval) for _interval in intervals[:i]],
+                    )
+
+            if callbackForEachBatch:
+                callbackForEachBatch(snapshot, intervals)
+
+        return dag
 
 
 def compute_interval_params(
