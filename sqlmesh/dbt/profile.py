@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.dbt.common import project_config_path
-from sqlmesh.dbt.datawarehouse import DataWarehouseConfig
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -20,17 +20,17 @@ class Profile:
     def __init__(
         self,
         path: Path,
-        connections: t.Dict[str, DataWarehouseConfig],
+        targets: t.Dict[str, TargetConfig],
         default_target: str,
     ):
         """
         Args:
             path: Path to the profile file
-            dataware_config
-            datwarehouse_config: The data warehouse configuration for the project's target
+            targets: Dict of targets defined for the project
+            default_target: Name of the default target for the proejct
         """
         self.path = path
-        self.connections = connections
+        self.targets = targets
         self.default_target = default_target
 
     @classmethod
@@ -49,7 +49,7 @@ class Profile:
                           specified, the name is read from the project yaml file.
 
         Returns:
-            The profile connection configurations for the specified project and the profile's default target
+            The Profile for the specified project
         """
         project_root = project_root or Path()
 
@@ -63,8 +63,8 @@ class Profile:
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found")
 
-        connections, default_target = cls._read_profile(profile_filepath, project_name)
-        return Profile(profile_filepath, connections, default_target)
+        targets, default_target = cls._read_profile(profile_filepath, project_name)
+        return Profile(profile_filepath, targets, default_target)
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
@@ -82,7 +82,7 @@ class Profile:
     @classmethod
     def _read_profile(
         cls, path: Path, project: str
-    ) -> t.Tuple[t.Dict[str, DataWarehouseConfig], str]:
+    ) -> t.Tuple[t.Dict[str, TargetConfig], str]:
         contents = yaml_load(path)
 
         project_data = contents.get(project)
@@ -93,19 +93,14 @@ class Profile:
         if not outputs:
             raise ConfigError(f"No outputs exist in profiles for Project '{project}'")
 
-        connections = {
-            name: DataWarehouseConfig.load(output) for name, output in outputs.items()
-        }
+        targets = {name: TargetConfig.load(output) for name, output in outputs.items()}
         default_target = project_data.get("target")
-        if default_target not in connections:
+        if default_target not in targets:
             raise ConfigError(
                 f"Default target '#{default_target}' not specified in profiles for Project '{project}'"
             )
 
-        return (connections, default_target)
+        return (targets, default_target)
 
     def to_sqlmesh(self) -> t.Dict[str, ConnectionConfig]:
-        return {
-            target: connection.to_sqlmesh()
-            for target, connection in self.connections.items()
-        }
+        return {name: target.to_sqlmesh() for name, target in self.targets.items()}

@@ -5,10 +5,10 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.dbt.common import BaseConfig, project_config_path
-from sqlmesh.dbt.models import ModelConfig
+from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
-from sqlmesh.dbt.sources import SourceConfig
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import capture_jinja
 from sqlmesh.utils.yaml import load as yaml_load
@@ -76,9 +76,9 @@ class ProjectConfig:
 
         profile = Profile.load(project_root, project_name)
         connection = (
-            profile.connections[target]
+            profile.targets[target]
             if target
-            else profile.connections[profile.default_target]
+            else profile.targets[profile.default_target]
         )
 
         models, sources, seeds, config_paths = cls._load_models_and_sources(
