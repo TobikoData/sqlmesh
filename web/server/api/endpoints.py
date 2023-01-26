@@ -140,11 +140,8 @@ def get_api_context(
         path=str(context.path),
         scheduler=context.config.scheduler.type_,
         time_column_format=context.config.time_column_format,
-        models=[x.name for x in context.models.values()],
+        models=list(context.models.keys()),
     )
-
-
-print(router.redirect_slashes)
 
 
 @router.get(
