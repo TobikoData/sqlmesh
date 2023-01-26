@@ -67,10 +67,14 @@ class Scheduler:
             t.Callable[[Snapshot, t.List[t.Tuple[datetime, datetime]]], None]
         ] = None,
     ) -> DAG[SchedulingUnit]:
-        """Returns a DAG of snapshot batches to evaluate.
+        """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
-            batches: The snapshot batches to evaluate.
+            batches: The batches of snapshots and intervals to evaluate.
+            callbackForEachBatch: A callback to be called for each batch.
+
+        Returns:
+            A DAG of snapshot intervals to be evaluated.
         """
 
         intervals_per_snapshot_version = {
