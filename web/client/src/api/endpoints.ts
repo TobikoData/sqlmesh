@@ -43,7 +43,7 @@ export async function getContext() {
   }>('context')
 }
 
-export async function getContextByEnvironment(environment: string = '') {
+export async function getContextByEnvironment(environment: string) {
   return await fetchApi<{
     environment: string
     backfills: Array<[string, string]>,
@@ -52,7 +52,7 @@ export async function getContextByEnvironment(environment: string = '') {
       removed: Array<string>,
       modified: Array<string>,
     }
-  }>(`context/${environment}`)
+  }>(`context/${environment || 'prod'}`)
 }
 
 type FetchResponse<T> = Promise<T | null>
