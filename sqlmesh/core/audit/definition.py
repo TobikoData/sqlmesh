@@ -8,6 +8,7 @@ from pydantic import Field, validator
 from sqlglot import exp, maybe_parse
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.model.definition import Model, _Model
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, raise_config_error
@@ -166,8 +167,8 @@ class Audit(AuditMeta, frozen=True):
 
     def render_query(
         self,
+        snapshot_or_model: t.Union[Snapshot, Model],
         *,
-        this_model: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
@@ -178,7 +179,7 @@ class Audit(AuditMeta, frozen=True):
         """Renders the audit's query.
 
         Args:
-            this_model: The name of a model that is being audited.
+            snapshot_or_model: The snapshot or model which is being audited.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
@@ -191,10 +192,19 @@ class Audit(AuditMeta, frozen=True):
         Returns:
             The rendered expression.
         """
-        return self._create_query_renderer().render(
+
+        if isinstance(snapshot_or_model, _Model):
+            model = snapshot_or_model
+            this_model = snapshot_or_model.name
+        else:
+            model = snapshot_or_model.model
+            this_model = snapshot_or_model.table_name(is_dev=is_dev, for_read=True)
+
+        return self._create_query_renderer(model).render(
             start=start,
             end=end,
             latest=latest,
+            add_incremental_filter=True,
             snapshots=snapshots,
             is_dev=is_dev,
             this_model=exp.to_table(this_model),
@@ -210,12 +220,15 @@ class Audit(AuditMeta, frozen=True):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    def _create_query_renderer(self) -> QueryRenderer:
+    def _create_query_renderer(self, model: Model) -> QueryRenderer:
         return QueryRenderer(
             self.query,
             self.dialect,
             self.macro_definitions,
             path=self._path or Path(),
+            time_column=model.time_column,
+            time_converter=model.convert_to_time_column,
+            only_latest=model.kind.only_latest,
         )
 
 

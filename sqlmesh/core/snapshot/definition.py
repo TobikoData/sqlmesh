@@ -758,7 +758,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         metadata.extend(
             [
                 audit.name,
-                audit.render_query(this_model=model.name, **audit_args).sql(
+                audit.render_query(model, **audit_args).sql(
                     identify=True, comments=True
                 ),
                 audit.dialect,

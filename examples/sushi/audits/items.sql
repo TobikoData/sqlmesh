@@ -3,9 +3,7 @@ AUDIT (
 );
 SELECT *
 FROM @this_model
-WHERE
-  ds BETWEEN @start_ds AND @end_ds AND
-  name IS NULL;
+WHERE name IS NULL;
 
 
 AUDIT (
@@ -13,7 +11,5 @@ AUDIT (
 );
 SELECT *
 FROM @this_model
-WHERE
-  ds BETWEEN @start_ds AND @end_ds AND
-  price <= @price;
+WHERE price <= @price;
 

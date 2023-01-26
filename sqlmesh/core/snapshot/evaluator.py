@@ -297,12 +297,12 @@ class SnapshotEvaluator:
         for audit_name, audit_args in snapshot.model.audits:
             audit = audits_by_name[audit_name]
             query = audit.render_query(
+                snapshot,
                 start=start,
                 end=end,
                 latest=latest,
                 snapshots=snapshots,
                 is_dev=is_dev,
-                this_model=snapshot.table_name(is_dev=is_dev, for_read=True),
                 **audit_args,
                 **kwargs,
             )
