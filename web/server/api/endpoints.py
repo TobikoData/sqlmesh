@@ -14,7 +14,7 @@ from web.server.models import (
     Directory,
     File,
 )
-from web.server.settings import Settings, get_context, get_settings
+from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 
 router = APIRouter()
 
@@ -123,11 +123,13 @@ async def delete_file(
         raise HTTPException(status_code=404)
 
 
-@router.get("/context")
+@router.get("/context", response_model=APIContext, response_model_exclude_unset=True)
 def get_api_context(
-    context: Context = Depends(get_context),
+    context: Context = Depends(get_loaded_context),
 ) -> APIContext:
     """Get the context"""
+
+    print(context._model_tables)
 
     return APIContext(
         concurrent_tasks=context.concurrent_tasks,
@@ -140,10 +142,10 @@ def get_api_context(
     )
 
 
-@router.get("/context/{environment:path}")
+@router.get("/context/{environment:str}")
 def get_api_context_by_environment(
     environment: str = "",
-    context: Context = Depends(get_context),
+    context: Context = Depends(get_loaded_context),
 ) -> APIContextEnvironment:
     """Get the context for a environment."""
 
