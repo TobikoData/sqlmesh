@@ -123,7 +123,11 @@ async def delete_file(
         raise HTTPException(status_code=404)
 
 
-@router.get("/context", response_model=APIContext, response_model_exclude_unset=True)
+@router.get(
+    "/context",
+    response_model=APIContext,
+    response_model_exclude_unset=True,
+)
 def get_api_context(
     context: Context = Depends(get_loaded_context),
 ) -> APIContext:
@@ -142,7 +146,11 @@ def get_api_context(
     )
 
 
-@router.get("/context/{environment:str}")
+@router.get(
+    "/context/{environment:str}",
+    response_model=APIContextEnvironment,
+    response_model_exclude_unset=True,
+)
 def get_api_context_by_environment(
     environment: str = "",
     context: Context = Depends(get_loaded_context),

@@ -44,7 +44,7 @@ class APIContext(PydanticModel):
     dialect: str
     path: str
     time_column_format: str
-    scheduler: t.Literal["builtin", "airflow", "cloud_composer"]
+    scheduler: str
     models: t.List[str] = []
 
 
