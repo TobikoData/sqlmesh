@@ -5,10 +5,10 @@ import typing as t
 from pathlib import Path
 
 from pydantic import Field, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.definition import Model, _Model
+from sqlmesh.core.model.definition import Model, _Model, expression_validator
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, raise_config_error
@@ -58,13 +58,7 @@ class Audit(AuditMeta, frozen=True):
 
     _path: t.Optional[pathlib.Path] = None
 
-    @validator("query", pre=True)
-    def _parse_expression(cls, v: str) -> exp.Expression:
-        """Helper method to deserialize SQLGlot expressions in Pydantic models."""
-        expression = maybe_parse(v)
-        if not expression:
-            raise ValueError(f"Could not parse {v}")
-        return expression
+    _query_validator = expression_validator
 
     @classmethod
     def load(

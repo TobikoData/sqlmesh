@@ -9,7 +9,7 @@ from itertools import zip_longest
 from pathlib import Path
 
 from astor import to_source
-from pydantic import Field, validator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.scope import traverse_scope
@@ -21,7 +21,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model.common import parse_expression, parse_model_name
+from sqlmesh.core.model.common import expression_validator, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
@@ -109,9 +109,7 @@ class _Model(ModelMeta, frozen=True):
     _depends_on: t.Optional[t.Set[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
 
-    _expressions_validator = validator("expressions_", pre=True, allow_reuse=True)(
-        parse_expression
-    )
+    _expressions_validator = expression_validator
 
     def render(
         self,
@@ -521,7 +519,7 @@ class SqlModel(_Model):
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     __query_renderer: t.Optional[QueryRenderer] = None
 
-    _query_validator = validator("query", pre=True, allow_reuse=True)(parse_expression)
+    _query_validator = expression_validator
 
     def render_query(
         self,
