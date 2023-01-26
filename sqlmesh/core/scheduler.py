@@ -108,14 +108,14 @@ class Scheduler:
         self.state_sync.add_interval(snapshot.snapshot_id, start, end, is_dev=is_dev)
         self.console.update_snapshot_progress(snapshot.name, 1)
 
-    def run(
+    def batches(
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        latest: TimeLike = now(),
         is_dev: bool = False,
-    ) -> None:
-        """Concurrently runs all snapshots in topological order.
+    ) -> SnapshotBatches:
+        """Returns a list of snapshot batches to evaluate.
 
         Args:
             start: The start of the run. Defaults to the min model start date.
@@ -126,10 +126,20 @@ class Scheduler:
         """
         validate_date_range(start, end)
 
-        latest = latest or now()
-        batches = self._interval_params(
-            self.snapshot_per_version.values(), start, end, latest, is_dev=is_dev
+        return self._interval_params(
+            self.snapshot_per_version.values(),
+            start,
+            end,
+            latest,
+            is_dev=is_dev,
         )
+
+    def dag(self, batches: SnapshotBatches) -> DAG[SchedulingUnit]:
+        """Returns a DAG of snapshot batches to evaluate.
+
+        Args:
+            batches: The snapshot batches to evaluate.
+        """
 
         intervals_per_snapshot_version = {
             (snapshot.name, snapshot.version_get_or_generate()): intervals
@@ -160,7 +170,53 @@ class Scheduler:
                         (sid, interval),
                         [(sid, _interval) for _interval in intervals[:i]],
                     )
-            self.console.start_snapshot_progress(snapshot.name, len(intervals))
+
+        return dag
+
+    def tasks(self, batches: SnapshotBatches) -> t.List[t.Tuple[str, int]]:
+        """Returns a list of tasks to evaluate.
+
+        Args:
+            batches: The snapshot batches to evaluate.
+        """
+        return [(snapshot.name, len(intervals)) for snapshot, intervals in batches]
+
+    def backfill(self, batches: SnapshotBatches) -> None:
+        """Backfills  with the given snapshot batches.
+
+        Args:
+            batches: The snapshot batches to backfill.
+        """
+
+        for task_name, task_size in self.tasks(batches):
+            self.console.start_snapshot_progress(task_name, task_size)
+
+    def run(
+        self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
+    ) -> None:
+        """Concurrently runs all snapshots in topological order.
+
+        Args:
+            start: The start of the run. Defaults to the min model start date.
+            end: The end of the run. Defaults to now.
+            latest: The latest datetime to use for non-incremental queries.
+            is_dev: Indicates whether the evaluation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+        """
+        validate_date_range(start, end)
+
+        latest = latest or now()
+
+        batches = self.batches(start, end, latest, is_dev=is_dev)
+
+        dag = self.dag(batches)
+
+        # Side effect: prints progress bar
+        self.backfill(batches)
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
