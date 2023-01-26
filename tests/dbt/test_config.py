@@ -3,15 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.datawarehouse import (
+from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.project import ProjectConfig
+from sqlmesh.dbt.target import (
     DatabricksConfig,
-    DataWarehouseConfig,
     PostgresConfig,
     RedshiftConfig,
     SnowflakeConfig,
+    TargetConfig,
 )
-from sqlmesh.dbt.models import Materialization, ModelConfig
-from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils.yaml import load as yaml_load
 
 
@@ -126,7 +126,7 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
 
 
 def _test_warehouse_config(
-    config_yaml: str, config_model: t.Type[DataWarehouseConfig], *params_path: str
+    config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str
 ):
     config_dict = yaml_load(config_yaml)
     for path in params_path:
