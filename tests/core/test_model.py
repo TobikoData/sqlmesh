@@ -357,6 +357,27 @@ def test_seed_model_diff(tmp_path):
     assert diff.endswith("-1,value_a\n+2,value_b")
 
 
+def test_audits():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            audits (
+                audit_a,
+                audit_b(key='value')
+            )
+        );
+        SELECT 1, ds;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    assert model.audits == [
+        ("audit_a", {}),
+        ("audit_b", {"key": "value"}),
+    ]
+
+
 def test_description(sushi_context):
     assert sushi_context.models["sushi.orders"].description == "Table of sushi orders."
 

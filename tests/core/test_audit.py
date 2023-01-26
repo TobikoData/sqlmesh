@@ -1,7 +1,8 @@
 import pytest
-from sqlglot import parse
+from sqlglot import parse, parse_one
 
 from sqlmesh.core.audit import Audit
+from sqlmesh.core.model import create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
 
@@ -10,7 +11,6 @@ def test_load(assert_exp_eq):
         """
         Audit (
             name my_audit,
-            model db.table,
             dialect spark,
             blocking false,
         );
@@ -25,7 +25,6 @@ def test_load(assert_exp_eq):
     )
 
     audit = Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
-    assert audit.model == "db.table"
     assert audit.dialect == "spark"
     assert audit.blocking is False
     assert audit.skip is False
@@ -47,7 +46,6 @@ def test_load_multiple(assert_exp_eq):
         """
         Audit (
             name first_audit,
-            model db.table,
             dialect spark,
         );
 
@@ -57,7 +55,6 @@ def test_load_multiple(assert_exp_eq):
 
         Audit (
             name second_audit,
-            model db.table,
             dialect duckdb,
             blocking false,
         );
@@ -69,7 +66,6 @@ def test_load_multiple(assert_exp_eq):
     )
 
     first_audit, second_audit = Audit.load_multiple(expressions, path="/path/to/audit")
-    assert first_audit.model == "db.table"
     assert first_audit.dialect == "spark"
     assert first_audit.blocking is True
     assert first_audit.skip is False
@@ -82,7 +78,6 @@ def test_load_multiple(assert_exp_eq):
     """,
     )
 
-    assert second_audit.model == "db.table"
     assert second_audit.dialect == "duckdb"
     assert second_audit.blocking is False
     assert second_audit.skip is False
@@ -114,7 +109,6 @@ def test_unordered_audit_statements():
 
         AUDIT (
             name my_audit,
-            model db.table
         );
     """
     )
@@ -129,7 +123,6 @@ def test_no_query():
         """
         AUDIT (
             name my_audit,
-            model db.table
         );
 
         @DEF(x, 1)
@@ -139,3 +132,22 @@ def test_no_query():
     with pytest.raises(AuditConfigError) as ex:
         Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Missing SELECT query" in str(ex.value)
+
+
+def test_macro():
+    model = create_sql_model("db.test_model", parse_one("SELECT a, ds"), [])
+
+    expected_query = "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+
+    audit = Audit(
+        name="test_audit",
+        query="SELECT * FROM @this_model WHERE a IS NULL",
+    )
+
+    audit_jinja = Audit(
+        name="test_audit",
+        query="SELECT * FROM {{ this_model }} WHERE a IS NULL",
+    )
+
+    assert audit.render_query(model).sql() == expected_query
+    assert audit_jinja.render_query(model).sql() == expected_query

@@ -53,6 +53,7 @@ class LoadedProject:
     macros: UniqueKeyDict[str, macro]
     hooks: UniqueKeyDict[str, hook]
     models: UniqueKeyDict[str, Model]
+    audits: UniqueKeyDict[str, Audit]
     dag: DAG[str]
 
 
@@ -80,8 +81,10 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
         update_model_schemas(self._context.dialect, self._dag, models)
 
+        audits = self._load_audits()
+
         project = LoadedProject(
-            hooks=hooks, macros=macros, models=models, dag=self._dag
+            hooks=hooks, macros=macros, models=models, audits=audits, dag=self._dag
         )
         return project
 
@@ -108,7 +111,11 @@ class Loader(abc.ABC):
     def _load_models(
         self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
     ) -> UniqueKeyDict[str, Model]:
-        """Loads all user models"""
+        """Loads all models."""
+
+    @abc.abstractmethod
+    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+        """Loads all audits."""
 
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.graph[model.name] = set()
@@ -149,7 +156,6 @@ class SqlMeshLoader(Loader):
         """
         models = self._load_sql_models(macros, hooks)
         models.update(self._load_python_models())
-        self._load_model_audits(models)
 
         return models
 
@@ -213,8 +219,9 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_model_audits(self, models: UniqueKeyDict[str, Model]) -> None:
-        """Loads all the model audits and adds them to the associated model"""
+    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+        """Loads all the model audits."""
+        audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         for path in self._context.glob_path(
             self._context.audits_directory_path, ".sql"
         ):
@@ -223,17 +230,14 @@ class SqlMeshLoader(Loader):
                 expressions = parse_model(
                     file.read(), default_dialect=self._context.dialect
                 )
-                for audit in Audit.load_multiple(
+                audits = Audit.load_multiple(
                     expressions=expressions,
                     path=path,
                     dialect=self._context.dialect,
-                ):
-                    if not audit.skip:
-                        if audit.model not in models:
-                            raise ConfigError(
-                                f"Model '{audit.model}' referenced in the audit '{audit.name}' ({path}) was not found"
-                            )
-                        models[audit.model].audits[audit.name] = audit
+                )
+                for audit in audits:
+                    audits_by_name[audit.name] = audit
+        return audits_by_name
 
     def _import_python_file(self, relative_path: Path) -> types.ModuleType:
         module_name = str(relative_path.with_suffix("")).replace(os.path.sep, ".")

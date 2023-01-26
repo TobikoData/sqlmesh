@@ -290,19 +290,25 @@ class SnapshotEvaluator:
             return []
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
+
+        audits_by_name = {a.name: a for a in snapshot.audits}
+
         results = []
-        for audit in snapshot.model.audits.values():
+        for audit_name, audit_args in snapshot.model.audits:
+            audit = audits_by_name[audit_name]
             query = audit.render_query(
+                snapshot,
                 start=start,
                 end=end,
                 latest=latest,
                 snapshots=snapshots,
                 is_dev=is_dev,
+                **audit_args,
                 **kwargs,
             )
             count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(f"({query})"))
             if count and raise_exception:
-                message = f"Audit {audit.name} for model {audit.model} failed.\nGot {count} results, expected 0.\n{query}"
+                message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
                 if audit.blocking:
                     raise AuditError(message)
                 else:

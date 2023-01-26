@@ -203,7 +203,7 @@ class QueryRenderer:
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(
-                f"Query needs to be a SELECT or a UNION {query}", self._path
+                f"Query needs to be a SELECT or a UNION {query}.", self._path
             )
 
         return t.cast(exp.Subqueryable, query)
@@ -233,10 +233,21 @@ class QueryRenderer:
         low = self._time_converter(start)
         high = self._time_converter(end)
 
+        time_column_identifier = exp.to_identifier(self._time_column.column)
+        if time_column_identifier is None:
+            raise_config_error(
+                f"Time column '{self._time_column.column}' must be a valid identifier.",
+                self._path,
+            )
+            raise
+
         time_column_projection = next(
-            select
-            for select in query.selects
-            if select.alias_or_name == self._time_column.column
+            (
+                select
+                for select in query.selects
+                if select.alias_or_name == self._time_column.column
+            ),
+            time_column_identifier,
         )
 
         if isinstance(time_column_projection, exp.Alias):
