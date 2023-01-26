@@ -49,7 +49,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
+from sqlmesh.core.dialect import format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
@@ -80,8 +80,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
-
-extend_sqlglot()
 
 
 class BaseContext(abc.ABC):

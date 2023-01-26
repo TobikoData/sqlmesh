@@ -1,9 +1,14 @@
 import pytest
 from sqlglot import parse, parse_one
 
-from sqlmesh.core.audit import Audit
-from sqlmesh.core.model import create_sql_model
+from sqlmesh.core.audit import Audit, column
+from sqlmesh.core.model import Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
+
+
+@pytest.fixture
+def model() -> Model:
+    return create_sql_model("db.test_model", parse_one("SELECT a, b, ds"), [])
 
 
 def test_load(assert_exp_eq):
@@ -134,9 +139,7 @@ def test_no_query():
     assert "Missing SELECT query" in str(ex.value)
 
 
-def test_macro():
-    model = create_sql_model("db.test_model", parse_one("SELECT a, ds"), [])
-
+def test_macro(model: Model):
     expected_query = "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
 
     audit = Audit(
@@ -151,3 +154,23 @@ def test_macro():
 
     assert audit.render_query(model).sql() == expected_query
     assert audit_jinja.render_query(model).sql() == expected_query
+
+
+def test_not_null_audit(model: Model):
+    rendered_query_a = column.not_null_audit.render_query(
+        model,
+        columns=["a"],
+    )
+    assert (
+        rendered_query_a.sql()
+        == "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+    )
+
+    rendered_query_a_and_b = column.not_null_audit.render_query(
+        model,
+        columns=["a", "b"],
+    )
+    assert (
+        rendered_query_a_and_b.sql()
+        == "SELECT * FROM db.test_model WHERE (a IS NULL OR b IS NULL) AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+    )

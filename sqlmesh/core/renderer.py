@@ -141,7 +141,7 @@ class QueryRenderer:
                 self._query_cache[cache_key] = macro_evaluator.transform(query)  # type: ignore
             except MacroEvalError as ex:
                 raise_config_error(
-                    f"Failed to evaluate macro '{definition}'. {ex}", self._path
+                    f"Failed to resolve macro for query. {ex}", self._path
                 )
 
             if self._schema:
