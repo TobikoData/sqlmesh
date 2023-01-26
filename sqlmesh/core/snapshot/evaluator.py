@@ -291,7 +291,7 @@ class SnapshotEvaluator:
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
-        audits_by_name = BUILT_IN_AUDITS | {a.name: a for a in snapshot.audits}
+        audits_by_name = {**BUILT_IN_AUDITS, **{a.name: a for a in snapshot.audits}}
 
         results = []
         for audit_name, audit_args in snapshot.model.audits:

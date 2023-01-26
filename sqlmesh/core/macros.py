@@ -340,11 +340,7 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
     """
     *items, func = args
     items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-
-    if not isinstance(items, (list, tuple)):
-        items = [items]
-
-    return reduce(func, items)
+    return reduce(func, ensure_collection(items))
 
 
 @macro("FILTER")
