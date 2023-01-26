@@ -754,6 +754,9 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
+        if audit_name not in audits:
+            continue
+
         audit = audits[audit_name]
         metadata.extend(
             [

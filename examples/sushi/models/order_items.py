@@ -26,6 +26,7 @@ ITEMS = "sushi.items"
         "ds": "text",
     },
     audits=[
+        ("not_null", {"columns": ["id", "order_id", "item_id", "quantity"]}),
         ("assert_order_items_quantity_exceeds_threshold", {"quantity": 0}),
     ],
 )

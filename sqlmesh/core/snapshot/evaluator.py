@@ -27,7 +27,7 @@ from contextlib import contextmanager
 
 from sqlglot import exp, select
 
-from sqlmesh.core.audit import AuditResult
+from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
@@ -291,7 +291,7 @@ class SnapshotEvaluator:
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
-        audits_by_name = {a.name: a for a in snapshot.audits}
+        audits_by_name = BUILT_IN_AUDITS | {a.name: a for a in snapshot.audits}
 
         results = []
         for audit_name, audit_args in snapshot.model.audits:

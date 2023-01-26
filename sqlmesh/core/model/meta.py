@@ -90,6 +90,8 @@ class ModelMeta(PydanticModel):
 
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [extract(i) for i in v.expressions]
+        if isinstance(v, exp.Paren):
+            return [extract(v.this)]
         if isinstance(v, exp.Expression):
             return [extract(v)]
         return v
