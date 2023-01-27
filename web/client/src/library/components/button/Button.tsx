@@ -16,12 +16,12 @@ export interface PropsButton extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const VARIANT = new Map<ButtonVariant, string>([
-  ['primary', 'bg-primary-500 hover:bg-primary-600 active:bg-primary-400 text-gray-100'],
+  ['primary', 'bg-secondary-100 hover:bg-secondary-100 active:bg-secondary-100 text-secondary-600'],
   ['secondary', 'bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-gray-100'],
   ['success', 'bg-success-500 hover:bg-success-600 active:bg-success-400 text-gray-100'],
   ['danger', 'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-gray-100'],
   ['warning', 'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-gray-100'],
-  ['alternative', 'bg-gray-500 hover:bg-gray-600 active:bg-gray-400 text-gray-100'],
+  ['alternative', 'bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-800'],
 ]);
 
 const SHAPE = new Map<ButtonShape, string>([
@@ -34,7 +34,7 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg`],
 ]);
 
-export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], form, onClick }: PropsButton) {
+export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], form, onClick, className }: PropsButton) {
   return (
     <button
       form={form}
@@ -43,6 +43,7 @@ export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSi
         VARIANT.get(variant),
         SHAPE.get(shape),
         SIZE.get(size),
+        className
       )}
       onClick={onClick}
     >
