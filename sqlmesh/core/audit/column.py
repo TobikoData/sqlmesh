@@ -18,8 +18,8 @@ WHERE @REDUCE(
 )
 
 
-unique_keys_audit = Audit(
-    name="unique_keys",
+unique_values_audit = Audit(
+    name="unique_values",
     query="""
 SELECT *
 FROM (
