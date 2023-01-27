@@ -30,7 +30,7 @@ FROM (
     )
   FROM @this_model
 )
-WHERE @reduce(
+WHERE @REDUCE(
   @EACH(
     @columns,
     c -> @SQL('@{c}_rank > 1')
