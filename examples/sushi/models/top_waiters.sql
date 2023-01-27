@@ -4,7 +4,7 @@ MODEL (
   kind VIEW,
   owner jen,
   audits (
-    unique_keys(columns=['waiter_id'])
+    unique_values(columns=['waiter_id'])
   )
 );
 
