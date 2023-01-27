@@ -9,12 +9,11 @@
 
 SELECT
   id::INT AS id, /* Primary key */
-  customer_id::INT AS customer_id, /* Id of customer who made the order */
-  waiter_id::INT AS waiter_id, /* Id of waiter who took the order */
-  start_ts::TEXT AS start_ts, /* Start timestamp */
-  end_ts::TEXT AS end_ts, /* End timestamp */
+  order_id::INT AS order_id, /* Order id */
+  item_id::INT AS item_id, /* Item id */
+  quantity::INT AS quantity, /* Quantity of items ordered */
   ds::TEXT AS ds /* Date of order */
-FROM {{ ref('raw_orders') }}
+FROM {{ source('raw', 'order_items') }}
 {% if is_incremental() %}
 WHERE
   ds > (select max(ds) from {{ this }})

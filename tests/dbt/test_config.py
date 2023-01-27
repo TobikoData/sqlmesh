@@ -17,7 +17,7 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 @pytest.fixture
 def sushi_dbt_project() -> ProjectConfig:
-    return ProjectConfig.load(Path("examples/sushi_dbt"))
+    return ProjectConfig.load(Path("examples/sushi_dbt_with_sources"))
 
 
 @pytest.mark.parametrize(
