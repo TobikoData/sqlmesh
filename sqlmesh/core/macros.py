@@ -207,7 +207,7 @@ class MacroEvaluator:
             ) from e
 
     def parse_one(
-        self, sql: str, into: t.Optional[exp.Expression] = None, **opts: t.Any
+        self, sql: str, into: t.Optional[exp.IntoType] = None, **opts: t.Any
     ) -> exp.Expression:
         """Parses the given SQL string and returns a syntax tree for the first
         parsed SQL statement.

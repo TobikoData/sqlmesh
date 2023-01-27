@@ -9,7 +9,6 @@ import pandas as pd
 from jinja2 import Environment
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
-from sqlglot.tokens import Token
 
 
 class Model(exp.Expression):
@@ -86,13 +85,6 @@ def _parse_lambda(self: Parser) -> t.Optional[exp.Expression]:
     return node
 
 
-@t.no_type_check
-def _parse_placeholder(self: Parser) -> t.Optional[exp.Expression]:
-    return self.__parse_placeholder() or (
-        self._match(TokenType.PARAMETER) and _parse_macro(self, None)
-    )
-
-
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
     index = self._index - 1
     field = self._parse_primary() or self._parse_function({}) or self._parse_id_var()
@@ -129,14 +121,13 @@ KEYWORD_MACROS = {"WITH", "JOIN", "WHERE", "GROUP_BY", "HAVING", "ORDER_BY"}
 
 
 def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]:
-    if (
-        not self._match_pair(TokenType.PARAMETER, TokenType.VAR, advance=False)
-        or self._next.text.upper() != name.upper()
+    if not self._match_pair(TokenType.PARAMETER, TokenType.VAR, advance=False) or (
+        self._next and self._next.text.upper() != name.upper()
     ):
         return None
 
     self._advance(1)
-    return _parse_macro(self, self._curr, name)
+    return _parse_macro(self, keyword_macro=name)
 
 
 @t.no_type_check
@@ -518,7 +509,6 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
-    _override(Parser, _parse_placeholder)
 
 
 def select_from_values(
