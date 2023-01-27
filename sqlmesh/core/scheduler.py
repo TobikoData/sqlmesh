@@ -153,10 +153,10 @@ class Scheduler:
         validate_date_range(start, end)
 
         latest = latest or now()
+        batches = self.batches(start, end, latest, is_dev=is_dev)
+        dag = self._dag(batches)
 
-        def console_progress(
-            snapshot: Snapshot, intervals: t.List[t.Tuple[datetime, datetime]]
-        ) -> None:
+        for snapshot, intervals in batches:
             self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
@@ -164,12 +164,12 @@ class Scheduler:
             sid, (start, end) = node
             self.evaluate(self.snapshots[sid], start, end, latest, is_dev=is_dev)
 
-        batches = self.batches(start, end, latest, is_dev=is_dev)
-        dag = self._dag(batches=batches, callbackForEachBatch=console_progress)
-
         with self.snapshot_evaluator.concurrent_context():
             errors, skipped_intervals = concurrent_apply_to_dag(
-                dag, evaluate_node, self.max_workers, raise_on_error=False
+                dag,
+                evaluate_node,
+                self.max_workers,
+                raise_on_error=False,
             )
 
         if not errors:
@@ -238,13 +238,7 @@ class Scheduler:
             latest=latest or now(),
         )
 
-    def _dag(
-        self,
-        batches: SnapshotBatches,
-        callbackForEachBatch: t.Optional[
-            t.Callable[[Snapshot, t.List[t.Tuple[datetime, datetime]]], None]
-        ] = None,
-    ) -> DAG[SchedulingUnit]:
+    def _dag(self, batches: SnapshotBatches) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
@@ -284,9 +278,6 @@ class Scheduler:
                         (sid, interval),
                         [(sid, _interval) for _interval in intervals[:i]],
                     )
-
-            if callbackForEachBatch:
-                callbackForEachBatch(snapshot, intervals)
 
         return dag
 
