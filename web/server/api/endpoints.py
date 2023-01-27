@@ -31,7 +31,7 @@ def validate_path(
     return path
 
 
-@router.get("/files")
+@router.get("/files", response_model=models.Directory)
 def get_files(
     context: Context = Depends(get_context),
 ) -> models.Directory:
@@ -42,6 +42,7 @@ def get_files(
     ) -> t.Tuple[t.List[models.Directory], t.List[models.File]]:
         directories = []
         files = []
+
         with os.scandir(path) as entries:
             for entry in entries:
                 entry_path = Path(entry.path)
@@ -81,7 +82,7 @@ def get_files(
     )
 
 
-@router.get("/files/{path:path}")
+@router.get("/files/{path:path}", response_model=models.File)
 def get_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
@@ -95,7 +96,7 @@ def get_file(
     return models.File(name=os.path.basename(path), path=path, content=content)
 
 
-@router.post("/files/{path:path}")
+@router.post("/files/{path:path}", response_model=models.File)
 async def write_file(
     content: str = Body(),
     path: str = Depends(validate_path),
