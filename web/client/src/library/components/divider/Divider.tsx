@@ -17,6 +17,6 @@ export function Divider({ size = EnumSize.sm, orientation = 'horizontal', classN
   const clsOrientation = orientation === 'horizontal' ? `w-full border-b${SIZE.get(size)}` : `h-full border-r${SIZE.get(size)}`;
 
   return (
-    <span className={clsx(className, ['block', clsOrientation, 'border-gray-100'])}></span>
+    <span className={clsx(['block', clsOrientation, 'border-gray-100'], className)}></span>
   );
 }

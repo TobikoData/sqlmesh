@@ -21,11 +21,11 @@ export default function Root() {
 
 function Header() {
   return (
-    <header className='min-h-[3rem] px-2 py-1 flex justify-between items-center'>
+    <header className='min-h-[2.5rem] px-2 flex justify-between items-center'>
       <div className='flex h-full items-center'>
-        <LogoTobiko style={{ height: '32px' }} mode='dark'/>
-        <Divider className='mx-2 h-[50%]' orientation='vertical' />
         <LogoSqlMesh style={{ height: '32px' }} />
+        <span className='inline-block mx-2 text-xs font-bold'>by</span>
+        <LogoTobiko style={{ height: '24px' }} mode='dark' />
       </div>
       <div>
         <ul className='flex'>
@@ -34,7 +34,7 @@ function Header() {
           </li>
           <li className='px-2 prose underline'>
             GitHub
-          </li>          
+          </li>
         </ul>
       </div>
     </header>
@@ -52,7 +52,7 @@ function Main({ children }: { children: React.ReactNode }) {
 function Footer() {
   return (
     <footer className='px-2 py-1 text-xs flex justify-between'>
-      <small>        
+      <small>
         {(new Date).getFullYear()}
       </small>
       platform footer
