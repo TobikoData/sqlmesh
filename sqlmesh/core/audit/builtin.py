@@ -49,3 +49,14 @@ FROM @this_model
 WHERE @SQL('@column') NOT IN @values
 """,
 )
+
+
+number_of_rows_audit = Audit(
+    name="number_of_rows",
+    query="""
+SELECT 1
+FROM @this_model
+LIMIT @SQL('@threshold + 1')
+HAVING COUNT(*) <= @threshold
+    """,
+)
