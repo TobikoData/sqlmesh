@@ -50,7 +50,7 @@ module.exports = {
       black: '#000',
     },
     fontFamily: {
-      sans: ['Circular STD', 'sans-serif'],
+      sans: ['Roboto', 'sans-serif'],
       serif: ['Publico', 'serif'],
     },
   },
