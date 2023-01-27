@@ -7,6 +7,7 @@ number_of_rows_audit = Audit(
     query="""
 SELECT 1
 FROM @this_model
+LIMIT @SQL('@threshold + 1')
 HAVING COUNT(*) <= @threshold
     """,
 )

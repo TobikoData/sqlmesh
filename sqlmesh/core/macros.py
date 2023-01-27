@@ -527,32 +527,6 @@ def order_by(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro("TO_IDENTIFIER")
-def to_identifier(evaluator: MacroEvaluator, arg: t.Any) -> t.Optional[exp.Identifier]:
-    """Converts the value into SQL identifier.
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro.
-        arg: The target value.
-    Returns:
-        Identifier expression.
-    """
-    return exp.to_identifier(str(arg))
-
-
-@macro("TO_TABLE")
-def to_table(evaluator: MacroEvaluator, arg: t.Any) -> t.Optional[exp.Table]:
-    """Converts the value into SQL table expression.
-
-    Args:
-        evaluator: MacroEvaluator that invoked the macro.
-        arg: The target value.
-    Returns:
-        Table expression.
-    """
-    return exp.to_table(str(arg))
-
-
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
