@@ -243,7 +243,6 @@ class Scheduler:
 
         Args:
             batches: The batches of snapshots and intervals to evaluate.
-            callbackForEachBatch: A callback to be called for each batch.
 
         Returns:
             A DAG of snapshot intervals to be evaluated.
