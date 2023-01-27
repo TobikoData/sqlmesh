@@ -9,7 +9,6 @@ import { Fragment, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import {
   XCircleIcon,
-  AcademicCapIcon,
   PlayIcon,
 } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
@@ -70,21 +69,9 @@ export function IDE() {
       }}
     >
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        {/* Project Name */}
         <div className="px-3 flex items-center">
-          {/* <AcademicCapIcon className="w-5 h-5 text-primary-500 mr-2" /> */}
           <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
         </div>
-
-        {/* Git */}
-        {/* <div className='px-4 flex'>
-          <div className='px-4'>TobikoData/wursthall</div>
-          <div className='px-4'>main</div>
-        </div> */}
-
-        {/* Search */}
-        {/* <div className='px-4 w-full'>search</div> */}
-
         <div className="px-3 flex items-center">
           <Button variant='primary' size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} className='w-[6rem] justify-between'>
             <span className="inline-block mr-3 min-w-20">Run Plan</span>
@@ -106,14 +93,6 @@ export function IDE() {
         </div>
         <Divider orientation="vertical" />
         <div className="h-full w-full flex flex-col overflow-hidden">
-          {/* Breadcrubms */}
-          {/* <div className='w-full overflow-hidden px-2 min-h-[1.5rem] flex items-center'>
-            <small className='inline-block cursor-pointer hover:text-gray-300'>audit</small>
-            <small className='inline-block px-2'>/</small>
-            <small className='inline-block cursor-pointer hover:text-gray-300'>items.sql</small>
-          </div>
-          <Divider /> */}
-
           {Boolean(activeFile) && (
             <>
               <div className="w-full h-full flex overflow-hidden">
@@ -199,24 +178,9 @@ export function IDE() {
                     </div>
                   </div>
                 </div>
-
-                {/* <Divider orientation='vertical' /> */}
-                {/* <div className='h-full min-w-[15%] w-full max-w-[25%] p-2'>Inspector</div> */}
               </div>
               <Divider />
               <div className="w-full min-h-[10rem] overflow-auto">
-                {/* <div className='text-center flex'>
-                  <div className='p-1 min-w-[10rem]'>
-                    Table
-                  </div>
-                  <div className='p-1 min-w-[10rem]'>
-                    DAG
-                  </div>                
-                  <div className='p-1 w-full'>
-                    ide preview tabs
-                  </div>
-                </div> */}
-                {/* <Divider /> */}
                 <Tabs />
               </div>
             </>
