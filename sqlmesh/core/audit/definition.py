@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot import exp
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.definition import Model, _Model, expression_validator
 from sqlmesh.core.renderer import QueryRenderer
@@ -194,14 +195,20 @@ class Audit(AuditMeta, frozen=True):
             model = snapshot_or_model.model
             this_model = snapshot_or_model.table_name(is_dev=is_dev, for_read=True)
 
-        return self._create_query_renderer(model).render(
+        query_renderer = self._create_query_renderer(model)
+
+        this_model_subquery = exp.select("*").from_(exp.to_table(this_model))
+        query_renderer.filter_time_column(
+            this_model_subquery, start or c.EPOCH_DS, end or c.EPOCH_DS
+        )
+
+        return query_renderer.render(
             start=start,
             end=end,
             latest=latest,
-            add_incremental_filter=True,
             snapshots=snapshots,
             is_dev=is_dev,
-            this_model=exp.to_table(this_model),
+            this_model=this_model_subquery.subquery(),
             **kwargs,
         )
 

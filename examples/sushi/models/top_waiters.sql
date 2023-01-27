@@ -2,7 +2,10 @@
 MODEL (
   name sushi.top_waiters,
   kind VIEW,
-  owner jen
+  owner jen,
+  audits (
+    unique_keys(columns=['waiter_id'])
+  )
 );
 
 SELECT

@@ -4,6 +4,9 @@ MODEL (
   owner jen,
   cron '@daily',
   batch_size 10,
+  audits (
+    number_of_rows(threshold=0)
+  )
 );
 
 SELECT
