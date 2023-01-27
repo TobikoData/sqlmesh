@@ -7,12 +7,45 @@ not_null_audit = Audit(
     query="""
 SELECT *
 FROM @this_model
-WHERE @reduce(
-  @each(
+WHERE @REDUCE(
+  @EACH(
     @columns,
-    c -> @sql('@c IS NULL')
+    c -> @SQL('@c IS NULL')
   ),
-  (l, r) -> @sql('@l OR @r')
+  (l, r) -> l OR r
 )
     """,
+)
+
+
+unique_keys_audit = Audit(
+    name="unique_keys",
+    query="""
+SELECT *
+FROM (
+  SELECT
+    @EACH(
+      @columns,
+      c -> @SQL('row_number() OVER (PARTITION BY @c ORDER BY 1) AS @{c}_rank')
+    )
+  FROM @this_model
+)
+WHERE @reduce(
+  @EACH(
+    @columns,
+    c -> @SQL('@{c}_rank > 1')
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+
+accepted_values_audit = Audit(
+    name="accepted_values",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @SQL('@column') NOT IN @values
+""",
 )

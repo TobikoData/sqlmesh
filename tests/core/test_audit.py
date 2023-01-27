@@ -1,7 +1,7 @@
 import pytest
 from sqlglot import parse, parse_one
 
-from sqlmesh.core.audit import Audit, column
+from sqlmesh.core.audit import Audit, column, table
 from sqlmesh.core.model import Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
@@ -140,7 +140,7 @@ def test_no_query():
 
 
 def test_macro(model: Model):
-    expected_query = "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+    expected_query = "SELECT * FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') WHERE a IS NULL"
 
     audit = Audit(
         name="test_audit",
@@ -163,7 +163,7 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == "SELECT * FROM db.test_model WHERE a IS NULL AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+        == "SELECT * FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') WHERE a IS NULL"
     )
 
     rendered_query_a_and_b = column.not_null_audit.render_query(
@@ -172,5 +172,44 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == "SELECT * FROM db.test_model WHERE (a IS NULL OR b IS NULL) AND ds <= '1970-01-01' AND ds >= '1970-01-01'"
+        == "SELECT * FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') WHERE a IS NULL OR b IS NULL"
+    )
+
+
+def test_unique_keys_audit(model: Model):
+    rendered_query_a = column.unique_keys_audit.render_query(model, columns=["a"])
+    assert (
+        rendered_query_a.sql()
+        == "SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY a ORDER BY 1) AS a_rank FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01')) WHERE a_rank > 1"
+    )
+
+    rendered_query_a_and_b = column.unique_keys_audit.render_query(
+        model, columns=["a", "b"]
+    )
+    assert (
+        rendered_query_a_and_b.sql()
+        == "SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY a ORDER BY 1) AS a_rank, ROW_NUMBER() OVER (PARTITION BY b ORDER BY 1) AS b_rank FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01')) WHERE a_rank > 1 OR b_rank > 1"
+    )
+
+
+def test_accepted_values_audit(model: Model):
+    rendered_query = column.accepted_values_audit.render_query(
+        model,
+        column="a",
+        values=["value_a", "value_b"],
+    )
+    assert (
+        rendered_query.sql()
+        == "SELECT * FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') WHERE NOT a IN ('value_a', 'value_b')"
+    )
+
+
+def test_number_of_rows_audit(model: Model):
+    rendered_query = table.number_of_rows_audit.render_query(
+        model,
+        threshold=0,
+    )
+    assert (
+        rendered_query.sql()
+        == "SELECT 1 FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') HAVING COUNT(*) <= 0 LIMIT 0 + 1"
     )

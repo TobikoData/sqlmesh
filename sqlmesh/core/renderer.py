@@ -196,7 +196,7 @@ class QueryRenderer:
                 query = query.copy()
             for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
                 if isinstance(node, exp.Select):
-                    self._filter_time_column(node, *dates[0:2])
+                    self.filter_time_column(node, *dates[0:2])
 
         if mapping:
             return exp.replace_tables(query, mapping)
@@ -223,7 +223,7 @@ class QueryRenderer:
             self._query_cache.clear()
             self.render()
 
-    def _filter_time_column(
+    def filter_time_column(
         self, query: exp.Select, start: TimeLike, end: TimeLike
     ) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""

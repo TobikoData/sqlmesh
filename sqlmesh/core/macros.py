@@ -126,7 +126,7 @@ class MacroEvaluator:
         self, query: exp.Expression
     ) -> exp.Expression | t.List[exp.Expression] | None:
         query = query.transform(
-            lambda node: exp.convert(self.locals[node.name])
+            lambda node: exp.convert(_norm_env_value(self.locals[node.name]))
             if isinstance(node, MacroVar)
             else node
         )
@@ -247,7 +247,7 @@ class macro(registry_decorator):
 MacroRegistry = t.Dict[str, macro]
 
 
-def norm_var_arg_lambda(
+def _norm_var_arg_lambda(
     evaluator: MacroEvaluator, func: exp.Lambda, *items: t.Any
 ) -> t.Tuple[t.Iterable, t.Callable]:
     """
@@ -296,6 +296,12 @@ def norm_var_arg_lambda(
     return expressions, func
 
 
+def _norm_env_value(value: t.Any) -> t.Any:
+    if isinstance(value, list):
+        return tuple(value)
+    return value
+
+
 @macro()
 def each(
     evaluator: MacroEvaluator,
@@ -314,8 +320,8 @@ def each(
         A list of items that is the result of func
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-    return [item for item in map(func, items) if item is not None]
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    return [item for item in map(func, ensure_collection(items)) if item is not None]
 
 
 @macro("REDUCE")
@@ -339,7 +345,7 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
         A single item that is the result of applying func cumulatively to items
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
     return reduce(func, ensure_collection(items))
 
 
@@ -363,7 +369,7 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
         The items for which the func returned True
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
     return list(filter(func, items))
 
 
