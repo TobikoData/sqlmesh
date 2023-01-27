@@ -93,9 +93,7 @@ def _parse_placeholder(self: Parser) -> t.Optional[exp.Expression]:
     )
 
 
-def _parse_macro(
-    self: Parser, _token: Token, keyword_macro: str = ""
-) -> t.Optional[exp.Expression]:
+def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
     index = self._index - 1
     field = self._parse_primary() or self._parse_function({}) or self._parse_id_var()
 
@@ -506,7 +504,7 @@ def extend_sqlglot() -> None:
                 "JINJA": Jinja.from_arg_list,
             }
         )
-        parser.PRIMARY_PARSERS.update(
+        parser.PLACEHOLDER_PARSERS.update(
             {
                 TokenType.PARAMETER: _parse_macro,
             }
