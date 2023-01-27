@@ -38,7 +38,7 @@ class Directory(PydanticModel):
     files: t.List[File] = []
 
 
-class APIContext(PydanticModel):
+class Context(PydanticModel):
     concurrent_tasks: int
     engine_adapter: str
     dialect: str
@@ -48,13 +48,13 @@ class APIContext(PydanticModel):
     models: t.List[str] = []
 
 
-class APIContextEnvironmentChanges(PydanticModel):
+class ContextEnvironmentChanges(PydanticModel):
     added: t.Set[str]
     removed: t.Set[str]
     modified: t.Dict[str, t.Tuple[t.Type[Snapshot], t.Type[Snapshot]]]
 
 
-class APIContextEnvironment(PydanticModel):
+class ContextEnvironment(PydanticModel):
     environment: str
-    changes: t.Optional[APIContextEnvironmentChanges]
+    changes: t.Optional[ContextEnvironmentChanges]
     backfills: t.List[t.Tuple[str, str]] = []
