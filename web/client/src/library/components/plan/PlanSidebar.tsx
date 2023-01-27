@@ -2,7 +2,7 @@ import { Divider } from "../divider/Divider";
 
 export function PlanSidebar({ context }: any) {
   return (
-    <div className="min-w-[15rem] h-full bg-secondary-900 text-gray-100 overflow-hidden overflow-y-auto">
+    <div className="min-w-[15rem] h-full bg-secondary-100 text-gray-800 overflow-hidden overflow-y-auto">
       <div className="flex flex-col h-full w-full p-4">
         <div className="py-2">
           <h5 className="font-bold text-sm">Engine Adapter</h5>

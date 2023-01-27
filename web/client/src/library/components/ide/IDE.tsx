@@ -2,7 +2,6 @@ import { ViewUpdate } from '@codemirror/view'
 import ContextIDE from '../../../context/Ide'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import { DropdownPlan, DropdownAudits } from '../dropdown/Dropdown'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
 import Tabs from '../tabs/Tabs'
@@ -10,7 +9,7 @@ import { Fragment, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import {
   XCircleIcon,
-  CheckCircleIcon,
+  AcademicCapIcon,
   PlayIcon,
 } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
@@ -72,9 +71,9 @@ export function IDE() {
     >
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         {/* Project Name */}
-        <div className="px-3 flex">
-          <p className="mr-1">Project:</p>
-          <h3 className="font-bold">{project?.name}</h3>
+        <div className="px-3 flex items-center">
+          {/* <AcademicCapIcon className="w-5 h-5 text-primary-500 mr-2" /> */}
+          <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
         </div>
 
         {/* Git */}
@@ -86,12 +85,13 @@ export function IDE() {
         {/* Search */}
         {/* <div className='px-4 w-full'>search</div> */}
 
-        <div className="px-4 flex items-center">
-          <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)}>
-            <span className="inline-block mr-3">Plan</span>
-            <PlayIcon className="w-4 h-4 text-gray-100" />
+        <div className="px-3 flex items-center">
+          <Button variant='primary' size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} className='w-[6rem] justify-between'>
+            <span className="inline-block mr-3 min-w-20">Run Plan</span>
+            <PlayIcon className="w-4 h-4 text-inherit" />
           </Button>
-          <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} variant="alternative">
+          <Divider orientation='vertical' className='h-4 mx-3' />
+          <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} variant="alternative" >
             <span className="inline-block">Audits</span>
           </Button>
           <Button size={EnumSize.sm} variant="alternative">
@@ -101,7 +101,7 @@ export function IDE() {
       </div>
       <Divider />
       <div className="flex w-full h-full overflow-hidden">
-        <div className="min-w-[12rem] w-full max-w-[16rem] overflow-hidden overflow-y-auto">
+        <div className="w-[16rem] overflow-hidden overflow-y-auto">
           <FolderTree project={project} />
         </div>
         <Divider orientation="vertical" />
@@ -117,51 +117,40 @@ export function IDE() {
           {Boolean(activeFile) && (
             <>
               <div className="w-full h-full flex overflow-hidden">
-                <div className="w-full flex flex-col overflow-hidden overflow-x-auto">
-                  <div className="w-full flex min-h-[2rem] overflow-hidden overflow-x-auto">
-                    <ul className="w-full whitespace-nowrap">
-                      {openedFiles.size > 0 &&
-                        [...openedFiles].map((file) => (
-                          <li
-                            key={file.path}
-                            className={clsx(
-                              'inline-block justify-between items-center py-1 px-3 overflow-hidden min-w-[10rem] text-center overflow-ellipsis cursor-pointer',
-                              file.path === activeFile?.path
-                                ? 'bg-white'
-                                : 'bg-gray-300'
-                            )}
-                            onClick={() => setActiveFile(file)}
-                          >
-                            <span className="flex justify-between items-center">
-                              <small>{file.name}</small>
-                              <XCircleIcon
-                                onClick={(e) => {
-                                  e.stopPropagation()
+                <div className="w-full flex flex-col overflow-hidden">
+                  <ul className="w-full whitespace-nowrap pl-[40px] min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto">
+                    {openedFiles.size > 0 &&
+                      [...openedFiles].map((file) => (
+                        <li
+                          key={file.path}
+                          className={clsx(
+                            'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
 
-                                  closeIdeTab(file)
-                                }}
-                                className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`}
-                              />
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
+                          )}
+                          onClick={() => setActiveFile(file)}
+                        >
+                          <span className={clsx(
+                            "flex justify-between items-center px-2 py-[0.25rem] min-w-[8rem] rounded-md",
+                            file.path === activeFile?.path
+                              ? 'bg-secondary-100'
+                              : 'bg-transparent'
+                          )}>
+                            <small className="text-xs">{file.name}</small>
+                            <XCircleIcon
+                              onClick={(e) => {
+                                e.stopPropagation()
 
-                  {/* <div className='text-center flex'>
-                    <div className='p-1 min-w-[10rem] '>
-                      Tab 1
-                    </div>
-                    <div className='p-1 min-w-[10rem]'>
-                      Inactive
-                    </div>            
-                    <div className='p-1 w-full'>
-                      ide editor tabs
-                    </div>
-                  </div> */}
-                  {/* <Divider /> */}
+                                closeIdeTab(file)
+                              }}
+                              className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`}
+                            />
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                  <Divider />
                   <div className="w-full h-full flex flex-col overflow-hidden">
-                    <div className="w-full h-full overflow-hidden">
+                    <div className="w-full h-full overflow-hidden ">
                       <Editor
                         className="h-full w-full"
                         extension={activeFile?.extension}
@@ -191,7 +180,7 @@ export function IDE() {
                     </div>
                   </div>
                   <Divider />
-                  <div className="px-2 py-1 flex justify-between min-h-[1.5rem]">
+                  <div className="px-2 flex justify-between items-center min-h-[2rem]">
                     <small>validation: ok</small>
                     <small>File Status: {status}</small>
                     <div className="flex">
