@@ -12,7 +12,7 @@ WHERE @REDUCE(
     @columns,
     c -> @SQL('@c IS NULL')
   ),
-  (l, r) -> @SQL('@l OR @r')
+  (l, r) -> l OR r
 )
     """,
 )
@@ -35,7 +35,7 @@ WHERE @reduce(
     @columns,
     c -> @SQL('@{c}_rank > 1')
   ),
-  (l, r) -> @SQL('@l OR @r')
+  (l, r) -> l OR r
 )
     """,
 )
