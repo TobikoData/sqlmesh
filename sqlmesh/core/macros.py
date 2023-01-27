@@ -62,7 +62,7 @@ class MacroDialect(Python):
     class Generator(Python.Generator):
         TRANSFORMS = {
             **Python.Generator.TRANSFORMS,  # type: ignore
-            exp.Column: lambda self, e: e.name,
+            exp.Column: lambda self, e: f"exp.to_column('{self.sql(e, 'this')}')",
             exp.Lambda: lambda self, e: f"lambda {self.expressions(e)}: {self.sql(e, 'this')}",
             MacroFunc: _macro_func_sql,
             MacroSQL: lambda self, e: _macro_sql(
@@ -282,7 +282,9 @@ def _norm_var_arg_lambda(
 
     if len(items) == 1:
         item = items[0]
-        expressions = item.expressions if isinstance(item, exp.Array) else item
+        expressions = (
+            item.expressions if isinstance(item, (exp.Array, exp.Tuple)) else item
+        )
     else:
         expressions = items
 

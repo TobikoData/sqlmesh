@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import typing as t
 from enum import Enum
 
@@ -8,6 +7,7 @@ from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse
 
+from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -78,14 +78,14 @@ class ModelMeta(PydanticModel):
             else:
                 return v.name, {}
 
+            macro_evaluator = MacroEvaluator()
+
             for arg in args:
                 if not isinstance(arg, exp.EQ):
                     raise ConfigError(
                         f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
-                kwargs[arg.left.name] = ast.literal_eval(
-                    arg.right.sql(dialect="python")
-                )
+                kwargs[arg.left.name] = macro_evaluator.eval_expression(arg.right)
             return (func, kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
