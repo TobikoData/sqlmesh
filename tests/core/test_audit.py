@@ -1,7 +1,7 @@
 import pytest
 from sqlglot import parse, parse_one
 
-from sqlmesh.core.audit import Audit, column, table
+from sqlmesh.core.audit import Audit, builtin
 from sqlmesh.core.model import Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
@@ -157,7 +157,7 @@ def test_macro(model: Model):
 
 
 def test_not_null_audit(model: Model):
-    rendered_query_a = column.not_null_audit.render_query(
+    rendered_query_a = builtin.not_null_audit.render_query(
         model,
         columns=["a"],
     )
@@ -166,7 +166,7 @@ def test_not_null_audit(model: Model):
         == "SELECT * FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') WHERE a IS NULL"
     )
 
-    rendered_query_a_and_b = column.not_null_audit.render_query(
+    rendered_query_a_and_b = builtin.not_null_audit.render_query(
         model,
         columns=["a", "b"],
     )
@@ -177,13 +177,13 @@ def test_not_null_audit(model: Model):
 
 
 def test_unique_values_audit(model: Model):
-    rendered_query_a = column.unique_values_audit.render_query(model, columns=["a"])
+    rendered_query_a = builtin.unique_values_audit.render_query(model, columns=["a"])
     assert (
         rendered_query_a.sql()
         == "SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY a ORDER BY 1) AS a_rank FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01')) WHERE a_rank > 1"
     )
 
-    rendered_query_a_and_b = column.unique_values_audit.render_query(
+    rendered_query_a_and_b = builtin.unique_values_audit.render_query(
         model, columns=["a", "b"]
     )
     assert (
@@ -193,7 +193,7 @@ def test_unique_values_audit(model: Model):
 
 
 def test_accepted_values_audit(model: Model):
-    rendered_query = column.accepted_values_audit.render_query(
+    rendered_query = builtin.accepted_values_audit.render_query(
         model,
         column="a",
         values=["value_a", "value_b"],
@@ -205,7 +205,7 @@ def test_accepted_values_audit(model: Model):
 
 
 def test_number_of_rows_audit(model: Model):
-    rendered_query = table.number_of_rows_audit.render_query(
+    rendered_query = builtin.number_of_rows_audit.render_query(
         model,
         threshold=0,
     )
