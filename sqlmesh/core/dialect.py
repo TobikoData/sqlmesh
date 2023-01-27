@@ -86,7 +86,7 @@ def _parse_lambda(self: Parser) -> t.Optional[exp.Expression]:
 
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
-    index = self._index - 1
+    index = self._index
     field = self._parse_primary() or self._parse_function({}) or self._parse_id_var()
 
     if isinstance(field, exp.Func):
