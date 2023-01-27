@@ -4,6 +4,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sqlglot.expressions import to_column
 
 from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -26,7 +27,14 @@ ITEMS = "sushi.items"
         "ds": "text",
     },
     audits=[
-        ("not_null", {"columns": ["id", "order_id", "item_id", "quantity"]}),
+        (
+            "not_null",
+            {
+                "columns": [
+                    to_column(c) for c in ("id", "order_id", "item_id", "quantity")
+                ]
+            },
+        ),
         ("assert_order_items_quantity_exceeds_threshold", {"quantity": 0}),
     ],
 )

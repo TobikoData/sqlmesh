@@ -1,5 +1,5 @@
 import pytest
-from sqlglot import parse, parse_one
+from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.audit import Audit, builtin
 from sqlmesh.core.model import Model, create_sql_model
@@ -159,7 +159,7 @@ def test_macro(model: Model):
 def test_not_null_audit(model: Model):
     rendered_query_a = builtin.not_null_audit.render_query(
         model,
-        columns=["a"],
+        columns=[exp.to_column("a")],
     )
     assert (
         rendered_query_a.sql()
@@ -168,7 +168,7 @@ def test_not_null_audit(model: Model):
 
     rendered_query_a_and_b = builtin.not_null_audit.render_query(
         model,
-        columns=["a", "b"],
+        columns=[exp.to_column("a"), exp.to_column("b")],
     )
     assert (
         rendered_query_a_and_b.sql()
@@ -177,14 +177,16 @@ def test_not_null_audit(model: Model):
 
 
 def test_unique_values_audit(model: Model):
-    rendered_query_a = builtin.unique_values_audit.render_query(model, columns=["a"])
+    rendered_query_a = builtin.unique_values_audit.render_query(
+        model, columns=[exp.to_column("a")]
+    )
     assert (
         rendered_query_a.sql()
         == "SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY a ORDER BY 1) AS a_rank FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01')) WHERE a_rank > 1"
     )
 
     rendered_query_a_and_b = builtin.unique_values_audit.render_query(
-        model, columns=["a", "b"]
+        model, columns=[exp.to_column("a"), exp.to_column("b")]
     )
     assert (
         rendered_query_a_and_b.sql()
@@ -195,7 +197,7 @@ def test_unique_values_audit(model: Model):
 def test_accepted_values_audit(model: Model):
     rendered_query = builtin.accepted_values_audit.render_query(
         model,
-        column="a",
+        column=exp.to_column("a"),
         values=["value_a", "value_b"],
     )
     assert (
