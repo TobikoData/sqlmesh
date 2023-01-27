@@ -26,6 +26,7 @@ class File(PydanticModel):
 
     @validator("is_supported", always=True)
     def default_is_supported(cls, v: bool, values: t.Dict[str, t.Any]) -> bool:
+        print(values)
         if "extension" in values:
             return values["extension"] in SUPPORTED_EXTENSIONS
         return v

@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 
@@ -65,7 +66,8 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(models.File(name=entry.name, path=relative_path))
+                    files.append(models.File(
+                        name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(
             files, key=lambda x: x.name
         )
@@ -150,10 +152,21 @@ def get_plan(
     """Get the context for a environment."""
 
     plan = context.plan(environment=environment, no_prompts=True)
+    batches = context.scheduler().batches()
+    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches}
+
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
         backfills=[
-            (x.snapshot_name, x.format_missing_range()) for x in plan.missing_intervals
+            (
+                interval.snapshot_name,
+                *[
+                    [to_ds(t) for t in make_inclusive(start, end)]
+                    for start, end in interval.merged_intervals
+                ],
+                tasks[interval.snapshot_name],
+            )
+            for interval in plan.missing_intervals
         ],
     )
 

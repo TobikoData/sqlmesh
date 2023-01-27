@@ -20,8 +20,10 @@ export const fetchAPI = async <T>({
   mode?: 'cors' | 'no-cors' | 'same-origin';
   cache?: 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached';
 }): Promise<T> => {
-  const response = await fetch(
-    `${baseURL}${url}` + new URLSearchParams(params),
+  url = `${url}${new URLSearchParams(params)}`.replace(/([^:]\/)\/+/g, '$1')
+  const input = new URL(url, baseURL)
+
+  const response = await fetch(input,
     {
       method,
       headers,
