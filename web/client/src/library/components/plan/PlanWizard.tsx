@@ -75,7 +75,7 @@ export function PlanWizard({
       <PlanWizardStep step={1} title='Define Environment'>
         {context?.environment ? (
           <div className='ml-4'>
-            <h4>Current Environment is <b className='px-2 pb-1 cursor-pointer rounded-md bg-secondary-100' onClick={() => { }}><u>{context?.environment}</u></b></h4>
+            <h4>Current Environment is <b className='px-2 py-1 font-sm cursor-pointer rounded-md bg-secondary-100' onClick={() => setEnvironment(undefined)}><u>{context?.environment}</u></b></h4>
           </div>
         ) : (
           <form className='ml-4' onSubmit={getContext} id={id}>
@@ -87,8 +87,19 @@ export function PlanWizard({
                   name="environment"
                   className="block bg-gray-100 px-2 py-1 rounded-md"
                 />
+                <div className="flex items-center">
+                  <small>Maybe?</small>
+                  <ul className="flex ml-2">
+                    {['prod', 'dev', 'stage'].map(env => (
+                      <li key={env} className="mr-3 border-b cursor-pointer hover:opacity-50" onClick={() => setEnvironment(env)}>
+                        <small className="font-sm">
+                          {env}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </label>
-              <small>If not provided defaults to <i><b>prod</b></i></small>
             </fieldset>
           </form>
         )}
@@ -108,40 +119,30 @@ export function PlanWizard({
         </div>
         {context?.backfills && (
           <div className='ml-4 mb-4 p-8 bg-secondary-100 rounded-lg overflow-hidden'>
-            {shouldShowBackfill ? (
-              <>
-                <h4 className='text-gray-700'>Models needing backfill (missing dates):</h4>
-                <ul className='ml-4'>
-                  {context?.backfills.map(([modelName, dates]) => (
-                    <li key={modelName} className='text-gray-600 font-light'>
-                      <p>{modelName}: <b><small>{dates}</small></b></p>
-                    </li>
-                  ))}
-                </ul>
-                <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} />
-              </>
-            ) : (
-              <div>
-                <h4 className='text-gray-700 mb-4'>Backfilling Models</h4>
-                <ul>
-                  {backfillTasks?.map(([name, count]) => (
-                    <li key={name} className="mb-4">
-                      <p className="flex justify-between">
-                        <small>{name}</small>
-                        <small>{count} batch{count < 1 || count > 1 ? 'es' : ''}</small>
-                      </p>
+            <div className="text-center flex flex-col mb-6">
+              <h4 className='font-black text-gray-700'>Models needing backfill (missing dates):</h4>
+              {shouldShowBackfill && <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} className="inline-block mx-auto" />}
+            </div>
+            <ul>
+              {context?.backfills.map(([modelName, [start, end], batches]: any = []) => (
+                <li key={modelName} className='text-gray-600 font-light w-full mb-3'>
+                  <div className="flex justify-between items-center w-full">
+                    <p className="font-bold">{modelName}</p>
+                    <div className="flex justify-end items-center whitespace-nowrap text-sm text-gray-900">
+                      <small className="inline-block">0 / {batches} batch{batches > 1 ? 'es' : ''}</small>
+                      <small className="inline-block pl-6 font-bold">{start} - {end}</small>
+                    </div>
 
-                      {/* Fake Progress for now. Remove once API works */}
-                      <Progress
-                        progress={backfillStatus != null ? 100 : 2}
-                        delay={Math.round(Math.random() * 1000)}
-                        duration={Math.round(Math.random() * 1000)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                  </div>
+                  <Progress
+                    progress={backfillStatus != null ? 100 : 2}
+                    delay={Math.round(Math.random() * 1000)}
+                    duration={Math.round(Math.random() * 1000)}
+                  />
+                </li>
+              ))}
+            </ul>
+
           </div>
         )}
       </PlanWizardStep>
@@ -165,7 +166,7 @@ export function PlanWizard({
                     ? 'bg-sky-900 bg-opacity-75 text-white'
                     : 'bg-white'
                   }
-                relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
+                  relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
                 }
               >
                 {({ active, checked }) => (
@@ -232,15 +233,15 @@ function PlanWizardStepHeader({ disabled = false, step = 1, children = '' }: any
   )
 }
 
-function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates, show = [true, true] }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement>, show: [boolean, boolean] }) {
+function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates, show = [true, true], className }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement>, show: [boolean, boolean], className?: string }) {
   const labelStartDate = `${prefix} Start Date (Optional)`.trim()
   const labelEndDate = `${prefix} End Date (Optional)`.trim()
   const [showStartDate, showEndDate] = show;
 
   return (
-    <form ref={refDates} className='flex mt-4'>
+    <form ref={refDates} className={clsx('flex mt-4', className)}>
       {showStartDate && (
-        <label className='mx-4'>
+        <label className='mx-4 text-left'>
           <small>{labelStartDate}</small>
           <input
             type="text"
@@ -251,7 +252,7 @@ function PlanDates({ prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates,
         </label>
       )}
       {showEndDate && (
-        <label className='mx-4'>
+        <label className='mx-4 text-left'>
           <small>{labelEndDate}</small>
           <input
             type="text"

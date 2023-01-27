@@ -12,13 +12,13 @@ import {
   PlayIcon,
 } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
-import { Transition, Dialog, RadioGroup } from '@headlessui/react'
+import { Transition, Dialog } from '@headlessui/react'
 import {
   useApiFileByPath,
   useMutationApiSaveFile,
   useApiFiles,
 } from '../../../api'
-import { type File } from '../../../api/endpoints'
+import { type File } from '../../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plan } from '../plan/Plan'
 
@@ -69,9 +69,27 @@ export function IDE() {
       }}
     >
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        <div className="px-3 flex items-center">
+        <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
         </div>
+
+        {/* Experimental 
+        <div className='flex w-full justify-center'>
+          <ul className='flex w-full items-center justify-center'>
+            {['Editor', 'Plan', 'Graph', 'Audits', 'Tests'].map((name, i) => (
+              <li key={name} >
+                <div className={clsx(
+                  'mx-2 text-sm opacity-85 cursor-pointer flex',
+                  name === 'Editor' && 'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
+                  ['Audits', 'Graph', 'Tests'].includes(name) && 'opacity-25 cursor-not-allowed'
+                )}>
+                  {i > 0 && <Divider orientation='vertical' className='h-3 mx-2' />}
+                  {name}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div> */}
         <div className="px-3 flex items-center">
           <Button variant='primary' size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} className='w-[6rem] justify-between'>
             <span className="inline-block mr-3 min-w-20">Run Plan</span>
@@ -196,7 +214,7 @@ export function IDE() {
           )}
         </div>
         <Divider orientation="vertical" />
-        <div className="min-w-[3.5rem] overflow-hidden py-2">
+        {/* <div className="min-w-[3.5rem] overflow-hidden py-2">
           <ul className="flex flex-col items-center">
             <li className="prose text-secondary-500 cursor-pointer text-center w-[2.5rem] h-[2.5rem] rounded-lg bg-secondary-100 flex justify-center items-center mb-2">
               <small>DAG</small>
@@ -205,7 +223,7 @@ export function IDE() {
               <small>QA</small>
             </li>
           </ul>
-        </div>
+        </div> */}
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
