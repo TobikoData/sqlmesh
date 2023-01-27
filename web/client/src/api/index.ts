@@ -1,10 +1,11 @@
 import { useQuery, useMutation, QueryClient } from '@tanstack/react-query'
-import { getFileByPath, getFiles, getContext, saveFileByPath, getContextByEnvironment } from './endpoints'
+import { saveFileByPath, getContext, getContextByEnvironment } from './endpoints'
+import { getFileApiFilesPathGet, getFilesApiFilesGet } from "./client";
 
 export function useApiFileByPath(path?: string) {
   return useQuery({
     queryKey: [`/api/files`, path],
-    queryFn: path ? () => getFileByPath(path) : undefined,
+    queryFn: path ? () => getFileApiFilesPathGet(path) : undefined,
     enabled: !!path,
   })
 }
@@ -12,7 +13,7 @@ export function useApiFileByPath(path?: string) {
 export function useApiFiles() {
   return useQuery({
     queryKey: ['/api/files'],
-    queryFn: getFiles,
+    queryFn: getFilesApiFilesGet,
   })
 }
 
