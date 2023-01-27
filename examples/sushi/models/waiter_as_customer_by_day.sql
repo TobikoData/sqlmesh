@@ -4,7 +4,7 @@ MODEL (
   owner jen,
   cron '@daily',
   audits (
-    not_null(columns=['waiter_id'])
+    not_null(columns=[waiter_id])
   )
 );
 
