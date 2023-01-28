@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApiContextByEnvironment } from "../../../api";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
+import { EnumStatePlan, StatePlan } from "./Plan";
 
 const strategies = [
   {
@@ -23,20 +24,16 @@ const strategies = [
 
 export function PlanWizard({
   id,
-  setShouldShowNext,
-  setShouldShowBackfill,
-  setShouldShowApply,
-  shouldShowBackfill,
-  backfillTasks,
   backfillStatus,
+  setPlanState,
+  setWithModified,
+  planState,
 }: {
   id: string,
-  setShouldShowNext: any,
-  setShouldShowBackfill: any,
-  setShouldShowApply: any,
-  shouldShowBackfill: boolean,
-  backfillTasks?: Array<[string, number]>,
-  backfillStatus?: boolean,
+  setPlanState: any,
+  setWithModified: any,
+  backfillStatus: any,
+  planState: StatePlan
 }) {
   const elFormOverrideDates = useRef(null)
   const elFormBackfillDates = useRef(null)
@@ -45,18 +42,23 @@ export function PlanWizard({
   const [environment, setEnvironment] = useState<string>()
 
   const { data: context } = useApiContextByEnvironment(environment)
+  const backfills = context?.backfills ?? []
 
   useEffect(() => {
-    setShouldShowNext(Boolean(!context?.environment))
-  }, [context?.environment])
+    const withEnironemnt = Boolean(context?.environment != null)
+    const withBackfills = Array.isArray(backfills) && backfills.length > 0
 
-  useEffect(() => {
-    setShouldShowBackfill(Boolean(context?.backfills))
-  }, [context?.backfills])
+    if (withEnironemnt && withBackfills) {
+      setPlanState(EnumStatePlan.Backfill)
+    }
 
-  useEffect(() => {
-    setShouldShowApply(Boolean(context?.environment) && !Boolean(context?.backfills))
-  }, [context?.environment, context?.backfills])
+    if (withEnironemnt && !withBackfills) {
+      setPlanState(EnumStatePlan.Apply)
+    }
+
+
+    setWithModified(Object.keys(context?.changes?.modified ?? {}).length > 0)
+  }, [context?.environment, backfills, context?.changes])
 
   function getContext(e: any) {
     e.preventDefault()
@@ -72,10 +74,13 @@ export function PlanWizard({
 
   return (
     <ul>
-      <PlanWizardStep step={1} title='Define Environment'>
+      <PlanWizardStep step={1} title='Details'>
         {context?.environment ? (
           <div className='ml-4'>
-            <h4>Current Environment is <b className='px-2 py-1 font-sm cursor-pointer rounded-md bg-secondary-100' onClick={() => setEnvironment(undefined)}><u>{context?.environment}</u></b></h4>
+            <h4>Current Environment is <b className='px-2 py-1 font-sm cursor-pointer rounded-md bg-secondary-100' onClick={() => {
+              setEnvironment(undefined)
+              setPlanState(EnumStatePlan.Run)
+            }}><u>{context?.environment}</u></b></h4>
           </div>
         ) : (
           <form className='ml-4' onSubmit={getContext} id={id}>
@@ -105,26 +110,26 @@ export function PlanWizard({
         )}
       </PlanWizardStep>
       <PlanWizardStep step={2} title='Review Models' disabled={context?.environment == null}>
-        <div className='ml-4 mb-4'>
-          {context?.changes?.added && (
-            <>
-              <h4 className='text-success-500'>Added Models</h4>
-              <ul className='ml-4'>
-                {context?.changes.added.map(modelName => (
-                  <li key={modelName} className='text-gray-600 font-light'>{modelName}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-        {context?.backfills && (
-          <div className='ml-4 mb-4 p-8 bg-secondary-100 rounded-lg overflow-hidden'>
+        {context?.changes?.added && (
+          <div className='ml-4 mb-8'>
+            <h4 className='text-success-500'>Added Models</h4>
+            <ul className='ml-2'>
+              {context?.changes.added.map(modelName => (
+                <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
+                  <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {backfills.length > 0 ? (
+          <div className='mx-4 mb-4 p-8 bg-secondary-100 rounded-lg overflow-hidden'>
             <div className="text-center flex flex-col mb-6">
               <h4 className='font-black text-gray-700'>Models needing backfill (missing dates):</h4>
-              {shouldShowBackfill && <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} className="inline-block mx-auto" />}
+              {planState === EnumStatePlan.Backfill && <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} className="inline-block mx-auto" />}
             </div>
             <ul>
-              {context?.backfills.map(([modelName, [start, end], batches]: any = []) => (
+              {backfills.map(([modelName, [start, end], batches]: any = []) => (
                 <li key={modelName} className='text-gray-600 font-light w-full mb-3'>
                   <div className="flex justify-between items-center w-full">
                     <p className="font-bold">{modelName}</p>
@@ -144,9 +149,11 @@ export function PlanWizard({
             </ul>
 
           </div>
+        ) : (
+          <h3>All Models are good!</h3>
         )}
       </PlanWizardStep>
-      {!context?.changes?.added && (
+      {Object.keys(context?.changes?.modified ?? {}).length > 0 && (
         <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
           <RadioGroup
             className='p-4 bg-secondary-900 rounded-lg'
@@ -203,7 +210,7 @@ export function PlanWizard({
           </RadioGroup>
         </PlanWizardStep>
       )}
-      {!context?.changes?.added && (
+      {Object.keys(context?.changes?.modified ?? {}).length > 0 && (
         <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
           <PlanDates refDates={elFormOverrideDates} show={[true, false]} />
         </PlanWizardStep>
