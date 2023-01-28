@@ -504,18 +504,18 @@ class _Model(ModelMeta, frozen=True):
         for hook, hook_kwargs in hooks:
             # Evaluate SQL expressions before passing them into a Python
             # function as arguments.
-            evaluated_kwargs = {
+            evaluated_hook_kwargs = {
                 key: macro_evaluator.eval_expression(value)
                 if isinstance(value, exp.Expression)
                 else value
-                for key, value in {**kwargs, **hook_kwargs}.items()
+                for key, value in hook_kwargs.items()
             }
             env[hook](
                 context=context,
                 start=start,
                 end=end,
                 latest=latest,
-                **evaluated_kwargs,
+                **{**kwargs, **evaluated_hook_kwargs},
             )
 
 
