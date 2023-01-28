@@ -24,6 +24,10 @@ export function useApiContext() {
   })
 }
 
+export async function useApiContextCancel(client: QueryClient) {
+  await client.cancelQueries({ queryKey: [`/api/context`] })
+}
+
 export function useApiContextByEnvironment(environment?: string) {
   return useQuery({
     queryKey: [`/api/context/`, environment],
