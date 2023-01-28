@@ -147,12 +147,8 @@ export function Plan({ onClose }: { onClose: any }) {
               </Button>
             )}
           </div>
-          {/* {!(!shouldShowApply && !shouldShowNext && !shouldShowBackfill && backfillStatus) && (
-
-          )} */}
-
           <div className='flex items-center'>
-            {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
+            {/* {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
               <Button
                 onClick={() => reset()}
                 variant="alternative"
@@ -161,7 +157,7 @@ export function Plan({ onClose }: { onClose: any }) {
               >
                 {planState === EnumStatePlan.Resetting ? 'Resetting' : 'Reset'}
               </Button>
-            )}
+            )} */}
             <Button
               onClick={() => close()}
               variant="alternative"

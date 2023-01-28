@@ -1,4 +1,4 @@
-import { type Directory, type File } from '../../../api/endpoints';
+import type { Directory, File } from '../../../api/client';
 import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon } from '@heroicons/react/20/solid'
@@ -103,7 +103,7 @@ function Directory({ directory, selectFile, activeFile, activeFiles }: PropsDire
       </span>
       {isOpen && withFolders && (
         <Directories
-          directories={directory.directories}
+          directories={directory.directories ?? []}
           withIndent={true}
           selectFile={selectFile}
           activeFile={activeFile}
@@ -112,7 +112,7 @@ function Directory({ directory, selectFile, activeFile, activeFiles }: PropsDire
       )}
       {isOpen && withFiles && (
         <Files
-          files={directory.files}
+          files={directory.files ?? []}
           selectFile={selectFile}
           activeFile={activeFile}
           activeFiles={activeFiles}

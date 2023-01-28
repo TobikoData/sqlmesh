@@ -18,7 +18,7 @@ import {
   useMutationApiSaveFile,
   useApiFiles,
 } from '../../../api'
-import { type File } from '../../../api/client'
+import type { File } from '../../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plan } from '../plan/Plan'
 

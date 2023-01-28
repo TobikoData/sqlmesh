@@ -140,7 +140,7 @@ export function PlanWizard({
 
                   </div>
                   <Progress
-                    progress={backfillStatus != null ? 100 : 2}
+                    progress={backfillStatus != null ? 100 : 0}
                     delay={Math.round(Math.random() * 1000)}
                     duration={Math.round(Math.random() * 1000)}
                   />
