@@ -20,9 +20,11 @@ DEFAULT_AIRFLOW_CONFIG = """scheduler:
     password: airflow
 """
 
-DEFAULT_DBT_CONFIG = """from sqlmesh.dbt.loader import sqlmesh_config
+DEFAULT_DBT_CONFIG = """from pathlib import Path
 
-config = sqlmesh_config()
+from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config(Path(__file__).parent)
 """
 
 EXAMPLE_SCHEMA_NAME = "sqlmesh_example"
