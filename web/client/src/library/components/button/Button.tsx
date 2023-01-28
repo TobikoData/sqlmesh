@@ -34,15 +34,17 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg`],
 ]);
 
-export function Button({ variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], form, onClick, className }: PropsButton) {
+export function Button({ disabled = false, variant = 'secondary', shape = 'rounded', size = EnumSize.md, children = [], form, onClick, className }: PropsButton) {
   return (
     <button
       form={form}
+      disabled={disabled}
       className={clsx(
         'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         VARIANT.get(variant),
         SHAPE.get(shape),
         SIZE.get(size),
+        disabled && 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed',
         className
       )}
       onClick={onClick}
