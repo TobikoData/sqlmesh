@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
+import { Divider } from '../divider/Divider'
 
 export const EnumStatePlan = {
   Empty: 'empty',
@@ -109,7 +110,8 @@ export function Plan({ onClose }: { onClose: any }) {
             />
           </div>
         )}
-        <div className='flex justify-between px-4 py-2 bg-secondary-100'>
+        <Divider className='h-2' />
+        <div className='flex justify-between px-4 py-2 '>
           <div className='flex w-full'>
             {(planState === EnumStatePlan.Run || planState === EnumStatePlan.Runing) && (
               <Button type="submit" form='contextEnvironment' disabled={planState === EnumStatePlan.Runing}>

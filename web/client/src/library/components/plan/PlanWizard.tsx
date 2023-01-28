@@ -90,7 +90,7 @@ export function PlanWizard({
                 <input
                   type="text"
                   name="environment"
-                  className="block bg-gray-100 px-2 py-1 rounded-md"
+                  className="block bg-gray-100 px-2 py-1 rounded-md w-full"
                 />
                 <div className="flex items-center">
                   <small>Maybe?</small>
@@ -112,7 +112,7 @@ export function PlanWizard({
       <PlanWizardStep step={2} title='Review Models' disabled={context?.environment == null}>
         {context?.changes?.added && (
           <div className='ml-4 mb-8'>
-            <h4 className='text-success-500'>Added Models</h4>
+            <h4 className='text-success-500 mb-2'>Added Models</h4>
             <ul className='ml-2'>
               {context?.changes.added.map(modelName => (
                 <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
@@ -153,8 +153,8 @@ export function PlanWizard({
           <h3>All Models are good!</h3>
         )}
       </PlanWizardStep>
-      {Object.keys(context?.changes?.modified ?? {}).length > 0 && (
-        <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
+      <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
+        {Object.keys(context?.changes?.modified ?? {}).length > 0 ? (
           <RadioGroup
             className='p-4 bg-secondary-900 rounded-lg'
             value={selected}
@@ -169,11 +169,11 @@ export function PlanWizard({
                     ? 'ring-2 ring-white ring-opacity-60 ring-offset-2 ring-offset-sky-300'
                     : ''
                   }
-                  ${checked
+                          ${checked
                     ? 'bg-sky-900 bg-opacity-75 text-white'
                     : 'bg-white'
                   }
-                  relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
+                          relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
                 }
               >
                 {({ active, checked }) => (
@@ -208,13 +208,17 @@ export function PlanWizard({
               </RadioGroup.Option>
             ))}
           </RadioGroup>
-        </PlanWizardStep>
-      )}
-      {Object.keys(context?.changes?.modified ?? {}).length > 0 && (
-        <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
+        ) : (
+          <h3>No Changes</h3>
+        )}
+      </PlanWizardStep>
+      <PlanWizardStep step={4} title='Override Dates' disabled={context?.environment == null}>
+        {Object.keys(context?.changes?.modified ?? {}).length > 0 ? (
           <PlanDates refDates={elFormOverrideDates} show={[true, false]} />
-        </PlanWizardStep>
-      )}
+        ) : (
+          <h3>Not Applicable</h3>
+        )}
+      </PlanWizardStep>
     </ul >
   )
 }
@@ -222,20 +226,24 @@ export function PlanWizard({
 function PlanWizardStep({ step, title, children, disabled = false }: any) {
   return (
     <li className='mb-8'>
-      <PlanWizardStepHeader step={step} disabled={disabled}>
-        {title}
-      </PlanWizardStepHeader>
-      {disabled === false && children}
+      <div className="flex items-start">
+        <PlanWizardStepHeader className='min-w-[25%] text-right pr-12' step={step} disabled={disabled}>
+          {title}
+        </PlanWizardStepHeader>
+        <div className="w-full h-full pt-1">
+          {disabled === false && children}
+        </div>
+      </div>
     </li>
   )
 }
 
-function PlanWizardStepHeader({ disabled = false, step = 1, children = '' }: any) {
+function PlanWizardStepHeader({ disabled = false, step = 1, children = '', className }: any) {
   return (
-    <div className={clsx(disabled && 'opacity-40 cursor-not-allowed', 'flex items-center mb-4')}>
-      <h3 className='text-secondary-600'>Step {step}</h3>
-      <Divider className='mx-6' orientation='vertical' />
+    <div className={clsx(disabled && 'opacity-40 cursor-not-allowed', 'mb-4 ', className)}>
+      <h3 className='text-secondary-600 font-bold text-lg'>Step {step}</h3>
       <small>{children}</small>
+      <Divider className="h-12 mt-3 mr-6" orientation="vertical" />
     </div>
   )
 }
