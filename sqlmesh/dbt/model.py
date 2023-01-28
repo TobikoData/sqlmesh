@@ -143,13 +143,13 @@ class ModelConfig(GeneralConfig):
 
         def source_map() -> str:
             deps = ", ".join(
-                f"'{dep}': '{source_mapping[dep]}'" for dep in self._sources
+                f"'{dep}': '{source_mapping[dep]}'" for dep in sorted(self._sources)
             )
             return f"{{{deps}}}"
 
         def ref_map() -> str:
             deps = ", ".join(
-                f"'{dep}': '{model_mapping[dep]}'" for dep in self._depends_on
+                f"'{dep}': '{model_mapping[dep]}'" for dep in sorted(self._depends_on)
             )
             return f"{{{deps}}}"
 
