@@ -374,7 +374,7 @@ def test_audits():
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert model.audits == [
         ("audit_a", {}),
-        ("audit_b", {"key": "value"}),
+        ("audit_b", {"key": exp.Literal.string("value")}),
     ]
 
 

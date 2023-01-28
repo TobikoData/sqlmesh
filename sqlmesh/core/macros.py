@@ -301,6 +301,8 @@ def _norm_var_arg_lambda(
 def _norm_env_value(value: t.Any) -> t.Any:
     if isinstance(value, list):
         return tuple(value)
+    if isinstance(value, exp.Array):
+        return exp.Tuple(expressions=value.expressions)
     return value
 
 
