@@ -22,14 +22,4 @@ clean-targets:         # directories to be removed by `dbt clean`
 models:
   +start: Jan 1 2020
   sushi:
-    cleansed:
-      +schema: cleansed
-      +materialized: table
-    db:
-      +schema: db
-      +materialized: table
-
-seeds:
-  sushi:
-    raw:
-      +schema: raw
+    +materialized: table

@@ -1,8 +1,7 @@
 version: 2
 
-models:
+seeds:
   - name: items
   - name: orders
   - name: order_items
-  - name: customers
-  - name: waiters
+  - name: waiter_names
