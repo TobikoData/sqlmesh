@@ -73,13 +73,12 @@ export function IDE() {
           <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
         </div>
 
-        {/* Experimental 
         <div className='flex w-full justify-center'>
           <ul className='flex w-full items-center justify-center'>
-            {['Editor', 'Plan', 'Graph', 'Audits', 'Tests'].map((name, i) => (
+            {['Editor', 'Graph', 'Audits', 'Tests'].map((name, i) => (
               <li key={name} >
                 <div className={clsx(
-                  'mx-2 text-sm opacity-85 cursor-pointer flex',
+                  'mx-2 text-sm opacity-85 flex',
                   name === 'Editor' && 'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
                   ['Audits', 'Graph', 'Tests'].includes(name) && 'opacity-25 cursor-not-allowed'
                 )}>
@@ -89,18 +88,11 @@ export function IDE() {
               </li>
             ))}
           </ul>
-        </div> */}
+        </div>
         <div className="px-3 flex items-center">
           <Button variant='primary' size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} className='w-[6rem] justify-between'>
             <span className="inline-block mr-3 min-w-20">Run Plan</span>
             <PlayIcon className="w-4 h-4 text-inherit" />
-          </Button>
-          <Divider orientation='vertical' className='h-4 mx-3' />
-          <Button size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} variant="alternative" >
-            <span className="inline-block">Audits</span>
-          </Button>
-          <Button size={EnumSize.sm} variant="alternative">
-            Tests
           </Button>
         </div>
       </div>
@@ -214,16 +206,6 @@ export function IDE() {
           )}
         </div>
         <Divider orientation="vertical" />
-        {/* <div className="min-w-[3.5rem] overflow-hidden py-2">
-          <ul className="flex flex-col items-center">
-            <li className="prose text-secondary-500 cursor-pointer text-center w-[2.5rem] h-[2.5rem] rounded-lg bg-secondary-100 flex justify-center items-center mb-2">
-              <small>DAG</small>
-            </li>
-            <li className="prose text-secondary-500 cursor-pointer text-center w-[2.5rem] h-[2.5rem] rounded-lg bg-secondary-100 flex justify-center items-center mb-2">
-              <small>QA</small>
-            </li>
-          </ul>
-        </div> */}
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
@@ -253,7 +235,7 @@ export function IDE() {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan onCancel={setIsOpenModalPlan} />
+                  <Plan onClose={() => setIsOpenModalPlan(false)} />
                 </Dialog.Panel>
               </Transition.Child>
             </div>
