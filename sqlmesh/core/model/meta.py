@@ -5,9 +5,8 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp, maybe_parse, parse_one
 
-from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -34,8 +33,8 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
-HookCall = t.Tuple[str, t.Dict[str, t.Any]]
-AuditReference = t.Tuple[str, t.Dict[str, t.Any]]
+HookCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
 class ModelMeta(PydanticModel):
@@ -78,14 +77,12 @@ class ModelMeta(PydanticModel):
             else:
                 return v.name, {}
 
-            macro_evaluator = MacroEvaluator()
-
             for arg in args:
                 if not isinstance(arg, exp.EQ):
                     raise ConfigError(
                         f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
-                kwargs[arg.left.name] = macro_evaluator.eval_expression(arg.right)
+                kwargs[arg.left.name] = arg.right
             return (func, kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
@@ -94,6 +91,17 @@ class ModelMeta(PydanticModel):
             return [extract(v.this)]
         if isinstance(v, exp.Expression):
             return [extract(v)]
+        if isinstance(v, list):
+            return [
+                (
+                    entry[0],
+                    {
+                        key: parse_one(value) if isinstance(value, str) else value
+                        for key, value in entry[1].items()
+                    },
+                )
+                for entry in v
+            ]
         return v
 
     @validator("partitioned_by_", pre=True)

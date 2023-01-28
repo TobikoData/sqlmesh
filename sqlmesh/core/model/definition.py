@@ -20,7 +20,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.hooks import HookRegistry, hook
-from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import HookCall, ModelMeta
@@ -499,13 +499,23 @@ class _Model(ModelMeta, frozen=True):
         start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
         latest = to_datetime(latest or c.EPOCH_DS)
 
+        macro_evaluator = MacroEvaluator()
+
         for hook, hook_kwargs in hooks:
+            # Evaluate SQL expressions before passing them into a Python
+            # function as arguments.
+            evaluated_kwargs = {
+                key: macro_evaluator.eval_expression(value)
+                if isinstance(value, exp.Expression)
+                else value
+                for key, value in {**kwargs, **hook_kwargs}.items()
+            }
             env[hook](
                 context=context,
                 start=start,
                 end=end,
                 latest=latest,
-                **{**kwargs, **hook_kwargs},
+                **evaluated_kwargs,
             )
 
 
