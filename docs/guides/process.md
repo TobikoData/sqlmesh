@@ -1,5 +1,3 @@
-# Development process
-
 ## Team development with SQLMesh
 
 TODO
@@ -27,3 +25,7 @@ TODO
 TODO
 
 What to do to prevent an unwanted change from propagating downstream.
+
+## Viewing the DAG
+
+TODO

@@ -1,4 +1,4 @@
-# API overview
+# API
 
 SQLMesh can be used with a [CLI](cli.md), [notebook](notebook.md), or directly through [Python](python.md). Each interface aims to have parity in both functionality and arguments. The following is a list of available commands.
 

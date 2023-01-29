@@ -1,31 +1,29 @@
 site_name: SQLMesh
 nav:
-  - Get Started:
+  - Get started:
     - "Overview": index.md
     - quick_start.md
   - Guides:
     - guides/projects.md
-    - guides/development.md
-    - guides/dag.md
-    - guides/tests.md
-    - guides/audits.md
+    - guides/process.md
   - Concepts:
     - concepts/overview.md
     - Models:
       - concepts/models.md
       - concepts/model_kinds.md
       - concepts/snapshots.md
-    - Plans:
-      - concepts/plans.md
-      - concepts/plan_kinds.md
+    - concepts/plans.md
     - concepts/configs.md
     - concepts/environments.md
+    - concepts/tests.md
+    - concepts/audits.md
     - concepts/glossary.md
   - Reference:
     - api/overview.md
-    - api/cli.md
-    - api/notebook.md
-    - api/python.md
+    - Options:
+      - api/cli.md
+      - api/notebook.md
+      - api/python.md
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
