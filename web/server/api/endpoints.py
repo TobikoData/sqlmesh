@@ -7,13 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
-from web.server.models import (
-    APIContext,
-    APIContextEnvironment,
-    APIContextEnvironmentChanges,
-    Directory,
-    File,
-)
+from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 
 router = APIRouter()
@@ -39,10 +33,12 @@ def validate_path(
 @router.get("/files")
 def get_files(
     context: Context = Depends(get_context),
-) -> Directory:
+) -> models.Directory:
     """Get all project files."""
 
-    def walk_path(path: str | Path) -> t.Tuple[t.List[Directory], t.List[File]]:
+    def walk_path(
+        path: str | Path,
+    ) -> t.Tuple[t.List[models.Directory], t.List[models.File]]:
         directories = []
         files = []
         with os.scandir(path) as entries:
@@ -61,7 +57,7 @@ def get_files(
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
-                        Directory(
+                        models.Directory(
                             name=entry.name,
                             path=relative_path,
                             directories=_directories,
@@ -69,13 +65,13 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(File(name=entry.name, path=relative_path))
+                    files.append(models.File(name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(
             files, key=lambda x: x.name
         )
 
     directories, files = walk_path(context.path)
-    return Directory(
+    return models.Directory(
         name=os.path.basename(context.path),
         path="",
         directories=directories,
@@ -87,14 +83,14 @@ def get_files(
 def get_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
-) -> File:
+) -> models.File:
     """Get a file, including its contents."""
     try:
         with open(settings.project_path / path) as f:
             content = f.read()
     except FileNotFoundError:
         raise HTTPException(status_code=404)
-    return File(name=os.path.basename(path), path=path, content=content)
+    return models.File(name=os.path.basename(path), path=path, content=content)
 
 
 @router.post("/files/{path:path}")
@@ -102,11 +98,11 @@ async def write_file(
     content: str = Body(),
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
-) -> File:
+) -> models.File:
     """Create or update a file."""
     with open(settings.project_path / path, "w", encoding="utf-8") as f:
         f.write(content)
-    return File(name=os.path.basename(path), path=path, content=content)
+    return models.File(name=os.path.basename(path), path=path, content=content)
 
 
 @router.delete("/files/{path:path}")
@@ -125,15 +121,14 @@ async def delete_file(
 
 @router.get(
     "/context",
-    response_model=APIContext,
     response_model_exclude_unset=True,
 )
 def get_api_context(
     context: Context = Depends(get_loaded_context),
-) -> APIContext:
+) -> models.Context:
     """Get the context"""
 
-    return APIContext(
+    return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
         dialect=context.dialect,
@@ -145,18 +140,17 @@ def get_api_context(
 
 
 @router.get(
-    "/context/{environment:str}",
-    response_model=APIContextEnvironment,
+    "/plan",
     response_model_exclude_unset=True,
 )
-def get_api_context_by_environment(
+def get_plan(
     environment: str = "",
     context: Context = Depends(get_loaded_context),
-) -> APIContextEnvironment:
+) -> models.ContextEnvironment:
     """Get the context for a environment."""
 
     plan = context.plan(environment=environment, no_prompts=True)
-    payload = APIContextEnvironment(
+    payload = models.ContextEnvironment(
         environment=plan.environment.name,
         backfills=[
             (x.snapshot_name, x.format_missing_range()) for x in plan.missing_intervals
@@ -164,7 +158,7 @@ def get_api_context_by_environment(
     )
 
     if plan.context_diff.has_differences:
-        payload.changes = APIContextEnvironmentChanges(
+        payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
             modified=plan.context_diff.modified_snapshots,

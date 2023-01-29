@@ -40,7 +40,7 @@ export async function getContextByEnvironment(environment: string = '') {
       removed: Array<string>,
       modified: Array<string>,
     }
-  }>(`context/${environment || 'prod'}`)
+  }>(`plan${environment ? `?environment=${environment}` : ''}`)
 }
 
 type FetchResponse<T> = Promise<T | null>
@@ -51,8 +51,8 @@ async function fetchApi<T = unknown>(
 ): FetchResponse<T> {
   const host = window.location.origin
   // Ensure that the final string does not contain any unnecessary or duplicate slashes
-  const distanation = `/api/${path}`.replace(/([^:]\/)\/+/g, '$1')
-  const url = new URL(distanation, host)
+  const destination = `/api/${path}`.replace(/([^:]\/)\/+/g, '$1')
+  const url = new URL(destination, host)
 
   try {
     const response = await fetch(url, options)
