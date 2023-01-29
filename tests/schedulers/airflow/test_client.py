@@ -29,32 +29,19 @@ def snapshot() -> Snapshot:
         models={},
         ttl="in 1 week",
     )
-    snapshot.version = snapshot.fingerprint
+    snapshot.version = snapshot.fingerprint.to_version()
     snapshot.updated_ts = 1665014400000
     snapshot.created_ts = 1665014400000
     return snapshot
 
 
-@pytest.mark.parametrize("dag_run_entries", [0, 1])
-def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: int):
+def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     post_dag_run_response_mock = mocker.Mock()
     post_dag_run_response_mock.json.return_value = {"dag_run_id": "test_dag_run_id"}
     post_dag_run_mock = mocker.patch("requests.Session.post")
     post_dag_run_mock.return_value = post_dag_run_response_mock
 
-    get_dag_runs_response_mock = mocker.Mock()
-    get_dag_runs_response_mock.json.return_value = {
-        "total_entries": dag_run_entries,
-        "dag_runs": [] if dag_run_entries == 0 else [{"dag_run_id": "init_run"}],
-    }
-    get_dag_runs_mock = mocker.patch("requests.Session.get")
-    get_dag_runs_mock.return_value = get_dag_runs_response_mock
-
     timestamp = to_datetime("2022-08-16T02:40:19.000000Z")
-
-    expected_dag_run_id = (
-        "init_run" if dag_run_entries == 0 else "2022-08-16T02:40:19.000000Z"
-    )
 
     environment = Environment(
         name="test_env",
@@ -74,10 +61,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
 
     assert result == "test_dag_run_id"
 
-    get_dag_runs_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns?limit=1"
-    )
-
     post_dag_run_mock.assert_called_once()
     args, data = post_dag_run_mock.call_args_list[0]
 
@@ -90,15 +73,17 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                 {
                     "created_ts": 1665014400000,
                     "ttl": "in 1 week",
-                    "fingerprint": snapshot.fingerprint,
+                    "fingerprint": snapshot.fingerprint.dict(),
                     "indirect_versions": {},
                     "intervals": [],
                     "dev_intervals": [],
                     "model": {
-                        "audits": {},
+                        "audits": [],
                         "cron": "@daily",
                         "dialect": "",
                         "expressions": ["@DEF(key, " "'value')"],
+                        "pre": [],
+                        "post": [],
                         "kind": {
                             "name": "incremental_by_time_range",
                             "time_column": {"column": "ds"},
@@ -109,6 +94,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                         "storage_format": "parquet",
                         "source_type": "sql",
                     },
+                    "audits": [],
                     "name": "test_model",
                     "parents": [],
                     "previous_versions": [],
@@ -121,7 +107,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
                 "name": "test_env",
                 "snapshots": [
                     {
-                        "fingerprint": snapshot.fingerprint,
+                        "fingerprint": snapshot.fingerprint.dict(),
                         "name": "test_model",
                         "physical_schema": "physical_schema",
                         "previous_versions": [],
@@ -146,7 +132,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot, dag_run_entries: 
             "users": [],
             "is_dev": False,
         },
-        "dag_run_id": expected_dag_run_id,
+        "dag_run_id": "2022-08-16T02:40:19.000000Z",
         "logical_date": "2022-08-16T02:40:19.000000Z",
     }
 
@@ -173,7 +159,7 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     assert result == environment
 
     get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/environment__dev"
+        "http://localhost:8080/api/v1/variables/sqlmesh__environment__dev"
     )
 
 
@@ -186,24 +172,24 @@ def test_get_snapshot(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
     )
-    result = client.get_snapshot(snapshot.name, snapshot.fingerprint)
+    result = client.get_snapshot(snapshot.name, snapshot.identifier)
 
     assert result == snapshot
 
     get_snapshot_mock.assert_called_once_with(
-        f"http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/snapshot_payload__test_model__{snapshot.fingerprint}"
+        f"http://localhost:8080/api/v1/variables/sqlmesh__snapshot_payload__test_model__{snapshot.identifier}"
     )
 
 
 def test_get_snapshot_ids(mocker: MockerFixture):
     get_snapshot_response_mock = mocker.Mock()
     get_snapshot_response_mock.json.return_value = {
-        "xcom_entries": [
+        "variables": [
             {
-                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name__test_fingerprint"
+                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name__test_identifier"
             },
             {
-                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name_2__test_fingerprint_2"
+                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name_2__test_identifier_2"
             },
         ]
     }
@@ -216,24 +202,24 @@ def test_get_snapshot_ids(mocker: MockerFixture):
     result = client.get_snapshot_ids()
 
     assert result == [
-        SnapshotId(name="test_name", fingerprint="test_fingerprint"),
-        SnapshotId(name="test_name_2", fingerprint="test_fingerprint_2"),
+        SnapshotId(name="test_name", identifier="test_identifier"),
+        SnapshotId(name="test_name_2", identifier="test_identifier_2"),
     ]
 
     get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries?limit=10000000"
+        "http://localhost:8080/api/v1/variables?limit=10000000"
     )
 
 
 def test_get_snapshot_fingerprints_for_version(mocker: MockerFixture):
-    expected_fingerprints = [
-        "test_fingerprint_1",
-        "test_fingerprint_2",
+    expected_identifiers = [
+        "test_identifier_1",
+        "test_identifier_2",
     ]
 
     get_snapshots_for_version_response_mock = mocker.Mock()
     get_snapshots_for_version_response_mock.json.return_value = {
-        "value": json.dumps(expected_fingerprints)
+        "value": json.dumps(expected_identifiers)
     }
     get_snapshots_for_version_mock = mocker.patch("requests.Session.get")
     get_snapshots_for_version_mock.return_value = (
@@ -243,12 +229,12 @@ def test_get_snapshot_fingerprints_for_version(mocker: MockerFixture):
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
     )
-    result = client.get_snapshot_fingerprints_for_version("test_name", "test_version")
+    result = client.get_snapshot_identifiers_for_version("test_name", "test_version")
 
-    assert result == expected_fingerprints
+    assert result == expected_identifiers
 
     get_snapshots_for_version_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns/init_run/taskInstances/plan_receiver_task/xcomEntries/snapshot_version_index__test_name__test_version"
+        "http://localhost:8080/api/v1/variables/sqlmesh__snapshot_version_index__test_name__test_version"
     )
 
 

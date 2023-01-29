@@ -12,6 +12,7 @@ from sqlmesh.core.model import (
     SeedKind,
     SqlModel,
     TimeColumn,
+    create_seed_model,
     load_model,
     model,
 )
@@ -327,6 +328,56 @@ def test_seed_provided_columns():
     }
 
 
+def test_seed_model_diff(tmp_path):
+    model_a_csv_path = (tmp_path / "model_a.csv").absolute()
+    model_b_csv_path = (tmp_path / "model_b.csv").absolute()
+
+    with open(model_a_csv_path, "w") as fd:
+        fd.write(
+            """key,value
+1,value_a
+"""
+        )
+
+    with open(model_b_csv_path, "w") as fd:
+        fd.write(
+            """key,value
+2,value_b
+"""
+        )
+
+    model_a = create_seed_model(
+        "test_db.test_model", SeedKind(path=str(model_a_csv_path))
+    )
+    model_b = create_seed_model(
+        "test_db.test_model", SeedKind(path=str(model_b_csv_path))
+    )
+
+    diff = model_a.text_diff(model_b)
+    assert diff.endswith("-1,value_a\n+2,value_b")
+
+
+def test_audits():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            audits (
+                audit_a,
+                audit_b(key='value')
+            )
+        );
+        SELECT 1, ds;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    assert model.audits == [
+        ("audit_a", {}),
+        ("audit_b", {"key": exp.Literal.string("value")}),
+    ]
+
+
 def test_description(sushi_context):
     assert sushi_context.models["sushi.orders"].description == "Table of sushi orders."
 
@@ -340,7 +391,6 @@ def test_render():
                 time_column (a, 'yyyymmdd')
             ),
             dialect spark,
-            cron '@daily',
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,

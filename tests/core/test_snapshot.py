@@ -7,7 +7,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, fingerprint_from_model
+from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, fingerprint_from_model
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
@@ -61,7 +61,7 @@ def test_json(snapshot: Snapshot):
         "intervals": [],
         "dev_intervals": [],
         "model": {
-            "audits": {},
+            "audits": [],
             "cron": "1 0 * * *",
             "batch_size": 30,
             "kind": {
@@ -71,13 +71,17 @@ def test_json(snapshot: Snapshot):
             "start": "2020-01-01",
             "dialect": "spark",
             "name": "name",
+            "partitioned_by": [],
+            "post": [],
+            "pre": [],
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
             "source_type": "sql",
         },
+        "audits": [],
         "name": "name",
         "parents": [
-            {"name": "parent.tbl", "fingerprint": snapshot.parents[0].fingerprint}
+            {"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}
         ],
         "previous_versions": [],
         "indirect_versions": {},
@@ -250,7 +254,11 @@ each_macro = lambda: "test"
 def test_fingerprint(model: Model, parent_model: Model):
     macro.get_registry()
     fingerprint = fingerprint_from_model(model, models={})
-    original_fingerprint = "713628577_0"
+
+    original_fingerprint = SnapshotFingerprint(
+        data_hash="713628577",
+        metadata_hash="3589467163",
+    )
 
     assert fingerprint == original_fingerprint
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
@@ -260,7 +268,8 @@ def test_fingerprint(model: Model, parent_model: Model):
         model, models={"parent.tbl": parent_model}
     )
     assert with_parent_fingerprint != fingerprint
-    assert int(with_parent_fingerprint.split("_")[-1]) > 0
+    assert int(with_parent_fingerprint.parent_data_hash) > 0
+    assert int(with_parent_fingerprint.parent_metadata_hash) > 0
 
     assert (
         fingerprint_from_model(
@@ -281,7 +290,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     model = SqlModel(
         **{**model.dict(), "query": parse_one("select 1, ds -- annotation")}
     )
-    assert new_fingerprint == fingerprint_from_model(model, models={})
+    assert new_fingerprint != fingerprint_from_model(model, models={})
 
 
 def test_stamp(model: Model):
@@ -295,42 +304,83 @@ def test_stamp(model: Model):
 
 def test_table_name(snapshot: Snapshot):
     # Mimic a direct breaking change.
-    snapshot.fingerprint = "1_1"
-    snapshot.version = snapshot.fingerprint
+    snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="1", metadata_hash="1", parent_data_hash="1"
+    )
+    snapshot.version = snapshot.fingerprint.to_version()
     snapshot.previous_versions = ()
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
+    assert (
+        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    )
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
 
     # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
-    snapshot.fingerprint = "1_2"
+    snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="1", metadata_hash="1", parent_data_hash="2"
+    )
     snapshot.previous_versions = (previous_data_version,)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__1_2__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
+    assert (
+        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False)
+        == "sqlmesh.name__781051917__temp"
+    )
+    assert (
+        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    )
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
 
     # Mimic a direct forward-only change.
-    snapshot.fingerprint = "2_1"
+    snapshot.fingerprint = SnapshotFingerprint(
+        data_hash="2", metadata_hash="1", parent_data_hash="1"
+    )
     snapshot.previous_versions = (previous_data_version,)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__2_1__temp"
+    assert (
+        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False)
+        == "sqlmesh.name__3049392110__temp"
+    )
+    assert (
+        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=True)
+        == "sqlmesh.name__3049392110__temp"
+    )
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
+    assert (
+        snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3049392110__temp"
+    )
 
     # Mimic a propmoted forward-only snapshot.
     snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__2_1__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__1_1"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__2_1__temp"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__1_1"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__1_1"
+    assert (
+        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False)
+        == "sqlmesh.name__3049392110__temp"
+    )
+    assert (
+        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    )
+    assert (
+        snapshot.table_name(is_dev=True, for_read=True)
+        == "sqlmesh.name__3049392110__temp"
+    )
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"

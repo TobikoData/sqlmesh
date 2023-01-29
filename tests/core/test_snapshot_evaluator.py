@@ -1,20 +1,29 @@
 import typing as t
+from datetime import datetime
 from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
-from sqlglot import parse_one
+from sqlglot import parse, parse_one
 
+from sqlmesh.core.context import ExecutionContext
 from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
     ModelKindName,
     SqlModel,
+    load_model,
 )
 from sqlmesh.core.schema_diff import SchemaDelta
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotFingerprint,
+    SnapshotTableInfo,
+)
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -29,7 +38,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
     )
 
     snapshot = make_snapshot(model)
-    snapshot.version = snapshot.fingerprint
+    snapshot.set_version()
     return snapshot
 
 
@@ -52,17 +61,41 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = SqlModel(
-        name="test_schema.test_model",
-        kind=IncrementalByTimeRangeKind(time_column="a"),
-        storage_format="parquet",
-        query=parse_one(
-            "SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"
+    payload = {"calls": 0}
+
+    @hook()
+    def x(
+        context: ExecutionContext,
+        start: datetime,
+        end: datetime,
+        latest: datetime,
+        **kwargs,
+    ) -> None:
+        payload = kwargs["payload"]
+        payload["calls"] += 1
+
+        if "y" in kwargs:
+            payload["y"] = kwargs["y"]
+
+    model = load_model(
+        parse(  # type: ignore
+            """
+        MODEL (
+            name test_schea.test_model,
+            kind INCREMENTAL_BY_TIME_RANGE (time_column a),
+            storage_format 'parquet',
+            pre x(),
+            post [x(), x(y=['a', 2, TRUE])],
+        );
+
+        SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds
+        """
         ),
+        hooks=hook.get_registry(),
     )
 
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.version = snapshot.fingerprint
+    snapshot.version = snapshot.fingerprint.to_version()
 
     evaluator.create([snapshot], {})
     evaluator.evaluate(
@@ -70,8 +103,12 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
         "2020-01-01",
         "2020-01-02",
         "2020-01-02",
+        payload=payload,
         snapshots={},
     )
+
+    assert payload["calls"] == 3
+    assert payload["y"] == ["a", 2, True]
 
     adapter_mock.create_schema.assert_has_calls(
         [
@@ -90,7 +127,7 @@ def test_evaluate(mocker: MockerFixture, make_snapshot):
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
     model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.version = snapshot.fingerprint
+    snapshot.set_version()
 
     parent_snapshot = make_snapshot(
         SqlModel(name="test_parent_model", query=parse_one("SELECT b, ds"))
@@ -144,7 +181,7 @@ def test_promote_model_info(mocker: MockerFixture):
             SnapshotTableInfo(
                 physical_schema="physical_schema",
                 name="test_schema.test_model",
-                fingerprint="1",
+                fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
                 version="1",
                 parents=[],
                 is_materialized=True,
@@ -247,7 +284,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
-    new_snapshot.version = snapshot.version
+    new_snapshot.set_version(snapshot.version)
 
     evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot])

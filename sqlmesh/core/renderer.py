@@ -109,7 +109,7 @@ class QueryRenderer:
 
             if isinstance(query, d.Jinja):
                 env = prepare_env(self._python_env)
-                env["sqlmesh"] = True
+                env[c.SQLMESH] = True
 
                 try:
                     parsed_query = parse_one(
@@ -141,7 +141,7 @@ class QueryRenderer:
                 self._query_cache[cache_key] = macro_evaluator.transform(query)  # type: ignore
             except MacroEvalError as ex:
                 raise_config_error(
-                    f"Failed to evaluate macro '{definition}'. {ex}", self._path
+                    f"Failed to resolve macro for query. {ex}", self._path
                 )
 
             if self._schema:
@@ -196,14 +196,14 @@ class QueryRenderer:
                 query = query.copy()
             for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
                 if isinstance(node, exp.Select):
-                    self._filter_time_column(node, *dates[0:2])
+                    self.filter_time_column(node, *dates[0:2])
 
         if mapping:
             return exp.replace_tables(query, mapping)
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(
-                f"Query needs to be a SELECT or a UNION {query}", self._path
+                f"Query needs to be a SELECT or a UNION {query}.", self._path
             )
 
         return t.cast(exp.Subqueryable, query)
@@ -223,7 +223,7 @@ class QueryRenderer:
             self._query_cache.clear()
             self.render()
 
-    def _filter_time_column(
+    def filter_time_column(
         self, query: exp.Select, start: TimeLike, end: TimeLike
     ) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
@@ -233,10 +233,21 @@ class QueryRenderer:
         low = self._time_converter(start)
         high = self._time_converter(end)
 
+        time_column_identifier = exp.to_identifier(self._time_column.column)
+        if time_column_identifier is None:
+            raise_config_error(
+                f"Time column '{self._time_column.column}' must be a valid identifier.",
+                self._path,
+            )
+            raise
+
         time_column_projection = next(
-            select
-            for select in query.selects
-            if select.alias_or_name == self._time_column.column
+            (
+                select
+                for select in query.selects
+                if select.alias_or_name == self._time_column.column
+            ),
+            time_column_identifier,
         )
 
         if isinstance(time_column_projection, exp.Alias):

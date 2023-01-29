@@ -4,6 +4,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sqlglot.expressions import to_column
 
 from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -25,13 +26,24 @@ ITEMS = "sushi.items"
         "quantity": "int",
         "ds": "text",
     },
+    audits=[
+        (
+            "not_null",
+            {
+                "columns": [
+                    to_column(c) for c in ("id", "order_id", "item_id", "quantity")
+                ]
+            },
+        ),
+        ("assert_order_items_quantity_exceeds_threshold", {"quantity": 0}),
+    ],
 )
 def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
     latest: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")
     items_table = context.table(ITEMS)

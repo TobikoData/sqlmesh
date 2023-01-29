@@ -17,9 +17,6 @@ from sqlmesh.utils.pydantic import PydanticModel
 PLAN_RECEIVER_DAG_ID = "sqlmesh_plan_receiver_dag"
 PLAN_RECEIVER_TASK_ID = "plan_receiver_task"
 
-SQLMESH_XCOM_DAG_ID: str = PLAN_RECEIVER_DAG_ID
-SQLMESH_XCOM_TASK_ID: str = PLAN_RECEIVER_TASK_ID
-
 JANITOR_DAG_ID = "sqlmesh_janitor_dag"
 JANITOR_TASK_ID = "janitor_task"
 
@@ -30,12 +27,11 @@ SNAPSHOT_AIRFLOW_TAG = "sqlmesh_snapshot"
 PLAN_AIRFLOW_TAG = "sqlmesh_plan"
 
 SNAPSHOT_TABLE_CLEANUP_XCOM_KEY = "snapshot_table_cleanup_task"
-HWM_UTC_XCOM_KEY = "high_water_mark_utc"
 
-PLAN_APPLICATION_REQUEST_KEY_PREFIX = "plan_application_request"
-SNAPSHOT_PAYLOAD_KEY_PREFIX = "snapshot_payload"
-SNAPSHOT_VERSION_KEY_PREFIX = "snapshot_version_index"
-ENV_KEY_PREFIX = "environment"
+PLAN_APPLICATION_REQUEST_KEY_PREFIX = "sqlmesh__plan_application_request"
+SNAPSHOT_PAYLOAD_KEY_PREFIX = "sqlmesh__snapshot_payload"
+SNAPSHOT_VERSION_KEY_PREFIX = "sqlmesh__snapshot_version_index"
+ENV_KEY_PREFIX = "sqlmesh__environment"
 
 AIRFLOW_LOCAL_URL = "http://localhost:8080/"
 
@@ -79,21 +75,21 @@ class PlanApplicationRequest(PydanticModel):
     is_dev: bool
 
 
-def snapshot_xcom_key(snapshot: SnapshotIdLike) -> str:
-    return snapshot_xcom_key_from_name_fingerprint(snapshot.name, snapshot.fingerprint)
+def snapshot_key(snapshot: SnapshotIdLike) -> str:
+    return snapshot_key_from_name_identifier(snapshot.name, snapshot.identifier)
 
 
-def snapshot_xcom_key_from_name_fingerprint(name: str, fingerprint: str) -> str:
-    return f"{SNAPSHOT_PAYLOAD_KEY_PREFIX}__{name}__{fingerprint}"
+def snapshot_key_from_name_identifier(name: str, identifier: str) -> str:
+    return f"{SNAPSHOT_PAYLOAD_KEY_PREFIX}__{name}__{identifier}"
 
 
-def snapshot_version_xcom_key(name: str, version: t.Optional[str] = None) -> str:
+def snapshot_version_key(name: str, version: t.Optional[str] = None) -> str:
     if not version:
         raise SQLMeshError("Version cannot be empty")
     return f"{SNAPSHOT_VERSION_KEY_PREFIX}__{name}__{version}"
 
 
-def name_from_snapshot_version_xcom_key(key: str) -> str:
+def name_from_snapshot_version_key(key: str) -> str:
     return key[len(f"{SNAPSHOT_VERSION_KEY_PREFIX}__") : key.rindex("__")]
 
 
@@ -109,14 +105,14 @@ def plan_application_dag_id(environment: str, request_id: str) -> str:
     return f"sqlmesh_plan_application__{environment}__{request_id}"
 
 
-def environment_xcom_key(env: str) -> str:
+def environment_key(env: str) -> str:
     return f"{ENV_KEY_PREFIX}__{env}"
 
 
-def plan_application_request_xcom_key(request_id: str) -> str:
+def plan_application_request_key(request_id: str) -> str:
     return f"{PLAN_APPLICATION_REQUEST_KEY_PREFIX}__{request_id}"
 
 
-def plan_application_request_xcom_key_from_dag_id(dag_id: str) -> str:
+def plan_application_request_key_from_dag_id(dag_id: str) -> str:
     request_id = dag_id[dag_id.rindex("__") + 2 :]
-    return plan_application_request_xcom_key(request_id)
+    return plan_application_request_key(request_id)

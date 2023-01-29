@@ -45,7 +45,7 @@ class MagicError(SQLMeshError):
     pass
 
 
-class AuditConfigError(SQLMeshError):
+class AuditConfigError(ConfigError):
     pass
 
 
@@ -57,7 +57,11 @@ class NotificationTargetError(SQLMeshError):
     pass
 
 
-def raise_config_error(msg: str, location: t.Optional[str | Path] = None) -> None:
+def raise_config_error(
+    msg: str,
+    location: t.Optional[str | Path] = None,
+    error_type: t.Type[ConfigError] = ConfigError,
+) -> None:
     if location:
-        raise ConfigError(f"{msg} at '{location}'")
-    raise ConfigError(msg)
+        raise error_type(f"{msg} at '{location}'")
+    raise error_type(msg)

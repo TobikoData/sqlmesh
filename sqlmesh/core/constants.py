@@ -1,3 +1,5 @@
+SQLMESH = "sqlmesh"
+
 PROD = "prod"
 """Prod"""
 DEV = "dev"

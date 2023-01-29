@@ -26,6 +26,21 @@ class model(registry_decorator):
         self.name = name
         self.kwargs = kwargs
 
+        # Make sure that argument values are expressions in order to
+        # pass validation in ModelMeta.
+        for calls_key in ("pre", "post", "audits"):
+            calls = self.kwargs.pop(calls_key, [])
+            self.kwargs[calls_key] = [
+                (
+                    call_key,
+                    {
+                        arg_key: exp.convert(arg_value)
+                        for arg_key, arg_value in call_args.items()
+                    },
+                )
+                for call_key, call_args in calls
+            ]
+
         self.columns = {
             column_name: column_type
             if isinstance(column_type, exp.DataType)
@@ -38,6 +53,7 @@ class model(registry_decorator):
         *,
         module_path: Path,
         path: Path,
+        defaults: t.Optional[t.Dict[str, t.Any]] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     ) -> Model:
         """Get the model registered by this function."""
@@ -54,6 +70,7 @@ class model(registry_decorator):
         return create_python_model(
             self.name,
             entrypoint,
+            defaults=defaults,
             path=path,
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),

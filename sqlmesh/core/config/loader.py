@@ -4,11 +4,12 @@ import os
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
 from sqlmesh.utils import sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
-from sqlmesh.utils.yaml import yaml
+from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
@@ -55,10 +56,7 @@ def load_config_from_paths(
 
 
 def load_config_from_yaml(path: Path) -> Config:
-    config_dict = yaml.load(path)
-    if config_dict is None:
-        raise ConfigError(f"Config file '{path}' can't be empty.")
-
+    config_dict = yaml_load(path)
     return Config.parse_obj(config_dict)
 
 
@@ -89,7 +87,7 @@ def load_config_from_env() -> Config:
 
     for key, value in os.environ.items():
         key = key.lower()
-        if key.startswith("sqlmesh__"):
+        if key.startswith(f"{c.SQLMESH}__"):
             segments = key.split("__")[1:]
             if not segments or not segments[-1]:
                 raise ConfigError(f"Invalid SQLMesh configuration variable '{key}'.")

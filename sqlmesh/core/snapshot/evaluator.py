@@ -27,7 +27,7 @@ from contextlib import contextmanager
 
 from sqlglot import exp, select
 
-from sqlmesh.core.audit import AuditResult
+from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
@@ -140,8 +140,18 @@ class SnapshotEvaluator:
 
         from sqlmesh.core.context import ExecutionContext
 
+        context = ExecutionContext(self.adapter, snapshots, is_dev)
+
+        model.run_pre_hooks(
+            context=context,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
+
         queries_or_dfs = model.render(
-            ExecutionContext(self.adapter, snapshots, is_dev),
+            context,
             start=start,
             end=end,
             latest=latest,
@@ -157,6 +167,14 @@ class SnapshotEvaluator:
                 if limit > 0:
                     return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetch_native_df(query.limit(limit))  # type: ignore
                 apply(query_or_df, index)
+
+            model.run_post_hooks(
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
             return None
 
     def promote(
@@ -272,18 +290,27 @@ class SnapshotEvaluator:
             return []
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
+
+        audits_by_name = {**BUILT_IN_AUDITS, **{a.name: a for a in snapshot.audits}}
+
         results = []
-        for audit, query in snapshot.model.render_audit_queries(
-            start=start,
-            end=end,
-            latest=latest,
-            snapshots=snapshots,
-            is_dev=is_dev,
-            **kwargs,
-        ):
-            count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(f"({query})"))
+        for audit_name, audit_args in snapshot.model.audits:
+            audit = audits_by_name[audit_name]
+            query = audit.render_query(
+                snapshot,
+                start=start,
+                end=end,
+                latest=latest,
+                snapshots=snapshots,
+                is_dev=is_dev,
+                **audit_args,
+                **kwargs,
+            )
+            count, *_ = self.adapter.fetchone(
+                select("COUNT(*)").from_(query.subquery())
+            )
             if count and raise_exception:
-                message = f"Audit {audit.name} for model {audit.model} failed.\nGot {count} results, expected 0.\n{query}"
+                message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
                 if audit.blocking:
                     raise AuditError(message)
                 else:

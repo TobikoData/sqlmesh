@@ -1,8 +1,10 @@
 import random
+import typing as t
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sqlglot.expressions import to_column
 
 from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
@@ -57,13 +59,18 @@ ITEMS = [
         "price": "double",
         "ds": "text",
     },
+    audits=[
+        ("accepted_values", {"column": to_column("name"), "values": ITEMS}),
+        ("not_null", {"columns": [to_column("name"), to_column("price")]}),
+        ("assert_items_price_exceeds_threshold", {"price": 0}),
+    ],
 )
 def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
     latest: datetime,
-    **kwargs,
+    **kwargs: t.Any,
 ) -> pd.DataFrame:
     dfs = []
     for dt in iter_dates(start, end):

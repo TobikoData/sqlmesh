@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
+from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.schedulers.airflow.integration import _plan_receiver_task
@@ -43,7 +43,7 @@ def test_apply_plan_create_backfill_promote(
 ):
     model_name = random_name()
     snapshot = make_snapshot(_create_model(model_name))
-    snapshot.version = snapshot.fingerprint
+    snapshot.set_version()
 
     environment_name = _random_environment_name()
     environment = _create_environment(snapshot, name=environment_name)
@@ -99,13 +99,17 @@ def test_mult_snapshots_same_version(
     dag = _get_snapshot_dag(airflow_client, model_name, snapshot.version)
     assert dag["is_active"]
 
-    snapshot.fingerprint = "test_fingerprint"
+    new_fingerprint = original_fingerprint.copy(update={"data_hash": "new_snapshot"})
+
+    snapshot.fingerprint = new_fingerprint
     environment.previous_plan_id = environment.plan_id
     environment.plan_id = "new_plan_id"
     _apply_plan_and_block(airflow_client, [snapshot], environment)
 
-    _validate_snapshot_fingerprints_for_version(
-        airflow_client, snapshot, [original_fingerprint, "test_fingerprint"]
+    _validate_snapshot_identifiers_for_version(
+        airflow_client,
+        snapshot,
+        [original_fingerprint.to_identifier(), new_fingerprint.to_identifier()],
     )
 
 
@@ -133,7 +137,7 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
 
     deleted_snapshot = SnapshotTableInfo(
         name="test_schema.deleted_model",
-        fingerprint="test_fingerprint",
+        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
         version="test_version",
         physical_schema="test_physical_schema",
         parents=[],
@@ -149,30 +153,31 @@ def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
         previous_plan_id=None,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {}
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
     get_environment_mock.return_value = old_environment
 
-    _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+    set_variable_mock = mocker.patch("airflow.models.Variable.set")
+
+    _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
     get_environment_mock.assert_called_once()
 
-    task_instance_mock.xcom_push.assert_called_once()
-    ((_, xcom_value), _) = task_instance_mock.xcom_push.call_args_list[0]
+    set_variable_mock.assert_called_once()
+
+    ((_, value), _) = set_variable_mock.call_args_list[0]
     assert common.PlanApplicationRequest.parse_raw(
-        xcom_value
+        value
     ) == common.PlanApplicationRequest(
         request_id="test_request_id",
         environment_name=environment_name,
@@ -223,22 +228,20 @@ def test_plan_receiver_task_duplicated_snapshot(
         is_dev=False,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
 
     with pytest.raises(SQLMeshError):
-        _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+        _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
 
@@ -269,13 +272,11 @@ def test_plan_receiver_task_unbounded_end(
         is_dev=False,
     )
 
-    task_instance_mock = mocker.Mock()
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_conf.dict()
 
     get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_all_snapshots"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
     )
     get_all_snapshots_mock.return_value = {
         snapshot.snapshot_id: snapshot,
@@ -283,15 +284,17 @@ def test_plan_receiver_task_unbounded_end(
     }
 
     get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.xcom.XComStateSync.get_environment"
+        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
     )
 
-    _plan_receiver_task(dag_run_mock, task_instance_mock, 1)
+    set_variable_mock = mocker.patch("airflow.models.Variable.set")
+
+    _plan_receiver_task(dag_run_mock, 1)
 
     get_all_snapshots_mock.assert_called_once()
     get_environment_mock.assert_called_once()
 
-    task_instance_mock.xcom_push.assert_called_once()
+    set_variable_mock.assert_called_once()
 
 
 def _apply_plan_and_block(
@@ -319,16 +322,16 @@ def _apply_plan_and_block(
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)
-def _validate_snapshot_fingerprints_for_version(
+def _validate_snapshot_identifiers_for_version(
     airflow_client: AirflowClient,
     snapshot: Snapshot,
-    expected_fingerprints: t.List[str],
+    expected_identifiers: t.List[str],
 ) -> None:
     assert sorted(
-        airflow_client.get_snapshot_fingerprints_for_version(
+        airflow_client.get_snapshot_identifiers_for_version(
             snapshot.name, snapshot.version
         )
-    ) == sorted(expected_fingerprints)
+    ) == sorted(expected_identifiers)
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)

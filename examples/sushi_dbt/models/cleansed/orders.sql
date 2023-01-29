@@ -14,7 +14,7 @@ SELECT
   start_ts::TEXT AS start_ts, /* Start timestamp */
   end_ts::TEXT AS end_ts, /* End timestamp */
   ds::TEXT AS ds /* Date of order */
-FROM {{ source('raw', 'orders') }}
+FROM {{ ref('raw_orders') }}
 {% if is_incremental() %}
 WHERE
   ds > (select max(ds) from {{ this }})

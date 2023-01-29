@@ -5,18 +5,18 @@ import typing as t
 
 from pydantic import Field
 
-from sqlmesh.core.config import Config, SnowflakeConnectionConfig
+from sqlmesh.core.config import ConnectionConfig, SnowflakeConnectionConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-class DataWarehouseConfig(abc.ABC, PydanticModel):
+class TargetConfig(abc.ABC, PydanticModel):
     """
-    Project connection and operational configuration for the data warehouse
+    Configuration for DBT profile target
 
     Args:
         type: The type of the data warehouse
-        schema_: The data warehouse schema for this project
+        schema_: The target schema for this project
         threads: The number of threads to run on
     """
 
@@ -25,15 +25,15 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
     threads: int = 1
 
     @classmethod
-    def load(cls, data: t.Dict[str, t.Any]) -> DataWarehouseConfig:
+    def load(cls, data: t.Dict[str, t.Any]) -> TargetConfig:
         """
-        Loads the data warehouse configuration from the yaml for project's target output
+        Loads the configuration from the yaml provided for a profile target
 
         Args:
             data: The yaml for the project's target output
 
         Returns:
-            The data warehouse configuration for the provided target output
+            The configuration of the provided profile target
         """
         db_type = data["type"]
         if db_type == "snowflake":
@@ -48,10 +48,14 @@ class DataWarehouseConfig(abc.ABC, PydanticModel):
         # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        """Converts target config to SQLMesh connection config"""
+        raise NotImplementedError
 
-class SnowflakeConfig(DataWarehouseConfig):
+
+class SnowflakeConfig(TargetConfig):
     """
-    Project connection and operational configuration for the Snowflake data warehouse
+    Project connection and operational configuration for the Snowflake target
 
     Args:
         account: Snowflake account
@@ -82,8 +86,8 @@ class SnowflakeConfig(DataWarehouseConfig):
     retry_on_database_errors: bool = False
     retry_all: bool = False
 
-    def to_sqlmesh(self) -> Config:
-        snowflake_connection_config = SnowflakeConnectionConfig(
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return SnowflakeConnectionConfig(
             user=self.user,
             password=self.password,
             account=self.account,
@@ -93,12 +97,10 @@ class SnowflakeConfig(DataWarehouseConfig):
             concurrent_tasks=self.threads,
         )
 
-        return Config(connections=snowflake_connection_config)
 
-
-class PostgresConfig(DataWarehouseConfig):
+class PostgresConfig(TargetConfig):
     """
-    Project connection and operational configuration for the Postgres data warehouse
+    Project connection and operational configuration for the Postgres target
 
     Args:
         host: The Postgres host to connect to
@@ -126,10 +128,13 @@ class PostgresConfig(DataWarehouseConfig):
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError
 
-class RedshiftConfig(DataWarehouseConfig):
+
+class RedshiftConfig(TargetConfig):
     """
-    Project connection and operational configuration for the Redshift data warehouse
+    Project connection and operational configuration for the Redshift target
 
     Args:
         host: The Redshift host to connect to
@@ -156,10 +161,13 @@ class RedshiftConfig(DataWarehouseConfig):
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError
 
-class DatabricksConfig(DataWarehouseConfig):
+
+class DatabricksConfig(TargetConfig):
     """
-    Project connection and operational configuration for the Databricks data warehouse
+    Project connection and operational configuration for the Databricks target
 
     Args:
         catalog: Catalog name to use for Unity Catalog
@@ -172,3 +180,6 @@ class DatabricksConfig(DataWarehouseConfig):
     host: str
     http_path: str
     token: str
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        raise NotImplementedError

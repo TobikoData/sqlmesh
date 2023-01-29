@@ -2,7 +2,9 @@ MODEL (
   name sushi.customers,
   kind FULL,
   owner jen,
-  cron '@daily'
+  cron '@daily',
+  pre noop(x=1),
+  post (noop(), noop(y=['a', 2])),
 );
 
 SELECT DISTINCT

@@ -132,6 +132,8 @@ def create_connection_pool(
 
 
 def _try_close(closeable: t.Any, kind: str) -> None:
+    if closeable is None:
+        return
     try:
         closeable.close()
     except Exception:

@@ -4,11 +4,12 @@ import ast
 import sys
 import types
 import typing as t
+from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
 
 from astor import to_source
-from pydantic import Field, validator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.scope import traverse_scope
@@ -17,15 +18,14 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import PySparkDataFrame
-from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model.common import parse_expression, parse_model_name
+from sqlmesh.core.hooks import HookRegistry, hook
+from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
+from sqlmesh.core.model.common import expression_validator, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
-from sqlmesh.core.model.meta import ModelMeta
-from sqlmesh.core.model.renderer import QueryRenderer
+from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import (
@@ -37,6 +37,7 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import Audit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
@@ -45,22 +46,6 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
-
-META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
-    "name": lambda value: exp.to_table(value),
-    "start": lambda value: exp.Literal.string(value),
-    "cron": lambda value: exp.Literal.string(value),
-    "batch_size": lambda value: exp.Literal.number(value),
-    "partitioned_by_": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
-    "depends_on_": lambda value: exp.Tuple(expressions=value),
-    "columns_to_types_": lambda value: exp.Schema(
-        expressions=[
-            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
-        ]
-    ),
-}
 
 
 class _Model(ModelMeta, frozen=True):
@@ -93,20 +78,22 @@ class _Model(ModelMeta, frozen=True):
         dialect: The SQL dialect that the model's query is written in. By default,
             this is assumed to be the dialect of the context.
         owner: The owner of the model.
-        cron: A cron string specifying how often the model should be refresh, leveraging the
+        cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         description: The optional model description.
         stamp: An optional arbitrary string sequence used to create new model versions without making
             changes to any of the functional components of the definition.
         start: The earliest date that the model will be backfilled for. If this is None,
-            then the date is inferred by taking the most recent start date's of its ancestors.
-            The start date can be a static datetime or a realtive datetime like "1 year ago"
+            then the date is inferred by taking the most recent start date of its ancestors.
+            The start date can be a static datetime or a relative datetime like "1 year ago"
         batch_size: The maximum number of intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         partitioned_by: The partition columns, only applicable in certain engines. (eg. (ds, hour))
+        pre: Pre-hooks to run before the model executes.
+        post: Post-hooks to run after the model executes.
         expressions: All of the expressions between the model definition and final query, used for setting certain variables or environments.
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
@@ -117,16 +104,12 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(
         default=None, alias="python_env"
     )
-    audits: t.Dict[str, Audit] = UniqueKeyDict("audits")
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
-    _audit_query_renderers: t.Dict[str, QueryRenderer] = {}
 
-    _expressions_validator = validator("expressions_", pre=True, allow_reuse=True)(
-        parse_expression
-    )
+    _expressions_validator = expression_validator
 
     def render(
         self,
@@ -161,7 +144,7 @@ class _Model(ModelMeta, frozen=True):
             **kwargs,
         )
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
+    def render_definition(self) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
@@ -172,7 +155,7 @@ class _Model(ModelMeta, frozen=True):
         for field in ModelMeta.__fields__.values():
             field_value = getattr(self, field.name)
 
-            if field_value is not None:
+            if field_value != field.default:
                 if field.name == "description":
                     comment = field_value
                 elif field.name == "kind":
@@ -195,7 +178,18 @@ class _Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
 
-        return [model, *self.expressions]
+        python_env = d.PythonCode(
+            expressions=[
+                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+                for k, v in self.sorted_python_env
+            ]
+        )
+
+        return [
+            model,
+            *self.expressions,
+            *([python_env] if python_env.expressions else []),
+        ]
 
     def render_query(
         self,
@@ -233,41 +227,6 @@ class _Model(ModelMeta, frozen=True):
             )
         ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]))
 
-    def render_audit_queries(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        is_dev: bool = False,
-        **kwargs: t.Any,
-    ) -> t.Generator[t.Tuple[Audit, exp.Subqueryable], None, None]:
-        """Renders this model's audit queries, expanding macros with provided kwargs.
-
-        Args:
-            start: The start datetime to render. Defaults to epoch start.
-            end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-            is_dev: Indicates whether the rendering happens in the development mode and temporary
-                tables / table clones should be used where applicable.
-            kwargs: Additional kwargs to pass to the renderer.
-
-        Returns:
-            The rendered expression.
-        """
-        for audit_name, audit in self.audits.items():
-            query = self._get_audit_query_renderer(audit_name).render(
-                start=start,
-                end=end,
-                latest=latest,
-                snapshots=snapshots,
-                is_dev=is_dev,
-                **kwargs,
-            )
-            yield audit, query
-
     def ctas_query(
         self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
     ) -> exp.Subqueryable:
@@ -291,6 +250,65 @@ class _Model(ModelMeta, frozen=True):
 
         return query
 
+    def run_pre_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.pre, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def run_post_hooks(
+        self,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Runs all pre hooks.
+
+        Args:
+            context: The execution context used for running the hook.
+            start: The start date/time of the run.
+            end: The end date/time of the run.
+            latest: The latest date/time to use for the run.
+        """
+        self._run_hooks(
+            self.post, context=context, start=start, end=end, latest=latest, **kwargs
+        )
+
+    def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
+        """Returns audits referenced in this model.
+
+        Args:
+            audits: Available audits by name.
+        """
+        from sqlmesh.core.audit import BUILT_IN_AUDITS
+
+        referenced_audits = []
+        for audit_name, _ in self.audits:
+            if audit_name in audits:
+                referenced_audits.append(audits[audit_name])
+            elif audit_name not in BUILT_IN_AUDITS:
+                raise_config_error(
+                    f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
+                    self._path,
+                )
+        return referenced_audits
+
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema associated with this model.
 
@@ -307,8 +325,8 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A unified text diff showing additions and deletions.
         """
-        meta_a, *statements_a, query_a = self.render_definition(show_python=True)
-        meta_b, *statements_b, query_b = other.render_definition(show_python=True)
+        meta_a, *statements_a, query_a = self.render_definition()
+        meta_b, *statements_b, query_b = other.render_definition()
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),
@@ -399,12 +417,12 @@ class _Model(ModelMeta, frozen=True):
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
-        return [s for s in (self.expressions or []) if isinstance(s, d.MacroDef)]
+        return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
     @property
     def sql_statements(self) -> t.List[exp.Expression]:
         """All sql statements from the list of expressions."""
-        return [s for s in (self.expressions or []) if not isinstance(s, d.MacroDef)]
+        return [s for s in self.expressions if not isinstance(s, d.MacroDef)]
 
     @property
     def view_name(self) -> str:
@@ -467,27 +485,38 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
-    def _get_audit_query_renderer(self, audit_name: str) -> QueryRenderer:
-        if audit_name not in self._audit_query_renderers:
-            audit = self.audits[audit_name]
-            self._audit_query_renderers[audit_name] = self._create_query_renderer(
-                audit.query, audit.dialect
-            )
-        return self._audit_query_renderers[audit_name]
+    def _run_hooks(
+        self,
+        hooks: t.List[HookCall],
+        *,
+        context: ExecutionContext,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        env = prepare_env(self.python_env)
+        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
+        latest = to_datetime(latest or c.EPOCH_DS)
 
-    def _create_query_renderer(
-        self, query: exp.Expression, dialect: str
-    ) -> QueryRenderer:
-        return QueryRenderer(
-            query,
-            dialect,
-            self.macro_definitions,
-            path=self._path,
-            python_env=self.python_env,
-            time_column=self.time_column,
-            time_converter=self.convert_to_time_column,
-            only_latest=self.kind.only_latest,
-        )
+        macro_evaluator = MacroEvaluator()
+
+        for hook, hook_kwargs in hooks:
+            # Evaluate SQL expressions before passing them into a Python
+            # function as arguments.
+            evaluated_hook_kwargs = {
+                key: macro_evaluator.eval_expression(value)
+                if isinstance(value, exp.Expression)
+                else value
+                for key, value in hook_kwargs.items()
+            }
+            env[hook](
+                context=context,
+                start=start,
+                end=end,
+                latest=latest,
+                **{**kwargs, **evaluated_hook_kwargs},
+            )
 
 
 class SqlModel(_Model):
@@ -503,7 +532,7 @@ class SqlModel(_Model):
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     __query_renderer: t.Optional[QueryRenderer] = None
 
-    _query_validator = validator("query", pre=True, allow_reuse=True)(parse_expression)
+    _query_validator = expression_validator
 
     def render_query(
         self,
@@ -527,8 +556,8 @@ class SqlModel(_Model):
             **kwargs,
         )
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
-        result = super().render_definition(show_python=show_python)
+    def render_definition(self) -> t.List[exp.Expression]:
+        result = super().render_definition()
         result.append(self.query)
         return result
 
@@ -600,8 +629,15 @@ class SqlModel(_Model):
     @property
     def _query_renderer(self) -> QueryRenderer:
         if self.__query_renderer is None:
-            self.__query_renderer = self._create_query_renderer(
-                self.query, self.dialect
+            self.__query_renderer = QueryRenderer(
+                self.query,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                python_env=self.python_env,
+                time_column=self.time_column,
+                time_converter=self.convert_to_time_column,
+                only_latest=self.kind.only_latest,
             )
         return self.__query_renderer
 
@@ -631,6 +667,27 @@ class SeedModel(_Model):
     ) -> t.Generator[QueryOrDF, None, None]:
         yield from self.seed.read(batch_size=self.kind.batch_size)
 
+    def render_definition(self) -> t.List[exp.Expression]:
+        result = super().render_definition()
+        result.append(exp.Literal.string(self.seed.content))
+        return result
+
+    def text_diff(self, other: Model) -> str:
+        if not isinstance(other, SeedModel):
+            return super().text_diff(other)
+
+        meta_a = self.render_definition()[0]
+        meta_b = other.render_definition()[0]
+        return "\n".join(
+            (
+                d.text_diff(meta_a, meta_b, self.dialect),
+                *unified_diff(
+                    self.seed.content.split("\n"),
+                    other.seed.content.split("\n"),
+                ),
+            )
+        ).strip()
+
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         if self.columns_to_types_ is not None:
@@ -640,6 +697,13 @@ class SeedModel(_Model):
     @property
     def is_seed(self) -> bool:
         return True
+
+    @property
+    def seed_path(self) -> Path:
+        seed_path = Path(self.kind.path)
+        if not seed_path.is_absolute():
+            return self._path.parent / seed_path
+        return seed_path
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
@@ -711,21 +775,6 @@ class PythonModel(_Model):
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
 
-    def render_definition(self, show_python: bool = False) -> t.List[exp.Expression]:
-        result = super().render_definition(show_python=show_python)
-
-        python_env = d.PythonCode(
-            expressions=[
-                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                for k, v in self.sorted_python_env
-            ]
-        )
-
-        if python_env.expressions:
-            result.append(python_env)
-
-        return result
-
     @property
     def is_python(self) -> bool:
         return True
@@ -742,10 +791,12 @@ Model = Annotated[
 def load_model(
     expressions: t.List[exp.Expression],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -754,14 +805,17 @@ def load_model(
 
     Args:
         expressions: Model, *Statements, Query.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
+        hooks: The custom registry of hooks. If not provided the default registry will be used.
+        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
+        kwargs: Additional kwargs to pass to the loader.
     """
     if not expressions:
         raise_config_error("Incomplete model definition, missing MODEL statement", path)
@@ -801,6 +855,7 @@ def load_model(
             name,
             query.name,
             python_env,
+            defaults=defaults,
             path=path,
             time_column_format=time_column_format,
             **meta_fields,
@@ -810,10 +865,12 @@ def load_model(
             name,
             query,
             statements,
+            defaults=defaults,
             path=path,
             module_path=module_path,
             time_column_format=time_column_format,
             macros=macros,
+            hooks=hooks,
             python_env=python_env,
             **meta_fields,
         )
@@ -824,7 +881,11 @@ def load_model(
                 for p in meta_fields.pop("kind").expressions
             }
             return create_seed_model(
-                name, SeedKind(**seed_properties), path=path, **meta_fields
+                name,
+                SeedKind(**seed_properties),
+                defaults=defaults,
+                path=path,
+                **meta_fields,
             )
         except Exception:
             raise_config_error(
@@ -839,10 +900,12 @@ def create_sql_model(
     query: exp.Expression,
     statements: t.List[exp.Expression],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -854,11 +917,13 @@ def create_sql_model(
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
         statements: The list of all SQL statements that are not a query or a model definition.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        python_env: The custom Python environment for macros. If not provided the environment will be constructed
+        hooks: The custom registry of hooks. If not provided the default registry will be used.
+        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
@@ -873,11 +938,18 @@ def create_sql_model(
         raise_config_error("Query missing select statements", path)
 
     if not python_env:
-        python_env = _python_env(query, module_path, macros or macro.get_registry())
+        python_env = _python_env(
+            query,
+            _extract_hooks(kwargs),
+            module_path,
+            macros or macro.get_registry(),
+            hooks or hook.get_registry(),
+        )
 
     return _create_model(
         SqlModel,
         name,
+        defaults=defaults,
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
@@ -892,6 +964,7 @@ def create_seed_model(
     name: str,
     seed_kind: SeedKind,
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     **kwargs: t.Any,
 ) -> Model:
@@ -901,6 +974,7 @@ def create_seed_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
     """
     seed_path = Path(seed_kind.path)
@@ -910,6 +984,7 @@ def create_seed_model(
     return _create_model(
         SeedModel,
         name,
+        defaults=defaults,
         path=path,
         depends_on=set(),
         seed=seed,
@@ -923,6 +998,7 @@ def create_python_model(
     entrypoint: str,
     python_env: t.Dict[str, Executable],
     *,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
@@ -935,6 +1011,7 @@ def create_python_model(
             The catalog and db are optional.
         entrypoint: The name of a Python function which contains the data fetching / transformation logic.
         python_env: The Python environment of all objects referenced by the model implementation.
+        defaults: Definition default values.
         path: An optional path to the model definition file.
         time_column_format: The default time column format to use if no model time column is configured.
         depends_on: The custom set of model's upstream dependencies.
@@ -948,6 +1025,7 @@ def create_python_model(
     return _create_model(
         PythonModel,
         name,
+        defaults=defaults,
         path=path,
         time_column_format=time_column_format,
         depends_on=depends_on,
@@ -961,7 +1039,8 @@ def _create_model(
     klass: t.Type[_Model],
     name: str,
     *,
-    path: Path,
+    defaults: t.Optional[t.Dict[str, t.Any]] = None,
+    path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
@@ -977,6 +1056,7 @@ def _create_model(
             name=name,
             expressions=expressions or [],
             **{
+                **(defaults or {}),
                 "dialect": dialect,
                 "depends_on": depends_on,
                 **kwargs,
@@ -1029,7 +1109,11 @@ def _find_tables(query: exp.Expression) -> t.Set[str]:
 
 
 def _python_env(
-    query: exp.Expression, module_path: Path, macros: MacroRegistry
+    query: exp.Expression,
+    hook_calls: t.List[HookCall],
+    module_path: Path,
+    macros: MacroRegistry,
+    hooks: HookRegistry,
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
 
@@ -1046,13 +1130,21 @@ def _python_env(
                 used_macros[name] = macros[name]
 
     for name, macro in used_macros.items():
-        if macro.serialize:
+        if not macro.func.__module__.startswith("sqlmesh."):
             build_env(
                 macro.func,
                 env=python_env,
                 name=name,
                 path=module_path,
             )
+
+    for hook, _ in hook_calls:
+        build_env(
+            hooks[hook].func,
+            env=python_env,
+            name=hook,
+            path=module_path,
+        )
 
     return serialize_env(python_env, path=module_path)
 
@@ -1098,3 +1190,46 @@ def _parse_depends_on(
                 )
 
     return depends_on
+
+
+def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
+    return (ModelMeta._value_or_tuple_with_args_validator(kwargs.get("pre")) or []) + (
+        ModelMeta._value_or_tuple_with_args_validator(kwargs.get("post")) or []
+    )
+
+
+def _list_of_calls_to_exp(
+    value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]
+) -> exp.Expression:
+    return exp.Tuple(
+        expressions=[
+            exp.Anonymous(
+                this=v[0],
+                expressions=[
+                    exp.EQ(this=exp.convert(left), expression=exp.convert(right))
+                    for left, right in v[1].items()
+                ],
+            )
+            for v in value
+        ]
+    )
+
+
+META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
+    "name": lambda value: exp.to_table(value),
+    "start": lambda value: exp.Literal.string(value),
+    "cron": lambda value: exp.Literal.string(value),
+    "batch_size": lambda value: exp.Literal.number(value),
+    "partitioned_by_": lambda value: (
+        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
+    ),
+    "depends_on_": lambda value: exp.Tuple(expressions=value),
+    "pre": _list_of_calls_to_exp,
+    "post": _list_of_calls_to_exp,
+    "audits": _list_of_calls_to_exp,
+    "columns_to_types_": lambda value: exp.Schema(
+        expressions=[
+            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
+        ]
+    ),
+}

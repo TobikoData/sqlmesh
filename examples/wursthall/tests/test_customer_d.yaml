@@ -1,0 +1,32 @@
+test_customer_d:
+  model: db.customer_d
+  inputs:
+    src.customer_details:
+      rows:
+      - id: '12345'
+        name: John Doe
+        email: herecomesjohnny@aol.com
+        phone: 970-555-5555
+        register_ds: '2022-10-01'
+      - id: '67890'
+        name: Jane Doe
+        email: jdoe@hotmail.com
+        phone: 555-555-5555
+        register_ds: '2022-10-01'
+  outputs:
+    vars:
+      start: 2022-10-01
+      end: 2022-10-01
+      latest: 2022-10-01
+    query:
+      rows:
+      - customer_id: '12345'
+        name: 4c2a904bafba06591225113ad17b5cec
+        email: 42b2b21a978be84f1674638685f6c69c
+        phone: 62339e0b7761a89bdf4b0f102da943a2
+        register_ds: '2022-10-01'
+      - customer_id: '67890'
+        name: 1c272047233576d77a9b9a1acfdf741c
+        email: 6d123ebf971031273b12882801adf3ba
+        phone: c6d93dd6a266f33038af03534ab8192f
+        register_ds: '2022-10-01'

@@ -31,6 +31,7 @@ module.exports = {
         400: 'hsl(260, 100%, 70%)',
         500: 'hsl(264, 100%, 60%)',
         600: 'hsl(264, 100%, 50%)',
+        900: 'hsl(264, 100%, 8%)',
       },
       alternative: {
         500: '#0c81f2',
@@ -49,7 +50,7 @@ module.exports = {
       black: '#000',
     },
     fontFamily: {
-      sans: ['Circular STD', 'sans-serif'],
+      sans: ['Roboto', 'sans-serif'],
       serif: ['Publico', 'serif'],
     },
   },

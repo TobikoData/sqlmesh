@@ -25,7 +25,7 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
-from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -316,7 +316,7 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
 
             task_id_prefix = (
-                f"snapshot_evaluator__{snapshot.name}__{snapshot.fingerprint}"
+                f"snapshot_evaluator__{snapshot.name}__{snapshot.identifier}"
             )
             tasks = [
                 self._create_snapshot_evaluator_operator(
@@ -330,10 +330,10 @@ class SnapshotDagGenerator:
                 for (start, end) in intervals_per_snapshot.intervals
             ]
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.fingerprint}__start"
+                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__start"
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.fingerprint}__end"
+                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__end"
             )
             if snapshot.is_incremental_by_unique_key_kind:
                 baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
@@ -483,7 +483,7 @@ def creation_update_state_task(
     new_snapshots: t.Iterable[Snapshot],
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
-    XComStateSync(session).push_snapshots(new_snapshots)
+    VariableStateSync(session).push_snapshots(new_snapshots)
 
 
 @provide_session
@@ -506,7 +506,7 @@ def promotion_update_state_task(
         plan_id=plan_id,
         previous_plan_id=previous_plan_id,
     )
-    state_sync = XComStateSync(session)
+    state_sync = VariableStateSync(session)
     state_sync.promote(environment, no_gaps=no_gaps)
     if snapshots and not end and unpaused_dt:
         state_sync.unpause_snapshots(snapshots, unpaused_dt)

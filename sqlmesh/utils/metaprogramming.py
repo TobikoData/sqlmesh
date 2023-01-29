@@ -20,7 +20,7 @@ from sqlmesh.utils import format_exception, unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
-IGNORE_DECORATORS = {"macro", "model"}
+IGNORE_DECORATORS = {"hook", "macro", "model"}
 
 
 def _is_relative_to(
@@ -151,6 +151,7 @@ def getsource(obj: t.Any) -> str:
                         raise OSError("lineno is out of bounds")
                     if pat.match(line):
                         break
+                    lnum = lnum - 1
                 return join_source(lnum)
     raise SQLMeshError(f"Cannot find source for {obj}")
 

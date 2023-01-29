@@ -60,6 +60,32 @@ class Scheduler:
         self.max_workers = max_workers
         self.console: Console = console or get_console()
 
+    def batches(
+        self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
+    ) -> SnapshotBatches:
+        """Returns a list of snapshot batches to evaluate.
+
+        Args:
+            start: The start of the run. Defaults to the min model start date.
+            end: The end of the run. Defaults to now.
+            latest: The latest datetime to use for non-incremental queries.
+            is_dev: Indicates whether the evaluation happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+        """
+        validate_date_range(start, end)
+
+        return self._interval_params(
+            self.snapshot_per_version.values(),
+            start,
+            end,
+            latest,
+            is_dev=is_dev,
+        )
+
     def evaluate(
         self,
         snapshot: Snapshot,
@@ -127,39 +153,10 @@ class Scheduler:
         validate_date_range(start, end)
 
         latest = latest or now()
-        batches = self._interval_params(
-            self.snapshot_per_version.values(), start, end, latest, is_dev=is_dev
-        )
+        batches = self.batches(start, end, latest, is_dev=is_dev)
+        dag = self._dag(batches)
 
-        intervals_per_snapshot_version = {
-            (snapshot.name, snapshot.version_or_fingerprint): intervals
-            for snapshot, intervals in batches
-        }
-
-        dag = DAG[SchedulingUnit]()
         for snapshot, intervals in batches:
-            if not intervals:
-                continue
-            upstream_dependencies = [
-                (p_sid, interval)
-                for p_sid in snapshot.parents
-                if p_sid in self.snapshots
-                for interval in intervals_per_snapshot_version.get(
-                    (
-                        self.snapshots[p_sid].name,
-                        self.snapshots[p_sid].version_or_fingerprint,
-                    ),
-                    [],
-                )
-            ]
-            sid = snapshot.snapshot_id
-            for i, interval in enumerate(intervals):
-                dag.add((sid, interval), upstream_dependencies)
-                if snapshot.is_incremental_by_unique_key_kind:
-                    dag.add(
-                        (sid, interval),
-                        [(sid, _interval) for _interval in intervals[:i]],
-                    )
             self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
@@ -169,7 +166,10 @@ class Scheduler:
 
         with self.snapshot_evaluator.concurrent_context():
             errors, skipped_intervals = concurrent_apply_to_dag(
-                dag, evaluate_node, self.max_workers, raise_on_error=False
+                dag,
+                evaluate_node,
+                self.max_workers,
+                raise_on_error=False,
             )
 
         if not errors:
@@ -237,6 +237,48 @@ class Scheduler:
             end=end or now(),
             latest=latest or now(),
         )
+
+    def _dag(self, batches: SnapshotBatches) -> DAG[SchedulingUnit]:
+        """Builds a DAG of snapshot intervals to be evaluated.
+
+        Args:
+            batches: The batches of snapshots and intervals to evaluate.
+
+        Returns:
+            A DAG of snapshot intervals to be evaluated.
+        """
+
+        intervals_per_snapshot_version = {
+            (snapshot.name, snapshot.version_get_or_generate()): intervals
+            for snapshot, intervals in batches
+        }
+
+        dag = DAG[SchedulingUnit]()
+        for snapshot, intervals in batches:
+            if not intervals:
+                continue
+            upstream_dependencies = [
+                (p_sid, interval)
+                for p_sid in snapshot.parents
+                if p_sid in self.snapshots
+                for interval in intervals_per_snapshot_version.get(
+                    (
+                        self.snapshots[p_sid].name,
+                        self.snapshots[p_sid].version_get_or_generate(),
+                    ),
+                    [],
+                )
+            ]
+            sid = snapshot.snapshot_id
+            for i, interval in enumerate(intervals):
+                dag.add((sid, interval), upstream_dependencies)
+                if snapshot.is_incremental_by_unique_key_kind:
+                    dag.add(
+                        (sid, interval),
+                        [(sid, _interval) for _interval in intervals[:i]],
+                    )
+
+        return dag
 
 
 def compute_interval_params(
@@ -359,7 +401,7 @@ def _resolve_one_snapshot_per_version(
 ) -> t.Dict[t.Tuple[str, str], Snapshot]:
     snapshot_per_version: t.Dict[t.Tuple[str, str], Snapshot] = {}
     for snapshot in snapshots:
-        key = (snapshot.name, snapshot.version_or_fingerprint)
+        key = (snapshot.name, snapshot.version_get_or_generate())
         if key not in snapshot_per_version:
             snapshot_per_version[key] = snapshot
         else:

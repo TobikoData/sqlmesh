@@ -35,13 +35,14 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.5.6",
+        "sqlglot>=10.5.8",
     ],
     extras_require={
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
             "black==22.6.0",
+            "Faker",
             "google-auth",
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin",

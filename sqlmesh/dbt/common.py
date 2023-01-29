@@ -1,14 +1,37 @@
 from __future__ import annotations
 
 import typing as t
+from pathlib import Path
 
 from pydantic import validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.utils.errors import ConfigError
 
 T = t.TypeVar("T", bound="BaseConfig")
+
+DEFAULT_PROJECT_FILE = "dbt_project.yml"
+
+
+def project_config_path(project_root: t.Optional[Path] = None) -> Path:
+    """
+    Get the path to the DBT project config file
+
+    Args:
+        project_root: Path to the DBT project root. If not specified, the current
+                      directory is used.
+
+    Returns:
+        Path to the DBT project config file
+    """
+    project_root = project_root or Path()
+    path = Path(project_root, DEFAULT_PROJECT_FILE)
+    if not path.exists():
+        raise ConfigError(f"Could not find {DEFAULT_PROJECT_FILE} for this project")
+
+    return path
 
 
 class GeneralConfig(BaseConfig):

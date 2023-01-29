@@ -13,7 +13,7 @@ SELECT
   item_id::INT AS item_id, /* Item id */
   quantity::INT AS quantity, /* Quantity of items ordered */
   ds::TEXT AS ds /* Date of order */
-FROM {{ source('raw', 'order_items') }}
+FROM {{ ref('raw_order_items') }}
 {% if is_incremental() %}
 WHERE
   ds > (select max(ds) from {{ this }})

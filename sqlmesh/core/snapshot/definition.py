@@ -9,6 +9,7 @@ from croniter import croniter_range
 from pydantic import validator
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.model import Model, SeedModel, kind, parse_model_name
 from sqlmesh.utils.date import (
     TimeLike,
@@ -39,29 +40,29 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY = 3
 
 
-class FingerprintMixin:
-    fingerprint: str
+class SnapshotFingerprint(PydanticModel, frozen=True):
+    data_hash: str
+    metadata_hash: str
+    parent_data_hash: str = "0"
+    parent_metadata_hash: str = "0"
 
-    @property
-    def data_hash(self) -> str:
-        return self._hashes[0]
+    def to_version(self) -> str:
+        return _hash([self.data_hash, self.parent_data_hash])
 
-    @property
-    def parent_hash(self) -> str:
-        return self._hashes[1]
-
-    @property
-    def _hashes(self) -> tuple[str, str]:
-        data_hash, parent_hash = self.fingerprint.split("_")
-        return (data_hash, parent_hash)
-
-    def data_hash_matches(self, other: t.Optional[FingerprintMixin]) -> bool:
-        return other is not None and self.data_hash == other.data_hash
+    def to_identifier(self) -> str:
+        return _hash(
+            [
+                self.data_hash,
+                self.metadata_hash,
+                self.parent_data_hash,
+                self.parent_metadata_hash,
+            ]
+        )
 
 
-class SnapshotId(PydanticModel, FingerprintMixin, frozen=True):
+class SnapshotId(PydanticModel, frozen=True):
     name: str
-    fingerprint: str
+    identifier: str
 
     @property
     def snapshot_id(self) -> SnapshotId:
@@ -69,8 +70,8 @@ class SnapshotId(PydanticModel, FingerprintMixin, frozen=True):
         return self
 
 
-class SnapshotDataVersion(PydanticModel, FingerprintMixin, frozen=True):
-    fingerprint: str
+class SnapshotDataVersion(PydanticModel, frozen=True):
+    fingerprint: SnapshotFingerprint
     version: str
     change_category: t.Optional[SnapshotChangeCategory]
 
@@ -81,7 +82,7 @@ class SnapshotDataVersion(PydanticModel, FingerprintMixin, frozen=True):
     @property
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
-        return self.fingerprint == self.version
+        return self.fingerprint.to_version() == self.version
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -107,9 +108,9 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return schema
 
 
-class SnapshotInfoMixin(FingerprintMixin):
+class SnapshotInfoMixin:
     name: str
-    fingerprint: str
+    fingerprint: SnapshotFingerprint
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
@@ -120,8 +121,12 @@ class SnapshotInfoMixin(FingerprintMixin):
         return is_dev and not self.is_new_version
 
     @property
+    def identifier(self) -> str:
+        return self.fingerprint.to_identifier()
+
+    @property
     def snapshot_id(self) -> SnapshotId:
-        return SnapshotId(name=self.name, fingerprint=self.fingerprint)
+        return SnapshotId(name=self.name, identifier=self.identifier)
 
     @property
     def qualified_view_name(self) -> QualifiedViewName:
@@ -155,6 +160,14 @@ class SnapshotInfoMixin(FingerprintMixin):
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
+    def data_hash_matches(
+        self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]
+    ) -> bool:
+        return (
+            other is not None
+            and self.fingerprint.data_hash == other.fingerprint.data_hash
+        )
+
     def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
@@ -166,10 +179,10 @@ class SnapshotInfoMixin(FingerprintMixin):
         if is_dev and for_read:
             # If this snapshot is used for reading, return a temporary table
             # only if this snapshot captures direct changes applied to its model.
-            version = self.fingerprint if self.is_forward_only else version
+            version = self.fingerprint.to_version() if self.is_forward_only else version
             is_temp = self.is_temporary_table(True) and self.is_forward_only
         elif is_dev:
-            version = self.fingerprint
+            version = self.fingerprint.to_version()
             is_temp = self.is_temporary_table(True)
         else:
             is_temp = False
@@ -184,7 +197,7 @@ class SnapshotInfoMixin(FingerprintMixin):
 
 class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
-    fingerprint: str
+    fingerprint: SnapshotFingerprint
     version: str
     physical_schema: str
     parents: t.Tuple[SnapshotId, ...]
@@ -218,7 +231,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     @property
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
-        return self.fingerprint == self.version
+        return self.fingerprint.to_version() == self.version
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
@@ -241,6 +254,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         physical_schema: The physical schema that the snapshot is stored in.
         model: Model object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
+        audits: The list of audits used by the model.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
         created_ts: Epoch millis timestamp when a snapshot was first created.
         updated_ts: Epoch millis timestamp when a snapshot was last updated.
@@ -256,10 +270,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     """
 
     name: str
-    fingerprint: str
+    fingerprint: SnapshotFingerprint
     physical_schema: str
     model: Model
     parents: t.Tuple[SnapshotId, ...]
+    audits: t.Tuple[Audit, ...]
     intervals: Intervals
     dev_intervals: Intervals
     created_ts: int
@@ -326,7 +341,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         models: t.Dict[str, Model],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
-        cache: t.Optional[t.Dict[str, str]] = None,
+        audits: t.Optional[t.Dict[str, Audit]] = None,
+        cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a model.
 
@@ -337,6 +353,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
+            audits: Available audits by name.
             cache: Cache of model name to fingerprints.
 
         Returns:
@@ -344,12 +361,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         created_ts = now_timestamp()
 
+        audits = audits or {}
+
         return cls(
             name=model.name,
             fingerprint=fingerprint_from_model(
                 model,
                 physical_schema=physical_schema,
                 models=models,
+                audits=audits,
                 cache=cache,
             ),
             physical_schema=physical_schema,
@@ -357,15 +377,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             parents=tuple(
                 SnapshotId(
                     name=name,
-                    fingerprint=fingerprint_from_model(
+                    identifier=fingerprint_from_model(
                         models[name],
                         physical_schema=physical_schema,
                         models=models,
+                        audits=audits,
                         cache=cache,
-                    ),
+                    ).to_identifier(),
                 )
                 for name in _parents_from_model(model, models)
             ),
+            audits=tuple(model.referenced_audits(audits)),
             intervals=[],
             dev_intervals=[],
             created_ts=created_ts,
@@ -506,7 +528,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if isinstance(version, (SnapshotDataVersion, SnapshotTableInfo, Snapshot)):
             self.version = version.data_version.version
         else:
-            self.version = version or self.fingerprint
+            self.version = version or self.fingerprint.to_version()
 
     def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
         """Sets the timestamp for when this snapshot was unpaused.
@@ -545,15 +567,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return self._table_name(self.version, is_dev, True)
 
-    @property
-    def snapshot_id(self) -> SnapshotId:
-        """Helper method to get the SnapshotId from the Snapshot."""
-        return SnapshotId(name=self.name, fingerprint=self.fingerprint)
-
-    @property
-    def version_or_fingerprint(self) -> str:
-        """Helper method to get the the version or fingerprint."""
-        return self.version or self.fingerprint
+    def version_get_or_generate(self) -> str:
+        """Helper method to get the version or generate it from the fingerprint."""
+        return self.version or self.fingerprint.to_version()
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -584,7 +600,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         self._ensure_version()
-        return self.fingerprint == self.version
+        return self.fingerprint.to_version() == self.version
 
     @property
     def is_full_kind(self) -> bool:
@@ -645,8 +661,9 @@ def fingerprint_from_model(
     *,
     models: t.Dict[str, Model],
     physical_schema: str = "",
-    cache: t.Optional[t.Dict[str, str]] = None,
-) -> str:
+    audits: t.Optional[t.Dict[str, Audit]] = None,
+    cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on a model's query and environment.
 
     This method tries to remove non meaningful differences to avoid ever changing fingerprints.
@@ -658,6 +675,7 @@ def fingerprint_from_model(
         physical_schema: The physical_schema of the snapshot which represents where it is stored.
         models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
+        audits: Available audits by name.
         cache: Cache of model name to fingerprints.
 
     Returns:
@@ -666,45 +684,98 @@ def fingerprint_from_model(
     cache = {} if cache is None else cache
 
     if model.name not in cache:
-        data = [
-            model.render_query().sql(identify=True, comments=False)
-            if not model.is_seed
-            else None,
-            str(model.sorted_python_env),
-            model.kind.name,
-            model.cron,
-            model.storage_format,
-            physical_schema,
-            *(model.partitioned_by or []),
-            *(
-                expression.sql(identify=True, comments=False)
-                for expression in model.expressions or []
-            ),
-            model.stamp,
-        ]
-
-        if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
-            data.append(model.kind.time_column.column)
-            data.append(model.kind.time_column.format)
-        elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
-            data.extend(model.kind.unique_key)
-        elif isinstance(model, SeedModel):
-            data.append(str(model.kind.batch_size))
-            data.append(model.seed.content)
-
-        parents = sorted(
+        parents = [
             fingerprint_from_model(
                 models[table],
                 models=models,
                 physical_schema=physical_schema,
+                audits=audits,
                 cache=cache,
             )
             for table in model.depends_on
             if table in models
+        ]
+
+        parent_data_hash = _hash(sorted(p.to_version() for p in parents))
+
+        parent_metadata_hash = _hash(
+            sorted(
+                h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash)
+            )
         )
 
-        cache[model.name] = "_".join((_hash(data), _hash(parents)))
+        cache[model.name] = SnapshotFingerprint(
+            data_hash=_model_data_hash(model, physical_schema),
+            metadata_hash=_model_metadata_hash(model, audits or {}),
+            parent_data_hash=parent_data_hash,
+            parent_metadata_hash=parent_metadata_hash,
+        )
+
     return cache[model.name]
+
+
+def _model_data_hash(model: Model, physical_schema: str) -> str:
+    data = [
+        model.render_query().sql(identify=True, comments=False)
+        if not model.is_seed
+        else None,
+        str(model.sorted_python_env),
+        model.kind.name,
+        model.cron,
+        model.storage_format,
+        physical_schema,
+        *(model.partitioned_by or []),
+        *(
+            expression.sql(identify=True, comments=False)
+            for expression in model.expressions or []
+        ),
+        model.stamp,
+    ]
+
+    if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
+        data.append(model.kind.time_column.column)
+        data.append(model.kind.time_column.format)
+    elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
+        data.extend(model.kind.unique_key)
+    elif isinstance(model, SeedModel):
+        data.append(str(model.kind.batch_size))
+        data.append(model.seed.content)
+
+    return _hash(data)
+
+
+def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
+    metadata = [
+        model.dialect,
+        model.owner,
+        model.description,
+        str(to_timestamp(model.start)) if model.start else None,
+        str(model.batch_size) if model.batch_size is not None else None,
+    ]
+
+    for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
+        if audit_name not in audits:
+            continue
+
+        audit = audits[audit_name]
+        metadata.extend(
+            [
+                audit.name,
+                audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args)).sql(
+                    identify=True, comments=True
+                ),
+                audit.dialect,
+                str(audit.skip),
+                str(audit.blocking),
+            ]
+        )
+
+    # Add comments from the model query.
+    for e, _, _ in model.render_query().walk():
+        if e.comments:
+            metadata.extend(e.comments)
+
+    return _hash(metadata)
 
 
 def _hash(data: t.Iterable[t.Optional[str]]) -> str:

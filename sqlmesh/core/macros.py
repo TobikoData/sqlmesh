@@ -62,7 +62,7 @@ class MacroDialect(Python):
     class Generator(Python.Generator):
         TRANSFORMS = {
             **Python.Generator.TRANSFORMS,  # type: ignore
-            exp.Column: lambda self, e: e.name,
+            exp.Column: lambda self, e: f"exp.to_column('{self.sql(e, 'this')}')",
             exp.Lambda: lambda self, e: f"lambda {self.expressions(e)}: {self.sql(e, 'this')}",
             MacroFunc: _macro_func_sql,
             MacroSQL: lambda self, e: _macro_sql(
@@ -89,17 +89,17 @@ class MacroEvaluator:
 
     Args:
         dialect: Dialect of the SQL to evaluate.
-        env: Python execution environment including global variables
+        python_env: Serialized Python environment.
     """
 
     def __init__(
-        self, dialect: str = "", env: t.Optional[t.Dict[str, Executable]] = None
+        self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
         self.env = {**ENV, "self": self}
-        self.python_env = env or {}
+        self.python_env = python_env or {}
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
@@ -126,7 +126,7 @@ class MacroEvaluator:
         self, query: exp.Expression
     ) -> exp.Expression | t.List[exp.Expression] | None:
         query = query.transform(
-            lambda node: exp.convert(self.locals[node.name])
+            lambda node: exp.convert(_norm_env_value(self.locals[node.name]))
             if isinstance(node, MacroVar)
             else node
         )
@@ -207,8 +207,8 @@ class MacroEvaluator:
             ) from e
 
     def parse_one(
-        self, sql: str, into: t.Optional[exp.Expression] = None, **opts: t.Any
-    ) -> t.Optional[exp.Expression]:
+        self, sql: str, into: t.Optional[exp.IntoType] = None, **opts: t.Any
+    ) -> exp.Expression:
         """Parses the given SQL string and returns a syntax tree for the first
         parsed SQL statement.
 
@@ -239,24 +239,15 @@ class macro(registry_decorator):
 
     Args:
         name: A custom name for the macro, the default is the name of the function.
-        serialize: Whether or not to serialize this macro when used in a model, defaults to True.
     """
 
     registry_name = "macros"
-
-    def __init__(
-        self,
-        name: str = "",
-        serialize: bool = True,
-    ):
-        super().__init__(name)
-        self.serialize = serialize
 
 
 MacroRegistry = t.Dict[str, macro]
 
 
-def norm_var_arg_lambda(
+def _norm_var_arg_lambda(
     evaluator: MacroEvaluator, func: exp.Lambda, *items: t.Any
 ) -> t.Tuple[t.Iterable, t.Callable]:
     """
@@ -291,7 +282,9 @@ def norm_var_arg_lambda(
 
     if len(items) == 1:
         item = items[0]
-        expressions = item.expressions if isinstance(item, exp.Array) else item
+        expressions = (
+            item.expressions if isinstance(item, (exp.Array, exp.Tuple)) else item
+        )
     else:
         expressions = items
 
@@ -305,7 +298,15 @@ def norm_var_arg_lambda(
     return expressions, func
 
 
-@macro(serialize=False)
+def _norm_env_value(value: t.Any) -> t.Any:
+    if isinstance(value, list):
+        return tuple(value)
+    if isinstance(value, exp.Array):
+        return exp.Tuple(expressions=value.expressions)
+    return value
+
+
+@macro()
 def each(
     evaluator: MacroEvaluator,
     *args: t.Any,
@@ -323,11 +324,11 @@ def each(
         A list of items that is the result of func
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-    return [item for item in map(func, items) if item is not None]
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    return [item for item in map(func, ensure_collection(items)) if item is not None]
 
 
-@macro("REDUCE", serialize=False)
+@macro("REDUCE")
 def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
     """Iterates through items applying provided function that takes two arguments
     cumulatively to the items of iterable items, from left to right, so as to reduce
@@ -348,11 +349,11 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
         A single item that is the result of applying func cumulatively to items
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-    return reduce(func, items)
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    return reduce(func, ensure_collection(items))
 
 
-@macro("FILTER", serialize=False)
+@macro("FILTER")
 def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
     """Iterates through items, applying provided function to each item and removing
     all items where the function returns False
@@ -372,11 +373,11 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
         The items for which the func returned True
     """
     *items, func = args
-    items, func = norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
+    items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
     return list(filter(func, items))
 
 
-@macro("WITH", serialize=False)
+@macro("WITH")
 def with_(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -401,7 +402,7 @@ def with_(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def join(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -430,7 +431,7 @@ def join(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def where(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -455,7 +456,7 @@ def where(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def group_by(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -480,7 +481,7 @@ def group_by(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def having(
     evaluator: MacroEvaluator,
     condition: exp.Condition,
@@ -505,7 +506,7 @@ def having(
     return expression if evaluator.eval_expression(condition) else None
 
 
-@macro(serialize=False)
+@macro()
 def order_by(
     evaluator: MacroEvaluator,
     condition: exp.Condition,

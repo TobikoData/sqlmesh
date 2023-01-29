@@ -14,6 +14,7 @@ from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 from sqlmesh.utils.yaml import dumps as yaml_dumps
+from sqlmesh.utils.yaml import load as yaml_load
 from sqlmesh.utils.yaml import yaml
 
 CONTEXT_VARIABLE_NAMES = [
@@ -114,7 +115,7 @@ class SQLMeshMagics(Magics):
 
         model_test_metadatas = get_all_model_tests(
             self.context.test_directory_path,
-            ignore_patterns=self.context._ignore_patterns,
+            ignore_patterns=self.context.ignore_patterns,
         )
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in model_test_metadatas:
@@ -131,7 +132,7 @@ class SQLMeshMagics(Magics):
             return
 
         test = tests[args.model][args.test_name]
-        test_def = yaml.load(test_def_raw) if test_def_raw else test.body
+        test_def = yaml_load(test_def_raw) if test_def_raw else test.body
         test_def_output = yaml_dumps(test_def)
 
         self._shell.set_next_input(
@@ -145,7 +146,7 @@ class SQLMeshMagics(Magics):
         )
 
         with open(test.path, "r+", encoding="utf-8") as file:
-            content = yaml.load(file.read())
+            content = yaml_load(file.read())
             content[args.test_name] = test_def
             file.seek(0)
             yaml.dump(content, file)

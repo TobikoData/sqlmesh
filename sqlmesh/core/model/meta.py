@@ -5,16 +5,14 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp, maybe_parse, parse_one
 
-from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     ModelKind,
-    ModelKindName,
-    SeedKind,
     TimeColumn,
+    model_kind_validator,
 )
 from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike, preserve_time_like_kind, to_datetime
@@ -35,6 +33,10 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
+HookCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
+
+
 class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
@@ -48,58 +50,67 @@ class ModelMeta(PydanticModel):
     start: t.Optional[TimeLike]
     batch_size: t.Optional[int]
     storage_format: t.Optional[str]
-    partitioned_by_: t.Optional[t.List[str]] = Field(
-        default=None, alias="partitioned_by"
-    )
+    partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
+    pre: t.List[HookCall] = []
+    post: t.List[HookCall] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(
         default=None, alias="columns"
     )
+    audits: t.List[AuditReference] = []
+
     _croniter: t.Optional[croniter] = None
+
+    _model_kind_validator = model_kind_validator
+
+    @validator("pre", "post", "audits", pre=True)
+    def _value_or_tuple_with_args_validator(cls, v: t.Any) -> t.Any:
+        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
+            kwargs = {}
+
+            if isinstance(v, exp.Anonymous):
+                func = v.name
+                args = v.expressions
+            elif isinstance(v, exp.Func):
+                func = v.sql_name()
+                args = list(v.args.values())
+            else:
+                return v.name, {}
+
+            for arg in args:
+                if not isinstance(arg, exp.EQ):
+                    raise ConfigError(
+                        f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
+                    )
+                kwargs[arg.left.name] = arg.right
+            return (func, kwargs)
+
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return [extract(i) for i in v.expressions]
+        if isinstance(v, exp.Paren):
+            return [extract(v.this)]
+        if isinstance(v, exp.Expression):
+            return [extract(v)]
+        if isinstance(v, list):
+            return [
+                (
+                    entry[0],
+                    {
+                        key: parse_one(value) if isinstance(value, str) else value
+                        for key, value in entry[1].items()
+                    },
+                )
+                for entry in v
+            ]
+        return v
 
     @validator("partitioned_by_", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
-        if isinstance(v, exp.Tuple):
-            return [i.name for i in v.expressions]
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return [e.name for e in v.expressions]
         if isinstance(v, exp.Expression):
             return [v.name]
         return v
-
-    @validator("kind", pre=True)
-    def _model_kind_validator(cls, v: t.Any) -> ModelKind:
-        if isinstance(v, ModelKind):
-            return v
-
-        if isinstance(v, d.ModelKind):
-            name = v.this
-            props = {prop.name: prop.args.get("value") for prop in v.expressions}
-            klass: t.Type[ModelKind] = ModelKind
-            if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRangeKind
-            elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKeyKind
-            elif name == ModelKindName.SEED:
-                klass = SeedKind
-            else:
-                props["name"] = ModelKindName(name)
-            return klass(**props)
-
-        if isinstance(v, dict):
-            if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-                klass = IncrementalByTimeRangeKind
-            elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-                klass = IncrementalByUniqueKeyKind
-            elif v.get("name") == ModelKindName.SEED:
-                klass = SeedKind
-            else:
-                klass = ModelKind
-            return klass(**v)
-
-        name = (v.name if isinstance(v, exp.Expression) else str(v)).lower()
-        try:
-            return ModelKind(name=ModelKindName(name))
-        except ValueError:
-            raise ConfigError(f"Invalid model kind '{name}'")
 
     @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
@@ -184,7 +195,7 @@ class ModelMeta(PydanticModel):
     @property
     def partitioned_by(self) -> t.List[str]:
         time_column = [self.time_column.column] if self.time_column else []
-        return unique([*time_column, *(self.partitioned_by_ or [])])
+        return unique([*time_column, *self.partitioned_by_])
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

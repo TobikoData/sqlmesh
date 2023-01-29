@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import util
-from sqlmesh.schedulers.airflow.state_sync.xcom import XComStateSync
+from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import to_datetime
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class HighWaterMarkSensor(BaseSensorOperator):
     def _get_target_snapshot(
         self, session: Session = util.PROVIDED_SESSION
     ) -> Snapshot:
-        target_snapshots = XComStateSync(session).get_snapshots_with_same_version(
+        target_snapshots = VariableStateSync(session).get_snapshots_with_same_version(
             [self.target_snapshot_info]
         )
         return Snapshot.merge_snapshots(

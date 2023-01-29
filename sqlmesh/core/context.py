@@ -42,34 +42,35 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import extend_sqlglot, format_model_expressions, parse_model
+from sqlmesh.core.dialect import format_model_expressions, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.hooks import hook
+from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, to_table_mapping
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotFingerprint,
+    to_table_mapping,
+)
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
-from sqlmesh.utils.errors import (
-    ConfigError,
-    MissingDependencyError,
-    PlanError,
-    SQLMeshError,
-)
+from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
 from sqlmesh.utils.file_cache import FileCache
 
 if t.TYPE_CHECKING:
@@ -79,8 +80,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
-
-extend_sqlglot()
 
 
 class BaseContext(abc.ABC):
@@ -203,7 +202,7 @@ class Context(BaseContext):
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
-        loader: t.Optional[Loader] = None,
+        loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
         console: t.Optional[Console] = None,
         users: t.Optional[t.List[User]] = None,
@@ -225,9 +224,12 @@ class Context(BaseContext):
         )
         self.dag: DAG[str] = DAG()
 
-        self._models: UniqueKeyDict = UniqueKeyDict("models")
-        self._macros: UniqueKeyDict = UniqueKeyDict("macros")
+        self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+        self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        self._macros: UniqueKeyDict[str, macro] = UniqueKeyDict("macros")
+        self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
+        self.connection = connection
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = (
@@ -255,10 +257,9 @@ class Context(BaseContext):
         self._state_sync: t.Optional[StateSync] = None
         self._state_reader: t.Optional[StateReader] = None
 
-        self._ignore_patterns = c.IGNORE_PATTERNS + self.config.ignore_patterns
         self.users = self.config.users + (users or [])
 
-        self._loader = loader or SqlMeshLoader()
+        self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
         if load:
             self.load()
@@ -358,8 +359,13 @@ class Context(BaseContext):
 
     @property
     def macro_directory_path(self) -> Path:
-        """Path to the drectory where the macros are defined"""
+        """Path to the directory where macros are defined"""
         return self.path / "macros"
+
+    @property
+    def hook_directory_path(self) -> Path:
+        """Path to the directory where hooks are defined"""
+        return self.path / "hooks"
 
     @property
     def test_directory_path(self) -> Path:
@@ -369,6 +375,10 @@ class Context(BaseContext):
     def audits_directory_path(self) -> Path:
         return self.path / "audits"
 
+    @property
+    def ignore_patterns(self) -> t.List[str]:
+        return c.IGNORE_PATTERNS + self.config.ignore_patterns
+
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
         if self._loader.reload_needed():
@@ -377,7 +387,12 @@ class Context(BaseContext):
     def load(self) -> Context:
         """Load all files in the context's path."""
         with sys_path(self.path):
-            self._macros, self._models, self.dag = self._loader.load(self)
+            project = self._loader.load(self)
+            self._hooks = project.hooks
+            self._macros = project.macros
+            self._models = project.models
+            self._audits = project.audits
+            self.dag = project.dag
 
         return self
 
@@ -414,10 +429,15 @@ class Context(BaseContext):
         return MappingProxyType(self._macros)
 
     @property
+    def hooks(self) -> MappingProxyType[str, hook]:
+        """Returns all registered hooks in this context."""
+        return MappingProxyType(self._hooks)
+
+    @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
         """Generates and returns snapshots based on models registered in this context."""
         snapshots = {}
-        fingerprint_cache: t.Dict[str, str] = {}
+        fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
         with self.table_info_cache as table_info_cache:
             for model in self._models.values():
                 snapshot = Snapshot.from_model(
@@ -425,6 +445,7 @@ class Context(BaseContext):
                     physical_schema=self.physical_schema,
                     models=self._models,
                     ttl=self.snapshot_ttl,
+                    audits=self._audits,
                     cache=fingerprint_cache,
                 )
                 cached = table_info_cache.get(snapshot.snapshot_id)
@@ -741,7 +762,7 @@ class Context(BaseContext):
                     path=Path(path) if path else self.test_directory_path,
                     snapshots=self.snapshots,
                     engine_adapter=self._test_engine_adapter,
-                    ignore_patterns=self._ignore_patterns,
+                    ignore_patterns=self.ignore_patterns,
                 )
             finally:
                 self._test_engine_adapter.close()
@@ -791,7 +812,7 @@ class Context(BaseContext):
         self.console.log_status_update(f"\nFinished with {len(errors)} audit error(s).")
         for error in errors:
             self.console.log_status_update(
-                f"\nFailure in audit {error.audit.name} for model {error.audit.model} ({error.audit._path})."
+                f"\nFailure in audit {error.audit.name} ({error.audit._path})."
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
@@ -840,7 +861,7 @@ class Context(BaseContext):
             Matched paths that are not ignored
         """
         for filepath in path.glob(f"**/*{file_extension}"):
-            for ignore_pattern in self._ignore_patterns:
+            for ignore_pattern in self.ignore_patterns:
                 if filepath.match(ignore_pattern):
                     break
             else:
@@ -850,23 +871,3 @@ class Context(BaseContext):
         self.dag.graph[model.name] = set()
 
         self.dag.add(model.name, model.depends_on)
-
-
-def update_model_schemas(dialect: str, dag: DAG, models: UniqueKeyDict) -> None:
-    schema = MappingSchema(dialect=dialect)
-    for name in dag.sorted():
-        model = models.get(name)
-
-        # External models don't exist in the context, so we need to skip them
-        if not model:
-            continue
-
-        if model.contains_star_query and any(
-            dep not in models for dep in model.depends_on
-        ):
-            raise SQLMeshError(
-                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
-            )
-
-        model.update_schema(schema)
-        schema.add_table(name, model.columns_to_types)

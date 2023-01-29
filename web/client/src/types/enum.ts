@@ -1,4 +1,3 @@
-
 export const EnumSize = {
   xs: 'xs',
   sm: 'sm',
@@ -6,8 +5,3 @@ export const EnumSize = {
   lg: 'lg',
   xl: 'xl',
 } as const;
-
-declare global {
-  type Size = typeof EnumSize[keyof typeof EnumSize]
-  type Subset<T, S extends T> = S
-}
