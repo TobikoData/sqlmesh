@@ -288,25 +288,64 @@ function Directory({
   return (
     <>
       <span
-        className='text-base whitespace-nowrap px-2 hover:bg-secondary-100 group flex justify-between rounded-md'
+        className='w-full text-base whitespace-nowrap px-2 hover:bg-secondary-100 group flex justify-between rounded-md'
       >
-        <span>
-          <IconChevron className={clsx(
-            `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500 cursor-pointer`,
-            { 'invisible pointer-events-none cursor-default': !withFolders && !withFiles }
-          )} onClick={() => setOpen(!isOpen)} />
-          <span className='cursor-pointer' onClick={() => setOpen(!isOpen)}>
+        <span className='w-full flex items-center'>
+          <div className='mr-2 flex items-center'>
+            <IconChevron className={clsx(
+              `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500 cursor-pointer`,
+              { 'invisible pointer-events-none cursor-default': !withFolders && !withFiles }
+            )} onClick={() => setOpen(!isOpen)}
+            />
             <IconFolder className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`} />
-            <p className='inline-block text-sm ml-1 text-gray-900 group-hover:text-secondary-500'>
-              {directory.name}
-            </p>
-          </span>
-        </span>
+          </div>
 
-        <span className='hidden group-hover:block'>
-          <DocumentPlusIcon onClick={(e: any) => create(e, "file", directory) && setOpen(true)}  className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-          <FolderPlusIcon onClick={(e: any) => create(e, "directory", directory) && setOpen(true)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-          <XCircleIcon onClick={(e: any) => remove(e, directory, parent)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`} />
+          <span className='w-full h-[1.5rem] flex items-center cursor-pointer justify-between'>
+            {/* <p className='inline-block text-sm ml-1 text-gray-900 group-hover:text-secondary-500'>
+              {directory.name}
+            </p> */}
+            {renamingArtifact === directory ? (
+                <div className='flex items-center'>
+                  <input
+                    type='text'
+                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                    value={artifactNewName || directory.name}
+                    onInput={(e: any) => {
+                      e.stopPropagation()
+
+                      setArtifactNewName(e.target.value)
+                    }}
+                  />
+                  <div className='flex'>
+                    <CheckCircleIcon onClick={(e : any) => {
+                      e.stopPropagation()
+                      
+                      rename(e, directory, parent)
+                      setRenamingArtifact(undefined)
+                    }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
+                  </div>
+                </div>
+              ) : (
+                <span className='w-full flex justify-between items-center'>
+                  <span
+                   onClick={() => setOpen(!isOpen)}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+
+                      setRenamingArtifact(directory)
+                    }}
+                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                  >
+                    {directory.name}
+                  </span>  
+                  <span className='hidden group-hover:block'>
+                    <DocumentPlusIcon onClick={(e: any) => create(e, "file", directory) && setOpen(true)}  className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+                    <FolderPlusIcon onClick={(e: any) => create(e, "directory", directory) && setOpen(true)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+                    <XCircleIcon onClick={(e: any) => remove(e, directory, parent)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`} />
+                  </span>
+                </span>
+              )}            
+          </span>
         </span>
       </span>
       {isOpen && withFolders && (
@@ -369,8 +408,10 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
               'flex w-full items-center overflow-hidden overflow-ellipsis',
               !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
             )}>
-              {activeFiles?.has(file) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
-              {!activeFiles?.has(file) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+              <div className='flex items-center'>
+                {activeFiles?.has(file) && (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+                {!activeFiles?.has(file) && (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)}
+              </div>
 
               {renamingArtifact === file ? (
                   <div className='flex items-center'>
