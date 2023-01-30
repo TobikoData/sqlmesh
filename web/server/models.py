@@ -57,4 +57,4 @@ class ContextEnvironmentChanges(PydanticModel):
 class ContextEnvironment(PydanticModel):
     environment: str
     changes: t.Optional[ContextEnvironmentChanges]
-    backfills: t.List[t.Tuple[str, str]] = []
+    backfills: t.List[t.Tuple[str, t.Tuple[str, str], int]] = []
