@@ -67,8 +67,7 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(models.File(
-                        name=entry.name, path=relative_path))
+                    files.append(models.File(name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(
             files, key=lambda x: x.name
         )
@@ -124,6 +123,7 @@ async def delete_file(
 
 @router.get(
     "/context",
+    response_model=models.Context,
     response_model_exclude_unset=True,
 )
 def get_api_context(
@@ -144,6 +144,7 @@ def get_api_context(
 
 @router.get(
     "/plan",
+    response_model=models.ContextEnvironment,
     response_model_exclude_unset=True,
 )
 def get_plan(
