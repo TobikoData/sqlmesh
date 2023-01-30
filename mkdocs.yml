@@ -9,9 +9,10 @@ nav:
   - Concepts:
     - concepts/overview.md
     - Models:
-      - concepts/models.md
-      - concepts/model_kinds.md
-      - concepts/snapshots.md
+      - concepts/models/overview.md
+      - concepts/models/model_kinds.md
+      - concepts/models/snapshots.md
+      - concepts/models/macros.md
     - concepts/plans.md
     - concepts/configs.md
     - concepts/environments.md
