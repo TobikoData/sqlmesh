@@ -11,6 +11,6 @@ interface IDE {
 export default createContext<IDE>({
   openedFiles: new Set(),
   activeFile: null,
-  setActiveFile: () => { },
-  setOpenedFiles: () => { }
+  setActiveFile: () => {},
+  setOpenedFiles: () => {}
 })

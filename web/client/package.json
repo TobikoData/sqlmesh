@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run generate:api && vite",
-    "build": "tsc && vite build",
+    "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview",
     "prettier": "prettier --write .",
     "lint:fix": "eslint --fix",

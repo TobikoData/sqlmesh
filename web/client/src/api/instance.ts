@@ -21,7 +21,6 @@ export const fetchAPI = async <T>({
   params?: any;
 }): Promise<T> => {
   const withSearchParams = Object.keys(params || {}).length > 0
-  console.log({withSearchParams, params})
   const fullUrl = `${url}${withSearchParams ? '?' + new URLSearchParams(params) : ''}`.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
 
