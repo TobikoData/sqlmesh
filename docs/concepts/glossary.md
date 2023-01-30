@@ -46,7 +46,7 @@ The property that, given a particular operation, the same outputs will be produc
 
 **Incremental refresh**
 <br>
-In an incremental data refresh, incoming data is compared to existing data, and only changes are updated. In SQLMesh, this is referred to as a logical update. For more information, refer to [plans](concepts/plans.md).
+In an incremental data refresh, incoming data is compared to existing data, and only changes are updated. In SQLMesh, this is referred to as a logical update. For more information, refer to [plans](/concepts/plans).
 
 **Integration**
 <br>
