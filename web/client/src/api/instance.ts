@@ -12,16 +12,18 @@ export const fetchAPI = async <T>({
 }: {
   url: string;
   method: 'get' | 'post' | 'put' | 'delete' | 'patch';
-  params?: any;
   data?: BodyInit;
   responseType?: string;
   headers?: { [key: string]: string };
   credentials?: 'omit' | 'same-origin' | 'include';
   mode?: 'cors' | 'no-cors' | 'same-origin';
   cache?: 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached';
+  params?: any;
 }): Promise<T> => {
-  url = `${url}${new URLSearchParams(params)}`.replace(/([^:]\/)\/+/g, '$1')
-  const input = new URL(url, baseURL)
+  const withSearchParams = Object.keys(params || {}).length > 0
+  console.log({withSearchParams, params})
+  const fullUrl = `${url}${withSearchParams ? '?' + new URLSearchParams(params) : ''}`.replace(/([^:]\/)\/+/g, '$1')
+  const input = new URL(fullUrl, baseURL)
 
   const response = await fetch(input,
     {

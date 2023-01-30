@@ -1,6 +1,6 @@
 import { useQuery, useMutation, QueryClient } from '@tanstack/react-query'
-import { saveFileByPath, getContext } from './endpoints'
-import { getFileApiFilesPathGet, getFilesApiFilesGet, getApiContextByEnvironmentApiContextEnvironmentGet } from "./client";
+import { saveFileByPath } from './endpoints'
+import { getFileApiFilesPathGet, getFilesApiFilesGet, getPlanApiPlanGet, getApiContextApiContextGet } from "./client";
 
 export function useApiFileByPath(path?: string) {
   return useQuery({
@@ -20,7 +20,7 @@ export function useApiFiles() {
 export function useApiContext() {
   return useQuery({
     queryKey: ['/api/context'],
-    queryFn: getContext,
+    queryFn: getApiContextApiContextGet,
   })
 }
 
@@ -30,8 +30,8 @@ export async function useApiContextCancel(client: QueryClient) {
 
 export function useApiContextByEnvironment(environment?: string) {
   return useQuery({
-    queryKey: [`/api/context/`, environment],
-    queryFn: () => getApiContextByEnvironmentApiContextEnvironmentGet(environment || 'prod'),
+    queryKey: [`/api/plan`, environment],
+    queryFn: () => getPlanApiPlanGet({ environment }),
     enabled: environment != null,
   })
 }
