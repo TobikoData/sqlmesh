@@ -1,4 +1,4 @@
-# Models
+# Overview
 
 Models are comprised of metadata and queries that create tables and views, which can be used by other models or even outside of SQLMesh. They are defined in the `models/` directory of your SQLMesh product, and live in `.sql` files. SQLMesh will automatically understand the relationships and lineage of your models by parsing SQL so you don't have to worry about manually setting up dependencies.
 
@@ -62,7 +62,7 @@ The MODEL statement takes various properties, which are used for both metadata a
 - Name is ***required***, and must be ***unique***.
 
 ### kind
-- Kind specifies what [kind](#model-kinds) a model is. A model's kind determines how it is computed and stored. The default kind is `incremental`, which means that a model processes and stores data incrementally by minute, hour, or day.
+- Kind specifies what [kind](/concepts/model_kinds) a model is. A model's kind determines how it is computed and stored. The default kind is `incremental`, which means that a model processes and stores data incrementally by minute, hour, or day.
 
 ### dialect
 - Dialect defines the SQL dialect of the file. By default, this uses the dialect of the SQLMesh `sqlmesh.core.config`.

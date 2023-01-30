@@ -1,23 +1,29 @@
 site_name: SQLMesh
 nav:
-  - Introduction:
+  - Get started:
     - "Overview": index.md
-    - "Quick start": quick_start.md
+    - quick_start.md
+  - Guides:
+    - guides/projects.md
+    - guides/process.md
   - Concepts:
     - concepts/overview.md
-    - concepts/models.md
-    - concepts/model_kinds.md
+    - Models:
+      - concepts/models.md
+      - concepts/model_kinds.md
+      - concepts/snapshots.md
     - concepts/plans.md
-    - concepts/snapshots.md
     - concepts/configs.md
     - concepts/environments.md
     - concepts/tests.md
     - concepts/audits.md
-  - API:
+    - concepts/glossary.md
+  - Reference:
     - api/overview.md
-    - api/cli.md
-    - api/notebook.md
-    - api/python.md
+    - Options:
+      - api/cli.md
+      - api/notebook.md
+      - api/python.md
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
@@ -25,32 +31,30 @@ nav:
   - Resources:
     - community.md
     - development.md
-    - glossary.md
 
 theme:
   name: material
-    #logo: assets/logo.png
+  logo: sqlmesh.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: deep purple
-      accent: orange
+      accent: deep purple
       toggle:
         icon: material/weather-sunny
         name: Switch to dark mode
-
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: deep purple
-      accent: orange
+      accent: deep purple
       toggle:
         icon: material/weather-night
         name: Switch to light mode
-
   features:
     - navigation.tracking
     - navigation.tabs
+    - navigation.path
 plugins:
   - include-markdown
 copyright: Tobiko Data Inc.
