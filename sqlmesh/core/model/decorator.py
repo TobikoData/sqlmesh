@@ -31,14 +31,16 @@ class model(registry_decorator):
         for calls_key in ("pre", "post", "audits"):
             calls = self.kwargs.pop(calls_key, [])
             self.kwargs[calls_key] = [
-                (
-                    call_key,
+                (call, {})
+                if isinstance(call, str)
+                else (
+                    call[0],
                     {
                         arg_key: exp.convert(arg_value)
-                        for arg_key, arg_value in call_args.items()
+                        for arg_key, arg_value in call[1].items()
                     },
                 )
-                for call_key, call_args in calls
+                for call in calls
             ]
 
         self.columns = {

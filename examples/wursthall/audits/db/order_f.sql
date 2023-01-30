@@ -1,6 +1,5 @@
 AUDIT (
   name assert_valid_order_totals,
-  model db.order_f
 );
 
 SELECT *

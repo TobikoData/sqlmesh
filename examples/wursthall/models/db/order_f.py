@@ -32,6 +32,7 @@ COLUMN_TO_TYPE = {
     cron="@daily",
     batch_size=200,
     columns=COLUMN_TO_TYPE,
+    audits=["assert_valid_order_totals"],
 )
 def execute(
     context: ExecutionContext,
