@@ -5,8 +5,7 @@ import { ChevronRightIcon, ChevronDownIcon, CheckCircleIcon } from '@heroicons/r
 import { useContext, useEffect, useState } from 'react';
 import ContextIDE from '../../../context/Ide';
 import clsx from 'clsx';
-import {  toSingular } from '../../../utils';
-import { e } from 'vitest/dist/index-2dd51af4';
+import { singular } from 'pluralize';
 
 /* TODO:
   - connect to API
@@ -24,23 +23,19 @@ const CSS_ICON_SIZE = 'w-4 h-4';
 class Counter {
   private store = new Map<string, number>();
 
-  countByKey(key: string | string[]): void {
+  countByKey(key: string | string[]): number {
     key = Counter.toKey(key);
 
     const count = (this.store.get(key) ?? 0) + 1;
 
     this.store.set(key, count);
-  }
 
-  getCountByKey(key: string | string[]): number {
-    key = Counter.toKey(key);
-
-    return this.store.get(key) ?? 0;
+    return count;
   }
 
   static toKey(key: string | string[]): string {
     return Array.isArray(key) ? key.join('_') : key;
-  }  
+  }
 }
 
 const counter = new Counter()
@@ -55,42 +50,47 @@ export function FolderTree({ project }: { project: any }) {
     setDirectory(project)
   }, [project])
 
-  function create(e: any, type: 'file' | 'directory', parent: Directory, extension = '.py'): boolean {
+  function createDirectory(e: MouseEvent, parent: Directory): boolean {
     e.stopPropagation()
 
-    if (type === 'directory') {
-      counter.countByKey([type, parent.path])
+    const count = counter.countByKey(parent.path)
 
-      const name = `new_directory_${counter.getCountByKey([type, parent.path])}`.toLowerCase()
+    const name = `new_directory_${count}`.toLowerCase()
 
-      parent.directories.push({
-        name,
-        path: parent.path + `${name}`,
-        files: [],
-        directories: []
-      })
-    } else {
-      counter.countByKey([type, parent.path])
-
-      const count = counter.getCountByKey([type, parent.path])
-      const name = parent.name.startsWith('new_')
-        ? `new_file_${count}${extension}`
-        : `new_${toSingular(parent.name)}_${count}${extension}`.toLowerCase()
-
-      parent.files.push({
-        name,
-        extension,
-        path: parent.path + `${name}.${extension}`,
-        content: '',
-        is_supported: true,
-      })
-    }
+    parent.directories.push({
+      name,
+      path: parent.path + `${name}`,
+      files: [],
+      directories: []
+    })    
 
     setDirectory({ ...directory })
 
     return true
   }
+  
+  function createFile(e: MouseEvent, parent: Directory, extension = '.py'): boolean {
+    e.stopPropagation()
 
+    const count = counter.countByKey(parent.path)
+
+    const name = parent.name.startsWith('new_')
+      ? `new_file_${count}${extension}`
+      : `new_${singular(parent.name)}_${count}${extension}`.toLowerCase()
+
+    parent.files.push({
+      name,
+      extension,
+      path: parent.path + `${name}.${extension}`,
+      content: '',
+      is_supported: true,
+    })    
+
+    setDirectory({ ...directory })
+
+    return true
+  }
+  
   function remove(e: any, artifact: Artifact, parent: Directory): boolean {
     e.stopPropagation()
 
@@ -132,7 +132,7 @@ export function FolderTree({ project }: { project: any }) {
     e.stopPropagation()
 
     const newName = artifactNewName || artifact.name
-    
+
     if ('extension' in artifact) {
       artifact.name = newName.trim().replace(`.${artifact.extension}`, '')
       artifact.path = parent.path + `${artifact.name}`
@@ -140,7 +140,7 @@ export function FolderTree({ project }: { project: any }) {
       if (openedFiles.has(artifact)) {
         openedFiles.forEach(file => {
           if (file.path === artifact.path) {
-            file.name =  artifact.name
+            file.name = artifact.name
             file.path = artifact.path
           }
         })
@@ -184,7 +184,8 @@ export function FolderTree({ project }: { project: any }) {
           activeFile={activeFile}
           activeFiles={openedFiles}
           parent={directory}
-          create={create}
+          createDirectory={createDirectory}
+          createFile={createFile}
           remove={remove}
           renamingArtifact={renamingArtifact}
           setRenamingArtifact={setRenamingArtifact}
@@ -200,13 +201,12 @@ export function FolderTree({ project }: { project: any }) {
           activeFile={activeFile}
           activeFiles={openedFiles}
           parent={directory}
-          create={create}
           remove={remove}
           renamingArtifact={renamingArtifact}
           setRenamingArtifact={setRenamingArtifact}
           setArtifactNewName={setArtifactNewName}
           artifactNewName={artifactNewName}
-          rename={rename}   
+          rename={rename}
         />
       )}
     </div>
@@ -221,7 +221,6 @@ interface PropsArtifacts {
   selectFile: (file: File) => void;
   parent: Directory;
   remove: (e: MouseEvent, file: Artifact, parent: Directory) => boolean;
-  create: (e: MouseEvent, type: 'file' | 'directory', parent: Directory, extension?: '.py' | '.yaml' | '.sql') => boolean;
   rename: (e: MouseEvent, file: Artifact, parent: Directory) => void;
   setRenamingArtifact: (artifact?: Artifact) => void;
   setArtifactNewName: (name: string) => void;
@@ -229,12 +228,18 @@ interface PropsArtifacts {
   renamingArtifact?: Artifact;
 }
 
-interface PropsDirectories extends PropsArtifacts {
-  directories: Directory[];
-  withIndent: boolean;
+interface PropsArtifactCreate{
+  createDirectory: (e: MouseEvent, parent: Directory) => boolean;
+  createFile: (e: MouseEvent, parent: Directory, extension?: '.py' | '.yaml' | '.sql') => boolean;
 }
 
-interface PropsDirectory extends PropsArtifacts {
+interface PropsDirectories extends PropsArtifacts, PropsArtifactCreate {
+  directories: Directory[];
+  withIndent: boolean;
+
+}
+
+interface PropsDirectory extends PropsArtifacts, PropsArtifactCreate {
   directory: Directory;
 }
 
@@ -243,10 +248,21 @@ interface PropsFiles extends PropsArtifacts {
 }
 
 function Directories({
-    directories = [],
-    withIndent = false,
-    selectFile,
-    activeFile, activeFiles, create, remove, parent, renamingArtifact, setRenamingArtifact, rename, setArtifactNewName, artifactNewName }: PropsDirectories) {
+  directories = [],
+  withIndent = false,
+  activeFile,
+  activeFiles,
+  renamingArtifact,
+  parent,
+  artifactNewName,
+  selectFile,
+  createDirectory,
+  createFile,
+  remove,
+  setRenamingArtifact,
+  rename,
+  setArtifactNewName,
+}: PropsDirectories) {
   return (
     <ul className={`${withIndent ? 'ml-4' : ''} overflow-hidden`}>
       {directories.map(directory => (
@@ -257,7 +273,8 @@ function Directories({
             activeFile={activeFile}
             activeFiles={activeFiles}
             parent={parent}
-            create={create}
+            createDirectory={createDirectory}
+            createFile={createFile}
             remove={remove}
             renamingArtifact={renamingArtifact}
             setRenamingArtifact={setRenamingArtifact}
@@ -271,13 +288,20 @@ function Directories({
   )
 }
 
-function Directory({  
+function Directory({
   directory,
-  selectFile,
   activeFile,
   activeFiles,
-  parent, create, remove, renamingArtifact, setRenamingArtifact, rename, setArtifactNewName,
-  artifactNewName
+  parent,
+  artifactNewName,
+  renamingArtifact,
+  remove,
+  createDirectory,
+  createFile,
+  selectFile,
+  setRenamingArtifact,
+  rename,
+  setArtifactNewName,
 }: PropsDirectory) {
   const [isOpen, setOpen] = useState(false);
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon;
@@ -305,46 +329,46 @@ function Directory({
               {directory.name}
             </p> */}
             {renamingArtifact === directory ? (
-                <div className='flex items-center'>
-                  <input
-                    type='text'
-                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
-                    value={artifactNewName || directory.name}
-                    onInput={(e: any) => {
-                      e.stopPropagation()
+              <div className='flex items-center'>
+                <input
+                  type='text'
+                  className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                  value={artifactNewName || directory.name}
+                  onInput={(e: any) => {
+                    e.stopPropagation()
 
-                      setArtifactNewName(e.target.value)
-                    }}
-                  />
-                  <div className='flex'>
-                    <CheckCircleIcon onClick={(e : any) => {
-                      e.stopPropagation()
-                      
-                      rename(e, directory, parent)
-                      setRenamingArtifact(undefined)
-                    }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
-                  </div>
+                    setArtifactNewName(e.target.value)
+                  }}
+                />
+                <div className='flex'>
+                  <CheckCircleIcon onClick={(e: any) => {
+                    e.stopPropagation()
+
+                    rename(e, directory, parent)
+                    setRenamingArtifact(undefined)
+                  }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
                 </div>
-              ) : (
-                <span className='w-full flex justify-between items-center'>
-                  <span
-                   onClick={() => setOpen(!isOpen)}
-                    onDoubleClick={e => {
-                      e.stopPropagation()
+              </div>
+            ) : (
+              <span className='w-full flex justify-between items-center'>
+                <span
+                  onClick={() => setOpen(!isOpen)}
+                  onDoubleClick={e => {
+                    e.stopPropagation()
 
-                      setRenamingArtifact(directory)
-                    }}
-                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
-                  >
-                    {directory.name}
-                  </span>  
-                  <span className='hidden group-hover:block'>
-                    <DocumentPlusIcon onClick={(e: any) => create(e, "file", directory) && setOpen(true)}  className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-                    <FolderPlusIcon onClick={(e: any) => create(e, "directory", directory) && setOpen(true)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-                    <XCircleIcon onClick={(e: any) => remove(e, directory, parent)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`} />
-                  </span>
+                    setRenamingArtifact(directory)
+                  }}
+                  className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                >
+                  {directory.name}
                 </span>
-              )}            
+                <span className='hidden group-hover:block'>
+                  <DocumentPlusIcon onClick={(e: any) => createFile(e, directory) && setOpen(true)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+                  <FolderPlusIcon onClick={(e: any) => createDirectory(e, directory) && setOpen(true)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
+                  <XCircleIcon onClick={(e: any) => remove(e, directory, parent)} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`} />
+                </span>
+              </span>
+            )}
           </span>
         </span>
       </span>
@@ -356,7 +380,8 @@ function Directory({
           activeFile={activeFile}
           activeFiles={activeFiles}
           parent={directory}
-          create={create}
+          createDirectory={createDirectory}
+          createFile={createFile}
           remove={remove}
           renamingArtifact={renamingArtifact}
           setRenamingArtifact={setRenamingArtifact}
@@ -372,20 +397,19 @@ function Directory({
           activeFile={activeFile}
           activeFiles={activeFiles}
           parent={directory}
-          create={create}
           remove={remove}
           renamingArtifact={renamingArtifact}
           setRenamingArtifact={setRenamingArtifact}
           rename={rename}
           setArtifactNewName={setArtifactNewName}
-          artifactNewName = {artifactNewName}
+          artifactNewName={artifactNewName}
         />
       )}
     </>
   )
 }
 
-function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent, renamingArtifact, setRenamingArtifact, rename, setArtifactNewName,artifactNewName  }: PropsFiles) {
+function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent, renamingArtifact, setRenamingArtifact, rename, setArtifactNewName, artifactNewName }: PropsFiles) {
   return (
     <ul className='ml-4 mr-1 overflow-hidden'>
       {files.map(file => (
@@ -414,25 +438,25 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
               </div>
 
               {renamingArtifact === file ? (
-                  <div className='flex items-center'>
-                    <input
-                      type='text'
-                      className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
-                      value={artifactNewName || file.name}
-                      onInput={(e: any) => {
-                        e.stopPropagation()
+                <div className='flex items-center'>
+                  <input
+                    type='text'
+                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                    value={artifactNewName || file.name}
+                    onInput={(e: any) => {
+                      e.stopPropagation()
 
-                        setArtifactNewName(e.target.value)
-                      }}
-                    />
-                    <div className='flex'>
-                      <CheckCircleIcon onClick={(e : any) => {
-                        e.stopPropagation()
-                        rename(e, file, parent)
-                        setRenamingArtifact(undefined)
-                      }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
-                    </div>
+                      setArtifactNewName(e.target.value)
+                    }}
+                  />
+                  <div className='flex'>
+                    <CheckCircleIcon onClick={(e: any) => {
+                      e.stopPropagation()
+                      rename(e, file, parent)
+                      setRenamingArtifact(undefined)
+                    }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
                   </div>
+                </div>
               ) : (
                 <>
                   <span
@@ -444,7 +468,7 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
                     className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
                   >
                     {file.name}
-                  </span>  
+                  </span>
                   <span className='flex items-center invisible group-hover/file:visible min-w-8' onClick={(e: any) => remove(e, file, parent)}>
                     <XCircleIcon className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500 cursor-pointer`} />
                   </span>
