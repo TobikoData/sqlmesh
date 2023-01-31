@@ -209,6 +209,8 @@ class Context(BaseContext):
     ):
         self.console = console or get_console()
         self.path = Path(path).absolute()
+        if not self.path.is_dir():
+            raise ConfigError(f"{path} is not a directory")
 
         self.config = self._load_config(config or "config")
 

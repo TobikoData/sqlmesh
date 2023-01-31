@@ -25,24 +25,18 @@ def test_interval_params(
     ]
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
-    assert scheduler._interval_params([orders, waiter_revenue], start_ds, end_ds) == [
-        (
-            orders,
-            [
-                (to_datetime(start_ds), to_datetime("2022-01-31")),
-                (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
-            ],
-        ),
-        (
-            waiter_revenue,
-            [
-                (to_datetime(start_ds), to_datetime("2022-01-11")),
-                (to_datetime("2022-01-11"), to_datetime("2022-01-21")),
-                (to_datetime("2022-01-21"), to_datetime("2022-01-31")),
-                (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
-            ],
-        ),
-    ]
+    assert scheduler._interval_params([orders, waiter_revenue], start_ds, end_ds) == {
+        orders: [
+            (to_datetime(start_ds), to_datetime("2022-01-31")),
+            (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
+        ],
+        waiter_revenue: [
+            (to_datetime(start_ds), to_datetime("2022-01-11")),
+            (to_datetime("2022-01-11"), to_datetime("2022-01-21")),
+            (to_datetime("2022-01-21"), to_datetime("2022-01-31")),
+            (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
+        ],
+    }
 
 
 def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
@@ -52,15 +46,12 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     orders.add_interval("2022-01-10", "2022-01-15")
     scheduler.state_sync.add_interval(orders.snapshot_id, "2022-01-10", "2022-01-15")
 
-    assert scheduler._interval_params([orders], start_ds, end_ds) == [
-        (
-            orders,
-            [
-                (to_datetime(start_ds), to_datetime("2022-01-10")),
-                (to_datetime("2022-01-16"), to_datetime("2022-02-06")),
-            ],
-        ),
-    ]
+    assert scheduler._interval_params([orders], start_ds, end_ds) == {
+        orders: [
+            (to_datetime(start_ds), to_datetime("2022-01-10")),
+            (to_datetime("2022-01-16"), to_datetime("2022-02-06")),
+        ]
+    }
 
 
 def test_interval_params_missing(
@@ -70,14 +61,11 @@ def test_interval_params_missing(
 
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
-    assert scheduler._interval_params([waiters], start_ds, end_ds) == [
-        (
-            waiters,
-            [
-                (to_datetime(start_ds), to_datetime("2022-03-02")),
-            ],
-        ),
-    ]
+    assert scheduler._interval_params([waiters], start_ds, end_ds) == {
+        waiters: [
+            (to_datetime(start_ds), to_datetime("2022-03-02")),
+        ]
+    }
 
 
 def test_multi_version_snapshots(
@@ -114,7 +102,7 @@ def test_multi_version_snapshots(
 
     interval_params = scheduler._interval_params([items_a], start_ds, end_ds)
     assert len(interval_params) == 1
-    assert interval_params[0][1] == [
+    assert list(interval_params.values())[0] == [
         (to_datetime(start_ds), to_datetime("2022-01-10")),
         (to_datetime("2022-01-16"), to_datetime("2022-01-20")),
         (to_datetime("2022-01-26"), to_datetime("2022-02-06")),
@@ -126,7 +114,7 @@ def test_multi_version_snapshots(
         [items_b], start_ds, end_ds, is_dev=True
     )
     assert len(interval_params_dev_mode) == 1
-    assert interval_params_dev_mode[0][1] == [
+    assert list(interval_params_dev_mode.values())[0] == [
         (to_datetime(start_ds), to_datetime("2022-01-20")),
         (to_datetime("2022-01-26"), to_datetime("2022-02-06")),
     ]
