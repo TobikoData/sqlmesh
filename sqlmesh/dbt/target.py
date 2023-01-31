@@ -5,7 +5,11 @@ import typing as t
 
 from pydantic import Field
 
-from sqlmesh.core.config import ConnectionConfig, SnowflakeConnectionConfig
+from sqlmesh.core.config import (
+    ConnectionConfig,
+    DuckDBConnectionConfig,
+    SnowflakeConnectionConfig,
+)
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -36,21 +40,36 @@ class TargetConfig(abc.ABC, PydanticModel):
             The configuration of the provided profile target
         """
         db_type = data["type"]
-        if db_type == "snowflake":
-            return SnowflakeConfig(**data)
+        if db_type == "databricks":
+            return DatabricksConfig(**data)
+        elif db_type == "duckdb":
+            return DuckDbConfig(**data)
         elif db_type == "postgres":
             return PostgresConfig(**data)
         elif db_type == "redshift":
             return RedshiftConfig(**data)
-        elif db_type == "databricks":
-            return DatabricksConfig(**data)
+        elif db_type == "snowflake":
+            return SnowflakeConfig(**data)
 
-        # TODO add other data warehouses
         raise ConfigError(f"{db_type} not supported")
 
     def to_sqlmesh(self) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
+
+
+class DuckDbConfig(TargetConfig):
+    """
+    Connection config for DuckDb target
+
+    Args:
+        path: Location of the database file. If not specified, an in memory database is used.
+    """
+
+    path: t.Optional[str] = None
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return DuckDBConnectionConfig(database=self.path, concurrent_tasks=self.threads)
 
 
 class SnowflakeConfig(TargetConfig):

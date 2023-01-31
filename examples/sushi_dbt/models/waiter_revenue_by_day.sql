@@ -11,10 +11,10 @@ SELECT
   o.waiter_id::INT AS waiter_id, /* Waiter id */
   SUM(oi.quantity * i.price)::DOUBLE AS revenue, /* Revenue from orders taken by this waiter */
   o.ds::TEXT AS ds /* Date */
-FROM {{ ref('orders') }} AS o
-LEFT JOIN {{ ref('order_items') }} AS oi
+FROM {{ source('raw', 'orders') }} AS o
+LEFT JOIN {{ source('raw', 'order_items') }} AS oi
   ON o.id = oi.order_id AND o.ds = oi.ds
-LEFT JOIN {{ ref('items') }} AS i
+LEFT JOIN {{ source('raw', 'items') }} AS i
   ON oi.item_id = i.id AND oi.ds = i.ds
 {% if is_incremental() %}
   WHERE

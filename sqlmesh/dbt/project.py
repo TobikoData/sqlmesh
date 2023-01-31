@@ -352,18 +352,6 @@ class ProjectConfig:
         return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
 
     @property
-    def model_mapping(self) -> t.Dict[str, str]:
-        mapping = {name: config.model_name for name, config in self.models.items()}
-        mapping.update({name: config.seed_name for name, config in self.seeds.items()})
-        return mapping
-
-    @property
-    def source_mapping(self) -> t.Dict[str, str]:
-        return {
-            config.config_name: config.source_name for config in self.sources.values()
-        }
-
-    @property
     def project_files(self) -> t.List[Path]:
         paths = self.config_paths.copy()
         paths.append(self.profile.path)
