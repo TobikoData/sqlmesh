@@ -1,8 +1,7 @@
 site_name: SQLMesh
 nav:
-  - Get started:
-    - "Overview": index.md
-    - quick_start.md
+  - "Overview": index.md
+  - quick_start.md
   - Guides:
     - guides/projects.md
     - guides/process.md
