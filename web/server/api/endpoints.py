@@ -155,7 +155,7 @@ def get_plan(
 
     plan = context.plan(environment=environment, no_prompts=True)
     batches = context.scheduler().batches()
-    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches}
+    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
