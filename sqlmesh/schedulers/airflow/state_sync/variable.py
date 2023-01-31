@@ -273,13 +273,7 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
         if not isinstance(value, str):
             value = json.dumps(value)
 
-        self._delete_records({key})
-        new_variable = Variable(
-            key=key,
-            val=value,
-            description=None,
-        )
-        self._session.add(new_variable)
+        Variable.set(key, value, session=self._session)
         self._session.flush()
 
     def _delete_records(self, target_keys: t.Set[str]) -> None:
