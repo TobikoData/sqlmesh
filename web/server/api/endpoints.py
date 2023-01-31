@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 
@@ -30,7 +31,7 @@ def validate_path(
     return path
 
 
-@router.get("/files")
+@router.get("/files", response_model=models.Directory)
 def get_files(
     context: Context = Depends(get_context),
 ) -> models.Directory:
@@ -41,6 +42,7 @@ def get_files(
     ) -> t.Tuple[t.List[models.Directory], t.List[models.File]]:
         directories = []
         files = []
+
         with os.scandir(path) as entries:
             for entry in entries:
                 entry_path = Path(entry.path)
@@ -79,7 +81,7 @@ def get_files(
     )
 
 
-@router.get("/files/{path:path}")
+@router.get("/files/{path:path}", response_model=models.File)
 def get_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
@@ -93,7 +95,7 @@ def get_file(
     return models.File(name=os.path.basename(path), path=path, content=content)
 
 
-@router.post("/files/{path:path}")
+@router.post("/files/{path:path}", response_model=models.File)
 async def write_file(
     content: str = Body(),
     path: str = Depends(validate_path),
@@ -121,6 +123,7 @@ async def delete_file(
 
 @router.get(
     "/context",
+    response_model=models.Context,
     response_model_exclude_unset=True,
 )
 def get_api_context(
@@ -141,6 +144,7 @@ def get_api_context(
 
 @router.get(
     "/plan",
+    response_model=models.ContextEnvironment,
     response_model_exclude_unset=True,
 )
 def get_plan(
@@ -150,10 +154,21 @@ def get_plan(
     """Get the context for a environment."""
 
     plan = context.plan(environment=environment, no_prompts=True)
+    batches = context.scheduler().batches()
+    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches}
+
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
         backfills=[
-            (x.snapshot_name, x.format_missing_range()) for x in plan.missing_intervals
+            models.ContextEnvironmentBackfill(
+                model_name=interval.snapshot_name,
+                interval=[
+                    [to_ds(t) for t in make_inclusive(start, end)]
+                    for start, end in interval.merged_intervals
+                ][0],
+                batches=tasks[interval.snapshot_name],
+            )
+            for interval in plan.missing_intervals
         ],
     )
 
