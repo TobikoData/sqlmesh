@@ -20,21 +20,16 @@ import { singular } from 'pluralize';
 */
 
 const CSS_ICON_SIZE = 'w-4 h-4';
+
 class Counter {
   private store = new Map<string, number>();
 
-  countByKey(key: string | string[]): number {
-    key = Counter.toKey(key);
-
+  countByKey(key: string): number {
     const count = (this.store.get(key) ?? 0) + 1;
 
     this.store.set(key, count);
 
     return count;
-  }
-
-  static toKey(key: string | string[]): string {
-    return Array.isArray(key) ? key.join('_') : key;
   }
 }
 
@@ -62,13 +57,13 @@ export function FolderTree({ project }: { project: any }) {
       path: parent.path + `${name}`,
       files: [],
       directories: []
-    })    
+    })
 
     setDirectory({ ...directory })
 
     return true
   }
-  
+
   function createFile(e: MouseEvent, parent: Directory, extension = '.py'): boolean {
     e.stopPropagation()
 
@@ -84,14 +79,14 @@ export function FolderTree({ project }: { project: any }) {
       path: parent.path + `${name}.${extension}`,
       content: '',
       is_supported: true,
-    })    
+    })
 
     setDirectory({ ...directory })
 
     return true
   }
-  
-  function remove(e: any, artifact: Artifact, parent: Directory): boolean {
+
+  function remove(e: MouseEvent, artifact: Artifact, parent: Directory): boolean {
     e.stopPropagation()
 
     if ('extension' in artifact) {
@@ -228,7 +223,7 @@ interface PropsArtifacts {
   renamingArtifact?: Artifact;
 }
 
-interface PropsArtifactCreate{
+interface PropsArtifactCreate {
   createDirectory: (e: MouseEvent, parent: Directory) => boolean;
   createFile: (e: MouseEvent, parent: Directory, extension?: '.py' | '.yaml' | '.sql') => boolean;
 }
