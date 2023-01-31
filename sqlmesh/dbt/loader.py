@@ -29,7 +29,14 @@ class DbtLoader(Loader):
     def _load_scripts(
         self,
     ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
-        return (UniqueKeyDict("macros"), UniqueKeyDict("hooks"))
+        macros: UniqueKeyDict[str, macro] = UniqueKeyDict("macros")
+
+        macros_dir = Path(self._context.path, "macros")
+        for path in macros_dir.glob("**/*.sql"):
+            # TODO handle macros
+            print("Handle macros here")
+
+        return (UniqueKeyDict("hooks"), macros)
 
     def _load_models(
         self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
@@ -48,7 +55,7 @@ class DbtLoader(Loader):
         models.update(
             {
                 model.model_name: model.to_sqlmesh(
-                    config.sources, config.models, config.seeds
+                    config.sources, config.models, config.seeds, macros
                 )
                 for model in config.models.values()
             }

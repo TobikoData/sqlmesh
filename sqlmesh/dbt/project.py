@@ -304,6 +304,9 @@ class ProjectConfig:
         depends_on = set()
         calls = set()
         sources = set()
+        unresolved_calls: t.Dict[
+            str, t.Tuple[t.Tuple[t.Any, ...], t.Dict[str, t.Any]]
+        ] = {}
 
         for method, args, kwargs in capture_jinja(sql).calls:
             calls.add(method)
@@ -321,11 +324,14 @@ class ProjectConfig:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
+            else:
+                unresolved_calls[method] = (args, kwargs)
 
         model_config.sql = cls._remove_config_jinja(sql)
         model_config._depends_on = depends_on
         model_config._calls = calls
         model_config._sources = sources
+        model_config._unresolved_calls = unresolved_calls
 
         return model_config
 

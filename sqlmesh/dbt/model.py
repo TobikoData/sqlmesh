@@ -9,11 +9,13 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
@@ -66,6 +68,7 @@ class ModelConfig(GeneralConfig):
     table_name: t.Optional[str] = None
     _depends_on: t.Set[str] = set()
     _calls: t.Set[str] = set()
+    _unresolved_calls: t.Dict[str, t.Tuple[t.Tuple[t.Any, ...], t.Dict[str, t.Any]]]
     _sources: t.Set[str] = set()
 
     # DBT configuration fields
@@ -128,6 +131,7 @@ class ModelConfig(GeneralConfig):
         sources: t.Dict[str, SourceConfig],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
+        macros: UniqueKeyDict[str, macro],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
