@@ -1,7 +1,4 @@
 version: 2
 
 seeds:
-  - name: items
-  - name: orders
-  - name: order_items
   - name: waiter_names

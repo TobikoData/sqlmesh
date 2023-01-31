@@ -7,7 +7,7 @@
 SELECT DISTINCT
   waiter_id::INT AS waiter_id,
   ds::TEXT AS ds
-FROM {{ ref('orders') }}
+FROM {{ source('raw', 'orders') }}
 {% if is_incremental() %}
 WHERE
   ds > (select max(ds) from {{ this }})

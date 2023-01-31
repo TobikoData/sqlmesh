@@ -1,3 +1,3 @@
 SELECT DISTINCT
   customer_id::INT AS customer_id
-FROM {{ ref('orders') }}
+FROM {{ source('raw', 'orders') }}

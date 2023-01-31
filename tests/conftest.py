@@ -12,6 +12,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils import random_id
+from sqlmesh.utils.date import TimeLike
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -28,7 +29,7 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 
 @pytest.fixture()
 def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context(mocker)
+    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
 
     plan_evaluator = BuiltInPlanEvaluator(
         context.state_sync, context.snapshot_evaluator
@@ -41,14 +42,29 @@ def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
 
 @pytest.fixture()
 def sushi_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context(mocker)
+    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
 
     context.apply(plan)
     return context
 
 
-def init_and_plan_sushi_context(mocker: MockerFixture) -> t.Tuple[Context, Plan]:
-    sushi_context = Context(path="examples/sushi")
+@pytest.fixture()
+def sushi_dbt_context(mocker: MockerFixture) -> Context:
+    from examples.sushi_dbt.seed_sources import init_raw_schema
+
+    context, plan = init_and_plan_sushi_context(
+        "examples/sushi_dbt", mocker, "Jan 1 2022"
+    )
+    init_raw_schema(context.engine_adapter)
+
+    context.apply(plan)
+    return context
+
+
+def init_and_plan_sushi_context(
+    path: str, mocker: MockerFixture, start: TimeLike = "1 week ago"
+) -> t.Tuple[Context, Plan]:
+    sushi_context = Context(path=path)
 
     for snapshot in sushi_context.snapshots.values():
         snapshot.set_version()
@@ -57,7 +73,7 @@ def init_and_plan_sushi_context(mocker: MockerFixture) -> t.Tuple[Context, Plan]
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 
-    plan = sushi_context.plan("prod", start="1 week ago")
+    plan = sushi_context.plan("prod", start=start)
 
     return (sushi_context, plan)
 
