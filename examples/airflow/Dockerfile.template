@@ -11,7 +11,7 @@ RUN usermod -u $AIRFLOW_UID airflow
 RUN apt-get update
 
 # Install system packages
-RUN apt install -y default-jdk gcc g++ make
+RUN apt install -y default-jdk gcc g++ make git
 
 ENV JAVA_HOME="/usr/lib/jvm/default-java/"
 

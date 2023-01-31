@@ -81,6 +81,7 @@ docker_compose["services"]["sqlmesh-tests"] = {
         "./spark_conf:/opt/spark/conf",
         "./spark_conf:/opt/hive/conf",
         "./warehouse:/opt/warehouse",
+        "../../:/opt/sqlmesh",
     ],
     "environment": {
         "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "postgresql+psycopg2://airflow:airflow@postgres/airflow",

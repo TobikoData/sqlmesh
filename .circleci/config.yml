@@ -65,7 +65,7 @@ jobs:
       - run:
           name: Collect Airflow logs
           command: |
-            tar -czf ./airflow_logs.tgz -C ./example/airflow/logs .
+            tar -czf ./airflow_logs.tgz -C ./examples/airflow/logs .
             mkdir -p /tmp/airflow_logs
             cp ./airflow_logs.tgz /tmp/airflow_logs/
           when: on_fail
