@@ -3,25 +3,20 @@ from __future__ import annotations
 import json
 import logging
 import typing as t
-from collections import defaultdict
 from datetime import timedelta
 
 from airflow import DAG
-from airflow.models import BaseOperator, DagRun, TaskInstance, Variable
+from airflow.models import BaseOperator, TaskInstance, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
-from sqlmesh.core import scheduler
-from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
-from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import now
-from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
 
@@ -100,26 +95,14 @@ class SQLMeshAirflow:
         incremental_dags = dag_generator.generate_incremental()
 
         plan_application_dags = [
-            dag_generator.generate_apply(r) for r in _get_plan_application_requests()
+            dag_generator.generate_apply(s) for s in _get_plan_dag_specs()
         ]
 
         system_dags = [
-            self._create_plan_receiver_dag(),
             self._create_janitor_dag(),
         ]
 
         return system_dags + incremental_dags + plan_application_dags
-
-    def _create_plan_receiver_dag(self) -> DAG:
-        dag = self._create_system_dag(common.PLAN_RECEIVER_DAG_ID, None)
-
-        PythonOperator(
-            task_id=common.PLAN_RECEIVER_TASK_ID,
-            python_callable=_plan_receiver_task,
-            dag=dag,
-        )
-
-        return dag
 
     def _create_janitor_dag(self) -> DAG:
         dag = self._create_system_dag(common.JANITOR_DAG_ID, self._janitor_interval)
@@ -159,109 +142,6 @@ class SQLMeshAirflow:
         )
 
 
-@provide_session
-def _plan_receiver_task(
-    dag_run: DagRun,
-    session: Session = util.PROVIDED_SESSION,
-) -> None:
-    state_sync = VariableStateSync(session)
-    plan_conf = common.PlanReceiverDagConf.parse_obj(dag_run.conf)
-
-    new_snapshots = {s.snapshot_id: s for s in plan_conf.new_snapshots}
-    stored_snapshots = state_sync.get_all_snapshots()
-
-    duplicated_snapshots = set(stored_snapshots).intersection(new_snapshots)
-    if duplicated_snapshots:
-        raise SQLMeshError(
-            f"Snapshots {duplicated_snapshots} already exist. "
-            "Make sure your code base is up to date and try re-creating the plan"
-        )
-
-    if plan_conf.environment.end_at:
-        end = plan_conf.environment.end_at
-        unpaused_dt = None
-    else:
-        # Unbounded end date means we need to unpause all paused snapshots
-        # that are part of the target environment.
-        end = now()
-        unpaused_dt = end
-
-    snapshots_for_intervals = {**new_snapshots, **stored_snapshots}
-    all_snapshots_by_version = defaultdict(set)
-    for snapshot in snapshots_for_intervals.values():
-        all_snapshots_by_version[(snapshot.name, snapshot.version)].add(
-            snapshot.snapshot_id
-        )
-
-    if plan_conf.is_dev:
-        # When in development mode exclude snapshots that match the version of each
-        # paused forward-only snapshot that is a part of the plan.
-        for s in plan_conf.environment.snapshots:
-            if s.is_forward_only and snapshots_for_intervals[s.snapshot_id].is_paused:
-                previous_snapshot_ids = all_snapshots_by_version[
-                    (s.name, s.version)
-                ] - {s.snapshot_id}
-                for sid in previous_snapshot_ids:
-                    snapshots_for_intervals.pop(sid)
-
-    if plan_conf.restatements:
-        state_sync.remove_interval(
-            [],
-            start=plan_conf.environment.start_at,
-            end=end,
-            all_snapshots=(
-                snapshot
-                for snapshot in snapshots_for_intervals.values()
-                if snapshot.name in plan_conf.restatements
-                and snapshot.snapshot_id not in new_snapshots
-            ),
-        )
-
-    if not plan_conf.skip_backfill:
-        backfill_batches = scheduler.compute_interval_params(
-            plan_conf.environment.snapshots,
-            snapshots=snapshots_for_intervals,
-            start=plan_conf.environment.start_at,
-            end=end,
-            latest=end,
-        )
-    else:
-        backfill_batches = {}
-
-    backfill_intervals_per_snapshot = [
-        common.BackfillIntervalsPerSnapshot(
-            snapshot_id=snapshot.snapshot_id,
-            intervals=intervals,
-        )
-        for snapshot, intervals in backfill_batches.items()
-    ]
-
-    request = common.PlanApplicationRequest(
-        request_id=plan_conf.request_id,
-        environment_name=plan_conf.environment.name,
-        new_snapshots=plan_conf.new_snapshots,
-        backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promoted_snapshots=plan_conf.environment.snapshots,
-        demoted_snapshots=_get_demoted_snapshots(plan_conf.environment, state_sync),
-        start=plan_conf.environment.start_at,
-        end=plan_conf.environment.end_at,
-        unpaused_dt=unpaused_dt,
-        no_gaps=plan_conf.no_gaps,
-        plan_id=plan_conf.environment.plan_id,
-        previous_plan_id=plan_conf.environment.previous_plan_id,
-        notification_targets=plan_conf.notification_targets,
-        backfill_concurrent_tasks=plan_conf.backfill_concurrent_tasks,
-        ddl_concurrent_tasks=plan_conf.ddl_concurrent_tasks,
-        users=plan_conf.users,
-        is_dev=plan_conf.is_dev,
-    )
-
-    Variable.set(
-        common.plan_application_request_key(plan_conf.request_id), request.json()
-    )
-
-
-@provide_session
 def _janitor_task(
     plan_application_dag_ttl: timedelta,
     ti: TaskInstance,
@@ -291,7 +171,7 @@ def _janitor_task(
     logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
     util.delete_variables(
         {
-            common.plan_application_request_key_from_dag_id(dag_id)
+            common.plan_dag_spec_key_from_dag_id(dag_id)
             for dag_id in plan_application_dag_ids
         },
         session=session,
@@ -307,26 +187,12 @@ def _get_all_snapshots(
 
 
 @provide_session
-def _get_plan_application_requests(
+def _get_plan_dag_specs(
     session: Session = util.PROVIDED_SESSION,
-) -> t.List[common.PlanApplicationRequest]:
+) -> t.List[common.PlanDagSpec]:
     records = (
         session.query(Variable)
-        .filter(Variable.key.like(f"{common.PLAN_APPLICATION_REQUEST_KEY_PREFIX}%"))
+        .filter(Variable.key.like(f"{common.PLAN_DAG_SPEC_KEY_PREFIX}%"))
         .all()
     )
-    return [common.PlanApplicationRequest.parse_raw(r.val) for r in records]
-
-
-def _get_demoted_snapshots(
-    new_environment: Environment, state_sync: StateSync
-) -> t.List[SnapshotTableInfo]:
-    current_environment = state_sync.get_environment(new_environment.name)
-    if current_environment:
-        preserved_snapshot_names = {s.name for s in new_environment.snapshots}
-        return [
-            s
-            for s in current_environment.snapshots
-            if s.name not in preserved_snapshot_names
-        ]
-    return []
+    return [common.PlanDagSpec.parse_raw(r.val) for r in records]
