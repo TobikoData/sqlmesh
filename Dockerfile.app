@@ -2,6 +2,7 @@ FROM node:19-alpine
 
 WORKDIR /app
 
-COPY . .
+COPY web/client/package*.json .
 
-RUN npm install -g npm@latest
+RUN npm install -g npm@latest && \
+    npm run init

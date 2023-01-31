@@ -4,14 +4,14 @@ services:
     image: tobiko-app
     container_name: tobiko-app
     build:
-      context: ./web/client
-      dockerfile: ../../Dockerfile.app
-    command: sh -c "npm run init && npm run dev -- --host 0.0.0.0 --port 8001"
+      dockerfile: Dockerfile.app
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port 8001"
     working_dir: /app
     ports:
       - 8001:8001
     volumes:
       - ./web/client:/app
+      - /app/node_modules
     tty: true
     networks:
       - tobiko-development
@@ -23,7 +23,6 @@ services:
     container_name: tobiko-api
     working_dir: /sqlmesh
     build:
-      context: .
       dockerfile: Dockerfile.api
     command: sh -c "python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
