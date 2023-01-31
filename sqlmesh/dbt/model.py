@@ -12,6 +12,8 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig
+from sqlmesh.dbt.seed import SeedConfig
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
@@ -23,7 +25,7 @@ class Materialization(str, Enum):
     TABLE = "table"
     VIEW = "view"
     INCREMENTAL = "incremental"
-    EPHERMAL = "ephemeral"
+    EPHEMERAL = "ephemeral"
 
 
 class ModelConfig(GeneralConfig):
@@ -122,7 +124,10 @@ class ModelConfig(GeneralConfig):
     }
 
     def to_sqlmesh(
-        self, source_mapping: t.Dict[str, str], model_mapping: t.Dict[str, str]
+        self,
+        sources: t.Dict[str, SourceConfig],
+        models: t.Dict[str, ModelConfig],
+        seeds: t.Dict[str, SeedConfig],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
@@ -141,15 +146,22 @@ class ModelConfig(GeneralConfig):
             if isinstance(jinja, d.Jinja):
                 pass
 
+        source_mapping = {
+            config.config_name: config.source_name for config in sources.values()
+        }
+
         def source_map() -> str:
             deps = ", ".join(
-                f"'{dep}': '{source_mapping[dep]}'" for dep in self._sources
+                f"'{dep}': '{source_mapping[dep]}'" for dep in sorted(self._sources)
             )
             return f"{{{deps}}}"
 
+        model_mapping = {name: config.model_name for name, config in models.items()}
+        model_mapping.update({name: config.seed_name for name, config in seeds.items()})
+
         def ref_map() -> str:
             deps = ", ".join(
-                f"'{dep}': '{model_mapping[dep]}'" for dep in self._depends_on
+                f"'{dep}': '{model_mapping[dep]}'" for dep in sorted(self._depends_on)
             )
             return f"{{{deps}}}"
 
@@ -178,11 +190,29 @@ class ModelConfig(GeneralConfig):
 
         python_env = {k: v for k, v in python_env.items() if k in self._calls}
 
+        depends_on = set()
+
+        # Include dependencies inherited from ephemeral tables
+        def add_dependency(dependency: str) -> None:
+            parent: t.Any = seeds.get(dependency)
+            if parent:
+                depends_on.add(parent.seed_name)
+                return
+
+            parent = models[dependency]
+            depends_on.add(parent.model_name)
+            if parent.materialized == Materialization.EPHEMERAL:
+                for parent_dependency in parent._depends_on:
+                    add_dependency(parent_dependency)
+
+        for dependency in self._depends_on:
+            add_dependency(dependency)
+
         return load_model(
             expressions,
             path=self.path,
             python_env=python_env,
-            depends_on={model_mapping[model] for model in self._depends_on},
+            depends_on=depends_on,
             start=self.start,
         )
 
@@ -218,6 +248,6 @@ class ModelConfig(GeneralConfig):
             if self.unique_key:
                 return f"{ModelKindName.INCREMENTAL_BY_UNIQUE_KEY.value} (UNIQUE_KEY ({','.join(self.unique_key)}))"
             raise ConfigError(f"Incremental needs either unique key or time column.")
-        if materialization == Materialization.EPHERMAL:
+        if materialization == Materialization.EPHEMERAL:
             return ModelKindName.EMBEDDED.value
         raise ConfigError(f"{materialization.value} materialization not supported")

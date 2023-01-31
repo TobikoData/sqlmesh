@@ -45,11 +45,11 @@ class DbtLoader(Loader):
             {seed.seed_name: seed.to_sqlmesh() for seed in config.seeds.values()}
         )
 
-        source_mapping = config.source_mapping
-        model_mapping = config.model_mapping
         models.update(
             {
-                model.model_name: model.to_sqlmesh(source_mapping, model_mapping)
+                model.model_name: model.to_sqlmesh(
+                    config.sources, config.models, config.seeds
+                )
                 for model in config.models.values()
             }
         )

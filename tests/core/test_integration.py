@@ -22,8 +22,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-
-START = "1 week ago"
+from sqlmesh.utils.date import TimeLike
 
 
 @pytest.fixture(autouse=True)
@@ -40,8 +39,9 @@ def plan_choice(plan: Plan, choice: SnapshotChangeCategory) -> None:
 
 @pytest.mark.integration
 @pytest.mark.core_integration
-def test_model_add(sushi_context: Context):
-    initial_add(sushi_context, "dev")
+@pytest.mark.parametrize("context_fixture", ["sushi_context", "sushi_dbt_context"])
+def test_model_add(context_fixture: Context, request):
+    initial_add(request.getfixturevalue(context_fixture), "dev")
 
 
 @pytest.mark.integration
@@ -400,7 +400,7 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = sushi_context.plan("prod", start=START)
+    plan = sushi_context.plan("prod", start=start(sushi_context))
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
     waiter_revenue = plan.context_diff.snapshots["sushi.waiter_revenue_by_day"]
@@ -468,7 +468,7 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("prod", start=START)
+    plan = context.plan("prod", start=start(context))
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
     context.apply(plan)
@@ -485,7 +485,7 @@ def setup_rebase(
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = context.plan("dev", start=START)
+    plan = context.plan("dev", start=start(context))
     plan_choice(plan, local_choice)
     local_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
     context.apply(plan)
@@ -496,7 +496,7 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("dev", start=START)
+    plan = context.plan("dev", start=start(context))
 
     assert plan.categorized == [context.snapshots["sushi.items"]]
     assert plan.indirectly_modified == {
@@ -643,7 +643,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
-    plan = context.plan(environment, start=START)
+    plan = context.plan(environment, start=start(context))
     validate_plan_changes(plan, added=context.models)
 
     context.apply(plan)
@@ -662,7 +662,7 @@ def apply_to_environment(
 
     plan = context.plan(
         environment,
-        start=START,
+        start=start(context),
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
     )
     plan_choice(plan, choice)
@@ -792,3 +792,9 @@ def snapshots_to_versions(snapshots: t.Dict[str, Snapshot]) -> t.Dict[str, str]:
 
 def to_snapshot_info(snapshot: SnapshotInfoLike) -> SnapshotTableInfo:
     return snapshot.table_info
+
+
+def start(context: Context) -> TimeLike:
+    env = context.state_sync.get_environment("prod")
+    assert env
+    return env.start_at

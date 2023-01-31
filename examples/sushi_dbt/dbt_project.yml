@@ -20,16 +20,6 @@ clean-targets:         # directories to be removed by `dbt clean`
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
 models:
-  +start: Jan 1 2020
+  +start: Jan 1 2022
   sushi:
-    cleansed:
-      +schema: cleansed
-      +materialized: table
-    db:
-      +schema: db
-      +materialized: table
-
-seeds:
-  sushi:
-    raw:
-      +schema: raw
+    +materialized: table
