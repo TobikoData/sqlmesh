@@ -3,7 +3,7 @@ nav:
   - "Overview": index.md
   - quick_start.md
   - Guides:
-    - guides/projects.md
+    - guides/create_a_project.md
     - guides/process.md
   - Concepts:
     - concepts/overview.md
