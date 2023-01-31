@@ -4,9 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "init": "npm install --no-optional --no-audit --no-fund --no-package-lock && npm run generate:api",
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "npm run generate:api && vite",
+    "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview",
     "prettier": "prettier --write .",
     "lint:fix": "eslint --fix",
