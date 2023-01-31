@@ -1,8 +1,9 @@
 import os
+from pathlib import Path
 
+from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.profile import Profile
-from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.utils.errors import ConfigError
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "source_data")
@@ -21,10 +22,12 @@ def init_raw_schema(conn: EngineAdapter) -> None:
     _add_csv_file(conn, "raw.order_items", f"{DATA_DIR}/order_items.csv")
 
 
-profile = Profile.load(os.path.dirname(__file__))
+profile = Profile.load(Path(__file__).parent)
 connection_config = profile.to_sqlmesh()[profile.default_target]
 if not isinstance(connection_config, DuckDBConnectionConfig):
-    raise ConfigError(f"Only duckdb supported. The CSV files in {str(DATA_DIR)} must be manually loaded into your target")
+    raise ConfigError(
+        f"Only duckdb supported. The CSV files in {str(DATA_DIR)} must be manually loaded into your target"
+    )
 
 engine_adapter = connection_config.create_engine_adapter()
 init_raw_schema(engine_adapter)
