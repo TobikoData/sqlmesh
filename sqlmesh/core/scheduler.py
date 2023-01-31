@@ -24,8 +24,10 @@ from sqlmesh.utils.date import (
 )
 
 logger = logging.getLogger(__name__)
-SnapshotBatches = t.List[t.Tuple[Snapshot, t.List[t.Tuple[datetime, datetime]]]]
-SchedulingUnit = t.Tuple[SnapshotId, t.Tuple[datetime, datetime]]
+Interval = t.Tuple[datetime, datetime]
+Batch = t.List[Interval]
+SnapshotToBatches = t.Dict[Snapshot, Batch]
+SchedulingUnit = t.Tuple[Snapshot, Interval]
 
 
 class Scheduler:
@@ -66,7 +68,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-    ) -> SnapshotBatches:
+    ) -> SnapshotToBatches:
         """Returns a list of snapshot batches to evaluate.
 
         Args:
@@ -156,13 +158,18 @@ class Scheduler:
         batches = self.batches(start, end, latest, is_dev=is_dev)
         dag = self._dag(batches)
 
-        for snapshot, intervals in batches:
+        visited = set()
+        for snapshot, _ in dag.sorted():
+            if snapshot in visited:
+                continue
+            visited.add(snapshot)
+            intervals = batches[snapshot]
             self.console.start_snapshot_progress(snapshot.name, len(intervals))
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
-            sid, (start, end) = node
-            self.evaluate(self.snapshots[sid], start, end, latest, is_dev=is_dev)
+            snapshot, (start, end) = node
+            self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
 
         with self.snapshot_evaluator.concurrent_context():
             errors, skipped_intervals = concurrent_apply_to_dag(
@@ -195,7 +202,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-    ) -> SnapshotBatches:
+    ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
         For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -207,7 +214,7 @@ class Scheduler:
         with 30 days and 1 job with 10.
 
         Args:
-            model_names: The list of model names.
+            snapshots: The list of snapshots.
             start: Start of the interval.
             end: End of the interval.
             latest: The latest datetime to use for non-incremental queries.
@@ -238,7 +245,7 @@ class Scheduler:
             latest=latest or now(),
         )
 
-    def _dag(self, batches: SnapshotBatches) -> DAG[SchedulingUnit]:
+    def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
         Args:
@@ -250,15 +257,15 @@ class Scheduler:
 
         intervals_per_snapshot_version = {
             (snapshot.name, snapshot.version_get_or_generate()): intervals
-            for snapshot, intervals in batches
+            for snapshot, intervals in batches.items()
         }
 
         dag = DAG[SchedulingUnit]()
-        for snapshot, intervals in batches:
+        for snapshot, intervals in batches.items():
             if not intervals:
                 continue
             upstream_dependencies = [
-                (p_sid, interval)
+                (self.snapshots[p_sid], interval)
                 for p_sid in snapshot.parents
                 if p_sid in self.snapshots
                 for interval in intervals_per_snapshot_version.get(
@@ -269,13 +276,12 @@ class Scheduler:
                     [],
                 )
             ]
-            sid = snapshot.snapshot_id
             for i, interval in enumerate(intervals):
-                dag.add((sid, interval), upstream_dependencies)
+                dag.add((snapshot, interval), upstream_dependencies)
                 if snapshot.is_incremental_by_unique_key_kind:
                     dag.add(
-                        (sid, interval),
-                        [(sid, _interval) for _interval in intervals[:i]],
+                        (snapshot, interval),
+                        [(snapshot, _interval) for _interval in intervals[:i]],
                     )
 
         return dag
@@ -288,7 +294,7 @@ def compute_interval_params(
     start: TimeLike,
     end: TimeLike,
     latest: TimeLike,
-) -> SnapshotBatches:
+) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
     For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
@@ -307,27 +313,22 @@ def compute_interval_params(
         latest: The latest datetime to use for non-incremental queries.
 
     Returns:
-        A list of tuples containing all snapshots needing to be run with their associated interval params.
+        A dict containing all snapshots needing to be run with their associated interval params.
     """
     start_dt = to_datetime(start)
 
-    params = []
+    snapshots_to_batches = {}
 
     for snapshot in Snapshot.merge_snapshots(target, snapshots):
         model_start_dt = max(
             start_date(snapshot, snapshots.values()) or start_dt, start_dt
         )
-        params.append(
-            (
-                snapshot,
-                [
-                    (to_datetime(s), to_datetime(e))
-                    for s, e in snapshot.missing_intervals(model_start_dt, end, latest)
-                ],
-            )
-        )
+        snapshots_to_batches[snapshot] = [
+            (to_datetime(s), to_datetime(e))
+            for s, e in snapshot.missing_intervals(model_start_dt, end, latest)
+        ]
 
-    return _batched_intervals(params)
+    return _batched_intervals(snapshots_to_batches)
 
 
 def start_date(
@@ -375,13 +376,13 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     return min(start_date(snapshot, snapshots) or yesterday() for snapshot in snapshots)
 
 
-def _batched_intervals(params: SnapshotBatches) -> SnapshotBatches:
-    batches = []
+def _batched_intervals(params: SnapshotToBatches) -> SnapshotToBatches:
+    batches = {}
 
-    for snapshot, intervals in params:
+    for snapshot, intervals in params.items():
         batch_size = snapshot.model.batch_size
         batches_for_snapshot = []
-        next_batch: t.List[t.Tuple[datetime, datetime]] = []
+        next_batch: t.List[Interval] = []
         for interval in intervals:
             if (batch_size and len(next_batch) >= batch_size) or (
                 next_batch and interval[0] != next_batch[-1][-1]
@@ -391,7 +392,7 @@ def _batched_intervals(params: SnapshotBatches) -> SnapshotBatches:
             next_batch.append(interval)
         if next_batch:
             batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
-        batches.append((snapshot, batches_for_snapshot))
+        batches[snapshot] = batches_for_snapshot
 
     return batches
 

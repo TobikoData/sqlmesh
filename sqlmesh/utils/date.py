@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 import typing as t
 import warnings
@@ -15,6 +17,9 @@ UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
 MILLIS_THRESHOLD = time.time() + 100 * 365 * 24 * 3600
 DATE_INT_FMT = "%Y%m%d"
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.scheduler import Interval
 
 
 def now() -> datetime:
@@ -206,7 +211,7 @@ def is_date(obj: TimeLike) -> bool:
         return False
 
 
-def make_inclusive(start: TimeLike, end: TimeLike) -> t.Tuple[datetime, datetime]:
+def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
     """Adjust start and end times to to become inclusive datetimes.
 
     SQLMesh treats start and end times as inclusive so that filters can be written as

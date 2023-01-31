@@ -61,9 +61,9 @@ def test_config_parameter():
 def test_config_not_found():
     with pytest.raises(
         ConfigError,
-        match=r"^SQLMesh config could not be found.*",
+        match=r"^nonexistent/directory is not a directory.*",
     ):
-        Context(path="nonexistent/directory")
+        Context(path="nonexistent/directory", config="local_config")
 
 
 def test_custom_macros(sushi_context):
