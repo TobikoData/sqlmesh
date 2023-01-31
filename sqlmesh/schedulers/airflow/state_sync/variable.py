@@ -230,11 +230,11 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             The Variable value associated with the target key.
         """
-        query = self._session.query(Variable.val).filter(Variable.key == target_key)
+        query = self._session.query(Variable).filter(Variable.key == target_key)
         if lock_for_update:
             query = query.with_for_update()
         result = query.one_or_none()
-        return result[0] if result is not None else None
+        return result.val if result is not None else None
 
     def _get_records(
         self,
@@ -256,7 +256,7 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of Variable keys to values associated with them.
         """
-        query = self._session.query(Variable.key, Variable.val)
+        query = self._session.query(Variable)
         if target_keys is not None:
             query = query.filter(Variable.key.in_(target_keys))
         else:
@@ -267,7 +267,7 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
         if lock_for_update:
             query = query.with_for_update()
         variables = query.all()
-        return {v[0]: v[1] for v in variables}
+        return {v.key: v.val for v in variables}
 
     def _set_record(self, key: str, value: t.Any) -> None:
         if not isinstance(value, str):
