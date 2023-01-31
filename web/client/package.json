@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "init": "npm install --no-audit --no-fund --no-package-lock",
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview",

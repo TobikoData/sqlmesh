@@ -5,4 +5,4 @@ WORKDIR /app
 COPY web/client/package*.json .
 
 RUN npm install -g npm@latest && \
-    npm run init
+    npm install --no-audit --no-fund --no-package-lock
