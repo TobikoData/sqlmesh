@@ -6,24 +6,28 @@ from datetime import datetime
 from urllib.parse import urlencode, urljoin
 
 import requests
-from requests.exceptions import HTTPError
 from requests.models import Response
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotNameVersion
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.utils.date import now
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import (
+    ApiClientError,
+    ApiServerError,
+    NotFoundError,
+    SQLMeshError,
+)
+from sqlmesh.utils.pydantic import PydanticModel
 
 DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
-VARIABLES_PATH: str = "api/v1/variables"
 
 
-SQLMESH_BASE_PATH = "sqlmesh/api/v1"
-PLANS_PATH = f"{SQLMESH_BASE_PATH}/plans"
+PLANS_PATH = f"{common.SQLMESH_API_BASE_PATH}/plans"
+ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
+SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
 
 
 class AirflowClient:
@@ -72,54 +76,41 @@ class AirflowClient:
         )
         self._raise_for_status(response)
 
-    def get_snapshot_ids(self) -> t.List[SnapshotId]:
-        response = self._get(f"{VARIABLES_PATH}?limit=10000000")
-        result = []
-        for entry in response["variables"]:
-            key = entry["key"]
-            if key.startswith(common.SNAPSHOT_PAYLOAD_KEY_PREFIX):
-                name_identifier = key.replace(
-                    f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__", ""
-                )
-                sep_index = name_identifier.rindex("__")
-                name = name_identifier[:sep_index]
-                identifier = name_identifier[sep_index + 2 :]
-                result.append(SnapshotId(name=name, identifier=identifier))
-        return result
+    def get_snapshots(
+        self, snapshot_ids: t.Optional[t.List[SnapshotId]]
+    ) -> t.List[Snapshot]:
+        params: t.Dict[str, str] = {}
+        if snapshot_ids is not None:
+            params["ids"] = _list_to_json(snapshot_ids)
 
-    def get_snapshot_identifiers_for_version(
-        self, name: str, version: t.Optional[str] = None
-    ) -> t.List[str]:
-        if not version:
-            raise SQLMeshError("Version cannot be empty")
-        key = common.snapshot_version_key(name, version)
-        try:
-            entry = self._get(f"{VARIABLES_PATH}/{key}")
-            return json.loads(entry["value"])
-        except HTTPError as e:
-            if not _is_not_found(e):
-                raise
-            return []
+        return common.SnapshotsResponse.parse_obj(
+            self._get(SNAPSHOTS_PATH, **params)
+        ).snapshots
+
+    def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
+        return set(
+            common.SnapshotIdsResponse.parse_obj(
+                self._get(SNAPSHOTS_PATH, "return_ids", ids=_list_to_json(snapshot_ids))
+            ).snapshot_ids
+        )
+
+    def get_snapshots_with_same_version(
+        self, snapshot_name_versions: t.List[SnapshotNameVersion]
+    ) -> t.List[Snapshot]:
+        return common.SnapshotsResponse.parse_obj(
+            self._get(SNAPSHOTS_PATH, versions=_list_to_json(snapshot_name_versions))
+        ).snapshots
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
-        key = common.environment_key(environment)
         try:
-            entry = self._get(f"{VARIABLES_PATH}/{key}")
-            return Environment.parse_raw(entry["value"])
-        except HTTPError as e:
-            if not _is_not_found(e):
-                raise
+            response = self._get(f"{ENVIRONMENTS_PATH}/{environment}")
+            return Environment.parse_obj(response)
+        except NotFoundError:
             return None
 
-    def get_snapshot(self, name: str, identifier: str) -> t.Optional[Snapshot]:
-        key = common.snapshot_key_from_name_identifier(name, identifier)
-        try:
-            entry = self._get(f"{VARIABLES_PATH}/{key}")
-            return Snapshot.parse_raw(entry["value"])
-        except HTTPError as e:
-            if not _is_not_found(e):
-                raise
-            return None
+    def get_environments(self) -> t.List[Environment]:
+        response = self._get(ENVIRONMENTS_PATH)
+        return common.EnvironmentsResponse.parse_obj(response).environments
 
     def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
         url = f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}/{dag_run_id}"
@@ -162,9 +153,8 @@ class AirflowClient:
                     if first_dag_run_id is None:
                         raise SQLMeshError(f"Missing a DAG Run for DAG '{dag_id}'")
                     return first_dag_run_id
-                except HTTPError as e:
-                    if not _is_not_found(e) or attempt_num > max_retries:
-                        raise
+                except ApiServerError:
+                    raise
                 except SQLMeshError:
                     if attempt_num > max_retries:
                         raise
@@ -198,7 +188,9 @@ class AirflowClient:
         self._session.close()
 
     def _get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
-        dag_runs_response = self._get(f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}?limit=1")
+        dag_runs_response = self._get(
+            f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}", limit="1"
+        )
         dag_runs = dag_runs_response["dag_runs"]
         if not dag_runs:
             return None
@@ -207,9 +199,13 @@ class AirflowClient:
     def _get_dag(self, dag_id: str) -> t.Dict[str, t.Any]:
         return self._get(f"api/v1/dags/{dag_id}")
 
-    def _get(self, path: str) -> t.Dict[str, t.Any]:
+    def _get(self, path: str, *flags: str, **params: str) -> t.Dict[str, t.Any]:
+        all_params = [*flags, *([urlencode(params)] if params else [])]
+        query_string = "&".join(all_params)
+        if query_string:
+            path = f"{path}?{query_string}"
         response = self._session.get(urljoin(self._airflow_url, path))
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
 
     def _console_loading_start(self) -> t.Optional[uuid.UUID]:
@@ -218,17 +214,16 @@ class AirflowClient:
         return None
 
     def _raise_for_status(self, response: Response) -> None:
-        if 400 <= response.status_code < 500:
-            raise SQLMeshError(response.text)
+        if response.status_code == 404:
+            raise NotFoundError(response.text)
+        elif 400 <= response.status_code < 500:
+            raise ApiClientError(response.text)
         elif 500 <= response.status_code < 600:
-            raise SQLMeshError(f"Unexpected server error ({response.status_code}).")
+            raise ApiServerError(response.text)
 
 
-def _logical_date(timestamp: t.Optional[datetime]) -> str:
-    if not timestamp:
-        timestamp = now()
-    return timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+T = t.TypeVar("T", bound=PydanticModel)
 
 
-def _is_not_found(error: HTTPError) -> bool:
-    return error.response.status_code == 404
+def _list_to_json(models: t.List[T]) -> str:
+    return json.dumps([m.dict() for m in models], separators=(",", ":"))

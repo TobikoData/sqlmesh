@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.scheduler import Interval
@@ -33,6 +34,8 @@ SNAPSHOT_VERSION_KEY_PREFIX = "sqlmesh__snapshot_version_index"
 ENV_KEY_PREFIX = "sqlmesh__environment"
 
 AIRFLOW_LOCAL_URL = "http://localhost:8080/"
+
+SQLMESH_API_BASE_PATH = f"{c.SQLMESH}/api/v1"
 
 
 class PlanApplicationRequest(PydanticModel):
@@ -72,6 +75,18 @@ class PlanDagSpec(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+
+
+class EnvironmentsResponse(PydanticModel):
+    environments: t.List[Environment]
+
+
+class SnapshotsResponse(PydanticModel):
+    snapshots: t.List[Snapshot]
+
+
+class SnapshotIdsResponse(PydanticModel):
+    snapshot_ids: t.List[SnapshotId]
 
 
 def snapshot_key(snapshot: SnapshotIdLike) -> str:

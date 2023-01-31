@@ -8,7 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
@@ -133,11 +133,11 @@ def _validate_snapshot_identifiers_for_version(
     snapshot: Snapshot,
     expected_identifiers: t.List[str],
 ) -> None:
-    assert sorted(
-        airflow_client.get_snapshot_identifiers_for_version(
-            snapshot.name, snapshot.version
-        )
-    ) == sorted(expected_identifiers)
+    snapshots = airflow_client.get_snapshots_with_same_version(
+        [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
+    )
+    identifiers = [s.identifier for s in snapshots]
+    assert sorted(identifiers) == sorted(expected_identifiers)
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)

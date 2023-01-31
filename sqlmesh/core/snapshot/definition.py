@@ -70,6 +70,11 @@ class SnapshotId(PydanticModel, frozen=True):
         return self
 
 
+class SnapshotNameVersion(PydanticModel, frozen=True):
+    name: str
+    version: str
+
+
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
@@ -647,6 +652,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
+SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
 
 
 def table_name(

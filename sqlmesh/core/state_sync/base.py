@@ -11,6 +11,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, now, to_datetime
@@ -36,14 +37,14 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotInfoLike]
+        self, snapshots: t.Iterable[SnapshotNameVersionLike]
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified version.
 
         Args:
-            snapshots: The list of snapshots or table infos.
+            snapshots: The collection of target name / version pairs.
 
         Returns:
             The list of Snapshot objects.
