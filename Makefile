@@ -30,6 +30,9 @@ package:
 publish: package
 	pip install twine && python -m twine upload dist/*
 
+develop:
+	python setup.py develop
+
 airflow-init:
 	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./examples/airflow init
 
@@ -55,9 +58,9 @@ airflow-it-test:
 airflow-it-test-docker:
 	make -C ./examples/airflow it-test-docker
 
-airflow-it-test-with-env: airflow-clean airflow-init airflow-run airflow-it-test airflow-stop
+airflow-it-test-with-env: develop airflow-clean airflow-init airflow-run airflow-it-test airflow-stop
 
-airflow-it-test-docker-with-env: airflow-clean airflow-init airflow-run airflow-it-test-docker airflow-stop
+airflow-it-test-docker-with-env: develop airflow-clean airflow-init airflow-run airflow-it-test-docker airflow-stop
 
 docs-serve:
 	mkdocs serve

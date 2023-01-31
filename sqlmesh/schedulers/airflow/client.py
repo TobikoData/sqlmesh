@@ -219,7 +219,7 @@ class AirflowClient:
 
     def _raise_for_status(self, response: Response) -> None:
         if 400 <= response.status_code < 500:
-            raise SQLMeshError(response.json()["message"])
+            raise SQLMeshError(response.text)
         elif 500 <= response.status_code < 600:
             raise SQLMeshError(f"Unexpected server error ({response.status_code}).")
 
