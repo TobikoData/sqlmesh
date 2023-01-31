@@ -54,7 +54,13 @@ class ContextEnvironmentChanges(PydanticModel):
     modified: t.Dict[str, t.Tuple[t.Type[Snapshot], t.Type[Snapshot]]]
 
 
+class ContextEnvironmentBackfill(PydanticModel):
+    model_name: str
+    interval: t.Tuple[str, str]
+    batches: int
+
+
 class ContextEnvironment(PydanticModel):
     environment: str
     changes: t.Optional[ContextEnvironmentChanges]
-    backfills: t.List[t.Tuple[str, t.Tuple[str, str], int]] = []
+    backfills: t.List[ContextEnvironmentBackfill] = []

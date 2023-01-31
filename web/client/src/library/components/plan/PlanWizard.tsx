@@ -129,13 +129,13 @@ export function PlanWizard({
               {planState === EnumStatePlan.Backfill && <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} className="inline-block mx-auto" />}
             </div>
             <ul>
-              {backfills.map(([modelName, [start, end], batches]: any = []) => (
-                <li key={modelName} className='text-gray-600 font-light w-full mb-3'>
+              {backfills.map(({model_name, interval, batches}: any) => (
+                <li key={model_name} className='text-gray-600 font-light w-full mb-3'>
                   <div className="flex justify-between items-center w-full">
-                    <p className="font-bold">{modelName}</p>
+                    <p className="font-bold">{model_name}</p>
                     <div className="flex justify-end items-center whitespace-nowrap text-sm text-gray-900">
                       <small className="inline-block">0 / {batches} batch{batches > 1 ? 'es' : ''}</small>
-                      <small className="inline-block pl-6 font-bold">{start} - {end}</small>
+                      <small className="inline-block pl-6 font-bold">{interval[0]} - {interval[1]}</small>
                     </div>
 
                   </div>

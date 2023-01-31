@@ -160,13 +160,13 @@ def get_plan(
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
         backfills=[
-            (
-                interval.snapshot_name,
-                *[
+            models.ContextEnvironmentBackfill(
+                model_name=interval.snapshot_name,
+                interval=[
                     [to_ds(t) for t in make_inclusive(start, end)]
                     for start, end in interval.merged_intervals
-                ],
-                tasks[interval.snapshot_name],
+                ][0],
+                batches=tasks[interval.snapshot_name],
             )
             for interval in plan.missing_intervals
         ],
