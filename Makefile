@@ -31,7 +31,7 @@ publish: package
 	pip install twine && python -m twine upload dist/*
 
 develop:
-	python setup.py develop
+	python3 setup.py develop
 
 airflow-init:
 	export AIRFLOW_ENGINE_OPERATOR=spark && make -C ./examples/airflow init
