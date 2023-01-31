@@ -9,7 +9,7 @@ import { Divider } from '../divider/Divider'
 export const EnumStatePlan = {
   Empty: 'empty',
   Run: 'run',
-  Runing: 'runing',
+  Running: 'running',
   Backfill: 'backfill',
   Backfilling: 'backfilling',
   Apply: 'apply',
@@ -57,7 +57,7 @@ export function Plan({ onClose }: { onClose: any }) {
   }
 
   useEffect(() => {
-    if (context?.models.length === 0) {
+    if (context?.models?.length === 0) {
       setPlanState(EnumStatePlan.Empty)
     } else {
       setPlanState(EnumStatePlan.Run)
@@ -113,9 +113,9 @@ export function Plan({ onClose }: { onClose: any }) {
         <Divider className='h-2' />
         <div className='flex justify-between px-4 py-2 '>
           <div className='flex w-full'>
-            {(planState === EnumStatePlan.Run || planState === EnumStatePlan.Runing) && (
-              <Button type="submit" form='contextEnvironment' disabled={planState === EnumStatePlan.Runing}>
-                {planState === EnumStatePlan.Runing ? 'Runing' : 'Run'}
+            {(planState === EnumStatePlan.Run || planState === EnumStatePlan.Running) && (
+              <Button type="submit" form='contextEnvironment' disabled={planState === EnumStatePlan.Running}>
+                {planState === EnumStatePlan.Running ? 'Running' : 'Run'}
               </Button>
             )}
 
@@ -138,7 +138,7 @@ export function Plan({ onClose }: { onClose: any }) {
                 Done
               </Button>
             )}
-            {[EnumStatePlan.Applying, EnumStatePlan.Runing, EnumStatePlan.Backfilling].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Backfilling | typeof EnumStatePlan.Runing | typeof EnumStatePlan.Applying>) && (
+            {[EnumStatePlan.Applying, EnumStatePlan.Running, EnumStatePlan.Backfilling].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Backfilling | typeof EnumStatePlan.Running | typeof EnumStatePlan.Applying>) && (
               <Button
                 onClick={() => cancel()}
                 variant="danger"
