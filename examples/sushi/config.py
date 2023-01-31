@@ -6,7 +6,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 # An in memory DuckDB config.
-config = Config()
+config = Config(connections=DuckDBConnectionConfig())
 
 # A stateful DuckDB config.
 local_config = Config(

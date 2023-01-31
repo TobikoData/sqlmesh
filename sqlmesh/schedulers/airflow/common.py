@@ -1,8 +1,8 @@
 import typing as t
-from datetime import datetime
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -52,7 +52,7 @@ class PlanReceiverDagConf(PydanticModel):
 
 class BackfillIntervalsPerSnapshot(PydanticModel):
     snapshot_id: SnapshotId
-    intervals: t.List[t.Tuple[datetime, datetime]]
+    intervals: t.List[Interval]
 
 
 class PlanApplicationRequest(PydanticModel):

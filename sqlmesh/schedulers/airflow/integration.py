@@ -226,14 +226,14 @@ def _plan_receiver_task(
             latest=end,
         )
     else:
-        backfill_batches = []
+        backfill_batches = {}
 
     backfill_intervals_per_snapshot = [
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=snapshot.snapshot_id,
             intervals=intervals,
         )
-        for (snapshot, intervals) in backfill_batches
+        for snapshot, intervals in backfill_batches.items()
     ]
 
     request = common.PlanApplicationRequest(
