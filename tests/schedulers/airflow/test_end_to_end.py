@@ -11,7 +11,7 @@ from sqlmesh.utils.date import yesterday_ds
 def wait_for_airflow(airflow_client: AirflowClient):
     @retry(wait=wait_fixed(2), stop=stop_after_attempt(15), reraise=True)
     def get_receiver_dag() -> None:
-        airflow_client.get_plan_receiver_dag()
+        airflow_client.get_janitor_dag()
 
     get_receiver_dag()
 

@@ -5,7 +5,6 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import ModelKind, ModelKindName, SqlModel
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, Plan
-from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -87,7 +86,6 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
 
 def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     airflow_client_mock = mocker.Mock()
-    airflow_client_mock.apply_plan.return_value = "test_plan_receiver_dag_run_id"
     airflow_client_mock.wait_for_dag_run_completion.return_value = True
     airflow_client_mock.wait_for_first_dag_run.return_value = (
         "test_plan_application_dag_run_id"
@@ -110,48 +108,15 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         is_dev=True,
     )
 
-    assert airflow_client_mock.wait_for_dag_run_completion.call_count == 2
-
-    airflow_client_mock.wait_for_first_dag_run.assert_called_once()
-
-
-def test_airflow_evaluator_plan_receiver_dag_fails(
-    sushi_plan: Plan, mocker: MockerFixture
-):
-    def wait_for_dag_run_completion(
-        dag_id: str, dag_run_id: str, poll_interval_secs: int
-    ) -> bool:
-        return dag_id != airflow_common.PLAN_RECEIVER_DAG_ID
-
-    airflow_client_mock = mocker.Mock()
-    airflow_client_mock.apply_plan.return_value = "test_plan_receiver_dag_run_id"
-    airflow_client_mock.wait_for_dag_run_completion.side_effect = (
-        wait_for_dag_run_completion
-    )
-
-    evaluator = AirflowPlanEvaluator(airflow_client_mock)
-
-    with pytest.raises(SQLMeshError):
-        evaluator.evaluate(sushi_plan)
-
-    airflow_client_mock.apply_plan.assert_called_once()
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
-    airflow_client_mock.wait_for_first_dag_run.assert_not_called()
+    airflow_client_mock.wait_for_first_dag_run.assert_called_once()
 
 
 def test_airflow_evaluator_plan_application_dag_fails(
     sushi_plan: Plan, mocker: MockerFixture
 ):
-    def wait_for_dag_run_completion(
-        dag_id: str, dag_run_id: str, poll_interval_secs: int
-    ) -> bool:
-        return dag_id == airflow_common.PLAN_RECEIVER_DAG_ID
-
     airflow_client_mock = mocker.Mock()
-    airflow_client_mock.apply_plan.return_value = "test_plan_receiver_dag_run_id"
-    airflow_client_mock.wait_for_dag_run_completion.side_effect = (
-        wait_for_dag_run_completion
-    )
+    airflow_client_mock.wait_for_dag_run_completion.return_value = False
     airflow_client_mock.wait_for_first_dag_run.return_value = (
         "test_plan_application_dag_run_id"
     )
@@ -162,5 +127,5 @@ def test_airflow_evaluator_plan_application_dag_fails(
         evaluator.evaluate(sushi_plan)
 
     airflow_client_mock.apply_plan.assert_called_once()
-    assert airflow_client_mock.wait_for_dag_run_completion.call_count == 2
+    airflow_client_mock.wait_for_dag_run_completion.assert_called_once()
     airflow_client_mock.wait_for_first_dag_run.assert_called_once()

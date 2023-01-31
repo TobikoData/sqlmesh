@@ -173,7 +173,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
 
         plan_request_id = random_id()
 
-        plan_receiver_dag_run_id = self.airflow_client.apply_plan(
+        self.airflow_client.apply_plan(
             plan.new_snapshots,
             environment,
             plan_request_id,
@@ -188,14 +188,6 @@ class AirflowPlanEvaluator(PlanEvaluator):
         )
 
         if self.blocking:
-            plan_receiver_succeeded = self.airflow_client.wait_for_dag_run_completion(
-                airflow_common.PLAN_RECEIVER_DAG_ID,
-                plan_receiver_dag_run_id,
-                self.dag_run_poll_interval_secs,
-            )
-            if not plan_receiver_succeeded:
-                raise SQLMeshError("Failed to launch plan application")
-
             plan_application_dag_id = airflow_common.plan_application_dag_id(
                 environment.name, plan_request_id
             )
