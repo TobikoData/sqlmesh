@@ -15,7 +15,7 @@ export const EnumStatePlan = {
   Apply: 'apply',
   Applying: 'applying',
   Done: 'done',
-  Resetting: 'Resetting',
+  Resetting: 'resetting',
   Canceling: 'canceling',
   Closing: 'closing',
 } as const;
@@ -121,7 +121,7 @@ export function Plan({ onClose }: { onClose: any }) {
 
             {(planState === EnumStatePlan.Backfill || planState === EnumStatePlan.Backfilling) && (
               <Button onClick={backfill} disabled={planState === EnumStatePlan.Backfilling}>
-                {planState === EnumStatePlan.Backfilling ? 'Backfillin' : 'Backfill'}
+                {planState === EnumStatePlan.Backfilling ? 'Backfilling' : 'Backfill'}
               </Button>
             )}
 
