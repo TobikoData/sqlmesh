@@ -2,19 +2,17 @@ import typing as t
 from datetime import timedelta
 
 import pytest
-from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, SnapshotTableInfo
+from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.schedulers.airflow.integration import _plan_receiver_task
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import now, to_datetime, yesterday
+from sqlmesh.utils.date import now, yesterday
 from sqlmesh.utils.errors import SQLMeshError
 
 DAG_CREATION_WAIT_INTERVAL = 3
@@ -28,7 +26,6 @@ def test_system_dags(airflow_client: AirflowClient):
     @retry(wait=wait_fixed(2), stop=stop_after_attempt(15), reraise=True)
     def get_system_dags() -> t.List[t.Dict[str, t.Any]]:
         return [
-            airflow_client.get_plan_receiver_dag(),
             airflow_client.get_janitor_dag(),
         ]
 
@@ -63,12 +60,8 @@ def test_apply_plan_create_backfill_promote(
     assert dag["is_active"]
 
     # Make sure that the same Snapshot can't be added again.
-    plan_receiver_dag_run_id = airflow_client.apply_plan(
-        [snapshot], environment, random_name()
-    )
-    assert not airflow_client.wait_for_dag_run_completion(
-        common.PLAN_RECEIVER_DAG_ID, plan_receiver_dag_run_id, DAG_RUN_POLL_INTERVAL
-    )
+    with pytest.raises(SQLMeshError, match=r"Snapshots.*already exist.*"):
+        airflow_client.apply_plan([snapshot], environment, random_name())
 
     # Verify full environment demotion.
     environment.snapshots = []
@@ -113,201 +106,14 @@ def test_mult_snapshots_same_version(
     )
 
 
-@pytest.mark.airflow
-def test_plan_receiver_task(mocker: MockerFixture, make_snapshot, random_name):
-    model_name = random_name()
-    snapshot = make_snapshot(_create_model(model_name), version="1")
-
-    environment_name = _random_environment_name()
-    new_environment = _create_environment(snapshot, name=environment_name)
-
-    plan_conf = common.PlanReceiverDagConf(
-        request_id="test_request_id",
-        new_snapshots=[snapshot],
-        environment=new_environment,
-        no_gaps=True,
-        skip_backfill=False,
-        restatements={"raw.items"},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
-        is_dev=False,
-    )
-
-    deleted_snapshot = SnapshotTableInfo(
-        name="test_schema.deleted_model",
-        fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
-        version="test_version",
-        physical_schema="test_physical_schema",
-        parents=[],
-        is_materialized=True,
-        is_embedded_kind=False,
-    )
-    old_environment = Environment(
-        name=environment_name,
-        snapshots=[deleted_snapshot],
-        start_at="2022-01-01",
-        end_at="2022-01-01",
-        plan_id="test_plan_id",
-        previous_plan_id=None,
-    )
-
-    dag_run_mock = mocker.Mock()
-    dag_run_mock.conf = plan_conf.dict()
-
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {}
-
-    get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
-    )
-    get_environment_mock.return_value = old_environment
-
-    set_variable_mock = mocker.patch("airflow.models.Variable.set")
-
-    _plan_receiver_task(dag_run_mock, 1)
-
-    get_all_snapshots_mock.assert_called_once()
-    get_environment_mock.assert_called_once()
-
-    set_variable_mock.assert_called_once()
-
-    ((_, value), _) = set_variable_mock.call_args_list[0]
-    assert common.PlanApplicationRequest.parse_raw(
-        value
-    ) == common.PlanApplicationRequest(
-        request_id="test_request_id",
-        environment_name=environment_name,
-        new_snapshots=[snapshot],
-        backfill_intervals_per_snapshot=[
-            common.BackfillIntervalsPerSnapshot(
-                snapshot_id=snapshot.snapshot_id,
-                intervals=[(to_datetime("2022-01-01"), to_datetime("2022-01-02"))],
-            )
-        ],
-        promoted_snapshots=[snapshot.table_info],
-        demoted_snapshots=[deleted_snapshot],
-        start="2022-01-01",
-        end="2022-01-01",
-        unpaused_dt=None,
-        no_gaps=True,
-        plan_id="test_plan_id",
-        previous_plan_id=None,
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
-        is_dev=False,
-    )
-
-
-@pytest.mark.airflow
-def test_plan_receiver_task_duplicated_snapshot(
-    mocker: MockerFixture, make_snapshot, random_name
-):
-    model_name = random_name()
-    snapshot = make_snapshot(_create_model(model_name), version="1")
-
-    environment_name = _random_environment_name()
-    new_environment = _create_environment(snapshot, name=environment_name)
-
-    plan_conf = common.PlanReceiverDagConf(
-        request_id="test_request_id",
-        new_snapshots=[snapshot],
-        environment=new_environment,
-        no_gaps=False,
-        skip_backfill=False,
-        restatements=set(),
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
-        is_dev=False,
-    )
-
-    dag_run_mock = mocker.Mock()
-    dag_run_mock.conf = plan_conf.dict()
-
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
-
-    get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
-    )
-
-    with pytest.raises(SQLMeshError):
-        _plan_receiver_task(dag_run_mock, 1)
-
-    get_all_snapshots_mock.assert_called_once()
-
-
-@pytest.mark.airflow
-@pytest.mark.parametrize("unbounded_end", [None, ""])
-def test_plan_receiver_task_unbounded_end(
-    mocker: MockerFixture, make_snapshot, random_name, unbounded_end: t.Optional[str]
-):
-    snapshot = make_snapshot(_create_model(random_name()), version="1")
-    unrelated_snapshot = make_snapshot(_create_model(random_name()), version="1")
-
-    environment_name = _random_environment_name()
-    new_environment = _create_environment(snapshot, name=environment_name)
-    new_environment.end_at = unbounded_end
-
-    plan_conf = common.PlanReceiverDagConf(
-        request_id="test_request_id",
-        new_snapshots=[],
-        environment=new_environment,
-        no_gaps=True,
-        skip_backfill=False,
-        restatements={"raw.items"},
-        notification_targets=[],
-        backfill_concurrent_tasks=1,
-        ddl_concurrent_tasks=1,
-        users=[],
-        is_dev=False,
-    )
-
-    dag_run_mock = mocker.Mock()
-    dag_run_mock.conf = plan_conf.dict()
-
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_all_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {
-        snapshot.snapshot_id: snapshot,
-        unrelated_snapshot.snapshot_id: unrelated_snapshot,
-    }
-
-    get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
-    )
-
-    set_variable_mock = mocker.patch("airflow.models.Variable.set")
-
-    _plan_receiver_task(dag_run_mock, 1)
-
-    get_all_snapshots_mock.assert_called_once()
-    get_environment_mock.assert_called_once()
-
-    set_variable_mock.assert_called_once()
-
-
 def _apply_plan_and_block(
     airflow_client: AirflowClient,
     new_snapshots: t.List[Snapshot],
     environment: Environment,
 ) -> None:
     plan_request_id = random_id()
-    plan_receiver_dag_run_id = airflow_client.apply_plan(
+    airflow_client.apply_plan(
         new_snapshots, environment, plan_request_id, is_dev=environment.name != c.PROD
-    )
-    assert airflow_client.wait_for_dag_run_completion(
-        common.PLAN_RECEIVER_DAG_ID, plan_receiver_dag_run_id, DAG_RUN_POLL_INTERVAL
     )
 
     plan_application_dag_id = common.plan_application_dag_id(

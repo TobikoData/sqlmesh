@@ -19,6 +19,9 @@ setup(
         "console_scripts": [
             "sqlmesh = sqlmesh.cli.main:cli",
         ],
+        "airflow.plugins": [
+            "sqlmesh_airflow = sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin",
+        ],
     },
     use_scm_version={"write_to": "sqlmesh/_version.py", "fallback_version": "0.0.0"},
     setup_requires=["setuptools_scm"],

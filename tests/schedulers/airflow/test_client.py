@@ -37,7 +37,8 @@ def snapshot() -> Snapshot:
 
 def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     post_dag_run_response_mock = mocker.Mock()
-    post_dag_run_response_mock.json.return_value = {"dag_run_id": "test_dag_run_id"}
+    post_dag_run_response_mock.json.return_value = {"request_id": "test_request_id"}
+    post_dag_run_response_mock.status_code = 200
     post_dag_run_mock = mocker.patch("requests.Session.post")
     post_dag_run_mock.return_value = post_dag_run_response_mock
 
@@ -57,83 +58,75 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
     )
-    result = client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
-
-    assert result == "test_dag_run_id"
+    client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
 
     post_dag_run_mock.assert_called_once()
     args, data = post_dag_run_mock.call_args_list[0]
 
-    assert (
-        args[0] == "http://localhost:8080/api/v1/dags/sqlmesh_plan_receiver_dag/dagRuns"
-    )
+    assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
     assert json.loads(data["data"]) == {
-        "conf": {
-            "new_snapshots": [
-                {
-                    "created_ts": 1665014400000,
-                    "ttl": "in 1 week",
-                    "fingerprint": snapshot.fingerprint.dict(),
-                    "indirect_versions": {},
-                    "intervals": [],
-                    "dev_intervals": [],
-                    "model": {
-                        "audits": [],
-                        "cron": "@daily",
-                        "dialect": "",
-                        "expressions": ["@DEF(key, " "'value')"],
-                        "pre": [],
-                        "post": [],
-                        "kind": {
-                            "name": "incremental_by_time_range",
-                            "time_column": {"column": "ds"},
-                        },
-                        "name": "test_model",
-                        "partitioned_by": ["a"],
-                        "query": "SELECT a, ds FROM tbl",
-                        "storage_format": "parquet",
-                        "source_type": "sql",
-                    },
+        "new_snapshots": [
+            {
+                "created_ts": 1665014400000,
+                "ttl": "in 1 week",
+                "fingerprint": snapshot.fingerprint.dict(),
+                "indirect_versions": {},
+                "intervals": [],
+                "dev_intervals": [],
+                "model": {
                     "audits": [],
+                    "cron": "@daily",
+                    "dialect": "",
+                    "expressions": ["@DEF(key, " "'value')"],
+                    "pre": [],
+                    "post": [],
+                    "kind": {
+                        "name": "incremental_by_time_range",
+                        "time_column": {"column": "ds"},
+                    },
                     "name": "test_model",
-                    "parents": [],
-                    "previous_versions": [],
+                    "partitioned_by": ["a"],
+                    "query": "SELECT a, ds FROM tbl",
+                    "storage_format": "parquet",
+                    "source_type": "sql",
+                },
+                "audits": [],
+                "name": "test_model",
+                "parents": [],
+                "previous_versions": [],
+                "physical_schema": "physical_schema",
+                "updated_ts": 1665014400000,
+                "version": snapshot.version,
+            }
+        ],
+        "environment": {
+            "name": "test_env",
+            "snapshots": [
+                {
+                    "fingerprint": snapshot.fingerprint.dict(),
+                    "name": "test_model",
                     "physical_schema": "physical_schema",
-                    "updated_ts": 1665014400000,
+                    "previous_versions": [],
                     "version": snapshot.version,
+                    "parents": [],
+                    "is_materialized": True,
+                    "is_embedded_kind": False,
                 }
             ],
-            "environment": {
-                "name": "test_env",
-                "snapshots": [
-                    {
-                        "fingerprint": snapshot.fingerprint.dict(),
-                        "name": "test_model",
-                        "physical_schema": "physical_schema",
-                        "previous_versions": [],
-                        "version": snapshot.version,
-                        "parents": [],
-                        "is_materialized": True,
-                        "is_embedded_kind": False,
-                    }
-                ],
-                "start_at": "2022-01-01",
-                "end_at": "2022-01-01",
-                "plan_id": "test_plan_id",
-                "previous_plan_id": "previous_plan_id",
-            },
-            "no_gaps": False,
-            "skip_backfill": False,
-            "notification_targets": [],
-            "request_id": request_id,
-            "restatements": [],
-            "backfill_concurrent_tasks": 1,
-            "ddl_concurrent_tasks": 1,
-            "users": [],
-            "is_dev": False,
+            "start_at": "2022-01-01",
+            "end_at": "2022-01-01",
+            "plan_id": "test_plan_id",
+            "previous_plan_id": "previous_plan_id",
         },
-        "dag_run_id": "2022-08-16T02:40:19.000000Z",
-        "logical_date": "2022-08-16T02:40:19.000000Z",
+        "no_gaps": False,
+        "skip_backfill": False,
+        "notification_targets": [],
+        "request_id": request_id,
+        "restatements": [],
+        "backfill_concurrent_tasks": 1,
+        "ddl_concurrent_tasks": 1,
+        "users": [],
+        "is_dev": False,
     }
 
 

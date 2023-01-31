@@ -7,6 +7,7 @@ from urllib.parse import urlencode, urljoin
 
 import requests
 from requests.exceptions import HTTPError
+from requests.models import Response
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
@@ -16,20 +17,13 @@ from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
 
 DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
-PLAN_RECEIVER_DAG_RUN_PATH = DAG_RUN_PATH_TEMPLATE.format(common.PLAN_RECEIVER_DAG_ID)
 VARIABLES_PATH: str = "api/v1/variables"
 
 
-DagConf = common.PlanReceiverDagConf
-
-
-class DagRunRequest(PydanticModel):
-    dag_run_id: str
-    logical_date: str
-    conf: DagConf
+SQLMESH_BASE_PATH = "sqlmesh/api/v1"
+PLANS_PATH = f"{SQLMESH_BASE_PATH}/plans"
 
 
 class AirflowClient:
@@ -57,24 +51,26 @@ class AirflowClient:
         timestamp: t.Optional[datetime] = None,
         users: t.Optional[t.List[User]] = None,
         is_dev: bool = False,
-    ) -> str:
-        return self._trigger_dag_run(
-            PLAN_RECEIVER_DAG_RUN_PATH,
-            common.PlanReceiverDagConf(
-                new_snapshots=list(new_snapshots),
-                environment=environment,
-                no_gaps=no_gaps,
-                skip_backfill=skip_backfill,
-                request_id=request_id,
-                restatements=set(restatements or []),
-                notification_targets=notification_targets or [],
-                backfill_concurrent_tasks=backfill_concurrent_tasks,
-                ddl_concurrent_tasks=ddl_concurrent_tasks,
-                users=users or [],
-                is_dev=is_dev,
-            ),
-            timestamp=timestamp,
+    ) -> None:
+        request = common.PlanApplicationRequest(
+            new_snapshots=list(new_snapshots),
+            environment=environment,
+            no_gaps=no_gaps,
+            skip_backfill=skip_backfill,
+            request_id=request_id,
+            restatements=set(restatements or []),
+            notification_targets=notification_targets or [],
+            backfill_concurrent_tasks=backfill_concurrent_tasks,
+            ddl_concurrent_tasks=ddl_concurrent_tasks,
+            users=users or [],
+            is_dev=is_dev,
         )
+
+        response = self._session.post(
+            urljoin(self._airflow_url, PLANS_PATH),
+            data=request.json(),
+        )
+        self._raise_for_status(response)
 
     def get_snapshot_ids(self) -> t.List[SnapshotId]:
         response = self._get(f"{VARIABLES_PATH}?limit=10000000")
@@ -128,9 +124,6 @@ class AirflowClient:
     def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
         url = f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}/{dag_run_id}"
         return self._get(url)["state"].lower()
-
-    def get_plan_receiver_dag(self) -> t.Dict[str, t.Any]:
-        return self._get_dag(common.PLAN_RECEIVER_DAG_ID)
 
     def get_janitor_dag(self) -> t.Dict[str, t.Any]:
         return self._get_dag(common.JANITOR_DAG_ID)
@@ -204,28 +197,6 @@ class AirflowClient:
     def close(self) -> None:
         self._session.close()
 
-    def _trigger_dag_run(
-        self,
-        dag_run_path: str,
-        dag_conf: DagConf,
-        dag_run_id: t.Optional[str] = None,
-        timestamp: t.Optional[datetime] = None,
-    ) -> str:
-        logical_date = _logical_date(timestamp)
-        request = DagRunRequest(
-            dag_run_id=dag_run_id or logical_date,
-            logical_date=logical_date,
-            conf=dag_conf,
-        )
-
-        response = self._session.post(
-            urljoin(self._airflow_url, dag_run_path),
-            data=request.json(),
-        )
-        response.raise_for_status()
-
-        return response.json()["dag_run_id"]
-
     def _get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
         dag_runs_response = self._get(f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}?limit=1")
         dag_runs = dag_runs_response["dag_runs"]
@@ -245,6 +216,12 @@ class AirflowClient:
         if self._console:
             return self._console.loading_start()
         return None
+
+    def _raise_for_status(self, response: Response) -> None:
+        if 400 <= response.status_code < 500:
+            raise SQLMeshError(response.json()["message"])
+        elif 500 <= response.status_code < 600:
+            raise SQLMeshError(f"Unexpected server error ({response.status_code}).")
 
 
 def _logical_date(timestamp: t.Optional[datetime]) -> str:

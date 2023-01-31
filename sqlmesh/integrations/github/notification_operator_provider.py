@@ -26,22 +26,22 @@ class GithubNotificationOperatorProvider(
         self,
         target: GithubNotificationTarget,
         plan_status: PlanStatus,
-        plan_application_request: common.PlanApplicationRequest,
+        plan_dag_spec: common.PlanDagSpec,
         **dag_kwargs: t.Any,
     ) -> GithubOperator:
         from airflow.providers.github.operators.github import GithubOperator
 
         if plan_status.is_started:
             notification_status = NotificationStatus.PROGRESS
-            msg = f"Updating Environment `{plan_application_request.environment_name}`"
+            msg = f"Updating Environment `{plan_dag_spec.environment_name}`"
         elif plan_status.is_finished:
             notification_status = NotificationStatus.SUCCESS
-            msg = f"Updated Environment `{plan_application_request.environment_name}`"
+            msg = f"Updated Environment `{plan_dag_spec.environment_name}`"
         else:
             notification_status = NotificationStatus.FAILURE
-            msg = f"Failed to Update Environment `{plan_application_request.environment_name}`"
+            msg = f"Failed to Update Environment `{plan_dag_spec.environment_name}`"
 
-        bot_users = [user for user in plan_application_request.users if user.is_bot]
+        bot_users = [user for user in plan_dag_spec.users if user.is_bot]
         bot_user_to_append_to = bot_users[0] if bot_users else None
 
         return GithubOperator(

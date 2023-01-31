@@ -75,8 +75,8 @@ class SnapshotDagGenerator:
             if s.unpaused_ts and not s.is_embedded_kind and not s.is_seed_kind
         ]
 
-    def generate_apply(self, request: common.PlanApplicationRequest) -> DAG:
-        return self._create_plan_application_dag(request)
+    def generate_apply(self, spec: common.PlanDagSpec) -> DAG:
+        return self._create_plan_application_dag(spec)
 
     def _create_incremental_dag_for_snapshot(self, snapshot: Snapshot) -> DAG:
         dag_id = common.dag_id_for_snapshot_info(snapshot.table_info)
@@ -122,20 +122,18 @@ class SnapshotDagGenerator:
 
             return dag
 
-    def _create_plan_application_dag(
-        self, request: common.PlanApplicationRequest
-    ) -> DAG:
+    def _create_plan_application_dag(self, plan_dag_spec: common.PlanDagSpec) -> DAG:
         dag_id = common.plan_application_dag_id(
-            request.environment_name, request.request_id
+            plan_dag_spec.environment_name, plan_dag_spec.request_id
         )
         logger.info(
             "Generating the plan application DAG '%s' for environment '%s'",
             dag_id,
-            request.environment_name,
+            plan_dag_spec.environment_name,
         )
 
         all_snapshots = {
-            **{s.snapshot_id: s for s in request.new_snapshots},
+            **{s.snapshot_id: s for s in plan_dag_spec.new_snapshots},
             **self._snapshots,
         }
 
@@ -143,44 +141,46 @@ class SnapshotDagGenerator:
             dag_id=dag_id,
             schedule_interval="@once",
             start_date=now(),
-            max_active_tasks=request.backfill_concurrent_tasks,
+            max_active_tasks=plan_dag_spec.backfill_concurrent_tasks,
             catchup=False,
             is_paused_upon_creation=False,
             default_args=DAG_DEFAULT_ARGS,
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.PLAN_AIRFLOW_TAG,
-                request.environment_name,
+                plan_dag_spec.environment_name,
             ],
         ) as dag:
             start_task = EmptyOperator(task_id="plan_application_start")
             end_task = EmptyOperator(task_id="plan_application_end")
 
             (create_start_task, create_end_task) = self._create_creation_tasks(
-                request.new_snapshots, request.ddl_concurrent_tasks
+                plan_dag_spec.new_snapshots, plan_dag_spec.ddl_concurrent_tasks
             )
 
             (backfill_start_task, backfill_end_task) = self._create_backfill_tasks(
-                request.backfill_intervals_per_snapshot, all_snapshots, request.is_dev
+                plan_dag_spec.backfill_intervals_per_snapshot,
+                all_snapshots,
+                plan_dag_spec.is_dev,
             )
 
             (
                 promote_start_task,
                 promote_end_task,
-            ) = self._create_promotion_demotion_tasks(request)
+            ) = self._create_promotion_demotion_tasks(plan_dag_spec)
 
             start_task >> create_start_task
             create_end_task >> backfill_start_task
             backfill_end_task >> promote_start_task
 
             self._add_notification_target_tasks(
-                request, start_task, end_task, promote_end_task
+                plan_dag_spec, start_task, end_task, promote_end_task
             )
             return dag
 
     def _add_notification_target_tasks(
         self,
-        request: common.PlanApplicationRequest,
+        request: common.PlanDagSpec,
         start_task: BaseOperator,
         end_task: BaseOperator,
         promote_end_task: BaseOperator,
@@ -241,7 +241,7 @@ class SnapshotDagGenerator:
         return (start_task, end_task)
 
     def _create_promotion_demotion_tasks(
-        self, request: common.PlanApplicationRequest
+        self, request: common.PlanDagSpec
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_promotion_start")
         end_task = EmptyOperator(task_id="snapshot_promotion_end")

@@ -55,14 +55,6 @@ RUN pip install apache-airflow-providers-apache-spark \
 USER root
 ADD setup.py /opt/sqlmesh/setup.py
 RUN mkdir /opt/sqlmesh/sqlmesh
-WORKDIR /opt/sqlmesh
 RUN chown -R airflow /opt/sqlmesh
 USER airflow
-RUN pip install .
-
-# Install Package
-USER root
-ADD . .
-RUN chown -R airflow /opt/sqlmesh
-USER airflow
-RUN pip install -e .
+RUN cd /opt/sqlmesh && pip install -e .
