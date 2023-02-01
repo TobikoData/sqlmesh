@@ -9,3 +9,12 @@ export async function saveFileByPath({ path, body = '' }: any) {
     data: body
   })
 }
+
+export async function applyPlan({ body, params }: any) {
+  return await fetchAPI({
+    url: `/api/plan`,
+    method: 'post',
+    data: body,
+    params
+  })
+}
