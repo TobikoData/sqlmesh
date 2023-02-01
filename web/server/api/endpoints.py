@@ -16,6 +16,7 @@ from starlette.status import (
 
 from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
+from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
@@ -62,7 +63,8 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(models.File(name=entry.name, path=relative_path))
+                    files.append(models.File(
+                        name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(
             files, key=lambda x: x.name
         )
@@ -165,17 +167,17 @@ async def delete_directory(
 )
 def get_api_context(
     context: Context = Depends(get_loaded_context),
+    settings: Settings = Depends(get_settings),
 ) -> models.Context:
     """Get the context"""
 
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
-        dialect=context.dialect,
-        path=str(context.path),
         scheduler=context.config.scheduler.type_,
         time_column_format=context.config.time_column_format,
         models=list(context.models.keys()),
+        config=settings.config,
     )
 
 
@@ -185,18 +187,23 @@ def get_api_context(
     response_model_exclude_unset=True,
 )
 def get_plan(
-    environment: str = "",
+    environment: str,
     context: Context = Depends(get_loaded_context),
 ) -> models.ContextEnvironment:
     """Get the context for a environment."""
 
     plan = context.plan(environment=environment, no_prompts=True)
-    batches = context.scheduler().batches()
-    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
-        backfills=[
+    )
+
+    if plan.context_diff.has_differences:
+        batches = context.scheduler().batches()
+        tasks = {
+            snapshot.name: len(intervals) for snapshot, intervals in batches.items()
+        }
+
+        payload.backfills = [
             models.ContextEnvironmentBackfill(
                 model_name=interval.snapshot_name,
                 interval=[
@@ -206,14 +213,12 @@ def get_plan(
                 batches=tasks[interval.snapshot_name],
             )
             for interval in plan.missing_intervals
-        ],
-    )
+        ]
 
-    if plan.context_diff.has_differences:
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=plan.context_diff.modified_snapshots,
+            modified=get_modified_snapshots(plan.context_diff),
         )
 
     return payload
