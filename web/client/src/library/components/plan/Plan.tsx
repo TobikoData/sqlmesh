@@ -5,6 +5,7 @@ import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
+import { applyPlan } from '../../../api/endpoints'
 
 export const EnumStatePlan = {
   Empty: 'empty',
@@ -25,19 +26,20 @@ export type StatePlan = typeof EnumStatePlan[keyof typeof EnumStatePlan]
 export function Plan({ onClose }: { onClose: any }) {
   const client = useQueryClient()
 
+  const [environment, setEnvironment] = useState<string>()
   const [planState, setPlanState] = useState<StatePlan>(EnumStatePlan.Empty)
   const [withModified, setWithModified] = useState(false)
   const [backfillStatus, setBackfillStatus] = useState<boolean>()
   const { data: context, refetch } = useApiContext()
 
-  function backfill() {
+  async function backfill() {
     setPlanState(EnumStatePlan.Backfilling)
 
-    setTimeout(() => {
-      setBackfillStatus(false)
-    }, 200)
+    setBackfillStatus(false)
 
-    setTimeout(() => {
+    const done = await applyPlan({ params: { environment } })
+
+    if (done) {
       setBackfillStatus(true)
 
       if (withModified) {
@@ -45,7 +47,7 @@ export function Plan({ onClose }: { onClose: any }) {
       } else {
         setPlanState(EnumStatePlan.Done)
       }
-    }, 2000)
+    }
   }
 
   function apply() {
@@ -107,6 +109,8 @@ export function Plan({ onClose }: { onClose: any }) {
               setPlanState={setPlanState}
               setWithModified={setWithModified}
               planState={planState}
+              setEnvironment={setEnvironment}
+              environment={environment}
             />
           </div>
         )}
@@ -121,7 +125,7 @@ export function Plan({ onClose }: { onClose: any }) {
 
             {(planState === EnumStatePlan.Backfill || planState === EnumStatePlan.Backfilling) && (
               <Button onClick={backfill} disabled={planState === EnumStatePlan.Backfilling}>
-                {planState === EnumStatePlan.Backfilling ? 'Backfilling' : 'Backfill'}
+                {planState === EnumStatePlan.Backfilling ? 'Backfilling' : 'Apply and Backfill'}
               </Button>
             )}
 
@@ -150,7 +154,7 @@ export function Plan({ onClose }: { onClose: any }) {
             )}
           </div>
           <div className='flex items-center'>
-            {/* {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
+            {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
               <Button
                 onClick={() => reset()}
                 variant="alternative"
@@ -159,7 +163,7 @@ export function Plan({ onClose }: { onClose: any }) {
               >
                 {planState === EnumStatePlan.Resetting ? 'Resetting' : 'Reset'}
               </Button>
-            )} */}
+            )}
             <Button
               onClick={() => close()}
               variant="alternative"
