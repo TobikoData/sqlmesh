@@ -7,7 +7,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotId
+from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils.date import to_datetime
@@ -36,11 +36,11 @@ def snapshot() -> Snapshot:
 
 
 def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
-    post_dag_run_response_mock = mocker.Mock()
-    post_dag_run_response_mock.json.return_value = {"request_id": "test_request_id"}
-    post_dag_run_response_mock.status_code = 200
-    post_dag_run_mock = mocker.patch("requests.Session.post")
-    post_dag_run_mock.return_value = post_dag_run_response_mock
+    apply_plan_response_mock = mocker.Mock()
+    apply_plan_response_mock.json.return_value = {"request_id": "test_request_id"}
+    apply_plan_response_mock.status_code = 200
+    apply_plan_mock = mocker.patch("requests.Session.post")
+    apply_plan_mock.return_value = apply_plan_response_mock
 
     timestamp = to_datetime("2022-08-16T02:40:19.000000Z")
 
@@ -60,8 +60,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     )
     client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
 
-    post_dag_run_mock.assert_called_once()
-    args, data = post_dag_run_mock.call_args_list[0]
+    apply_plan_mock.assert_called_once()
+    args, data = apply_plan_mock.call_args_list[0]
 
     assert args[0] == "http://localhost:8080/sqlmesh/api/v1/plans"
     assert json.loads(data["data"]) == {
@@ -130,8 +130,72 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     }
 
 
+def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
+    snapshots = common.SnapshotsResponse(snapshots=[snapshot])
+
+    get_snapshots_response_mock = mocker.Mock()
+    get_snapshots_response_mock.status_code = 200
+    get_snapshots_response_mock.json.return_value = snapshots.dict()
+    get_snapshots_mock = mocker.patch("requests.Session.get")
+    get_snapshots_mock.return_value = get_snapshots_response_mock
+
+    client = AirflowClient(
+        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
+    )
+    result = client.get_snapshots([snapshot.snapshot_id])
+
+    assert result == [snapshot]
+
+    get_snapshots_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/snapshots?ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
+    )
+
+
+def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
+    snapshot_ids = common.SnapshotIdsResponse(snapshot_ids=[snapshot.snapshot_id])
+
+    snapshots_exist_response_mock = mocker.Mock()
+    snapshots_exist_response_mock.status_code = 200
+    snapshots_exist_response_mock.json.return_value = snapshot_ids.dict()
+    snapshots_exist_mock = mocker.patch("requests.Session.get")
+    snapshots_exist_mock.return_value = snapshots_exist_response_mock
+
+    client = AirflowClient(
+        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
+    )
+    result = client.snapshots_exist([snapshot.snapshot_id])
+
+    assert result == {snapshot.snapshot_id}
+
+    snapshots_exist_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/snapshots?return_ids&ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
+    )
+
+
+def test_get_snapshots_with_same_version(mocker: MockerFixture, snapshot: Snapshot):
+    snapshots = common.SnapshotsResponse(snapshots=[snapshot])
+
+    get_snapshots_response_mock = mocker.Mock()
+    get_snapshots_response_mock.status_code = 200
+    get_snapshots_response_mock.json.return_value = snapshots.dict()
+    get_snapshots_mock = mocker.patch("requests.Session.get")
+    get_snapshots_mock.return_value = get_snapshots_response_mock
+
+    client = AirflowClient(
+        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
+    )
+    result = client.get_snapshots_with_same_version(
+        [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
+    )
+
+    assert result == [snapshot]
+
+    get_snapshots_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/snapshots?versions=%5B%7B%22name%22%3A%22test_model%22%2C%22version%22%3A%222710441016%22%7D%5D"
+    )
+
+
 def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
-    get_snapshot_response_mock = mocker.Mock()
     environment = Environment(
         name="test",
         snapshots=[snapshot.table_info],
@@ -140,9 +204,12 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
         plan_id="test_plan_id",
         previous_plan_id=None,
     )
-    get_snapshot_response_mock.json.return_value = {"value": environment.json()}
-    get_snapshot_mock = mocker.patch("requests.Session.get")
-    get_snapshot_mock.return_value = get_snapshot_response_mock
+
+    get_environment_response_mock = mocker.Mock()
+    get_environment_response_mock.status_code = 200
+    get_environment_response_mock.json.return_value = environment.dict()
+    get_environment_mock = mocker.patch("requests.Session.get")
+    get_environment_mock.return_value = get_environment_response_mock
 
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
@@ -151,88 +218,43 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
 
     assert result == environment
 
-    get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/variables/sqlmesh__environment__dev"
+    get_environment_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments/dev"
     )
 
 
-def test_get_snapshot(mocker: MockerFixture, snapshot: Snapshot):
-    get_snapshot_response_mock = mocker.Mock()
-    get_snapshot_response_mock.json.return_value = {"value": snapshot.json()}
-    get_snapshot_mock = mocker.patch("requests.Session.get")
-    get_snapshot_mock.return_value = get_snapshot_response_mock
+def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
+    environment = Environment(
+        name="test",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id=None,
+    )
+    environments = common.EnvironmentsResponse(environments=[environment])
+
+    get_environments_response_mock = mocker.Mock()
+    get_environments_response_mock.status_code = 200
+    get_environments_response_mock.json.return_value = environments.dict()
+    get_environments_mock = mocker.patch("requests.Session.get")
+    get_environments_mock.return_value = get_environments_response_mock
 
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
     )
-    result = client.get_snapshot(snapshot.name, snapshot.identifier)
+    result = client.get_environments()
 
-    assert result == snapshot
+    assert result == [environment]
 
-    get_snapshot_mock.assert_called_once_with(
-        f"http://localhost:8080/api/v1/variables/sqlmesh__snapshot_payload__test_model__{snapshot.identifier}"
-    )
-
-
-def test_get_snapshot_ids(mocker: MockerFixture):
-    get_snapshot_response_mock = mocker.Mock()
-    get_snapshot_response_mock.json.return_value = {
-        "variables": [
-            {
-                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name__test_identifier"
-            },
-            {
-                "key": f"{common.SNAPSHOT_PAYLOAD_KEY_PREFIX}__test_name_2__test_identifier_2"
-            },
-        ]
-    }
-    get_snapshot_mock = mocker.patch("requests.Session.get")
-    get_snapshot_mock.return_value = get_snapshot_response_mock
-
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
-    result = client.get_snapshot_ids()
-
-    assert result == [
-        SnapshotId(name="test_name", identifier="test_identifier"),
-        SnapshotId(name="test_name_2", identifier="test_identifier_2"),
-    ]
-
-    get_snapshot_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/variables?limit=10000000"
-    )
-
-
-def test_get_snapshot_fingerprints_for_version(mocker: MockerFixture):
-    expected_identifiers = [
-        "test_identifier_1",
-        "test_identifier_2",
-    ]
-
-    get_snapshots_for_version_response_mock = mocker.Mock()
-    get_snapshots_for_version_response_mock.json.return_value = {
-        "value": json.dumps(expected_identifiers)
-    }
-    get_snapshots_for_version_mock = mocker.patch("requests.Session.get")
-    get_snapshots_for_version_mock.return_value = (
-        get_snapshots_for_version_response_mock
-    )
-
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
-    result = client.get_snapshot_identifiers_for_version("test_name", "test_version")
-
-    assert result == expected_identifiers
-
-    get_snapshots_for_version_mock.assert_called_once_with(
-        "http://localhost:8080/api/v1/variables/sqlmesh__snapshot_version_index__test_name__test_version"
+    get_environments_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments"
     )
 
 
 def test_get_dag_run_state(mocker: MockerFixture):
     get_dag_run_state_mock = mocker.Mock()
+    get_dag_run_state_mock.status_code = 200
     get_dag_run_state_mock.json.return_value = {"state": "failed"}
     get_snapshot_mock = mocker.patch("requests.Session.get")
     get_snapshot_mock.return_value = get_dag_run_state_mock

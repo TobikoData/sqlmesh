@@ -11,6 +11,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync.base import StateSync
@@ -27,7 +28,7 @@ class CommonStateSyncMixin(StateSync):
         return self._get_snapshots(snapshot_ids)
 
     def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotInfoLike]
+        self, snapshots: t.Iterable[SnapshotNameVersionLike]
     ) -> t.List[Snapshot]:
         return self._get_snapshots_with_same_version(snapshots)
 
@@ -286,7 +287,7 @@ class CommonStateSyncMixin(StateSync):
     @abc.abstractmethod
     def _get_snapshots_with_same_version(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
+        snapshots: t.Iterable[SnapshotNameVersionLike],
         lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
@@ -294,7 +295,7 @@ class CommonStateSyncMixin(StateSync):
         The output includes the snapshots with the specified version.
 
         Args:
-            snapshots: The list of snapshots or table infos.
+            snapshots: The collection of target name / version pairs.
             lock_for_update: Lock the snapshot rows for future update
 
         Returns:

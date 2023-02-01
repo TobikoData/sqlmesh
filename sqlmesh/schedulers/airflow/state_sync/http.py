@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from concurrent.futures import ThreadPoolExecutor
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotInfoLike,
+    SnapshotNameVersion,
+    SnapshotNameVersionLike,
+)
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.file_cache import FileCache
 
 logger = logging.getLogger(__name__)
@@ -65,9 +70,10 @@ class HttpStateReader(StateReader):
         Returns:
             A list of all environments.
         """
-        raise NotImplementedError(
-            "Fetching all environments is not supported by the Airflow HTTP State Sync"
-        )
+        envs = self._client.get_environments()
+        for env in envs:
+            self._update_cache(env.snapshots)
+        return envs
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
@@ -79,25 +85,11 @@ class HttpStateReader(StateReader):
         call to the rest api. Multiple threads can be used, but it could possibly have detrimental effects
         on the production server.
         """
-        snapshot_ids = snapshot_ids or self._client.get_snapshot_ids()
-
-        with ThreadPoolExecutor(
-            max_workers=self.max_concurrent_requests,
-            thread_name_prefix="airflow_get_snapshots",
-        ) as executor:
-            snapshots = executor.map(
-                lambda snapshot_id: self._client.get_snapshot(
-                    snapshot_id.name,
-                    snapshot_id.identifier,
-                ),
-                snapshot_ids,
-            )
-
-        snapshots_dict = {
-            snapshot.snapshot_id: snapshot for snapshot in snapshots if snapshot
-        }
-        self._update_cache(snapshots_dict.values())
-        return snapshots_dict
+        snapshots = self._client.get_snapshots(
+            [s.snapshot_id for s in snapshot_ids] if snapshot_ids is not None else None
+        )
+        self._update_cache(snapshots)
+        return {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
     def snapshots_exist(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
@@ -110,24 +102,18 @@ class HttpStateReader(StateReader):
         Returns:
             A set of existing snapshot IDs.
         """
-        target_ids = {
-            SnapshotId(name=s.name, identifier=s.identifier) for s in snapshot_ids
-        }
-        return target_ids.intersection(set(self._client.get_snapshot_ids()))
+        if not snapshot_ids:
+            return set()
+        return self._client.snapshots_exist([s.snapshot_id for s in snapshot_ids])
 
     def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotInfoLike]
+        self, snapshots: t.Iterable[SnapshotNameVersionLike]
     ) -> t.List[Snapshot]:
         if not snapshots:
             return []
-
-        target_snapshot_ids = set()
-        for s in snapshots:
-            for i in self._client.get_snapshot_identifiers_for_version(
-                s.name, version=s.version
-            ):
-                target_snapshot_ids.add(SnapshotId(name=s.name, identifier=i))
-        return list(self.get_snapshots(target_snapshot_ids).values())
+        return self._client.get_snapshots_with_same_version(
+            [SnapshotNameVersion(name=s.name, version=s.version) for s in snapshots]
+        )
 
     def get_snapshots_by_models(self, *names: str) -> t.List[Snapshot]:
         """
@@ -139,17 +125,6 @@ class HttpStateReader(StateReader):
         raise NotImplementedError(
             "Getting snapshots by model names is not supported by the Airflow HTTP State Sync"
         )
-
-    def _wait_for_dag_run_completion(
-        self, dag_id: str, dag_run_id: str, op_name: str
-    ) -> None:
-        succeeded = self._client.wait_for_dag_run_completion(
-            dag_id, dag_run_id, self.dag_run_poll_interval_secs
-        )
-        if not succeeded:
-            raise SQLMeshError(
-                f"{op_name.capitalize()} failed. Check details at {self._client.dag_run_tracking_url(dag_id, dag_run_id)}"
-            )
 
     def _update_cache(self, snapshots: t.Iterable[SnapshotInfoLike]) -> None:
         with self.table_info_cache:
