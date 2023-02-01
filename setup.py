@@ -67,9 +67,10 @@ setup(
             "types-requests==2.28.8",
         ],
         "web": [
-            "fastapi==0.85.0",
+            "fastapi==0.89.1",
             "hyperscript==0.0.1",
-            "uvicorn==0.18.3",
+            "sse-starlette==1.2.1",
+            "uvicorn==0.20.0",
         ],
         "snowflake": [
             "snowflake-connector-python[pandas]",
