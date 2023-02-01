@@ -5,7 +5,6 @@ import typing as t
 
 from pydantic import validator
 
-from sqlmesh.core.snapshot.definition import Snapshot
 from sqlmesh.utils.pydantic import PydanticModel
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
@@ -41,17 +40,22 @@ class Directory(PydanticModel):
 class Context(PydanticModel):
     concurrent_tasks: int
     engine_adapter: str
-    dialect: str
-    path: str
     time_column_format: str
     scheduler: str
     models: t.List[str] = []
+    config: str
+
+
+class ModelsDiff(PydanticModel):
+    direct: t.Dict[str, str]
+    indirect: t.Set[str]
+    metadata: t.Set[str]
 
 
 class ContextEnvironmentChanges(PydanticModel):
     added: t.Set[str]
     removed: t.Set[str]
-    modified: t.Dict[str, t.Tuple[t.Type[Snapshot], t.Type[Snapshot]]]
+    modified: ModelsDiff
 
 
 class ContextEnvironmentBackfill(PydanticModel):
