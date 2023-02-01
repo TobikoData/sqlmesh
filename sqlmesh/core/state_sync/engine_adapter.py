@@ -24,7 +24,13 @@ from sqlglot import exp
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotInfoLike,
+    SnapshotNameVersionLike,
+)
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
 from sqlmesh.utils.errors import SQLMeshError
@@ -275,14 +281,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return snapshots
 
     def _get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotInfoLike], lock_for_update: bool = False
+        self,
+        snapshots: t.Iterable[SnapshotNameVersionLike],
+        lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
 
         The output includes the snapshots with the specified identifiers.
 
         Args:
-            snapshots: The list of snapshots or table infos.
+            snapshots: The collection of target name / version pairs.
             lock_for_update: Lock the snapshot rows for future update
 
         Returns:

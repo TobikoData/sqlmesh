@@ -8,7 +8,12 @@ from airflow.models import Variable
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotNameVersionLike,
+)
 from sqlmesh.core.state_sync import CommonStateSyncMixin, StateSync
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.utils import unique
@@ -86,21 +91,16 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
 
     def _get_snapshots_with_same_version(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
+        snapshots: t.Iterable[SnapshotNameVersionLike],
         lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
-        snapshots_dict = self._get_snapshots(
-            snapshot_ids=(snapshot.snapshot_id for snapshot in snapshots),
-            lock_for_update=lock_for_update,
-        )
         version_index = self._get_snapshot_versions(
             target_keys={
-                common.snapshot_version_key(s.name, s.version)
-                for s in snapshots_dict.values()
+                common.snapshot_version_key(s.name, s.version) for s in snapshots
             }
         )
 
-        all_snapshot_ids = reduce(
+        snapshot_ids = reduce(
             or_,
             [
                 {
@@ -113,13 +113,13 @@ class VariableStateSync(CommonStateSyncMixin, StateSync):
                 for key, identifiers in version_index.items()
             ],
         )
-        missing_keys = all_snapshot_ids - snapshots_dict.keys()
-        missing_snapshots = self._get_snapshots(
-            snapshot_ids=missing_keys,
+
+        all_snapshots = self._get_snapshots(
+            snapshot_ids=snapshot_ids,
             lock_for_update=lock_for_update,
         )
 
-        return list({**snapshots_dict, **missing_snapshots}.values())
+        return list(all_snapshots.values())
 
     def _get_environment(
         self, environment: str, lock_for_update: bool = False

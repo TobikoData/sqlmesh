@@ -57,6 +57,22 @@ class NotificationTargetError(SQLMeshError):
     pass
 
 
+class ApiError(SQLMeshError):
+    pass
+
+
+class ApiClientError(ApiError):
+    pass
+
+
+class ApiServerError(ApiError):
+    pass
+
+
+class NotFoundError(ApiClientError):
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,
