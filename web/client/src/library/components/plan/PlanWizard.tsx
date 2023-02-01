@@ -28,18 +28,22 @@ export function PlanWizard({
   setPlanState,
   setWithModified,
   planState,
+  setEnvironment,
+  environment
 }: {
   id: string,
   setPlanState: any,
   setWithModified: any,
   backfillStatus: any,
-  planState: StatePlan
+  planState: StatePlan,
+  setEnvironment: any,
+  environment?: string
 }) {
   const elFormOverrideDates = useRef(null)
   const elFormBackfillDates = useRef(null)
 
   const [selected, setSelected] = useState(strategies[0])
-  const [environment, setEnvironment] = useState<string>()
+
 
   const { data: context } = useApiContextByEnvironment(environment)
   const backfills = context?.backfills ?? []
@@ -110,18 +114,77 @@ export function PlanWizard({
         )}
       </PlanWizardStep>
       <PlanWizardStep step={2} title='Review Models' disabled={context?.environment == null}>
-        {context?.changes?.added && (
-          <div className='ml-4 mb-8'>
-            <h4 className='text-success-500 mb-2'>Added Models</h4>
-            <ul className='ml-2'>
-              {context?.changes.added.map(modelName => (
-                <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
-                  <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div className="flex">
+          {Boolean(context?.changes?.added?.length) && (
+            <div className='ml-4 mb-8'>
+              <h4 className='text-success-500 mb-2'>Added Models</h4>
+              <ul className='ml-2'>
+                {context?.changes?.added.map(modelName => (
+                  <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
+                    <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {Boolean(context?.changes?.removed?.length) && (
+            <div className='ml-4 mb-8'>
+              <h4 className='text-danger-500 mb-2'>Removed Models</h4>
+              <ul className='ml-2'>
+                {context?.changes?.added.map(modelName => (
+                  <li key={modelName} className='text-danger-500 font-sm h-[1.5rem]'>
+                    <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">{modelName}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {isModified(context?.changes?.modified) && (
+            <div className='ml-4 mb-8'>
+              <h4 className='text-gray-700 mb-2'>Modified Models</h4>
+              <div className="flex">
+                {isModifiedDirect(context?.changes?.modified.direct) && (
+                  <div className="ml-1">
+                    <small>Direct</small>
+                    <ul className='ml-1 mr-3'>
+                      {Object.keys(context?.changes?.modified.direct || []).map(modelName => (
+                        <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isModifiedIndirect(context?.changes?.modified.indirect) && (
+                  <div className="ml-1 mr-3">
+                    <small>Indirect</small>
+                    <ul className='ml-1'>
+                      {(context?.changes?.modified?.indirect || [])?.map((modelName: any) => (
+                        <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isModifiedMetadata(context?.changes?.modified.metadata) && (
+                  <div className="ml-1">
+                    <small>Metadata</small>
+                    <ul className='ml-1'>
+                      {(context?.changes?.modified?.metadata || [])?.map((modelName: any) => (
+                        <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {backfills.length > 0 ? (
           <div className='mx-4 mb-4 p-8 bg-secondary-100 rounded-lg overflow-hidden'>
             <div className="text-center flex flex-col mb-6">
@@ -129,7 +192,7 @@ export function PlanWizard({
               {planState === EnumStatePlan.Backfill && <PlanDates refDates={elFormBackfillDates} prefix='Backfill' show={[true, false]} className="inline-block mx-auto" />}
             </div>
             <ul>
-              {backfills.map(({model_name, interval, batches}: any) => (
+              {backfills.map(({ model_name, interval, batches }: any) => (
                 <li key={model_name} className='text-gray-600 font-light w-full mb-3'>
                   <div className="flex justify-between items-center w-full">
                     <p className="font-bold">{model_name}</p>
@@ -150,13 +213,16 @@ export function PlanWizard({
 
           </div>
         ) : (
-          <h3>All Models are good!</h3>
+          <div className="ml-4 text-gray-700">
+            <Divider className="h-1 w-full mb-4" />
+            <h3>Latest Data</h3>
+          </div>
         )}
       </PlanWizardStep>
       <PlanWizardStep step={3} title='Select Change Strategy' disabled={context?.environment == null}>
         {Object.keys(context?.changes?.modified ?? {}).length > 0 ? (
           <RadioGroup
-            className='p-4 bg-secondary-900 rounded-lg'
+            className='p-4 pt-5 bg-secondary-100 rounded-lg'
             value={selected}
             onChange={setSelected}
           >
@@ -166,11 +232,11 @@ export function PlanWizard({
                 value={strategy}
                 className={({ active, checked }) =>
                   `${active
-                    ? 'ring-2 ring-white ring-opacity-60 ring-offset-2 ring-offset-sky-300'
+                    ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset-2 ring-offset-sky-300'
                     : ''
                   }
-                          ${checked
-                    ? 'bg-sky-900 bg-opacity-75 text-white'
+                  ${checked
+                    ? 'bg-secondary-500 bg-opacity-75 text-white'
                     : 'bg-white'
                   }
                           relative flex cursor-pointer rounded-lg px-5 py-4 shadow-md focus:outline-none mb-2`
@@ -221,6 +287,24 @@ export function PlanWizard({
       </PlanWizardStep>
     </ul >
   )
+}
+
+function isModifiedDirect(direct: any): boolean {
+  return Object.keys(direct ?? {}).length > 0
+}
+
+function isModifiedIndirect(indirect: any): boolean {
+  return Array.isArray(indirect ?? []) && indirect?.length > 0
+}
+
+function isModifiedMetadata(metadata: any): boolean {
+  return Array.isArray(metadata ?? []) && metadata?.length > 0
+}
+
+function isModified(modified: any): boolean {
+  return isModifiedDirect(modified?.direct ?? {})
+    || isModifiedIndirect(modified?.indirect)
+    || isModifiedMetadata(modified?.metadata)
 }
 
 function PlanWizardStep({ step, title, children, disabled = false }: any) {
