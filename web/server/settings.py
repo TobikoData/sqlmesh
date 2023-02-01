@@ -10,6 +10,7 @@ from sqlmesh.core.context import Context
 
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
+    config: str = "local_config"
 
 
 @lru_cache()
@@ -23,12 +24,12 @@ def _get_context(path: str) -> Context:
 
 
 @lru_cache()
-def _get_loaded_context(path: str) -> Context:
-    return Context(path=path, console=ApiConsole())
+def _get_loaded_context(path: str, config: str) -> Context:
+    return Context(path=path, config=config, console=ApiConsole())
 
 
 def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
-    return _get_loaded_context(settings.project_path)
+    return _get_loaded_context(settings.project_path, settings.config)
 
 
 def get_context(settings: Settings = Depends(get_settings)) -> Context:
