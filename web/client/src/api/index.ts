@@ -21,6 +21,7 @@ export function useApiContext() {
   return useQuery({
     queryKey: ['/api/context'],
     queryFn: getApiContextApiContextGet,
+    cacheTime: 0
   })
 }
 
@@ -33,6 +34,7 @@ export function useApiContextByEnvironment(environment?: string) {
     queryKey: [`/api/plan`, environment],
     queryFn: () => getPlanApiPlanGet({ environment }),
     enabled: environment != null,
+    cacheTime: 0
   })
 }
 
