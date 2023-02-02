@@ -69,7 +69,6 @@ setup(
         "web": [
             "fastapi==0.89.1",
             "hyperscript==0.0.1",
-            "sse-starlette==1.2.1",
             "uvicorn==0.20.0",
         ],
         "snowflake": [

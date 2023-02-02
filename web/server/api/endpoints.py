@@ -8,7 +8,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sse_starlette.sse import EventSourceResponse
 from starlette.status import HTTP_303_SEE_OTHER
 
 from sqlmesh.core.console import ApiConsole
@@ -16,6 +15,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
+from web.server.sse import SSEResponse
 
 SSE_DELAY = 1  # second
 router = APIRouter()
@@ -211,7 +211,7 @@ async def apply(
 async def tasks(
     request: Request,
     context: Context = Depends(get_loaded_context),
-) -> EventSourceResponse:
+) -> SSEResponse:
     async def running_tasks() -> t.AsyncGenerator:
         console: ApiConsole = context.console  # type: ignore
         if hasattr(request.app.state, "task"):
@@ -225,4 +225,4 @@ async def tasks(
                 yield {"data": {"ok": True, "tasks": task_status}}
         yield {"data": {"ok": True, "tasks": {}}}
 
-    return EventSourceResponse(running_tasks())
+    return SSEResponse(running_tasks())
