@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import asyncio
+import functools
 import os
 import typing as t
 from pathlib import Path
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
+from starlette.status import HTTP_303_SEE_OTHER
 
+from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
+from web.server.sse import SSEResponse
+from web.server.utils import run_in_executor
 
+SSE_DELAY = 1  # second
 router = APIRouter()
 
 
@@ -180,3 +188,58 @@ def get_plan(
         )
 
     return payload
+
+
+@router.post("/apply")
+async def apply(
+    environment: str,
+    request: Request,
+    context: Context = Depends(get_loaded_context),
+) -> RedirectResponse:
+    async def plan_and_apply() -> t.Any:
+        plan = functools.partial(
+            context.plan, environment, no_prompts=True, auto_apply=True
+        )
+        return await run_in_executor(plan)
+
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        task = asyncio.create_task(plan_and_apply())
+        setattr(task, "_environment", environment)
+        request.app.state.task = task
+    return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
+
+
+@router.get("/tasks")
+async def tasks(
+    request: Request,
+    context: Context = Depends(get_loaded_context),
+) -> SSEResponse:
+    task = None
+    environment = None
+    if hasattr(request.app.state, "task"):
+        task = request.app.state.task
+        environment = getattr(task, "_environment", None)
+
+    def create_response(task_status: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        return {
+            "data": {
+                "ok": True,
+                "environment": environment,
+                "tasks": task_status,
+            }
+        }
+
+    async def running_tasks() -> t.AsyncGenerator:
+        console: ApiConsole = context.console  # type: ignore
+        if task:
+            while not task.done():
+                task_status = console.current_task_status
+                if task_status:
+                    yield create_response(task_status)
+                await asyncio.sleep(SSE_DELAY)
+            task_status = console.previous_task_status
+            if task_status:
+                yield create_response(task_status)
+        yield create_response({})
+
+    return SSEResponse(running_tasks())

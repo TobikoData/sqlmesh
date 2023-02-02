@@ -99,7 +99,7 @@ config = Config(ignore_patterns=["*.txt"])
 
 
 def test_write_file(project_tmp_path: Path) -> None:
-    response = client.post("/api/files/foo.txt", data='"bar"')
+    response = client.post("/api/files/foo.txt", content='"bar"')
     assert response.status_code == 200
     assert response.json() == {
         "name": "foo.txt",
@@ -115,7 +115,7 @@ def test_update_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
-    response = client.post("/api/files/foo.txt", data='"baz"')
+    response = client.post("/api/files/foo.txt", content='"baz"')
     assert response.status_code == 200
     assert response.json() == {
         "name": "foo.txt",
@@ -139,3 +139,13 @@ def test_delete_file(project_tmp_path: Path) -> None:
 def test_delete_file_not_found() -> None:
     response = client.delete("/api/files/not_found.txt")
     assert response.status_code == 404
+
+
+def test_apply() -> None:
+    response = client.post("/api/apply?environment=dev", params={"environment": "dev"})
+    assert response.status_code == 200
+
+
+def test_tasks() -> None:
+    response = client.get("/api/tasks")
+    assert response.status_code == 200
