@@ -16,7 +16,6 @@ from starlette.status import (
 
 from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
-from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
@@ -218,7 +217,8 @@ def get_plan(
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=get_modified_snapshots(plan.context_diff),
+            modified=models.ModelsDiff.get_modified_snapshots(
+                plan.context_diff),
         )
 
     return payload
