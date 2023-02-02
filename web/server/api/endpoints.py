@@ -16,6 +16,7 @@ from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 from web.server.sse import SSEResponse
+from web.server.utils import run_in_executor
 
 SSE_DELAY = 1  # second
 router = APIRouter()
@@ -199,11 +200,12 @@ async def apply(
         plan = functools.partial(
             context.plan, environment, no_prompts=True, auto_apply=True
         )
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, plan)
+        return await run_in_executor(plan)
 
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        request.app.state.task = asyncio.create_task(plan_and_apply())
+        task = asyncio.create_task(plan_and_apply())
+        setattr(task, "_environment", environment)
+        request.app.state.task = task
     return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
 
 
@@ -212,17 +214,32 @@ async def tasks(
     request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> SSEResponse:
+    task = None
+    environment = None
+    if hasattr(request.app.state, "task"):
+        task = request.app.state.task
+        environment = getattr(task, "_environment", None)
+
+    def create_response(task_status: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        return {
+            "data": {
+                "ok": True,
+                "environment": environment,
+                "tasks": task_status,
+            }
+        }
+
     async def running_tasks() -> t.AsyncGenerator:
         console: ApiConsole = context.console  # type: ignore
-        if hasattr(request.app.state, "task"):
-            while not request.app.state.task.done():
+        if task:
+            while not task.done():
                 task_status = console.current_task_status
                 if task_status:
-                    yield {"data": {"ok": True, "tasks": task_status}}
+                    yield create_response(task_status)
                 await asyncio.sleep(SSE_DELAY)
             task_status = console.previous_task_status
             if task_status:
-                yield {"data": {"ok": True, "tasks": task_status}}
-        yield {"data": {"ok": True, "tasks": {}}}
+                yield create_response(task_status)
+        yield create_response({})
 
     return SSEResponse(running_tasks())
