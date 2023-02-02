@@ -12,7 +12,7 @@ import {
   PlayIcon,
 } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
-import { Transition, Dialog } from '@headlessui/react'
+import { Transition, Dialog, Popover } from '@headlessui/react'
 import {
   useApiFileByPath,
   useMutationApiSaveFile,
@@ -21,20 +21,43 @@ import {
 import type { File } from '../../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plan } from '../plan/Plan'
+import { EnumPlanState, useStorePlan } from '../../../context/plan'
+import { Progress } from '../progress/Progress'
+import { Spinner } from '../logo/Spinner'
+import { delay } from '../../../utils'
 
 export function IDE() {
   const client = useQueryClient()
+
+  const planState = useStorePlan((s: any) => s.state)
+  const setPlanState = useStorePlan((s: any) => s.setState)
+  const setPlanAction = useStorePlan((s: any) => s.setAction)
+  const activePlan = useStorePlan((s: any) => s.activePlan)
 
   const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
   const [activeFile, setActiveFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
   const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
-
   const [status, setStatus] = useState('editing')
+  const [applied, setApplied] = useState<boolean | null>(null)
 
-  const mutationSaveFile = useMutationApiSaveFile(client)
+  const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
   const { data: fileData } = useApiFileByPath(activeFile?.path)
+
+  useEffect(() => {
+    if (applied == null) return
+
+    if (planState === EnumPlanState.Applying) {
+      setPlanAction(EnumPlanState.Done)
+    }
+
+    if (isOpenModalPlan) return setPlanState(EnumPlanState.Setting)
+
+    if (applied) return setPlanState(EnumPlanState.Init)
+
+    setPlanState(EnumPlanState.Failed)
+  }, [applied])
 
   useEffect(() => {
     setFileContent(fileData?.content ?? '')
@@ -52,6 +75,50 @@ export function IDE() {
     }
 
     setOpenedFiles(new Set([...openedFiles]))
+  }
+
+  function applyPlan() {
+    setApplied(null)
+
+    setPlanState(EnumPlanState.Applying)
+    setPlanAction(EnumPlanState.Applying)
+
+    delay(3000).then(() => {
+      setApplied(true)
+    }).catch(() => {
+      setApplied(false)
+    })
+  }
+
+  function closePlan() {
+    setPlanAction(EnumPlanState.Closing)
+
+    if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
+      setPlanState(EnumPlanState.Init)
+    }
+
+    setIsOpenModalPlan(false)
+  }
+
+  function cancelPlan() {
+    setPlanAction(EnumPlanState.Canceling)
+
+    if (planState === EnumPlanState.Applying) {
+      setPlanState(EnumPlanState.Canceling)
+    }
+
+    // Cancel request
+
+    if (isOpenModalPlan) {
+      setPlanState(EnumPlanState.Setting)
+    } else {
+      setPlanState(EnumPlanState.Init)
+    }
+  }
+
+  function startPlan() {
+    setPlanState(EnumPlanState.Setting)
+    setIsOpenModalPlan(true)
   }
 
   return (
@@ -89,11 +156,108 @@ export function IDE() {
             ))}
           </ul>
         </div>
+
         <div className="px-3 flex items-center">
-          <Button variant='primary' size={EnumSize.sm} onClick={() => setIsOpenModalPlan(true)} className='w-[6rem] justify-between'>
-            <span className="inline-block mr-3 min-w-20">Run Plan</span>
-            <PlayIcon className="w-4 h-4 text-inherit" />
-          </Button>
+          {planState === 'applying' ? (
+            <Popover className="relative">
+              {({ open }) => (
+                <>
+                  <Popover.Button
+                    className={`
+                      ${open ? '' : 'text-opacity-90'}
+                      group text-base font-medium text-white hover:text-opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75`}
+                  >
+                    <div className='flex items-center text-xs whitespace-nowrap m-1 bg-secondary-100 rounded-md px-2 pr-1 py-1'>
+                      <Spinner className='w-3 h-3 mr-2' />
+                      <span className="inline-block mr-3 min-w-20 text-secondary-500">
+                        {planState === EnumPlanState.Init
+                          ? 'Run Plan'
+                          : planState === EnumPlanState.Setting
+                            ? 'Setting Plan'
+                            : planState === EnumPlanState.Canceling
+                              ? 'Canceling Plan...'
+                              : 'Applying Plan...'
+                        }
+                      </span>
+                      <span className='inline-block px-2 rounded-[4px] text-xs bg-secondary-500 text-secondary-100 font-bold'>1</span>
+                    </div>
+                  </Popover.Button>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-200"
+                    enterFrom="opacity-0 translate-y-1"
+                    enterTo="opacity-100 translate-y-0"
+                    leave="transition ease-in duration-150"
+                    leaveFrom="opacity-100 translate-y-0"
+                    leaveTo="opacity-0 translate-y-1"
+                  >
+                    <Popover.Panel className="absolute right-1 z-10 mt-3 transform">
+                      <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
+                        <div className="relative grid gap-8 py-3 bg-white lg:grid-cols-2">
+                          <div key={activePlan.environment} className="mx-4">
+                            <div className='flex justify-between items-baseline'>
+                              <small className="block whitespace-nowrap text-sm font-medium text-gray-900">
+                                Environemnt: {activePlan.environment}
+                              </small>
+                              <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
+                                {Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length} of {Object.values(activePlan.tasks).length}
+                              </small>
+                            </div>
+
+                            <Progress
+                              progress={Math.ceil(Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length / Object.values(activePlan.tasks).length * 100)}
+                            />
+                            <div className='my-4 px-4 py-2 bg-secondary-100 rounded-lg'>
+                              {(Object.entries(activePlan.tasks)).map(([model_name, task]: any) => (
+                                <div key={model_name}>
+                                  <div className='flex justify-between items-baselin'>
+                                    <small className="text-xs block whitespace-nowrap font-medium text-gray-900 mr-6">
+                                      {model_name}
+                                    </small>
+                                    <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
+                                      {task.completed} of {task.total}
+                                    </small>
+                                  </div>
+                                  <Progress
+                                    progress={Math.ceil(task.completed / task.total * 100)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <div className='flex justify-end'>
+                              <Button size='sm' variant='danger' className='mx-0' onClick={e => {
+                                e.stopPropagation()
+                                cancelPlan()
+                              }}>Cancel</Button>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    </Popover.Panel>
+
+                  </Transition>
+                </>
+              )}
+            </Popover>
+          ) : (
+            <Button
+              disabled={planState === EnumPlanState.Setting}
+              variant='primary'
+              size={EnumSize.sm}
+              onClick={e => {
+                e.stopPropagation()
+                startPlan()
+              }}
+              className='min-w-[6rem] justify-between'
+            >
+              <span className="inline-block mr-3 min-w-20">
+                {planState === EnumPlanState.Init ? 'Run Plan' : planState === EnumPlanState.Setting ? 'Setting Plan' : 'Applying Plan'}
+              </span>
+              <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
+            </Button>
+          )}
+
         </div>
       </div>
       <Divider />
@@ -150,7 +314,7 @@ export function IDE() {
                               Boolean(value) && value !== fileContent
 
                             if (shouldMutate) {
-                              mutationSaveFile.mutate({
+                              saveFile.mutate({
                                 path: activeFile?.path,
                                 body: viewUpdate.state.doc.toString(),
                               })
@@ -209,7 +373,7 @@ export function IDE() {
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
-      <Transition appear show={isOpenModalPlan} as={Fragment}>
+      <Transition appear show={isOpenModalPlan} as={Fragment} afterLeave={() => setPlanAction(EnumPlanState.None)}>
         <Dialog as="div" className="relative z-[100]" onClose={() => undefined}>
           <Transition.Child
             as={Fragment}
@@ -235,7 +399,7 @@ export function IDE() {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan onClose={() => setIsOpenModalPlan(false)} />
+                  <Plan onClose={() => closePlan()} onCancel={() => cancelPlan()} onApply={() => applyPlan()} />
                 </Dialog.Panel>
               </Transition.Child>
             </div>
