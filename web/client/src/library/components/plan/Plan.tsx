@@ -6,89 +6,50 @@ import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
 import { applyPlan } from '../../../api/endpoints'
+import { EnumPlanState, type PlanState, useStorePlan } from '../../../context/plan'
 
-export const EnumStatePlan = {
-  Empty: 'empty',
-  Run: 'run',
-  Running: 'running',
-  Backfill: 'backfill',
-  Backfilling: 'backfilling',
-  Apply: 'apply',
-  Applying: 'applying',
-  Done: 'done',
-  Resetting: 'resetting',
-  Canceling: 'canceling',
-  Closing: 'closing',
-} as const;
 
-export type StatePlan = typeof EnumStatePlan[keyof typeof EnumStatePlan]
-
-export function Plan({ onClose }: { onClose: any }) {
+export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: any, onApply: any }) {
   const client = useQueryClient()
 
-  const [environment, setEnvironment] = useState<string>()
-  const [planState, setPlanState] = useState<StatePlan>(EnumStatePlan.Empty)
-  const [withModified, setWithModified] = useState(false)
-  const [backfillStatus, setBackfillStatus] = useState<boolean>()
-  const { data: context, refetch } = useApiContext()
+  const planState = useStorePlan((s: any) => s.state)
+  const planAction = useStorePlan((s: any) => s.action)
+  const setPlanAction = useStorePlan((s: any) => s.setAction)
+  const environment = useStorePlan((s: any) => s.environment)
+  const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
+  const withBackfill = useStorePlan((s: any) => s.withBackfill)
 
-  async function backfill() {
-    setPlanState(EnumStatePlan.Backfilling)
-
-    setBackfillStatus(false)
-
-    const done = await applyPlan({ params: { environment } })
-
-    if (done) {
-      setBackfillStatus(true)
-
-      if (withModified) {
-        setPlanState(EnumStatePlan.Apply)
-      } else {
-        setPlanState(EnumStatePlan.Done)
-      }
-    }
-  }
-
-  function apply() {
-    setPlanState(EnumStatePlan.Applying)
-
-    setTimeout(() => {
-      setPlanState(EnumStatePlan.Done)
-    }, 3000)
-  }
+  const { data: context } = useApiContext()
 
   useEffect(() => {
-    if (context?.models?.length === 0) {
-      setPlanState(EnumStatePlan.Empty)
-    } else {
-      setPlanState(EnumStatePlan.Run)
+    if (environment == null) {
+      setPlanAction(EnumPlanState.Run)
     }
-  }, [context])
+  }, [environment])
 
-
-  async function reset() {
-    setPlanState(EnumStatePlan.Resetting)
-
-    await useApiContextCancel(client)
-    await delay(2000)
-    await refetch()
-
-    setPlanState(EnumStatePlan.Run)
+  function apply() {
+    onApply()
   }
 
-  async function cancel() {
-    setPlanState(EnumStatePlan.Canceling)
-
-    await useApiContextCancel(client)
-    await delay(1000)
+  function cleanUp() {
+    useApiContextCancel(client)
+    setEnvironment(null)
   }
 
-  async function close() {
-    setPlanState(EnumStatePlan.Closing)
+  function reset() {
+    setPlanAction(EnumPlanState.Resetting)
 
-    await useApiContextCancel(client)
-    await delay(1000)
+    cleanUp()
+  }
+
+  function cancel() {
+    onCancel()
+
+    reset()
+  }
+
+  function close() {
+    reset()
 
     onClose()
   }
@@ -97,80 +58,66 @@ export function Plan({ onClose }: { onClose: any }) {
     <div className="flex items-start w-full h-[75vh] overflow-hidden">
       <PlanSidebar context={context} />
       <div className="flex flex-col w-full h-full overflow-hidden">
-        {planState === EnumStatePlan.Empty ? (
+        {planState === EnumPlanState.Init ? (
           <div className='flex items-center justify-center w-full h-full'>
             <h2 className='text-2xl font-black text-gray-700'>No Models Found</h2>
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard
-              id="contextEnvironment"
-              backfillStatus={backfillStatus}
-              setPlanState={setPlanState}
-              setWithModified={setWithModified}
-              planState={planState}
-              setEnvironment={setEnvironment}
-              environment={environment}
-            />
+            <PlanWizard id="contextEnvironment" />
           </div>
         )}
         <Divider className='h-2' />
         <div className='flex justify-between px-4 py-2 '>
           <div className='flex w-full'>
-            {(planState === EnumStatePlan.Run || planState === EnumStatePlan.Running) && (
-              <Button type="submit" form='contextEnvironment' disabled={planState === EnumStatePlan.Running}>
-                {planState === EnumStatePlan.Running ? 'Running' : 'Run'}
+            {(planAction === EnumPlanState.Run || planAction === EnumPlanState.Running) && (
+              <Button type="submit" form='contextEnvironment' disabled={planAction === EnumPlanState.Running}>
+                {planAction === EnumPlanState.Running ? 'Running...' : 'Run'}
               </Button>
             )}
 
-            {(planState === EnumStatePlan.Backfill || planState === EnumStatePlan.Backfilling) && (
-              <Button onClick={backfill} disabled={planState === EnumStatePlan.Backfilling}>
-                {planState === EnumStatePlan.Backfilling ? 'Backfilling' : 'Apply and Backfill'}
+            {(planAction === EnumPlanState.Apply || planAction === EnumPlanState.Applying) && (
+              <Button onClick={() => apply()} disabled={planAction === EnumPlanState.Applying}>
+                {planAction === EnumPlanState.Applying ? 'Applying...' : withBackfill ? 'Apply And Backfill' : 'Apply'}
               </Button>
             )}
 
-            {(planState === EnumStatePlan.Apply || planState === EnumStatePlan.Applying) && (
-              <Button onClick={() => apply()} disabled={planState === EnumStatePlan.Applying}>
-                {planState === EnumStatePlan.Applying ? 'Applying' : 'Apply'}
-              </Button>
-            )}
-
-            {planState === EnumStatePlan.Done && (
+            {planAction === EnumPlanState.Done && (
               <Button
                 onClick={() => close()}
               >
                 Done
               </Button>
             )}
-            {[EnumStatePlan.Applying, EnumStatePlan.Running, EnumStatePlan.Backfilling].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Backfilling | typeof EnumStatePlan.Running | typeof EnumStatePlan.Applying>) && (
+            {(planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling) && (
               <Button
                 onClick={() => cancel()}
                 variant="danger"
                 className='justify-self-end'
-                disabled={planState === EnumStatePlan.Canceling || planState === EnumStatePlan.Resetting}
+                disabled={planAction === EnumPlanState.Canceling}
               >
-                {planState === EnumStatePlan.Canceling ? 'Canceling' : 'Cancel'}
+                {planAction === EnumPlanState.Canceling ? 'Canceling...' : 'Cancel'}
               </Button>
             )}
           </div>
           <div className='flex items-center'>
-            {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
+            {environment != null && (
               <Button
                 onClick={() => reset()}
                 variant="alternative"
                 className='justify-self-end'
-                disabled={planState === EnumStatePlan.Resetting}
+                disabled={planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling || planAction === EnumPlanState.Closing}
               >
-                {planState === EnumStatePlan.Resetting ? 'Resetting' : 'Reset'}
+                {planState === EnumPlanState.Resetting ? 'Resetting...' : 'Reset'}
               </Button>
             )}
             <Button
               onClick={() => close()}
               variant="alternative"
               className='justify-self-end'
-              disabled={planState === EnumStatePlan.Closing || planState === EnumStatePlan.Resetting}
+              disabled={planAction === EnumPlanState.Closing || planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Canceling}
             >
-              {planState === EnumStatePlan.Closing ? 'Closing' : 'Close'}
+              {planAction === EnumPlanState.Closing ? 'Closing...' : 'Close'}
             </Button>
           </div>
         </div>
@@ -179,8 +126,3 @@ export function Plan({ onClose }: { onClose: any }) {
   )
 }
 
-async function delay(time: number = 1000): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, time)
-  })
-}
