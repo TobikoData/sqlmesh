@@ -83,7 +83,7 @@ export function IDE() {
     setPlanState(EnumPlanState.Applying)
     setPlanAction(EnumPlanState.Applying)
 
-    delay(3000).then(() => {
+    delay(2000000).then(() => {
       setApplied(true)
     }).catch(() => {
       setApplied(false)
@@ -193,7 +193,7 @@ export function IDE() {
                   >
                     <Popover.Panel className="absolute right-1 z-10 mt-3 transform">
                       <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
-                        <div className="relative grid gap-8 py-3 bg-white lg:grid-cols-2">
+                        <div className="relative grid gap-8 py-3 bg-white">
                           <div key={activePlan.environment} className="mx-4">
                             <div className='flex justify-between items-baseline'>
                               <small className="block whitespace-nowrap text-sm font-medium text-gray-900">
@@ -224,7 +224,7 @@ export function IDE() {
                                 </div>
                               ))}
                             </div>
-                            <div className='flex justify-end'>
+                            <div className='flex justify-end items-center px-2'>
                               <Button size='sm' variant='danger' className='mx-0' onClick={e => {
                                 e.stopPropagation()
                                 cancelPlan()
