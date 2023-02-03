@@ -1,4 +1,4 @@
-import type { Directory, File } from '../../../api/client';
+
 import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
@@ -6,6 +6,8 @@ import { useContext, useEffect, useState } from 'react';
 import ContextIDE from '../../../context/Ide';
 import clsx from 'clsx';
 import { singular } from 'pluralize';
+import { ModelFile, ModelDirectory } from '../../../models';
+import { Directory } from '../../../api/client';
 
 /* TODO:
   - connect to API
@@ -35,36 +37,34 @@ class Counter {
 
 const counter = new Counter()
 
-export function FolderTree({ project }: { project: any }) {
+export function FolderTree({ project }: { project?: Directory }) {
   const { setActiveFile, activeFile, openedFiles, setOpenedFiles } = useContext(ContextIDE);
-  const [directory, setDirectory] = useState<Directory>(project);
+  const [directory, setDirectory] = useState<ModelDirectory>(new ModelDirectory());
   const [renamingArtifact, setRenamingArtifact] = useState<Artifact>();
   const [artifactNewName, setArtifactNewName] = useState<string>('');
 
   useEffect(() => {
-    setDirectory(project)
+    setDirectory(new ModelDirectory(project))
   }, [project])
 
-  function createDirectory(e: MouseEvent, parent: Directory): boolean {
+
+  function createDirectory(e: MouseEvent, parent: ModelDirectory): boolean {
     e.stopPropagation()
 
     const count = counter.countByKey(parent.path)
-
     const name = `new_directory_${count}`.toLowerCase()
 
-    parent.directories.push({
+    parent.addDirectory(new ModelDirectory({
       name,
-      path: parent.path + `${name}`,
-      files: [],
-      directories: []
-    })
+      path: `${parent.path}/${name}`
+    }, parent))
 
-    setDirectory({ ...directory })
+    setDirectory(new ModelDirectory(directory))
 
     return true
   }
 
-  function createFile(e: MouseEvent, parent: Directory, extension = '.py'): boolean {
+  function createFile(e: MouseEvent, parent: ModelDirectory, extension = '.py'): boolean {
     e.stopPropagation()
 
     const count = counter.countByKey(parent.path)
@@ -73,24 +73,24 @@ export function FolderTree({ project }: { project: any }) {
       ? `new_file_${count}${extension}`
       : `new_${singular(parent.name)}_${count}${extension}`.toLowerCase()
 
-    parent.files.push({
+    parent.addFile(new ModelFile({
       name,
       extension,
-      path: parent.path + `${name}.${extension}`,
+      path: `${parent.path}/${name}`,
       content: '',
       is_supported: true,
-    })
+    }, parent))
 
-    setDirectory({ ...directory })
+    setDirectory(new ModelDirectory(directory))
 
     return true
   }
 
-  function remove(e: MouseEvent, artifact: Artifact, parent: Directory): boolean {
+  function remove(e: MouseEvent, artifact: Artifact, parent: ModelDirectory): boolean {
     e.stopPropagation()
 
     if ('extension' in artifact) {
-      parent.files = parent.files.filter(f => f.path !== artifact.path)
+      parent.removeFile(artifact)
 
       if (openedFiles.delete(artifact)) {
         setOpenedFiles(new Set(openedFiles))
@@ -113,53 +113,53 @@ export function FolderTree({ project }: { project: any }) {
         }
       })
 
-      parent.directories = parent.directories.filter(f => f.path !== artifact.path)
+      parent.remiveDirectory(artifact)
 
       setOpenedFiles(new Set(openedFiles))
     }
 
-    setDirectory({ ...directory })
+    setDirectory(new ModelDirectory(directory))
 
     return true
   }
 
-  function rename(e: any, artifact: Artifact, parent: Directory): boolean {
+  function rename(e: any, artifact: Artifact): boolean {
     e.stopPropagation()
 
     const newName = artifactNewName || artifact.name
 
     if ('extension' in artifact) {
-      artifact.name = newName.trim().replace(`.${artifact.extension}`, '')
-      artifact.path = parent.path + `${artifact.name}`
+      artifact.rename(newName.trim().replace(`.${artifact.extension}`, ''))
 
       if (openedFiles.has(artifact)) {
         openedFiles.forEach(file => {
-          if (file.path === artifact.path) {
-            file.name = artifact.name
-            file.path = artifact.path
-          }
+          // if (file.path === artifact.path) {
+          //   file.name = artifact.name
+          //   file.path = artifact.path
+          // }
         })
       }
 
       setOpenedFiles(new Set(openedFiles))
     } else {
-      artifact.name = newName
-      artifact.path = parent.path + `${artifact.name}`
+      artifact.rename(newName)
 
       const files = getAllFilesInDirectory(artifact as Directory)
 
       files.forEach(file => {
-        file.path = file.path.replace(artifact.path, artifact.path)
+        // file.path = file.path.replace(artifact.path, artifact.path)
       })
     }
 
-    setDirectory({ ...directory })
+    setDirectory(new ModelDirectory(directory))
+
     setArtifactNewName('')
+    setRenamingArtifact(undefined)
 
     return true
   }
 
-  function getAllFilesInDirectory(dir: Directory): File[] {
+  function getAllFilesInDirectory(dir: ModelDirectory): ModelFile[] {
     const files = dir.files || []
     const directories = dir.directories || []
 
@@ -173,7 +173,7 @@ export function FolderTree({ project }: { project: any }) {
     <div className='py-2 overflow-hidden'>
       {Boolean(directory?.directories?.length) && (
         <Directories
-          directories={directory.directories}
+          directories={directory.directories ?? []}
           withIndent={false}
           selectFile={setActiveFile}
           activeFile={activeFile}
@@ -191,7 +191,7 @@ export function FolderTree({ project }: { project: any }) {
       )}
       {Boolean(directory?.files?.length) && (
         <Files
-          files={directory.files}
+          files={directory.files ?? []}
           selectFile={setActiveFile}
           activeFile={activeFile}
           activeFiles={openedFiles}
@@ -208,15 +208,15 @@ export function FolderTree({ project }: { project: any }) {
   );
 }
 
-type Artifact = File | Directory
+type Artifact = ModelFile | ModelDirectory
 
 interface PropsArtifacts {
-  activeFile: File | null;
-  activeFiles?: Set<File>;
-  selectFile: (file: File) => void;
-  parent: Directory;
-  remove: (e: MouseEvent, file: Artifact, parent: Directory) => boolean;
-  rename: (e: MouseEvent, file: Artifact, parent: Directory) => void;
+  activeFile: ModelFile | null;
+  activeFiles?: Set<ModelFile>;
+  selectFile: (file: ModelFile) => void;
+  parent: ModelDirectory;
+  remove: (e: MouseEvent, file: Artifact, parent: ModelDirectory) => boolean;
+  rename: (e: MouseEvent, file: Artifact) => void;
   setRenamingArtifact: (artifact?: Artifact) => void;
   setArtifactNewName: (name: string) => void;
   artifactNewName: string;
@@ -224,22 +224,22 @@ interface PropsArtifacts {
 }
 
 interface PropsArtifactCreate {
-  createDirectory: (e: MouseEvent, parent: Directory) => boolean;
-  createFile: (e: MouseEvent, parent: Directory, extension?: '.py' | '.yaml' | '.sql') => boolean;
+  createDirectory: (e: MouseEvent, parent: ModelDirectory) => boolean;
+  createFile: (e: MouseEvent, parent: ModelDirectory, extension?: '.py' | '.yaml' | '.sql') => boolean;
 }
 
 interface PropsDirectories extends PropsArtifacts, PropsArtifactCreate {
-  directories: Directory[];
+  directories: ModelDirectory[];
   withIndent: boolean;
 
 }
 
 interface PropsDirectory extends PropsArtifacts, PropsArtifactCreate {
-  directory: Directory;
+  directory: ModelDirectory;
 }
 
 interface PropsFiles extends PropsArtifacts {
-  files: File[];
+  files: ModelFile[];
 }
 
 function Directories({
@@ -320,9 +320,6 @@ function Directory({
           </div>
 
           <span className='w-full h-[1.5rem] flex items-center cursor-pointer justify-between'>
-            {/* <p className='inline-block text-sm ml-1 text-gray-900 group-hover:text-secondary-500'>
-              {directory.name}
-            </p> */}
             {renamingArtifact === directory ? (
               <div className='flex items-center'>
                 <input
@@ -339,8 +336,7 @@ function Directory({
                   <CheckCircleIcon onClick={(e: any) => {
                     e.stopPropagation()
 
-                    rename(e, directory, parent)
-                    setRenamingArtifact(undefined)
+                    rename(e, directory)
                   }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
                 </div>
               </div>
@@ -351,6 +347,7 @@ function Directory({
                   onDoubleClick={e => {
                     e.stopPropagation()
 
+                    setArtifactNewName(directory.name)
                     setRenamingArtifact(directory)
                   }}
                   className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
@@ -414,7 +411,7 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
           onClick={e => {
             e.stopPropagation()
 
-            file.is_supported && file !== activeFile && selectFile(file)
+            file.is_supported && file.id !== activeFile?.id && selectFile(file)
           }}
           className={'border-l px-1'}
         >
@@ -447,8 +444,8 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
                   <div className='flex'>
                     <CheckCircleIcon onClick={(e: any) => {
                       e.stopPropagation()
-                      rename(e, file, parent)
-                      setRenamingArtifact(undefined)
+
+                      rename(e, file)
                     }} className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`} />
                   </div>
                 </div>
@@ -458,6 +455,7 @@ function Files({ files = [], activeFiles, activeFile, selectFile, remove, parent
                     onDoubleClick={e => {
                       e.stopPropagation()
 
+                      setArtifactNewName(file.name)
                       setRenamingArtifact(file)
                     }}
                     className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'

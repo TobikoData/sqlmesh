@@ -1,11 +1,11 @@
 import { createContext } from "react";
-import type { File } from '../api/client';
+import { ModelFile } from "../models/file";
 
 interface IDE {
-  openedFiles: Set<File>
-  activeFile: File | null
-  setActiveFile: (file: File | null) => void
-  setOpenedFiles: (files: Set<File>) => void
+  openedFiles: Set<ModelFile>
+  activeFile: ModelFile | null
+  setActiveFile: (file: ModelFile | null) => void
+  setOpenedFiles: (files: Set<ModelFile>) => void
 }
 
 export default createContext<IDE>({
