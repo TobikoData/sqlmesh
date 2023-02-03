@@ -10,7 +10,7 @@ from sqlmesh.core.context import Context
 
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
-    config: str = "local_config"
+    config: str = ""
 
 
 @lru_cache()

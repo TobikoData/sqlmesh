@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import os
 import typing as t
 from pathlib import Path
@@ -170,6 +171,8 @@ def get_api_context(
 ) -> models.Context:
     """Get the context"""
 
+    context.refresh()
+
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
@@ -239,7 +242,8 @@ async def apply(
         task = asyncio.create_task(run_in_executor(plan))
         setattr(task, "_environment", environment)
         request.app.state.task = task
-    return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
+
+    return {"ok": True}
 
 
 @router.get("/tasks")
@@ -250,18 +254,21 @@ async def tasks(
     """Stream of plan application events"""
     task = None
     environment = None
+
     if hasattr(request.app.state, "task"):
         task = request.app.state.task
         environment = getattr(task, "_environment", None)
 
     def create_response(task_status: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        return {
-            "data": {
+        data = json.dumps(
+            {
                 "ok": True,
                 "environment": environment,
                 "tasks": task_status,
             }
-        }
+        )
+
+        return {"data": f"{data}"}
 
     async def running_tasks() -> t.AsyncGenerator:
         console: ApiConsole = context.console  # type: ignore
