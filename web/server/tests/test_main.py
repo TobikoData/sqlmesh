@@ -141,6 +141,54 @@ def test_delete_file_not_found() -> None:
     assert response.status_code == 404
 
 
+def test_create_directory(project_tmp_path: Path) -> None:
+    response = client.post("/api/directories/new_dir")
+    assert response.status_code == 200
+    assert (project_tmp_path / "new_dir").exists()
+
+
+def test_create_directory_already_exists(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+
+    response = client.post("/api/directories/new_dir")
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Directory already exists"}
+
+
+def test_delete_directory(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+
+    response = client.delete("/api/directories/new_dir")
+    assert response.status_code == 204
+    assert not new_dir.exists()
+
+
+def test_delete_directory_not_found(project_tmp_path: Path) -> None:
+    response = client.delete("/api/directories/fake_dir")
+    assert response.status_code == 404
+
+
+def test_delete_directory_not_a_directory(project_tmp_path: Path) -> None:
+    txt_file = project_tmp_path / "foo.txt"
+    txt_file.touch()
+
+    response = client.delete("/api/directories/foo.txt")
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Not a directory"}
+
+
+def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+    (new_dir / "foo.txt").touch()
+
+    response = client.delete("/api/directories/new_dir")
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Directory not empty"}
+
+
 def test_apply() -> None:
     response = client.post("/api/apply?environment=dev", params={"environment": "dev"})
     assert response.status_code == 200
