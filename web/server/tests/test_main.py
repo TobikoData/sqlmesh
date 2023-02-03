@@ -203,13 +203,13 @@ def test_tasks() -> None:
 @pytest.mark.asyncio
 async def test_cancel() -> None:
     app.state.task = asyncio.create_task(asyncio.sleep(1))
-    response = client.post("/api/cancel")
+    response = client.post("/api/plan/cancel")
     await asyncio.sleep(0.1)
     assert response.status_code == 204
     assert app.state.task.cancelled()
 
 
 def test_cancel_no_task() -> None:
-    response = client.post("/api/cancel")
+    response = client.post("/api/plan/cancel")
     assert response.status_code == 422
     assert response.json() == {"detail": "No active task found."}

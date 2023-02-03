@@ -274,7 +274,7 @@ async def tasks(
     return SSEResponse(running_tasks())
 
 
-@router.post("/cancel")
+@router.post("/plan/cancel")
 async def cancel(
     request: Request,
     response: Response,
