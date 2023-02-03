@@ -11,3 +11,15 @@ export async function delay(time: number = 1000): Promise<void> {
     setTimeout(resolve, time)
   })
 }
+
+export function isObjectEmpty(value: unknown): boolean {
+  return isObject(value) && isArrayEmpty(Object.keys(value as object));
+}
+
+export function isObject(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    value.constructor === Object
+  );
+}
