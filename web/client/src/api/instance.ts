@@ -51,8 +51,6 @@ export const fetchAPI = async <T>({
 			if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
 				const data  = await response.text()
 
-				console.log(data.trim().replace('data: ', '').trim())
-
 				json = JSON.parse(data.trim().replace('data: ', '').trim())
 
 			} else if (response.headers.get('Content-Type')?.includes('application/json')) {

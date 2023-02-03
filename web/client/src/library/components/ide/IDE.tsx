@@ -25,11 +25,7 @@ import { EnumPlanState, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
 import fetchAPI from '../../../api/instance'
-import { isObjectEmpty } from '../../../utils'
-
-const source = new EventSource('/api/tasks');
-
-
+import { isObject, isObjectEmpty } from '../../../utils'
 
 export function IDE() {
   const client = useQueryClient()
@@ -39,6 +35,7 @@ export function IDE() {
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const activePlan = useStorePlan((s: any) => s.activePlan)
   const environment = useStorePlan((s: any) => s.environment)
+  const setTasks = useStorePlan((s: any) => s.setTasks)
 
   const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
   const [activeFile, setActiveFile] = useState<File | null>(null)
@@ -50,19 +47,6 @@ export function IDE() {
   const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
   const { data: fileData } = useApiFileByPath(activeFile?.path)
-
-  useEffect(() => {
-    if (source.onmessage == null) {
-      source.onmessage = (event) => {
-        try {
-          updateTasks(JSON.parse(event.data))
-        } catch {
-          setIsPlanCompleted(false)
-          source.close()
-        }
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (isPlanCompleted == null) return
@@ -81,20 +65,33 @@ export function IDE() {
     setFileContent(fileData?.content ?? '')
   }, [fileData])
 
-  function updateTasks(data: any) {
-    if (data.environment == null) return source.close()
+  function subscribe(channel: any, callback: any) {
+    channel.onmessage = (event: any) => {
+      callback(JSON.parse(event.data), channel)
+    }
+
+    return channel
+  }
+
+  function updateTasks(data: any, channel: any) {
+    if (data.environment == null) return channel.close()
 
     if (!data.ok) {
       setIsPlanCompleted(false)
 
-      return source.close()
+      return channel.close()
     }
 
-    if (isObjectEmpty(data.tasks)) {
-      setIsPlanCompleted(true)
+    if (isObject(data.tasks)) {
+      if (isObjectEmpty(data.tasks)) {
+        setIsPlanCompleted(true)
 
-      return source.close()
+        return channel.close()
+      } else {
+        setTasks(data.tasks)
+      }
     }
+
   }
 
   function closeIdeTab(f: File) {
@@ -121,17 +118,13 @@ export function IDE() {
       const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
 
       if (data.ok) {
-        const payload = await fetchAPI({ url: `/api/tasks`, method: 'get' })
-
-        updateTasks(payload)
+        subscribe(new EventSource('/api/tasks'), updateTasks)
       }
     } catch (error) {
       console.log(error)
 
       setIsPlanCompleted(false)
     }
-
-
   }
 
   function closePlan() {
