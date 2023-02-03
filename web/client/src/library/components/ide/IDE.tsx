@@ -24,7 +24,12 @@ import { Plan } from '../plan/Plan'
 import { EnumPlanState, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
-import { delay } from '../../../utils'
+import fetchAPI from '../../../api/instance'
+import { isObjectEmpty } from '../../../utils'
+
+const source = new EventSource('/api/tasks');
+
+
 
 export function IDE() {
   const client = useQueryClient()
@@ -33,35 +38,64 @@ export function IDE() {
   const setPlanState = useStorePlan((s: any) => s.setState)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const activePlan = useStorePlan((s: any) => s.activePlan)
+  const environment = useStorePlan((s: any) => s.environment)
 
   const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
   const [activeFile, setActiveFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
   const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
   const [status, setStatus] = useState('editing')
-  const [applied, setApplied] = useState<boolean | null>(null)
+  const [isPlanCompleted, setIsPlanCompleted] = useState<boolean | null>(null)
 
   const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
   const { data: fileData } = useApiFileByPath(activeFile?.path)
 
   useEffect(() => {
-    if (applied == null) return
+    if (source.onmessage == null) {
+      source.onmessage = (event) => {
+        try {
+          updateTasks(JSON.parse(event.data))
+        } catch {
+          setIsPlanCompleted(false)
+          source.close()
+        }
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isPlanCompleted == null) return
 
     if (planState === EnumPlanState.Applying) {
       setPlanAction(EnumPlanState.Done)
     }
 
     if (isOpenModalPlan) return setPlanState(EnumPlanState.Setting)
-
-    if (applied) return setPlanState(EnumPlanState.Init)
+    if (isPlanCompleted) return setPlanState(EnumPlanState.Init)
 
     setPlanState(EnumPlanState.Failed)
-  }, [applied])
+  }, [isPlanCompleted])
 
   useEffect(() => {
     setFileContent(fileData?.content ?? '')
   }, [fileData])
+
+  function updateTasks(data: any) {
+    if (data.environment == null) return source.close()
+
+    if (!data.ok) {
+      setIsPlanCompleted(false)
+
+      return source.close()
+    }
+
+    if (isObjectEmpty(data.tasks)) {
+      setIsPlanCompleted(true)
+
+      return source.close()
+    }
+  }
 
   function closeIdeTab(f: File) {
     if (!f) return
@@ -77,17 +111,27 @@ export function IDE() {
     setOpenedFiles(new Set([...openedFiles]))
   }
 
-  function applyPlan() {
-    setApplied(null)
+  async function applyPlan() {
+    setIsPlanCompleted(null)
 
     setPlanState(EnumPlanState.Applying)
     setPlanAction(EnumPlanState.Applying)
 
-    delay(2000000).then(() => {
-      setApplied(true)
-    }).catch(() => {
-      setApplied(false)
-    })
+    try {
+      const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
+
+      if (data.ok) {
+        const payload = await fetchAPI({ url: `/api/tasks`, method: 'get' })
+
+        updateTasks(payload)
+      }
+    } catch (error) {
+      console.log(error)
+
+      setIsPlanCompleted(false)
+    }
+
+
   }
 
   function closePlan() {
@@ -106,6 +150,8 @@ export function IDE() {
     if (planState === EnumPlanState.Applying) {
       setPlanState(EnumPlanState.Canceling)
     }
+
+    console.log('cancel plan')
 
     // Cancel request
 
