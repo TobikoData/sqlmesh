@@ -35,16 +35,35 @@ export const fetchAPI = async <T>({
 		input.search = new URLSearchParams(params).toString();
 	}
 
-	const response = await fetch(input, {
-		method,
-		headers,
-		credentials,
-		mode,
-		cache,
-		...(data ? { body: JSON.stringify(data) } : {}),
-	});
+	return new Promise(async (resolve , reject) => {
+		try {
+			const response = await fetch(input, {
+				method,
+				headers,
+				credentials,
+				mode,
+				cache,
+				...(data ? { body: JSON.stringify(data) } : {}),
+			});
 
-	return response.json();
+			let json = null;
+
+			if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
+				const data  = await response.text()
+
+				console.log(data.trim().replace('data: ', '').trim())
+
+				json = JSON.parse(data.trim().replace('data: ', '').trim())
+
+			} else if (response.headers.get('Content-Type')?.includes('application/json')) {
+				json = await response.json()
+			}
+
+			resolve(json)
+		} catch (error) {
+			reject(error)
+		}
+	});
 };
 
 export default fetchAPI;
