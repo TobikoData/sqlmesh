@@ -23,6 +23,7 @@ export function PlanWizard({
   const category = useStorePlan((s: any) => s.category)
   const categories = useStorePlan((s: any) => s.categories)
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
+  const tasks = useStorePlan((s: any) => s.tasks)
 
   const { data: context } = useApiContextByEnvironment(environment)
 
@@ -244,11 +245,10 @@ export function PlanWizard({
                           )}>{model_name}</p>
                           <small className="inline-block pl-3 text-xs text-gray-900">{interval[0]} - {interval[1]}</small>
                         </div>
-                        <small className="inline-block text-xs">0 / {batches} batch{batches > 1 ? 'es' : ''}</small>
+                        <small className="inline-block text-xs">{tasks?.[model_name]?.completed ?? 0} / {batches} batch{batches > 1 ? 'es' : ''}</small>
                       </div>
                       <Progress
-                        progress={0}
-                        duration={200}
+                        progress={Math.ceil(tasks?.[model_name]?.completed / tasks?.[model_name]?.total * 100)}
                       />
                     </li>
                   ))}
