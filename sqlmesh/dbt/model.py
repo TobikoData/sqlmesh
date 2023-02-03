@@ -18,6 +18,7 @@ from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
@@ -131,7 +132,7 @@ class ModelConfig(GeneralConfig):
         sources: t.Dict[str, SourceConfig],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
-        macros: UniqueKeyDict[str, macro],
+        jinja_macros: JinjaMacroRegistry,
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
@@ -185,15 +186,19 @@ class ModelConfig(GeneralConfig):
             ),
             "sqlmesh": Executable(
                 kind=ExecutableKind.VALUE,
-                payload=True,
+                payload="True",
             ),
             "is_incremental": Executable(
                 payload="def is_incremental(): return False",
             ),
+            "__jinja_macros__": Executable(
+                kind=ExecutableKind.VALUE,
+                payload="[]",
+            ),
+            **jinja_macros,
         }
 
-        python_env = {k: v for k, v in python_env.items() if k in self._calls}
-
+        #python_env = {k: v for k, v in python_env.items() if k in self._calls}
         depends_on = set()
 
         # Include dependencies inherited from ephemeral tables

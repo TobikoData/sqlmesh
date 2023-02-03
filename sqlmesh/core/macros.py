@@ -17,7 +17,7 @@ from sqlmesh.core.dialect import (
     MacroStrReplace,
     MacroVar,
 )
-from sqlmesh.utils import registry_decorator
+from sqlmesh.utils import registry_decorator, UniqueKeyDict
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
@@ -93,17 +93,20 @@ class MacroEvaluator:
     """
 
     def __init__(
-        self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None
+        self, dialect: str = "",
+        python_env: t.Optional[t.Dict[str, Executable]] = None,
+        env: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
-        self.env = {**ENV, "self": self}
+        self.env = {**(env or {}), **ENV, "self": self}
         self.python_env = python_env or {}
+        if not env:
+            prepare_env(self.python_env, self.env)
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
-        prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
@@ -242,7 +245,7 @@ class macro(registry_decorator):
     registry_name = "macros"
 
 
-MacroRegistry = t.Dict[str, macro]
+MacroRegistry = UniqueKeyDict[str, macro]
 
 
 def _norm_var_arg_lambda(

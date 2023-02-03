@@ -3,7 +3,51 @@ from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
 
-from jinja2 import Environment, Undefined
+from jinja2 import Environment, Undefined, runtime
+from sqlglot import Dialect, Parser, TokenType
+
+from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+
+
+JinjaMacroRegistry = UniqueKeyDict[str, Executable]
+
+
+class MacroExtractor(Parser):
+    def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, str]:
+        """Extract a dictionary of macro definitions from a jinja string.
+
+        Args:
+            jinja: The jinja string to extract from.
+            dialect: The dialect of SQL.
+
+        Returns:
+            A dictionary of macro name to macro definition.
+        """
+        self.reset()
+        self.sql = jinja or ""
+        self._tokens = Dialect.get_or_raise(dialect)().tokenizer.tokenize(jinja)
+        self._index = -1
+        self._advance()
+
+        macros: t.Dict[str, str] = {}
+
+        while self._curr:
+            if self._tag == "MACRO" and self._next:
+                start = self._prev
+                name = self._next.text
+                while self._curr and self._tag != "ENDMACRO":
+                    self._advance()
+                macros[name] = self._find_sql(start, self._next)
+
+            self._advance()
+
+        return macros
+
+
+    def _advance(self, times: int = 1) -> None:
+        super()._advance(times)
+        self._tag = self._curr.text.upper() if self._curr and self._prev and self._prev.token_type == TokenType.BLOCK_START else ""
 
 
 class Placeholder(str):

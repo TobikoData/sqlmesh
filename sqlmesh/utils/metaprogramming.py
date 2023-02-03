@@ -288,6 +288,7 @@ class ExecutableKind(str, Enum):
     IMPORT = "import"
     VALUE = "value"
     DEFINITION = "definition"
+    SCRIPT = "script"
 
     def __lt__(self, other: t.Any) -> bool:
         if not isinstance(other, ExecutableKind):

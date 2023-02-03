@@ -15,13 +15,15 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
-from sqlmesh.core.hooks import hook
-from sqlmesh.core.macros import macro
+from sqlmesh.core.hooks import HookRegistry, hook
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -51,8 +53,9 @@ def update_model_schemas(
 
 @dataclass
 class LoadedProject:
-    macros: UniqueKeyDict[str, macro]
-    hooks: UniqueKeyDict[str, hook]
+    macros: MacroRegistry
+    jinja_macros: JinjaMacroRegistry
+    hooks: HookRegistry
     models: UniqueKeyDict[str, Model]
     audits: UniqueKeyDict[str, Audit]
     dag: DAG[str]
@@ -80,8 +83,8 @@ class Loader(abc.ABC):
         self._path_mtimes.clear()
         self._dag = DAG()
 
-        hooks, macros = self._load_scripts()
-        models = self._load_models(macros, hooks)
+        macros, jinja_macros, hooks = self._load_scripts()
+        models = self._load_models(macros, jinja_macros, hooks)
         for model in models.values():
             self._add_model_to_dag(model)
         update_model_schemas(self._context.dialect, self._dag, models)
@@ -89,7 +92,12 @@ class Loader(abc.ABC):
         audits = self._load_audits()
 
         project = LoadedProject(
-            hooks=hooks, macros=macros, models=models, audits=audits, dag=self._dag
+            macros=macros,
+            jinja_macros=jinja_macros,
+            hooks=hooks,
+            models=models,
+            audits=audits,
+            dag=self._dag
         )
         return project
 
@@ -109,12 +117,19 @@ class Loader(abc.ABC):
     @abc.abstractmethod
     def _load_scripts(
         self,
-    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    ) -> t.Tuple[
+        MacroRegistry,
+        JinjaMacroRegistry,
+        HookRegistry,
+    ]:
         """Loads all user defined hooks and macros."""
 
     @abc.abstractmethod
     def _load_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        hooks: HookRegistry,
     ) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
@@ -126,13 +141,32 @@ class Loader(abc.ABC):
         self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
 
+    def _load_jinja_macros(self, paths: t.Iterable[Path]) -> JinjaMacroRegistry:
+        macros: JinjaMacroRegistry = UniqueKeyDict("jinja_macros")
+
+        for path in paths:
+            with open(path, mode="r", encoding="utf8") as file:
+                for name, macro in MacroExtractor().extract(file.read()).items():
+                    macros[name] = Executable(
+                        payload=f'__jinja_macros__.append("""{macro}""")',
+                        kind=ExecutableKind.SCRIPT,
+                        name=name,
+                        path=str(path),
+                    )
+
+        return macros
+
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
     def _load_scripts(
         self,
-    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    ) -> t.Tuple[
+        MacroRegistry,
+        JinjaMacroRegistry,
+        HookRegistry,
+    ]:
         """Loads all user defined hooks and macros."""
         # Store a copy of the macro registry
         standard_hooks = hook.get_registry()
@@ -149,23 +183,30 @@ class SqlMeshLoader(Loader):
 
         hook.set_registry(standard_hooks)
         macro.set_registry(standard_macros)
+        jinja_macros = self._load_jinja_macros(self._context.glob_path(self._context.hook_directory_path, ".sql"))
 
-        return hooks, macros
+        return macros, jinja_macros, hooks
 
     def _load_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        hooks: HookRegistry,
     ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(macros, hooks)
+        models = self._load_sql_models(macros, jinja_macros, hooks)
         models.update(self._load_python_models())
 
         return models
 
     def _load_sql_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        hooks: HookRegistry,
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
@@ -186,6 +227,7 @@ class SqlMeshLoader(Loader):
                     expressions,
                     defaults=self._context.config.model_defaults.dict(),
                     macros=macros,
+                    jinja_macros=jinja_macros,
                     hooks=hooks,
                     path=Path(path).absolute(),
                     module_path=self._context.path,

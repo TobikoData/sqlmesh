@@ -5,13 +5,15 @@ from pathlib import Path
 
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
-from sqlmesh.core.hooks import hook
+from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.loader import Loader
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.metaprogramming import Executable
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
@@ -28,18 +30,22 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 class DbtLoader(Loader):
     def _load_scripts(
         self,
-    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
-        macros: UniqueKeyDict[str, macro] = UniqueKeyDict("macros")
-
-        macros_dir = Path(self._context.path, "macros")
-        for path in macros_dir.glob("**/*.sql"):
-            # TODO handle macros
-            print("Handle macros here")
-
-        return (UniqueKeyDict("hooks"), macros)
+    ) -> t.Tuple[
+        MacroRegistry,
+        JinjaMacroRegistry,
+        HookRegistry,
+    ]:
+        return (
+            UniqueKeyDict("macros"),
+            self._load_jinja_macros(Path(self._context.path, "macros").glob("**/*.sql")),
+            UniqueKeyDict("hooks"),
+        )
 
     def _load_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self,
+        macros: MacroRegistry,
+        jinja_macros: JinjaMacroRegistry,
+        hooks: HookRegistry,
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
@@ -55,7 +61,7 @@ class DbtLoader(Loader):
         models.update(
             {
                 model.model_name: model.to_sqlmesh(
-                    config.sources, config.models, config.seeds, macros
+                    config.sources, config.models, config.seeds, jinja_macros
                 )
                 for model in config.models.values()
             }

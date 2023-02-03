@@ -114,7 +114,7 @@ class QueryRenderer:
                 try:
                     parsed_query = parse_one(
                         Environment()
-                        .from_string(query.name)
+                        .from_string("\n".join((*env["__jinja_macros__"], query.name)))
                         .render(**env, **render_kwargs),
                         read=self._dialect,
                     )
@@ -122,11 +122,12 @@ class QueryRenderer:
                         raise ConfigError(f"Failed to parse a Jinja query {query}")
                     query = parsed_query
                 except Exception as ex:
+                    print(env)
                     raise ConfigError(
                         f"Invalid model query. {ex} at '{self._path}'"
                     ) from ex
 
-            macro_evaluator = MacroEvaluator(self._dialect, self._python_env)
+            macro_evaluator = MacroEvaluator(self._dialect, env=env)
             macro_evaluator.locals.update(render_kwargs)
 
             for definition in self._macro_definitions:

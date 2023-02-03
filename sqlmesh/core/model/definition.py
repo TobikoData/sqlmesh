@@ -791,6 +791,7 @@ def load_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[HookRegistry] = None,
     hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
@@ -805,6 +806,7 @@ def load_model(
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
+        jinja_macros: The custom registry of jinja macros. If not provided the default registry will be used.
         hooks: The custom registry of hooks. If not provided the default registry will be used.
         python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
             from the macro registry.
@@ -865,6 +867,7 @@ def load_model(
             module_path=module_path,
             time_column_format=time_column_format,
             macros=macros,
+            jinja_macros=jinja_macros,
             hooks=hooks,
             python_env=python_env,
             **meta_fields,
@@ -900,6 +903,7 @@ def create_sql_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
@@ -1107,6 +1111,7 @@ def _python_env(
     hook_calls: t.List[HookCall],
     module_path: Path,
     macros: MacroRegistry,
+    jinja_macros: JinjaMacroRegistry,
     hooks: HookRegistry,
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}

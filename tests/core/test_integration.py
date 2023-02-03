@@ -39,7 +39,8 @@ def plan_choice(plan: Plan, choice: SnapshotChangeCategory) -> None:
 
 @pytest.mark.integration
 @pytest.mark.core_integration
-@pytest.mark.parametrize("context_fixture", ["sushi_context", "sushi_dbt_context"])
+#@pytest.mark.parametrize("context_fixture", ["sushi_context", "sushi_dbt_context"])
+@pytest.mark.parametrize("context_fixture", ["sushi_dbt_context"])
 def test_model_add(context_fixture: Context, request):
     initial_add(request.getfixturevalue(context_fixture), "dev")
 

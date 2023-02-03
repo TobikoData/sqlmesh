@@ -8,4 +8,4 @@ SELECT DISTINCT
   waiter_id::INT AS waiter_id,
   ds::TEXT AS ds
 FROM {{ source('raw', 'orders') }}
-{{ incremental_by_ds(ds) }}
+{{ incremental_by_ds('ds') }}
