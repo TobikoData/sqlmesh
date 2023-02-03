@@ -1,7 +1,7 @@
 import { RadioGroup } from "@headlessui/react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
 import { EnumPlanState, useStorePlan } from "../../../context/plan";
 import { isArrayNotEmpty } from "../../../utils";
@@ -13,6 +13,7 @@ export function PlanWizard({
 }: {
   id: string
 }) {
+  const planState = useStorePlan((s: any) => s.state)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const backfills = useStorePlan((s: any) => s.backfills)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
@@ -22,8 +23,6 @@ export function PlanWizard({
   const category = useStorePlan((s: any) => s.category)
   const categories = useStorePlan((s: any) => s.categories)
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
-
-  const elFormBackfillDates = useRef(null)
 
   const { data: context } = useApiContextByEnvironment(environment)
 
@@ -35,7 +34,8 @@ export function PlanWizard({
     if (isArrayNotEmpty(context.backfills)) {
       setCategory(categories[0])
       setPlanAction(EnumPlanState.Apply)
-
+    } else if (isModified(context.changes?.modified) || isArrayNotEmpty(context.changes?.added) || isArrayNotEmpty(context.changes?.removed)) {
+      setPlanAction(EnumPlanState.Apply)
     } else {
       setPlanAction(EnumPlanState.Done)
     }
@@ -61,7 +61,7 @@ export function PlanWizard({
 
   return (
     <ul>
-      <PlanWizardStep headline="Environment" description='Set Details'>
+      <PlanWizardStep headline="Setup" description='Set Details'>
         {context?.environment ? (
           <div>
             <h4 className="ml-1">Current Environment is <b className='px-2 py-1 font-sm rounded-md bg-secondary-100'>{context?.environment}</b></h4>
@@ -94,77 +94,86 @@ export function PlanWizard({
         )}
       </PlanWizardStep>
       <PlanWizardStep headline="Models" description='Review Models' disabled={context?.environment == null}>
-        <div className="flex">
-          {Boolean(context?.changes?.added?.length) && (
-            <div className='ml-4 mb-8'>
-              <h4 className='text-success-500 mb-2'>Added Models</h4>
-              <ul className='ml-2'>
-                {context?.changes?.added.map(modelName => (
-                  <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
-                    <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
-                  </li>
-                ))}
-              </ul>
+        {(isModified(context?.changes?.modified) || isArrayNotEmpty(context?.changes?.added) || isArrayNotEmpty(context?.changes?.removed)) ? (
+          <>
+            <div className="flex">
+              {isArrayNotEmpty(context?.changes?.added) && (
+                <div className='ml-4 mb-8'>
+                  <h4 className='text-success-500 mb-2'>Added Models</h4>
+                  <ul className='ml-2'>
+                    {context?.changes?.added.map(modelName => (
+                      <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
+                        <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {isArrayNotEmpty(context?.changes?.removed?.length) && (
+                <div className='ml-4 mb-8'>
+                  <h4 className='text-danger-500 mb-2'>Removed Models</h4>
+                  <ul className='ml-2'>
+                    {context?.changes?.added.map(modelName => (
+                      <li key={modelName} className='text-danger-500 font-sm h-[1.5rem]'>
+                        <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">{modelName}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          )}
-          {Boolean(context?.changes?.removed?.length) && (
-            <div className='ml-4 mb-8'>
-              <h4 className='text-danger-500 mb-2'>Removed Models</h4>
-              <ul className='ml-2'>
-                {context?.changes?.added.map(modelName => (
-                  <li key={modelName} className='text-danger-500 font-sm h-[1.5rem]'>
-                    <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">{modelName}</small>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-        {isModified(context?.changes?.modified) && (
-          <div className="flex">
-            {isArrayNotEmpty(context?.changes?.modified.direct) && (
-              <div className="ml-1">
-                <h4 className='text-secondary-500 mb-2'>Modified Directly</h4>
-                <ul className='ml-1 mr-3'>
-                  {context?.changes?.modified.direct.map(({ model_name }: any) => (
-                    <li key={model_name} className='text-secondary-500 font-sm h-[1.5rem]'>
-                      <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">{model_name}</small>
-                    </li>
-                  ))}
-                </ul>
+            {isModified(context?.changes?.modified) && (
+              <div className="flex">
+                {isArrayNotEmpty(context?.changes?.modified.direct) && (
+                  <div className="ml-1">
+                    <h4 className='text-secondary-500 mb-2'>Modified Directly</h4>
+                    <ul className='ml-1 mr-3'>
+                      {context?.changes?.modified.direct.map(({ model_name }: any) => (
+                        <li key={model_name} className='text-secondary-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">{model_name}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isArrayNotEmpty(context?.changes?.modified.indirect) && (
+                  <div className="ml-1 mr-3">
+                    <h4 className='text-warning-500 mb-2'>Modified Indirectly</h4>
+                    <ul className='ml-1'>
+                      {(context?.changes?.modified?.indirect || [])?.map((modelName: any) => (
+                        <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isArrayNotEmpty(context?.changes?.modified.metadata) && (
+                  <div className="ml-1">
+                    <small>Modified Metadata</small>
+                    <ul className='ml-1'>
+                      {(context?.changes?.modified?.metadata || [])?.map((modelName: any) => (
+                        <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
-            {isArrayNotEmpty(context?.changes?.modified.indirect) && (
-              <div className="ml-1 mr-3">
-                <h4 className='text-warning-500 mb-2'>Modified Indirectly</h4>
-                <ul className='ml-1'>
-                  {(context?.changes?.modified?.indirect || [])?.map((modelName: any) => (
-                    <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
-                      <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {isArrayNotEmpty(context?.changes?.modified.metadata) && (
-              <div className="ml-1">
-                <small>Modified Metadata</small>
-                <ul className='ml-1'>
-                  {(context?.changes?.modified?.metadata || [])?.map((modelName: any) => (
-                    <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
-                      <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          </>
+        ) : (
+          <div className="ml-1 text-gray-700">
+            <Divider className="h-1 w-full mb-4" />
+            <h3>No Changes</h3>
           </div>
         )}
       </PlanWizardStep>
       <PlanWizardStep headline="Backfill" description='Backfill Progress' disabled={context?.environment == null}>
         {isArrayNotEmpty(backfills) ? (
           <>
-            {isArrayNotEmpty(backfills) && isModified(context?.changes?.modified) && (
+            {isArrayNotEmpty(backfills) && isModified(context?.changes?.modified) && planState !== EnumPlanState.Applying && (
               <div className="mb-4">
                 <RadioGroup
                   className='rounded-lg w-full'
@@ -238,21 +247,39 @@ export function PlanWizard({
                         <small className="inline-block text-xs">0 / {batches} batch{batches > 1 ? 'es' : ''}</small>
                       </div>
                       <Progress
-                        progress={30}
-                        delay={Math.round(Math.random() * 1000)}
-                        duration={Math.round(Math.random() * 1000)}
+                        progress={0}
+                        duration={200}
                       />
                     </li>
                   ))}
                 </ul>
-                <PlanDates refDates={elFormBackfillDates} show={[true, true]} />
+                {planState !== EnumPlanState.Applying && <form className={clsx('flex ml-1 mt-1')}>
+                  <label className='mr-4 mb-3 text-left'>
+                    <small>Start Date</small>
+                    <input
+                      type="text"
+                      name="start_date"
+                      className="block bg-gray-100 px-2 py-1 rounded-md"
+                    />
+                    <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
+                  </label>
+                  <label className='mb-3 text-left'>
+                    <small>End Date</small>
+                    <input
+                      type="text"
+                      name="end_date"
+                      className="block bg-gray-100 px-2 py-1 rounded-md"
+                    />
+                    <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
+                  </label>
+                </form>}
               </>
             )}
           </>
         ) : (
           <div className="ml-1 text-gray-700">
             <Divider className="h-1 w-full mb-4" />
-            <h3>Latest Data</h3>
+            <h3>Explanation why we dont need to Backfill</h3>
           </div>
         )}
       </PlanWizardStep>
@@ -281,40 +308,6 @@ function PlanWizardStepHeader({ disabled = false, headline = 1, children = '', c
       <h3 className='whitespace-nowrap text-gray-600 font-bold text-lg'>{headline}</h3>
       <small className="text-gray-500">{children}</small>
     </div>
-  )
-}
-
-function PlanDates({ headline = '', prefix = '', hint = 'eg. "1 year", "2020-01-01"', refDates, show = [true, true], className }: { prefix?: string, hint?: string, refDates: React.RefObject<HTMLFormElement>, show: [boolean, boolean], className?: string, headline?: string }) {
-  const labelStartDate = `${prefix} Start Date (Optional)`.trim()
-  const labelEndDate = `${prefix} End Date (Optional)`.trim()
-  const [showStartDate, showEndDate] = show;
-
-  return (
-    <form ref={refDates} className={clsx('flex ml-1 mt-1', className)}>
-      <h3>{headline}</h3>
-      {showStartDate && (
-        <label className='mr-4 mb-3 text-left'>
-          <small>{labelStartDate}</small>
-          <input
-            type="text"
-            name="start_date"
-            className="block bg-gray-100 px-2 py-1 rounded-md"
-          />
-          <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
-        </label>
-      )}
-      {showEndDate && (
-        <label className='mb-3 text-left'>
-          <small>{labelEndDate}</small>
-          <input
-            type="text"
-            name="end_date"
-            className="block bg-gray-100 px-2 py-1 rounded-md"
-          />
-          <small className="text-xs text-gray-500">{hint}</small>
-        </label>
-      )}
-    </form>
   )
 }
 

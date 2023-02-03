@@ -17,7 +17,10 @@ export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: a
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const environment = useStorePlan((s: any) => s.environment)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
+  const setCategory = useStorePlan((s: any) => s.setCategory)
   const withBackfill = useStorePlan((s: any) => s.withBackfill)
+  const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
+  const setBackfills = useStorePlan((s: any) => s.setBackfills)
 
   const { data: context } = useApiContext()
 
@@ -34,6 +37,9 @@ export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: a
   function cleanUp() {
     useApiContextCancel(client)
     setEnvironment(null)
+    setCategory(null)
+    setWithBackfill(false)
+    setBackfills([])
   }
 
   function reset() {
