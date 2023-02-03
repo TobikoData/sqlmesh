@@ -225,14 +225,13 @@ async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> RedirectResponse:
-    async def plan_and_apply() -> t.Any:
-        plan = functools.partial(
-            context.plan, environment, no_prompts=True, auto_apply=True
-        )
-        return await run_in_executor(plan)
+    """Apply a plan"""
+    plan = functools.partial(
+        context.plan, environment, no_prompts=True, auto_apply=True
+    )
 
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        task = asyncio.create_task(plan_and_apply())
+        task = asyncio.create_task(run_in_executor(plan))
         setattr(task, "_environment", environment)
         request.app.state.task = task
     return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
@@ -243,6 +242,7 @@ async def tasks(
     request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> SSEResponse:
+    """Stream of plan application events"""
     task = None
     environment = None
     if hasattr(request.app.state, "task"):
@@ -272,3 +272,17 @@ async def tasks(
         yield create_response({})
 
     return SSEResponse(running_tasks())
+
+
+@router.post("/cancel")
+async def cancel(
+    request: Request,
+    response: Response,
+    context: Context = Depends(get_loaded_context),
+) -> None:
+    """Cancel a plan application"""
+    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No active task found."
+        )
+    response.status_code = status.HTTP_204_NO_CONTENT
