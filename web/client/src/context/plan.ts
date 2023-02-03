@@ -56,6 +56,8 @@ export const useStorePlan = create((set) => ({
   setWithBackfill: (withBackfill: boolean) => set(() => ({ withBackfill })),
   backfills: [],
   setBackfills: (backfills: any) => set(() => ({ backfills })),
+  tasks: {},
+  setTasks: (tasks: any) => set(() => ({ tasks })),
 }))
 
 function getPlan() {
