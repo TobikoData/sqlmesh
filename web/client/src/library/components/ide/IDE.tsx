@@ -35,7 +35,7 @@ export function IDE() {
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const activePlan = useStorePlan((s: any) => s.activePlan)
   const environment = useStorePlan((s: any) => s.environment)
-  const setTasks = useStorePlan((s: any) => s.setTasks)
+  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
 
   const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
   const [activeFile, setActiveFile] = useState<File | null>(null)
@@ -74,6 +74,8 @@ export function IDE() {
   }
 
   function updateTasks(data: any, channel: any) {
+    setActivePlan(null)
+
     if (data.environment == null) return channel.close()
 
     if (!data.ok) {
@@ -82,14 +84,17 @@ export function IDE() {
       return channel.close()
     }
 
-    if (isObject(data.tasks)) {
-      if (isObjectEmpty(data.tasks)) {
-        setIsPlanCompleted(true)
+    if (!isObject(data.tasks)) return channel.close()
 
-        return channel.close()
-      } else {
-        setTasks(data.tasks)
-      }
+    if (isObjectEmpty(data.tasks)) {
+      setIsPlanCompleted(true)
+
+      return channel.close()
+    } else {
+      setActivePlan({
+        environment: data.environment,
+        tasks: data.tasks,
+      })
     }
 
   }
@@ -197,7 +202,7 @@ export function IDE() {
         </div>
 
         <div className="px-3 flex items-center">
-          {planState === 'applying' ? (
+          {planState === 'applying' && activePlan ? (
             <Popover className="relative">
               {({ open }) => (
                 <>
@@ -242,7 +247,6 @@ export function IDE() {
                                 {Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length} of {Object.values(activePlan.tasks).length}
                               </small>
                             </div>
-
                             <Progress
                               progress={Math.ceil(Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length / Object.values(activePlan.tasks).length * 100)}
                             />
