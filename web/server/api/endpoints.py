@@ -8,12 +8,7 @@ import typing as t
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
-from starlette.status import (
-    HTTP_303_SEE_OTHER,
-    HTTP_404_NOT_FOUND,
-    HTTP_422_UNPROCESSABLE_ENTITY,
-)
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
@@ -63,8 +58,7 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(models.File(
-                        name=entry.name, path=relative_path))
+                    files.append(models.File(name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(
             files, key=lambda x: x.name
         )
@@ -220,8 +214,7 @@ def get_plan(
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=models.ModelsDiff.get_modified_snapshots(
-                plan.context_diff),
+            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )
 
     return payload
@@ -232,7 +225,7 @@ async def apply(
     environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-) -> RedirectResponse:
+) -> t.Any:
     """Apply a plan"""
     plan = functools.partial(
         context.plan, environment, no_prompts=True, auto_apply=True
