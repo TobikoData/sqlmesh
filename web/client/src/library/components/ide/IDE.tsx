@@ -24,23 +24,22 @@ import { Plan } from '../plan/Plan'
 import { EnumPlanState, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
-import fetchAPI from '../../../api/instance'
 import { isObject, isObjectEmpty } from '../../../utils'
 
 export function IDE() {
   const client = useQueryClient()
 
   const planState = useStorePlan((s: any) => s.state)
+  const planAction = useStorePlan((s: any) => s.action)
   const setPlanState = useStorePlan((s: any) => s.setState)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const activePlan = useStorePlan((s: any) => s.activePlan)
-  const environment = useStorePlan((s: any) => s.environment)
   const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
 
   const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
   const [activeFile, setActiveFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string>('')
-  const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
+  const [channel, setChannel] = useState<EventSource>()
   const [status, setStatus] = useState('editing')
   const [isPlanCompleted, setIsPlanCompleted] = useState<boolean | null>(null)
 
@@ -48,29 +47,28 @@ export function IDE() {
   const { data: project } = useApiFiles()
   const { data: fileData } = useApiFileByPath(activeFile?.path)
 
-  useEffect(() => {
-    if (isPlanCompleted == null) return
-
-    if (planState === EnumPlanState.Applying) {
-      setPlanAction(EnumPlanState.Done)
-    }
-
-    if (isOpenModalPlan) return setPlanState(EnumPlanState.Setting)
-    if (isPlanCompleted) return setPlanState(EnumPlanState.Init)
-
-    setPlanState(EnumPlanState.Failed)
-  }, [isPlanCompleted])
+  // useEffect(() => {
+  //   if (channel == null) {
+  //     subscribe()
+  //   }
+  // }, [])
 
   useEffect(() => {
     setFileContent(fileData?.content ?? '')
   }, [fileData])
 
-  function subscribe(channel: any, callback: any) {
-    channel.onmessage = (event: any) => {
-      callback(JSON.parse(event.data), channel)
+  useEffect(() => {
+    if (channel) {
+      channel.onmessage = (event: any) => {
+        updateTasks(JSON.parse(event.data), channel)
+      }
     }
+  }, [channel])
 
-    return channel
+  function subscribe() {
+    channel?.close()
+
+    setChannel(new EventSource('/api/tasks'))
   }
 
   function updateTasks(data: any, channel: any) {
@@ -79,6 +77,10 @@ export function IDE() {
     if (data.environment == null) return channel.close()
 
     if (!data.ok) {
+      if (planState === EnumPlanState.Init) {
+        setPlanState(EnumPlanState.Applying)
+      }
+
       setIsPlanCompleted(false)
 
       return channel.close()
@@ -99,10 +101,10 @@ export function IDE() {
 
   }
 
-  function closeIdeTab(f: File) {
-    if (!f) return
+  function closeIdeTab(file: File) {
+    if (!file) return
 
-    openedFiles.delete(f)
+    openedFiles.delete(file)
 
     if (openedFiles.size === 0) {
       setActiveFile(null)
@@ -113,25 +115,6 @@ export function IDE() {
     setOpenedFiles(new Set([...openedFiles]))
   }
 
-  async function applyPlan() {
-    setIsPlanCompleted(null)
-
-    setPlanState(EnumPlanState.Applying)
-    setPlanAction(EnumPlanState.Applying)
-
-    try {
-      const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
-
-      if (data.ok) {
-        subscribe(new EventSource('/api/tasks'), updateTasks)
-      }
-    } catch (error) {
-      console.log(error)
-
-      setIsPlanCompleted(false)
-    }
-  }
-
   function closePlan() {
     setPlanAction(EnumPlanState.Closing)
 
@@ -139,7 +122,7 @@ export function IDE() {
       setPlanState(EnumPlanState.Init)
     }
 
-    setIsOpenModalPlan(false)
+    setPlanAction(EnumPlanState.None)
   }
 
   function cancelPlan() {
@@ -153,7 +136,7 @@ export function IDE() {
 
     // Cancel request
 
-    if (isOpenModalPlan) {
+    if (planAction !== EnumPlanState.None) {
       setPlanState(EnumPlanState.Setting)
     } else {
       setPlanState(EnumPlanState.Init)
@@ -162,7 +145,6 @@ export function IDE() {
 
   function startPlan() {
     setPlanState(EnumPlanState.Setting)
-    setIsOpenModalPlan(true)
   }
 
   return (
@@ -202,7 +184,7 @@ export function IDE() {
         </div>
 
         <div className="px-3 flex items-center">
-          {planState === EnumStatePlan.Applying && activePlan ? (
+          {planState === EnumPlanState.Applying && activePlan ? (
             <Popover className="relative">
               {({ open }) => (
                 <>
@@ -290,6 +272,7 @@ export function IDE() {
               size={EnumSize.sm}
               onClick={e => {
                 e.stopPropagation()
+
                 startPlan()
               }}
               className='min-w-[6rem] justify-between'
@@ -416,7 +399,7 @@ export function IDE() {
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
-      <Transition appear show={isOpenModalPlan} as={Fragment} afterLeave={() => setPlanAction(EnumPlanState.None)}>
+      <Transition appear show={planAction !== EnumPlanState.None || planState === EnumPlanState.Setting} as={Fragment} afterLeave={() => setPlanAction(EnumPlanState.None)}>
         <Dialog as="div" className="relative z-[100]" onClose={() => undefined}>
           <Transition.Child
             as={Fragment}
@@ -442,7 +425,13 @@ export function IDE() {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan onClose={() => closePlan()} onCancel={() => cancelPlan()} onApply={() => applyPlan()} />
+                  <Plan
+                    onClose={closePlan}
+                    onCancel={cancelPlan}
+                    subscribe={subscribe}
+                    isPlanCompleted={isPlanCompleted}
+                    setIsPlanCompleted={setIsPlanCompleted}
+                  />
                 </Dialog.Panel>
               </Transition.Child>
             </div>
