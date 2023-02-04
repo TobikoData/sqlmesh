@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import typing as t
-
-from sqlmesh.utils import registry_decorator, UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, registry_decorator
 
 
 class hook(registry_decorator):

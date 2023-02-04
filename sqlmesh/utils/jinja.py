@@ -3,14 +3,8 @@ from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
 
-from jinja2 import Environment, Undefined, runtime
+from jinja2 import Environment, Undefined
 from sqlglot import Dialect, Parser, TokenType
-
-from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
-
-
-JinjaMacroRegistry = UniqueKeyDict[str, Executable]
 
 
 class MacroExtractor(Parser):
@@ -44,10 +38,15 @@ class MacroExtractor(Parser):
 
         return macros
 
-
     def _advance(self, times: int = 1) -> None:
         super()._advance(times)
-        self._tag = self._curr.text.upper() if self._curr and self._prev and self._prev.token_type == TokenType.BLOCK_START else ""
+        self._tag = (
+            self._curr.text.upper()
+            if self._curr
+            and self._prev
+            and self._prev.token_type == TokenType.BLOCK_START
+            else ""
+        )
 
 
 class Placeholder(str):

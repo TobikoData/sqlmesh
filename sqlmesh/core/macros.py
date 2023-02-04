@@ -17,7 +17,7 @@ from sqlmesh.core.dialect import (
     MacroStrReplace,
     MacroVar,
 )
-from sqlmesh.utils import registry_decorator, UniqueKeyDict
+from sqlmesh.utils import UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
@@ -93,7 +93,8 @@ class MacroEvaluator:
     """
 
     def __init__(
-        self, dialect: str = "",
+        self,
+        dialect: str = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         env: t.Optional[t.Dict[str, t.Any]] = None,
     ):
@@ -245,7 +246,7 @@ class macro(registry_decorator):
     registry_name = "macros"
 
 
-MacroRegistry = UniqueKeyDict[str, macro]
+MacroRegistry = UniqueKeyDict[str, t.Union[macro | Executable]]
 
 
 def _norm_var_arg_lambda(

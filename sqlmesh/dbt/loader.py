@@ -5,15 +5,13 @@ from pathlib import Path
 
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
-from sqlmesh.core.hooks import HookRegistry, hook
+from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.jinja import JinjaMacroRegistry
-from sqlmesh.utils.metaprogramming import Executable
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
@@ -28,23 +26,18 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 
 
 class DbtLoader(Loader):
-    def _load_scripts(
-        self,
-    ) -> t.Tuple[
-        MacroRegistry,
-        JinjaMacroRegistry,
-        HookRegistry,
-    ]:
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
         return (
-            UniqueKeyDict("macros"),
-            self._load_jinja_macros(Path(self._context.path, "macros").glob("**/*.sql")),
+            self._add_jinja_macros(
+                macro.get_registry(),
+                Path(self._context.path, "macros").glob("**/*.sql"),
+            ),
             UniqueKeyDict("hooks"),
         )
 
     def _load_models(
         self,
         macros: MacroRegistry,
-        jinja_macros: JinjaMacroRegistry,
         hooks: HookRegistry,
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
@@ -61,7 +54,7 @@ class DbtLoader(Loader):
         models.update(
             {
                 model.model_name: model.to_sqlmesh(
-                    config.sources, config.models, config.seeds, jinja_macros
+                    config.sources, config.models, config.seeds, macros
                 )
                 for model in config.models.values()
             }

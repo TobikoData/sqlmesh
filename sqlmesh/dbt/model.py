@@ -9,16 +9,14 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
-from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
@@ -132,7 +130,7 @@ class ModelConfig(GeneralConfig):
         sources: t.Dict[str, SourceConfig],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
-        jinja_macros: JinjaMacroRegistry,
+        macros: MacroRegistry,
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
@@ -195,10 +193,10 @@ class ModelConfig(GeneralConfig):
                 kind=ExecutableKind.VALUE,
                 payload="[]",
             ),
-            **jinja_macros,
+            **{k: v for k, v in macros.items() if isinstance(v, Executable)},
         }
 
-        #python_env = {k: v for k, v in python_env.items() if k in self._calls}
+        # python_env = {k: v for k, v in python_env.items() if k in self._calls}
         depends_on = set()
 
         # Include dependencies inherited from ephemeral tables
