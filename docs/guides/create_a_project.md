@@ -56,7 +56,7 @@ To create a project from the command line, follow these steps:
 
 ## Edit an existing project
 
-To edit an existing project, open the project file you wish to edit within VSCode (recommended) or your preferred editor.
+To edit an existing project, open the project file you wish to edit in your preferred editor.
 
 If using CLI or Notebook, you can open a file in your project for editing by using the `sqlmesh` command with the `--path` varaible, and pointing to your project's path as follows:
 
