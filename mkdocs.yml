@@ -7,6 +7,10 @@ nav:
     - quick_start.md
   - Guides:
     - guides/create_a_project.md
+    - guides/add_model.md
+    - guides/delete_model.md
+    - guides/evaluate_model.md
+    - guides/validate_model.md
   - Concepts:
     - concepts/overview.md
     - Models:
