@@ -8,7 +8,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from starlette.status import HTTP_303_SEE_OTHER
+from starlette.status import (
+    HTTP_303_SEE_OTHER,
+    HTTP_404_NOT_FOUND,
+    HTTP_422_UNPROCESSABLE_ENTITY,
+)
 
 from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
@@ -16,27 +20,10 @@ from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 from web.server.sse import SSEResponse
-from web.server.utils import run_in_executor
+from web.server.utils import run_in_executor, validate_path
 
 SSE_DELAY = 1  # second
 router = APIRouter()
-
-
-def validate_path(
-    path: str,
-    context: Context = Depends(get_context),
-) -> str:
-    resolved_path = context.path.resolve()
-    full_path = (resolved_path / path).resolve()
-    try:
-        full_path.relative_to(resolved_path)
-    except ValueError:
-        raise HTTPException(status_code=404)
-
-    if any(full_path.match(pattern) for pattern in context.ignore_patterns):
-        raise HTTPException(status_code=404)
-
-    return path
 
 
 @router.get("/files", response_model=models.Directory)
@@ -99,7 +86,7 @@ def get_file(
         with open(settings.project_path / path) as f:
             content = f.read()
     except FileNotFoundError:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     return models.File(name=os.path.basename(path), path=path, content=content)
 
 
@@ -126,7 +113,49 @@ async def delete_file(
         (settings.project_path / path).unlink()
         response.status_code = status.HTTP_204_NO_CONTENT
     except FileNotFoundError:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    except IsADirectoryError:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="File is a directory"
+        )
+
+
+@router.post("/directories/{path:path}", response_model=models.Directory)
+async def create_directory(
+    response: Response,
+    path: str = Depends(validate_path),
+    settings: Settings = Depends(get_settings),
+) -> models.Directory:
+    """Create a directory."""
+    try:
+        (settings.project_path / path).mkdir(parents=True)
+        return models.Directory(name=os.path.basename(path), path=path)
+    except FileExistsError:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory already exists"
+        )
+
+
+@router.delete("/directories/{path:path}")
+async def delete_directory(
+    response: Response,
+    path: str = Depends(validate_path),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Delete a directory."""
+    try:
+        (settings.project_path / path).rmdir()
+        response.status_code = status.HTTP_204_NO_CONTENT
+    except FileNotFoundError:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    except NotADirectoryError:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not a directory"
+        )
+    except OSError:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory not empty"
+        )
 
 
 @router.get(
@@ -196,14 +225,13 @@ async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> RedirectResponse:
-    async def plan_and_apply() -> t.Any:
-        plan = functools.partial(
-            context.plan, environment, no_prompts=True, auto_apply=True
-        )
-        return await run_in_executor(plan)
+    """Apply a plan"""
+    plan = functools.partial(
+        context.plan, environment, no_prompts=True, auto_apply=True
+    )
 
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        task = asyncio.create_task(plan_and_apply())
+        task = asyncio.create_task(run_in_executor(plan))
         setattr(task, "_environment", environment)
         request.app.state.task = task
     return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
@@ -214,6 +242,7 @@ async def tasks(
     request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> SSEResponse:
+    """Stream of plan application events"""
     task = None
     environment = None
     if hasattr(request.app.state, "task"):
@@ -243,3 +272,17 @@ async def tasks(
         yield create_response({})
 
     return SSEResponse(running_tasks())
+
+
+@router.post("/plan/cancel")
+async def cancel(
+    request: Request,
+    response: Response,
+    context: Context = Depends(get_loaded_context),
+) -> None:
+    """Cancel a plan application"""
+    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No active task found."
+        )
+    response.status_code = status.HTTP_204_NO_CONTENT

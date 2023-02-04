@@ -58,6 +58,7 @@ setup(
             "psycopg2-binary",
             "PyGithub",
             "pytest",
+            "pytest-asyncio",
             "pytest-mock",
             "pyspark",
             "sqlalchemy-stubs",
