@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { python } from '@codemirror/lang-python';
@@ -23,23 +23,35 @@ export function Editor() {
   const client = useQueryClient()
 
   const { setActiveFile, activeFile, openedFiles, setOpenedFiles } = useContext(ContextIDE);
+  const [content, setContent] = useState<string>()
   const [status, setStatus] = useState('edit')
+
   const { data: fileData } = useApiFileByPath(activeFile?.path)
   const mutationSaveFile = useMutationApiSaveFile(client)
 
   useEffect(() => {
-    if (fileData && activeFile && !activeFile?.isLocal) {
-      activeFile.content = fileData.content ?? ''
-
-      setStatus('updated')
+    if (fileData) {
+      setContent(fileData.content)
     }
   }, [fileData])
 
+  useEffect(() => {
+    if (activeFile) {
+      setContent(activeFile.content)
+    }
+  }, [activeFile])
 
-  function closeEditorTab(f: ModelFile) {
-    if (!f) return
+  useEffect(() => {
+    if (activeFile) {
+      updateFileContent(content, activeFile?.id)
+    }
+  }, [content])
 
-    openedFiles.delete(f)
+
+  function closeEditorTab(file: ModelFile) {
+    if (!file) return
+
+    openedFiles.delete(file)
 
     if (openedFiles.size === 0) {
       setActiveFile(null)
@@ -60,26 +72,35 @@ export function Editor() {
   function onChange(value: string) {
     setStatus('edit')
 
-    if (value === activeFile?.content) return
+    if (activeFile?.isLocal) return setContent(value)
 
-    if (activeFile?.isLocal) {
-      activeFile.content = value
+    setStatus('saving...')
 
-      setStatus('saved')
-    } else {
-      setStatus('saving...')
-
+    if (value !== content) {
       mutationSaveFile.mutate({
         path: activeFile?.path,
         body: value,
       })
-
-      setStatus('saved')
     }
+
+    setStatus('saved')
   }
 
   function sendQuery() {
     console.log('Sending query', activeFile?.content)
+  }
+
+  function cleanUp() {
+    setContent('')
+    setStatus('edit')
+  }
+
+  function updateFileContent(text?: string, id?: string | number) {
+    openedFiles.forEach(file => {
+      if (id && file.id === id) {
+        file.content = text ?? ''
+      }
+    })
   }
 
   const debouncedChange = useMemo(() => debounce(
@@ -90,7 +111,7 @@ export function Editor() {
     () => {
       setStatus('edit')
     },
-    500
+    200
   ), [])
 
   return (
@@ -99,20 +120,30 @@ export function Editor() {
         <Button className='m-0 ml-1 mr-3' size='sm' onClick={e => {
           e.stopPropagation()
 
-          addNewFileAndSelect()
+          // debouncedChange.cancel()
+
+          updateFileContent(content, activeFile?.id)
+
+          setTimeout(() => {
+            addNewFileAndSelect()
+          }, 200)
         }}>+</Button>
         <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto">
           {openedFiles.size > 0 &&
             [...openedFiles].map((file, idx) => (
               <li
-                key={file.path || file.id}
+                key={file.id}
                 className={clsx(
                   'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
 
                 )}
                 onClick={() => {
                   if (activeFile?.id !== file.id) {
-                    setActiveFile(file)
+                    updateFileContent(content, activeFile?.id)
+
+                    setTimeout(() => {
+                      setActiveFile(file)
+                    }, 200)
                   }
                 }}
               >
@@ -130,6 +161,7 @@ export function Editor() {
                       onClick={(e) => {
                         e.stopPropagation()
 
+                        cleanUp()
                         closeEditorTab(file)
                       }}
                       className={`inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700 `}
@@ -147,7 +179,7 @@ export function Editor() {
           <CodeEditor
             className="h-full w-full"
             extension={activeFile?.extension}
-            value={activeFile?.content}
+            value={content}
             onChange={debouncedChange}
           />
         </div>
@@ -158,7 +190,7 @@ export function Editor() {
         <small>File Status: {status}</small>
         <small>{getLanguageByExtension(activeFile?.extension)}</small>
         <div className="flex">
-          {activeFile?.extension === '.sql' && activeFile.content && (
+          {activeFile?.extension === '.sql' && content && (
             <>
               <Button size={EnumSize.sm} variant="alternative" onClick={e => {
                 e.stopPropagation()
@@ -221,9 +253,9 @@ function debounce(
   after: () => void,
   delay: number = 500
 ) {
-  console.log('fsdfdsfsd')
   let timer: any
-  return function (...args: any) {
+
+  function callback(...args: any) {
     clearTimeout(timer)
 
     before && before()
@@ -234,6 +266,12 @@ function debounce(
       after && after()
     }, delay)
   }
+
+  callback.cancel = () => {
+    timer = clearTimeout(timer)
+  }
+
+  return callback
 }
 
 function getLanguageByExtension(extension?: string) {
