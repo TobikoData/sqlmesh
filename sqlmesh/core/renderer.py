@@ -107,8 +107,9 @@ class QueryRenderer:
                 **kwargs,
             }
 
+            env = prepare_env(self._python_env)
+
             if isinstance(query, d.Jinja):
-                env = prepare_env(self._python_env)
                 env[c.SQLMESH] = True
 
                 try:
@@ -122,7 +123,6 @@ class QueryRenderer:
                         raise ConfigError(f"Failed to parse a Jinja query {query}")
                     query = parsed_query
                 except Exception as ex:
-                    print(env)
                     raise ConfigError(
                         f"Invalid model query. {ex} at '{self._path}'"
                     ) from ex
