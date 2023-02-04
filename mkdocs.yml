@@ -1,35 +1,47 @@
 site_name: SQLMesh
 nav:
-  - "Overview": index.md
-  - quick_start.md
+  - Get started:
+    - "What is SQLMesh?": index.md
+    - "Why SQLMesh?": why_sqlmesh.md
+    - prerequisites.md
+    - quick_start.md
   - Guides:
     - guides/create_a_project.md
-    - guides/process.md
   - Concepts:
     - concepts/overview.md
     - Models:
       - concepts/models/overview.md
       - concepts/models/model_kinds.md
+      - concepts/models/python_models.md
+      - concepts/models/sql_models.md
+      - concepts/models/seed_models.md
     - concepts/plans.md
     - concepts/configs.md
     - concepts/environments.md
+    - concepts/team_development.md
     - concepts/macros.md
+    - concepts/hooks.md
     - concepts/tests.md
     - concepts/audits.md
     - Architecture:
       - concepts/architecture/snapshots.md
+      - concepts/architecture/serialization.md
     - concepts/glossary.md
   - Reference:
-    - api/overview.md
+    - reference/overview.md
     - Options:
-      - api/cli.md
-      - api/notebook.md
-      - api/python.md
+      - reference/cli.md
+      - reference/notebook.md
+      - reference/python.md
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
     - integrations/dbt.md
+    - integrations/github.md
+  - Best practices:
+    - best_practices/recommended_workflow.md
   - Resources:
+    - release_notes.md
     - community.md
     - development.md
 

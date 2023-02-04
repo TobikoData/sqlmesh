@@ -5,6 +5,8 @@ This example project will run locally on your computer using [DuckDB](https://du
 
 ## Prerequisites
 
+[//]: # (If anything changes here, update prerequisites.md as well.)
+
 You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running the following command:
 ```
 python3 --version
