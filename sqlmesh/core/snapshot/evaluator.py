@@ -87,7 +87,7 @@ class SnapshotEvaluator:
         if snapshot.is_embedded_kind:
             return None
 
-        if not limit and snapshot.is_forward_only:
+        if not limit and not snapshot.is_forward_only:
             self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
