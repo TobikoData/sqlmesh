@@ -1,20 +1,75 @@
 # Create a project
 
-## Create a project from scratch
+## Create a project
 
-To get up and running with a new project that SQLMesh scaffolds for you, refer to the [quickstart guide](/quick_start).
+---
 
-* Make sure you have required dependencies.
-* Create a folder
-* Run `sqlmesh init`
+Before getting started, ensure that you meet the [prerequsities](../../prerequisites) for using SQLMesh.
+
+---
+
+To create a project from the command line, follow these steps:
+
+1. Create a directory for your project:
+
+    ```
+    mkdir my-project
+    ```
+
+2. Change directories into your new project:
+
+    ```
+    cd my-project
+    ```
+
+    From here, you can create your project structure from scratch, or SQLMesh can scaffold one for you. For the purposes of this guide, we'll show you how to scaffold your project so that you can get up and running quickly.
+
+1. To scaffold a project, it is recommended that you use a virtual environment by running the following commands:
+
+    ```
+    python -m venv .env
+    ```
+
+    ```
+    source .env/bin/active
+    ```
+
+    ```
+    pip install sqlmesh
+    ```
+
+    **Note:** When using a virtual environment, you must ensure that it is activated first. You should see `(.env)` in your command line; if you don't, run `source .env/bin/activate` from your project directory to activate your environment.
+
+1. Once you have activated your environment, run the following command and SQLMesh will build out your project:
+
+    ```
+    sqlmesh init
+    ```
+   
+    The following directories and files will be created that you can use to organize your SQLMesh project:
+
+    - config.py (database configuration file)
+    - ./models (SQL and Python models)
+    - ./audits (shared audits)
+    - ./tests (unit tests)
+    - ./macros
 
 ## Edit an existing project
 
-* There's nothing special to do for an existing project, you just use it as normal.
+To edit an existing project, open the project file you wish to edit in your preferred editor.
 
-* CLI/Notebook you need to pass the path variable in pointing to your project.
+If using CLI or Notebook, you can open a file in your project for editing by using the `sqlmesh` command with the `--path` varaible, and pointing to your project's path as follows:
 
-## Import a DBT project
+```
+sqlmesh --path <your-project-path>
+```
 
-* Read the DBT guide
-* All you need to do is run sqlmesh with a dbt flag (ask chris for this).
+For more details, refer to [CLI](../../api/cli) and [Notebook](../..api/notebook).
+
+## Import a dbt project
+
+To import a dbt project, use the `sqlmesh init` command with the `dbt` flag as follows:
+
+```
+sqlmesh init -t dbt
+```
