@@ -36,6 +36,7 @@ EXAMPLE_FULL_MODEL_DEF = f"""MODEL (
   name {EXAMPLE_FULL_MODEL_NAME},
   kind FULL,
   cron '@daily',
+  audits [assert_positive_order_ids],
 );
 
 SELECT
@@ -75,12 +76,11 @@ WHERE
 """
 
 EXAMPLE_AUDIT = f"""AUDIT (
-  name asset_positive_order_ids,
-  model {EXAMPLE_FULL_MODEL_NAME}
+  name assert_positive_order_ids,
 );
 
 SELECT *
-FROM {EXAMPLE_FULL_MODEL_NAME}
+FROM @this_model
 WHERE
   item_id < 0
 """

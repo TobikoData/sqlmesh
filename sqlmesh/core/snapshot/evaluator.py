@@ -87,14 +87,14 @@ class SnapshotEvaluator:
         if snapshot.is_embedded_kind:
             return None
 
-        if not snapshot.is_forward_only:
+        if not limit and snapshot.is_forward_only:
             self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
 
         model = snapshot.model
         columns_to_types = model.columns_to_types
-        table_name = snapshot.table_name(is_dev=is_dev)
+        table_name = "" if limit else snapshot.table_name(is_dev=is_dev)
 
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if snapshot.is_view_kind:
@@ -165,7 +165,7 @@ class SnapshotEvaluator:
         ):
             for index, query_or_df in enumerate(queries_or_dfs):
                 if limit > 0:
-                    return query_or_df.head(limit) if isinstance(query_or_df, DF) else self.adapter._fetch_native_df(query.limit(limit))  # type: ignore
+                    return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
                 apply(query_or_df, index)
 
             model.run_post_hooks(
