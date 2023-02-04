@@ -9,15 +9,16 @@ import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
 
 export function PlanWizard({
-  id
+  id,
+  context,
 }: {
-  id: string
+  id: string,
+  context: any,
 }) {
   const planState = useStorePlan((s: any) => s.state)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const backfills = useStorePlan((s: any) => s.backfills)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
-  const environment = useStorePlan((s: any) => s.environment)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const setCategory = useStorePlan((s: any) => s.setCategory)
   const category = useStorePlan((s: any) => s.category)
@@ -25,7 +26,6 @@ export function PlanWizard({
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
   const activePlan = useStorePlan((s: any) => s.activePlan)
 
-  const { data: context } = useApiContextByEnvironment(environment)
 
   useEffect(() => {
     if (context == null) return
@@ -102,7 +102,7 @@ export function PlanWizard({
                 <div className='ml-4 mb-8'>
                   <h4 className='text-success-500 mb-2'>Added Models</h4>
                   <ul className='ml-2'>
-                    {context?.changes?.added.map(modelName => (
+                    {context?.changes?.added.map((modelName: string) => (
                       <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
                         <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
                       </li>
@@ -114,7 +114,7 @@ export function PlanWizard({
                 <div className='ml-4 mb-8'>
                   <h4 className='text-danger-500 mb-2'>Removed Models</h4>
                   <ul className='ml-2'>
-                    {context?.changes?.added.map(modelName => (
+                    {context?.changes?.added.map((modelName: string) => (
                       <li key={modelName} className='text-danger-500 font-sm h-[1.5rem]'>
                         <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">{modelName}</small>
                       </li>
@@ -233,15 +233,15 @@ export function PlanWizard({
             {category.id != 'no-change' && (
               <>
                 <ul className="mb-4">
-                  {backfills.filter((item: any) => category.id === 'non-breaking-change' ? !context?.changes?.modified?.indirect?.find(model_name => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
+                  {backfills.filter((item: any) => category.id === 'non-breaking-change' ? !context?.changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
                     <li key={model_name} className='text-gray-600 font-light w-full mb-2'>
                       <div className="flex justify-between items-center w-full">
                         <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
                           <p className={clsx(
                             "font-bold text-xs ",
-                            context?.changes?.modified?.direct?.find(m => m.model_name === model_name) && 'text-secondary-500',
-                            context?.changes?.added?.find(name => name === model_name) && 'text-success-500',
-                            context?.changes?.modified?.indirect?.find(name => name === model_name) && 'text-warning-500',
+                            context?.changes?.modified?.direct?.find((m: any) => m.model_name === model_name) && 'text-secondary-500',
+                            context?.changes?.added?.find((name: string) => name === model_name) && 'text-success-500',
+                            context?.changes?.modified?.indirect?.find((name: string) => name === model_name) && 'text-warning-500',
                           )}>{model_name}</p>
                           <small className="inline-block pl-3 text-xs text-gray-900">{interval[0]} - {interval[1]}</small>
                         </div>
@@ -253,22 +253,30 @@ export function PlanWizard({
                     </li>
                   ))}
                 </ul>
-                {planState !== EnumPlanState.Applying && <form className={clsx('flex ml-1 mt-1')}>
-                  <label className='mr-4 mb-3 text-left'>
+                {<form className={clsx('flex ml-1 mt-1')}>
+                  <label className={clsx(
+                    'mb-3 mr-4 text-left',
+                    (planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                  )}>
                     <small>Start Date</small>
                     <input
                       type="text"
                       name="start_date"
                       className="block bg-gray-100 px-2 py-1 rounded-md"
+                      disabled={planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
                     />
                     <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
                   </label>
-                  <label className='mb-3 text-left'>
+                  <label className={clsx(
+                    'mb-3 text-left',
+                    (planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                  )}>
                     <small>End Date</small>
                     <input
                       type="text"
                       name="end_date"
                       className="block bg-gray-100 px-2 py-1 rounded-md"
+                      disabled={planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
                     />
                     <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
                   </label>

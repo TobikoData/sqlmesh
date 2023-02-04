@@ -1,20 +1,21 @@
 import { Button } from '../button/Button'
-import { useApiContext, useApiContextCancel } from '../../../api'
+import { useApiContext, useApiContextByEnvironment, useApiContextCancel } from '../../../api'
 import { useEffect, useState } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
-import { applyPlan } from '../../../api/endpoints'
-import { EnumPlanState, type PlanState, useStorePlan } from '../../../context/plan'
+import { EnumPlanState, useStorePlan } from '../../../context/plan'
+import fetchAPI from '../../../api/instance'
 
 
-export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: any, onApply: any }) {
+export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanCompleted }: { isPlanCompleted: boolean | null, onClose: any, onCancel: any, subscribe: any, setIsPlanCompleted: any }) {
   const client = useQueryClient()
 
   const planState = useStorePlan((s: any) => s.state)
   const planAction = useStorePlan((s: any) => s.action)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
+  const setPlanState = useStorePlan((s: any) => s.setState)
   const environment = useStorePlan((s: any) => s.environment)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const setCategory = useStorePlan((s: any) => s.setCategory)
@@ -22,16 +23,47 @@ export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: a
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
 
+  const { data: contextPlan, refetch } = useApiContextByEnvironment(environment)
   const { data: context } = useApiContext()
 
   useEffect(() => {
-    if (environment == null) {
+    if (isPlanCompleted == null) return
+
+    if (planAction === EnumPlanState.None) {
+      setPlanState(EnumPlanState.Init)
+    }
+
+    if (isPlanCompleted) {
+      setPlanState(EnumPlanState.Setting)
+      setPlanAction(EnumPlanState.Done)
+
+      refetch()
+    }
+  }, [isPlanCompleted])
+
+  useEffect(() => {
+    if (environment == null && planState === EnumPlanState.Setting) {
       setPlanAction(EnumPlanState.Run)
     }
   }, [environment])
 
-  function apply() {
-    onApply()
+  async function apply() {
+    setIsPlanCompleted(null)
+
+    setPlanState(EnumPlanState.Applying)
+    setPlanAction(EnumPlanState.Applying)
+
+    try {
+      const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
+
+      if (data.ok) {
+        subscribe()
+      }
+    } catch (error) {
+      console.log(error)
+
+      setIsPlanCompleted(false)
+    }
   }
 
   function cleanUp() {
@@ -70,7 +102,7 @@ export function Plan({ onClose, onCancel, onApply }: { onClose: any, onCancel: a
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard id="contextEnvironment" />
+            <PlanWizard id="contextEnvironment" context={contextPlan} />
           </div>
         )}
         <Divider className='h-2' />
