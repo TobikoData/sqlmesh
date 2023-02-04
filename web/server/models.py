@@ -63,7 +63,7 @@ class ModelsDiff(PydanticModel):
         indirect = set()
         metadata = set()
 
-        for snapshot_name in context_diff.snapshots.keys():
+        for snapshot_name in context_diff.modified_snapshots:
             if context_diff.directly_modified(snapshot_name):
                 direct.append(
                     {

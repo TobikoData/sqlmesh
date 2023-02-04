@@ -260,15 +260,15 @@ async def tasks(
         environment = getattr(task, "_environment", None)
 
     def create_response(task_status: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        data = json.dumps(
-            {
-                "ok": True,
-                "environment": environment,
-                "tasks": task_status,
-            }
-        )
-
-        return {"data": f"{data}"}
+        return {
+            "data": json.dumps(
+                {
+                    "ok": True,
+                    "environment": environment,
+                    "tasks": task_status,
+                }
+            )
+        }
 
     async def running_tasks() -> t.AsyncGenerator:
         console: ApiConsole = context.console  # type: ignore

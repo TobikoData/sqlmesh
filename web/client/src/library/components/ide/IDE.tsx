@@ -202,7 +202,7 @@ export function IDE() {
         </div>
 
         <div className="px-3 flex items-center">
-          {planState === 'applying' && activePlan ? (
+          {planState === EnumStatePlan.Applying && activePlan ? (
             <Popover className="relative">
               {({ open }) => (
                 <>
