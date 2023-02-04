@@ -51,14 +51,18 @@ def date_kwargs() -> t.Dict[str, str]:
     }
 
 
-def test_evaluate(mocker: MockerFixture, make_snapshot):
+@pytest.fixture
+def adapter_mock(mocker: MockerFixture):
     transaction_mock = mocker.Mock()
     transaction_mock.__enter__ = mocker.Mock()
     transaction_mock.__exit__ = mocker.Mock()
 
     adapter_mock = mocker.Mock()
     adapter_mock.transaction.return_value = transaction_mock
+    return adapter_mock
 
+
+def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
     payload = {"calls": 0}
@@ -147,9 +151,7 @@ def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snaps
         )
 
 
-def test_promote(mocker: MockerFixture, make_snapshot):
-    adapter_mock = mocker.Mock()
-
+def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = SqlModel(
