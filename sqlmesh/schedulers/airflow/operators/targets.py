@@ -124,7 +124,7 @@ class SnapshotEvaluationTarget(
         self,
         context: Context,
         session: Session = util.PROVIDED_SESSION,
-        **kwargs: t.Any
+        **kwargs: t.Any,
     ) -> None:
         VariableStateSync(session).add_interval(
             self.snapshot.snapshot_id,
@@ -236,7 +236,7 @@ class SnapshotTableCleanupTarget(
         self,
         context: Context,
         session: Session = util.PROVIDED_SESSION,
-        **kwargs: t.Any
+        **kwargs: t.Any,
     ) -> None:
         _delete_xcom(
             common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,

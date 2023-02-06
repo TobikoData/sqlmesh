@@ -18,6 +18,9 @@ repos:
       - id: black
         name: black
         language: system
+        args:
+          - --target-version
+          - py37
         entry: black
         require_serial: true
         files: *files
