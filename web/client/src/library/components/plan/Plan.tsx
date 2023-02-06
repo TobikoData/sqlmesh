@@ -1,15 +1,23 @@
 import { Button } from '../button/Button'
 import { useApiContext, useApiContextByEnvironment, useApiContextCancel } from '../../../api'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
 import { EnumPlanState, useStorePlan } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
+import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
+import { useChannel } from '../../../api/channels'
 
 
-export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanCompleted }: { isPlanCompleted: boolean | null, onClose: any, onCancel: any, subscribe: any, setIsPlanCompleted: any }) {
+export function Plan({
+  onClose,
+  onCancel,
+}: {
+  onClose: any,
+  onCancel: any,
+}) {
   const client = useQueryClient()
 
   const planState = useStorePlan((s: any) => s.state)
@@ -22,36 +30,44 @@ export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanC
   const withBackfill = useStorePlan((s: any) => s.withBackfill)
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
+  const updateTasks = useStorePlan((s: any) => s.updateTasks)
 
-  const { data: contextPlan, refetch } = useApiContextByEnvironment(environment)
+  const [subscribe] = useChannel('/api/tasks', updateTasks)
+
+  const { refetch } = useApiContextByEnvironment(environment)
   const { data: context } = useApiContext()
 
   useEffect(() => {
-    if (isPlanCompleted == null) return
-
-    if (planAction === EnumPlanState.None) {
-      setPlanState(EnumPlanState.Init)
-    }
-
-    if (isPlanCompleted) {
-      setPlanState(EnumPlanState.Setting)
-      setPlanAction(EnumPlanState.Done)
-
-      refetch()
-    }
-  }, [isPlanCompleted])
+    setPlanAction(EnumPlanState.Run)
+  }, [])
 
   useEffect(() => {
-    if (environment == null && planState === EnumPlanState.Setting) {
+    if (isNotNil(environment)) {
+      refetch()
+    }
+
+    if (isNil(environment)) {
       setPlanAction(EnumPlanState.Run)
     }
   }, [environment])
 
-  async function apply() {
-    setIsPlanCompleted(null)
+  useEffect(() => {
+    if (planState === EnumPlanState.Applying) {
+      setPlanAction(EnumPlanState.Applying)
+    }
 
+    if (planState === EnumPlanState.Canceling) {
+      setPlanAction(EnumPlanState.Canceling)
+    }
+
+    if (planState === EnumPlanState.Finished || planState === EnumPlanState.Failed) {
+      setPlanAction(EnumPlanState.Done)
+      refetch()
+    }
+  }, [planState])
+
+  async function apply() {
     setPlanState(EnumPlanState.Applying)
-    setPlanAction(EnumPlanState.Applying)
 
     try {
       const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
@@ -62,7 +78,7 @@ export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanC
     } catch (error) {
       console.log(error)
 
-      setIsPlanCompleted(false)
+      reset()
     }
   }
 
@@ -74,8 +90,10 @@ export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanC
     setBackfills([])
   }
 
-  function reset() {
+  async function reset() {
     setPlanAction(EnumPlanState.Resetting)
+
+    await delay(500)
 
     cleanUp()
   }
@@ -96,13 +114,13 @@ export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanC
     <div className="flex items-start w-full h-[75vh] overflow-hidden">
       <PlanSidebar context={context} />
       <div className="flex flex-col w-full h-full overflow-hidden">
-        {planState === EnumPlanState.Init ? (
+        {isArrayEmpty(context?.models) ? (
           <div className='flex items-center justify-center w-full h-full'>
             <h2 className='text-2xl font-black text-gray-700'>No Models Found</h2>
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard id="contextEnvironment" context={contextPlan} />
+            <PlanWizard id="contextEnvironment" />
           </div>
         )}
         <Divider className='h-2' />
@@ -146,7 +164,7 @@ export function Plan({ onClose, onCancel, subscribe, setIsPlanCompleted, isPlanC
                 className='justify-self-end'
                 disabled={planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling || planAction === EnumPlanState.Closing}
               >
-                {planState === EnumPlanState.Resetting ? 'Resetting...' : 'Reset'}
+                {planAction === EnumPlanState.Resetting ? 'Resetting...' : 'Reset'}
               </Button>
             )}
             <Button
