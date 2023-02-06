@@ -25,6 +25,7 @@ import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/pl
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
+import fetchAPI from '../../../api/instance'
 
 export function IDE() {
   const client = useQueryClient()
@@ -34,6 +35,7 @@ export function IDE() {
   const setPlanState = useStorePlan((s: any) => s.setState)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
+  const setLastPlan = useStorePlan((s: any) => s.setLastPlan)
   const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
@@ -43,7 +45,7 @@ export function IDE() {
   const [fileContent, setFileContent] = useState<string>('')
   const [status, setStatus] = useState('editing')
 
-  const [subscribe, getChannel] = useChannel('/api/tasks', updateTasks)
+  const [subscribe, getChannel, unsubscribe] = useChannel('/api/tasks', updateTasks)
 
   const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
@@ -78,15 +80,26 @@ export function IDE() {
     setPlanAction(EnumPlanAction.Closing)
   }
 
-  function cancelPlan() {
+  async function cancelPlan() {
     setPlanState(EnumPlanState.Canceling)
-
 
     if (planAction !== EnumPlanAction.None) {
       setPlanAction(EnumPlanAction.Canceling)
     }
 
-    console.log('cancel plan')
+    try {
+      await fetchAPI({ url: `/api/plan/cancel`, method: 'post' })
+    } catch (e) {
+      console.error(e)
+    }
+
+    setPlanState(EnumPlanState.Cancelled)
+
+    setLastPlan(plan)
+
+    getChannel()?.close()
+    unsubscribe()
+
 
     if (planAction !== EnumPlanAction.None) {
       startPlan()
@@ -94,9 +107,9 @@ export function IDE() {
   }
 
   function startPlan() {
-    setActivePlan(null)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanAction.Opening)
+    setActivePlan(null)
     setEnvironment(null)
   }
 
@@ -169,6 +182,7 @@ export function IDE() {
                     'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
                     planState === EnumPlanState.Finished && 'bg-success-500 text-white',
                     planState === EnumPlanState.Failed && 'bg-danger-500 text-white',
+                    planState === EnumPlanState.Cancelled && 'bg-warning-500 text-white',
                     planState === EnumPlanState.Applying && 'bg-secondary-500 text-white',
                     planState !== EnumPlanState.Finished && planState !== EnumPlanState.Failed && planState !== EnumPlanState.Applying && 'bg-gray-100 text-gray-500',
                   )}
@@ -218,7 +232,9 @@ export function IDE() {
                           </div>
                           <div className='flex justify-end items-center px-2'>
                             <div className='w-full'>
-                              <small className='text-xs'><b>Last Update:</b> {new Date(plan.updated_at).toDateString()}</small>
+                              <small className='text-xs'>
+                                <b>Last Updated:</b> {new Date(plan.updated_at).toDateString()}
+                              </small>
                             </div>
                             {planState === EnumPlanState.Applying && <Button size='sm' variant='danger' className='mx-0' onClick={e => {
                               e.stopPropagation()
