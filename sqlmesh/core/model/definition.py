@@ -370,7 +370,7 @@ class _Model(ModelMeta, frozen=True):
             elif time_column_type.this in exp.DataType.NUMERIC_TYPES:
                 return exp.Literal.number(time)
             elif time_column_type.this in exp.DataType.TEMPORAL_TYPES:
-                return exp.Cast(this=exp.Literal.string(time), to=time_column_type)
+                return exp.cast(exp.Literal.string(time), time_column_type)
         return exp.convert(time)
 
     @property
