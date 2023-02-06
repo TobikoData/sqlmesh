@@ -21,7 +21,7 @@ import {
 import type { File } from '../../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plan } from '../plan/Plan'
-import { EnumPlanState, useStorePlan } from '../../../context/plan'
+import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
@@ -75,20 +75,20 @@ export function IDE() {
   }
 
   function closePlan() {
-    setPlanAction(EnumPlanState.Closing)
+    setPlanAction(EnumPlanAction.Closing)
   }
 
   function cancelPlan() {
     setPlanState(EnumPlanState.Canceling)
 
 
-    if (planAction !== EnumPlanState.None) {
-      setPlanAction(EnumPlanState.Canceling)
+    if (planAction !== EnumPlanAction.None) {
+      setPlanAction(EnumPlanAction.Canceling)
     }
 
     console.log('cancel plan')
 
-    if (planAction !== EnumPlanState.None) {
+    if (planAction !== EnumPlanAction.None) {
       startPlan()
     }
   }
@@ -96,7 +96,7 @@ export function IDE() {
   function startPlan() {
     setActivePlan(null)
     setPlanState(EnumPlanState.Init)
-    setPlanAction(EnumPlanState.Opening)
+    setPlanAction(EnumPlanAction.Opening)
     setEnvironment(null)
   }
 
@@ -138,7 +138,7 @@ export function IDE() {
 
         <div className="px-3 flex items-center">
           <Button
-            disabled={planAction !== EnumPlanState.None || planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
+            disabled={planAction !== EnumPlanAction.None || planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
             variant='primary'
             size={EnumSize.sm}
             onClick={e => {
@@ -154,7 +154,7 @@ export function IDE() {
                 ? 'Applying Plan...'
                 : planState === EnumPlanState.Canceling
                   ? 'Canceling Plan...'
-                  : planAction !== EnumPlanState.None
+                  : planAction !== EnumPlanAction.None
                     ? 'Setting Plan...'
                     : 'Run Plan'
               }
@@ -349,7 +349,7 @@ export function IDE() {
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
-      <Transition appear show={planAction !== EnumPlanState.None && planAction !== EnumPlanState.Closing} as={Fragment} afterLeave={() => setPlanAction(EnumPlanState.None)}>
+      <Transition appear show={planAction !== EnumPlanAction.None && planAction !== EnumPlanAction.Closing} as={Fragment} afterLeave={() => setPlanAction(EnumPlanAction.None)}>
         <Dialog as="div" className="relative z-[100]" onClose={() => undefined}>
           <Transition.Child
             as={Fragment}

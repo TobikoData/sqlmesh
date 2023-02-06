@@ -3,7 +3,7 @@ import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
 import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
-import { EnumPlanState, useStorePlan } from "../../../context/plan";
+import { EnumPlanState, EnumPlanAction, useStorePlan } from "../../../context/plan";
 import { isArrayNotEmpty } from "../../../utils";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
@@ -34,11 +34,11 @@ export function PlanWizard({
 
     if (isArrayNotEmpty(context.backfills)) {
       setCategory(categories[0])
-      setPlanAction(EnumPlanState.Apply)
+      setPlanAction(EnumPlanAction.Apply)
     } else if (isModified(context.changes?.modified) || isArrayNotEmpty(context.changes?.added) || isArrayNotEmpty(context.changes?.removed)) {
-      setPlanAction(EnumPlanState.Apply)
+      setPlanAction(EnumPlanAction.Apply)
     } else {
-      setPlanAction(EnumPlanState.Done)
+      setPlanAction(EnumPlanAction.Done)
     }
   }, [context])
 
@@ -50,7 +50,7 @@ export function PlanWizard({
     e.preventDefault()
     e.stopPropagation()
 
-    setPlanAction(EnumPlanState.Running)
+    setPlanAction(EnumPlanAction.Running)
 
     const elForm = e.target
     const data = new FormData(e.target)

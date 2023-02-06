@@ -5,7 +5,7 @@ import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
-import { EnumPlanState, PlanState, useStorePlan } from '../../../context/plan'
+import { EnumPlanState, EnumPlanAction, PlanState, useStorePlan, PlanAction } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
 import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
@@ -38,12 +38,12 @@ export function Plan({
   const { data: context } = useApiContext()
 
   useEffect(() => {
-    setPlanAction(EnumPlanState.Run)
+    setPlanAction(EnumPlanAction.Run)
   }, [])
 
   useEffect(() => {
     if (isNil(environment)) {
-      setPlanAction(EnumPlanState.Run)
+      setPlanAction(EnumPlanAction.Run)
     } else {
       refetch()
     }
@@ -51,15 +51,15 @@ export function Plan({
 
   useEffect(() => {
     if (planState === EnumPlanState.Applying) {
-      setPlanAction(EnumPlanState.Applying)
+      setPlanAction(EnumPlanAction.Applying)
     }
 
     if (planState === EnumPlanState.Canceling) {
-      setPlanAction(EnumPlanState.Canceling)
+      setPlanAction(EnumPlanAction.Canceling)
     }
 
     if (planState === EnumPlanState.Finished || planState === EnumPlanState.Failed) {
-      setPlanAction(EnumPlanState.Done)
+      setPlanAction(EnumPlanAction.Done)
       refetch()
     }
   }, [planState])
@@ -89,7 +89,7 @@ export function Plan({
   }
 
   async function reset() {
-    setPlanAction(EnumPlanState.Resetting)
+    setPlanAction(EnumPlanAction.Resetting)
 
     await delay(500)
 
@@ -124,25 +124,25 @@ export function Plan({
         <Divider className='h-2' />
         <div className='flex justify-between px-4 py-2 '>
           <div className='flex w-full'>
-            {(planAction === EnumPlanState.Run || planAction === EnumPlanState.Running) && (
-              <Button type="submit" form='contextEnvironment' disabled={planAction === EnumPlanState.Running}>
-                {getActionName(planAction, [EnumPlanState.Running, EnumPlanState.Run])}
+            {(planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running) && (
+              <Button type="submit" form='contextEnvironment' disabled={planAction === EnumPlanAction.Running}>
+                {getActionName(planAction, [EnumPlanAction.Running, EnumPlanAction.Run])}
               </Button>
             )}
 
-            {(planAction === EnumPlanState.Apply || planAction === EnumPlanState.Applying) && (
-              <Button onClick={() => apply()} disabled={planAction === EnumPlanState.Applying}>
-                {getActionName(planAction, [EnumPlanState.Applying], withBackfill ? 'Apply And Backfill' : 'Apply')}
+            {(planAction === EnumPlanAction.Apply || planAction === EnumPlanAction.Applying) && (
+              <Button onClick={() => apply()} disabled={planAction === EnumPlanAction.Applying}>
+                {getActionName(planAction, [EnumPlanAction.Applying], withBackfill ? 'Apply And Backfill' : 'Apply')}
               </Button>
             )}
-            {(planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling) && (
+            {(planAction === EnumPlanAction.Applying || planAction === EnumPlanAction.Canceling) && (
               <Button
                 onClick={() => cancel()}
                 variant="danger"
                 className='justify-self-end'
-                disabled={planAction === EnumPlanState.Canceling}
+                disabled={planAction === EnumPlanAction.Canceling}
               >
-                {getActionName(planAction, [EnumPlanState.Canceling], 'Cancel')}
+                {getActionName(planAction, [EnumPlanAction.Canceling], 'Cancel')}
               </Button>
             )}
           </div>
@@ -152,18 +152,18 @@ export function Plan({
                 onClick={() => reset()}
                 variant="alternative"
                 className='justify-self-end'
-                disabled={[EnumPlanState.Resetting, EnumPlanState.Applying, EnumPlanState.Canceling, EnumPlanState.Closing].includes(planAction)}
+                disabled={[EnumPlanAction.Resetting, EnumPlanAction.Applying, EnumPlanAction.Canceling, EnumPlanAction.Closing].includes(planAction)}
               >
-                {getActionName(planAction, [EnumPlanState.Resetting], 'Reset')}
+                {getActionName(planAction, [EnumPlanAction.Resetting], 'Reset')}
               </Button>
             )}
             <Button
               onClick={() => close()}
-              variant={planAction === EnumPlanState.Done ? 'secondary' : 'alternative'}
+              variant={planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'}
               className='justify-self-end'
-              disabled={planAction === EnumPlanState.Closing || planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Canceling}
+              disabled={[EnumPlanAction.Closing, EnumPlanAction.Resetting, EnumPlanAction.Canceling].includes(planAction)}
             >
-              {getActionName(planAction, [EnumPlanState.Closing, EnumPlanState.Done], 'Close')}
+              {getActionName(planAction, [EnumPlanAction.Closing, EnumPlanAction.Done], 'Close')}
             </Button>
           </div>
         </div>
@@ -172,34 +172,34 @@ export function Plan({
   )
 }
 
-function getActionName(action: PlanState, options: Array<string> = [], fallback: string = 'Start'): string {
+function getActionName(action: PlanAction, options: Array<string> = [], fallback: string = 'Start'): string {
   if (!options.includes(action)) return fallback
 
   let name: string;
 
   switch (action) {
-    case EnumPlanState.Done:
+    case EnumPlanAction.Done:
       name = 'Done'
       break
-    case EnumPlanState.Running:
+    case EnumPlanAction.Running:
       name = 'Running...'
       break
-    case EnumPlanState.Applying:
+    case EnumPlanAction.Applying:
       name = 'Applying...'
       break
-    case EnumPlanState.Canceling:
+    case EnumPlanAction.Canceling:
       name = 'Canceling...'
       break
-    case EnumPlanState.Resetting:
+    case EnumPlanAction.Resetting:
       name = 'Resetting...'
       break
-    case EnumPlanState.Closing:
+    case EnumPlanAction.Closing:
       name = 'Closing...'
       break
-    case EnumPlanState.Run:
+    case EnumPlanAction.Run:
       name = 'Run'
       break
-    case EnumPlanState.Apply:
+    case EnumPlanAction.Apply:
       name = 'Apply'
       break
     default:
