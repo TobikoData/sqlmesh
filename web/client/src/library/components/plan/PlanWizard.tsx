@@ -60,6 +60,8 @@ export function PlanWizard({
     elForm.reset()
   }
 
+  const isPlanInProgress = planState === EnumPlanState.Canceling || planState === EnumPlanState.Applying
+
   return (
     <ul>
       <PlanWizardStep headline="Setup" description='Set Details'>
@@ -256,27 +258,27 @@ export function PlanWizard({
                 {<form className={clsx('flex ml-1 mt-1')}>
                   <label className={clsx(
                     'mb-3 mr-4 text-left',
-                    (planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                    (isPlanInProgress) && 'opacity-50 pointer-events-none cursor-not-allowed'
                   )}>
                     <small>Start Date</small>
                     <input
                       type="text"
                       name="start_date"
                       className="block bg-gray-100 px-2 py-1 rounded-md"
-                      disabled={planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
+                      disabled={isPlanInProgress}
                     />
                     <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
                   </label>
                   <label className={clsx(
                     'mb-3 text-left',
-                    (planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                    (isPlanInProgress) && 'opacity-50 pointer-events-none cursor-not-allowed'
                   )}>
                     <small>End Date</small>
                     <input
                       type="text"
                       name="end_date"
                       className="block bg-gray-100 px-2 py-1 rounded-md"
-                      disabled={planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
+                      disabled={isPlanInProgress}
                     />
                     <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
                   </label>
