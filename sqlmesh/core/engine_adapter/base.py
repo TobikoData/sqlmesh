@@ -155,6 +155,15 @@ class EngineAdapter:
             table_name, query_or_columns_to_types, exists, **kwargs
         )
 
+    def create_snapshots_table(
+        self, snapshots_table_name: str, snapshots_columns: t.Dict[str, exp.DataType]
+    ) -> None:
+        """Create a table to store snapshots."""
+        self.create_table(
+            snapshots_table_name,
+            snapshots_columns,
+        )
+
     def _create_table_from_columns(
         self,
         table_name: TableName,
