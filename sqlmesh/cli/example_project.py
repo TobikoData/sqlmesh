@@ -141,6 +141,7 @@ def init_example_project(
         return
 
     _create_folders([audits_path, macros_path, models_path, tests_path])
+    _create_macros(macros_path)
     _create_audits(audits_path)
     _create_models(models_path)
     _create_tests(tests_path)
@@ -157,6 +158,10 @@ def _create_config(config_path: Path, template: ProjectTemplate) -> None:
         config_path,
         DEFAULT_CONFIGS[template],
     )
+
+
+def _create_macros(macros_path: Path) -> None:
+    (macros_path / "__init__.py").touch()
 
 
 def _create_audits(audits_path: Path) -> None:

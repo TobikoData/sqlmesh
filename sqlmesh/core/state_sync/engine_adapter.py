@@ -85,7 +85,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Creates the schema and table to store state."""
         self.engine_adapter.create_schema(self.snapshots_table)
 
-        self.engine_adapter.create_table(
+        self.engine_adapter.create_snapshots_table(
             self.snapshots_table, self.snapshot_columns_to_types
         )
         self.engine_adapter.create_table(
