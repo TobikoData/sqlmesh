@@ -23,3 +23,6 @@ DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
 
 EPOCH_DS = "1970-01-01"
+
+JINJA_MACROS = "JINJA_MACROS"
+"""Used to store jinja macros in the execution env."""

@@ -107,23 +107,23 @@ class QueryRenderer:
                 **kwargs,
             }
 
+            python_env = {
+                c.JINJA_MACROS: Executable(
+                    kind=ExecutableKind.VALUE, payload="[]"
+                ),
+                c.SQLMESH: Executable(
+                    kind=ExecutableKind.VALUE, payload="True"
+                ),
+                **self._python_env,
+            }
+
             if isinstance(query, d.Jinja):
-                env = prepare_env(
-                    {
-                        "__jinja_macros__": Executable(
-                            kind=ExecutableKind.VALUE, payload="[]"
-                        ),
-                        c.SQLMESH: Executable(
-                            kind=ExecutableKind.VALUE, payload="True"
-                        ),
-                        **self._python_env,
-                    }
-                )
+                env = prepare_env(python_env)
 
                 try:
                     parsed_query = parse_one(
                         Environment()
-                        .from_string("\n".join((*env["__jinja_macros__"], query.name)))
+                        .from_string("\n".join((*env[c.JINJA_MACROS], query.name)))
                         .render(**env, **render_kwargs),
                         read=self._dialect,
                     )
@@ -135,7 +135,7 @@ class QueryRenderer:
                         f"Invalid model query. {ex} at '{self._path}'"
                     ) from ex
 
-            macro_evaluator = MacroEvaluator(self._dialect, python_env=self._python_env)
+            macro_evaluator = MacroEvaluator(self._dialect, python_env=python_env)
             macro_evaluator.locals.update(render_kwargs)
 
             for definition in self._macro_definitions:

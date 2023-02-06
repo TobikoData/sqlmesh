@@ -14,6 +14,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.audit import Audit
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import parse_model
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
@@ -135,7 +136,7 @@ class Loader(abc.ABC):
             with open(path, mode="r", encoding="utf8") as file:
                 for name, macro in MacroExtractor().extract(file.read()).items():
                     registry[name] = Executable(
-                        payload=f"""__jinja_macros__.append('''{macro}''')""",
+                        payload=f"""{c.JINJA_MACROS}.append('''{macro}''')""",
                         kind=ExecutableKind.SCRIPT,
                         name=name,
                         path=str(path),
