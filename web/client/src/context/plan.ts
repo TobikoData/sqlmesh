@@ -1,25 +1,25 @@
 import { create } from 'zustand'
+import { isObject, isObjectEmpty } from '../utils';
 
 export const EnumPlanState = {
   Init: 'init',
+  None: 'none',
+  Done: 'done',
   Run: 'run',
   Running: 'running',
   Apply: 'apply',
   Applying: 'applying',
-  Done: 'done',
   Finished: 'finished',
   Failed: 'failed',
   Resetting: 'resetting',
   Canceling: 'canceling',
   Closing: 'closing',
-  Stopping: 'closing',
-  None: 'none',
-  Setting: 'setting',
+  Openning: 'openning',
 } as const;
 
 export type PlanState = typeof EnumPlanState[keyof typeof EnumPlanState]
 
-export const useStorePlan = create((set) => ({
+export const useStorePlan = create((set, get) => ({
   state: EnumPlanState.Init,
   action: EnumPlanState.None,
   activePlan: null,
@@ -57,4 +57,46 @@ export const useStorePlan = create((set) => ({
   setWithBackfill: (withBackfill: boolean) => set(() => ({ withBackfill })),
   backfills: [],
   setBackfills: (backfills: any) => set(() => ({ backfills })),
+  updateTasks: (data: any, channel: EventSource, unsubscribe: () => void) => {
+    const s: any = get()
+
+    if (channel == null) return
+
+    if (data.environment == null || isObject(data.tasks) === false) {
+      s.setState(null)
+  
+      channel?.close()
+      unsubscribe()
+  
+      return
+    }
+  
+    if (data.ok === false) {
+      s.setState(EnumPlanState.Failed)
+  
+      channel?.close()
+      unsubscribe()
+  
+      return
+    }
+
+    s.setActivePlan({
+      environment: data.environment,
+      tasks: data.tasks,
+      intervals: data.intervals,
+      updated_at: data.updated_at || Date.now(),
+    })
+  
+    const isAllCompleted = isObjectEmpty(data.tasks) || Object.values(data.tasks).every((t: any) => t.completed === t.total)
+  
+    if (isAllCompleted) {
+      s.setState(EnumPlanState.Finished)
+  
+      channel?.close()
+      unsubscribe()
+    } else {
+      s.setState(EnumPlanState.Applying)
+    }
+  }
 }))
+
