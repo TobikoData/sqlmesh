@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 
 
 def test_create_view(mocker: MockerFixture):
@@ -294,6 +294,37 @@ def test_create_table_like(mocker: MockerFixture):
 
     cursor_mock.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
+    )
+
+
+def test_create_table_primary_key(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+    }
+
+    adapter = EngineAdapterWithIndexSupport(lambda: connection_mock, "")  # type: ignore
+    adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
+
+    cursor_mock.execute.assert_called_once_with(
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT, PRIMARY KEY("cola", "colb"))'
+    )
+
+
+def test_create_index(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapterWithIndexSupport(lambda: connection_mock, "")  # type: ignore
+    adapter.create_index("test_table", "test_index", ("cola", "colb"))
+
+    cursor_mock.execute.assert_called_once_with(
+        'CREATE INDEX "test_index" ON "test_table" ("cola", "colb")'
     )
 
 
