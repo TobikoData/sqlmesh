@@ -56,6 +56,18 @@ class BaseSparkEngineAdapter(EngineAdapter):
             )
         )
 
+    def create_state_table(
+        self,
+        table_name: str,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+    ) -> None:
+        self.create_table(
+            table_name,
+            columns_to_types,
+            partitioned_by=primary_key,
+        )
+
     def alter_table(
         self,
         table_name: TableName,

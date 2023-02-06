@@ -1,7 +1,10 @@
 import typing as t
 
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import (
+    EngineAdapter,
+    EngineAdapterWithIndexSupport,
+)
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.databricks import DatabricksSparkSessionEngineAdapter
 from sqlmesh.core.engine_adapter.databricks_api import DatabricksAPIEngineAdapter
@@ -18,6 +21,10 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "snowflake": SnowflakeEngineAdapter,
     "databricks": DatabricksSparkSessionEngineAdapter,
     "redshift": RedshiftEngineAdapter,
+    "postgres": EngineAdapterWithIndexSupport,
+    "postgresql": EngineAdapterWithIndexSupport,
+    "mysql": EngineAdapterWithIndexSupport,
+    "mssql": EngineAdapterWithIndexSupport,
 }
 
 
@@ -43,4 +50,8 @@ def create_engine_adapter(
         engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
     if engine_adapter is None:
         return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
+    if engine_adapter is EngineAdapterWithIndexSupport:
+        return EngineAdapterWithIndexSupport(
+            connection_factory, dialect, multithreaded=multithreaded
+        )
     return engine_adapter(connection_factory, multithreaded=multithreaded)
