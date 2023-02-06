@@ -280,7 +280,7 @@ def test_replace_query_pandas(mocker: MockerFixture):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS int) AS "a", CAST("b" AS int) AS "b" FROM (VALUES (CAST(1 AS int), CAST(4 AS int)), (2, 5), (3, 6)) AS "test_table"("a", "b")'
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS "test_table"("a", "b")'
     )
 
 

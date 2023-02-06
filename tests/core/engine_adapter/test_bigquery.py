@@ -84,5 +84,5 @@ def test_replace_query_pandas(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS int) AS `a`, CAST(`b` AS int) AS `b` FROM UNNEST([STRUCT(CAST(1 AS int) AS `a`, CAST(4 AS int) AS `b`), STRUCT(2 AS `a`, 5 AS `b`), STRUCT(3 AS `a`, 6 AS `b`)])"
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM UNNEST([STRUCT(CAST(1 AS INT64) AS `a`, CAST(4 AS INT64) AS `b`), STRUCT(2 AS `a`, 5 AS `b`), STRUCT(3 AS `a`, 6 AS `b`)])"
     ]

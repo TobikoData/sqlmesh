@@ -96,7 +96,7 @@ def test_pandas_to_sql(mocker: MockerFixture):
     assert len(results) == 1
     assert (
         results[0].sql(dialect="redshift")
-        == "VALUES (CAST(1 AS int), CAST(4 AS int)), (2, 5), (3, 6)"
+        == "VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)"
     )
 
 
