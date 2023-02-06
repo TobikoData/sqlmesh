@@ -14,7 +14,7 @@ export const EnumPlanState = {
   Resetting: 'resetting',
   Canceling: 'canceling',
   Closing: 'closing',
-  Openning: 'openning',
+  Opening: 'opening',
 } as const;
 
 export type PlanState = typeof EnumPlanState[keyof typeof EnumPlanState]
@@ -67,7 +67,7 @@ export const useStorePlan = create((set, get) => ({
     if (data.environment == null || isObject(data.tasks) === false) {
       s.setState(null)
   
-      channel?.close()
+      channel.close()
       unsubscribe()
   
       return
@@ -87,7 +87,7 @@ export const useStorePlan = create((set, get) => ({
 
       s.setLastPlan(plan)
   
-      channel?.close()
+      channel.close()
       unsubscribe()
   
       return
@@ -115,5 +115,5 @@ export const useStorePlan = create((set, get) => ({
 }))
 
 function isAllTasksCompleted(tasks: any = {}): boolean {
-  return  Object.values(tasks).every((t: any) => t.completed === t.total)
+  return Object.values(tasks).every((t: any) => t.completed === t.total)
 }
