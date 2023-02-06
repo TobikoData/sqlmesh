@@ -93,21 +93,17 @@ class MacroEvaluator:
     """
 
     def __init__(
-        self,
-        dialect: str = "",
-        python_env: t.Optional[t.Dict[str, Executable]] = None,
-        env: t.Optional[t.Dict[str, t.Any]] = None,
+        self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
-        self.env = {**(env or {}), **ENV, "self": self}
+        self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
-        if not env:
-            prepare_env(self.python_env, self.env)
         self.macros = {
             normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
         }
+        prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]

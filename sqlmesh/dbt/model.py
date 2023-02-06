@@ -189,10 +189,6 @@ class ModelConfig(GeneralConfig):
             "is_incremental": Executable(
                 payload="def is_incremental(): return False",
             ),
-            "__jinja_macros__": Executable(
-                kind=ExecutableKind.VALUE,
-                payload="[]",
-            ),
             **{k: v for k, v in macros.items() if isinstance(v, Executable)},
         }
 

@@ -20,7 +20,7 @@ from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, raise_config_error
-from sqlmesh.utils.metaprogramming import Executable, prepare_env
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind, prepare_env
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
@@ -107,10 +107,18 @@ class QueryRenderer:
                 **kwargs,
             }
 
-            env = prepare_env(self._python_env)
-
             if isinstance(query, d.Jinja):
-                env[c.SQLMESH] = True
+                env = prepare_env(
+                    {
+                        "__jinja_macros__": Executable(
+                            kind=ExecutableKind.VALUE, payload="[]"
+                        ),
+                        c.SQLMESH: Executable(
+                            kind=ExecutableKind.VALUE, payload="True"
+                        ),
+                        **self._python_env,
+                    }
+                )
 
                 try:
                     parsed_query = parse_one(
@@ -127,7 +135,7 @@ class QueryRenderer:
                         f"Invalid model query. {ex} at '{self._path}'"
                     ) from ex
 
-            macro_evaluator = MacroEvaluator(self._dialect, env=env)
+            macro_evaluator = MacroEvaluator(self._dialect, python_env=self._python_env)
             macro_evaluator.locals.update(render_kwargs)
 
             for definition in self._macro_definitions:
