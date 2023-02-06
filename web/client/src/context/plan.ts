@@ -1,71 +1,106 @@
 import { create } from 'zustand'
+import { ContextEnvironmentBackfill } from '../api/client';
 import { isObject, isObjectEmpty } from '../utils';
 
-export const EnumPlanState = {
-  Init: 'init',
+export const EnumPlanAction = {
   None: 'none',
   Done: 'done',
   Run: 'run',
   Running: 'running',
   Apply: 'apply',
   Applying: 'applying',
-  Finished: 'finished',
-  Failed: 'failed',
-  Resetting: 'resetting',
   Canceling: 'canceling',
+  Resetting: 'resetting',
   Closing: 'closing',
   Opening: 'opening',
 } as const;
 
-export type PlanState = typeof EnumPlanState[keyof typeof EnumPlanState]
+export const EnumPlanState = {
+  Init: 'init',
+  Applying: 'applying',
+  Canceling: 'canceling',
+  Finished: 'finished',
+  Failed: 'failed',
+  Cancelled: 'cancelled',
+} as const;
 
-export const useStorePlan = create((set, get) => ({
+export type PlanState = typeof EnumPlanState[keyof typeof EnumPlanState]
+export type PlanAction = typeof EnumPlanAction[keyof typeof EnumPlanAction]
+
+type Category = {
+  id: string;
+  name: string;
+  description: string;
+}
+
+type PlanTaskStatus = {
+  completed: number;
+  total: number;
+}
+
+type PlanTasks = { [key: string]: PlanTaskStatus }
+
+type PlanProgress = {
+  ok: boolean;
+  environment: string;
+  tasks: PlanTasks;
+  updated_at: string;
+}
+
+interface PlanStore {
+  state: PlanState;
+  action: PlanAction;
+  setActivePlan: (activePlan: PlanProgress | null) => void;
+  setLastPlan: (lastPlan: PlanProgress | null) => void;
+  setState: (state: PlanState) => void;
+  setAction: (action: PlanAction) => void;
+  setBackfillStart: (backfill_start: string) => void;
+  setBackfillEnd: (backfill_end: string) => void;
+  setEnvironment: (environment: string) => void;
+  setCategory: (category: Category) => void;
+  activePlan?: PlanProgress | null;
+  lastPlan?: PlanProgress | null;
+  backfill_start: string | null;
+  backfill_end: string | null;
+  environment: string | null;
+  category: Category | null;
+  categories: Category[];
+  withBackfill: boolean;
+  setWithBackfill: (withBackfill: boolean) => void;
+  backfills: ContextEnvironmentBackfill[];
+  setBackfills: (backfills: ContextEnvironmentBackfill[]) => void;
+  updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => void;
+}
+
+export const useStorePlan = create<PlanStore>((set, get) => ({
   state: EnumPlanState.Init,
-  action: EnumPlanState.None,
+  action: EnumPlanAction.None,
   activePlan: null,
   lastPlan: null,
-  setActivePlan: (activePlan: any) => set(() => ({ activePlan })),
-  setLastPlan: (lastPlan: any) => set(() => ({ lastPlan })),
-  setNewPlan: (newPlan: any) => set(() => ({ newPlan })),
-  setPlan: (plan: any) => set(() => ({ plan })),
-  setState: (state: string) => set(() => ({ state })),
-  setAction: (action: string) => set(() => ({ action })),
+  setActivePlan: (activePlan: PlanProgress | null) => set(() => ({ activePlan })),
+  setLastPlan: (lastPlan: PlanProgress | null) => set(() => ({ lastPlan })),
+  setState: (state: PlanState) => set(() => ({ state })),
+  setAction: (action: PlanAction) => set(() => ({ action })),
   setBackfillStart: (backfill_start: string) => set(() => ({ backfill_start })),
   setBackfillEnd: (backfill_end: string) => set(() => ({ backfill_end })),
   setEnvironment: (environment: string) => set(() => ({ environment })),
-  setCategory: (category: string) => set(() => ({ category })),
+  setCategory: (category: Category) => set(() => ({ category })),
   backfill_start: null,
   backfill_end: null,
   environment: null,
   category: null,
-  categories: [
-    {
-      id: 'breaking-change',
-      name: 'Breaking Change',
-      description: 'This is a breaking change',
-    },
-    {
-      id: 'non-breaking-change',
-      name: 'Non-Breaking Change',
-      description: 'This is a non-breaking change',
-    },
-    {
-      id: 'no-change',
-      name: 'No Change',
-      description: 'This is a no change',
-    },
-  ],
+  categories: getCategories(),
   withBackfill: true,
   setWithBackfill: (withBackfill: boolean) => set(() => ({ withBackfill })),
   backfills: [],
-  setBackfills: (backfills: any) => set(() => ({ backfills })),
-  updateTasks: (data: any, channel: EventSource, unsubscribe: () => void) => {
-    const s: any = get()
+  setBackfills: (backfills: ContextEnvironmentBackfill[]) => set(() => ({ backfills })),
+  updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => {
+    const s = get()
 
     if (channel == null) return
 
     if (data.environment == null || isObject(data.tasks) === false) {
-      s.setState(null)
+      s.setState(EnumPlanState.Init)
   
       channel.close()
       unsubscribe()
@@ -73,11 +108,11 @@ export const useStorePlan = create((set, get) => ({
       return
     }
 
-    const plan = {
+    const plan: PlanProgress = {
+      ok: data.ok,
       environment: data.environment,
       tasks: data.tasks,
-      intervals: data.intervals,
-      updated_at: data.updated_at || Date.now(),
+      updated_at: data.updated_at || new Date().toISOString(),
     }
 
     s.setActivePlan(plan)
@@ -114,6 +149,26 @@ export const useStorePlan = create((set, get) => ({
   }
 }))
 
-function isAllTasksCompleted(tasks: any = {}): boolean {
-  return Object.values(tasks).every((t: any) => t.completed === t.total)
+function isAllTasksCompleted(tasks: PlanTasks = {}): boolean {
+  return Object.values(tasks).every(t => t.completed === t.total)
+}
+
+function getCategories(): Category[] {
+  return [
+    {
+      id: 'breaking-change',
+      name: 'Breaking Change',
+      description: 'This is a breaking change',
+    },
+    {
+      id: 'non-breaking-change',
+      name: 'Non-Breaking Change',
+      description: 'This is a non-breaking change',
+    },
+    {
+      id: 'no-change',
+      name: 'No Change',
+      description: 'This is a no change',
+    },
+  ]
 }
