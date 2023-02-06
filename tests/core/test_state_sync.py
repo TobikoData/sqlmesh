@@ -186,18 +186,20 @@ def test_get_snapshots_with_same_version(
     make_snapshot: t.Callable,
     snapshots: t.List[Snapshot],
 ) -> None:
-    snapshot_c = make_snapshot(
+    snapshot_a = snapshots[0]
+
+    snapshot_a_new = make_snapshot(
         SqlModel(
-            name="c",
+            name=snapshot_a.name,
             query=parse_one("select 3, ds"),
         ),
-        version="a",
+        version=snapshot_a.version,
     )
-    state_sync.push_snapshots(snapshots + [snapshot_c])
+    state_sync.push_snapshots(snapshots + [snapshot_a_new])
 
-    assert state_sync.get_snapshots_with_same_version([snapshot_c]) == [
-        snapshots[0],
-        snapshot_c,
+    assert state_sync.get_snapshots_with_same_version([snapshot_a_new]) == [
+        snapshot_a,
+        snapshot_a_new,
     ]
 
 

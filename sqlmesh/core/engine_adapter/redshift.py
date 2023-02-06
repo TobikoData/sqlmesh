@@ -68,7 +68,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         query: Query,
         exists: bool = True,
         **kwargs: t.Any,
-    ) -> None:
+    ) -> t.Optional[exp.Create]:
         """
         Redshift doesn't support `CREATE TABLE IF NOT EXISTS AS...` but does support `CREATE TABLE AS...` so
         we check if the exists check exists and if not then we can use the base implementation. Otherwise we
@@ -78,7 +78,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         if not exists:
             return super()._create_table_from_query(table_name, query, exists, **kwargs)
         if self.table_exists(table_name):
-            return
+            return None
         return self._create_table_from_query(table_name, query, exists=False, **kwargs)
 
     @classmethod

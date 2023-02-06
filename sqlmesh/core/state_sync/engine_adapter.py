@@ -22,7 +22,7 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.dialect import select_from_values
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -83,14 +83,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def init_schema(self) -> None:
         """Creates the schema and table to store state."""
-        self.engine_adapter.create_schema(self.snapshots_table)
+        with self.engine_adapter.transaction(TransactionType.DDL):
+            self.engine_adapter.create_schema(self.snapshots_table)
 
-        self.engine_adapter.create_snapshots_table(
-            self.snapshots_table, self.snapshot_columns_to_types
-        )
-        self.engine_adapter.create_table(
-            self.environments_table, self.environment_columns_to_types
-        )
+            self.engine_adapter.create_state_table(
+                self.snapshots_table,
+                self.snapshot_columns_to_types,
+                primary_key=("name", "identifier"),
+            )
+
+            self.engine_adapter.create_index(
+                self.snapshots_table, "name_version_idx", ("name", "version")
+            )
+
+            self.engine_adapter.create_state_table(
+                self.environments_table,
+                self.environment_columns_to_types,
+                primary_key=("name",),
+            )
 
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
@@ -124,31 +134,32 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _push_snapshots(
         self, snapshots: t.Iterable[Snapshot], overwrite: bool = False
     ) -> None:
-        if overwrite:
-            snapshots = tuple(snapshots)
-            self.delete_snapshots(snapshots)
+        with self.engine_adapter.transaction():
+            if overwrite:
+                snapshots = tuple(snapshots)
+                self.delete_snapshots(snapshots)
 
-        self.engine_adapter.insert_append(
-            self.snapshots_table,
-            next(
-                select_from_values(
-                    [
-                        (
-                            snapshot.name,
-                            snapshot.identifier,
-                            snapshot.version,
-                            snapshot.json(),
-                        )
-                        for snapshot in snapshots
-                    ],
-                    columns_to_types=self.snapshot_columns_to_types,
-                )
-            ),
-        )
+            self.engine_adapter.insert_append(
+                self.snapshots_table,
+                next(
+                    select_from_values(
+                        [
+                            (
+                                snapshot.name,
+                                snapshot.identifier,
+                                snapshot.version,
+                                snapshot.json(),
+                            )
+                            for snapshot in snapshots
+                        ],
+                        columns_to_types=self.snapshot_columns_to_types,
+                    )
+                ),
+            )
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.engine_adapter.delete_from(
-            self.snapshots_table, where=self._filter_condition(snapshot_ids)
+            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
         )
 
     def snapshots_exist(
@@ -159,43 +170,50 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for name, identifier in self.engine_adapter.fetchall(
                 exp.select("name", "identifier")
                 .from_(self.snapshots_table)
-                .where(self._filter_condition(snapshot_ids))
+                .where(self._snapshot_id_filter(snapshot_ids))
             )
         }
 
     def _update_environment(self, environment: Environment) -> None:
-        self.engine_adapter.delete_from(
-            self.environments_table,
-            where=f"name = '{environment.name}'",
-        )
+        with self.engine_adapter.transaction():
+            self.engine_adapter.delete_from(
+                self.environments_table,
+                where=exp.EQ(
+                    this=exp.to_column("name"),
+                    expression=exp.Literal.string(environment.name),
+                ),
+            )
 
-        self.engine_adapter.insert_append(
-            self.environments_table,
-            next(
-                select_from_values(
-                    [
-                        (
-                            environment.name,
-                            json.dumps(
-                                [snapshot.dict() for snapshot in environment.snapshots]
-                            ),
-                            environment.start_at,
-                            environment.end_at,
-                            environment.plan_id,
-                            environment.previous_plan_id,
-                        )
-                    ],
-                    columns_to_types=self.environment_columns_to_types,
-                )
-            ),
-            columns_to_types=self.environment_columns_to_types,
-        )
+            self.engine_adapter.insert_append(
+                self.environments_table,
+                next(
+                    select_from_values(
+                        [
+                            (
+                                environment.name,
+                                json.dumps(
+                                    [
+                                        snapshot.dict()
+                                        for snapshot in environment.snapshots
+                                    ]
+                                ),
+                                environment.start_at,
+                                environment.end_at,
+                                environment.plan_id,
+                                environment.previous_plan_id,
+                            )
+                        ],
+                        columns_to_types=self.environment_columns_to_types,
+                    )
+                ),
+                columns_to_types=self.environment_columns_to_types,
+            )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
-            where=self._filter_condition([snapshot.snapshot_id]),
+            where=self._snapshot_id_filter([snapshot.snapshot_id]),
         )
 
     def get_environments(self) -> t.List[Environment]:
@@ -255,7 +273,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             exp.select("snapshot")
             .from_(self.snapshots_table)
             .where(
-                None if snapshot_ids is None else self._filter_condition(snapshot_ids)
+                None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids)
             )
         )
 
@@ -302,14 +320,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot_rows = self.engine_adapter.fetchall(
             exp.select("snapshot")
             .from_(self.snapshots_table)
-            .where(
-                exp.In(
-                    this=exp.to_identifier("version"),
-                    expressions=[
-                        exp.convert(snapshot.version) for snapshot in snapshots
-                    ],
-                )
-            )
+            .where(self._snapshot_name_version_filter(snapshots))
         )
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
@@ -326,7 +337,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             The environment object.
         """
         row = self.engine_adapter.fetchone(
-            self._environments_query(f"name = '{environment}'")
+            self._environments_query(
+                exp.EQ(
+                    this=exp.to_column("name"),
+                    expression=exp.Literal.string(environment),
+                )
+            )
         )
 
         if not row:
@@ -336,7 +352,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self._update_cache(env.snapshots)
         return env
 
-    def _filter_condition(
+    def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Union[exp.Or, exp.Boolean]:
         if not snapshot_ids:
@@ -345,10 +361,38 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return exp.or_(
             *(
                 exp.and_(
-                    f"name = '{snapshot_id.name}'",
-                    f"identifier = '{snapshot_id.identifier}'",
+                    exp.EQ(
+                        this=exp.to_column("name"),
+                        expression=exp.Literal.string(snapshot_id.name),
+                    ),
+                    exp.EQ(
+                        this=exp.to_column("identifier"),
+                        expression=exp.Literal.string(snapshot_id.identifier),
+                    ),
                 )
                 for snapshot_id in snapshot_ids
+            )
+        )
+
+    def _snapshot_name_version_filter(
+        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike]
+    ) -> t.Union[exp.Or, exp.Boolean]:
+        if not snapshot_name_versions:
+            return exp.FALSE
+
+        return exp.or_(
+            *(
+                exp.and_(
+                    exp.EQ(
+                        this=exp.to_column("name"),
+                        expression=exp.Literal.string(snapshot_name_version.name),
+                    ),
+                    exp.EQ(
+                        this=exp.to_column("version"),
+                        expression=exp.Literal.string(snapshot_name_version.version),
+                    ),
+                )
+                for snapshot_name_version in snapshot_name_versions
             )
         )
 
