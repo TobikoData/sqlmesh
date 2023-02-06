@@ -33,7 +33,8 @@ export function IDE() {
   const planAction = useStorePlan((s: any) => s.action)
   const setPlanState = useStorePlan((s: any) => s.setState)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
-  const activePlan = useStorePlan((s: any) => s.activePlan)
+  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
+  const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
 
@@ -94,6 +95,7 @@ export function IDE() {
   }
 
   function startPlan() {
+    setActivePlan(null)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanState.Openning)
     setEnvironment(null)
@@ -160,7 +162,7 @@ export function IDE() {
             </span>
             <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
           </Button>
-          {activePlan && <Popover className="relative flex">
+          {plan && <Popover className="relative flex">
             {() => (
               <>
                 <Popover.Button
@@ -172,7 +174,7 @@ export function IDE() {
                     planState !== EnumPlanState.Finished && planState !== EnumPlanState.Failed && planState !== EnumPlanState.Applying && 'bg-gray-100 text-gray-500',
                   )}
                 >
-                  {activePlan ? 1 : 0}
+                  {plan ? 1 : 0}
                 </Popover.Button>
                 <Transition
                   as={Fragment}
@@ -186,20 +188,20 @@ export function IDE() {
                   <Popover.Panel className="absolute right-1 z-10 mt-3 transform">
                     <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
                       <div className="relative grid gap-8 py-3 bg-white">
-                        <div key={activePlan.environment} className="mx-4">
+                        <div key={plan.environment} className="mx-4">
                           <div className='flex justify-between items-baseline'>
                             <small className="block whitespace-nowrap text-sm font-medium text-gray-900">
-                              Environemnt: {activePlan.environment}
+                              Environemnt: {plan.environment}
                             </small>
                             <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
-                              {Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length} of {Object.values(activePlan.tasks).length}
+                              {Object.values(plan.tasks).filter((t: any) => t.completed === t.total).length} of {Object.values(plan.tasks).length}
                             </small>
                           </div>
                           <Progress
-                            progress={Math.ceil(Object.values(activePlan.tasks).filter((t: any) => t.completed === t.total).length / Object.values(activePlan.tasks).length * 100)}
+                            progress={Math.ceil(Object.values(plan.tasks).filter((t: any) => t.completed === t.total).length / Object.values(plan.tasks).length * 100)}
                           />
                           <div className='my-4 px-4 py-2 bg-secondary-100 rounded-lg'>
-                            {(Object.entries(activePlan.tasks)).map(([model_name, task]: any) => (
+                            {(Object.entries(plan.tasks)).map(([model_name, task]: any) => (
                               <div key={model_name}>
                                 <div className='flex justify-between items-baselin'>
                                   <small className="text-xs block whitespace-nowrap font-medium text-gray-900 mr-6">
@@ -217,7 +219,7 @@ export function IDE() {
                           </div>
                           <div className='flex justify-end items-center px-2'>
                             <div className='w-full'>
-                              <small className='text-xs'><b>Last Update:</b> {new Date(activePlan.updated_at).toDateString()}</small>
+                              <small className='text-xs'><b>Last Update:</b> {new Date(plan.updated_at).toDateString()}</small>
                             </div>
                             {planState === EnumPlanState.Applying && <Button size='sm' variant='danger' className='mx-0' onClick={e => {
                               e.stopPropagation()
