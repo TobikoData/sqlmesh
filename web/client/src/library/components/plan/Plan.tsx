@@ -137,14 +137,6 @@ export function Plan({
                 {planAction === EnumPlanState.Applying ? 'Applying...' : withBackfill ? 'Apply And Backfill' : 'Apply'}
               </Button>
             )}
-
-            {planAction === EnumPlanState.Done && (
-              <Button
-                onClick={() => close()}
-              >
-                Done
-              </Button>
-            )}
             {(planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling) && (
               <Button
                 onClick={() => cancel()}
@@ -169,11 +161,16 @@ export function Plan({
             )}
             <Button
               onClick={() => close()}
-              variant="alternative"
+              variant={planAction === EnumPlanState.Done ? 'secondary' : 'alternative'}
               className='justify-self-end'
               disabled={planAction === EnumPlanState.Closing || planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Canceling}
             >
-              {planAction === EnumPlanState.Closing ? 'Closing...' : 'Close'}
+              {planAction === EnumPlanState.Closing
+                ? 'Closing...'
+                : planAction === EnumPlanState.Done
+                  ? 'Done'
+                  : 'Close'
+              }
             </Button>
           </div>
         </div>
