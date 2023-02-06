@@ -144,6 +144,9 @@ class Loader(abc.ABC):
 
         return registry
 
+    def _track_file(self, path: Path) -> None:
+        self._path_mtimes[path] = path.stat().st_mtime
+
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
@@ -158,7 +161,7 @@ class SqlMeshLoader(Loader):
             self._context.glob_path(self._context.macro_directory_path, ".py")
         ) + tuple(self._context.glob_path(self._context.hook_directory_path, ".py")):
             if self._import_python_file(path.relative_to(self._context.path)):
-                self._path_mtimes[path] = path.stat().st_mtime
+                self._track_file(path)
 
         hooks = hook.get_registry()
         macros = macro.get_registry()
@@ -191,7 +194,7 @@ class SqlMeshLoader(Loader):
         for path in self._context.glob_path(
             self._context.models_directory_path, ".sql"
         ):
-            self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 try:
                     expressions = parse_model(
@@ -215,7 +218,7 @@ class SqlMeshLoader(Loader):
 
                 if isinstance(model, SeedModel):
                     seed_path = model.seed_path
-                    self._path_mtimes[seed_path] = seed_path.stat().st_mtime
+                    self._track_file(seed_path)
 
         return models
 
@@ -227,9 +230,8 @@ class SqlMeshLoader(Loader):
         registered: t.Set[str] = set()
 
         for path in self._context.glob_path(self._context.models_directory_path, ".py"):
-            self._path_mtimes[path] = path.stat().st_mtime
-            if self._import_python_file(path.relative_to(self._context.path)):
-                self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
+            self._import_python_file(path.relative_to(self._context.path))
             new = registry.keys() - registered
             registered |= new
             for name in new:
@@ -249,7 +251,7 @@ class SqlMeshLoader(Loader):
         for path in self._context.glob_path(
             self._context.audits_directory_path, ".sql"
         ):
-            self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 expressions = parse_model(
                     file.read(), default_dialect=self._context.dialect

@@ -27,6 +27,10 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 
 class DbtLoader(Loader):
     def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
+        macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
+        for file in macro_files:
+            self._track_file(file)
+
         return (
             self._add_jinja_macros(
                 macro.get_registry(),
@@ -43,9 +47,8 @@ class DbtLoader(Loader):
         models: UniqueKeyDict = UniqueKeyDict("models")
 
         config = ProjectConfig.load(self._context.path, self._context.connection)
-        self._path_mtimes = {
-            path: path.stat().st_mtime for path in config.project_files
-        }
+        for path in config.project_files:
+            self._track_file(path)
 
         models.update(
             {seed.seed_name: seed.to_sqlmesh() for seed in config.seeds.values()}
