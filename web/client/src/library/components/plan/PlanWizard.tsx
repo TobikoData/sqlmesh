@@ -141,7 +141,7 @@ export function PlanWizard({
                   <div className="ml-1 mr-3">
                     <h4 className='text-warning-500 mb-2'>Modified Indirectly</h4>
                     <ul className='ml-1'>
-                      {(context?.changes?.modified?.indirect || [])?.map((modelName: any) => (
+                      {context?.changes?.modified?.indirect.map((modelName: any) => (
                         <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
                         </li>
@@ -153,7 +153,7 @@ export function PlanWizard({
                   <div className="ml-1">
                     <small>Modified Metadata</small>
                     <ul className='ml-1'>
-                      {(context?.changes?.modified?.metadata || [])?.map((modelName: any) => (
+                      {context?.changes?.modified?.metadata.map((modelName: any) => (
                         <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
                         </li>
@@ -174,7 +174,7 @@ export function PlanWizard({
       <PlanWizardStep headline="Backfill" description='Backfill Progress' disabled={context?.environment == null}>
         {isArrayNotEmpty(backfills) ? (
           <>
-            {isArrayNotEmpty(backfills) && isModified(context?.changes?.modified) && planState !== EnumPlanState.Applying && (
+            {isModified(context?.changes?.modified) && planState !== EnumPlanState.Applying && (
               <div className="mb-4">
                 <RadioGroup
                   className='rounded-lg w-full'

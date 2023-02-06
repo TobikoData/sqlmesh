@@ -91,13 +91,12 @@ export function IDE() {
     if (planAction !== EnumPlanState.None) {
       startPlan()
     }
-
   }
 
   function startPlan() {
     setActivePlan(null)
     setPlanState(EnumPlanState.Init)
-    setPlanAction(EnumPlanState.Openning)
+    setPlanAction(EnumPlanState.Opening)
     setEnvironment(null)
   }
 

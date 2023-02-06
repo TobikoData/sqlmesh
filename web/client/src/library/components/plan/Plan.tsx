@@ -42,12 +42,10 @@ export function Plan({
   }, [])
 
   useEffect(() => {
-    if (isNotNil(environment)) {
-      refetch()
-    }
-
     if (isNil(environment)) {
       setPlanAction(EnumPlanState.Run)
+    } else {
+      refetch()
     }
   }, [environment])
 
@@ -154,7 +152,7 @@ export function Plan({
                 onClick={() => reset()}
                 variant="alternative"
                 className='justify-self-end'
-                disabled={planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling || planAction === EnumPlanState.Closing}
+                disabled={[EnumPlanState.Resetting, EnumPlanState.Applying, EnumPlanState.Canceling, EnumPlanState.Closing].includes(planAction)}
               >
                 {getActionName(planAction, [EnumPlanState.Resetting], 'Reset')}
               </Button>
@@ -175,6 +173,8 @@ export function Plan({
 }
 
 function getActionName(action: PlanState, options: Array<string> = [], fallback: string = 'Start'): string {
+  if (!options.includes(action)) return fallback
+
   let name: string;
 
   switch (action) {
@@ -207,5 +207,5 @@ function getActionName(action: PlanState, options: Array<string> = [], fallback:
       break
   }
 
-  return options.includes(action) ? name : fallback
+  return name
 }
