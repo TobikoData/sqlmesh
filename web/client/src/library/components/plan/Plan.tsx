@@ -5,7 +5,7 @@ import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
-import { EnumPlanState, useStorePlan } from '../../../context/plan'
+import { EnumPlanState, PlanState, useStorePlan } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
 import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
@@ -128,13 +128,13 @@ export function Plan({
           <div className='flex w-full'>
             {(planAction === EnumPlanState.Run || planAction === EnumPlanState.Running) && (
               <Button type="submit" form='contextEnvironment' disabled={planAction === EnumPlanState.Running}>
-                {planAction === EnumPlanState.Running ? 'Running...' : 'Run'}
+                {getActionName(planAction, [EnumPlanState.Running, EnumPlanState.Run])}
               </Button>
             )}
 
             {(planAction === EnumPlanState.Apply || planAction === EnumPlanState.Applying) && (
               <Button onClick={() => apply()} disabled={planAction === EnumPlanState.Applying}>
-                {planAction === EnumPlanState.Applying ? 'Applying...' : withBackfill ? 'Apply And Backfill' : 'Apply'}
+                {getActionName(planAction, [EnumPlanState.Applying], withBackfill ? 'Apply And Backfill' : 'Apply')}
               </Button>
             )}
             {(planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling) && (
@@ -144,7 +144,7 @@ export function Plan({
                 className='justify-self-end'
                 disabled={planAction === EnumPlanState.Canceling}
               >
-                {planAction === EnumPlanState.Canceling ? 'Canceling...' : 'Cancel'}
+                {getActionName(planAction, [EnumPlanState.Canceling], 'Cancel')}
               </Button>
             )}
           </div>
@@ -156,7 +156,7 @@ export function Plan({
                 className='justify-self-end'
                 disabled={planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Applying || planAction === EnumPlanState.Canceling || planAction === EnumPlanState.Closing}
               >
-                {planAction === EnumPlanState.Resetting ? 'Resetting...' : 'Reset'}
+                {getActionName(planAction, [EnumPlanState.Resetting], 'Reset')}
               </Button>
             )}
             <Button
@@ -165,12 +165,7 @@ export function Plan({
               className='justify-self-end'
               disabled={planAction === EnumPlanState.Closing || planAction === EnumPlanState.Resetting || planAction === EnumPlanState.Canceling}
             >
-              {planAction === EnumPlanState.Closing
-                ? 'Closing...'
-                : planAction === EnumPlanState.Done
-                  ? 'Done'
-                  : 'Close'
-              }
+              {getActionName(planAction, [EnumPlanState.Closing, EnumPlanState.Done], 'Close')}
             </Button>
           </div>
         </div>
@@ -179,3 +174,40 @@ export function Plan({
   )
 }
 
+function getActionName(action: PlanState, options: Array<string> = [], fallback: string = 'Start'): string {
+  let name = fallback;
+
+  if (action === EnumPlanState.Done) {
+    name = 'Done'
+  }
+
+  if (action === EnumPlanState.Running) {
+    name = 'Running...'
+  }
+
+  if (action === EnumPlanState.Applying) {
+    name = 'Applying...'
+  }
+
+  if (action === EnumPlanState.Canceling) {
+    name = 'Canceling...'
+  }
+
+  if (action === EnumPlanState.Resetting) {
+    name = 'Resetting...'
+  }
+
+  if (action === EnumPlanState.Closing) {
+    name = 'Closing...'
+  }
+
+  if (action === EnumPlanState.Run) {
+    name = 'Run'
+  }
+
+  if (action === EnumPlanState.Apply) {
+    name = 'Apply'
+  }
+
+  return options.includes(action) ? name : fallback
+}
