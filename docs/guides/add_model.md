@@ -4,14 +4,14 @@
 
 ---
 
-Before adding a model, ensure that you have [created your project structure](/guides/create_a_project) and that you are working in a [dev environment](/concepts/environments).
+Before adding a model, ensure that you have [already created your project](/guides/create_a_project) and that you are working in a [dev environment](/concepts/environments).
 
 ---
 
 To add a model:
 
-1. Within your **models** folder, create a new file. For example: `example_new_model.sql`.
-2. Within this file, define your model as follows:
+1. Within your **models** folder, create a new database file. For example, `example_new_model.sql`.
+2. Within the file, define your model as follows:
 
     ```
     MODEL (
@@ -45,9 +45,4 @@ To edit an existing model, open the model file you wish to edit in your preferre
 
 ### Preview changes
 
-You can then preview any changes you made to the model in order to understand their impact by using the `plan` command as follows:
-
-1. Preview changes by entering the `sqlmesh plan dev` command.
-2. Hit `Enter` to leave the backfill start and end dates empty.
-
-Observe that SQLMesh detects your changes and shows you the difference between the old model and the new model. SQLMesh will also show you whether any downstream models are impacted; if so, SQLMesh will prompt you to classify the changes as [Breaking](/../concepts/plans#breaking-change) or [Non-Breaking](/../concepts/plans#non-breaking-change) before applying the changes.
+To preview any changes you make to your model in order to understand their impact, use the `evaluate` command. Refer to [evaluate a model](/guides/evalute_model).
