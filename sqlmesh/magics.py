@@ -258,6 +258,33 @@ class SQLMeshMagics(Magics):
         self.display(df)
 
     @magic_arguments()
+    @argument("model", type=str, help="The model.")
+    @argument("--start", "-s", type=str, help="Start date to render.")
+    @argument("--end", "-e", type=str, help="End date to render.")
+    @argument("--latest", "-l", type=str, help="Latest date to render.")
+    @argument(
+        "--expand",
+        type=t.Union[bool, t.Iterable[str]],
+        help="Whether or not to use expand materialized models, defaults to False. If True, all referenced models are expanded as raw queries. If a list, only referenced models are expanded as raw queries.",
+    )
+    @argument("--dialect", type=str, help="SQL dialect to render.")
+    @line_magic
+    def render(self, line: str) -> None:
+        """Renders a model's query, optionally expanding referenced models."""
+        self.context.refresh()
+        args = parse_argstring(self.render, line)
+
+        query = self.context.render(
+            args.model,
+            start=args.start,
+            end=args.end,
+            latest=args.latest,
+            expand=args.expand,
+        )
+
+        self.context.console.show_sql(query.sql(pretty=True, dialect=args.dialect))
+
+    @magic_arguments()
     @argument(
         "df_var",
         default=None,
