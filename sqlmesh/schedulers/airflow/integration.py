@@ -11,11 +11,9 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
-from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import now
 
 logger = logging.getLogger(__name__)
@@ -83,7 +81,8 @@ class SQLMeshAirflow:
         Returns:
             The list of DAG instances managed by the platform.
         """
-        stored_snapshots = _get_all_snapshots()
+        with util.scoped_state_sync() as state_sync:
+            stored_snapshots = state_sync.get_snapshots(None)
 
         dag_generator = SnapshotDagGenerator(
             self._engine_operator,
@@ -147,43 +146,37 @@ def _janitor_task(
     ti: TaskInstance,
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
-    state_sync = VariableStateSync(session)
+    with util.scoped_state_sync() as state_sync:
+        expired_snapshots = state_sync.remove_expired_snapshots()
+        ti.xcom_push(
+            key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,
+            value=json.dumps([s.table_info.dict() for s in expired_snapshots]),
+            session=session,
+        )
 
-    expired_snapshots = state_sync.remove_expired_snapshots()
-    ti.xcom_push(
-        key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,
-        value=json.dumps([s.table_info.dict() for s in expired_snapshots]),
-        session=session,
-    )
+        all_snapshot_dag_ids = set(util.get_snapshot_dag_ids())
+        active_snapshot_dag_ids = {
+            common.dag_id_for_snapshot_info(s)
+            for s in state_sync.get_snapshots(None).values()
+        }
+        expired_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
+        logger.info("Deleting expired Snapshot DAGs: %s", expired_snapshot_dag_ids)
+        util.delete_dags(expired_snapshot_dag_ids, session=session)
 
-    all_snapshot_dag_ids = set(util.get_snapshot_dag_ids())
-    active_snapshot_dag_ids = {
-        common.dag_id_for_name_version(s["name"], s["version"])
-        for s in state_sync.get_all_snapshots_raw()
-    }
-    expired_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
-    logger.info("Deleting expired Snapshot DAGs: %s", expired_snapshot_dag_ids)
-    util.delete_dags(expired_snapshot_dag_ids, session=session)
-
-    plan_application_dag_ids = util.get_finished_plan_application_dag_ids(
-        ttl=plan_application_dag_ttl, session=session
-    )
-    logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
-    util.delete_variables(
-        {
-            common.plan_dag_spec_key_from_dag_id(dag_id)
-            for dag_id in plan_application_dag_ids
-        },
-        session=session,
-    )
-    util.delete_dags(plan_application_dag_ids, session=session)
-
-
-@provide_session
-def _get_all_snapshots(
-    session: Session = util.PROVIDED_SESSION,
-) -> t.Dict[SnapshotId, Snapshot]:
-    return VariableStateSync(session).get_all_snapshots()
+        plan_application_dag_ids = util.get_finished_plan_application_dag_ids(
+            ttl=plan_application_dag_ttl, session=session
+        )
+        logger.info(
+            "Deleting expired Plan Application DAGs: %s", plan_application_dag_ids
+        )
+        util.delete_variables(
+            {
+                common.plan_dag_spec_key_from_dag_id(dag_id)
+                for dag_id in plan_application_dag_ids
+            },
+            session=session,
+        )
+        util.delete_dags(plan_application_dag_ids, session=session)
 
 
 @provide_session

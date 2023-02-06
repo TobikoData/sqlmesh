@@ -62,17 +62,11 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         plan_id="test_plan_id",
     )
 
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {}
+    state_sync_mock = mocker.Mock()
+    state_sync_mock.get_snapshots.return_value = {}
+    state_sync_mock.get_environment.return_value = old_environment
 
-    get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
-    )
-    get_environment_mock.return_value = old_environment
-
-    plan_spec = create_plan_dag_spec(plan_request)
+    plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment_name=environment_name,
@@ -98,8 +92,8 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         is_dev=False,
     )
 
-    get_all_snapshots_mock.assert_called_once()
-    get_environment_mock.assert_called_once()
+    state_sync_mock.get_snapshots.assert_called_once()
+    state_sync_mock.get_environment.assert_called_once()
 
 
 @pytest.mark.airflow
@@ -132,15 +126,13 @@ def test_create_plan_dag_spec_duplicated_snapshot(
     dag_run_mock = mocker.Mock()
     dag_run_mock.conf = plan_request.dict()
 
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
+    state_sync_mock = mocker.Mock()
+    state_sync_mock.get_snapshots.return_value = {snapshot.snapshot_id: snapshot}
 
     with pytest.raises(SQLMeshError):
-        create_plan_dag_spec(plan_request)
+        create_plan_dag_spec(plan_request, state_sync_mock)
 
-    get_all_snapshots_mock.assert_called_once()
+    state_sync_mock.get_snapshots.assert_called_once()
 
 
 @pytest.mark.airflow
@@ -179,19 +171,14 @@ def test_create_plan_dag_spec_unbounded_end(
         is_dev=False,
     )
 
-    get_all_snapshots_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots"
-    )
-    get_all_snapshots_mock.return_value = {
+    state_sync_mock = mocker.Mock()
+    state_sync_mock.get_snapshots.return_value = {
         snapshot.snapshot_id: snapshot,
         unrelated_snapshot.snapshot_id: unrelated_snapshot,
     }
+    state_sync_mock.get_environment.return_value = None
 
-    get_environment_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_environment"
-    )
+    create_plan_dag_spec(plan_request, state_sync_mock)
 
-    create_plan_dag_spec(plan_request)
-
-    get_all_snapshots_mock.assert_called_once()
-    get_environment_mock.assert_called_once()
+    state_sync_mock.get_snapshots.assert_called_once()
+    state_sync_mock.get_environment.assert_called_once()

@@ -9,13 +9,11 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
-    SnapshotInfoLike,
     SnapshotNameVersion,
     SnapshotNameVersionLike,
 )
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.utils.file_cache import FileCache
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +34,12 @@ class HttpStateReader(StateReader):
 
     def __init__(
         self,
-        table_info_cache: FileCache,
         client: AirflowClient,
         max_concurrent_requests: int = 2,
         blocking_updates: bool = True,
         dag_run_poll_interval_secs: int = 2,
         console: t.Optional[Console] = None,
     ):
-        self.table_info_cache = table_info_cache
         self._client = client
         self.max_concurrent_requests = max_concurrent_requests
         self.blocking_updates = blocking_updates
@@ -59,10 +55,7 @@ class HttpStateReader(StateReader):
         Returns:
             The environment object.
         """
-        env = self._client.get_environment(environment)
-        if env:
-            self._update_cache(env.snapshots)
-        return env
+        return self._client.get_environment(environment)
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -70,10 +63,7 @@ class HttpStateReader(StateReader):
         Returns:
             A list of all environments.
         """
-        envs = self._client.get_environments()
-        for env in envs:
-            self._update_cache(env.snapshots)
-        return envs
+        return self._client.get_environments()
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
@@ -88,7 +78,6 @@ class HttpStateReader(StateReader):
         snapshots = self._client.get_snapshots(
             [s.snapshot_id for s in snapshot_ids] if snapshot_ids is not None else None
         )
-        self._update_cache(snapshots)
         return {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
     def snapshots_exist(
@@ -125,9 +114,3 @@ class HttpStateReader(StateReader):
         raise NotImplementedError(
             "Getting snapshots by model names is not supported by the Airflow HTTP State Sync"
         )
-
-    def _update_cache(self, snapshots: t.Iterable[SnapshotInfoLike]) -> None:
-        with self.table_info_cache:
-            self.table_info_cache.update(
-                {snapshot.snapshot_id: snapshot.table_info for snapshot in snapshots}
-            )

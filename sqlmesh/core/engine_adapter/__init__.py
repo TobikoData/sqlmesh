@@ -22,7 +22,6 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "databricks": DatabricksSparkSessionEngineAdapter,
     "redshift": RedshiftEngineAdapter,
     "postgres": EngineAdapterWithIndexSupport,
-    "postgresql": EngineAdapterWithIndexSupport,
     "mysql": EngineAdapterWithIndexSupport,
     "mssql": EngineAdapterWithIndexSupport,
 }
@@ -32,6 +31,8 @@ def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
 ) -> EngineAdapter:
     dialect = dialect.lower()
+    if dialect == "postgresql":
+        dialect = "postgres"
     # TODO: Update in follow up PR
     if dialect == "databricks":
         try:

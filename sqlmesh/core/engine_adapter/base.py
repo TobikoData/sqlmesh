@@ -131,7 +131,11 @@ class EngineAdapter:
         self.execute(create)
 
     def create_index(
-        self, table_name: TableName, index_name: str, columns: t.Tuple[str, ...]
+        self,
+        table_name: TableName,
+        index_name: str,
+        columns: t.Tuple[str, ...],
+        exists: bool = True,
     ) -> None:
         """Creates a new index for the given table.
 
@@ -139,6 +143,7 @@ class EngineAdapter:
             table_name: The name of the target table.
             index_name: The name of the index.
             columns: The list of columns that constitute the index.
+            exists: Indicates whether to include the IF NOT EXISTS check.
         """
 
     def create_table(
@@ -697,7 +702,11 @@ class EngineAdapter:
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
     def create_index(
-        self, table_name: TableName, index_name: str, columns: t.Tuple[str, ...]
+        self,
+        table_name: TableName,
+        index_name: str,
+        columns: t.Tuple[str, ...],
+        exists: bool = True,
     ) -> None:
         expression = exp.Create(
             this=exp.Index(
@@ -708,6 +717,7 @@ class EngineAdapterWithIndexSupport(EngineAdapter):
                 ),
             ),
             kind="INDEX",
+            exists=exists,
         )
         self.execute(expression)
 

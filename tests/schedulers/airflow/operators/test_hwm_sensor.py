@@ -24,7 +24,7 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     )
 
     get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots_with_same_version"
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
     )
     get_snapshots_with_same_version_mock.return_value = [target_snapshot]
 
@@ -60,7 +60,7 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     )
 
     get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots_with_same_version"
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
     )
     get_snapshots_with_same_version_mock.return_value = [
         target_snapshot_v1,
@@ -100,7 +100,7 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     )
 
     get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.get_snapshots_with_same_version"
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
     )
     get_snapshots_with_same_version_mock.return_value = [
         target_snapshot_v1,

@@ -69,9 +69,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
-        return EngineAdapterStateSync(
-            context.engine_adapter, context.physical_schema, context.table_info_cache
-        )
+        return EngineAdapterStateSync(context.engine_adapter, context.physical_schema)
 
     def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
@@ -99,7 +97,6 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
         from sqlmesh.schedulers.airflow.state_sync import HttpStateReader
 
         return HttpStateReader(
-            table_info_cache=context.table_info_cache,
             client=self.get_client(context.console),
             max_concurrent_requests=self.max_concurrent_requests,
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,

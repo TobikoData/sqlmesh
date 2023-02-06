@@ -6,17 +6,13 @@ import typing as t
 from airflow.api_connexion import security
 from airflow.models import Variable
 from airflow.security import permissions
-from airflow.utils.session import provide_session
 from airflow.www.app import csrf
 from flask import Blueprint, Response, jsonify, make_response, request
-from sqlalchemy.orm import Session
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import SnapshotId, SnapshotNameVersion
-from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.pydantic import PydanticModel
 
 sqlmesh_api_v1 = Blueprint(
@@ -34,7 +30,8 @@ sqlmesh_api_v1 = Blueprint(
 def apply_plan() -> Response:
     try:
         plan = common.PlanApplicationRequest.parse_obj(request.json or {})
-        spec = create_plan_dag_spec(plan)
+        with util.scoped_state_sync() as state_sync:
+            spec = create_plan_dag_spec(plan, state_sync)
     except Exception as ex:
         return _error(str(ex))
 
@@ -49,7 +46,8 @@ def apply_plan() -> Response:
     [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
 )
 def get_environment(name: str) -> Response:
-    environment = _get_state_sync().get_environment(name)
+    with util.scoped_state_sync() as state_sync:
+        environment = state_sync.get_environment(name)
     if environment is None:
         return _error(f"Environment '{name}' was not found", 404)
     return _success(environment)
@@ -61,7 +59,8 @@ def get_environment(name: str) -> Response:
     [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
 )
 def get_environments() -> Response:
-    environments = _get_state_sync().get_environments()
+    with util.scoped_state_sync() as state_sync:
+        environments = state_sync.get_environments()
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
@@ -71,27 +70,28 @@ def get_environments() -> Response:
     [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
 )
 def get_snapshots() -> Response:
-    state_sync = _get_state_sync()
-
-    snapshot_name_versions = _snapshot_name_versions_from_request()
-    if snapshot_name_versions is not None:
-        snapshots = state_sync.get_snapshots_with_same_version(snapshot_name_versions)
-    else:
-        snapshot_ids = _snapshot_ids_from_request()
-
-        if "return_ids" in request.args:
-            existing_snapshot_ids = (
-                state_sync.snapshots_exist(snapshot_ids)
-                if snapshot_ids is not None
-                else set()
+    with util.scoped_state_sync() as state_sync:
+        snapshot_name_versions = _snapshot_name_versions_from_request()
+        if snapshot_name_versions is not None:
+            snapshots = state_sync.get_snapshots_with_same_version(
+                snapshot_name_versions
             )
-            return _success(
-                common.SnapshotIdsResponse(snapshot_ids=existing_snapshot_ids)
-            )
+        else:
+            snapshot_ids = _snapshot_ids_from_request()
 
-        snapshots = list(state_sync.get_snapshots(snapshot_ids).values())
+            if "return_ids" in request.args:
+                existing_snapshot_ids = (
+                    state_sync.snapshots_exist(snapshot_ids)
+                    if snapshot_ids is not None
+                    else set()
+                )
+                return _success(
+                    common.SnapshotIdsResponse(snapshot_ids=existing_snapshot_ids)
+                )
 
-    return _success(common.SnapshotsResponse(snapshots=snapshots))
+            snapshots = list(state_sync.get_snapshots(snapshot_ids).values())
+
+        return _success(common.SnapshotsResponse(snapshots=snapshots))
 
 
 T = t.TypeVar("T", bound=PydanticModel)
@@ -121,8 +121,3 @@ def _snapshot_name_versions_from_request() -> t.Optional[t.List[SnapshotNameVers
 
     raw_versions = json.loads(request.args["versions"])
     return [SnapshotNameVersion.parse_obj(v) for v in raw_versions]
-
-
-@provide_session
-def _get_state_sync(session: Session = util.PROVIDED_SESSION) -> StateSync:
-    return VariableStateSync(session)
