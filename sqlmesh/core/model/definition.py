@@ -30,6 +30,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import (
     Executable,
+    ExecutableKind,
     build_env,
     prepare_env,
     print_exception,
@@ -434,7 +435,11 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:
-        return self.python_env_ or {}
+        return {
+            c.JINJA_MACROS: Executable(kind=ExecutableKind.VALUE, payload="[]"),
+            c.SQLMESH: Executable(kind=ExecutableKind.VALUE, payload="True"),
+            **(self.python_env_ or {}),
+        }
 
     @property
     def contains_star_query(self) -> bool:

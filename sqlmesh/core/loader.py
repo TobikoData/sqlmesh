@@ -13,8 +13,8 @@ from pathlib import Path
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
-from sqlmesh.core.audit import Audit
 from sqlmesh.core import constants as c
+from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
