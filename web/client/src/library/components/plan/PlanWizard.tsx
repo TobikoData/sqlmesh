@@ -10,27 +10,27 @@ import { Progress } from "../progress/Progress";
 
 export function PlanWizard({
   id,
-  context,
 }: {
-  id: string,
-  context: any,
+  id: string
 }) {
   const planState = useStorePlan((s: any) => s.state)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const backfills = useStorePlan((s: any) => s.backfills)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
+  const environment = useStorePlan((s: any) => s.environment)
   const setCategory = useStorePlan((s: any) => s.setCategory)
   const category = useStorePlan((s: any) => s.category)
   const categories = useStorePlan((s: any) => s.categories)
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
   const activePlan = useStorePlan((s: any) => s.activePlan)
-
+  const { data: context, refetch } = useApiContextByEnvironment(environment)
 
   useEffect(() => {
-    if (context == null) return
+    if (context == null || context.environment == null) return
 
     setBackfills(context.backfills)
+    setEnvironment(context.environment)
 
     if (isArrayNotEmpty(context.backfills)) {
       setCategory(categories[0])
@@ -63,9 +63,9 @@ export function PlanWizard({
   return (
     <ul>
       <PlanWizardStep headline="Setup" description='Set Details'>
-        {context?.environment ? (
+        {environment ? (
           <div>
-            <h4 className="ml-1">Current Environment is <b className='px-2 py-1 font-sm rounded-md bg-secondary-100'>{context?.environment}</b></h4>
+            <h4 className="ml-1">Current Environment is <b className='px-2 py-1 font-sm rounded-md bg-secondary-100'>{environment}</b></h4>
           </div>
         ) : (
           <form onSubmit={getContext} id={id}>
