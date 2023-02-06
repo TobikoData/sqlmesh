@@ -175,38 +175,36 @@ export function Plan({
 }
 
 function getActionName(action: PlanState, options: Array<string> = [], fallback: string = 'Start'): string {
-  let name = fallback;
+  let name: string;
 
-  if (action === EnumPlanState.Done) {
-    name = 'Done'
-  }
-
-  if (action === EnumPlanState.Running) {
-    name = 'Running...'
-  }
-
-  if (action === EnumPlanState.Applying) {
-    name = 'Applying...'
-  }
-
-  if (action === EnumPlanState.Canceling) {
-    name = 'Canceling...'
-  }
-
-  if (action === EnumPlanState.Resetting) {
-    name = 'Resetting...'
-  }
-
-  if (action === EnumPlanState.Closing) {
-    name = 'Closing...'
-  }
-
-  if (action === EnumPlanState.Run) {
-    name = 'Run'
-  }
-
-  if (action === EnumPlanState.Apply) {
-    name = 'Apply'
+  switch (action) {
+    case EnumPlanState.Done:
+      name = 'Done'
+      break
+    case EnumPlanState.Running:
+      name = 'Running...'
+      break
+    case EnumPlanState.Applying:
+      name = 'Applying...'
+      break
+    case EnumPlanState.Canceling:
+      name = 'Canceling...'
+      break
+    case EnumPlanState.Resetting:
+      name = 'Resetting...'
+      break
+    case EnumPlanState.Closing:
+      name = 'Closing...'
+      break
+    case EnumPlanState.Run:
+      name = 'Run'
+      break
+    case EnumPlanState.Apply:
+      name = 'Apply'
+      break
+    default:
+      name = fallback
+      break
   }
 
   return options.includes(action) ? name : fallback
