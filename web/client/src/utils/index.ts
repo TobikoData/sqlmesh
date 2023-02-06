@@ -23,3 +23,11 @@ export function isObject(value: unknown): boolean {
     value.constructor === Object
   );
 }
+
+export function isNil(value: unknown): boolean {
+  return value == null;
+}
+
+export function isNotNil(value: unknown): boolean {
+  return value != null;
+}
