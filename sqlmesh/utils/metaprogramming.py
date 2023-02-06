@@ -386,7 +386,7 @@ def prepare_env(
         if executable.is_value:
             env[name] = ast.literal_eval(executable.payload)
         else:
-            exec(executable.payload, env, env)
+            exec(executable.payload, env)
     return env
 
 
