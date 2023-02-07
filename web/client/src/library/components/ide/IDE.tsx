@@ -1,4 +1,3 @@
-import { ViewUpdate } from '@codemirror/view'
 import ContextIDE from '../../../context/Ide'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
@@ -7,19 +6,10 @@ import { FolderTree } from '../folderTree/FolderTree'
 import Tabs from '../tabs/Tabs'
 import { Fragment, useEffect, useState } from 'react'
 import clsx from 'clsx'
-import {
-  XCircleIcon,
-  PlayIcon,
-} from '@heroicons/react/24/solid'
+import { PlayIcon, } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover } from '@headlessui/react'
-import {
-  useApiFileByPath,
-  useMutationApiSaveFile,
-  useApiFiles,
-} from '../../../api'
-import type { File } from '../../../api/client'
-import { useQueryClient } from '@tanstack/react-query'
+import { useApiFiles, } from '../../../api'
 import { Plan } from '../plan/Plan'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
@@ -28,8 +18,6 @@ import { useChannel } from '../../../api/channels'
 import { ModelFile } from '../../../models'
 
 export function IDE() {
-  const client = useQueryClient()
-
   const planState = useStorePlan((s: any) => s.state)
   const planAction = useStorePlan((s: any) => s.action)
   const setPlanState = useStorePlan((s: any) => s.setState)
@@ -51,6 +39,12 @@ export function IDE() {
       subscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (activeFile == null) {
+      setActiveFile([...openedFiles][0])
+    }
+  }, [openedFiles])
 
   function closePlan() {
     setPlanAction(EnumPlanAction.Closing)
@@ -86,8 +80,9 @@ export function IDE() {
         setActiveFile: (file) => {
           if (!file) return setActiveFile(null)
 
+          openedFiles.add(file)
+
           setActiveFile(file)
-          setOpenedFiles(new Set([...openedFiles, file]))
         },
         setOpenedFiles,
       }}
