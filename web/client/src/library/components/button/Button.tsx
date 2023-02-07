@@ -40,7 +40,7 @@ export function Button({ disabled = false, variant = 'secondary', shape = 'round
       form={form}
       disabled={disabled}
       className={clsx(
-        'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
+        'whitespace-nowrap flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         VARIANT.get(variant),
         SHAPE.get(shape),
         SIZE.get(size),
@@ -58,7 +58,7 @@ export function ButtonMenu({ variant = 'secondary', shape = 'rounded', size = En
   return (
     <Menu.Button
       className={clsx(
-        'flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
+        'whitespace-nowrap flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         VARIANT.get(variant),
         SHAPE.get(shape),
         SIZE.get(size),
