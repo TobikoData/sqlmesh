@@ -13,29 +13,13 @@ To add a model:
 1. Within your **models** folder, create a new database file. For example, `example_new_model.sql`.
 2. Within the file, define your model as follows:
 
-    ```
-    MODEL (
-    ```
+        MODEL (
+        name sqlmesh_example.example_new_model
+        )
 
-    ```
-    name sqlmesh_example.example_new_model
-    ```
-
-    ```
-    )
-    ```
-
-    ```
-    SELECT *
-    ```
-
-    ```
-    FROM sqlmesh_example.example_incremental_model
-    ```
-
-    ```
-    WHERE ds BETWEEN @start_ds and @end_ds
-    ```
+        SELECT *
+        FROM sqlmesh_example.example_incremental_model
+        WHERE ds BETWEEN @start_ds and @end_ds
 
     **Note:** The last line in this file is required if your model is incremental. Refer to [model kinds](/../concepts/models/model_kinds) for more information about the kinds of models you can create.
 
