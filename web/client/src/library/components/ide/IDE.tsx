@@ -1,30 +1,82 @@
+import { ViewUpdate } from '@codemirror/view'
 import ContextIDE from '../../../context/Ide'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
+import Tabs from '../tabs/Tabs'
 import { Fragment, useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { PlayIcon } from '@heroicons/react/24/solid'
+import {
+  XCircleIcon,
+  PlayIcon,
+} from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
-import { Transition, Dialog } from '@headlessui/react'
-import { useApiFiles } from '../../../api'
+import { Transition, Dialog, Popover } from '@headlessui/react'
+import {
+  useApiFileByPath,
+  useMutationApiSaveFile,
+  useApiFiles,
+} from '../../../api'
+import type { File } from '../../../api/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { Plan } from '../plan/Plan'
-import Tabs from '../tabs/Tabs';
+import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
+import { Progress } from '../progress/Progress'
+import { Spinner } from '../logo/Spinner'
+import { useChannel } from '../../../api/channels'
 import { ModelFile } from '../../../models'
 
 export function IDE() {
-  const [isOpenModalPlan, setIsOpenModalPlan] = useState(false)
+  const client = useQueryClient()
+
+  const planState = useStorePlan((s: any) => s.state)
+  const planAction = useStorePlan((s: any) => s.action)
+  const setPlanState = useStorePlan((s: any) => s.setState)
+  const setPlanAction = useStorePlan((s: any) => s.setAction)
+  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
+  const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
+  const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
+  const updateTasks = useStorePlan((s: any) => s.updateTasks)
+
   const [openedFiles, setOpenedFiles] = useState<Set<ModelFile>>(new Set([new ModelFile()]))
   const [activeFile, setActiveFile] = useState<ModelFile | null>(null)
+
+  const [subscribe, getChannel] = useChannel('/api/tasks', updateTasks)
 
   const { data: project } = useApiFiles()
 
   useEffect(() => {
-    if (activeFile === null) {
-      setActiveFile([...openedFiles][0])
+    if (getChannel() == null) {
+      subscribe()
     }
-  }, [openedFiles])
+  }, [])
+
+  function closePlan() {
+    setPlanAction(EnumPlanAction.Closing)
+  }
+
+  function cancelPlan() {
+    setPlanState(EnumPlanState.Canceling)
+
+
+    if (planAction !== EnumPlanAction.None) {
+      setPlanAction(EnumPlanAction.Canceling)
+    }
+
+    console.log('cancel plan')
+
+    if (planAction !== EnumPlanAction.None) {
+      startPlan()
+    }
+  }
+
+  function startPlan() {
+    setActivePlan(null)
+    setPlanState(EnumPlanState.Init)
+    setPlanAction(EnumPlanAction.Opening)
+    setEnvironment(null)
+  }
 
   return (
     <ContextIDE.Provider
@@ -34,9 +86,8 @@ export function IDE() {
         setActiveFile: (file) => {
           if (!file) return setActiveFile(null)
 
-          openedFiles.add(file)
-
           setActiveFile(file)
+          setOpenedFiles(new Set([...openedFiles, file]))
         },
         setOpenedFiles,
       }}
@@ -88,6 +139,79 @@ export function IDE() {
             </span>
             <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
           </Button>
+          {plan && <Popover className="relative flex">
+            {() => (
+              <>
+                <Popover.Button
+                  className={clsx(
+                    'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
+                    planState === EnumPlanState.Finished && 'bg-success-500 text-white',
+                    planState === EnumPlanState.Failed && 'bg-danger-500 text-white',
+                    planState === EnumPlanState.Applying && 'bg-secondary-500 text-white',
+                    planState !== EnumPlanState.Finished && planState !== EnumPlanState.Failed && planState !== EnumPlanState.Applying && 'bg-gray-100 text-gray-500',
+                  )}
+                >
+                  {plan ? 1 : 0}
+                </Popover.Button>
+                <Transition
+                  as={Fragment}
+                  enter="transition ease-out duration-200"
+                  enterFrom="opacity-0 translate-y-1"
+                  enterTo="opacity-100 translate-y-0"
+                  leave="transition ease-in duration-150"
+                  leaveFrom="opacity-100 translate-y-0"
+                  leaveTo="opacity-0 translate-y-1"
+                >
+                  <Popover.Panel className="absolute right-1 z-10 mt-3 transform">
+                    <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
+                      <div className="relative grid gap-8 py-3 bg-white">
+                        <div key={plan.environment} className="mx-4">
+                          <div className='flex justify-between items-baseline'>
+                            <small className="block whitespace-nowrap text-sm font-medium text-gray-900">
+                              Environemnt: {plan.environment}
+                            </small>
+                            <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
+                              {Object.values(plan.tasks).filter((t: any) => t.completed === t.total).length} of {Object.values(plan.tasks).length}
+                            </small>
+                          </div>
+                          <Progress
+                            progress={Math.ceil(Object.values(plan.tasks).filter((t: any) => t.completed === t.total).length / Object.values(plan.tasks).length * 100)}
+                          />
+                          <div className='my-4 px-4 py-2 bg-secondary-100 rounded-lg'>
+                            {(Object.entries(plan.tasks)).map(([model_name, task]: any) => (
+                              <div key={model_name}>
+                                <div className='flex justify-between items-baselin'>
+                                  <small className="text-xs block whitespace-nowrap font-medium text-gray-900 mr-6">
+                                    {model_name}
+                                  </small>
+                                  <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
+                                    {task.completed} of {task.total}
+                                  </small>
+                                </div>
+                                <Progress
+                                  progress={Math.ceil(task.completed / task.total * 100)}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div className='flex justify-end items-center px-2'>
+                            <div className='w-full'>
+                              <small className='text-xs'><b>Last Update:</b> {new Date(plan.updated_at).toDateString()}</small>
+                            </div>
+                            {planState === EnumPlanState.Applying && <Button size='sm' variant='danger' className='mx-0' onClick={e => {
+                              e.stopPropagation()
+                              cancelPlan()
+                            }}>Cancel</Button>}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </Popover.Panel>
+                </Transition>
+              </>
+            )}
+          </Popover>}
         </div>
       </div>
       <Divider />
@@ -120,8 +244,8 @@ export function IDE() {
         </div>
       </div>
       <Divider />
-      <div className="px-2 text-xs py-1">ide footer</div>
-      <Transition appear show={isOpenModalPlan} as={Fragment}>
+      <div className="p-1">ide footer</div>
+      <Transition appear show={planAction !== EnumPlanAction.None && planAction !== EnumPlanAction.Closing} as={Fragment} afterLeave={() => setPlanAction(EnumPlanAction.None)}>
         <Dialog as="div" className="relative z-[100]" onClose={() => undefined}>
           <Transition.Child
             as={Fragment}
@@ -147,7 +271,10 @@ export function IDE() {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan onClose={() => setIsOpenModalPlan(false)} />
+                  <Plan
+                    onClose={closePlan}
+                    onCancel={cancelPlan}
+                  />
                 </Dialog.Panel>
               </Transition.Child>
             </div>
@@ -157,5 +284,3 @@ export function IDE() {
     </ContextIDE.Provider>
   )
 }
-
-
