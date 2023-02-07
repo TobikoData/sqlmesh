@@ -25,6 +25,7 @@ import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/pl
 import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
+import fetchAPI from '../../../api/instance'
 
 export function IDE() {
   const client = useQueryClient()
@@ -34,6 +35,7 @@ export function IDE() {
   const setPlanState = useStorePlan((s: any) => s.setState)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
+  const setLastPlan = useStorePlan((s: any) => s.setLastPlan)
   const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
@@ -43,7 +45,7 @@ export function IDE() {
   const [fileContent, setFileContent] = useState<string>('')
   const [status, setStatus] = useState('editing')
 
-  const [subscribe, getChannel] = useChannel('/api/tasks', updateTasks)
+  const [subscribe, getChannel, unsubscribe] = useChannel('/api/tasks', updateTasks)
 
   const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
@@ -78,21 +80,31 @@ export function IDE() {
     setPlanAction(EnumPlanAction.Closing)
   }
 
-  function cancelPlan() {
+  async function cancelPlan() {
     setPlanState(EnumPlanState.Canceling)
-
 
     if (planAction !== EnumPlanAction.None) {
       setPlanAction(EnumPlanAction.Canceling)
     }
 
-    console.log('cancel plan')
+    try {
+      await fetchAPI({ url: '/api/plan/cancel', method: 'post' })
+    } catch (e) {
+      console.error(e)
+    }
+
+    setPlanState(EnumPlanState.Cancelled)
+
+    setLastPlan(plan)
+
+    getChannel()?.close()
+    unsubscribe()
+
 
     if (planAction !== EnumPlanAction.None) {
       startPlan()
     }
   }
-
   function startPlan() {
     setActivePlan(null)
     setPlanState(EnumPlanState.Init)
