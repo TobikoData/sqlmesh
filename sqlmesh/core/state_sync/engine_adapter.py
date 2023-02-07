@@ -238,7 +238,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .where(where)
         )
         if lock_for_update:
-            return query.lock()
+            return query.lock(copy=False)
         return query
 
     def _get_snapshots(
@@ -263,7 +263,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
         )
         if lock_for_update:
-            query = query.lock()
+            query = query.lock(copy=False)
 
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
@@ -311,7 +311,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .where(self._snapshot_name_version_filter(snapshots))
         )
         if lock_for_update:
-            query = query.lock()
+            query = query.lock(copy=False)
 
         snapshot_rows = self.engine_adapter.fetchall(query)
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
