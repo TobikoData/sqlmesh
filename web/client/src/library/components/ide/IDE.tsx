@@ -136,7 +136,7 @@ export function IDE() {
           </ul>
         </div>
 
-        <div className="px-3 flex items-center">
+        <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
             disabled={planAction !== EnumPlanAction.None || planState === EnumPlanState.Applying || planState === EnumPlanState.Canceling}
             variant='primary'

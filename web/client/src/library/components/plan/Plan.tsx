@@ -9,6 +9,7 @@ import { EnumPlanState, EnumPlanAction, PlanState, useStorePlan, PlanAction } fr
 import fetchAPI from '../../../api/instance'
 import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
+import { getActionName } from './help'
 
 
 export function Plan({
@@ -31,6 +32,8 @@ export function Plan({
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
+  const backfill_start = useStorePlan((s: any) => s.backfill_start)
+  const backfill_end = useStorePlan((s: any) => s.backfill_end)
 
   const [subscribe] = useChannel('/api/tasks', updateTasks)
 
@@ -60,7 +63,6 @@ export function Plan({
 
     if (planState === EnumPlanState.Finished || planState === EnumPlanState.Failed) {
       setPlanAction(EnumPlanAction.Done)
-      refetch()
     }
   }, [planState])
 
@@ -68,7 +70,14 @@ export function Plan({
     setPlanState(EnumPlanState.Applying)
 
     try {
-      const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
+      const data: any = await fetchAPI({
+        url: `/api/apply?environment=${environment}`,
+        method: 'post',
+        data: JSON.stringify({
+          start: backfill_start,
+          end: backfill_end,
+        })
+      })
 
       if (data.ok) {
         subscribe()
@@ -154,7 +163,7 @@ export function Plan({
                 className='justify-self-end'
                 disabled={[EnumPlanAction.Resetting, EnumPlanAction.Applying, EnumPlanAction.Canceling, EnumPlanAction.Closing].includes(planAction)}
               >
-                {getActionName(planAction, [EnumPlanAction.Resetting], 'Reset')}
+                {getActionName(planAction, [EnumPlanAction.Resetting], 'Start Over')}
               </Button>
             )}
             <Button
@@ -172,40 +181,3 @@ export function Plan({
   )
 }
 
-function getActionName(action: PlanAction, options: Array<string> = [], fallback: string = 'Start'): string {
-  if (!options.includes(action)) return fallback
-
-  let name: string;
-
-  switch (action) {
-    case EnumPlanAction.Done:
-      name = 'Done'
-      break
-    case EnumPlanAction.Running:
-      name = 'Running...'
-      break
-    case EnumPlanAction.Applying:
-      name = 'Applying...'
-      break
-    case EnumPlanAction.Canceling:
-      name = 'Canceling...'
-      break
-    case EnumPlanAction.Resetting:
-      name = 'Resetting...'
-      break
-    case EnumPlanAction.Closing:
-      name = 'Closing...'
-      break
-    case EnumPlanAction.Run:
-      name = 'Run'
-      break
-    case EnumPlanAction.Apply:
-      name = 'Apply'
-      break
-    default:
-      name = fallback
-      break
-  }
-
-  return name
-}
