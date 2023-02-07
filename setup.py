@@ -62,7 +62,7 @@ setup(
             "pytest-mock",
             "pyspark",
             "sqlalchemy-stubs",
-            "tenacity",
+            "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
             "types-requests==2.28.8",
