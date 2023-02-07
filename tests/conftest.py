@@ -68,7 +68,6 @@ def init_and_plan_sushi_context(
 
     for snapshot in sushi_context.snapshots.values():
         snapshot.set_version()
-        sushi_context.table_info_cache[snapshot.snapshot_id] = snapshot.table_info
 
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False

@@ -16,7 +16,6 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -119,19 +118,18 @@ class SnapshotEvaluationTarget(
     latest: t.Optional[TimeLike]
     is_dev: bool
 
-    @provide_session
     def post_hook(
         self,
         context: Context,
-        session: Session = util.PROVIDED_SESSION,
         **kwargs: t.Any,
     ) -> None:
-        VariableStateSync(session).add_interval(
-            self.snapshot.snapshot_id,
-            self._get_start(context),
-            self._get_end(context),
-            is_dev=self.is_dev,
-        )
+        with util.scoped_state_sync() as state_sync:
+            state_sync.add_interval(
+                self.snapshot.snapshot_id,
+                self._get_start(context),
+                self._get_end(context),
+                is_dev=self.is_dev,
+            )
 
     def _get_command_payload(
         self, context: Context
@@ -291,11 +289,11 @@ class SnapshotCreateTablesTarget(
             snapshots=stored_snapshots + self.new_snapshots,
         )
 
-    @provide_session
     def _get_stored_snapshots(
-        self, snapshot_ids: t.Set[SnapshotId], session: Session = util.PROVIDED_SESSION
+        self, snapshot_ids: t.Set[SnapshotId]
     ) -> t.List[Snapshot]:
-        return list(VariableStateSync(session).get_snapshots(snapshot_ids).values())
+        with util.scoped_state_sync() as state_sync:
+            return list(state_sync.get_snapshots(snapshot_ids).values())
 
 
 class SnapshotMigrateTablesTarget(

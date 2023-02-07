@@ -324,7 +324,7 @@ def test_create_index(mocker: MockerFixture):
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE INDEX "test_index" ON "test_table" ("cola", "colb")'
+        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
     )
 
 

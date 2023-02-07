@@ -49,13 +49,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_view_model_snapshot = snapshots[new_view_model.name]
 
     new_model_snapshot.version = new_model_snapshot.fingerprint.to_version()
-    sushi_context.table_info_cache[
-        new_model_snapshot.snapshot_id
-    ] = new_model_snapshot.table_info
     new_view_model_snapshot.version = new_view_model_snapshot.fingerprint.to_version()
-    sushi_context.table_info_cache[
-        new_view_model_snapshot.snapshot_id
-    ] = new_view_model_snapshot.table_info
 
     plan = Plan(
         sushi_context._context_diff("prod"),
