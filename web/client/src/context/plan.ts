@@ -135,6 +135,8 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
 
       if (isObjectEmpty(s.activePlan?.tasks)) {
         s.setLastPlan(null)
+      } else {
+        s.setLastPlan(plan)
       }
 
       if (isObjectEmpty(data.tasks)) {

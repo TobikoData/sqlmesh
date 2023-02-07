@@ -88,7 +88,7 @@ export function IDE() {
     }
 
     try {
-      await fetchAPI({ url: `/api/plan/cancel`, method: 'post' })
+      await fetchAPI({ url: '/api/plan/cancel', method: 'post' })
     } catch (e) {
       console.error(e)
     }
