@@ -47,6 +47,12 @@ type PlanProgress = {
   updated_at: string;
 }
 
+type PlanDate = {
+  date: Date,
+  timestamp: number,
+  formatted: string,
+}
+
 interface PlanStore {
   state: PlanState;
   action: PlanAction;
@@ -54,14 +60,12 @@ interface PlanStore {
   setLastPlan: (lastPlan: PlanProgress | null) => void;
   setState: (state: PlanState) => void;
   setAction: (action: PlanAction) => void;
-  setBackfillStart: (backfill_start: string) => void;
-  setBackfillEnd: (backfill_end: string) => void;
   setEnvironment: (environment: string) => void;
   setCategory: (category: Category) => void;
   activePlan?: PlanProgress | null;
   lastPlan?: PlanProgress | null;
-  backfill_start: string | null;
-  backfill_end: string | null;
+  backfill_start: PlanDate | null;
+  backfill_end: PlanDate | null;
   environment: string | null;
   category: Category | null;
   categories: Category[];
@@ -81,12 +85,13 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setLastPlan: (lastPlan: PlanProgress | null) => set(() => ({ lastPlan })),
   setState: (state: PlanState) => set(() => ({ state })),
   setAction: (action: PlanAction) => set(() => ({ action })),
-  setBackfillStart: (backfill_start: string) => set(() => ({ backfill_start })),
-  setBackfillEnd: (backfill_end: string) => set(() => ({ backfill_end })),
   setEnvironment: (environment: string) => set(() => ({ environment })),
   setCategory: (category: Category) => set(() => ({ category })),
   backfill_start: null,
   backfill_end: null,
+  setBackfillDate: (type: 'start' | 'end' , date: string) => set(() => ({
+    [`backfill_${type}`]: date,
+  })),
   environment: null,
   category: null,
   categories: getCategories(),
