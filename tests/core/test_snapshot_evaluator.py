@@ -317,6 +317,6 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     with pytest.raises(
         ConfigError,
-        match="Cannot audit 'db.model' because it has not been versioned yet. Run a plan first.",
+        match="Cannot audit 'db.model' because it has not been versioned yet. Apply a plan first.",
     ):
         evaluator.audit(snapshot=snapshot, snapshots={})
