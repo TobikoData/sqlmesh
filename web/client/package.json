@@ -8,7 +8,7 @@
     "build": "npm run generate:api && tsc && vite build",
     "preview": "vite preview",
     "prettier": "prettier --write .",
-    "lint:fix": "eslint --fix",
+    "lint:fix": "eslint --fix -c .eslintrc.json --ext .js,.jsx,.ts,.tsx .",
     "format": "npm run prettier && npm run lint:fix",
     "test": "vitest",
     "generate:api": "orval --config ./orval.config.ts"
