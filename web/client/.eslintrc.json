@@ -1,7 +1,8 @@
 {
   "env": {
     "browser": true,
-    "es2021": true
+    "es2021": true,
+    "node": true
   },
   "extends": [
     "plugin:react/recommended",
@@ -9,18 +10,16 @@
     "prettier"
   ],
   "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "project": ["./tsconfig.json"]
-  },
+  "parserOptions": { "project": ["./tsconfig.json"] },
   "plugins": ["react", "@typescript-eslint"],
   "rules": {
     "react/jsx-uses-react": "off",
     "react/react-in-jsx-scope": "off"
   },
-  "ignorePatterns": ["src/api/client.ts"],
+  "ignorePatterns": ["src/api/client.ts", "vite.config.ts", "orval.config.ts"],
   "settings": {
     "react": {
-      "version": "18.2"
+      "version": "detect"
     }
   }
 }
