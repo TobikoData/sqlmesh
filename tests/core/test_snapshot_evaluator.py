@@ -24,7 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 
 @pytest.fixture
@@ -302,3 +302,21 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     assert duck_conn.execute(
         f"SELECT b FROM sqlmesh.db__model__{snapshot.version}"
     ).fetchall() == [(1,)]
+
+
+def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="db.model",
+            kind=ModelKind(name=ModelKindName.FULL),
+            query=parse_one("SELECT a::int FROM tbl"),
+        )
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="Cannot audit 'db.model' because it has not been versioned yet. Run a plan first.",
+    ):
+        evaluator.audit(snapshot=snapshot, snapshots={})
