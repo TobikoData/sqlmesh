@@ -4,16 +4,16 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 
 * A Directed Acyclic Graph (DAG) is generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
 * Each Plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
-* The Airflow [Variables](https://airflow.apache.org/docs/apache-airflow/stable/howto/variable.html) are used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
+* The Airflow [Database Backend](https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html) is used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
 To integrate SQLMesh with Airflow, configure the following:
 
 ## Airflow cluster configuration
-To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed in that cluster.
+To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed in that cluster. Please note that the Airflow Webserver instance(s) needs to be restarted after installation.
 
-Once the package is installed, a new Python module is created in the target DAG repository with the following content:
+Once the package is installed, the following Python module needs to be created in the `dags/` folder of the target DAG repository with the following contents:
 
 ```python
 from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
