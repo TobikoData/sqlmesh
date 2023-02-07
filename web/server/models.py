@@ -6,6 +6,7 @@ import typing as t
 from pydantic import validator
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
@@ -99,3 +100,11 @@ class ContextEnvironment(PydanticModel):
     environment: str
     changes: t.Optional[ContextEnvironmentChanges]
     backfills: t.List[ContextEnvironmentBackfill] = []
+
+
+class EvaluateInput(PydanticModel):
+    model: str
+    start: TimeLike
+    end: TimeLike
+    latest: TimeLike
+    limit: t.Optional[int] = None
