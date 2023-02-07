@@ -8,6 +8,7 @@ USER root
 ENV AIRFLOW_UID=$AIRFLOW_UID
 RUN usermod -u $AIRFLOW_UID airflow
 
+RUN apt-get autoclean
 RUN apt-get update
 
 # Install system packages
