@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
