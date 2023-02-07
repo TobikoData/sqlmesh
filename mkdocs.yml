@@ -10,6 +10,8 @@ nav:
     - guides/add_model.md
     - guides/delete_model.md
     - guides/evaluate_model.md
+    - guides/test_model.md
+    - guides/audit_model.md
     - guides/validate_model.md
     - guides/view_dag.md
   - Concepts:
