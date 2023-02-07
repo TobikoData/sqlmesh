@@ -228,13 +228,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     def _environments_query(
-        self, where: t.Optional[str | exp.Expression] = None
+        self,
+        where: t.Optional[str | exp.Expression] = None,
+        lock_for_update: bool = False,
     ) -> exp.Select:
-        return (
+        query = (
             exp.select(*(exp.to_identifier(field) for field in Environment.__fields__))
             .from_(self.environments_table)
             .where(where)
         )
+        if lock_for_update:
+            return query.lock()
+        return query
 
     def _get_snapshots(
         self,
@@ -250,18 +255,20 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        expression = (
+        query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
             .where(
                 None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids)
             )
         )
+        if lock_for_update:
+            query = query.lock()
 
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
 
-        for row in self.engine_adapter.fetchall(expression):
+        for row in self.engine_adapter.fetchall(query):
             snapshot = Snapshot.parse_raw(row[0])
             snapshot_id = snapshot.snapshot_id
             if snapshot_id in snapshots:
@@ -298,11 +305,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshots:
             return []
 
-        snapshot_rows = self.engine_adapter.fetchall(
+        query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
             .where(self._snapshot_name_version_filter(snapshots))
         )
+        if lock_for_update:
+            query = query.lock()
+
+        snapshot_rows = self.engine_adapter.fetchall(query)
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_environment(
@@ -319,10 +330,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """
         row = self.engine_adapter.fetchone(
             self._environments_query(
-                exp.EQ(
+                where=exp.EQ(
                     this=exp.to_column("name"),
                     expression=exp.Literal.string(environment),
-                )
+                ),
+                lock_for_update=lock_for_update,
             )
         )
 
