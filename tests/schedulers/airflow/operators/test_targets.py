@@ -43,6 +43,7 @@ def test_evaluation_target_execute(
     )
 
     snapshot = make_snapshot(model)
+    snapshot.set_version()
     parent_snapshots = {snapshot.name: snapshot}
 
     target = targets.SnapshotEvaluationTarget(
