@@ -2,17 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import os
 import typing as t
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
-from starlette.status import (
-    HTTP_303_SEE_OTHER,
-    HTTP_404_NOT_FOUND,
-    HTTP_422_UNPROCESSABLE_ENTITY,
-)
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
@@ -165,17 +161,19 @@ async def delete_directory(
 )
 def get_api_context(
     context: Context = Depends(get_loaded_context),
+    settings: Settings = Depends(get_settings),
 ) -> models.Context:
     """Get the context"""
+
+    context.refresh()
 
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
-        dialect=context.dialect,
-        path=str(context.path),
         scheduler=context.config.scheduler.type_,
         time_column_format=context.config.time_column_format,
         models=list(context.models.keys()),
+        config=settings.config,
     )
 
 
@@ -185,18 +183,23 @@ def get_api_context(
     response_model_exclude_unset=True,
 )
 def get_plan(
-    environment: str = "",
+    environment: str,
     context: Context = Depends(get_loaded_context),
 ) -> models.ContextEnvironment:
     """Get the context for a environment."""
 
     plan = context.plan(environment=environment, no_prompts=True)
-    batches = context.scheduler().batches()
-    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
-        backfills=[
+    )
+
+    if plan.context_diff.has_differences:
+        batches = context.scheduler().batches()
+        tasks = {
+            snapshot.name: len(intervals) for snapshot, intervals in batches.items()
+        }
+
+        payload.backfills = [
             models.ContextEnvironmentBackfill(
                 model_name=interval.snapshot_name,
                 interval=[
@@ -206,14 +209,12 @@ def get_plan(
                 batches=tasks[interval.snapshot_name],
             )
             for interval in plan.missing_intervals
-        ],
-    )
+        ]
 
-    if plan.context_diff.has_differences:
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=plan.context_diff.modified_snapshots,
+            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )
 
     return payload
@@ -224,7 +225,7 @@ async def apply(
     environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-) -> RedirectResponse:
+) -> t.Any:
     """Apply a plan"""
     plan = functools.partial(
         context.plan, environment, no_prompts=True, auto_apply=True
@@ -234,7 +235,8 @@ async def apply(
         task = asyncio.create_task(run_in_executor(plan))
         setattr(task, "_environment", environment)
         request.app.state.task = task
-    return RedirectResponse(request.url_for("tasks"), status_code=HTTP_303_SEE_OTHER)
+
+    return {"ok": True}
 
 
 @router.get("/tasks")
@@ -245,17 +247,20 @@ async def tasks(
     """Stream of plan application events"""
     task = None
     environment = None
+
     if hasattr(request.app.state, "task"):
         task = request.app.state.task
         environment = getattr(task, "_environment", None)
 
     def create_response(task_status: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         return {
-            "data": {
-                "ok": True,
-                "environment": environment,
-                "tasks": task_status,
-            }
+            "data": json.dumps(
+                {
+                    "ok": True,
+                    "environment": environment,
+                    "tasks": task_status,
+                }
+            )
         }
 
     async def running_tasks() -> t.AsyncGenerator:
