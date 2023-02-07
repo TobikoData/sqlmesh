@@ -4,8 +4,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from sqlmesh.core.context import Context
 from web.server.main import app
-from web.server.settings import Settings, get_settings
+from web.server.settings import Settings, get_loaded_context, get_settings
 
 client = TestClient(app)
 
@@ -24,6 +25,15 @@ config = Config()
 
     app.dependency_overrides[get_settings] = get_settings_override
     return tmp_path
+
+
+@pytest.fixture
+def web_sushi_context(sushi_context: Context) -> Context:
+    def get_context_override() -> Context:
+        return sushi_context
+
+    app.dependency_overrides[get_loaded_context] = get_context_override
+    return sushi_context
 
 
 def test_get_files(project_tmp_path: Path) -> None:
@@ -213,3 +223,24 @@ def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
     assert response.json() == {"detail": "No active task found."}
+
+
+def test_evaluate(web_sushi_context: Context) -> None:
+    response = client.post(
+        "/api/evaluate",
+        json={
+            "model": "sushi.top_waiters",
+            "start": "2022-01-01",
+            "end": "now",
+            "latest": "now",
+            "limit": 100,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()
+
+
+def test_fetchdf(web_sushi_context: Context) -> None:
+    response = client.post("/api/fetchdf", content='"SELECT * from sushi.top_waiters"')
+    assert response.status_code == 200
+    assert response.json()
