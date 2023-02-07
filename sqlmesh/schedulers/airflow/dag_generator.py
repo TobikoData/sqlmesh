@@ -8,8 +8,6 @@ from airflow import DAG
 from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
-from airflow.utils.session import provide_session
-from sqlalchemy.orm import Session
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
@@ -25,7 +23,6 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -478,15 +475,11 @@ class SnapshotDagGenerator:
         return output
 
 
-@provide_session
-def creation_update_state_task(
-    new_snapshots: t.Iterable[Snapshot],
-    session: Session = util.PROVIDED_SESSION,
-) -> None:
-    VariableStateSync(session).push_snapshots(new_snapshots)
+def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
+    with util.scoped_state_sync() as state_sync:
+        state_sync.push_snapshots(new_snapshots)
 
 
-@provide_session
 def promotion_update_state_task(
     snapshots: t.List[SnapshotTableInfo],
     environment_name: str,
@@ -496,7 +489,6 @@ def promotion_update_state_task(
     no_gaps: bool,
     plan_id: str,
     previous_plan_id: t.Optional[str],
-    session: Session = util.PROVIDED_SESSION,
 ) -> None:
     environment = Environment(
         name=environment_name,
@@ -506,7 +498,7 @@ def promotion_update_state_task(
         plan_id=plan_id,
         previous_plan_id=previous_plan_id,
     )
-    state_sync = VariableStateSync(session)
-    state_sync.promote(environment, no_gaps=no_gaps)
-    if snapshots and not end and unpaused_dt:
-        state_sync.unpause_snapshots(snapshots, unpaused_dt)
+    with util.scoped_state_sync() as state_sync:
+        state_sync.promote(environment, no_gaps=no_gaps)
+        if snapshots and not end and unpaused_dt:
+            state_sync.unpause_snapshots(snapshots, unpaused_dt)

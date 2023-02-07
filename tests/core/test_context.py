@@ -78,7 +78,7 @@ def test_dag(sushi_context):
     }
 
 
-def test_render(sushi_context, assert_exp_eq, mock_file_cache):
+def test_render(sushi_context, assert_exp_eq):
     snapshot = sushi_context.snapshots["sushi.waiter_revenue_by_day"]
 
     assert_exp_eq(
@@ -164,7 +164,6 @@ def test_render(sushi_context, assert_exp_eq, mock_file_cache):
 
     # unpushed render still works
     unpushed = Context(path="examples/sushi")
-    unpushed.table_info_cache.clear()
     assert_exp_eq(
         unpushed.render(snapshot.name),
         f"""

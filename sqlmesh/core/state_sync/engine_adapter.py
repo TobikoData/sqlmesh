@@ -28,13 +28,11 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
-    SnapshotInfoLike,
     SnapshotNameVersionLike,
 )
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.file_cache import FileCache
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +52,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         engine_adapter: EngineAdapter,
         schema: str,
-        table_info_cache: FileCache,
     ):
         self.engine_adapter = engine_adapter
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
-        self.table_info_cache = table_info_cache
 
     @property
     def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
@@ -128,7 +124,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots = snapshots_by_id.values()
 
         if snapshots:
-            self._update_cache(snapshots)
             self._push_snapshots(snapshots)
 
     def _push_snapshots(
@@ -241,20 +236,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .where(where)
         )
 
-    def remove_expired_snapshots(self) -> t.List[Snapshot]:
-        expired_snapshots = super().remove_expired_snapshots()
-        for snapshot in expired_snapshots:
-            self.engine_adapter.drop_table(snapshot.table_name())
-
-        return expired_snapshots
-
-    def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
-    ) -> t.Dict[SnapshotId, Snapshot]:
-        snapshots = super().get_snapshots(snapshot_ids)
-        self._update_cache(snapshots.values())
-        return snapshots
-
     def _get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
@@ -349,7 +330,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return None
 
         env = self._environment_from_row(row)
-        self._update_cache(env.snapshots)
         return env
 
     def _snapshot_id_filter(
@@ -395,9 +375,3 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for snapshot_name_version in snapshot_name_versions
             )
         )
-
-    def _update_cache(self, snapshots: t.Iterable[SnapshotInfoLike]) -> None:
-        with self.table_info_cache:
-            self.table_info_cache.update(
-                {snapshot.snapshot_id: snapshot.table_info for snapshot in snapshots}
-            )

@@ -5,12 +5,9 @@ from datetime import datetime
 from airflow.models import DagRun
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.context import Context
-from airflow.utils.session import provide_session
-from sqlalchemy.orm import Session
 
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import util
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
 from sqlmesh.utils.date import to_datetime
 
 logger = logging.getLogger(__name__)
@@ -66,13 +63,12 @@ class HighWaterMarkSensor(BaseSensorOperator):
         this_prev = to_datetime(self.this_snapshot.model.cron_floor(target_date))
         return min(target_prev, this_prev)
 
-    @provide_session
-    def _get_target_snapshot(
-        self, session: Session = util.PROVIDED_SESSION
-    ) -> Snapshot:
-        target_snapshots = VariableStateSync(session).get_snapshots_with_same_version(
-            [self.target_snapshot_info]
-        )
-        return Snapshot.merge_snapshots(
-            [self.target_snapshot_info], {s.snapshot_id: s for s in target_snapshots}
-        )[0]
+    def _get_target_snapshot(self) -> Snapshot:
+        with util.scoped_state_sync() as state_sync:
+            target_snapshots = state_sync.get_snapshots_with_same_version(
+                [self.target_snapshot_info]
+            )
+            return Snapshot.merge_snapshots(
+                [self.target_snapshot_info],
+                {s.snapshot_id: s for s in target_snapshots},
+            )[0]

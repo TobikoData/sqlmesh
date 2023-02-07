@@ -3,24 +3,18 @@ from __future__ import annotations
 import typing as t
 from collections import defaultdict
 
-from airflow.utils.session import provide_session
-from sqlalchemy.orm import Session
-
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
-from sqlmesh.schedulers.airflow import common, util
-from sqlmesh.schedulers.airflow.state_sync.variable import VariableStateSync
+from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
 
 
-@provide_session
 def create_plan_dag_spec(
-    request: common.PlanApplicationRequest, session: Session = util.PROVIDED_SESSION
+    request: common.PlanApplicationRequest, state_sync: StateSync
 ) -> common.PlanDagSpec:
-    state_sync = VariableStateSync(session)
     new_snapshots = {s.snapshot_id: s for s in request.new_snapshots}
     stored_snapshots = state_sync.get_snapshots(None)
 
