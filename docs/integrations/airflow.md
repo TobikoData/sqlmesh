@@ -13,7 +13,7 @@ To integrate SQLMesh with Airflow, configure the following:
 ## Airflow cluster configuration
 To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed in that cluster. Please note that the Airflow Webserver instance(s) needs to be restarted after installation.
 
-Once the package is installed, the following Python module needs to be created in the `dags/` folder of the target DAG repository with the following content:
+Once the package is installed, the following Python module needs to be created in the `dags/` folder of the target DAG repository with the following contents:
 
 ```python
 from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
