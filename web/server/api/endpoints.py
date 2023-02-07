@@ -4,9 +4,11 @@ import asyncio
 import functools
 import json
 import os
+import traceback
 import typing as t
 from pathlib import Path
 
+import pandas as pd
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -291,3 +293,40 @@ async def cancel(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="No active task found."
         )
     response.status_code = status.HTTP_204_NO_CONTENT
+
+
+@router.post("/evaluate")
+async def evaluate(
+    options: models.EvaluateInput,
+    context: Context = Depends(get_loaded_context),
+) -> t.Optional[str]:
+    """Evaluate a model with a default limit of 1000"""
+    try:
+        df = context.evaluate(
+            options.model,
+            start=options.start,
+            end=options.end,
+            latest=options.latest,
+            limit=options.limit,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        )
+    if isinstance(df, pd.DataFrame):
+        return df.to_json()
+    return df.toPandas().to_json()
+
+
+@router.post("/fetchdf")
+async def fetchdf(
+    sql: str = Body(),
+    context: Context = Depends(get_loaded_context),
+) -> t.Optional[str]:
+    """Fetches a dataframe given a sql string"""
+    try:
+        return context.fetchdf(sql).to_json()
+    except Exception:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        )
