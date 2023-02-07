@@ -18,7 +18,7 @@ from sqlmesh.utils.errors import ConfigError
 class Config(BaseConfig):
     """An object used by a Context to configure your SQLMesh project.
 
-    Args:
+    Args
         connections: Supported connections and their configurations. Key represents a unique name of a connection.
         default_connection: The name of a connection to use by default.
         test_connection: The connection settings for tests. Can be a name which refers to an existing configuration
@@ -28,9 +28,11 @@ class Config(BaseConfig):
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
         physical_schema: The default schema used to store materialized tables.
         snapshot_ttl: Duration before unpromoted snapshots are removed.
+        ignore_patterns: Files that match glob patterns specified in this list are ignored when scanning the project folder.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
         users: A list of users that can be used for approvals/notifications.
+        model_defaults: Default values for model definitions.
     """
 
     connections: t.Union[
@@ -42,14 +44,13 @@ class Config(BaseConfig):
     )
     scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     notification_targets: t.List[NotificationTarget] = []
-    dialect: str = ""
     physical_schema: str = ""
     snapshot_ttl: str = ""
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
-    loader: t.Type[Loader] = SqlMeshLoader
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
+    loader: t.Type[Loader] = SqlMeshLoader
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "connections": UpdateStrategy.KEY_UPDATE,

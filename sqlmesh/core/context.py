@@ -240,7 +240,11 @@ class Context(BaseContext):
         )
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
-        self.dialect = dialect or self.config.dialect or self._engine_adapter.dialect
+        self.dialect = (
+            dialect
+            or self.config.model_defaults.dialect
+            or self._engine_adapter.dialect
+        )
 
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks

@@ -8,7 +8,10 @@ from pydantic import Field
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.config.common import concurrent_tasks_validator
+from sqlmesh.core.config.common import (
+    concurrent_tasks_validator,
+    http_headers_validator,
+)
 from sqlmesh.core.engine_adapter import EngineAdapter
 
 if sys.version_info >= (3, 9):
@@ -155,6 +158,7 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
     type_: Literal["databricks_api"] = Field(alias="type", default="databricks_api")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+    _http_headers_validator = http_headers_validator
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -251,6 +255,9 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     concurrent_tasks: int = 4
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
+    _http_headers_validator = http_headers_validator
 
     _has_spark_session_access: bool
 
@@ -352,6 +359,7 @@ class RedshiftConnectionConfig(_ConnectionConfig):
 
     Arg Source: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/__init__.py#L146
     Note: A subset of properties were selected. Please open an issue/PR if you want to see more supported.
+
     Args:
         user: The username to use for authentication with the Amazon Redshift cluster.
         password: The password to use for authentication with the Amazon Redshift cluster.
