@@ -46,6 +46,8 @@ export const fetchAPI = async <T>({
 				...(data ? { body: JSON.stringify(data) } : {}),
 			});
 
+			if (response.status === 204) return resolve({ ok: true } as T)
+
 			let json = null;
 
 			if (response.headers.get('Content-Type')?.includes('text/event-stream')) {

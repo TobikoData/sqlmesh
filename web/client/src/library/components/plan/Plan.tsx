@@ -25,6 +25,7 @@ export function Plan({
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const setPlanState = useStorePlan((s: any) => s.setState)
   const environment = useStorePlan((s: any) => s.environment)
+  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const setCategory = useStorePlan((s: any) => s.setCategory)
   const withBackfill = useStorePlan((s: any) => s.withBackfill)
@@ -86,6 +87,7 @@ export function Plan({
     setCategory(null)
     setWithBackfill(false)
     setBackfills([])
+    setActivePlan(null)
   }
 
   async function reset() {
