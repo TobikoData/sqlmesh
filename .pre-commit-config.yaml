@@ -43,6 +43,7 @@ repos:
         entry: prettier --write --ignore-path .prettierignore --config ./web/client/.prettierrc.json
         exclude: ^(web/client/node_modules)
         require_serial: true
+        language: node
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: "5d73b35"
     hooks:
@@ -50,13 +51,19 @@ repos:
         name: eslint
         files: ^(web/client)
         exclude: ^(web/client/node_modules)
-        entry: eslint --fix -c ./web/client/.eslintrc.json --parser-options project:./web/client/tsconfig.json --ext .js,.jsx,.ts,.tsx .
+        entry: eslint --fix -c ./web/client/.eslintrc.json --parser-options tsconfigRootDir:./web/client --ext .js,.jsx,.ts,.tsx .
         additional_dependencies:
-          - eslint@8.31.0
-          - eslint-config-prettier@8.6.0
-          - eslint-config-standard-with-typescript@27.0.1
-          - eslint-plugin-import@2.27.4
-          - eslint-plugin-n@15.6.1
-          - eslint-plugin-promise@6.1.1
-          - eslint-plugin-react@7.32.0
+          [
+            "@typescript-eslint/eslint-plugin",
+            "@typescript-eslint/parser",
+            eslint@8.31.0,
+            eslint-config-prettier@8.6.0,
+            eslint-config-standard-with-typescript@27.0.1,
+            eslint-plugin-import@2.27.4,
+            eslint-plugin-n@15.6.1,
+            eslint-plugin-promise@6.1.1,
+            eslint-plugin-react@7.32.0,
+          ]
+
         require_serial: true
+        language: node
