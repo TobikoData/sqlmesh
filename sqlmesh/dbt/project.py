@@ -72,7 +72,7 @@ class ProjectConfig:
 
         project_name = project_yaml.get("name")
         if not project_name:
-            raise ConfigError(f"{project_file_path.stem} must include project name")
+            raise ConfigError(f"{project_file_path.stem} must include project name.")
 
         profile = Profile.load(project_root, project_name)
         connection = (
@@ -306,7 +306,6 @@ class ProjectConfig:
         sources = set()
 
         for method, args, kwargs in capture_jinja(sql).calls:
-            calls.add(method)
             if method == "config":
                 if args:
                     if isinstance(args[0], dict):
@@ -321,6 +320,8 @@ class ProjectConfig:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
+            else:
+                calls.add(method)
 
         model_config.sql = cls._remove_config_jinja(sql)
         model_config._depends_on = depends_on

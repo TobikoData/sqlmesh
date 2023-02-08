@@ -9,14 +9,15 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
+from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig
+from sqlmesh.dbt.common import Dependencies, GeneralConfig
+from sqlmesh.dbt.macros import ref_method, source_method
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
 class Materialization(str, Enum):
@@ -128,6 +129,8 @@ class ModelConfig(GeneralConfig):
         sources: t.Dict[str, SourceConfig],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
+        macros: MacroRegistry,
+        macro_dependencies: t.Dict[str, Dependencies],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
@@ -149,64 +152,23 @@ class ModelConfig(GeneralConfig):
         source_mapping = {
             config.config_name: config.source_name for config in sources.values()
         }
-
-        def source_map() -> str:
-            deps = ", ".join(
-                f"'{dep}': '{source_mapping[dep]}'" for dep in sorted(self._sources)
-            )
-            return f"{{{deps}}}"
-
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        def ref_map() -> str:
-            deps = ", ".join(
-                f"'{dep}': '{model_mapping[dep]}'" for dep in sorted(self._depends_on)
-            )
-            return f"{{{deps}}}"
+        dependencies = self._dependencies(
+            source_mapping, models, seeds, macros, macro_dependencies
+        )
 
         python_env = {
-            "source": Executable(
-                payload=f"""def source(source_name, table_name):
-    return {source_map()}[".".join([source_name, table_name])]
-""",
-            ),
-            "ref": Executable(
-                payload=f"""def ref(package_name, model_name=None):
-    if model_name:
-        raise Exception("Package not supported.")
-    model_name = package_name
-    return {ref_map()}[model_name]
-""",
-            ),
-            "sqlmesh": Executable(
-                kind=ExecutableKind.VALUE,
-                payload=True,
-            ),
-            "is_incremental": Executable(
-                payload="def is_incremental(): return False",
-            ),
+            "source": source_method(dependencies.sources, source_mapping),
+            "ref": ref_method(dependencies.refs, model_mapping),
+            **{k: v for k, v in macros.items() if k in dependencies.macros},
         }
 
-        python_env = {k: v for k, v in python_env.items() if k in self._calls}
-
-        depends_on = set()
-
-        # Include dependencies inherited from ephemeral tables
-        def add_dependency(dependency: str) -> None:
-            parent: t.Any = seeds.get(dependency)
-            if parent:
-                depends_on.add(parent.seed_name)
-                return
-
-            parent = models[dependency]
-            depends_on.add(parent.model_name)
-            if parent.materialized == Materialization.EPHEMERAL:
-                for parent_dependency in parent._depends_on:
-                    add_dependency(parent_dependency)
-
-        for dependency in self._depends_on:
-            add_dependency(dependency)
+        depends_on = {
+            seeds[ref].seed_name if ref in seeds else models[ref].model_name
+            for ref in dependencies.refs
+        }
 
         return load_model(
             expressions,
@@ -250,4 +212,93 @@ class ModelConfig(GeneralConfig):
             raise ConfigError(f"Incremental needs either unique key or time column.")
         if materialization == Materialization.EPHEMERAL:
             return ModelKindName.EMBEDDED.value
-        raise ConfigError(f"{materialization.value} materialization not supported")
+        raise ConfigError(f"{materialization.value} materialization not supported.")
+
+    def _dependencies(
+        self,
+        source_mapping: t.Dict[str, str],
+        models: t.Dict[str, ModelConfig],
+        seeds: t.Dict[str, SeedConfig],
+        macros: MacroRegistry,
+        macro_dependencies: t.Dict[str, Dependencies],
+    ) -> Dependencies:
+        """Recursively gather all the dependencies for this model, including any from ephemeral parents and macros"""
+        dependencies: Dependencies = self.__class__._macro_dependencies(
+            self, source_mapping, models, seeds, macros, macro_dependencies
+        )
+
+        for source in self._sources:
+            if source not in source_mapping:
+                raise ConfigError(
+                    f"Source {source} for model {self.table_name} not found."
+                )
+
+            dependencies.sources.add(source)
+
+        for dependency in self._depends_on:
+            """Add seed/model as a dependency"""
+            parent: t.Union[SeedConfig, ModelConfig, None] = seeds.get(dependency)
+            if parent:
+                dependencies.refs.add(dependency)
+                continue
+
+            parent = models.get(dependency)
+            if not parent:
+                raise ConfigError(
+                    f"Ref {dependency} for Model {self.table_name} not found."
+                )
+
+            dependencies.refs.add(dependency)
+            if parent.materialized == Materialization.EPHEMERAL:
+                parent_dependencies = parent._dependencies(
+                    source_mapping, models, seeds, macros, macro_dependencies
+                )
+                dependencies = dependencies.union(parent_dependencies)
+
+        return dependencies
+
+    @classmethod
+    def _macro_dependencies(
+        cls,
+        model: ModelConfig,
+        source_mapping: t.Dict[str, str],
+        models: t.Dict[str, ModelConfig],
+        seeds: t.Dict[str, SeedConfig],
+        macros: MacroRegistry,
+        macro_dependencies: t.Dict[str, Dependencies],
+    ) -> Dependencies:
+        dependencies = Dependencies()
+
+        def add_dependency(macro: str) -> None:
+            """Add macro and everything it recursively uses as dependencies"""
+            if macro not in macros:
+                raise ConfigError(
+                    f"Macro {call} for model {model.table_name} not found."
+                )
+
+            dependencies.macros.add(macro)
+            if macro not in macro_dependencies:
+                return
+
+            for source in macro_dependencies[macro].sources:
+                if source not in source_mapping:
+                    raise ConfigError(f"Source {source} for macro {macro} not found.")
+                dependencies.sources.add(source)
+
+            for ref in macro_dependencies[macro].refs:
+                if ref not in models and ref not in seeds:
+                    raise ConfigError(f"Source {source} for macro {macro} not found.")
+                dependencies.refs.add(ref)
+
+            for macro_call in macro_dependencies[macro].macros:
+                if macro_call not in macros:
+                    raise ConfigError(
+                        f"Macro {macro_call} used by macro {macro} not found."
+                    )
+
+                add_dependency(macro_call)
+
+        for call in model._calls:
+            add_dependency(call)
+
+        return dependencies

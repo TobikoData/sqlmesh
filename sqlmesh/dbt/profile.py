@@ -57,11 +57,11 @@ class Profile:
             project_file = project_config_path(project_root)
             project_name = yaml_load(project_file).get("name")
             if not project_name:
-                raise ConfigError(f"{project_file.stem} must include project name")
+                raise ConfigError(f"{project_file.stem} must include project name.")
 
         profile_filepath = cls._find_profile(project_root)
         if not profile_filepath:
-            raise ConfigError(f"{cls.PROFILE_FILE} not found")
+            raise ConfigError(f"{cls.PROFILE_FILE} not found.")
 
         targets, default_target = cls._read_profile(profile_filepath, project_name)
         return Profile(profile_filepath, targets, default_target)
@@ -87,17 +87,17 @@ class Profile:
 
         project_data = contents.get(project)
         if not project_data:
-            raise ConfigError(f"Project '{project}' does not exist in profiles")
+            raise ConfigError(f"Project '{project}' does not exist in profiles.")
 
         outputs = project_data.get("outputs")
         if not outputs:
-            raise ConfigError(f"No outputs exist in profiles for Project '{project}'")
+            raise ConfigError(f"No outputs exist in profiles for Project '{project}'.")
 
         targets = {name: TargetConfig.load(output) for name, output in outputs.items()}
         default_target = project_data.get("target")
         if default_target not in targets:
             raise ConfigError(
-                f"Default target '#{default_target}' not specified in profiles for Project '{project}'"
+                f"Default target '#{default_target}' not specified in profiles for Project '{project}'."
             )
 
         return (targets, default_target)
