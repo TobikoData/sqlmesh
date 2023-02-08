@@ -3,8 +3,9 @@ import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
 import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
+import { ContextEnvironmentBackfill } from "../../../api/client";
 import { EnumPlanState, EnumPlanAction, useStorePlan } from "../../../context/plan";
-import { isArrayNotEmpty, toDate, toDateFormat } from "../../../utils";
+import { includes, isArrayNotEmpty, toDate, toDateFormat, toRation } from "../../../utils";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
 import { isModified } from "./help";
@@ -14,29 +15,29 @@ export function PlanWizard({
 }: {
   id: string
 }) {
-  const planState = useStorePlan((s: any) => s.state)
-  const planAction = useStorePlan((s: any) => s.action)
-  const setPlanAction = useStorePlan((s: any) => s.setAction)
-  const backfills = useStorePlan((s: any) => s.backfills)
-  const setBackfills = useStorePlan((s: any) => s.setBackfills)
-  const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
-  const environment = useStorePlan((s: any) => s.environment)
-  const setCategory = useStorePlan((s: any) => s.setCategory)
-  const category = useStorePlan((s: any) => s.category)
-  const categories = useStorePlan((s: any) => s.categories)
-  const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
-  const setBackfillDate = useStorePlan((s: any) => s.setBackfillDate)
-  const backfill_start = useStorePlan((s: any) => s.backfill_start)
-  const backfill_end = useStorePlan((s: any) => s.backfill_end)
-  const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
+  const planState = useStorePlan(s => s.state)
+  const planAction = useStorePlan(s => s.action)
+  const setPlanAction = useStorePlan(s => s.setAction)
+  const backfills = useStorePlan(s => s.backfills)
+  const setBackfills = useStorePlan(s => s.setBackfills)
+  const setEnvironment = useStorePlan(s => s.setEnvironment)
+  const environment = useStorePlan(s => s.environment)
+  const setCategory = useStorePlan(s => s.setCategory)
+  const category = useStorePlan(s => s.category)
+  const categories = useStorePlan(s => s.categories)
+  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
+  const setBackfillDate = useStorePlan(s => s.setBackfillDate)
+  const backfill_start = useStorePlan(s => s.backfill_start)
+  const backfill_end = useStorePlan(s => s.backfill_end)
+  const plan = useStorePlan(s => s.lastPlan || s.activePlan)
+  const activePlan = useStorePlan(s => s.activePlan)
 
-  const activePlan = useStorePlan((s: any) => s.activePlan)
   const { data: context } = useApiContextByEnvironment(environment)
 
   useEffect(() => {
     if (context?.environment == null) return
 
-    setBackfills(context.backfills)
+    setBackfills(context.backfills ?? [])
     setEnvironment(context.environment)
 
     if (isArrayNotEmpty(context.backfills)) {
@@ -56,14 +57,14 @@ export function PlanWizard({
     setWithBackfill(isArrayNotEmpty(backfills) && category?.id != 'no-change')
   }, [backfills, category])
 
-  function getContext(e: any) {
+  function getContext(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     e.stopPropagation()
 
     setPlanAction(EnumPlanAction.Running)
 
-    const elForm = e.target
-    const data = new FormData(e.target)
+    const elForm = e.target as HTMLFormElement
+    const data = new FormData(elForm)
 
     setEnvironment(String(data.get('environment')))
 
@@ -143,9 +144,9 @@ export function PlanWizard({
                   <div className="ml-1">
                     <h4 className='text-secondary-500 mb-2'>Modified Directly</h4>
                     <ul className='ml-1 mr-3'>
-                      {changes?.modified.direct.map(({ model_name }: any) => (
-                        <li key={model_name} className='text-secondary-500 font-sm h-[1.5rem]'>
-                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">{model_name}</small>
+                      {changes?.modified.direct.map(change => (
+                        <li key={change.model_name} className='text-secondary-500 font-sm h-[1.5rem]'>
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">{change.model_name}</small>
                         </li>
                       ))}
                     </ul>
@@ -155,7 +156,7 @@ export function PlanWizard({
                   <div className="ml-1 mr-3">
                     <h4 className='text-warning-500 mb-2'>Modified Indirectly</h4>
                     <ul className='ml-1'>
-                      {changes?.modified?.indirect.map((modelName: any) => (
+                      {changes?.modified?.indirect.map((modelName: string) => (
                         <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
                         </li>
@@ -167,7 +168,7 @@ export function PlanWizard({
                   <div className="ml-1">
                     <small>Modified Metadata</small>
                     <ul className='ml-1'>
-                      {changes?.modified?.metadata.map((modelName: any) => (
+                      {changes?.modified?.metadata.map((modelName: string) => (
                         <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
                         </li>
@@ -187,7 +188,7 @@ export function PlanWizard({
       </PlanWizardStep>
       {withChanges && (
         <PlanWizardStep headline="Backfill" description='Progress' disabled={context?.environment == null}>
-          {[EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed].includes(planState) && planAction === EnumPlanAction.Done && (
+          {includes([EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed], planState) && planAction === EnumPlanAction.Done && (
             <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
               <h3
                 className={clsx(
@@ -209,16 +210,16 @@ export function PlanWizard({
                     value={category}
                     onChange={setCategory}
                   >
-                    {categories.map((c: any) => (
+                    {categories.map(category => (
                       <RadioGroup.Option
-                        key={c.name}
-                        value={c}
+                        key={category.name}
+                        value={category}
                         className={({ active, checked }) =>
                           `${active
                             ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
                             : ''
                           }
-                      ${checked
+                          ${checked
                             ? 'bg-secondary-500 bg-opacity-75 text-white'
                             : 'bg-secondary-100'
                           }
@@ -235,13 +236,13 @@ export function PlanWizard({
                                     className={`font-medium  ${checked ? 'text-white' : 'text-gray-900'
                                       }`}
                                   >
-                                    {c.name}
+                                    {category.name}
                                   </RadioGroup.Label>
                                   <RadioGroup.Description
                                     as="span"
                                     className={`inline ${checked ? 'text-sky-100' : 'text-gray-500'} text-xs`}
                                   >
-                                    <span>{c.description}</span>
+                                    <span>{category.description}</span>
                                   </RadioGroup.Description>
                                 </div>
                               </div>
@@ -258,34 +259,33 @@ export function PlanWizard({
                   </RadioGroup>
                 </div>
               )}
-              {category.id != 'no-change' && (
+              {category != null && category.id != 'no-change' && (
                 <>
-
                   <ul className="mb-4">
-                    {backfills.filter((item: any) => category.id === 'non-breaking-change' ? !changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
+                    {backfills.filter(item => category.id === 'non-breaking-change' ? !changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
                       <li key={model_name} className='text-gray-600 font-light w-full mb-2'>
                         <div className="flex justify-between items-center w-full">
                           <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
                             <p
                               className={clsx(
                                 "font-bold text-xs",
-                                changes?.modified?.direct?.find((m: any) => m.model_name === model_name) && 'text-secondary-500',
+                                changes?.modified?.direct?.find(change => change.model_name === model_name) && 'text-secondary-500',
                                 changes?.added?.find((name: string) => name === model_name) && 'text-success-500',
                                 changes?.modified?.indirect?.find((name: string) => name === model_name) && 'text-warning-500',
                               )}
                             >
-                              <small className="inline-block pr-3 text-xs text-gray-500">{interval[0]} - {interval[1]}</small>
+                              <span className="inline-block pr-3 text-xs text-gray-500">{interval[0]} - {interval[1]}</span>
                               {model_name}
                             </p>
 
                           </div>
                           <p className="inline-block text-xs">
                             <small>{activePlan?.tasks?.[model_name]?.completed ?? 0} / {batches} batch{batches > 1 ? 'es' : ''}</small>
-                            <small className="inline-block ml-2 font-bold">{Math.ceil(activePlan?.tasks?.[model_name]?.completed / activePlan?.tasks?.[model_name]?.total * 100) || 0}%</small>
+                            <small className="inline-block ml-2 font-bold">{Math.ceil(toRation(activePlan?.tasks?.[model_name]?.completed, activePlan?.tasks?.[model_name]?.total))}%</small>
                           </p>
                         </div>
                         <Progress
-                          progress={Math.ceil(activePlan?.tasks?.[model_name]?.completed / activePlan?.tasks?.[model_name]?.total * 100)}
+                          progress={Math.ceil(toRation(activePlan?.tasks?.[model_name]?.completed, activePlan?.tasks?.[model_name]?.total))}
                         />
                       </li>
                     ))}

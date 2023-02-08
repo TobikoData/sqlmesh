@@ -36,19 +36,21 @@ export function isDate(value: unknown): boolean {
   return value instanceof Date;
 }
 
-export function toDate(str: string | number): Date | null {
+export function toDate(str?: string | number): Date | undefined {
+  if (str == null) return undefined;
+  
   try {
     const date = new Date(str);
 
     return isNaN(date.getTime())
-      ? null
+      ? undefined
       : date;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
-export function toDateFormat(date: Date | null, format: string = 'yyyy-mm-dd'): string {
+export function toDateFormat(date?: Date, format: string = 'yyyy-mm-dd'): string {
   if (date == null) return '';
   
   const year = date.getFullYear();
@@ -64,4 +66,13 @@ export function toDateFormat(date: Date | null, format: string = 'yyyy-mm-dd'): 
   return date.toDateString();
 }
 
+export function includes<T>(array: T[], value: T): boolean {
+  return array.includes(value)
+}
 
+export function toRation(top?: number, bottom?: number, multiplier = 100): number {
+  if (top == null || bottom == null || multiplier == 0) return 0;
+  if (isNaN(top)|| isNaN(bottom) || isNaN(multiplier)) return 0;
+
+  return top / bottom * multiplier;
+}
