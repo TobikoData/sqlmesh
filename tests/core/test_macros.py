@@ -45,6 +45,13 @@ def test_macro_custom(macro_evaluator, assert_exp_eq):
     )
 
 
+def test_ast_correctness(macro_evaluator):
+    macro_evaluator.locals = {"x": "y"}
+    assert macro_evaluator.transform(parse_one("SELECT * FROM @SQL('@x')")).find(
+        exp.Table
+    ) == exp.table_("y")
+
+
 @pytest.mark.parametrize(
     "sql, expected, args",
     [
