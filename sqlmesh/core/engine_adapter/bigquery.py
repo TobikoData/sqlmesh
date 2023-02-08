@@ -106,7 +106,12 @@ class BigQueryEngineAdapter(EngineAdapter):
         self.execute(query)
         return self.cursor._query_job.to_dataframe()
 
-    def execute(self, sql: t.Union[str, exp.Expression], **kwargs: t.Any) -> None:
+    def execute(
+        self,
+        sql: t.Union[str, exp.Expression],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
         from google.cloud import bigquery  # type: ignore
 
         create_session = isinstance(sql, exp.Transaction) and self._session_id is None
@@ -122,7 +127,11 @@ class BigQueryEngineAdapter(EngineAdapter):
                     )
                 ],
             )
-        super().execute(sql, **{**kwargs, "job_config": job_config})
+        super().execute(
+            sql,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            **{**kwargs, "job_config": job_config},
+        )
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         if transaction_type.is_dml:
