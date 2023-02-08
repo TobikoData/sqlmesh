@@ -5,13 +5,16 @@ from pathlib import Path
 
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config
+from sqlmesh.core.context import Context
 from sqlmesh.core.hooks import HookRegistry
-from sqlmesh.core.loader import Loader
+from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model
+from sqlmesh.dbt.common import Dependencies, ignore_macro
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.jinja import capture_jinja
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
@@ -26,6 +29,10 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
 
 
 class DbtLoader(Loader):
+    def load(self, context: Context) -> LoadedProject:
+        self._macro_dependencies: t.Dict[str, Dependencies] = {}
+        return super().load(context)
+
     def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
         macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
         for file in macro_files:
@@ -57,7 +64,11 @@ class DbtLoader(Loader):
         models.update(
             {
                 model.model_name: model.to_sqlmesh(
-                    config.sources, config.models, config.seeds, macros
+                    config.sources,
+                    config.models,
+                    config.seeds,
+                    macros,
+                    self._macro_dependencies,
                 )
                 for model in config.models.values()
             }
@@ -67,3 +78,20 @@ class DbtLoader(Loader):
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")
+
+    def _added_jinja_macro(self, name: str, macro: str) -> None:
+        dependencies = Dependencies()
+
+        for method, args, kwargs in capture_jinja(macro).calls:
+            if method == "ref":
+                dep = ".".join(args + tuple(kwargs.values()))
+                if dep:
+                    dependencies.refs.add(dep)
+            elif method == "source":
+                source = ".".join(args + tuple(kwargs.values()))
+                if source:
+                    dependencies.sources.add(dep)
+            elif not ignore_macro(name):
+                dependencies.macros.add(method)
+
+        self._macro_dependencies[name] = dependencies

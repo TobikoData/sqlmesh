@@ -141,10 +141,15 @@ class Loader(abc.ABC):
                         name=name,
                         path=str(path),
                     )
+                    self._added_jinja_macro(name, macro)
 
         return registry
 
+    def _added_jinja_macro(self, name: str, macro: str) -> None:
+        """Callback invoked when adding a new jinja macro to the macro registry"""
+
     def _track_file(self, path: Path) -> None:
+        """Project file to track for modifications"""
         self._path_mtimes[path] = path.stat().st_mtime
 
 

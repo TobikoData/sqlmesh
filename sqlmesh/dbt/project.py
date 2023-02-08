@@ -4,7 +4,7 @@ import re
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import BaseConfig, project_config_path
+from sqlmesh.dbt.common import BaseConfig, ignore_macro, project_config_path
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
@@ -304,12 +304,8 @@ class ProjectConfig:
         depends_on = set()
         calls = set()
         sources = set()
-        unresolved_calls: t.Dict[
-            str, t.Tuple[t.Tuple[t.Any, ...], t.Dict[str, t.Any]]
-        ] = {}
 
         for method, args, kwargs in capture_jinja(sql).calls:
-            calls.add(method)
             if method == "config":
                 if args:
                     if isinstance(args[0], dict):
@@ -324,14 +320,13 @@ class ProjectConfig:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
-            else:
-                unresolved_calls[method] = (args, kwargs)
+            elif not ignore_macro(method):
+                calls.add(method)
 
         model_config.sql = cls._remove_config_jinja(sql)
         model_config._depends_on = depends_on
         model_config._calls = calls
         model_config._sources = sources
-        model_config._unresolved_calls = unresolved_calls
 
         return model_config
 

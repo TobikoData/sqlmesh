@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import validator
@@ -32,6 +33,21 @@ def project_config_path(project_root: t.Optional[Path] = None) -> Path:
         raise ConfigError(f"Could not find {DEFAULT_PROJECT_FILE} for this project")
 
     return path
+
+
+@dataclass
+class Dependencies:
+    macros: t.Set[str] = field(default_factory=lambda: set())
+    sources: t.Set[str] = field(default_factory=lambda: set())
+    refs: t.Set[str] = field(default_factory=lambda: set())
+
+    def union(self, other: Dependencies) -> Dependencies:
+        dependencies = Dependencies()
+        dependencies.macros = self.macros.union(other.macros)
+        dependencies.sources = self.sources.union(other.sources)
+        dependencies.refs = self.refs.union(other.refs)
+
+        return dependencies
 
 
 class GeneralConfig(BaseConfig):
@@ -114,3 +130,10 @@ def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
             v[key] = try_str_to_bool(value)
 
     return v
+
+
+FILTERED_MACROS = {"is_incremental"}
+
+
+def ignore_macro(name: str) -> bool:
+    return name in FILTERED_MACROS
