@@ -47,12 +47,6 @@ type PlanProgress = {
   updated_at: string;
 }
 
-type PlanDate = {
-  date: Date,
-  timestamp: number,
-  formatted: string,
-}
-
 interface PlanStore {
   state: PlanState;
   action: PlanAction;
@@ -64,8 +58,8 @@ interface PlanStore {
   setCategory: (category: Category) => void;
   activePlan?: PlanProgress | null;
   lastPlan?: PlanProgress | null;
-  backfill_start: PlanDate | null;
-  backfill_end: PlanDate | null;
+  backfill_start: string | null;
+  backfill_end: string | null;
   environment: string | null;
   category: Category | null;
   categories: Category[];
