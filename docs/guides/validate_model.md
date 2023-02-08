@@ -1,6 +1,6 @@
 # Validate changes to a model
 
-## Automatic validation of a change to a model
+## Automatic model validation
 
 SQLMesh automatically validates your models in order to ensure the quality and accuracy of your data. This is done by:
 * Running unit tests by default when you run the `plan` command. This ensures all changes to applied to any environment is logically validated.
@@ -8,7 +8,7 @@ SQLMesh automatically validates your models in order to ensure the quality and a
 
 # TODO: Add note about CI/CD bot when documentation is ready as another way SQLMesh provides automatic validation since it automatically creates the preview environment.
 
-## Manually validate changes to a model
+## Manual model validation
 
 * Evaluating a model
 * Testing a model using unit tests
