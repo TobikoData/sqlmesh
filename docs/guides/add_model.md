@@ -14,12 +14,11 @@ To add a model:
 2. Within the file, define your model as follows:
 
         MODEL (
-        name sqlmesh_example.example_new_model
+            name sqlmesh_example.example_new_model,
+            kind incremental_by_time_range (
+                time_column (ds, '%Y-%m-%d'),
+            ),
         )
-
-        kind incremental_by_time_range (
-            time_column (ds, '%Y-%m-%d'),
-        ),
 
         SELECT *
         FROM sqlmesh_example.example_incremental_model
