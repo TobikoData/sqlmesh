@@ -13,11 +13,11 @@ from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
+from sqlmesh.dbt.macros import ref_method, source_method
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
 class Materialization(str, Enum):
@@ -159,40 +159,9 @@ class ModelConfig(GeneralConfig):
             source_mapping, models, seeds, macros, macro_dependencies
         )
 
-        def source_map() -> str:
-            deps = ", ".join(
-                f"'{dep}': '{source_mapping[dep]}'"
-                for dep in sorted(dependencies.sources)
-            )
-            return f"{{{deps}}}"
-
-        def ref_map() -> str:
-            deps = ", ".join(
-                f"'{dep}': '{model_mapping[dep]}'" for dep in sorted(dependencies.refs)
-            )
-            return f"{{{deps}}}"
-
         python_env = {
-            "source": Executable(
-                payload=f"""def source(source_name, table_name):
-    return {source_map()}[".".join([source_name, table_name])]
-""",
-            ),
-            "ref": Executable(
-                payload=f"""def ref(package_name, model_name=None):
-    if model_name:
-        raise Exception("Package not supported.")
-    model_name = package_name
-    return {ref_map()}[model_name]
-""",
-            ),
-            "sqlmesh": Executable(
-                kind=ExecutableKind.VALUE,
-                payload="True",
-            ),
-            "is_incremental": Executable(
-                payload="def is_incremental(): return False",
-            ),
+            "source": source_method(dependencies.sources, source_mapping),
+            "ref": ref_method(dependencies.refs, model_mapping),
             **{k: v for k, v in macros.items() if k in dependencies.macros},
         }
 
@@ -243,7 +212,7 @@ class ModelConfig(GeneralConfig):
             raise ConfigError(f"Incremental needs either unique key or time column.")
         if materialization == Materialization.EPHEMERAL:
             return ModelKindName.EMBEDDED.value
-        raise ConfigError(f"{materialization.value} materialization not supported")
+        raise ConfigError(f"{materialization.value} materialization not supported.")
 
     def _dependencies(
         self,
@@ -261,14 +230,14 @@ class ModelConfig(GeneralConfig):
         for source in self._sources:
             if source not in source_mapping:
                 raise ConfigError(
-                    f"Source {source} for model {self.table_name} not found"
+                    f"Source {source} for model {self.table_name} not found."
                 )
 
             dependencies.sources.add(source)
 
         for dependency in self._depends_on:
             """Add seed/model as a dependency"""
-            parent: t.Any = seeds.get(dependency)
+            parent: t.Union[SeedConfig, ModelConfig, None] = seeds.get(dependency)
             if parent:
                 dependencies.refs.add(dependency)
                 continue
@@ -276,7 +245,7 @@ class ModelConfig(GeneralConfig):
             parent = models.get(dependency)
             if not parent:
                 raise ConfigError(
-                    f"Ref {dependency} for Model {self.table_name} not found"
+                    f"Ref {dependency} for Model {self.table_name} not found."
                 )
 
             dependencies.refs.add(dependency)
@@ -304,28 +273,30 @@ class ModelConfig(GeneralConfig):
             """Add macro and everything it recursively uses as dependencies"""
             if macro not in macros:
                 raise ConfigError(
-                    f"Macro {call} for model {model.table_name} not found"
+                    f"Macro {call} for model {model.table_name} not found."
                 )
 
             dependencies.macros.add(macro)
+            if macro not in macro_dependencies:
+                return
 
             for source in macro_dependencies[macro].sources:
                 if source not in source_mapping:
-                    raise ConfigError(f"Source {source} for macro {macro} not found")
+                    raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.sources.add(source)
 
             for ref in macro_dependencies[macro].refs:
                 if ref not in models and ref not in seeds:
-                    raise ConfigError(f"Source {source} for macro {macro} not found")
+                    raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.refs.add(ref)
 
             for macro_call in macro_dependencies[macro].macros:
                 if macro_call not in macros:
                     raise ConfigError(
-                        f"Macro {macro_call} used by macro {macro} not found"
+                        f"Macro {macro_call} used by macro {macro} not found."
                     )
 
-                add_dependency(macro)
+                add_dependency(macro_call)
 
         for call in model._calls:
             add_dependency(call)

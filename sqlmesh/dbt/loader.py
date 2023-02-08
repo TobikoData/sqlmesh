@@ -10,7 +10,8 @@ from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model
-from sqlmesh.dbt.common import Dependencies, ignore_macro
+from sqlmesh.dbt.common import Dependencies
+from sqlmesh.dbt.macros import builtin_methods
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils import UniqueKeyDict
@@ -38,9 +39,12 @@ class DbtLoader(Loader):
         for file in macro_files:
             self._track_file(file)
 
+        registry = macro.get_registry()
+        registry.update(builtin_methods())
+
         return (
             self._add_jinja_macros(
-                macro.get_registry(),
+                registry,
                 Path(self._context.path, "macros").glob("**/*.sql"),
             ),
             UniqueKeyDict("hooks"),
@@ -79,10 +83,14 @@ class DbtLoader(Loader):
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")
 
-    def _added_jinja_macro(self, name: str, macro: str) -> None:
+    def _on_jinja_macro_added(self, name: str, macro: str) -> None:
         dependencies = Dependencies()
 
-        for method, args, kwargs in capture_jinja(macro).calls:
+        combined = macro.split("\n")
+        test = "\n".join(combined[1:-1])
+
+        for method, args, kwargs in capture_jinja(test).calls:
+            print(method)
             if method == "ref":
                 dep = ".".join(args + tuple(kwargs.values()))
                 if dep:
@@ -91,7 +99,7 @@ class DbtLoader(Loader):
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     dependencies.sources.add(dep)
-            elif not ignore_macro(name):
+            else:
                 dependencies.macros.add(method)
 
         self._macro_dependencies[name] = dependencies

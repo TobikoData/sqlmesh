@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import validator
@@ -10,6 +9,7 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
 
 T = t.TypeVar("T", bound="BaseConfig")
 
@@ -35,11 +35,19 @@ def project_config_path(project_root: t.Optional[Path] = None) -> Path:
     return path
 
 
-@dataclass
-class Dependencies:
-    macros: t.Set[str] = field(default_factory=lambda: set())
-    sources: t.Set[str] = field(default_factory=lambda: set())
-    refs: t.Set[str] = field(default_factory=lambda: set())
+class Dependencies(PydanticModel):
+    """
+    DBT dependencies for a model, macro, etc.
+
+    Args:
+        macros: The names of macros used
+        sources: The "source_name.table_name" for source tables used
+        refs: The table_name for models used
+    """
+
+    macros: t.Set[str] = set()
+    sources: t.Set[str] = set()
+    refs: t.Set[str] = set()
 
     def union(self, other: Dependencies) -> Dependencies:
         dependencies = Dependencies()
@@ -130,10 +138,3 @@ def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
             v[key] = try_str_to_bool(value)
 
     return v
-
-
-FILTERED_MACROS = {"is_incremental"}
-
-
-def ignore_macro(name: str) -> bool:
-    return name in FILTERED_MACROS

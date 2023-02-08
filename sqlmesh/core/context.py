@@ -52,9 +52,9 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.hooks import HookRegistry
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
-from sqlmesh.core.macros import MacroRegistry
+from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
@@ -223,8 +223,8 @@ class Context(BaseContext):
 
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
-        self.macros: MacroRegistry = UniqueKeyDict("macros")
-        self.hooks: HookRegistry = UniqueKeyDict("hooks")
+        self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
+        self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.connection = connection
         connection_config = self.config.get_connection(connection)
@@ -389,8 +389,8 @@ class Context(BaseContext):
         """Load all files in the context's path."""
         with sys_path(self.path):
             project = self._loader.load(self)
-            self.hooks = project.hooks
-            self.macros = project.macros
+            self._hooks = project.hooks
+            self._macros = project.macros
             self._models = project.models
             self._audits = project.audits
             self.dag = project.dag
@@ -423,6 +423,16 @@ class Context(BaseContext):
     def models(self) -> MappingProxyType[str, Model]:
         """Returns all registered models in this context."""
         return MappingProxyType(self._models)
+
+    @property
+    def macros(self) -> MappingProxyType[str, ExecutableOrMacro]:
+        """Returns all registered macros in this context."""
+        return MappingProxyType(self._macros)
+
+    @property
+    def hooks(self) -> MappingProxyType[str, hook]:
+        """Returns all registered hooks in this context."""
+        return MappingProxyType(self._hooks)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:

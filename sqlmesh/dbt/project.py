@@ -4,7 +4,7 @@ import re
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import BaseConfig, ignore_macro, project_config_path
+from sqlmesh.dbt.common import BaseConfig, project_config_path
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
@@ -72,7 +72,7 @@ class ProjectConfig:
 
         project_name = project_yaml.get("name")
         if not project_name:
-            raise ConfigError(f"{project_file_path.stem} must include project name")
+            raise ConfigError(f"{project_file_path.stem} must include project name.")
 
         profile = Profile.load(project_root, project_name)
         connection = (
@@ -320,7 +320,7 @@ class ProjectConfig:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
-            elif not ignore_macro(method):
+            else:
                 calls.add(method)
 
         model_config.sql = cls._remove_config_jinja(sql)

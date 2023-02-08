@@ -18,6 +18,8 @@ def incremental_by_ds(evaluator: MacroEvaluator, column: exp.Column) -> exp.Expr
         )
     )
     if not isinstance(expression, exp.Expression):
-        raise MacroEvalError(f"Got type of {type(expression)}, expected exp.Expression")
+        raise MacroEvalError(
+            f"Return type is {type(expression)}, expected exp.Expression"
+        )
 
     return expression

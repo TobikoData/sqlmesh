@@ -288,7 +288,7 @@ class ExecutableKind(str, Enum):
     IMPORT = "import"
     VALUE = "value"
     DEFINITION = "definition"
-    SCRIPT = "script"
+    STATEMENT = "statement"
 
     def __lt__(self, other: t.Any) -> bool:
         if not isinstance(other, ExecutableKind):
@@ -310,6 +310,10 @@ class Executable(PydanticModel):
     @property
     def is_import(self) -> bool:
         return self.kind == ExecutableKind.IMPORT
+
+    @property
+    def is_statement(self) -> bool:
+        return self.kind == ExecutableKind.STATEMENT
 
     @property
     def is_value(self) -> bool:

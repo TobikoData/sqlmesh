@@ -51,7 +51,7 @@ class TargetConfig(abc.ABC, PydanticModel):
         elif db_type == "snowflake":
             return SnowflakeConfig(**data)
 
-        raise ConfigError(f"{db_type} not supported")
+        raise ConfigError(f"{db_type} not supported.")
 
     def to_sqlmesh(self) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""

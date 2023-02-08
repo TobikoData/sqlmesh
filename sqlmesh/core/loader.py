@@ -137,15 +137,15 @@ class Loader(abc.ABC):
                 for name, macro in MacroExtractor().extract(file.read()).items():
                     registry[name] = Executable(
                         payload=f"""{c.JINJA_MACROS}.append('''{macro}''')""",
-                        kind=ExecutableKind.SCRIPT,
+                        kind=ExecutableKind.STATEMENT,
                         name=name,
                         path=str(path),
                     )
-                    self._added_jinja_macro(name, macro)
+                    self._on_jinja_macro_added(name, macro)
 
         return registry
 
-    def _added_jinja_macro(self, name: str, macro: str) -> None:
+    def _on_jinja_macro_added(self, name: str, macro: str) -> None:
         """Callback invoked when adding a new jinja macro to the macro registry"""
 
     def _track_file(self, path: Path) -> None:

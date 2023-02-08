@@ -242,7 +242,8 @@ class macro(registry_decorator):
     registry_name = "macros"
 
 
-MacroRegistry = UniqueKeyDict[str, t.Union[macro | Executable]]
+ExecutableOrMacro = t.Union[Executable, macro]
+MacroRegistry = UniqueKeyDict[str, ExecutableOrMacro]
 
 
 def _norm_var_arg_lambda(
