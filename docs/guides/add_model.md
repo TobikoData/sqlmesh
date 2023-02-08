@@ -17,6 +17,10 @@ To add a model:
         name sqlmesh_example.example_new_model
         )
 
+        kind incremental_by_time_range (
+            time_column (ds, '%Y-%m-%d'),
+        ),
+
         SELECT *
         FROM sqlmesh_example.example_incremental_model
         WHERE ds BETWEEN @start_ds and @end_ds
@@ -29,4 +33,4 @@ To edit an existing model, open the model file you wish to edit in your preferre
 
 ### Preview changes
 
-To preview any changes you make to your model in order to understand their impact, use the `evaluate` command. Refer to [evaluate a model](/guides/evalute_model).
+To preview an example of what your change looks like without actually creating a table, use the `evaluate` command. Refer to [evaluate a model](/guides/evalute_model). To materialize this change, use the `plan` command. Refer to [preview changes using the `plan` command](/guides/validate_model#previewing-changes-using-the-`plan`-command).
