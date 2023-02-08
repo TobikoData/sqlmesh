@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlencode
 
 import pytest
 import requests
@@ -9,7 +10,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 from sqlmesh.utils.date import to_datetime
 
 
@@ -81,7 +82,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "pre": [],
                     "post": [],
                     "kind": {
-                        "name": "incremental_by_time_range",
+                        "name": "INCREMENTAL_BY_TIME_RANGE",
                         "time_column": {"column": "ds"},
                     },
                     "name": "test_model",
@@ -130,6 +131,10 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     }
 
 
+def snapshot_url(snapshot_ids, key="ids") -> str:
+    return urlencode({key: _list_to_json(snapshot_ids)})
+
+
 def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
     snapshots = common.SnapshotsResponse(snapshots=[snapshot])
 
@@ -147,7 +152,7 @@ def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
     assert result == [snapshot]
 
     get_snapshots_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/snapshots?ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
+        f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url([snapshot.snapshot_id])}"
     )
 
 
@@ -168,7 +173,7 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     assert result == {snapshot.snapshot_id}
 
     snapshots_exist_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/snapshots?return_ids&ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
+        f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url([snapshot.snapshot_id])}"
     )
 
 
@@ -184,14 +189,13 @@ def test_get_snapshots_with_same_version(mocker: MockerFixture, snapshot: Snapsh
     client = AirflowClient(
         airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
     )
-    result = client.get_snapshots_with_same_version(
-        [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
-    )
+    versions = [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
+    result = client.get_snapshots_with_same_version(versions)
 
     assert result == [snapshot]
 
     get_snapshots_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/snapshots?versions=%5B%7B%22name%22%3A%22test_model%22%2C%22version%22%3A%222710441016%22%7D%5D"
+        f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url(versions, 'versions')}"
     )
 
 

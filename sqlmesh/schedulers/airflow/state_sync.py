@@ -25,7 +25,6 @@ class HttpStateReader(StateReader):
         airflow_url: URL pointing to the airflow rest api.
         username: Username for Airflow.
         password: Password for Airflow.
-        max_concurrent_requests: Max number of http requests to make concurrently.
         blocking_updates: Indicates whether calls that cause state updates should be blocking.
         dag_run_poll_interval_secs: Determines how frequently the state of a DAG run should be checked.
             Used to block on calls that update the state.
@@ -35,13 +34,11 @@ class HttpStateReader(StateReader):
     def __init__(
         self,
         client: AirflowClient,
-        max_concurrent_requests: int = 2,
         blocking_updates: bool = True,
         dag_run_poll_interval_secs: int = 2,
         console: t.Optional[Console] = None,
     ):
         self._client = client
-        self.max_concurrent_requests = max_concurrent_requests
         self.blocking_updates = blocking_updates
         self.dag_run_poll_interval_secs = dag_run_poll_interval_secs
         self.console = console

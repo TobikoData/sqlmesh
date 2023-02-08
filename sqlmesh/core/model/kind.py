@@ -16,13 +16,13 @@ from sqlmesh.utils.pydantic import PydanticModel
 class ModelKindName(str, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
 
-    INCREMENTAL_BY_TIME_RANGE = "incremental_by_time_range"
-    INCREMENTAL_BY_UNIQUE_KEY = "incremental_by_unique_key"
-    FULL = "full"
-    SNAPSHOT = "snapshot"
-    VIEW = "view"
-    EMBEDDED = "embedded"
-    SEED = "seed"
+    INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
+    INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
+    FULL = "FULL"
+    SNAPSHOT = "SNAPSHOT"
+    VIEW = "VIEW"
+    EMBEDDED = "EMBEDDED"
+    SEED = "SEED"
 
 
 class ModelKind(PydanticModel):
@@ -65,10 +65,8 @@ class ModelKind(PydanticModel):
         """Whether or not this model only cares about latest date to render."""
         return self.name in (ModelKindName.VIEW, ModelKindName.FULL)
 
-    def to_expression(self, *args: t.Any, **kwargs: t.Any) -> d.ModelKind:
-        return d.ModelKind(
-            this=self.name.value,
-        )
+    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+        return d.ModelKind(this=self.name.value.upper(), **kwargs)
 
 
 class TimeColumn(PydanticModel):
@@ -96,7 +94,7 @@ class TimeColumn(PydanticModel):
                 exp.Literal.string(
                     format_time(
                         self.format,
-                        d.Dialect.get_or_raise(dialect).inverse_time_mapping,
+                        d.Dialect.get_or_raise(dialect).inverse_time_mapping,  # type: ignore
                     )
                 ),
             ]
@@ -126,9 +124,8 @@ class IncrementalByTimeRangeKind(ModelKind):
             return TimeColumn(column=v)
         return v
 
-    def to_expression(self, dialect: str) -> d.ModelKind:
-        return d.ModelKind(
-            this=self.name.value,
+    def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
+        return super().to_expression(
             expressions=[
                 exp.Property(
                     this="time_column", value=self.time_column.to_expression(dialect)
@@ -171,6 +168,20 @@ class SeedKind(ModelKind):
             return v.this
         return str(v)
 
+    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+        """Convert the seed kind into a SQLGlot expression."""
+        return super().to_expression(
+            expressions=[
+                exp.Property(
+                    this=exp.Var(this="path"), value=exp.Literal.string(self.path)
+                ),
+                exp.Property(
+                    this=exp.Var(this="batch_size"),
+                    value=exp.Literal.number(self.batch_size),
+                ),
+            ],
+        )
+
 
 def _model_kind_validator(v: t.Any) -> ModelKind:
     if isinstance(v, ModelKind):
@@ -201,7 +212,8 @@ def _model_kind_validator(v: t.Any) -> ModelKind:
             klass = ModelKind
         return klass(**v)
 
-    name = (v.name if isinstance(v, exp.Expression) else str(v)).lower()
+    name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
+
     try:
         return ModelKind(name=ModelKindName(name))
     except ValueError:

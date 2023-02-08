@@ -12,11 +12,10 @@ class ModelDefaultsConfig(BaseConfig):
 
     Args:
         kind: The model kind.
-        dialect: The SQL dialect that the model's query is written in. By default,
-            this is assumed to be the dialect of the context.
-        owner: The owner of the model.
+        dialect: The SQL dialect that the model's query is written in.
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        owner: The owner of the model.
         start: The earliest date that the model will be backfilled for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"

@@ -25,3 +25,17 @@ concurrent_tasks_validator = validator(
     allow_reuse=True,
     check_fields=False,
 )(_concurrent_tasks_validator)
+
+
+def _http_headers_validator(v: t.Any) -> t.Any:
+    if isinstance(v, dict):
+        return [(key, value) for key, value in v.items()]
+    return v
+
+
+http_headers_validator = validator(
+    "http_headers",
+    pre=True,
+    allow_reuse=True,
+    check_fields=False,
+)(_http_headers_validator)

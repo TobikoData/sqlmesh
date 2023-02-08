@@ -162,7 +162,7 @@ class _Model(ModelMeta, frozen=True):
                     expressions.append(
                         exp.Property(
                             this="kind",
-                            value=field_value.to_expression(self.dialect),
+                            value=field_value.to_expression(dialect=self.dialect),
                         )
                     )
                 else:
@@ -667,11 +667,6 @@ class SeedModel(_Model):
     ) -> t.Generator[QueryOrDF, None, None]:
         yield from self.seed.read(batch_size=self.kind.batch_size)
 
-    def render_definition(self) -> t.List[exp.Expression]:
-        result = super().render_definition()
-        result.append(exp.Literal.string(self.seed.content))
-        return result
-
     def text_diff(self, other: Model) -> str:
         if not isinstance(other, SeedModel):
             return super().text_diff(other)
@@ -986,7 +981,6 @@ def create_seed_model(
         name,
         defaults=defaults,
         path=path,
-        depends_on=set(),
         seed=seed,
         kind=seed_kind,
         **kwargs,

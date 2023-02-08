@@ -49,7 +49,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import format_model_expressions, parse_model
+from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse_model
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
@@ -240,7 +240,11 @@ class Context(BaseContext):
         )
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
-        self.dialect = dialect or self.config.dialect or self._engine_adapter.dialect
+        self.dialect = (
+            dialect
+            or self.config.model_defaults.dialect
+            or self._engine_adapter.dialect
+        )
 
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks
@@ -502,6 +506,10 @@ class Context(BaseContext):
             model = model_or_snapshot
 
         expand = self.dag.upstream(model.name) if expand is True else expand or []
+
+        if model.is_seed:
+            df = next(model.render(self, start=start, end=end, latest=latest, **kwargs))
+            return next(pandas_to_sql(df, model.columns_to_types))
 
         return model.render_query(
             start=start,
