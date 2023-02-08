@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ContextEnvironmentBackfill } from '../api/client';
-import { isObject, isObjectEmpty } from '../utils';
+import { isObject, isObjectEmpty, isNil } from '../utils';
 
 export const EnumPlanAction = {
   None: 'none',
@@ -118,7 +118,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   
     if (data.ok === false) {
       s.setState(EnumPlanState.Failed)
-
       s.setLastPlan(plan)
   
       channel.close()
@@ -132,10 +131,10 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
     if (isAllCompleted) {
       s.setState(EnumPlanState.Finished)
 
-      if (isObjectEmpty(s.activePlan?.tasks)) {
+      if (s.activePlan == null || isObjectEmpty(s.activePlan?.tasks)) {
         s.setLastPlan(null)
       } else {
-        s.setLastPlan(plan)
+        s.setLastPlan(s.activePlan)
       }
 
       if (isObjectEmpty(data.tasks)) {
