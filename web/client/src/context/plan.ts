@@ -131,10 +131,10 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
     if (isAllCompleted) {
       s.setState(EnumPlanState.Finished)
 
-      if (s.activePlan == null || isObjectEmpty(s.activePlan?.tasks)) {
+      if (isObjectEmpty(s.activePlan?.tasks)) {
         s.setLastPlan(null)
       } else {
-        s.setLastPlan(s.activePlan)
+        s.setLastPlan(plan)
       }
 
       if (isObjectEmpty(data.tasks)) {
