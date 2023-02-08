@@ -72,7 +72,7 @@ api-docs-serve:
 	pdoc/cli.py
 
 ui-up:
-	docker-compose -f ./docker-compose.yml up -d && open http://localhost:8001
+	docker-compose -f ./docker-compose.yml up -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
 
 ui-down:
 	docker-compose -f ./docker-compose.yml down
