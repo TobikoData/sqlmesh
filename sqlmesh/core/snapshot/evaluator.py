@@ -263,10 +263,10 @@ class SnapshotEvaluator:
         self,
         *,
         snapshot: Snapshot,
+        snapshots: t.Dict[str, Snapshot],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        snapshots: t.Dict[str, Snapshot],
         raise_exception: bool = True,
         is_dev: bool = False,
         **kwargs: t.Any,
@@ -275,10 +275,10 @@ class SnapshotEvaluator:
 
         Args:
             snapshot: Snapshot to evaluate.  start: The start datetime to audit. Defaults to epoch start.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             raise_exception: Whether to raise an exception if the audit fails. Blocking rules determine if an
                 AuditError is thrown or if we just warn with logger
             is_dev: Indicates whether the auditing happens in the development mode and temporary
@@ -288,6 +288,11 @@ class SnapshotEvaluator:
         if snapshot.is_temporary_table(is_dev):
             # We can't audit a temporary table.
             return []
+
+        if not snapshot.version:
+            raise ConfigError(
+                f"Cannot audit '{snapshot.name}' because it has not been versioned yet. Apply a plan first."
+            )
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 

@@ -10,6 +10,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotInfoLike,
     SnapshotTableInfo,
 )
 from sqlmesh.core.user import User
@@ -107,7 +108,8 @@ def name_from_snapshot_version_key(key: str) -> str:
     return key[len(f"{SNAPSHOT_VERSION_KEY_PREFIX}__") : key.rindex("__")]
 
 
-def dag_id_for_snapshot_info(info: SnapshotTableInfo) -> str:
+def dag_id_for_snapshot_info(info: SnapshotInfoLike) -> str:
+    assert info.version
     return dag_id_for_name_version(info.name, info.version)
 
 

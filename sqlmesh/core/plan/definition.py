@@ -425,9 +425,10 @@ class Plan:
         self, model_name: str, upstream_model_names: t.Iterable[str]
     ) -> None:
         for upstream in upstream_model_names:
-            upstream_snapshot = self.context_diff.snapshots[upstream]
+            upstream_snapshot = self.context_diff.snapshots.get(upstream)
             if (
-                upstream_snapshot.version
+                upstream_snapshot
+                and upstream_snapshot.version
                 and upstream_snapshot.is_forward_only
                 and upstream_snapshot.is_paused
             ):

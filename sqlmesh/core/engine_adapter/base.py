@@ -15,6 +15,7 @@ import typing as t
 
 import pandas as pd
 from sqlglot import Dialect, exp, parse_one
+from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import (
@@ -130,10 +131,27 @@ class EngineAdapter:
             )
         self.execute(create)
 
+    def create_index(
+        self,
+        table_name: TableName,
+        index_name: str,
+        columns: t.Tuple[str, ...],
+        exists: bool = True,
+    ) -> None:
+        """Creates a new index for the given table.
+
+        Args:
+            table_name: The name of the target table.
+            index_name: The name of the index.
+            columns: The list of columns that constitute the index.
+            exists: Indicates whether to include the IF NOT EXISTS check.
+        """
+
     def create_table(
         self,
         table_name: TableName,
         query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         **kwargs: t.Any,
     ) -> None:
@@ -144,24 +162,48 @@ class EngineAdapter:
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
             query_or_columns_to_types: A query or mapping between the column name and its data type.
+            primary_key: Determines the table primary key.
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
         if isinstance(query_or_columns_to_types, dict):
-            return self._create_table_from_columns(
+            expression = self._create_table_from_columns(
+                table_name, query_or_columns_to_types, primary_key, exists, **kwargs
+            )
+        else:
+            expression = self._create_table_from_query(
                 table_name, query_or_columns_to_types, exists, **kwargs
             )
-        return self._create_table_from_query(
-            table_name, query_or_columns_to_types, exists, **kwargs
+        if expression is not None:
+            self.execute(expression)
+
+    def create_state_table(
+        self,
+        table_name: str,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+    ) -> None:
+        """Create a table to store SQLMesh internal state.
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            columns_to_types: A mapping between the column name and its data type.
+            primary_key: Determines the table primary key.
+        """
+        self.create_table(
+            table_name,
+            columns_to_types,
+            primary_key=primary_key,
         )
 
     def _create_table_from_columns(
         self,
         table_name: TableName,
         columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         **kwargs: t.Any,
-    ) -> None:
+    ) -> t.Optional[exp.Create]:
         """
         Create a table using a DDL statement.
 
@@ -180,14 +222,13 @@ class EngineAdapter:
                 for column, kind in columns_to_types.items()
             ],
         )
-        create_expression = exp.Create(
+        return exp.Create(
             this=schema,
             kind="TABLE",
             exists=exists,
             properties=properties,
             expression=None,
         )
-        self.execute(create_expression)
 
     def _create_table_from_query(
         self,
@@ -195,7 +236,7 @@ class EngineAdapter:
         query: Query,
         exists: bool = True,
         **kwargs: t.Any,
-    ) -> None:
+    ) -> t.Optional[exp.Create]:
         """
         Create a table using a DDL statement.
 
@@ -207,14 +248,13 @@ class EngineAdapter:
         """
         properties = self._create_table_properties(**kwargs)
         schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
-        create_expression = exp.Create(
+        return exp.Create(
             this=schema,
             kind="TABLE",
             exists=exists,
             properties=properties,
             expression=query,
         )
-        self.execute(create_expression)
 
     def create_table_like(
         self,
@@ -578,12 +618,20 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
-        self.execute(query)
+    def fetchone(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.Tuple:
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return self.cursor.fetchone()
 
-    def fetchall(self, query: t.Union[exp.Expression, str]) -> t.List[t.Tuple]:
-        self.execute(query)
+    def fetchall(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.List[t.Tuple]:
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return self.cursor.fetchall()
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
@@ -630,9 +678,23 @@ class EngineAdapter:
         """Whether or not the engine adapter supports transactions for the given transaction type."""
         return True
 
-    def execute(self, sql: t.Union[str, exp.Expression], **kwargs: t.Any) -> None:
+    def execute(
+        self,
+        sql: t.Union[str, exp.Expression],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
         """Execute a sql query."""
-        sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE}
+            if ignore_unsupported_errors
+            else {}
+        )
+        sql = (
+            self._to_sql(sql, **to_sql_kwargs)
+            if isinstance(sql, exp.Expression)
+            else sql
+        )
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql, **kwargs)
 
@@ -659,3 +721,48 @@ class EngineAdapter:
             **kwargs,
         }
         return e.sql(**sql_gen_kwargs)  # type: ignore
+
+
+class EngineAdapterWithIndexSupport(EngineAdapter):
+    def create_index(
+        self,
+        table_name: TableName,
+        index_name: str,
+        columns: t.Tuple[str, ...],
+        exists: bool = True,
+    ) -> None:
+        expression = exp.Create(
+            this=exp.Index(
+                this=exp.to_identifier(index_name),
+                table=exp.to_table(table_name),
+                columns=exp.Tuple(
+                    expressions=[exp.to_column(c) for c in columns],
+                ),
+            ),
+            kind="INDEX",
+            exists=exists,
+        )
+        self.execute(expression)
+
+    def _create_table_from_columns(
+        self,
+        table_name: TableName,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
+        exists: bool = True,
+        **kwargs: t.Any,
+    ) -> t.Optional[exp.Create]:
+        expression = super()._create_table_from_columns(
+            table_name, columns_to_types, primary_key, exists, **kwargs
+        )
+        if expression is None or primary_key is None:
+            return expression
+
+        schema = expression.this
+        schema.append(
+            "expressions",
+            exp.Anonymous(
+                this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key]
+            ),
+        )
+        return expression

@@ -529,7 +529,7 @@ def select_from_values(
         This method operates as a generator and yields a VALUES expression.
     """
     casted_columns = [
-        exp.alias_(exp.Cast(this=exp.to_column(column), to=kind), column)
+        exp.alias_(exp.cast(column, to=kind), column)
         for column, kind in columns_to_types.items()
     ]
     batch = []

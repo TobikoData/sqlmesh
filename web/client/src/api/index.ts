@@ -21,6 +21,7 @@ export function useApiContext() {
   return useQuery({
     queryKey: ['/api/context'],
     queryFn: getApiContextApiContextGet,
+    cacheTime: 0
   })
 }
 
@@ -28,11 +29,14 @@ export async function useApiContextCancel(client: QueryClient) {
   await client.cancelQueries({ queryKey: [`/api/context`] })
 }
 
-export function useApiContextByEnvironment(environment?: string) {
+export function useApiContextByEnvironment(environment: string) {
+  environment = environment || ''
+
   return useQuery({
     queryKey: [`/api/plan`, environment],
     queryFn: () => getPlanApiPlanGet({ environment }),
-    enabled: environment != null,
+    enabled: false,
+    cacheTime: 0
   })
 }
 

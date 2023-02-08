@@ -11,15 +11,13 @@ from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.file_cache import FileCache
 
 
 @pytest.fixture
-def state_sync(duck_conn, mock_file_cache):
+def state_sync(duck_conn):
     state_sync = EngineAdapterStateSync(
         create_engine_adapter(lambda: duck_conn, "duckdb"),
         "sqlmesh",
-        mock_file_cache,
     )
     state_sync.init_schema()
     return state_sync
@@ -65,7 +63,6 @@ def promote_snapshots(
 def test_push_snapshots(
     state_sync: EngineAdapterStateSync,
     make_snapshot: t.Callable,
-    mock_file_cache: FileCache,
 ) -> None:
     snapshot_a = make_snapshot(
         SqlModel(
@@ -96,12 +93,6 @@ def test_push_snapshots(
         snapshot_a.snapshot_id: snapshot_a,
         snapshot_b.snapshot_id: snapshot_b,
     }
-    mock_file_cache.update.assert_called_with(  # type: ignore
-        {
-            snapshot_a.snapshot_id: snapshot_a.table_info,
-            snapshot_b.snapshot_id: snapshot_b.table_info,
-        }
-    )
 
     with pytest.raises(
         SQLMeshError,
@@ -186,18 +177,20 @@ def test_get_snapshots_with_same_version(
     make_snapshot: t.Callable,
     snapshots: t.List[Snapshot],
 ) -> None:
-    snapshot_c = make_snapshot(
+    snapshot_a = snapshots[0]
+
+    snapshot_a_new = make_snapshot(
         SqlModel(
-            name="c",
+            name=snapshot_a.name,
             query=parse_one("select 3, ds"),
         ),
-        version="a",
+        version=snapshot_a.version,
     )
-    state_sync.push_snapshots(snapshots + [snapshot_c])
+    state_sync.push_snapshots(snapshots + [snapshot_a_new])
 
-    assert state_sync.get_snapshots_with_same_version([snapshot_c]) == [
-        snapshots[0],
-        snapshot_c,
+    assert state_sync.get_snapshots_with_same_version([snapshot_a_new]) == [
+        snapshot_a,
+        snapshot_a_new,
     ]
 
 

@@ -38,7 +38,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=10.6.0",
+        "sqlglot>=10.6.3",
     ],
     extras_require={
         "dev": [
@@ -62,7 +62,7 @@ setup(
             "pytest-mock",
             "pyspark",
             "sqlalchemy-stubs",
-            "tenacity",
+            "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
             "types-requests==2.28.8",

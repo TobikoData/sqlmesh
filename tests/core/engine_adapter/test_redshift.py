@@ -32,8 +32,10 @@ def test_create_table_from_query_no_exists(mocker: MockerFixture):
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = RedshiftEngineAdapter(lambda: connection_mock)
-    adapter._create_table_from_query(
-        table_name="test_table", query=parse_one("SELECT cola FROM table"), exists=False
+    adapter.create_table(
+        table_name="test_table",
+        query_or_columns_to_types=parse_one("SELECT cola FROM table"),
+        exists=False,
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -51,8 +53,10 @@ def test_create_table_from_query_exists(mocker: MockerFixture):
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=False,
     )
-    adapter._create_table_from_query(
-        table_name="test_table", query=parse_one("SELECT cola FROM table"), exists=True
+    adapter.create_table(
+        table_name="test_table",
+        query_or_columns_to_types=parse_one("SELECT cola FROM table"),
+        exists=True,
     )
 
     cursor_mock.execute.assert_called_once_with(
@@ -70,8 +74,10 @@ def test_create_table_from_query_already_exists(mocker: MockerFixture):
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=True,
     )
-    adapter._create_table_from_query(
-        table_name="test_table", query=parse_one("SELECT cola FROM table"), exists=True
+    adapter.create_table(
+        table_name="test_table",
+        query_or_columns_to_types=parse_one("SELECT cola FROM table"),
+        exists=True,
     )
 
     assert not cursor_mock.execute.called
@@ -90,7 +96,7 @@ def test_pandas_to_sql(mocker: MockerFixture):
     assert len(results) == 1
     assert (
         results[0].sql(dialect="redshift")
-        == "VALUES (CAST(1 AS int), CAST(4 AS int)), (2, 5), (3, 6)"
+        == "VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)"
     )
 
 

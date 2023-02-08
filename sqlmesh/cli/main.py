@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import typing as t
 
 import click
@@ -42,6 +43,10 @@ def cli(
     path = os.path.abspath(path)
     if ctx.invoked_subcommand == "init":
         ctx.obj = path
+        return
+
+    # Delegates the execution of the --help option to the corresponding subcommand
+    if "--help" in sys.argv:
         return
 
     context = Context(

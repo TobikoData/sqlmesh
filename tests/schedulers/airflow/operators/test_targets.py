@@ -39,10 +39,11 @@ def test_evaluation_target_execute(
     )
 
     add_interval_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.state_sync.variable.VariableStateSync.add_interval"
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
     )
 
     snapshot = make_snapshot(model)
+    snapshot.set_version()
     parent_snapshots = {snapshot.name: snapshot}
 
     target = targets.SnapshotEvaluationTarget(

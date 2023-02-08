@@ -1,92 +1,111 @@
 import { Button } from '../button/Button'
-import { useApiContext, useApiContextCancel } from '../../../api'
-import { useEffect, useState } from 'react'
+import { useApiContext, useApiContextByEnvironment, useApiContextCancel } from '../../../api'
+import { useEffect } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
+import { EnumPlanState, EnumPlanAction, PlanState, useStorePlan, PlanAction } from '../../../context/plan'
+import fetchAPI from '../../../api/instance'
+import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
+import { useChannel } from '../../../api/channels'
 
-export const EnumStatePlan = {
-  Empty: 'empty',
-  Run: 'run',
-  Running: 'running',
-  Backfill: 'backfill',
-  Backfilling: 'backfilling',
-  Apply: 'apply',
-  Applying: 'applying',
-  Done: 'done',
-  Resetting: 'resetting',
-  Canceling: 'canceling',
-  Closing: 'closing',
-} as const;
 
-export type StatePlan = typeof EnumStatePlan[keyof typeof EnumStatePlan]
-
-export function Plan({ onClose }: { onClose: any }) {
+export function Plan({
+  onClose,
+  onCancel,
+}: {
+  onClose: any,
+  onCancel: any,
+}) {
   const client = useQueryClient()
 
-  const [planState, setPlanState] = useState<StatePlan>(EnumStatePlan.Empty)
-  const [withModified, setWithModified] = useState(false)
-  const [backfillStatus, setBackfillStatus] = useState<boolean>()
-  const { data: context, refetch } = useApiContext()
+  const planState = useStorePlan((s: any) => s.state)
+  const planAction = useStorePlan((s: any) => s.action)
+  const setPlanAction = useStorePlan((s: any) => s.setAction)
+  const setPlanState = useStorePlan((s: any) => s.setState)
+  const environment = useStorePlan((s: any) => s.environment)
+  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
+  const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
+  const setCategory = useStorePlan((s: any) => s.setCategory)
+  const withBackfill = useStorePlan((s: any) => s.withBackfill)
+  const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
+  const setBackfills = useStorePlan((s: any) => s.setBackfills)
+  const updateTasks = useStorePlan((s: any) => s.updateTasks)
 
-  function backfill() {
-    setPlanState(EnumStatePlan.Backfilling)
+  const [subscribe] = useChannel('/api/tasks', updateTasks)
 
-    setTimeout(() => {
-      setBackfillStatus(false)
-    }, 200)
-
-    setTimeout(() => {
-      setBackfillStatus(true)
-
-      if (withModified) {
-        setPlanState(EnumStatePlan.Apply)
-      } else {
-        setPlanState(EnumStatePlan.Done)
-      }
-    }, 2000)
-  }
-
-  function apply() {
-    setPlanState(EnumStatePlan.Applying)
-
-    setTimeout(() => {
-      setPlanState(EnumStatePlan.Done)
-    }, 3000)
-  }
+  const { refetch } = useApiContextByEnvironment(environment)
+  const { data: context } = useApiContext()
 
   useEffect(() => {
-    if (context?.models?.length === 0) {
-      setPlanState(EnumStatePlan.Empty)
-    } else {
-      setPlanState(EnumStatePlan.Run)
-    }
-  }, [context])
+    setPlanAction(EnumPlanAction.Run)
+  }, [])
 
+  useEffect(() => {
+    if (isNil(environment)) {
+      setPlanAction(EnumPlanAction.Run)
+    } else {
+      refetch()
+    }
+  }, [environment])
+
+  useEffect(() => {
+    if (planState === EnumPlanState.Applying) {
+      setPlanAction(EnumPlanAction.Applying)
+    }
+
+    if (planState === EnumPlanState.Canceling) {
+      setPlanAction(EnumPlanAction.Canceling)
+    }
+
+    if (planState === EnumPlanState.Finished || planState === EnumPlanState.Failed) {
+      setPlanAction(EnumPlanAction.Done)
+      refetch()
+    }
+  }, [planState])
+
+  async function apply() {
+    setPlanState(EnumPlanState.Applying)
+
+    try {
+      const data: any = await fetchAPI({ url: `/api/apply?environment=${environment}`, method: 'post' })
+
+      if (data.ok) {
+        subscribe()
+      }
+    } catch (error) {
+      console.log(error)
+
+      reset()
+    }
+  }
+
+  function cleanUp() {
+    useApiContextCancel(client)
+    setEnvironment(null)
+    setCategory(null)
+    setWithBackfill(false)
+    setBackfills([])
+    setActivePlan(null)
+  }
 
   async function reset() {
-    setPlanState(EnumStatePlan.Resetting)
+    setPlanAction(EnumPlanAction.Resetting)
 
-    await useApiContextCancel(client)
-    await delay(2000)
-    await refetch()
+    await delay(500)
 
-    setPlanState(EnumStatePlan.Run)
+    cleanUp()
   }
 
-  async function cancel() {
-    setPlanState(EnumStatePlan.Canceling)
+  function cancel() {
+    onCancel()
 
-    await useApiContextCancel(client)
-    await delay(1000)
+    reset()
   }
 
-  async function close() {
-    setPlanState(EnumStatePlan.Closing)
-
-    await useApiContextCancel(client)
-    await delay(1000)
+  function close() {
+    reset()
 
     onClose()
   }
@@ -95,78 +114,58 @@ export function Plan({ onClose }: { onClose: any }) {
     <div className="flex items-start w-full h-[75vh] overflow-hidden">
       <PlanSidebar context={context} />
       <div className="flex flex-col w-full h-full overflow-hidden">
-        {planState === EnumStatePlan.Empty ? (
+        {isArrayEmpty(context?.models) ? (
           <div className='flex items-center justify-center w-full h-full'>
             <h2 className='text-2xl font-black text-gray-700'>No Models Found</h2>
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard
-              id="contextEnvironment"
-              backfillStatus={backfillStatus}
-              setPlanState={setPlanState}
-              setWithModified={setWithModified}
-              planState={planState}
-            />
+            <PlanWizard id="contextEnvironment" />
           </div>
         )}
         <Divider className='h-2' />
         <div className='flex justify-between px-4 py-2 '>
           <div className='flex w-full'>
-            {(planState === EnumStatePlan.Run || planState === EnumStatePlan.Running) && (
-              <Button type="submit" form='contextEnvironment' disabled={planState === EnumStatePlan.Running}>
-                {planState === EnumStatePlan.Running ? 'Running' : 'Run'}
+            {(planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running) && (
+              <Button type="submit" form='contextEnvironment' disabled={planAction === EnumPlanAction.Running}>
+                {getActionName(planAction, [EnumPlanAction.Running, EnumPlanAction.Run])}
               </Button>
             )}
 
-            {(planState === EnumStatePlan.Backfill || planState === EnumStatePlan.Backfilling) && (
-              <Button onClick={backfill} disabled={planState === EnumStatePlan.Backfilling}>
-                {planState === EnumStatePlan.Backfilling ? 'Backfilling' : 'Backfill'}
+            {(planAction === EnumPlanAction.Apply || planAction === EnumPlanAction.Applying) && (
+              <Button onClick={() => apply()} disabled={planAction === EnumPlanAction.Applying}>
+                {getActionName(planAction, [EnumPlanAction.Applying], withBackfill ? 'Apply And Backfill' : 'Apply')}
               </Button>
             )}
-
-            {(planState === EnumStatePlan.Apply || planState === EnumStatePlan.Applying) && (
-              <Button onClick={() => apply()} disabled={planState === EnumStatePlan.Applying}>
-                {planState === EnumStatePlan.Applying ? 'Applying' : 'Apply'}
-              </Button>
-            )}
-
-            {planState === EnumStatePlan.Done && (
-              <Button
-                onClick={() => close()}
-              >
-                Done
-              </Button>
-            )}
-            {[EnumStatePlan.Applying, EnumStatePlan.Running, EnumStatePlan.Backfilling].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Backfilling | typeof EnumStatePlan.Running | typeof EnumStatePlan.Applying>) && (
+            {(planAction === EnumPlanAction.Applying || planAction === EnumPlanAction.Canceling) && (
               <Button
                 onClick={() => cancel()}
                 variant="danger"
                 className='justify-self-end'
-                disabled={planState === EnumStatePlan.Canceling || planState === EnumStatePlan.Resetting}
+                disabled={planAction === EnumPlanAction.Canceling}
               >
-                {planState === EnumStatePlan.Canceling ? 'Canceling' : 'Cancel'}
+                {getActionName(planAction, [EnumPlanAction.Canceling], 'Cancel')}
               </Button>
             )}
           </div>
           <div className='flex items-center'>
-            {/* {![EnumStatePlan.Empty, EnumStatePlan.Canceling, EnumStatePlan.Closing].includes(planState as Subset<StatePlan, typeof EnumStatePlan.Empty | typeof EnumStatePlan.Canceling>) && (
+            {environment != null && (
               <Button
                 onClick={() => reset()}
                 variant="alternative"
                 className='justify-self-end'
-                disabled={planState === EnumStatePlan.Resetting}
+                disabled={[EnumPlanAction.Resetting, EnumPlanAction.Applying, EnumPlanAction.Canceling, EnumPlanAction.Closing].includes(planAction)}
               >
-                {planState === EnumStatePlan.Resetting ? 'Resetting' : 'Reset'}
+                {getActionName(planAction, [EnumPlanAction.Resetting], 'Reset')}
               </Button>
-            )} */}
+            )}
             <Button
               onClick={() => close()}
-              variant="alternative"
+              variant={planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'}
               className='justify-self-end'
-              disabled={planState === EnumStatePlan.Closing || planState === EnumStatePlan.Resetting}
+              disabled={[EnumPlanAction.Closing, EnumPlanAction.Resetting, EnumPlanAction.Canceling].includes(planAction)}
             >
-              {planState === EnumStatePlan.Closing ? 'Closing' : 'Close'}
+              {getActionName(planAction, [EnumPlanAction.Closing, EnumPlanAction.Done], 'Close')}
             </Button>
           </div>
         </div>
@@ -175,8 +174,40 @@ export function Plan({ onClose }: { onClose: any }) {
   )
 }
 
-async function delay(time: number = 1000): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, time)
-  })
+function getActionName(action: PlanAction, options: Array<string> = [], fallback: string = 'Start'): string {
+  if (!options.includes(action)) return fallback
+
+  let name: string;
+
+  switch (action) {
+    case EnumPlanAction.Done:
+      name = 'Done'
+      break
+    case EnumPlanAction.Running:
+      name = 'Running...'
+      break
+    case EnumPlanAction.Applying:
+      name = 'Applying...'
+      break
+    case EnumPlanAction.Canceling:
+      name = 'Canceling...'
+      break
+    case EnumPlanAction.Resetting:
+      name = 'Resetting...'
+      break
+    case EnumPlanAction.Closing:
+      name = 'Closing...'
+      break
+    case EnumPlanAction.Run:
+      name = 'Run'
+      break
+    case EnumPlanAction.Apply:
+      name = 'Apply'
+      break
+    default:
+      name = fallback
+      break
+  }
+
+  return name
 }

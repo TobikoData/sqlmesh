@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import typing as t
 from datetime import timedelta
 
+from airflow import settings
 from airflow.api.common.experimental.delete_dag import delete_dag
 from airflow.exceptions import AirflowException, DagNotFound
 from airflow.models import BaseOperator, DagRun, DagTag, Variable, XCom
@@ -11,6 +13,8 @@ from airflow.utils.session import provide_session
 from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
 
+from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
@@ -22,6 +26,18 @@ logger = logging.getLogger(__name__)
 # Airflow at runtime. This makes the type signature cleaner
 # and prevents mypy from complaining.
 PROVIDED_SESSION: Session = t.cast(Session, None)
+
+
+@contextlib.contextmanager
+def scoped_state_sync() -> t.Generator[StateSync, None, None]:
+    dialect = settings.engine.dialect.name
+    engine_adapter = create_engine_adapter(
+        settings.engine.raw_connection, dialect, multithreaded=True
+    )
+    try:
+        yield EngineAdapterStateSync(engine_adapter, "sqlmesh")
+    finally:
+        engine_adapter.close()
 
 
 @provide_session

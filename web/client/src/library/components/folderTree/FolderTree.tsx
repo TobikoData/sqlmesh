@@ -101,7 +101,7 @@ export function FolderTree({ project }: { project: any }) {
       }
 
     } else {
-      const files = getAllFilesInDirectory(artifact)
+      const files = getAllFilesInDirectory(artifact as Directory)
 
       files.forEach(file => {
         openedFiles.delete(file)
@@ -146,7 +146,7 @@ export function FolderTree({ project }: { project: any }) {
       artifact.name = newName
       artifact.path = parent.path + `${artifact.name}`
 
-      const files = getAllFilesInDirectory(artifact)
+      const files = getAllFilesInDirectory(artifact as Directory)
 
       files.forEach(file => {
         file.path = file.path.replace(artifact.path, artifact.path)

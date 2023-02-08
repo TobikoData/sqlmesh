@@ -5,7 +5,8 @@ import typing as t
 
 from pydantic import validator
 
-from sqlmesh.core.snapshot.definition import Snapshot
+from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
@@ -41,17 +42,52 @@ class Directory(PydanticModel):
 class Context(PydanticModel):
     concurrent_tasks: int
     engine_adapter: str
-    dialect: str
-    path: str
     time_column_format: str
     scheduler: str
     models: t.List[str] = []
+    config: str
+
+
+class ModelsDiff(PydanticModel):
+    direct: t.List[t.Dict[str, str]]
+    indirect: t.Set[str]
+    metadata: t.Set[str]
+
+    @classmethod
+    def get_modified_snapshots(
+        cls,
+        context_diff: ContextDiff,
+    ) -> ModelsDiff:
+        """Get the modified snapshots for a environment."""
+
+        direct = []
+        indirect = set()
+        metadata = set()
+
+        for snapshot_name in context_diff.modified_snapshots:
+            if context_diff.directly_modified(snapshot_name):
+                direct.append(
+                    {
+                        "model_name": snapshot_name,
+                        "diff": context_diff.text_diff(snapshot_name),
+                    }
+                )
+            elif context_diff.indirectly_modified(snapshot_name):
+                indirect.add(snapshot_name)
+            elif context_diff.metadata_updated(snapshot_name):
+                metadata.add(snapshot_name)
+
+        return ModelsDiff(
+            direct=direct,
+            indirect=indirect,
+            metadata=metadata,
+        )
 
 
 class ContextEnvironmentChanges(PydanticModel):
     added: t.Set[str]
     removed: t.Set[str]
-    modified: t.Dict[str, t.Tuple[t.Type[Snapshot], t.Type[Snapshot]]]
+    modified: ModelsDiff
 
 
 class ContextEnvironmentBackfill(PydanticModel):
@@ -64,3 +100,11 @@ class ContextEnvironment(PydanticModel):
     environment: str
     changes: t.Optional[ContextEnvironmentChanges]
     backfills: t.List[ContextEnvironmentBackfill] = []
+
+
+class EvaluateInput(PydanticModel):
+    model: str
+    start: TimeLike
+    end: TimeLike
+    latest: TimeLike
+    limit: t.Optional[int] = None

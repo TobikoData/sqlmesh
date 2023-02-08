@@ -71,7 +71,6 @@ from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
-from sqlmesh.utils.file_cache import FileCache
 
 if t.TYPE_CHECKING:
     import graphviz
@@ -214,10 +213,6 @@ class Context(BaseContext):
 
         self.config = self._load_config(config or "config")
 
-        # Initialize cache
-        cache_path = self.path / c.CACHE_PATH
-        cache_path.mkdir(exist_ok=True)
-        self.table_info_cache: FileCache = FileCache(cache_path / c.TABLE_INFO_CACHE)
         self.physical_schema = (
             physical_schema or self.config.physical_schema or "sqlmesh"
         )
@@ -438,24 +433,27 @@ class Context(BaseContext):
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
         """Generates and returns snapshots based on models registered in this context."""
-        snapshots = {}
+        local_snapshots = {}
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-        with self.table_info_cache as table_info_cache:
-            for model in self._models.values():
-                snapshot = Snapshot.from_model(
-                    model,
-                    physical_schema=self.physical_schema,
-                    models=self._models,
-                    ttl=self.snapshot_ttl,
-                    audits=self._audits,
-                    cache=fingerprint_cache,
-                )
-                cached = table_info_cache.get(snapshot.snapshot_id)
-                if cached:
-                    snapshot.version = cached.version
-                    snapshot.previous_versions = cached.previous_versions
-                snapshots[model.name] = snapshot
-        return snapshots
+        for model in self._models.values():
+            snapshot = Snapshot.from_model(
+                model,
+                physical_schema=self.physical_schema,
+                models=self._models,
+                ttl=self.snapshot_ttl,
+                audits=self._audits,
+                cache=fingerprint_cache,
+            )
+            local_snapshots[model.name] = snapshot
+
+        stored_snapshots = self.state_reader.get_snapshots(
+            [s.snapshot_id for s in local_snapshots.values()]
+        )
+
+        return {
+            name: stored_snapshots.get(s.snapshot_id, s)
+            for name, s in local_snapshots.items()
+        }
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:

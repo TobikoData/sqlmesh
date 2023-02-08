@@ -10,13 +10,8 @@ export function PlanSidebar({ context }: any) {
         </div>
         <Divider />
         <div className="py-2">
-          <h5 className="font-bold text-sm">Path</h5>
-          <small className="block px-2">{context?.path}</small>
-        </div>
-        <Divider />
-        <div className="py-2">
-          <h5 className="font-bold text-sm">Dialect</h5>
-          <small className="block px-2">{context?.dialect}</small>
+          <h5 className="font-bold text-sm">Config</h5>
+          <small className="block px-2">{context?.config}</small>
         </div>
         <Divider />
         <div className="py-2">
