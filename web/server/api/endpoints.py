@@ -4,6 +4,7 @@ import asyncio
 import functools
 import json
 import os
+import time
 import traceback
 import typing as t
 from pathlib import Path
@@ -261,6 +262,7 @@ async def tasks(
                     "ok": True,
                     "environment": environment,
                     "tasks": task_status,
+                    "timestamp": int(time.time()),
                 }
             )
         }
