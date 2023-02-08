@@ -15,7 +15,7 @@ from sqlmesh.dbt.macros import builtin_methods
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import ProjectConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.jinja import capture_jinja
+from sqlmesh.utils.jinja import MacroInfo
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
@@ -83,14 +83,13 @@ class DbtLoader(Loader):
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")
 
-    def _on_jinja_macro_added(self, name: str, macro: str) -> None:
+    def _on_jinja_macro_added(self, name: str, macro: MacroInfo) -> None:
+        if not macro.calls:
+            return
+
         dependencies = Dependencies()
 
-        combined = macro.split("\n")
-        test = "\n".join(combined[1:-1])
-
-        for method, args, kwargs in capture_jinja(test).calls:
-            print(method)
+        for method, args, kwargs in macro.calls:
             if method == "ref":
                 dep = ".".join(args + tuple(kwargs.values()))
                 if dep:

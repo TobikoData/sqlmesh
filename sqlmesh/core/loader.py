@@ -23,7 +23,7 @@ from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import MacroExtractor
+from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 if t.TYPE_CHECKING:
@@ -136,7 +136,7 @@ class Loader(abc.ABC):
             with open(path, mode="r", encoding="utf8") as file:
                 for name, macro in MacroExtractor().extract(file.read()).items():
                     registry[name] = Executable(
-                        payload=f"""{c.JINJA_MACROS}.append('''{macro}''')""",
+                        payload=f"""{c.JINJA_MACROS}.append('''{macro.macro}''')""",
                         kind=ExecutableKind.STATEMENT,
                         name=name,
                         path=str(path),
@@ -145,7 +145,7 @@ class Loader(abc.ABC):
 
         return registry
 
-    def _on_jinja_macro_added(self, name: str, macro: str) -> None:
+    def _on_jinja_macro_added(self, name: str, macro: MacroInfo) -> None:
         """Callback invoked when adding a new jinja macro to the macro registry"""
 
     def _track_file(self, path: Path) -> None:

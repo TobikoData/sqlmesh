@@ -7,8 +7,16 @@ from jinja2 import Environment, Undefined
 from sqlglot import Dialect, Parser, TokenType
 
 
+@dataclass
+class MacroInfo:
+    """Class to hold macro and its calls"""
+
+    macro: str
+    calls: t.List[t.Tuple[str, t.Tuple[t.Any, ...], t.Dict[str, t.Any]]]
+
+
 class MacroExtractor(Parser):
-    def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, str]:
+    def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, MacroInfo]:
         """Extract a dictionary of macro definitions from a jinja string.
 
         Args:
@@ -24,15 +32,26 @@ class MacroExtractor(Parser):
         self._index = -1
         self._advance()
 
-        macros: t.Dict[str, str] = {}
+        macros: t.Dict[str, MacroInfo] = {}
 
         while self._curr:
-            if self._tag == "MACRO" and self._next:
-                start = self._prev
+            if self._curr.token_type == TokenType.BLOCK_START:
+                macro_start = self._curr
+            elif self._tag == "MACRO" and self._next:
                 name = self._next.text
-                while self._curr and self._tag != "ENDMACRO":
+                while self._curr and self._curr.token_type != TokenType.BLOCK_END:
                     self._advance()
-                macros[name] = self._find_sql(start, self._next)
+                body_start = self._next
+
+                while self._curr and self._tag != "ENDMACRO":
+                    if self._curr.token_type == TokenType.BLOCK_START:
+                        body_end = self._prev
+                    self._advance()
+
+                calls = capture_jinja(self._find_sql(body_start, body_end)).calls
+                macros[name] = MacroInfo(
+                    macro=self._find_sql(macro_start, self._next), calls=calls
+                )
 
             self._advance()
 
