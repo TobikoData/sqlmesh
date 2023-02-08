@@ -4,9 +4,10 @@ import clsx from "clsx";
 import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
 import { EnumPlanState, EnumPlanAction, useStorePlan } from "../../../context/plan";
-import { isArrayNotEmpty } from "../../../utils";
+import { isArrayNotEmpty, toDate, toDateFormat } from "../../../utils";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
+import { isModified } from "./help";
 
 export function PlanWizard({
   id,
@@ -14,6 +15,7 @@ export function PlanWizard({
   id: string
 }) {
   const planState = useStorePlan((s: any) => s.state)
+  const planAction = useStorePlan((s: any) => s.action)
   const setPlanAction = useStorePlan((s: any) => s.setAction)
   const backfills = useStorePlan((s: any) => s.backfills)
   const setBackfills = useStorePlan((s: any) => s.setBackfills)
@@ -23,11 +25,16 @@ export function PlanWizard({
   const category = useStorePlan((s: any) => s.category)
   const categories = useStorePlan((s: any) => s.categories)
   const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
+  const setBackfillDate = useStorePlan((s: any) => s.setBackfillDate)
+  const backfill_start = useStorePlan((s: any) => s.backfill_start)
+  const backfill_end = useStorePlan((s: any) => s.backfill_end)
+  const plan = useStorePlan((s: any) => s.lastPlan || s.activePlan)
+
   const activePlan = useStorePlan((s: any) => s.activePlan)
-  const { data: context, refetch } = useApiContextByEnvironment(environment)
+  const { data: context } = useApiContextByEnvironment(environment)
 
   useEffect(() => {
-    if (context == null || context.environment == null) return
+    if (context?.environment == null) return
 
     setBackfills(context.backfills)
     setEnvironment(context.environment)
@@ -40,6 +47,9 @@ export function PlanWizard({
     } else {
       setPlanAction(EnumPlanAction.Done)
     }
+
+    setBackfillDate('start', toDateFormat(toDate(context.start)))
+    setBackfillDate('end', toDateFormat(toDate(context.end)))
   }, [context])
 
   useEffect(() => {
@@ -60,11 +70,13 @@ export function PlanWizard({
     elForm.reset()
   }
 
-  const isPlanInProgress = planState === EnumPlanState.Canceling || planState === EnumPlanState.Applying
+  const isPlanInProgress = planAction === EnumPlanState.Canceling || planState === EnumPlanState.Applying
+  const changes = context?.changes
+  const withChanges = (isModified(changes?.modified) || isArrayNotEmpty(changes?.added) || isArrayNotEmpty(changes?.removed))
 
   return (
     <ul>
-      <PlanWizardStep headline="Setup" description='Set Details'>
+      <PlanWizardStep headline="Setup" description='Set Options'>
         {environment ? (
           <div>
             <h4 className="ml-1">Current Environment is <b className='px-2 py-1 font-sm rounded-md bg-secondary-100'>{environment}</b></h4>
@@ -96,15 +108,15 @@ export function PlanWizard({
           </form>
         )}
       </PlanWizardStep>
-      <PlanWizardStep headline="Models" description='Review Models' disabled={context?.environment == null}>
-        {(isModified(context?.changes?.modified) || isArrayNotEmpty(context?.changes?.added) || isArrayNotEmpty(context?.changes?.removed)) ? (
+      <PlanWizardStep headline="Models" description='Review Changes' disabled={context?.environment == null}>
+        {withChanges ? (
           <>
             <div className="flex">
-              {isArrayNotEmpty(context?.changes?.added) && (
+              {isArrayNotEmpty(changes?.added) && (
                 <div className='ml-4 mb-8'>
                   <h4 className='text-success-500 mb-2'>Added Models</h4>
                   <ul className='ml-2'>
-                    {context?.changes?.added.map((modelName: string) => (
+                    {changes?.added.map((modelName: string) => (
                       <li key={modelName} className='text-success-500 font-sm h-[1.5rem]'>
                         <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">{modelName}</small>
                       </li>
@@ -112,11 +124,11 @@ export function PlanWizard({
                   </ul>
                 </div>
               )}
-              {isArrayNotEmpty(context?.changes?.removed?.length) && (
+              {isArrayNotEmpty(changes?.removed?.length) && (
                 <div className='ml-4 mb-8'>
                   <h4 className='text-danger-500 mb-2'>Removed Models</h4>
                   <ul className='ml-2'>
-                    {context?.changes?.added.map((modelName: string) => (
+                    {changes?.added.map((modelName: string) => (
                       <li key={modelName} className='text-danger-500 font-sm h-[1.5rem]'>
                         <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">{modelName}</small>
                       </li>
@@ -125,13 +137,13 @@ export function PlanWizard({
                 </div>
               )}
             </div>
-            {isModified(context?.changes?.modified) && (
+            {isModified(changes?.modified) && (
               <div className="flex">
-                {isArrayNotEmpty(context?.changes?.modified.direct) && (
+                {isArrayNotEmpty(changes?.modified.direct) && (
                   <div className="ml-1">
                     <h4 className='text-secondary-500 mb-2'>Modified Directly</h4>
                     <ul className='ml-1 mr-3'>
-                      {context?.changes?.modified.direct.map(({ model_name }: any) => (
+                      {changes?.modified.direct.map(({ model_name }: any) => (
                         <li key={model_name} className='text-secondary-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">{model_name}</small>
                         </li>
@@ -139,11 +151,11 @@ export function PlanWizard({
                     </ul>
                   </div>
                 )}
-                {isArrayNotEmpty(context?.changes?.modified.indirect) && (
+                {isArrayNotEmpty(changes?.modified.indirect) && (
                   <div className="ml-1 mr-3">
                     <h4 className='text-warning-500 mb-2'>Modified Indirectly</h4>
                     <ul className='ml-1'>
-                      {context?.changes?.modified?.indirect.map((modelName: any) => (
+                      {changes?.modified?.indirect.map((modelName: any) => (
                         <li key={modelName} className='text-warning-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">{modelName}</small>
                         </li>
@@ -151,11 +163,11 @@ export function PlanWizard({
                     </ul>
                   </div>
                 )}
-                {isArrayNotEmpty(context?.changes?.modified.metadata) && (
+                {isArrayNotEmpty(changes?.modified.metadata) && (
                   <div className="ml-1">
                     <small>Modified Metadata</small>
                     <ul className='ml-1'>
-                      {context?.changes?.modified?.metadata.map((modelName: any) => (
+                      {changes?.modified?.metadata.map((modelName: any) => (
                         <li key={modelName} className='text-gray-500 font-sm h-[1.5rem]'>
                           <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">{modelName}</small>
                         </li>
@@ -173,127 +185,155 @@ export function PlanWizard({
           </div>
         )}
       </PlanWizardStep>
-      <PlanWizardStep headline="Backfill" description='Backfill Progress' disabled={context?.environment == null}>
-        {isArrayNotEmpty(backfills) ? (
-          <>
-            {isModified(context?.changes?.modified) && planState !== EnumPlanState.Applying && (
-              <div className="mb-4">
-                <RadioGroup
-                  className='rounded-lg w-full'
-                  value={category}
-                  onChange={setCategory}
-                >
-                  {categories.map((c: any) => (
-                    <RadioGroup.Option
-                      key={c.name}
-                      value={c}
-                      className={({ active, checked }) =>
-                        `${active
-                          ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
-                          : ''
+      {withChanges && (
+        <PlanWizardStep headline="Backfill" description='Progress' disabled={context?.environment == null}>
+          {[EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed].includes(planState) && planAction === EnumPlanAction.Done && (
+            <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
+              <h3
+                className={clsx(
+                  "font-bold text-lg ",
+                  planState === EnumPlanState.Cancelled && 'text-gray-700',
+                  planState === EnumPlanState.Finished && 'text-success-500',
+                  planState === EnumPlanState.Failed && 'text-danger-500',
+                )}
+              >{planState === EnumPlanState.Finished ? 'Completed' : planState === EnumPlanState.Cancelled ? 'Canceled' : 'Failed'}</h3>
+              <p className="text-xs text-gray-600">{toDateFormat(toDate(plan?.updated_at), 'yyyy-mm-dd hh-mm-ss')}</p>
+            </div>
+          )}
+          {isArrayNotEmpty(backfills) ? (
+            <>
+              {isModified(changes?.modified) && planState !== EnumPlanState.Applying && (
+                <div className="mb-4">
+                  <RadioGroup
+                    className='rounded-lg w-full'
+                    value={category}
+                    onChange={setCategory}
+                  >
+                    {categories.map((c: any) => (
+                      <RadioGroup.Option
+                        key={c.name}
+                        value={c}
+                        className={({ active, checked }) =>
+                          `${active
+                            ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
+                            : ''
+                          }
+                      ${checked
+                            ? 'bg-secondary-500 bg-opacity-75 text-white'
+                            : 'bg-secondary-100'
+                          }
+                      relative flex cursor-pointer rounded-md px-3 py-2 focus:outline-none mb-2`
                         }
-                ${checked
-                          ? 'bg-secondary-500 bg-opacity-75 text-white'
-                          : 'bg-secondary-100'
-                        }
-                relative flex cursor-pointer rounded-md px-3 py-2 focus:outline-none mb-2`
-                      }
-                    >
-                      {({ checked }) => (
-                        <>
-                          <div className="flex w-full items-center justify-between">
-                            <div className="flex items-center">
-                              <div className="text-sm">
-                                <RadioGroup.Label
-                                  as="p"
-                                  className={`font-medium  ${checked ? 'text-white' : 'text-gray-900'
-                                    }`}
-                                >
-                                  {c.name}
-                                </RadioGroup.Label>
-                                <RadioGroup.Description
-                                  as="span"
-                                  className={`inline ${checked ? 'text-sky-100' : 'text-gray-500'} text-xs`}
-                                >
-                                  <span>{c.description}</span>
-                                </RadioGroup.Description>
+                      >
+                        {({ checked }) => (
+                          <>
+                            <div className="flex w-full items-center justify-between">
+                              <div className="flex items-center">
+                                <div className="text-sm">
+                                  <RadioGroup.Label
+                                    as="p"
+                                    className={`font-medium  ${checked ? 'text-white' : 'text-gray-900'
+                                      }`}
+                                  >
+                                    {c.name}
+                                  </RadioGroup.Label>
+                                  <RadioGroup.Description
+                                    as="span"
+                                    className={`inline ${checked ? 'text-sky-100' : 'text-gray-500'} text-xs`}
+                                  >
+                                    <span>{c.description}</span>
+                                  </RadioGroup.Description>
+                                </div>
                               </div>
+                              {checked && (
+                                <div className="shrink-0 text-white">
+                                  <CheckCircleIcon className="h-6 w-6" />
+                                </div>
+                              )}
                             </div>
-                            {checked && (
-                              <div className="shrink-0 text-white">
-                                <CheckCircleIcon className="h-6 w-6" />
-                              </div>
-                            )}
+                          </>
+                        )}
+                      </RadioGroup.Option>
+                    ))}
+                  </RadioGroup>
+                </div>
+              )}
+              {category.id != 'no-change' && (
+                <>
+
+                  <ul className="mb-4">
+                    {backfills.filter((item: any) => category.id === 'non-breaking-change' ? !changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
+                      <li key={model_name} className='text-gray-600 font-light w-full mb-2'>
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
+                            <p
+                              className={clsx(
+                                "font-bold text-xs",
+                                changes?.modified?.direct?.find((m: any) => m.model_name === model_name) && 'text-secondary-500',
+                                changes?.added?.find((name: string) => name === model_name) && 'text-success-500',
+                                changes?.modified?.indirect?.find((name: string) => name === model_name) && 'text-warning-500',
+                              )}
+                            >
+                              <small className="inline-block pr-3 text-xs text-gray-500">{interval[0]} - {interval[1]}</small>
+                              {model_name}
+                            </p>
+
                           </div>
-                        </>
-                      )}
-                    </RadioGroup.Option>
-                  ))}
-                </RadioGroup>
-              </div>
-            )}
-            {category.id != 'no-change' && (
-              <>
-                <ul className="mb-4">
-                  {backfills.filter((item: any) => category.id === 'non-breaking-change' ? !context?.changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
-                    <li key={model_name} className='text-gray-600 font-light w-full mb-2'>
-                      <div className="flex justify-between items-center w-full">
-                        <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
-                          <p className={clsx(
-                            "font-bold text-xs ",
-                            context?.changes?.modified?.direct?.find((m: any) => m.model_name === model_name) && 'text-secondary-500',
-                            context?.changes?.added?.find((name: string) => name === model_name) && 'text-success-500',
-                            context?.changes?.modified?.indirect?.find((name: string) => name === model_name) && 'text-warning-500',
-                          )}>{model_name}</p>
-                          <small className="inline-block pl-3 text-xs text-gray-900">{interval[0]} - {interval[1]}</small>
+                          <p className="inline-block text-xs">
+                            <small>{activePlan?.tasks?.[model_name]?.completed ?? 0} / {batches} batch{batches > 1 ? 'es' : ''}</small>
+                            <small className="inline-block ml-2 font-bold">{Math.ceil(activePlan?.tasks?.[model_name]?.completed / activePlan?.tasks?.[model_name]?.total * 100) || 0}%</small>
+                          </p>
                         </div>
-                        <small className="inline-block text-xs">{activePlan?.tasks?.[model_name]?.completed ?? 0} / {batches} batch{batches > 1 ? 'es' : ''}</small>
-                      </div>
-                      <Progress
-                        progress={Math.ceil(activePlan?.tasks?.[model_name]?.completed / activePlan?.tasks?.[model_name]?.total * 100)}
+                        <Progress
+                          progress={Math.ceil(activePlan?.tasks?.[model_name]?.completed / activePlan?.tasks?.[model_name]?.total * 100)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                  {<form className={clsx('flex ml-1 mt-1')}>
+                    <label className={clsx(
+                      'mb-3 mr-4 text-left',
+                      (isPlanInProgress || planAction === EnumPlanAction.Done) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                    )}>
+                      <small>Start Date</small>
+                      <input
+                        type="text"
+                        name="start_date"
+                        className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
+                        disabled={isPlanInProgress || planAction === EnumPlanAction.Done}
+                        value={backfill_start}
+                        onChange={(e) => setBackfillDate('start', e.target.value)}
                       />
-                    </li>
-                  ))}
-                </ul>
-                {<form className={clsx('flex ml-1 mt-1')}>
-                  <label className={clsx(
-                    'mb-3 mr-4 text-left',
-                    (isPlanInProgress) && 'opacity-50 pointer-events-none cursor-not-allowed'
-                  )}>
-                    <small>Start Date</small>
-                    <input
-                      type="text"
-                      name="start_date"
-                      className="block bg-gray-100 px-2 py-1 rounded-md"
-                      disabled={isPlanInProgress}
-                    />
-                    <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
-                  </label>
-                  <label className={clsx(
-                    'mb-3 text-left',
-                    (isPlanInProgress) && 'opacity-50 pointer-events-none cursor-not-allowed'
-                  )}>
-                    <small>End Date</small>
-                    <input
-                      type="text"
-                      name="end_date"
-                      className="block bg-gray-100 px-2 py-1 rounded-md"
-                      disabled={isPlanInProgress}
-                    />
-                    <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
-                  </label>
-                </form>}
-              </>
-            )}
-          </>
-        ) : (
-          <div className="ml-1 text-gray-700">
-            <Divider className="h-1 w-full mb-4" />
-            <h3>Explanation why we dont need to Backfill</h3>
-          </div>
-        )}
-      </PlanWizardStep>
-    </ul >
+                      <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
+                    </label>
+                    <label className={clsx(
+                      'mb-3 text-left',
+                      (isPlanInProgress || planAction === EnumPlanAction.Done) && 'opacity-50 pointer-events-none cursor-not-allowed'
+                    )}>
+                      <small>End Date</small>
+                      <input
+                        type="text"
+                        name="end_date"
+                        className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
+                        disabled={isPlanInProgress || planAction === EnumPlanAction.Done}
+                        value={backfill_end}
+                        onChange={(e) => setBackfillDate('end', e.target.value)}
+                      />
+                      <small className="text-xs text-gray-500">eg. '1 year', '2020-01-01'</small>
+                    </label>
+                  </form>}
+                </>
+              )}
+            </>
+          ) : (
+            <div className="ml-1 text-gray-700">
+              <Divider className="h-1 w-full mb-4" />
+              <h3>Explanation why we dont need to Backfill</h3>
+            </div>
+          )}
+        </PlanWizardStep>
+      )}
+    </ul>
   )
 }
 
@@ -319,8 +359,4 @@ function PlanWizardStepHeader({ disabled = false, headline = 1, children = '', c
       <small className="text-gray-500">{children}</small>
     </div>
   )
-}
-
-function isModified(modified: unknown): boolean {
-  return (Object.values(modified || {}) as any[]).some(isArrayNotEmpty)
 }

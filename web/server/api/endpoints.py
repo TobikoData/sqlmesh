@@ -194,6 +194,8 @@ def get_plan(
     plan = context.plan(environment=environment, no_prompts=True)
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
+        start=plan.start,
+        end=plan.end,
     )
 
     if plan.context_diff.has_differences:
