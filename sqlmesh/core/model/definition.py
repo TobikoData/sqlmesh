@@ -30,6 +30,7 @@ from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.metaprogramming import (
     Executable,
+    ExecutableKind,
     build_env,
     prepare_env,
     print_exception,
@@ -182,6 +183,7 @@ class _Model(ModelMeta, frozen=True):
             expressions=[
                 v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
                 for k, v in self.sorted_python_env
+                if k not in BUILTIN_METHODS
             ]
         )
 
@@ -434,7 +436,10 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:
-        return self.python_env_ or {}
+        return {
+            **BUILTIN_METHODS,
+            **(self.python_env_ or {}),
+        }
 
     @property
     def contains_star_query(self) -> bool:
@@ -1208,6 +1213,11 @@ def _list_of_calls_to_exp(
         ]
     )
 
+
+BUILTIN_METHODS = {
+    c.JINJA_MACROS: Executable(kind=ExecutableKind.VALUE, payload="[]"),
+    c.SQLMESH: Executable(kind=ExecutableKind.VALUE, payload="True"),
+}
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),

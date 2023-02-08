@@ -13,15 +13,18 @@ from pathlib import Path
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse_model
-from sqlmesh.core.hooks import hook
-from sqlmesh.core.macros import macro
+from sqlmesh.core.hooks import HookRegistry, hook
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -51,8 +54,8 @@ def update_model_schemas(
 
 @dataclass
 class LoadedProject:
-    macros: UniqueKeyDict[str, macro]
-    hooks: UniqueKeyDict[str, hook]
+    macros: MacroRegistry
+    hooks: HookRegistry
     models: UniqueKeyDict[str, Model]
     audits: UniqueKeyDict[str, Audit]
     dag: DAG[str]
@@ -80,7 +83,7 @@ class Loader(abc.ABC):
         self._path_mtimes.clear()
         self._dag = DAG()
 
-        hooks, macros = self._load_scripts()
+        macros, hooks = self._load_scripts()
         models = self._load_models(macros, hooks)
         for model in models.values():
             self._add_model_to_dag(model)
@@ -89,7 +92,7 @@ class Loader(abc.ABC):
         audits = self._load_audits()
 
         project = LoadedProject(
-            hooks=hooks, macros=macros, models=models, audits=audits, dag=self._dag
+            macros=macros, hooks=hooks, models=models, audits=audits, dag=self._dag
         )
         return project
 
@@ -107,14 +110,12 @@ class Loader(abc.ABC):
         )
 
     @abc.abstractmethod
-    def _load_scripts(
-        self,
-    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
         """Loads all user defined hooks and macros."""
 
     @abc.abstractmethod
     def _load_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self, macros: MacroRegistry, hooks: HookRegistry
     ) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
@@ -126,13 +127,36 @@ class Loader(abc.ABC):
         self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
 
+    def _add_jinja_macros(
+        self, registry: MacroRegistry, paths: t.Iterable[Path]
+    ) -> MacroRegistry:
+        registry = t.cast(MacroRegistry, registry.copy())
+
+        for path in paths:
+            with open(path, mode="r", encoding="utf8") as file:
+                for name, macro in MacroExtractor().extract(file.read()).items():
+                    registry[name] = Executable(
+                        payload=f"""{c.JINJA_MACROS}.append('''{macro.macro}''')""",
+                        kind=ExecutableKind.STATEMENT,
+                        name=name,
+                        path=str(path),
+                    )
+                    self._on_jinja_macro_added(name, macro)
+
+        return registry
+
+    def _on_jinja_macro_added(self, name: str, macro: MacroInfo) -> None:
+        """Callback invoked when adding a new jinja macro to the macro registry"""
+
+    def _track_file(self, path: Path) -> None:
+        """Project file to track for modifications"""
+        self._path_mtimes[path] = path.stat().st_mtime
+
 
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def _load_scripts(
-        self,
-    ) -> t.Tuple[UniqueKeyDict[str, hook], UniqueKeyDict[str, macro]]:
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
         """Loads all user defined hooks and macros."""
         # Store a copy of the macro registry
         standard_hooks = hook.get_registry()
@@ -142,18 +166,21 @@ class SqlMeshLoader(Loader):
             self._context.glob_path(self._context.macro_directory_path, ".py")
         ) + tuple(self._context.glob_path(self._context.hook_directory_path, ".py")):
             if self._import_python_file(path.relative_to(self._context.path)):
-                self._path_mtimes[path] = path.stat().st_mtime
+                self._track_file(path)
 
         hooks = hook.get_registry()
         macros = macro.get_registry()
+        macros = self._add_jinja_macros(
+            macros, self._context.glob_path(self._context.hook_directory_path, ".sql")
+        )
 
         hook.set_registry(standard_hooks)
         macro.set_registry(standard_macros)
 
-        return hooks, macros
+        return macros, hooks
 
     def _load_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self, macros: MacroRegistry, hooks: HookRegistry
     ) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
@@ -165,14 +192,14 @@ class SqlMeshLoader(Loader):
         return models
 
     def _load_sql_models(
-        self, macros: UniqueKeyDict[str, macro], hooks: UniqueKeyDict[str, hook]
+        self, macros: MacroRegistry, hooks: HookRegistry
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
         for path in self._context.glob_path(
             self._context.models_directory_path, ".sql"
         ):
-            self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 try:
                     expressions = parse_model(
@@ -196,7 +223,7 @@ class SqlMeshLoader(Loader):
 
                 if isinstance(model, SeedModel):
                     seed_path = model.seed_path
-                    self._path_mtimes[seed_path] = seed_path.stat().st_mtime
+                    self._track_file(seed_path)
 
         return models
 
@@ -208,9 +235,8 @@ class SqlMeshLoader(Loader):
         registered: t.Set[str] = set()
 
         for path in self._context.glob_path(self._context.models_directory_path, ".py"):
-            self._path_mtimes[path] = path.stat().st_mtime
-            if self._import_python_file(path.relative_to(self._context.path)):
-                self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
+            self._import_python_file(path.relative_to(self._context.path))
             new = registry.keys() - registered
             registered |= new
             for name in new:
@@ -230,7 +256,7 @@ class SqlMeshLoader(Loader):
         for path in self._context.glob_path(
             self._context.audits_directory_path, ".sql"
         ):
-            self._path_mtimes[path] = path.stat().st_mtime
+            self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 expressions = parse_model(
                     file.read(), default_dialect=self._context.dialect

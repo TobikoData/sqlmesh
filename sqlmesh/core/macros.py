@@ -17,7 +17,7 @@ from sqlmesh.core.dialect import (
     MacroStrReplace,
     MacroVar,
 )
-from sqlmesh.utils import registry_decorator
+from sqlmesh.utils import UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
@@ -242,7 +242,8 @@ class macro(registry_decorator):
     registry_name = "macros"
 
 
-MacroRegistry = t.Dict[str, macro]
+ExecutableOrMacro = t.Union[Executable, macro]
+MacroRegistry = UniqueKeyDict[str, ExecutableOrMacro]
 
 
 def _norm_var_arg_lambda(

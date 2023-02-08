@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import typing as t
-
-from sqlmesh.utils import registry_decorator
+from sqlmesh.utils import UniqueKeyDict, registry_decorator
 
 
 class hook(registry_decorator):
@@ -30,4 +28,4 @@ class hook(registry_decorator):
     registry_name = "hooks"
 
 
-HookRegistry = t.Dict[str, hook]
+HookRegistry = UniqueKeyDict[str, hook]

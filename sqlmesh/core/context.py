@@ -54,7 +54,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
@@ -223,7 +223,7 @@ class Context(BaseContext):
 
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
-        self._macros: UniqueKeyDict[str, macro] = UniqueKeyDict("macros")
+        self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.connection = connection
@@ -425,7 +425,7 @@ class Context(BaseContext):
         return MappingProxyType(self._models)
 
     @property
-    def macros(self) -> MappingProxyType[str, macro]:
+    def macros(self) -> MappingProxyType[str, ExecutableOrMacro]:
         """Returns all registered macros in this context."""
         return MappingProxyType(self._macros)
 

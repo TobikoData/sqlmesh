@@ -9,5 +9,4 @@ SELECT DISTINCT
   waiter_id::INT AS waiter_id,
   ds::TEXT AS ds
 FROM sushi.orders AS o
-WHERE
-  ds BETWEEN @start_ds AND @end_ds
+WHERE @incremental_by_ds(ds)
