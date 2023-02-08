@@ -33,7 +33,6 @@ In your SQLMesh repository, create the following configuration:
 from sqlmesh.core.config import Config, AirflowSchedulerConfig
 
 airflow_config = Config(
-    dialect="spark",
     scheduler=AirflowSchedulerConfig(
         airflow_url="https://<Airflow Webserver Host>:<Airflow Webserver Port>/",
         username="<Airflow Username>",

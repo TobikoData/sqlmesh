@@ -81,7 +81,6 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
 
 
 class _BaseAirflowSchedulerConfig(_SchedulerConfig):
-    max_concurrent_requests: int
     dag_run_poll_interval_secs: int
     dag_creation_poll_interval_secs: int
     dag_creation_max_retry_attempts: int
@@ -98,7 +97,6 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
 
         return HttpStateReader(
             client=self.get_client(context.console),
-            max_concurrent_requests=self.max_concurrent_requests,
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
             console=context.console,
         )
@@ -124,8 +122,6 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         airflow_url: The URL of the Airflow Webserver.
         username: The Airflow username.
         password: The Airflow password.
-        max_concurrent_requests: The maximum number of concurrent requests when interacting with
-            the Airflow Webserver.
         dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
         dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
         dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
@@ -137,7 +133,6 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     airflow_url: str = AIRFLOW_LOCAL_URL
     username: str = "airflow"
     password: str = "airflow"
-    max_concurrent_requests: int = 2
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10
@@ -166,8 +161,6 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     Args:
         airflow_url: The URL of the Airflow Webserver.
-        max_concurrent_requests: The maximum number of concurrent requests when interacting with
-            the Airflow Webserver.
         dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
         dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
         dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
@@ -177,7 +170,6 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     """
 
     airflow_url: str
-    max_concurrent_requests: int = 2
     dag_run_poll_interval_secs: int = 10
     dag_creation_poll_interval_secs: int = 30
     dag_creation_max_retry_attempts: int = 10

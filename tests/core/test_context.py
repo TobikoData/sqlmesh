@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 import sqlmesh.core.constants
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.errors import ConfigError
@@ -43,7 +43,9 @@ def test_config_precedence():
     assert context.physical_schema == "test"
 
     # Context parameters take precedence over config
-    config = Config(dialect="presto", physical_schema="dev")
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev"
+    )
     context = Context(
         path="examples/sushi", dialect="spark", physical_schema="test", config=config
     )
@@ -52,7 +54,9 @@ def test_config_precedence():
 
 
 def test_config_parameter():
-    config = Config(dialect="presto", physical_schema="dev")
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev"
+    )
     context = Context(path="examples/sushi", config=config)
     assert context.dialect == "presto"
     assert context.physical_schema == "dev"
