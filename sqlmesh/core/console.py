@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import datetime
+import time
 import typing as t
 import unittest
 import uuid
@@ -688,12 +689,18 @@ class ApiConsole(TerminalConsole):
         self.current_task_status[snapshot_name] = {
             "completed": 0,
             "total": total_batches,
+            "start": int(time.time()),
         }
 
     def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
         """Update snapshot progress."""
         if self.current_task_status:
             self.current_task_status[snapshot_name]["completed"] += num_batches
+            if (
+                self.current_task_status[snapshot_name]["completed"]
+                >= self.current_task_status[snapshot_name]["total"]
+            ):
+                self.current_task_status[snapshot_name]["end"] = int(time.time())
 
     def complete_snapshot_progress(self) -> None:
         """Indicates that load progress is complete"""
