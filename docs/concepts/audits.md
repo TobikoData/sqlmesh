@@ -131,7 +131,7 @@ Done.
 ```
 
 ### Automated auditing
-When you apply a plan, SQLMesh will automatically run each model's audits. By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behvavior can be changed for individual audits. Refer to [Non-blocking audits](#non-blocking-audits).
+When you apply a plan, SQLMesh will automatically run each model's audits. By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits. Refer to [Non-blocking audits](#non-blocking-audits).
 
 ## Advanced usage
 ### Skipping audits

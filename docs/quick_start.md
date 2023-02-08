@@ -49,13 +49,13 @@ This will create the directories and files that you can use to organize your SQL
 - config.py
     - The file for database configuration. Refer to [configs](/concepts/configs).
 - ./models
-    - The place for sql and python models. Refer to [models](/concepts/models).
+    - The place for sql and python models. Refer to [models](/concepts/models/overview).
 - ./audits
-    - The place for shared audits. Refer to [auditing](/guides/audits).
+    - The place for shared audits. Refer to [auditing](/concepts/audits).
 - ./tests
-    - The place for unit tests. Refer to [testing](/guides/tests).
+    - The place for unit tests. Refer to [testing](/concepts/tests).
 - ./macros
-    - The place for macros.
+    - The place for macros. Refer to [macros](/concepts/macros).
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment

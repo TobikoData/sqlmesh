@@ -7,6 +7,15 @@ nav:
     - quick_start.md
   - Guides:
     - guides/create_a_project.md
+    - guides/add_model.md
+    - guides/delete_model.md
+    - guides/evaluate_model.md
+    - guides/test_model.md
+    - guides/audit_model.md
+    - guides/validate_model.md
+    - guides/revert_change.md
+    - guides/view_dag.md
+    - guides/integrate_airflow.md
   - Concepts:
     - concepts/overview.md
     - Models:
