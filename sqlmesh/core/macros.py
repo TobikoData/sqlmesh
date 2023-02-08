@@ -143,14 +143,12 @@ class MacroEvaluator:
 
         transformed = evaluate_macros(query)
 
-        if transformed:
-            for expression in ensure_collection(transformed):
-                expression.transform(  # type: ignore
-                    lambda node: node.this
-                    if isinstance(node, exp.Column) and node.arg_key == "alias"
-                    else node,
-                    copy=False,
-                )
+        if isinstance(transformed, list):
+            return [
+                self.parse_one(node.sql(dialect=self.dialect)) for node in transformed
+            ]
+        elif isinstance(transformed, exp.Expression):
+            return self.parse_one(transformed.sql(dialect=self.dialect))
 
         return transformed
 

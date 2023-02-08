@@ -94,7 +94,7 @@ class TimeColumn(PydanticModel):
                 exp.Literal.string(
                     format_time(
                         self.format,
-                        d.Dialect.get_or_raise(dialect).inverse_time_mapping,
+                        d.Dialect.get_or_raise(dialect).inverse_time_mapping,  # type: ignore
                     )
                 ),
             ]
