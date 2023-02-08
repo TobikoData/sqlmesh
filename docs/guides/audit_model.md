@@ -19,3 +19,4 @@ Done.
 By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits by defining them as [non-blocking](/concepts/audits#non-blocking-audits).
 
 For more information about audits, refer to [auditing](/concepts/audits).
+For more information about testing with unit tests, refer to [testing](/concepts/tests).

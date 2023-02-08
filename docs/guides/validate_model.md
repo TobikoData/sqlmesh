@@ -2,28 +2,26 @@
 
 ## Validate changes to a model
 
-Validating a model ties together multiple features in order to ensure the quality and accuracy of your data.
+When running the `plan` command, there are multiple ways that SQLMesh automatically validates your models in order to ensure the quality and accuracy of your data. You can also perform any of these techniques manually if you wish to directly validate a change:
 
-To validate a model, perform each of the following steps:
+* Evaluating a model
+* Testing a model using unit tests
+* Auditing a model
+* Previewing changes using the `plan` command 
 
-1. Evaluate a model
-2. Test a model
-3. Audit a model
-4. Preview changes using the `plan` command 
-
-### 1. Evaluate a model
+### Evaluating a model
 
 Refer to [evaluate a model](/guides/evaluate_model).
 
-### 2. Test a model
+### Testing a model using unit tests
 
 Refer to [test a model](/guides/test_model).
 
-### 3. Audit a model
+### Auditing a model
 
 Refer to [audit a model](/guides/audit_model).
 
-### 4. Preview changes using the `plan` command
+### Previewing changes using the `plan` command
 
 To preview changes using `plan`, enter the `sqlmesh plan dev` command.
 
