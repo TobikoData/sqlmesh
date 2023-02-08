@@ -1,7 +1,7 @@
 # Auditing
-Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](/concepts/tests), they are a great way to ensure the quality of your data and to build trust in it across your organization.  
+Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](/concepts/tests), they are a great way to ensure the quality of your data and to build trust in it across your organization.
 
-A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models. 
+A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models.
 
 ## Example audit
 In SQLMesh, audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong. In its simplest form, an audit is defined with the custom AUDIT expression along with a query, as in the following example:
@@ -9,21 +9,111 @@ In SQLMesh, audits are defined in `.sql` files in an `audit` directory in your S
 ```sql
 AUDIT (
   name assert_item_price_is_not_null,
-  model sushi.items,
-  dialect spark,
-)
+  dialect spark
+);
 SELECT * from sushi.items
 WHERE ds BETWEEN @start_ds AND @end_ds AND
-   price IS NULL
+   price IS NULL;
 ```
 
-In the example, we defined an audit named `assert_item_price_is_not_null` on the model `sushi.items`, ensuring that every sushi item has a price. 
+In the example, we defined an audit named `assert_item_price_is_not_null`, ensuring that every sushi item has a price.
 
-**Note:** If the query is in a different dialect than the rest of your project, you can specify it here as we did in the example, and SQLGlot will automatically understand how to execute the query. 
+**Note:** If the query is in a different dialect than the rest of your project, you can specify it here as we did in the example, and SQLGlot will automatically understand how to execute the query.
 
-While the query can technically be on any model or even multiple models, the model specified in the audit definition tells SQLMesh when to run the audit during your pipeline's execution. If the query returns any records, it means there is a potential issue requiring your attention.
+In order for this audit to take effect it should first be included in the target model's definition:
+```sql
+MODEL (
+  name sushi.items,
+  audits (
+    assert_item_price_is_not_null()
+  )
+);
+```
+Now the `assert_item_price_is_not_null` will run every time the `sushi.items` model is evaluated.
 
-## Run an audit
+## Generic audits
+Audits can also be parameterized and implemented in a model-agnostic way.
+
+As an example consider the following audit definition which checks whether the target column exceeds a configured threshold:
+```sql
+AUDIT (
+  name does_not_exceed_threshold
+);
+SELECT * FROM @this_model
+WHERE @column >= @threshold;
+```
+In the example above we utilized [Macros](/concepts/macros) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
+
+The generic audit can now be applied to a model by being referenced in its definition:
+```
+MODEL (
+  name sushi.items,
+  audits (
+    does_not_exceed_threshold(column=id, threshold=1000),
+    does_not_exceed_threshold(column=price, threshold=100)
+  )
+);
+```
+Notice how `column` and `threshold` parameters have been set at this point. These values will later be propagated into the audit query and returned by the `@column` and `@threshold` macros accordingly.
+
+Please also note that the same audit can be applied more than once to the same model with different sets of parameters.
+
+## Built-in audits
+SQLMesh comes with a suite of built-in generic audits which covers a broad set of common use cases.
+
+### not_null
+Ensures that specified columns are not null.
+
+Example:
+```sql
+MODEL (
+  name sushi.orders,
+  audits (
+    not_null(columns=[id, customer_id, waiter_id])
+  )
+);
+```
+
+### unique_values
+Makes sure that provided columns only contain unique values.
+
+Example:
+```sql
+MODEL (
+  name sushi.orders,
+  audits (
+    unique_values(columns=[id])
+  )
+);
+```
+
+### accepted_values
+Ensures that the value of the target column is one of the accepted values.
+
+Example:
+```sql
+MODEL (
+  name sushi.items,
+  audits (
+    accepted_values(column=name, values=['Hamachi', 'Unagi', 'Sake'])
+  )
+);
+```
+
+### number_of_rows
+Ensures that the number of rows in the model's table exceeds the configured threshold. For incremental models this check only applies to a data interval that is being evaluated, and not to the entire table.
+
+Example:
+```sql
+MODEL (
+  name sushi.orders,
+  audits (
+    number_of_rows(threshold=10)
+  )
+);
+```
+
+## Running audits
 ### The CLI audit command
 
 You can execute audits with the `sqlmesh audit` command as follows:
@@ -50,12 +140,11 @@ Audits can be skipped by setting the `skip` argument to `true` as in the followi
 ```sql
 AUDIT (
   name assert_item_price_is_not_null,
-  model sushi.items,
   skip true
-)
+);
 SELECT * from sushi.items
 WHERE ds BETWEEN @start_ds AND @end_ds AND
-   price IS NULL
+   price IS NULL;
 ```
 
 ### Non-blocking audits
@@ -64,10 +153,9 @@ By default, audits that fail will stop the execution of the pipeline in order to
 ```sql
 AUDIT (
   name assert_item_price_is_not_null,
-  model sushi.items,
   blocking false
-)
+);
 SELECT * from sushi.items
 WHERE ds BETWEEN @start_ds AND @end_ds AND
-   price IS NULL
+   price IS NULL;
 ```
