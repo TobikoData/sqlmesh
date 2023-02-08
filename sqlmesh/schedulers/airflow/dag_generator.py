@@ -464,7 +464,10 @@ class SnapshotDagGenerator:
         output = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            if not upstream_snapshot.is_embedded_kind:
+            if (
+                not upstream_snapshot.is_embedded_kind
+                and not upstream_snapshot.is_seed_kind
+            ):
                 output.append(
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
