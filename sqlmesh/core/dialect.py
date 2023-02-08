@@ -228,6 +228,8 @@ def _create_parser(
     parser_type: t.Type[exp.Expression], table_keys: t.List[str]
 ) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
+        from sqlmesh.core.model.kind import ModelKindName
+
         expressions = []
 
         while True:
@@ -249,12 +251,13 @@ def _create_parser(
                 if not id_var:
                     value = None
                 else:
-                    id_var = id_var.name.lower()
                     index = self._index
-                    if id_var in (
-                        "incremental_by_time_range",
-                        "incremental_by_unique_key",
-                        "seed",
+                    kind = ModelKindName[id_var.name.upper()]
+
+                    if kind in (
+                        ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+                        ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
+                        ModelKindName.SEED,
                     ) and self._match(TokenType.L_PAREN):
                         self._retreat(index)
                         props = self._parse_wrapped_csv(
@@ -264,7 +267,7 @@ def _create_parser(
                         props = None
                     value = self.expression(
                         ModelKind,
-                        this=id_var,
+                        this=kind.value,
                         expressions=props,
                     )
             else:
@@ -336,6 +339,9 @@ def format_model_expressions(
     Returns:
         A string with the formatted model.
     """
+    if len(expressions) == 1:
+        return expressions[0].sql(pretty=True, dialect=dialect)
+
     *statements, query = expressions
     query = query.copy()
     selects = []
