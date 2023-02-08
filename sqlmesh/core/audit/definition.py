@@ -227,6 +227,7 @@ class Audit(AuditMeta, frozen=True):
             self.dialect,
             self.macro_definitions,
             path=self._path or Path(),
+            python_env=model.python_env,
             time_column=model.time_column,
             time_converter=model.convert_to_time_column,
             only_latest=model.kind.only_latest,
