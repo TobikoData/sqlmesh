@@ -65,7 +65,7 @@ def test_json(snapshot: Snapshot):
             "cron": "1 0 * * *",
             "batch_size": 30,
             "kind": {
-                "name": "incremental_by_time_range",
+                "name": "INCREMENTAL_BY_TIME_RANGE",
                 "time_column": {"column": "ds"},
             },
             "start": "2020-01-01",
@@ -86,7 +86,7 @@ def test_json(snapshot: Snapshot):
         "previous_versions": [],
         "indirect_versions": {},
         "updated_ts": 1663891973000,
-        "version": snapshot.version,
+        "version": snapshot.fingerprint.dict(),
     }
 
 
@@ -256,7 +256,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="713628577",
+        data_hash="457513203",
         metadata_hash="3589467163",
     )
 

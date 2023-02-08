@@ -258,13 +258,14 @@ def validate_model_kind_change(
         "sushi.customer_revenue_by_day",
         "sushi.top_waiters",
     ]
-    kind: ModelKind = ModelKind(name=kind_name)
-    if kind_name == "incremental_by_time_range":
-        kind = IncrementalByTimeRangeKind(
+    if kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+        kind: ModelKind = IncrementalByTimeRangeKind(
             time_column=TimeColumn(column="ds", format="%Y-%m-%d")
         )
-    elif kind_name == "incremental_by_unique_key":
+    elif kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
         kind = IncrementalByUniqueKeyKind(unique_key="id")
+    else:
+        kind = ModelKind(name=kind_name)
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)
