@@ -64,7 +64,7 @@ class DuckDBConnectionConfig(_ConnectionConfig):
     """Configuration for the DuckDB connection.
 
     Args:
-        database: The optional database name. If not specified the in-memory database will be used.
+        database: The optional database name. If not specified, the in-memory database will be used.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 

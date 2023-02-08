@@ -1,5 +1,5 @@
 # Configuration Reference
-This page contains the list of all available SQLMesh configurations that can be set as either an environment varaible, in the `config.yaml` in a project folder or in the file with the same name in the `~/.sqlmesh` folder.
+This page contains the list of all available SQLMesh configurations that can be set as either environment varaibles, in the `config.yaml` in a project folder or in the file with the same name in the `~/.sqlmesh` folder.
 
 Configuration options from different sources have the following order of precedence:
 1. Set as an environment variable (eg. `SQLMESH__MODEL_DEFAULTS__DIALECT`).
@@ -7,7 +7,7 @@ Configuration options from different sources have the following order of precede
 3. Set in `config.yaml` in the `~/.sqlmesh` folder.
 
 ## connections
-A dictionary of supported connection and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly, omitting the dictionary.
+A dictionary of supported connections and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly, omitting the dictionary.
 
 ```yaml
 connections:
@@ -25,7 +25,7 @@ Below is the list of configuration options specific to each corresponding connec
 
 ### duckdb
 #### database
-The optional database name. If not specified the in-memory database is used.
+The optional database name. If not specified, the in-memory database is used.
 
 **Type:** string
 **Default:** `None`
@@ -166,7 +166,7 @@ The number of concurrent tasks used for model backfilling during plan applicatio
 **Default:** `4`
 
 #### ddl_concurrent_tasks
-The number of concurrent tasks used DDL operations like table / view creation, deletion, etc.
+The number of concurrent tasks used for DDL operations like table / view creation, deletion, etc.
 
 **Type:** int
 **Default:** `4`
@@ -218,7 +218,7 @@ model_defaults:
     kind: full
 ```
 
-Alternatively if a kind requires addiional parameters it can be provided as an object:
+Alternatively if a kind requires additional parameters it can be provided as an object:
 ```
 model_defaults:
     kind:
@@ -242,7 +242,7 @@ The cron expression specifying how often the model should be refreshed.
 **Default:** `None`
 
 ### owner
-The owner of a model. Maybe used for notification purposes.
+The owner of a model. May be used for notification purposes.
 
 **Type:** string
 **Default:** `None`
@@ -260,7 +260,7 @@ The maximum number of intervals that can be evaluated in a single backfill task.
 **Default:** `None`
 
 ### storage_format
-The storage format that should be used to store physical tables. Only applicable to egnines like Spark.
+The storage format that should be used to store physical tables. Only applicable to engines like Spark.
 
 **Type:** string
 **Default:** `None`

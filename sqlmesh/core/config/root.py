@@ -18,7 +18,7 @@ from sqlmesh.utils.errors import ConfigError
 class Config(BaseConfig):
     """An object used by a Context to configure your SQLMesh project.
 
-    Args
+    Args:
         connections: Supported connections and their configurations. Key represents a unique name of a connection.
         default_connection: The name of a connection to use by default.
         test_connection: The connection settings for tests. Can be a name which refers to an existing configuration
