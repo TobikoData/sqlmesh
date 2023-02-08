@@ -173,7 +173,7 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     assert result == {snapshot.snapshot_id}
 
     snapshots_exist_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/snapshots?return_ids&{snapshot_url([snapshot.snapshot_id])}"
+        f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url([snapshot.snapshot_id])}"
     )
 
 
