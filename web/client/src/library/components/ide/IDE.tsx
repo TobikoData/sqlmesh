@@ -75,6 +75,7 @@ export function IDE() {
       startPlan()
     }
   }
+
   function startPlan() {
     setActivePlan(null)
     setPlanState(EnumPlanState.Init)

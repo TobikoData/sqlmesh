@@ -96,15 +96,18 @@ export function Plan({
     setCategory(null)
     setWithBackfill(false)
     setBackfills([])
-    setActivePlan(null)
   }
 
   async function reset() {
     setPlanAction(EnumPlanAction.Resetting)
 
-    await delay(500)
+    await delay(200)
 
     cleanUp()
+
+    if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
+      setActivePlan(null)
+    }
   }
 
   function cancel() {
@@ -113,8 +116,8 @@ export function Plan({
     reset()
   }
 
-  function close() {
-    reset()
+  async function close() {
+    await reset()
 
     onClose()
   }
