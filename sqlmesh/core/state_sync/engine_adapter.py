@@ -219,7 +219,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """
         return [
             self._environment_from_row(row)
-            for row in self.engine_adapter.fetchall(self._environments_query())
+            for row in self.engine_adapter.fetchall(
+                self._environments_query(), ignore_unsupported_errors=True
+            )
         ]
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
@@ -268,7 +270,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
 
-        for row in self.engine_adapter.fetchall(query):
+        for row in self.engine_adapter.fetchall(query, ignore_unsupported_errors=True):
             snapshot = Snapshot.parse_raw(row[0])
             snapshot_id = snapshot.snapshot_id
             if snapshot_id in snapshots:
@@ -313,7 +315,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if lock_for_update:
             query = query.lock(copy=False)
 
-        snapshot_rows = self.engine_adapter.fetchall(query)
+        snapshot_rows = self.engine_adapter.fetchall(
+            query, ignore_unsupported_errors=True
+        )
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_environment(
@@ -335,7 +339,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     expression=exp.Literal.string(environment),
                 ),
                 lock_for_update=lock_for_update,
-            )
+            ),
+            ignore_unsupported_errors=True,
         )
 
         if not row:

@@ -15,6 +15,7 @@ import typing as t
 
 import pandas as pd
 from sqlglot import Dialect, exp, parse_one
+from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import (
@@ -617,12 +618,20 @@ class EngineAdapter:
     ) -> None:
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
-    def fetchone(self, query: t.Union[exp.Expression, str]) -> t.Tuple:
-        self.execute(query)
+    def fetchone(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.Tuple:
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return self.cursor.fetchone()
 
-    def fetchall(self, query: t.Union[exp.Expression, str]) -> t.List[t.Tuple]:
-        self.execute(query)
+    def fetchall(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.List[t.Tuple]:
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return self.cursor.fetchall()
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
@@ -669,9 +678,23 @@ class EngineAdapter:
         """Whether or not the engine adapter supports transactions for the given transaction type."""
         return True
 
-    def execute(self, sql: t.Union[str, exp.Expression], **kwargs: t.Any) -> None:
+    def execute(
+        self,
+        sql: t.Union[str, exp.Expression],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
         """Execute a sql query."""
-        sql = self._to_sql(sql) if isinstance(sql, exp.Expression) else sql
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE}
+            if ignore_unsupported_errors
+            else {}
+        )
+        sql = (
+            self._to_sql(sql, **to_sql_kwargs)
+            if isinstance(sql, exp.Expression)
+            else sql
+        )
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql, **kwargs)
 
