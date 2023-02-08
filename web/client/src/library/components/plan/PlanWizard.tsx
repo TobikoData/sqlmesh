@@ -3,7 +3,6 @@ import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
 import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
-import { ContextEnvironmentBackfill } from "../../../api/client";
 import { EnumPlanState, EnumPlanAction, useStorePlan } from "../../../context/plan";
 import { includes, isArrayNotEmpty, toDate, toDateFormat, toRatio } from "../../../utils";
 import { Divider } from "../divider/Divider";

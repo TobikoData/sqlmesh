@@ -95,6 +95,7 @@ export function Plan({
     setCategory(undefined)
     setWithBackfill(false)
     setBackfills([])
+    setActivePlan(undefined)
   }
 
   async function reset() {
