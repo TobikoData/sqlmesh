@@ -90,7 +90,9 @@ class AirflowClient:
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
         return set(
             common.SnapshotIdsResponse.parse_obj(
-                self._get(SNAPSHOTS_PATH, "return_ids", ids=_list_to_json(snapshot_ids))
+                self._get(
+                    SNAPSHOTS_PATH, "check_existence", ids=_list_to_json(snapshot_ids)
+                )
             ).snapshot_ids
         )
 

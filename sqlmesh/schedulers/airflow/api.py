@@ -79,7 +79,7 @@ def get_snapshots() -> Response:
         else:
             snapshot_ids = _snapshot_ids_from_request()
 
-            if "return_ids" in request.args:
+            if "check_existence" in request.args:
                 existing_snapshot_ids = (
                     state_sync.snapshots_exist(snapshot_ids)
                     if snapshot_ids is not None

@@ -168,7 +168,7 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     assert result == {snapshot.snapshot_id}
 
     snapshots_exist_mock.assert_called_once_with(
-        "http://localhost:8080/sqlmesh/api/v1/snapshots?return_ids&ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
+        "http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&ids=%5B%7B%22name%22%3A%22test_model%22%2C%22identifier%22%3A%223654063500%22%7D%5D"
     )
 
 
