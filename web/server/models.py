@@ -98,6 +98,8 @@ class ContextEnvironmentBackfill(PydanticModel):
 
 class ContextEnvironment(PydanticModel):
     environment: str
+    start: TimeLike
+    end: TimeLike
     changes: t.Optional[ContextEnvironmentChanges]
     backfills: t.List[ContextEnvironmentBackfill] = []
 
