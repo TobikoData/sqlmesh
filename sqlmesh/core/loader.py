@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import importlib
+import linecache
 import os
 import sys
 import types
@@ -71,6 +72,10 @@ class Loader(abc.ABC):
         Args:
             context: The context to load macros and models for
         """
+        # python files are cached by the system
+        # need to manually clear here so we can reload macros
+        linecache.clearcache()
+
         self._context = context
         self._path_mtimes.clear()
         self._dag = DAG()
