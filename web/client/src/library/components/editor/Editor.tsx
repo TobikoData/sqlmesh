@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, MouseEvent } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { python } from '@codemirror/lang-python';
@@ -11,77 +11,91 @@ import {
   useApiFileByPath,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query';
-import ContextIDE from '../../../context/Ide';
 import { XCircleIcon } from '@heroicons/react/24/solid';
 import { Divider } from '../divider/Divider';
 import { Button } from '../button/Button';
 import { EnumSize } from '../../../types/enum';
 import { ModelFile } from '../../../models';
+import { useStoreFileTree } from '../../../context/fileTree';
 
 
 export function Editor() {
   const client = useQueryClient()
 
-  const { setActiveFile, activeFile, openedFiles, setOpenedFiles } = useContext(ContextIDE);
-  const [content, setContent] = useState<string>()
+  const activeFileId = useStoreFileTree(s => s.activeFileId)
+  const openedFiles = useStoreFileTree(s => s.openedFiles)
+  const setActiveFileId = useStoreFileTree(s => s.setActiveFileId)
+  const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
+  const selectFile = useStoreFileTree(s => s.selectFile)
+
   const [status, setStatus] = useState('edit')
+  const [activeFile, setActiveFile] = useState<ModelFile>()
 
   const { data: fileData } = useApiFileByPath(activeFile?.path)
   const mutationSaveFile = useMutationApiSaveFile(client)
 
   useEffect(() => {
-    if (fileData) {
-      setContent(fileData.content)
-    }
+    if (fileData == null || activeFile == null) return
+
+    activeFile.content = fileData.content ?? ''
+
+    setOpenedFiles(openedFiles)
   }, [fileData])
 
   useEffect(() => {
-    if (activeFile) {
-      setContent(activeFile.content)
-    }
-  }, [activeFile])
+    setActiveFile(openedFiles.get(activeFileId))
+  }, [activeFileId])
 
   useEffect(() => {
-    if (activeFile) {
-      updateFileContent(content, activeFile?.id)
+    if (openedFiles.size < 1) {
+      const file = new ModelFile()
+
+      selectFile(file)
+    } else {
+      openedFiles.has(activeFileId) === false && setActiveFileId([...openedFiles.values()][0].id)
     }
-  }, [content])
+  }, [openedFiles])
 
 
   function closeEditorTab(file: ModelFile) {
     if (!file) return
 
-    openedFiles.delete(file)
+    openedFiles.delete(file.id)
 
     if (openedFiles.size === 0) {
-      setActiveFile(null)
-    } else if (!activeFile || !openedFiles.has(activeFile)) {
-      setActiveFile([...openedFiles][0])
+      setActiveFile(undefined)
+    } else if (activeFile == null || openedFiles.has(activeFile.id) === false) {
+      setActiveFile([...openedFiles.values()][0])
     }
 
-    setOpenedFiles(new Set([...openedFiles]))
+    setOpenedFiles(new Map(openedFiles))
   }
 
   function addNewFileAndSelect() {
     const file = new ModelFile()
 
-    setOpenedFiles(new Set([...openedFiles, file]))
-    setActiveFile(file)
+    openedFiles.set(file.id, file)
+
+    setActiveFileId(file.id)
   }
 
   function onChange(value: string) {
     setStatus('edit')
 
-    if (activeFile?.isLocal) return setContent(value)
+    if (activeFile == null) return
 
     setStatus('saving...')
 
-    if (value !== content) {
-      mutationSaveFile.mutate({
-        path: activeFile?.path,
-        body: value,
-      })
-    }
+    activeFile.content = value
+
+    setOpenedFiles(openedFiles)
+
+    if (activeFile?.isLocal || activeFile.content === value) return
+
+    mutationSaveFile.mutate({
+      path: activeFile?.path,
+      body: { content: value },
+    })
 
     setStatus('saved')
   }
@@ -91,16 +105,7 @@ export function Editor() {
   }
 
   function cleanUp() {
-    setContent('')
     setStatus('edit')
-  }
-
-  function updateFileContent(text?: string, id?: string | number) {
-    openedFiles.forEach(file => {
-      if (id && file.id === id) {
-        file.content = text ?? ''
-      }
-    })
   }
 
   const debouncedChange = useMemo(() => debounce(
@@ -112,53 +117,45 @@ export function Editor() {
       setStatus('edit')
     },
     200
-  ), [])
+  ), [activeFile])
 
   return (
     <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
       <div className='flex items-center'>
-        <Button className='m-0 ml-1 mr-3' size='sm' onClick={e => {
-          e.stopPropagation()
+        <Button
+          className='m-0 ml-1 mr-3'
+          size='sm'
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
 
-          // debouncedChange.cancel()
-
-          updateFileContent(content, activeFile?.id)
-
-          setTimeout(() => {
             addNewFileAndSelect()
-          }, 200)
-        }}>+</Button>
-        <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto">
+          }}>+</Button>
+        <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
           {openedFiles.size > 0 &&
-            [...openedFiles].map((file, idx) => (
+            [...openedFiles.values()].map((file, idx) => (
               <li
                 key={file.id}
                 className={clsx(
                   'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
-
                 )}
-                onClick={() => {
-                  if (activeFile?.id !== file.id) {
-                    updateFileContent(content, activeFile?.id)
+                onClick={(e: MouseEvent) => {
+                  e.stopPropagation()
 
-                    setTimeout(() => {
-                      setActiveFile(file)
-                    }, 200)
-                  }
+                  setActiveFileId(file.id)
                 }}
               >
                 <span className={clsx(
                   "flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md",
-                  file === activeFile
+                  file.id === activeFileId
                     ? 'bg-secondary-100'
                     : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300'
                 )}>
                   <small className="text-xs">
-                    {file.isUntitled ? `Untitled-${idx + 1}` : file.name}
+                    {file.isUntitled ? `SQL-${idx + 1}` : file.name}
                   </small>
                   {openedFiles.size > 1 && (
                     <XCircleIcon
-                      onClick={(e) => {
+                      onClick={(e: MouseEvent) => {
                         e.stopPropagation()
 
                         cleanUp()
@@ -177,9 +174,10 @@ export function Editor() {
       <div className="w-full h-full flex flex-col overflow-hidden">
         <div className="w-full h-full overflow-hidden ">
           <CodeEditor
+            key={activeFile?.id}
             className="h-full w-full"
             extension={activeFile?.extension}
-            value={content}
+            value={activeFile?.content}
             onChange={debouncedChange}
           />
         </div>
@@ -190,7 +188,7 @@ export function Editor() {
         <small>File Status: {status}</small>
         <small>{getLanguageByExtension(activeFile?.extension)}</small>
         <div className="flex">
-          {activeFile?.extension === '.sql' && content && (
+          {activeFile?.extension === '.sql' && activeFile.content && (
             <>
               <Button size={EnumSize.sm} variant="alternative" onClick={e => {
                 e.stopPropagation()
@@ -253,25 +251,19 @@ function debounce(
   after: () => void,
   delay: number = 500
 ) {
-  let timer: any
+  let timeoutID: ReturnType<typeof setTimeout>
 
-  function callback(...args: any) {
-    clearTimeout(timer)
+  return function callback(...args: any) {
+    clearTimeout(timeoutID)
 
     before && before()
 
-    timer = setTimeout(() => {
+    timeoutID = setTimeout(() => {
       fn(...args)
 
       after && after()
     }, delay)
   }
-
-  callback.cancel = () => {
-    timer = clearTimeout(timer)
-  }
-
-  return callback
 }
 
 function getLanguageByExtension(extension?: string) {
