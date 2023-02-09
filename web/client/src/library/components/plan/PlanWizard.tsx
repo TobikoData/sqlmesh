@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useApiContextByEnvironment } from "../../../api";
 import { ContextEnvironmentBackfill } from "../../../api/client";
 import { EnumPlanState, EnumPlanAction, useStorePlan } from "../../../context/plan";
-import { includes, isArrayNotEmpty, toDate, toDateFormat, toRation } from "../../../utils";
+import { includes, isArrayNotEmpty, toDate, toDateFormat, toRatio } from "../../../utils";
 import { Divider } from "../divider/Divider";
 import { Progress } from "../progress/Progress";
 import { isModified } from "./help";
@@ -259,33 +259,36 @@ export function PlanWizard({
                   </RadioGroup>
                 </div>
               )}
-              {category != null && category.id != 'no-change' && (
+              {category && category.id != 'no-change' && (
                 <>
                   <ul className="mb-4">
-                    {backfills.filter(item => category.id === 'non-breaking-change' ? !changes?.modified?.indirect?.find((model_name: string) => model_name === item.model_name) : true).map(({ model_name, interval, batches }: any) => (
-                      <li key={model_name} className='text-gray-600 font-light w-full mb-2'>
+                    {backfills.filter(item => category.id === 'non-breaking-change'
+                      ? !changes?.modified?.indirect?.find(model_name => model_name === item.model_name)
+                      : true
+                    ).map(snapshot => (
+                      <li key={snapshot.model_name} className='text-gray-600 font-light w-full mb-2'>
                         <div className="flex justify-between items-center w-full">
                           <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
                             <p
                               className={clsx(
                                 "font-bold text-xs",
-                                changes?.modified?.direct?.find(change => change.model_name === model_name) && 'text-secondary-500',
-                                changes?.added?.find((name: string) => name === model_name) && 'text-success-500',
-                                changes?.modified?.indirect?.find((name: string) => name === model_name) && 'text-warning-500',
+                                changes?.modified?.direct?.find(change => change.model_name === snapshot.model_name) && 'text-secondary-500',
+                                changes?.added?.find(name => name === snapshot.model_name) && 'text-success-500',
+                                changes?.modified?.indirect?.find(name => name === snapshot.model_name) && 'text-warning-500',
                               )}
                             >
-                              <span className="inline-block pr-3 text-xs text-gray-500">{interval[0]} - {interval[1]}</span>
-                              {model_name}
+                              <span className="inline-block pr-3 text-xs text-gray-500">{`${snapshot.interval[0]} - ${snapshot.interval[1]}`}</span>
+                              {snapshot.model_name}
                             </p>
 
                           </div>
                           <p className="inline-block text-xs">
-                            <small>{activePlan?.tasks?.[model_name]?.completed ?? 0} / {batches} batch{batches > 1 ? 'es' : ''}</small>
-                            <small className="inline-block ml-2 font-bold">{Math.ceil(toRation(activePlan?.tasks?.[model_name]?.completed, activePlan?.tasks?.[model_name]?.total))}%</small>
+                            <small>{activePlan?.tasks?.[snapshot.model_name]?.completed ?? 0} / {snapshot.batches} batch{snapshot.batches > 1 ? 'es' : ''}</small>
+                            <small className="inline-block ml-2 font-bold">{Math.ceil(toRatio(activePlan?.tasks?.[snapshot.model_name]?.completed, activePlan?.tasks?.[snapshot.model_name]?.total))}%</small>
                           </p>
                         </div>
                         <Progress
-                          progress={Math.ceil(toRation(activePlan?.tasks?.[model_name]?.completed, activePlan?.tasks?.[model_name]?.total))}
+                          progress={Math.ceil(toRatio(activePlan?.tasks?.[snapshot.model_name]?.completed, activePlan?.tasks?.[snapshot.model_name]?.total))}
                         />
                       </li>
                     ))}

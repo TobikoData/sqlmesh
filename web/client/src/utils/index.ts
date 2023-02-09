@@ -36,11 +36,11 @@ export function isDate(value: unknown): boolean {
   return value instanceof Date;
 }
 
-export function toDate(str?: string | number): Date | undefined {
-  if (str == null) return undefined;
+export function toDate(value?: string | number): Date | undefined {
+  if (value == null) return undefined;
   
   try {
-    const date = new Date(str);
+    const date = new Date(value);
 
     return isNaN(date.getTime())
       ? undefined
@@ -70,8 +70,8 @@ export function includes<T>(array: T[], value: T): boolean {
   return array.includes(value)
 }
 
-export function toRation(top?: number, bottom?: number, multiplier = 100): number {
-  if (top == null || bottom == null || multiplier == 0) return 0;
+export function toRatio(top?: number, bottom?: number, multiplier = 100): number {
+  if (top == null || bottom == null || bottom === 0) return 0;
   if (isNaN(top)|| isNaN(bottom) || isNaN(multiplier)) return 0;
 
   return top / bottom * multiplier;

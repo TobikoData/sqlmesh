@@ -11,7 +11,6 @@ import { delay, includes, isArrayEmpty, isNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
 
-
 export function Plan({
   onClose,
   onCancel,
