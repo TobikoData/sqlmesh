@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import typing as t
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.models import BaseOperator, TaskInstance, Variable
@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.utils.date import now
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +132,7 @@ class SQLMeshAirflow:
                 retries=0,
             ),
             schedule_interval=schedule_interval,
-            start_date=now(),
+            start_date=datetime(2023, 1, 1),
             max_active_runs=1,
             catchup=False,
             is_paused_upon_creation=False,
@@ -141,13 +140,16 @@ class SQLMeshAirflow:
         )
 
 
+@provide_session
 def _janitor_task(
     plan_application_dag_ttl: timedelta,
     ti: TaskInstance,
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
     with util.scoped_state_sync() as state_sync:
-        expired_snapshots = state_sync.remove_expired_snapshots()
+        state_sync.delete_expired_environments()
+
+        expired_snapshots = state_sync.delete_expired_snapshots()
         ti.xcom_push(
             key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,
             value=json.dumps([s.table_info.dict() for s in expired_snapshots]),

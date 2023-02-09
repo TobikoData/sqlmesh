@@ -9,7 +9,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKind, ModelKindName, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -442,6 +442,46 @@ def test_promote_snapshots_no_gaps(
     new_snapshot_same_interval.add_interval("2022-01-01", "2022-01-03")
     state_sync.push_snapshots([new_snapshot_same_interval])
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
+
+
+def test_delete_expired_environments(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot])
+
+    now_ts = now_timestamp()
+
+    env_a = Environment(
+        name="test_environment_a",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=now_ts - 1000,
+    )
+    state_sync.promote(env_a)
+
+    env_b = env_a.copy(
+        update={"name": "test_environment_b", "expiration_ts": now_ts + 1000}
+    )
+    state_sync.promote(env_b)
+
+    assert state_sync.get_environment(env_a.name) == env_a
+    assert state_sync.get_environment(env_b.name) == env_b
+
+    state_sync.delete_expired_environments()
+
+    assert state_sync.get_environment(env_a.name) is None
+    assert state_sync.get_environment(env_b.name) == env_b
 
 
 def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:

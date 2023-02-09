@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import typing as t
+from functools import wraps
 
 from airflow.api_connexion import security
 from airflow.models import Variable
-from airflow.security import permissions
 from airflow.www.app import csrf
 from flask import Blueprint, Response, jsonify, make_response, request
 
@@ -22,11 +22,18 @@ sqlmesh_api_v1 = Blueprint(
 )
 
 
+def check_authentication(func: t.Callable) -> t.Callable:
+    @wraps(func)
+    def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+        security.check_authentication()
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 @sqlmesh_api_v1.route("/plans", methods=["POST"])
 @csrf.exempt
-@security.requires_access(
-    [(permissions.ACTION_CAN_CREATE, permissions.RESOURCE_VARIABLE)]
-)
+@check_authentication
 def apply_plan() -> Response:
     try:
         plan = common.PlanApplicationRequest.parse_obj(request.json or {})
@@ -42,9 +49,7 @@ def apply_plan() -> Response:
 
 @sqlmesh_api_v1.route("/environments/<name>", methods=["GET"])
 @csrf.exempt
-@security.requires_access(
-    [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
-)
+@check_authentication
 def get_environment(name: str) -> Response:
     with util.scoped_state_sync() as state_sync:
         environment = state_sync.get_environment(name)
@@ -55,9 +60,7 @@ def get_environment(name: str) -> Response:
 
 @sqlmesh_api_v1.route("/environments", methods=["GET"])
 @csrf.exempt
-@security.requires_access(
-    [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
-)
+@check_authentication
 def get_environments() -> Response:
     with util.scoped_state_sync() as state_sync:
         environments = state_sync.get_environments()
@@ -66,9 +69,7 @@ def get_environments() -> Response:
 
 @sqlmesh_api_v1.route("/snapshots", methods=["GET"])
 @csrf.exempt
-@security.requires_access(
-    [(permissions.ACTION_CAN_READ, permissions.RESOURCE_VARIABLE)]
-)
+@check_authentication
 def get_snapshots() -> Response:
     with util.scoped_state_sync() as state_sync:
         snapshot_name_versions = _snapshot_name_versions_from_request()

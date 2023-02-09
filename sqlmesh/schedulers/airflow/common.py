@@ -21,8 +21,6 @@ from sqlmesh.utils.pydantic import PydanticModel
 JANITOR_DAG_ID = "sqlmesh_janitor_dag"
 JANITOR_TASK_ID = "janitor_task"
 
-INIT_RUN_ID = "init_run"
-
 SQLMESH_AIRFLOW_TAG = "sqlmesh"
 SNAPSHOT_AIRFLOW_TAG = "sqlmesh_snapshot"
 PLAN_AIRFLOW_TAG = "sqlmesh_plan"
@@ -76,6 +74,7 @@ class PlanDagSpec(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+    environment_expiration_ts: t.Optional[int]
 
 
 class EnvironmentsResponse(PydanticModel):

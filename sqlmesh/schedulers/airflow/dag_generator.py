@@ -255,6 +255,7 @@ class SnapshotDagGenerator:
                 "no_gaps": request.no_gaps,
                 "plan_id": request.plan_id,
                 "previous_plan_id": request.previous_plan_id,
+                "environment_expiration_ts": request.environment_expiration_ts,
             },
         )
 
@@ -492,6 +493,7 @@ def promotion_update_state_task(
     no_gaps: bool,
     plan_id: str,
     previous_plan_id: t.Optional[str],
+    environment_expiration_ts: t.Optional[int],
 ) -> None:
     environment = Environment(
         name=environment_name,
@@ -500,6 +502,7 @@ def promotion_update_state_task(
         end_at=end,
         plan_id=plan_id,
         previous_plan_id=previous_plan_id,
+        expiration_ts=environment_expiration_ts,
     )
     with util.scoped_state_sync() as state_sync:
         state_sync.promote(environment, no_gaps=no_gaps)

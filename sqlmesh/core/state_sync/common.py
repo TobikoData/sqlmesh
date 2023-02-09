@@ -68,6 +68,8 @@ class CommonStateSyncMixin(StateSync):
         Returns:
            A tuple of (added snapshot table infos, removed snapshot table infos)
         """
+        logger.info("Promoting environment '%s'", environment.name)
+
         snapshot_ids = set(snapshot.snapshot_id for snapshot in environment.snapshots)
         snapshots = self._get_snapshots(snapshot_ids, lock_for_update=True).values()
         missing = snapshot_ids - {snapshot.snapshot_id for snapshot in snapshots}
@@ -114,7 +116,7 @@ class CommonStateSyncMixin(StateSync):
         self._update_environment(environment)
         return table_infos, [existing_table_infos[name] for name in missing_models]
 
-    def remove_expired_snapshots(self) -> t.List[Snapshot]:
+    def delete_expired_snapshots(self) -> t.List[Snapshot]:
         current_time = now()
 
         snapshots_by_version = defaultdict(list)
