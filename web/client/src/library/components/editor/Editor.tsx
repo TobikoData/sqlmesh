@@ -19,6 +19,16 @@ import { ModelFile } from '../../../models';
 import { useStoreFileTree } from '../../../context/fileTree';
 
 
+export const EnumEditorFileStatus = {
+  Edit: 'edit',
+  Editing: 'editing',
+  Saving: 'saving',
+  Saved: 'saved',
+} as const;
+
+
+export type EditorFileStatus = typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
+
 export function Editor() {
   const client = useQueryClient()
 
@@ -28,7 +38,7 @@ export function Editor() {
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
-  const [status, setStatus] = useState('edit')
+  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
   const [activeFile, setActiveFile] = useState<ModelFile>()
 
   const { data: fileData } = useApiFileByPath(activeFile?.path)
@@ -80,11 +90,11 @@ export function Editor() {
   }
 
   function onChange(value: string) {
-    setStatus('edit')
+    setEditorFileStatus(EnumEditorFileStatus.Edit)
 
     if (activeFile == null) return
 
-    setStatus('saving...')
+    setEditorFileStatus(EnumEditorFileStatus.Saving)
 
     activeFile.content = value
 
@@ -97,7 +107,7 @@ export function Editor() {
       body: { content: value },
     })
 
-    setStatus('saved')
+    setEditorFileStatus(EnumEditorFileStatus.Saved)
   }
 
   function sendQuery() {
@@ -105,16 +115,16 @@ export function Editor() {
   }
 
   function cleanUp() {
-    setStatus('edit')
+    setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
 
   const debouncedChange = useMemo(() => debounce(
     onChange,
     () => {
-      setStatus('editing...')
+      setEditorFileStatus(EnumEditorFileStatus.Editing)
     },
     () => {
-      setStatus('edit')
+      setEditorFileStatus(EnumEditorFileStatus.Edit)
     },
     200
   ), [activeFile])
@@ -185,7 +195,7 @@ export function Editor() {
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
         <small>validation: ok</small>
-        <small>File Status: {status}</small>
+        <small>File Status: {fileStatus}</small>
         <small>{getLanguageByExtension(activeFile?.extension)}</small>
         <div className="flex">
           {activeFile?.extension === '.sql' && activeFile.content && (
