@@ -304,7 +304,7 @@ export function IDE() {
                             if (shouldMutate) {
                               saveFile.mutate({
                                 path: activeFile?.path,
-                                body: viewUpdate.state.doc.toString(),
+                                body: { content: viewUpdate.state.doc.toString() },
                               })
 
                               setStatus('saved')

@@ -110,7 +110,7 @@ config = Config(ignore_patterns=["*.txt"])
 
 
 def test_write_file(project_tmp_path: Path) -> None:
-    response = client.post("/api/files/foo.txt", content='"bar"')
+    response = client.post("/api/files/foo.txt", json={"content": "bar"})
     assert response.status_code == 200
     assert response.json() == {
         "name": "foo.txt",
@@ -126,7 +126,7 @@ def test_update_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
-    response = client.post("/api/files/foo.txt", content='"baz"')
+    response = client.post("/api/files/foo.txt", json={"content": "baz"})
     assert response.status_code == 200
     assert response.json() == {
         "name": "foo.txt",
@@ -241,6 +241,8 @@ def test_evaluate(web_sushi_context: Context) -> None:
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:
-    response = client.post("/api/fetchdf", content='"SELECT * from sushi.top_waiters"')
+    response = client.post(
+        "/api/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"}
+    )
     assert response.status_code == 200
     assert response.json()

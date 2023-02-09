@@ -91,7 +91,7 @@ def get_file(
 
 @router.post("/files/{path:path}", response_model=models.File)
 async def write_file(
-    content: str = Body(),
+    content: str = Body(embed=True),
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
 ) -> models.File:
@@ -324,7 +324,7 @@ async def evaluate(
 
 @router.post("/fetchdf")
 async def fetchdf(
-    sql: str = Body(),
+    sql: str = Body(embed=True),
     context: Context = Depends(get_loaded_context),
 ) -> t.Optional[str]:
     """Fetches a dataframe given a sql string"""
