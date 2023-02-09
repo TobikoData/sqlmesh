@@ -32,6 +32,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
+from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),
             "previous_plan_id": exp.DataType.build("text"),
+            "expiration_ts": exp.DataType.build("bigint"),
         }
 
     def init_schema(self) -> None:
@@ -152,6 +154,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 ),
             )
 
+    def delete_expired_environments(self) -> None:
+        now_ts = now_timestamp()
+        self.engine_adapter.delete_from(
+            self.environments_table,
+            where=exp.LTE(
+                this=exp.to_column("expiration_ts"),
+                expression=exp.Literal.number(now_ts),
+            ),
+        )
+
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.engine_adapter.delete_from(
             self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
@@ -196,6 +208,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                                 environment.end_at,
                                 environment.plan_id,
                                 environment.previous_plan_id,
+                                environment.expiration_ts,
                             )
                         ],
                         columns_to_types=self.environment_columns_to_types,

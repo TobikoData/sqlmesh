@@ -22,6 +22,7 @@ from sqlmesh.utils.date import (
     make_inclusive,
     now,
     to_ds,
+    to_timestamp,
     validate_date_range,
     yesterday_ds,
 )
@@ -50,6 +51,7 @@ class Plan:
         skip_backfill: Whether to skip the backfill step.
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
+        environment_ttl: The period of time that a development environment should exist before being deleted.
     """
 
     def __init__(
@@ -65,6 +67,7 @@ class Plan:
         skip_backfill: bool = False,
         is_dev: bool = False,
         forward_only: bool = False,
+        environment_ttl: t.Optional[str] = None,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -74,6 +77,7 @@ class Plan:
         self.skip_backfill = skip_backfill
         self.is_dev = is_dev
         self.forward_only = forward_only
+        self.environment_ttl = environment_ttl
         self._start = (
             start if start or not (is_dev and forward_only) else yesterday_ds()
         )
@@ -215,6 +219,11 @@ class Plan:
     @property
     def environment(self) -> Environment:
         """The environment of the plan."""
+        expiration_ts = (
+            to_timestamp(self.environment_ttl, relative_base=now())
+            if self.is_dev and self.environment_ttl is not None
+            else None
+        )
         return Environment(
             name=self.context_diff.environment,
             snapshots=[snapshot.table_info for snapshot in self.snapshots],
@@ -222,6 +231,7 @@ class Plan:
             end_at=self._end,
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
+            expiration_ts=expiration_ts,
         )
 
     @property

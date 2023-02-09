@@ -102,6 +102,7 @@ def create_plan_dag_spec(
         ddl_concurrent_tasks=request.ddl_concurrent_tasks,
         users=request.users,
         is_dev=request.is_dev,
+        environment_expiration_ts=request.environment.expiration_ts,
     )
 
 

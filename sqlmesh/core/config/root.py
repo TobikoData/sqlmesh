@@ -27,7 +27,8 @@ class Config(BaseConfig):
         notification_targets: The notification targets to use.
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
         physical_schema: The default schema used to store materialized tables.
-        snapshot_ttl: Duration before unpromoted snapshots are removed.
+        snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
+        environment_ttl: The period of time that a development environment should exist before being deleted.
         ignore_patterns: Files that match glob patterns specified in this list are ignored when scanning the project folder.
         time_column_format: The default format to use for all model time columns. Defaults to %Y-%m-%d.
             This time format uses python format codes. https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes.
@@ -45,7 +46,8 @@ class Config(BaseConfig):
     scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     notification_targets: t.List[NotificationTarget] = []
     physical_schema: str = ""
-    snapshot_ttl: str = ""
+    snapshot_ttl: str = c.DEFAULT_SNAPSHOT_TTL
+    environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []

@@ -23,6 +23,7 @@ class Environment(PydanticModel):
     end_at: t.Optional[TimeLike]
     plan_id: str
     previous_plan_id: t.Optional[str]
+    expiration_ts: t.Optional[int]
 
     @validator("snapshots", pre=True)
     @classmethod

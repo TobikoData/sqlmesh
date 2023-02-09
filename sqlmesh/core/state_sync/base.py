@@ -210,6 +210,17 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def delete_expired_snapshots(self) -> t.List[Snapshot]:
+        """Removes expired snapshots.
+
+        Expired snapshots are snapshots that have exceeded their time-to-live
+        and are no longer in use within an environment.
+
+        Returns:
+            The list of removed snapshots.
+        """
+
+    @abc.abstractmethod
     def add_interval(
         self,
         snapshot_id: SnapshotIdLike,
@@ -268,6 +279,13 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def delete_expired_environments(self) -> None:
+        """Removes expired environments.
+
+        Expired environments are environments that have exceeded their time-to-live value.
+        """
+
+    @abc.abstractmethod
     def unpause_snapshots(
         self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
@@ -280,15 +298,4 @@ class StateSync(StateReader, abc.ABC):
             snapshots: Target snapshots.
             unpaused_dt: The datetime object which indicates when target snapshots
                 were unpaused.
-        """
-
-    @abc.abstractmethod
-    def remove_expired_snapshots(self) -> t.List[Snapshot]:
-        """Removes expired snapshots.
-
-        Expired snapshots are snapshots that have exceeded their time-to-live
-        and are no longer in use within an environment.
-
-        Returns:
-            The list of removed snapshots.
         """

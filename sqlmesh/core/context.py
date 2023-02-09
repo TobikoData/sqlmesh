@@ -670,6 +670,7 @@ class Context(BaseContext):
             skip_backfill=skip_backfill,
             is_dev=environment != c.PROD,
             forward_only=forward_only,
+            environment_ttl=self.config.environment_ttl,
         )
 
         if not no_prompts:

@@ -195,11 +195,18 @@ The default schema used to store physical tables for models.
 **Default:** `sqlmesh`
 
 ## snapshot_ttl
-Duration before unpromoted snapshots are removed. This is defined as a string with the default `in 1 week`. Other [relative strings](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`.
+The period of time that a model snapshot that is not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`.
 
 **Type:** string
 
-**Default:** `''`
+**Default:** `'in 1 week'`
+
+## environment_ttl
+The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`.
+
+**Type:** string
+
+**Default:** `'in 1 week'`
 
 ## ignore_patterns
 Files that match glob patterns specified in this list are ingored when scanning the project folder.

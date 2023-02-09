@@ -82,17 +82,18 @@ def yesterday_timestamp() -> int:
     return to_timestamp(yesterday())
 
 
-def to_timestamp(value: TimeLike) -> int:
+def to_timestamp(value: TimeLike, relative_base: t.Optional[datetime] = None) -> int:
     """
     Converts a value into an epoch millis timestamp.
 
     Args:
-        value: A variety of date formats. If value is a string, it must be in isoformat.
+        value: A variety of date formats. If value is a string, it must be in iso format.
+        relative_base: The datetime to reference for time expressions that are using relative terms
 
     Returns:
         Epoch millis timestamp.
     """
-    return int(to_datetime(value).timestamp() * 1000)
+    return int(to_datetime(value, relative_base=relative_base).timestamp() * 1000)
 
 
 def to_datetime(
