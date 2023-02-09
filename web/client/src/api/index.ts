@@ -7,6 +7,7 @@ export function useApiFileByPath(path?: string) {
     queryKey: [`/api/files`, path],
     queryFn: path ? () => getFileApiFilesPathGet(path) : undefined,
     enabled: !!path,
+    cacheTime: 0
   })
 }
 
@@ -14,6 +15,7 @@ export function useApiFiles() {
   return useQuery({
     queryKey: ['/api/files'],
     queryFn: getFilesApiFilesGet,
+    cacheTime: 0
   })
 }
 
