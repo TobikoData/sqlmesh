@@ -19,11 +19,23 @@ def wait_for_airflow(airflow_client: AirflowClient):
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_sushi(mocker: MockerFixture, is_docker: bool):
+    start = yesterday_ds()
+
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
     context = Context(path="./examples/sushi", config=airflow_config)
+
     context.plan(
-        start=yesterday_ds(),
+        start=start,
         skip_tests=True,
         no_prompts=True,
         auto_apply=True,
     )
+
+    # Ensure that the plan has been applied successfully.
+    no_change_plan = context.plan(
+        environment="test_dev",
+        start=start,
+        skip_tests=True,
+        no_prompts=True,
+    )
+    assert not no_change_plan.requires_backfill

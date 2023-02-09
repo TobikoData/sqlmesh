@@ -4,6 +4,7 @@ import abc
 import logging
 import typing as t
 from collections import defaultdict
+from functools import wraps
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
@@ -19,6 +20,18 @@ from sqlmesh.utils.date import TimeLike, now, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
+
+
+def transactional(func: t.Callable) -> t.Callable:
+    @wraps(func)
+    def wrapper(self: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        if not hasattr(self, "_transaction"):
+            return func(self, *args, **kwargs)
+
+        with self._transaction():
+            return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class CommonStateSyncMixin(StateSync):
@@ -52,6 +65,7 @@ class CommonStateSyncMixin(StateSync):
             if snapshot.name in names
         ]
 
+    @transactional
     def promote(
         self, environment: Environment, no_gaps: bool = False
     ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
@@ -116,6 +130,7 @@ class CommonStateSyncMixin(StateSync):
         self._update_environment(environment)
         return table_infos, [existing_table_infos[name] for name in missing_models]
 
+    @transactional
     def delete_expired_snapshots(self) -> t.List[Snapshot]:
         current_time = now()
 
@@ -152,6 +167,7 @@ class CommonStateSyncMixin(StateSync):
 
         return expired_snapshots
 
+    @transactional
     def add_interval(
         self,
         snapshot_id: SnapshotIdLike,
@@ -169,6 +185,7 @@ class CommonStateSyncMixin(StateSync):
         stored_snapshot.add_interval(start, end, is_dev=is_dev)
         self._update_snapshot(stored_snapshot)
 
+    @transactional
     def remove_interval(
         self,
         snapshots: t.Iterable[SnapshotInfoLike],
@@ -184,6 +201,7 @@ class CommonStateSyncMixin(StateSync):
             snapshot.remove_interval(start, end)
             self._update_snapshot(snapshot)
 
+    @transactional
     def unpause_snapshots(
         self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
