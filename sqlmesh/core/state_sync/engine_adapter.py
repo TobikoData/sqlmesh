@@ -15,6 +15,7 @@ adapter to read and write state to the underlying data store.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import typing as t
@@ -22,7 +23,7 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.dialect import select_from_values
-from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -31,7 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersionLike,
 )
 from sqlmesh.core.state_sync.base import StateSync
-from sqlmesh.core.state_sync.common import CommonStateSyncMixin
+from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -79,27 +80,28 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "expiration_ts": exp.DataType.build("bigint"),
         }
 
+    @transactional
     def init_schema(self) -> None:
         """Creates the schema and table to store state."""
-        with self.engine_adapter.transaction(TransactionType.DDL):
-            self.engine_adapter.create_schema(self.snapshots_table)
+        self.engine_adapter.create_schema(self.snapshots_table)
 
-            self.engine_adapter.create_state_table(
-                self.snapshots_table,
-                self.snapshot_columns_to_types,
-                primary_key=("name", "identifier"),
-            )
+        self.engine_adapter.create_state_table(
+            self.snapshots_table,
+            self.snapshot_columns_to_types,
+            primary_key=("name", "identifier"),
+        )
 
-            self.engine_adapter.create_index(
-                self.snapshots_table, "name_version_idx", ("name", "version")
-            )
+        self.engine_adapter.create_index(
+            self.snapshots_table, "name_version_idx", ("name", "version")
+        )
 
-            self.engine_adapter.create_state_table(
-                self.environments_table,
-                self.environment_columns_to_types,
-                primary_key=("name",),
-            )
+        self.engine_adapter.create_state_table(
+            self.environments_table,
+            self.environment_columns_to_types,
+            primary_key=("name",),
+        )
 
+    @transactional
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
 
@@ -131,28 +133,27 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _push_snapshots(
         self, snapshots: t.Iterable[Snapshot], overwrite: bool = False
     ) -> None:
-        with self.engine_adapter.transaction():
-            if overwrite:
-                snapshots = tuple(snapshots)
-                self.delete_snapshots(snapshots)
+        if overwrite:
+            snapshots = tuple(snapshots)
+            self.delete_snapshots(snapshots)
 
-            self.engine_adapter.insert_append(
-                self.snapshots_table,
-                next(
-                    select_from_values(
-                        [
-                            (
-                                snapshot.name,
-                                snapshot.identifier,
-                                snapshot.version,
-                                snapshot.json(),
-                            )
-                            for snapshot in snapshots
-                        ],
-                        columns_to_types=self.snapshot_columns_to_types,
-                    )
-                ),
-            )
+        self.engine_adapter.insert_append(
+            self.snapshots_table,
+            next(
+                select_from_values(
+                    [
+                        (
+                            snapshot.name,
+                            snapshot.identifier,
+                            snapshot.version,
+                            snapshot.json(),
+                        )
+                        for snapshot in snapshots
+                    ],
+                    columns_to_types=self.snapshot_columns_to_types,
+                )
+            ),
+        )
 
     def delete_expired_environments(self) -> None:
         now_ts = now_timestamp()
@@ -182,40 +183,36 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         }
 
     def _update_environment(self, environment: Environment) -> None:
-        with self.engine_adapter.transaction():
-            self.engine_adapter.delete_from(
-                self.environments_table,
-                where=exp.EQ(
-                    this=exp.to_column("name"),
-                    expression=exp.Literal.string(environment.name),
-                ),
-            )
+        self.engine_adapter.delete_from(
+            self.environments_table,
+            where=exp.EQ(
+                this=exp.to_column("name"),
+                expression=exp.Literal.string(environment.name),
+            ),
+        )
 
-            self.engine_adapter.insert_append(
-                self.environments_table,
-                next(
-                    select_from_values(
-                        [
-                            (
-                                environment.name,
-                                json.dumps(
-                                    [
-                                        snapshot.dict()
-                                        for snapshot in environment.snapshots
-                                    ]
-                                ),
-                                environment.start_at,
-                                environment.end_at,
-                                environment.plan_id,
-                                environment.previous_plan_id,
-                                environment.expiration_ts,
-                            )
-                        ],
-                        columns_to_types=self.environment_columns_to_types,
-                    )
-                ),
-                columns_to_types=self.environment_columns_to_types,
-            )
+        self.engine_adapter.insert_append(
+            self.environments_table,
+            next(
+                select_from_values(
+                    [
+                        (
+                            environment.name,
+                            json.dumps(
+                                [snapshot.dict() for snapshot in environment.snapshots]
+                            ),
+                            environment.start_at,
+                            environment.end_at,
+                            environment.plan_id,
+                            environment.previous_plan_id,
+                            environment.expiration_ts,
+                        )
+                    ],
+                    columns_to_types=self.environment_columns_to_types,
+                )
+            ),
+            columns_to_types=self.environment_columns_to_types,
+        )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
         self.engine_adapter.update_table(
@@ -405,3 +402,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for snapshot_name_version in snapshot_name_versions
             )
         )
+
+    @contextlib.contextmanager
+    def _transaction(self) -> t.Generator[None, None, None]:
+        with self.engine_adapter.transaction():
+            yield

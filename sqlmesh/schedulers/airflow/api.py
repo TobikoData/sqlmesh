@@ -31,7 +31,7 @@ def check_authentication(func: t.Callable) -> t.Callable:
     return wrapper
 
 
-@sqlmesh_api_v1.route("/plans", methods=["POST"])
+@sqlmesh_api_v1.post("/plans")
 @csrf.exempt
 @check_authentication
 def apply_plan() -> Response:
@@ -47,7 +47,7 @@ def apply_plan() -> Response:
     return make_response(jsonify(request_id=spec.request_id), 201)
 
 
-@sqlmesh_api_v1.route("/environments/<name>", methods=["GET"])
+@sqlmesh_api_v1.get("/environments/<name>")
 @csrf.exempt
 @check_authentication
 def get_environment(name: str) -> Response:
@@ -58,7 +58,7 @@ def get_environment(name: str) -> Response:
     return _success(environment)
 
 
-@sqlmesh_api_v1.route("/environments", methods=["GET"])
+@sqlmesh_api_v1.get("/environments")
 @csrf.exempt
 @check_authentication
 def get_environments() -> Response:
@@ -67,7 +67,7 @@ def get_environments() -> Response:
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
-@sqlmesh_api_v1.route("/snapshots", methods=["GET"])
+@sqlmesh_api_v1.get("/snapshots")
 @csrf.exempt
 @check_authentication
 def get_snapshots() -> Response:
