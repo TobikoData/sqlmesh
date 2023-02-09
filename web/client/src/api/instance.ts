@@ -39,11 +39,11 @@ export const fetchAPI = async <T>({
 		try {
 			const response = await fetch(input, {
 				method,
-				headers,
+				headers: {...headers, ...(data && { 'Content-Type': 'application/json' })},
 				credentials,
 				mode,
 				cache,
-				...(data ? { body: JSON.stringify(data) } : {}),
+				...(data && { body: JSON.stringify(data) }),
 			});
 
 			if (response.status === 204) return resolve({ ok: true } as T)
