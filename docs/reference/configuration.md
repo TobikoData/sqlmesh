@@ -1,4 +1,4 @@
-# Configuration Reference
+# Configuration
 This page contains the list of all available SQLMesh configurations that can be set as either environment varaibles, in the `config.yaml` in a project folder or in the file with the same name in the `~/.sqlmesh` folder.
 
 Configuration options from different sources have the following order of precedence:
