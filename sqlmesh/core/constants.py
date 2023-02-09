@@ -9,6 +9,8 @@ SNAPSHOTS_PATH = "snapshots"
 """Snapshots path"""
 DEFAULT_SNAPSHOT_TTL = "in 1 week"
 """Default snapshot TTL"""
+DEFAULT_ENVIRONMENT_TTL = "in 1 week"
+"""Default environment TTL"""
 IGNORE_PATTERNS = [
     ".ipynb_checkpoints/*",
 ]
