@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ContextEnvironmentBackfill } from '../api/client';
-import { isObject, isObjectEmpty, isNil } from '../utils';
+import { isObject, isObjectEmpty } from '../utils';
 
 export const EnumPlanAction = {
   None: 'none',
