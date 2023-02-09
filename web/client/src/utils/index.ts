@@ -69,25 +69,21 @@ export function toDateFormat(
 	const second = date.getSeconds();
 
 	if (format === "yyyy-mm-dd")
-		return `${year}-${month
-			.toString()
-			.padStart(2, "0")}-${day
-			.toString()
-			.padStart(2, "0")}`;
+		return `${year}-${toFormatted(month)}-${toFormatted(
+			day
+		)}`;
 	if (format === "yyyy-mm-dd hh-mm-ss")
-		return `${year}-${month
-			.toString()
-			.padStart(2, "0")}-${day
-			.toString()
-			.padStart(2, "0")} ${hour
-			.toString()
-			.padStart(2, "0")}:${minute
-			.toString()
-			.padStart(2, "0")}:${second
-			.toString()
-			.padStart(2, "0")}`;
+		return `${year}-${toFormatted(month)}-${toFormatted(
+			day
+		)} ${toFormatted(hour)}:${toFormatted(
+			minute
+		)}:${toFormatted(second)}`;
 
 	return date.toDateString();
+
+	function toFormatted(n: number) {
+		return n.toString().padStart(2, "0");
+	}
 }
 
 export function includes<T>(array: T[], value: T): boolean {
