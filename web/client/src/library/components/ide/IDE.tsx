@@ -1,10 +1,9 @@
-import ContextIDE from '../../../context/Ide'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
 import Tabs from '../tabs/Tabs'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect } from 'react'
 import clsx from 'clsx'
 import { PlayIcon, } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
@@ -16,7 +15,6 @@ import { Progress } from '../progress/Progress'
 import { Spinner } from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
 import fetchAPI from '../../../api/instance'
-import { ModelFile } from '../../../models'
 
 export function IDE() {
   const planState = useStorePlan((s: any) => s.state)
@@ -29,9 +27,6 @@ export function IDE() {
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
 
-  const [openedFiles, setOpenedFiles] = useState<Set<ModelFile>>(new Set([new ModelFile()]))
-  const [activeFile, setActiveFile] = useState<ModelFile | null>(null)
-
   const [subscribe, getChannel, unsubscribe] = useChannel('/api/tasks', updateTasks)
 
   const { data: project } = useApiFiles()
@@ -41,12 +36,6 @@ export function IDE() {
       subscribe()
     }
   }, [])
-
-  useEffect(() => {
-    if (activeFile === null) {
-      setActiveFile([...openedFiles][0])
-    }
-  }, [openedFiles])
 
   function closePlan() {
     setPlanAction(EnumPlanAction.Closing)
@@ -84,20 +73,7 @@ export function IDE() {
   }
 
   return (
-    <ContextIDE.Provider
-      value={{
-        openedFiles,
-        activeFile,
-        setActiveFile: (file) => {
-          if (!file) return setActiveFile(null)
-
-          openedFiles.add(file)
-
-          setActiveFile(file)
-        },
-        setOpenedFiles,
-      }}
-    >
+    <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
@@ -227,26 +203,13 @@ export function IDE() {
         </div>
         <Divider orientation="vertical" />
         <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
-          {Boolean(activeFile) && (
-            <>
-              <div className="w-full h-full flex overflow-hidden">
-                <Editor />
-              </div>
-              <Divider />
-              <div className="w-full min-h-[10rem] overflow-auto">
-                <Tabs />
-              </div>
-            </>
-          )}
-
-          {!Boolean(activeFile) && (
-            <div className="w-full h-full flex justify-center items-center text-center">
-              <div className="prose">
-                <h2>Instructions on how to start</h2>
-                <p>Select file</p>
-              </div>
-            </div>
-          )}
+          <div className="w-full h-full flex overflow-hidden">
+            <Editor />
+          </div>
+          <Divider />
+          <div className="w-full min-h-[10rem] overflow-auto">
+            <Tabs />
+          </div>
         </div>
       </div>
       <Divider />
@@ -287,6 +250,6 @@ export function IDE() {
           </div>
         </Dialog>
       </Transition>
-    </ContextIDE.Provider>
+    </>
   )
 }
