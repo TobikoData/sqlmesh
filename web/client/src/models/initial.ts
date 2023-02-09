@@ -1,7 +1,7 @@
 let counter = 0;
 
-type Initial<T extends object> = T & { id?: number | string };
-type InitialWithId<T extends object> = T & { id: number | string };
+type Initial<T extends object> = T & { id?: ID };
+type InitialWithId<T extends object> = T & { id: ID };
 
 export class ModelInitial<T extends object = any> {
   private readonly _initial: InitialWithId<T>;
@@ -25,4 +25,8 @@ export class ModelInitial<T extends object = any> {
   get isModel(): boolean {
     return true;
   }
-}
+
+  get id(): ID {
+    return this.initial.id;
+  }
+} 
