@@ -1,7 +1,7 @@
 site_name: SQLMesh
 nav:
+  - "Overview": index.md
   - Get started:
-    - "What is SQLMesh?": index.md
     - "Why SQLMesh?": why_sqlmesh.md
     - prerequisites.md
     - quick_start.md
@@ -25,7 +25,6 @@ nav:
       - concepts/models/sql_models.md
       - concepts/models/seed_models.md
     - concepts/plans.md
-    - concepts/configs.md
     - concepts/environments.md
     - concepts/team_development.md
     - concepts/macros.md
@@ -37,11 +36,12 @@ nav:
       - concepts/architecture/serialization.md
     - concepts/glossary.md
   - Reference:
-    - reference/overview.md
-    - Options:
+    - API:
+      - reference/overview.md
       - reference/cli.md
       - reference/notebook.md
       - reference/python.md
+    - reference/configuration.md
   - Integrations:
     - integrations/overview.md
     - integrations/airflow.md
