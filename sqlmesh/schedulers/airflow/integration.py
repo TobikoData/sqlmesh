@@ -90,17 +90,18 @@ class SQLMeshAirflow:
             stored_snapshots,
         )
 
-        incremental_dags = dag_generator.generate_incremental()
+        cadence_dags = dag_generator.generate_cadence_dags()
 
         plan_application_dags = [
-            dag_generator.generate_apply(s) for s in _get_plan_dag_specs()
+            dag_generator.generate_plan_application_dag(s)
+            for s in _get_plan_dag_specs()
         ]
 
         system_dags = [
             self._create_janitor_dag(),
         ]
 
-        return system_dags + incremental_dags + plan_application_dags
+        return system_dags + cadence_dags + plan_application_dags
 
     def _create_janitor_dag(self) -> DAG:
         dag = self._create_system_dag(common.JANITOR_DAG_ID, self._janitor_interval)

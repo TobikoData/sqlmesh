@@ -65,27 +65,27 @@ class SnapshotDagGenerator:
         )
         self._snapshots = snapshots
 
-    def generate_incremental(self) -> t.List[DAG]:
+    def generate_cadence_dags(self) -> t.List[DAG]:
         return [
-            self._create_incremental_dag_for_snapshot(s)
+            self._create_cadence_dag_for_snapshot(s)
             for s in self._snapshots.values()
             if s.unpaused_ts and not s.is_embedded_kind and not s.is_seed_kind
         ]
 
-    def generate_apply(self, spec: common.PlanDagSpec) -> DAG:
+    def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> DAG:
         return self._create_plan_application_dag(spec)
 
-    def _create_incremental_dag_for_snapshot(self, snapshot: Snapshot) -> DAG:
+    def _create_cadence_dag_for_snapshot(self, snapshot: Snapshot) -> DAG:
         dag_id = common.dag_id_for_snapshot_info(snapshot.table_info)
         logger.info(
-            "Generating the incremental DAG '%s' for snapshot %s",
+            "Generating the cadence DAG '%s' for snapshot %s",
             dag_id,
             snapshot.snapshot_id,
         )
 
         if not snapshot.unpaused_ts:
             raise SQLMeshError(
-                f"Can't create an incremental DAG for the paused snapshot {snapshot.snapshot_id}"
+                f"Can't create a cadence DAG for the paused snapshot {snapshot.snapshot_id}"
             )
 
         with DAG(
