@@ -224,6 +224,13 @@ This time format uses python format codes. https://docs.python.org/3/library/dat
 
 **Default:** `%Y-%m-%d`
 
+## auto_categorize_changes
+Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking) during plan creation.
+
+**Type:** boolean
+
+**Default:** `True`
+
 ## model_defaults
 
 This section contains options that are specific to models and which are set automatically unless explicitly overriden in the model definition.
