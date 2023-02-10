@@ -198,15 +198,14 @@ export function Editor() {
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
         <div className='flex align-center mr-4'>
-          <small className='font-bold text-xs whitespace-nowrap' >Valid: <span className={clsx(`bg-${isSaved ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')} ></span></small>
+          <Indicator text="Valid" ok={isSaved} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <small className='font-bold text-xs whitespace-nowrap'>Saved: <span className={clsx(`bg-${isSaved ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')}></span></small>
+          <Indicator text="Saved" ok={isSaved} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <small className='font-bold text-xs whitespace-nowrap'>Status: <span className='font-normal text-gray-600'>{fileStatus}</span></small>
+          <Indicator text="Saved" value={fileStatus} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <small className='font-bold text-xs whitespace-nowrap'>Language: <span className='font-normal text-gray-600'>{getLanguageByExtension(activeFile?.extension)}</span></small>
+          <Indicator text="Saved" value={getLanguageByExtension(activeFile?.extension)} />
         </div>
-
         <div className="flex">
           {activeFile?.extension === '.sql' && activeFile.content && (
             <>
@@ -241,6 +240,14 @@ export function Editor() {
       </div>
     </div >
   )
+}
+
+function Indicator({ text, value, ok = true }: { text: string, value?: string, ok?: boolean }) {
+  return <small className='font-bold text-xs whitespace-nowrap'>
+    {text}: {value
+      ? <span className='font-normal text-gray-600'>{value}</span>
+      : <span className={clsx(`bg-${ok ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')}></span>}
+  </small>
 }
 
 function CodeEditor({ className, value, onChange, extension }: any) {
