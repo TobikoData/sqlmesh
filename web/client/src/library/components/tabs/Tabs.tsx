@@ -40,7 +40,7 @@ export default function Tabs() {
                 key={category}
                 className={({ selected }) =>
                   clsx(
-                    'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md cursor-pointer'
+                    'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md cursor-pointer',
                     selected
                       ? 'bg-secondary-100 text-secondary-500'
                       : 'text-gray-900 hover:bg-white/[0.12] hover:text-gray-500'
