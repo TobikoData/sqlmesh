@@ -36,7 +36,7 @@ class SQLMeshMagics(Magics):
         return display
 
     @property
-    def context(self) -> Context:
+    def _context(self) -> Context:
         for variable_name in CONTEXT_VARIABLE_NAMES:
             context = self._shell.user_ns.get(variable_name)
             if context:
@@ -44,6 +44,13 @@ class SQLMeshMagics(Magics):
         raise MissingContextException(
             f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
         )
+
+    @magic_arguments()
+    @argument("path", type=str, help="The path to the SQLMesh project.")
+    @line_magic
+    def context(self, path: str) -> None:
+        """Sets the context in the user namespace."""
+        self._shell.user_ns["context"] = Context(path=path)
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -55,24 +62,24 @@ class SQLMeshMagics(Magics):
     def model(self, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
-        model = self.context.get_model(args.model)
+        model = self._context.get_model(args.model)
 
         if not model:
             raise SQLMeshError(f"Cannot find {model}")
 
         if sql:
             loaded = load_model(
-                parse_model(sql, default_dialect=self.context.dialect),
-                macros=self.context._macros,
+                parse_model(sql, default_dialect=self._context.dialect),
+                macros=self._context._macros,
                 path=model._path,
-                dialect=self.context.dialect,
-                time_column_format=self.context.config.time_column_format,
+                dialect=self._context.dialect,
+                time_column_format=self._context.config.time_column_format,
             )
 
             if loaded.name == args.model:
                 model = loaded
 
-        self.context.upsert_model(model)
+        self._context.upsert_model(model)
         expressions = model.render_definition(include_python=False)
 
         formatted = format_model_expressions(expressions, model.dialect)
@@ -90,9 +97,9 @@ class SQLMeshMagics(Magics):
         with open(model._path, "w", encoding="utf-8") as file:
             file.write(formatted)
 
-        self.context.upsert_model(model)
-        self.context.console.show_sql(
-            self.context.render(
+        self._context.upsert_model(model)
+        self._context.console.show_sql(
+            self._context.render(
                 model.name,
                 start=args.start,
                 end=args.end,
@@ -114,21 +121,21 @@ class SQLMeshMagics(Magics):
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
         model_test_metadatas = get_all_model_tests(
-            self.context.test_directory_path,
-            ignore_patterns=self.context.ignore_patterns,
+            self._context.test_directory_path,
+            ignore_patterns=self._context.ignore_patterns,
         )
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
         for model_test_metadata in model_test_metadatas:
             model = model_test_metadata.body.get("model")
             if not model:
-                self.context.console.log_error(
+                self._context.console.log_error(
                     f"Test found that does not have `model` defined: {model_test_metadata.path}"
                 )
             tests[model][model_test_metadata.test_name] = model_test_metadata
         if args.ls:
             # TODO: Provide better UI for displaying tests
             for test_name in tests[args.model]:
-                self.context.console.log_status_update(test_name)
+                self._context.console.log_status_update(test_name)
             return
 
         test = tests[args.model][args.test_name]
@@ -210,14 +217,14 @@ class SQLMeshMagics(Magics):
     @line_magic
     def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
-        self.context.refresh()
+        self._context.refresh()
         args = parse_argstring(self.plan, line)
 
         # Since the magics share a context we want to clear out any state before generating a new plan
-        console = self.context.console
-        self.context.console = NotebookMagicConsole(self.display)
+        console = self._context.console
+        self._context.console = NotebookMagicConsole(self.display)
 
-        self.context.plan(
+        self._context.plan(
             args.environment,
             start=args.start,
             end=args.end,
@@ -230,7 +237,7 @@ class SQLMeshMagics(Magics):
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
         )
-        self.context.console = console
+        self._context.console = console
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -245,10 +252,10 @@ class SQLMeshMagics(Magics):
     @line_magic
     def evaluate(self, line: str) -> None:
         """Evaluate a model query and fetches a dataframe."""
-        self.context.refresh()
+        self._context.refresh()
         args = parse_argstring(self.evaluate, line)
 
-        df = self.context.evaluate(
+        df = self._context.evaluate(
             args.model,
             start=args.start,
             end=args.end,
@@ -271,10 +278,10 @@ class SQLMeshMagics(Magics):
     @line_magic
     def render(self, line: str) -> None:
         """Renders a model's query, optionally expanding referenced models."""
-        self.context.refresh()
+        self._context.refresh()
         args = parse_argstring(self.render, line)
 
-        query = self.context.render(
+        query = self._context.render(
             args.model,
             start=args.start,
             end=args.end,
@@ -282,7 +289,7 @@ class SQLMeshMagics(Magics):
             expand=args.expand,
         )
 
-        self.context.console.show_sql(query.sql(pretty=True, dialect=args.dialect))
+        self._context.console.show_sql(query.sql(pretty=True, dialect=args.dialect))
 
     @magic_arguments()
     @argument(
@@ -296,7 +303,7 @@ class SQLMeshMagics(Magics):
     def fetchdf(self, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
-        df = self.context.fetchdf(sql)
+        df = self._context.fetchdf(sql)
         if args.df_var:
             self._shell.user_ns[args.df_var] = df
         self.display(df)
@@ -305,8 +312,8 @@ class SQLMeshMagics(Magics):
     @line_magic
     def dag(self, line: str) -> None:
         """Displays the dag"""
-        self.context.refresh()
-        dag = self.context.get_dag()
+        self._context.refresh()
+        dag = self._context.get_dag()
         self.display(HTML(dag.pipe().decode("utf-8")))
 
     @property
