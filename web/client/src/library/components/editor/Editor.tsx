@@ -11,13 +11,12 @@ import {
   useApiFileByPath,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query';
-import { XCircleIcon } from '@heroicons/react/24/solid';
+import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid';
 import { Divider } from '../divider/Divider';
 import { Button } from '../button/Button';
 import { EnumSize } from '../../../types/enum';
 import { ModelFile } from '../../../models';
 import { useStoreFileTree } from '../../../context/fileTree';
-
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -25,7 +24,6 @@ export const EnumEditorFileStatus = {
   Saving: 'saving',
   Saved: 'saved',
 } as const;
-
 
 export type EditorFileStatus = typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
 
@@ -75,6 +73,8 @@ export function Editor() {
 
     if (activeFileId === file.id) {
       setActiveFileId(getNextOpenedFile().id)
+    } else {
+      setOpenedFiles(openedFiles)
     }
   }
 
@@ -117,12 +117,8 @@ export function Editor() {
 
   const debouncedChange = useMemo(() => debounce(
     onChange,
-    () => {
-      setEditorFileStatus(EnumEditorFileStatus.Editing)
-    },
-    () => {
-      setEditorFileStatus(EnumEditorFileStatus.Edit)
-    },
+    () => setEditorFileStatus(EnumEditorFileStatus.Editing),
+    () => setEditorFileStatus(EnumEditorFileStatus.Edit),
     200
   ), [activeFile])
 
@@ -131,12 +127,17 @@ export function Editor() {
       <div className='flex items-center'>
         <Button
           className='m-0 ml-1 mr-3'
+          variant='primary'
           size='sm'
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
             addNewFileAndSelect()
-          }}>+</Button>
+          }}>
+          <PlusIcon
+            className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer "
+          />
+        </Button>
         <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
           {openedFiles.size > 0 &&
             [...openedFiles.values()].map((file, idx) => (
@@ -162,13 +163,13 @@ export function Editor() {
                   </small>
                   {openedFiles.size > 1 && (
                     <XCircleIcon
+                      className="inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700"
                       onClick={(e: MouseEvent) => {
                         e.stopPropagation()
 
                         cleanUp()
                         closeEditorTab(file)
                       }}
-                      className={`inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700 `}
                     />
                   )}
                 </span>

@@ -66,10 +66,10 @@ export function IDE() {
   }
 
   function startPlan() {
-    setActivePlan(null)
+    setActivePlan(undefined)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanAction.Opening)
-    setEnvironment(null)
+    setEnvironment(undefined)
   }
 
   return (
