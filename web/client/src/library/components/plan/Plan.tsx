@@ -5,9 +5,9 @@ import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
-import { EnumPlanState, EnumPlanAction, PlanState, useStorePlan, PlanAction } from '../../../context/plan'
+import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
-import { delay, isArrayEmpty, isNil, isNotNil } from '../../../utils'
+import { delay, isArrayEmpty, isNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
 
@@ -96,15 +96,18 @@ export function Plan({
     setCategory(null)
     setWithBackfill(false)
     setBackfills([])
-    setActivePlan(null)
   }
 
   async function reset() {
     setPlanAction(EnumPlanAction.Resetting)
 
-    await delay(500)
+    await delay(200)
 
     cleanUp()
+
+    if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
+      setActivePlan(null)
+    }
   }
 
   function cancel() {
@@ -113,8 +116,8 @@ export function Plan({
     reset()
   }
 
-  function close() {
-    reset()
+  async function close() {
+    await reset()
 
     onClose()
   }
