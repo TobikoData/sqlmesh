@@ -37,6 +37,7 @@ export function Editor() {
   const setActiveFileId = useStoreFileTree(s => s.setActiveFileId)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
+  const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
 
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
   const [activeFile, setActiveFile] = useState<ModelFile>()
@@ -62,23 +63,19 @@ export function Editor() {
 
       selectFile(file)
     } else {
-      openedFiles.has(activeFileId) === false && setActiveFileId([...openedFiles.values()][0].id)
+      openedFiles.has(activeFileId) === false && setActiveFileId(getNextOpenedFile().id)
     }
   }, [openedFiles])
 
 
   function closeEditorTab(file: ModelFile) {
-    if (!file) return
+    if (file == null) return
 
     openedFiles.delete(file.id)
 
-    if (openedFiles.size === 0) {
-      setActiveFile(undefined)
-    } else if (activeFile == null || openedFiles.has(activeFile.id) === false) {
-      setActiveFile([...openedFiles.values()][0])
+    if (activeFileId === file.id) {
+      setActiveFileId(getNextOpenedFile().id)
     }
-
-    setOpenedFiles(new Map(openedFiles))
   }
 
   function addNewFileAndSelect() {

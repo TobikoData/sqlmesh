@@ -6,6 +6,8 @@ type InitialWithId<T extends object> = T & { id: ID };
 export class ModelInitial<T extends object = any> {
   private readonly _initial: InitialWithId<T>;
 
+  isModel = true
+
   constructor(initial: Initial<T> | InitialWithId<T>) {
     this._initial = (initial as InitialWithId<T>).id
       ? (initial as InitialWithId<T>)
@@ -20,10 +22,6 @@ export class ModelInitial<T extends object = any> {
 
   get initial(): InitialWithId<T> {
     return this._initial;
-  }
-
-  get isModel(): boolean {
-    return true;
   }
 
   get id(): ID {

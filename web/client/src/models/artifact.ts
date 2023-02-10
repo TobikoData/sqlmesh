@@ -36,7 +36,7 @@ export class ModelArtifact<T extends InitialArtifact = InitialArtifact> extends 
   }  
 
   get path(): string {
-    return this.parent?.isModel ? `${this.parent.path}/${this.name}` : this._path;
+    return this.toPath(this.name, this._path)
   }
 
   get isUntitled(): boolean {
@@ -53,13 +53,20 @@ export class ModelArtifact<T extends InitialArtifact = InitialArtifact> extends 
 
   rename(newName: string): void {
     if (this.isLocal === false) {
-      if (this.parent?.isModel) {
-        this._path = this.parent.path + `${newName}`
-      } else {
-        this._path = this._path.replace(this.name, newName);
-      }
+      this._path = this.toPath(newName, this._path.replace(this.name, newName)) 
     }
 
     this._name = newName;
+  }
+
+  private toPath(name: string, fallback: string = ''): string {
+    return (
+      this.withParent
+        ? `${this.parent?.path}/${name}`
+        : fallback
+    )
+    .split('/')
+    .filter(Boolean)
+    .join('/')
   }
 }
