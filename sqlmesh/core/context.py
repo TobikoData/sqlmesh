@@ -604,7 +604,7 @@ class Context(BaseContext):
         forward_only: bool = False,
         no_prompts: bool = False,
         auto_apply: bool = False,
-        auto_categorize_changes: t.Optional[bool] = None,
+        no_categorize_changes: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -632,8 +632,9 @@ class Context(BaseContext):
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False.
             auto_apply: Whether to automatically apply the new plan after creation. Default: False.
-            auto_categorize_changes: Indicates whether SQLMesh should attempt to automatically categorize model
-                changes (breaking / non-breaking). If provided this value overrides the value specified in configuration.
+            no_categorize_changes: Indicates whether to disable automatic categorization of model
+                changes (breaking / non-breaking). If not provided, then the corresponding configuration
+                option determines the behavior.
 
         Returns:
             The populated Plan object.
@@ -677,8 +678,11 @@ class Context(BaseContext):
             environment_ttl=self.config.environment_ttl,
         )
 
-        if auto_categorize_changes is None:
-            auto_categorize_changes = self.config.auto_categorize_changes
+        auto_categorize_changes = (
+            self.config.auto_categorize_changes
+            if no_categorize_changes is None
+            else not no_categorize_changes
+        )
 
         if auto_categorize_changes and not forward_only:
             # Attempt to automatically determine and assign change categories.

@@ -211,6 +211,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     is_flag=True,
     help="Automatically apply the new plan after creation.",
 )
+@click.option(
+    "--no-categorize-changes",
+    is_flag=True,
+    help="Disable automatic change categorization.",
+    default=None,
+)
 @click.pass_context
 @error_handler
 def plan(
