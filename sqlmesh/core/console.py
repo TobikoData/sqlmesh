@@ -20,7 +20,8 @@ from rich.tree import Tree
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import to_date
+from sqlmesh.utils.date import now_timestamp, to_date
+from web.server.sse import Event
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -692,7 +693,7 @@ class ApiConsole(TerminalConsole):
         self.current_task_status[snapshot_name] = {
             "completed": 0,
             "total": total_batches,
-            "start": int(time.time()),
+            "start": now_timestamp(),
         }
 
     def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
@@ -705,16 +706,16 @@ class ApiConsole(TerminalConsole):
             ):
                 self.current_task_status[snapshot_name]["end"] = int(time.time())
             self.queue.put_nowait(
-                {
-                    "event": "tasks",
-                    "data": json.dumps(
+                Event(
+                    event="tasks",
+                    data=json.dumps(
                         {
                             "ok": True,
                             "tasks": self.current_task_status,
-                            "timestamp": int(time.time()),
+                            "timestamp": now_timestamp(),
                         }
                     ),
-                }
+                )
             )
 
     def complete_snapshot_progress(self) -> None:
@@ -731,7 +732,9 @@ class ApiConsole(TerminalConsole):
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
         self.queue.put_nowait(
-            f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
+            Event(
+                data=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
+            )
         )
 
 
