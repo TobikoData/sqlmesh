@@ -4,7 +4,6 @@ from pathlib import Path
 from fastapi import Depends
 from pydantic import BaseSettings
 
-from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
 
 
@@ -25,7 +24,9 @@ def _get_context(path: str) -> Context:
 
 @lru_cache()
 def _get_loaded_context(path: str, config: str) -> Context:
-    return Context(path=path, config=config, console=ApiConsole())
+    from web.server.main import api_console
+
+    return Context(path=path, config=config, console=api_console)
 
 
 def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:

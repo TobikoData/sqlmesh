@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import datetime
+import json
 import time
 import typing as t
 import unittest
@@ -683,6 +685,7 @@ class ApiConsole(TerminalConsole):
         super().__init__()
         self.current_task_status: t.Dict[str, t.Dict[str, int]] = {}
         self.previous_task_status: t.Dict[str, t.Dict[str, int]] = {}
+        self.queue: asyncio.Queue = asyncio.Queue()
 
     def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
         """Indicates that a new load progress has begun."""
@@ -701,16 +704,35 @@ class ApiConsole(TerminalConsole):
                 >= self.current_task_status[snapshot_name]["total"]
             ):
                 self.current_task_status[snapshot_name]["end"] = int(time.time())
+            self.queue.put_nowait(
+                {
+                    "event": "tasks",
+                    "data": json.dumps(
+                        {
+                            "ok": True,
+                            "tasks": self.current_task_status,
+                            "timestamp": int(time.time()),
+                        }
+                    ),
+                }
+            )
 
     def complete_snapshot_progress(self) -> None:
         """Indicates that load progress is complete"""
-        self.log_success("All model batches have been executed successfully")
+        self.queue.put_nowait("All model batches have been executed successfully")
         self.stop_snapshot_progress()
 
     def stop_snapshot_progress(self) -> None:
         """Stop the load progress"""
         self.previous_task_status = self.current_task_status.copy()
         self.current_task_status = {}
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: str, target_dialect: str
+    ) -> None:
+        self.queue.put_nowait(
+            f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
+        )
 
 
 def get_console() -> TerminalConsole:
