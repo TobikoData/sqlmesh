@@ -202,9 +202,9 @@ export function Editor() {
           <Divider orientation='vertical' className='h-[12px] mx-3' />
           <Indicator text="Saved" ok={isSaved} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Saved" value={fileStatus} />
+          <Indicator text="Status" value={fileStatus} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Saved" value={getLanguageByExtension(activeFile?.extension)} />
+          <Indicator text="Language" value={getLanguageByExtension(activeFile?.extension)} />
         </div>
         <div className="flex">
           {activeFile?.extension === '.sql' && activeFile.content && (
