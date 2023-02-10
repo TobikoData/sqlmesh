@@ -118,7 +118,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   
     if (data.ok === false) {
       s.setState(EnumPlanState.Failed)
-
       s.setLastPlan(plan)
   
       channel.close()

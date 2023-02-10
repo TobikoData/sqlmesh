@@ -52,3 +52,16 @@ html {
   src: url('./assets/fonts/Circular STD/CircularStd-Black.otf') format('opentype');
   font-weight: 900;
 }
+
+.scrollbar::-webkit-scrollbar {
+  height: 0.2rem;
+}
+
+.scrollbar::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(264, 100%, 60%);
+  border-radius: 1rem;
+}

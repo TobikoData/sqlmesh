@@ -1,25 +1,14 @@
-import { ViewUpdate } from '@codemirror/view'
-import ContextIDE from '../../../context/Ide'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
 import Tabs from '../tabs/Tabs'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect } from 'react'
 import clsx from 'clsx'
-import {
-  XCircleIcon,
-  PlayIcon,
-} from '@heroicons/react/24/solid'
+import { PlayIcon, } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover } from '@headlessui/react'
-import {
-  useApiFileByPath,
-  useMutationApiSaveFile,
-  useApiFiles,
-} from '../../../api'
-import type { File } from '../../../api/client'
-import { useQueryClient } from '@tanstack/react-query'
+import { useApiFiles } from '../../../api'
 import { Plan } from '../plan/Plan'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { Progress } from '../progress/Progress'
@@ -28,8 +17,6 @@ import { useChannel } from '../../../api/channels'
 import fetchAPI from '../../../api/instance'
 
 export function IDE() {
-  const client = useQueryClient()
-
   const planState = useStorePlan((s: any) => s.state)
   const planAction = useStorePlan((s: any) => s.action)
   const setPlanState = useStorePlan((s: any) => s.setState)
@@ -40,41 +27,15 @@ export function IDE() {
   const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
   const updateTasks = useStorePlan((s: any) => s.updateTasks)
 
-  const [openedFiles, setOpenedFiles] = useState<Set<File>>(new Set())
-  const [activeFile, setActiveFile] = useState<File | null>(null)
-  const [fileContent, setFileContent] = useState<string>('')
-  const [status, setStatus] = useState('editing')
-
   const [subscribe, getChannel, unsubscribe] = useChannel('/api/tasks', updateTasks)
 
-  const saveFile = useMutationApiSaveFile(client)
   const { data: project } = useApiFiles()
-  const { data: fileData } = useApiFileByPath(activeFile?.path)
 
   useEffect(() => {
     if (getChannel() == null) {
       subscribe()
     }
   }, [])
-
-  useEffect(() => {
-    setFileContent(fileData?.content ?? '')
-  }, [fileData])
-
-
-  function closeIdeTab(file: File) {
-    if (!file) return
-
-    openedFiles.delete(file)
-
-    if (openedFiles.size === 0) {
-      setActiveFile(null)
-    } else if (!activeFile || !openedFiles.has(activeFile)) {
-      setActiveFile([...openedFiles][0])
-    }
-
-    setOpenedFiles(new Set([...openedFiles]))
-  }
 
   function closePlan() {
     setPlanAction(EnumPlanAction.Closing)
@@ -94,17 +55,16 @@ export function IDE() {
     }
 
     setPlanState(EnumPlanState.Cancelled)
-
     setLastPlan(plan)
 
     getChannel()?.close()
     unsubscribe()
 
-
     if (planAction !== EnumPlanAction.None) {
       startPlan()
     }
   }
+
   function startPlan() {
     setActivePlan(null)
     setPlanState(EnumPlanState.Init)
@@ -113,19 +73,7 @@ export function IDE() {
   }
 
   return (
-    <ContextIDE.Provider
-      value={{
-        openedFiles,
-        activeFile,
-        setActiveFile: (file) => {
-          if (!file) return setActiveFile(null)
-
-          setActiveFile(file)
-          setOpenedFiles(new Set([...openedFiles, file]))
-        },
-        setOpenedFiles,
-      }}
-    >
+    <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold"><span className='inline-block text-secondary-500'>/</span> {project?.name}</h3>
@@ -254,110 +202,15 @@ export function IDE() {
           <FolderTree project={project} />
         </div>
         <Divider orientation="vertical" />
-        <div className="h-full w-full flex flex-col overflow-hidden">
-          {Boolean(activeFile) && (
-            <>
-              <div className="w-full h-full flex overflow-hidden">
-                <div className="w-full flex flex-col overflow-hidden">
-                  <ul className="w-full whitespace-nowrap pl-[40px] min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto">
-                    {openedFiles.size > 0 &&
-                      [...openedFiles].map((file) => (
-                        <li
-                          key={file.path}
-                          className={clsx(
-                            'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
-
-                          )}
-                          onClick={() => setActiveFile(file)}
-                        >
-                          <span className={clsx(
-                            "flex justify-between items-center px-2 py-[0.25rem] min-w-[8rem] rounded-md",
-                            file.path === activeFile?.path
-                              ? 'bg-secondary-100'
-                              : 'bg-transparent'
-                          )}>
-                            <small className="text-xs">{file.name}</small>
-                            <XCircleIcon
-                              onClick={(e) => {
-                                e.stopPropagation()
-
-                                closeIdeTab(file)
-                              }}
-                              className={`inline-block text-gray-700 w-4 h-4 ml-2 cursor-pointer`}
-                            />
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
-                  <Divider />
-                  <div className="w-full h-full flex flex-col overflow-hidden">
-                    <div className="w-full h-full overflow-hidden ">
-                      <Editor
-                        className="h-full w-full"
-                        extension={activeFile?.extension}
-                        value={fileContent}
-                        onChange={debounce(
-                          (value: string, viewUpdate: ViewUpdate) => {
-                            const shouldMutate =
-                              Boolean(value) && value !== fileContent
-
-                            if (shouldMutate) {
-                              saveFile.mutate({
-                                path: activeFile?.path,
-                                body: { content: viewUpdate.state.doc.toString() },
-                              })
-
-                              setStatus('saved')
-                            } else {
-                              setStatus('editing')
-                            }
-                          },
-                          () => {
-                            setStatus('saving...')
-                          },
-                          2000
-                        )}
-                      />
-                    </div>
-                  </div>
-                  <Divider />
-                  <div className="px-2 flex justify-between items-center min-h-[2rem]">
-                    <small>validation: ok</small>
-                    <small>File Status: {status}</small>
-                    <div className="flex">
-                      <Button size={EnumSize.sm} variant="secondary">
-                        Run Query
-                      </Button>
-                      <Button size={EnumSize.sm} variant="alternative">
-                        Validate
-                      </Button>
-                      <Button size={EnumSize.sm} variant="alternative">
-                        Format
-                      </Button>
-                      <Button size={EnumSize.sm} variant="success">
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <Divider />
-              <div className="w-full min-h-[10rem] overflow-auto">
-                <Tabs />
-              </div>
-            </>
-          )}
-
-          {!Boolean(activeFile) && (
-            <div className="w-full h-full flex justify-center items-center text-center">
-              <div className="prose">
-                <h2>Instructions on how to start</h2>
-                <p>Select file</p>
-              </div>
-            </div>
-          )}
+        <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
+          <div className="w-full h-full flex overflow-hidden">
+            <Editor />
+          </div>
+          <Divider />
+          <div className="w-full min-h-[10rem] overflow-auto">
+            <Tabs />
+          </div>
         </div>
-        <Divider orientation="vertical" />
       </div>
       <Divider />
       <div className="p-1">ide footer</div>
@@ -397,23 +250,6 @@ export function IDE() {
           </div>
         </Dialog>
       </Transition>
-    </ContextIDE.Provider>
+    </>
   )
-}
-
-function debounce(
-  fn: (...args: any) => void,
-  before: () => void,
-  delay: number = 500
-) {
-  let timer: any
-  return function (...args: any) {
-    clearTimeout(timer)
-
-    before && before()
-
-    timer = setTimeout(() => {
-      fn(...args)
-    }, delay)
-  }
 }
