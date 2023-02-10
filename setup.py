@@ -50,7 +50,7 @@ setup(
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin",
             "mkdocs-material",
-            "mypy==0.981",
+            "mypy~=1.0.0",
             "ipywidgets",
             "pre-commit",
             "pandas-stubs",

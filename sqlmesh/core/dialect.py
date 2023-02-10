@@ -233,12 +233,12 @@ def _create_parser(
         expressions = []
 
         while True:
-            key = self._parse_id_var(any_token=True)
+            key_expression = self._parse_id_var(any_token=True)
 
-            if not key:
+            if not key_expression:
                 break
 
-            key = key.name.lower()
+            key = key_expression.name.lower()
 
             value: t.Optional[exp.Expression | str]
 
