@@ -39,6 +39,7 @@ export function Editor() {
 
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
   const [activeFile, setActiveFile] = useState<ModelFile>()
+  const [isSaved, setIsSaved] = useState(true)
 
   const { data: fileData } = useApiFileByPath(activeFile?.path)
   const mutationSaveFile = useMutationApiSaveFile(client)
@@ -93,11 +94,11 @@ export function Editor() {
 
     setEditorFileStatus(EnumEditorFileStatus.Saving)
 
+    if (activeFile?.isLocal || activeFile.content === value) return setIsSaved(true)
+
     activeFile.content = value
 
     setOpenedFiles(openedFiles)
-
-    if (activeFile?.isLocal || activeFile.content === value) return
 
     mutationSaveFile.mutate({
       path: activeFile?.path,
@@ -105,6 +106,7 @@ export function Editor() {
     })
 
     setEditorFileStatus(EnumEditorFileStatus.Saved)
+    setIsSaved(true)
   }
 
   function sendQuery() {
@@ -117,7 +119,10 @@ export function Editor() {
 
   const debouncedChange = useMemo(() => debounce(
     onChange,
-    () => setEditorFileStatus(EnumEditorFileStatus.Editing),
+    () => {
+      setIsSaved(false)
+      setEditorFileStatus(EnumEditorFileStatus.Editing)
+    },
     () => setEditorFileStatus(EnumEditorFileStatus.Edit),
     200
   ), [activeFile])
@@ -192,9 +197,16 @@ export function Editor() {
       </div>
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
-        <small>validation: ok</small>
-        <small>File Status: {fileStatus}</small>
-        <small>{getLanguageByExtension(activeFile?.extension)}</small>
+        <div className='flex align-center mr-4'>
+          <small className='font-bold text-xs whitespace-nowrap' >Valid: <span className={clsx(`bg-${isSaved ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')} ></span></small>
+          <Divider orientation='vertical' className='h-[12px] mx-3' />
+          <small className='font-bold text-xs whitespace-nowrap'>Saved: <span className={clsx(`bg-${isSaved ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')}></span></small>
+          <Divider orientation='vertical' className='h-[12px] mx-3' />
+          <small className='font-bold text-xs whitespace-nowrap'>Status: <span className='font-normal text-gray-600'>{fileStatus}</span></small>
+          <Divider orientation='vertical' className='h-[12px] mx-3' />
+          <small className='font-bold text-xs whitespace-nowrap'>Language: <span className='font-normal text-gray-600'>{getLanguageByExtension(activeFile?.extension)}</span></small>
+        </div>
+
         <div className="flex">
           {activeFile?.extension === '.sql' && activeFile.content && (
             <>
@@ -215,16 +227,13 @@ export function Editor() {
             </>
           )}
 
-          {!activeFile?.isLocal && (
+          {activeFile?.isLocal === false && (
             <>
               <Button size={EnumSize.sm} variant="alternative">
                 Validate
               </Button>
               <Button size={EnumSize.sm} variant="alternative">
                 Format
-              </Button>
-              <Button size={EnumSize.sm} variant="success">
-                Save
               </Button>
             </>
           )}
