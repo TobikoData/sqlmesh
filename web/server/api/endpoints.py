@@ -285,6 +285,23 @@ async def tasks(
     return SSEResponse(running_tasks())
 
 
+@router.get("/events")
+async def events(
+    request: Request,
+) -> SSEResponse:
+    async def generator() -> t.AsyncGenerator:
+        queue: asyncio.Queue = asyncio.Queue()
+        request.app.state.console_listeners.append(queue)
+        try:
+            while True:
+                yield await queue.get()
+            queue.task_done()
+        finally:
+            request.app.state.console_listeners.remove(queue)
+
+    return SSEResponse(generator())
+
+
 @router.post("/plan/cancel")
 async def cancel(
     request: Request,
