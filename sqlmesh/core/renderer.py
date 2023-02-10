@@ -9,6 +9,7 @@ from sqlglot import exp, parse_one
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.expand_laterals import expand_laterals
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
@@ -25,7 +26,12 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
 
-RENDER_OPTIMIZER_RULES = (qualify_tables, qualify_columns, annotate_types)
+RENDER_OPTIMIZER_RULES = (
+    qualify_tables,
+    qualify_columns,
+    expand_laterals,
+    annotate_types,
+)
 
 
 class QueryRenderer:
