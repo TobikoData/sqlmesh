@@ -24,6 +24,7 @@
     "@headlessui/react": "^1.7.7",
     "@heroicons/react": "^2.0.13",
     "@tanstack/react-query": "^4.22.0",
+    "@tanstack/react-table": "^8.7.9",
     "@uiw/react-codemirror": "^4.19.7",
     "clsx": "^1.2.1",
     "pluralize": "^8.0.0",
