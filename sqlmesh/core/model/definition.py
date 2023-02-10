@@ -145,11 +145,11 @@ class _Model(ModelMeta, frozen=True):
             **kwargs,
         )
 
-    def render_definition(self) -> t.List[exp.Expression]:
+    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
 
         Args:
-            show_python: Whether or not to show Python code in the rendered model for SQL based models.
+            include_python: Whether or not to include Python code in the rendered definition.
         """
         expressions = []
         comment = None
@@ -179,18 +179,24 @@ class _Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
 
-        python_env = d.PythonCode(
-            expressions=[
-                v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
-                for k, v in self.sorted_python_env
-                if k not in BUILTIN_METHODS
-            ]
-        )
+        python_expressions = []
+        if include_python:
+            python_env = d.PythonCode(
+                expressions=[
+                    v.payload
+                    if v.is_import or v.is_definition
+                    else f"{k} = {v.payload}"
+                    for k, v in self.sorted_python_env
+                    if k not in BUILTIN_METHODS
+                ]
+            )
+            if python_env.expressions:
+                python_expressions.append(python_env)
 
         return [
             model,
             *self.expressions,
-            *([python_env] if python_env.expressions else []),
+            *python_expressions,
         ]
 
     def render_query(
@@ -561,8 +567,8 @@ class SqlModel(_Model):
             **kwargs,
         )
 
-    def render_definition(self) -> t.List[exp.Expression]:
-        result = super().render_definition()
+    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+        result = super().render_definition(include_python=include_python)
         result.append(self.query)
         return result
 
@@ -774,6 +780,11 @@ class PythonModel(_Model):
         except Exception as e:
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
+
+    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+        # Ignore the provided value for the include_python flag, since the Pyhon model's
+        # definition without Python code is meaningless.
+        return super().render_definition(include_python=True)
 
     @property
     def is_python(self) -> bool:
