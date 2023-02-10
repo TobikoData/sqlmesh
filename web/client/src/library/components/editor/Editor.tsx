@@ -42,7 +42,16 @@ export function Editor() {
   const [isSaved, setIsSaved] = useState(true)
 
   const { data: fileData } = useApiFileByPath(activeFile?.path)
-  const mutationSaveFile = useMutationApiSaveFile(client)
+  const mutationSaveFile = useMutationApiSaveFile(client, {
+    onSuccess: () => {
+      setIsSaved(true)
+      setEditorFileStatus(EnumEditorFileStatus.Edit)
+    },
+    onMutate: () => {
+      setIsSaved(false)
+      setEditorFileStatus(EnumEditorFileStatus.Saving)
+    }
+  })
 
   useEffect(() => {
     if (fileData == null || activeFile == null) return
@@ -87,14 +96,8 @@ export function Editor() {
     setActiveFileId(file.id)
   }
 
-  function onChange(value: string) {
-    setEditorFileStatus(EnumEditorFileStatus.Edit)
-
-    if (activeFile == null) return
-
-    setEditorFileStatus(EnumEditorFileStatus.Saving)
-
-    if (activeFile?.isLocal || activeFile.content === value) return setIsSaved(true)
+  function onChange(value: string): void{
+    if (activeFile == null || activeFile?.isLocal || activeFile.content === value) return
 
     activeFile.content = value
 
@@ -104,9 +107,6 @@ export function Editor() {
       path: activeFile?.path,
       body: { content: value },
     })
-
-    setEditorFileStatus(EnumEditorFileStatus.Saved)
-    setIsSaved(true)
   }
 
   function sendQuery() {
@@ -119,10 +119,7 @@ export function Editor() {
 
   const debouncedChange = useMemo(() => debounce(
     onChange,
-    () => {
-      setIsSaved(false)
-      setEditorFileStatus(EnumEditorFileStatus.Editing)
-    },
+    () => setEditorFileStatus(EnumEditorFileStatus.Editing),
     () => setEditorFileStatus(EnumEditorFileStatus.Edit),
     200
   ), [activeFile])
@@ -198,7 +195,7 @@ export function Editor() {
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
         <div className='flex align-center mr-4'>
-          <Indicator text="Valid" ok={isSaved} />
+          <Indicator text="Valid" ok={true} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
           <Indicator text="Saved" ok={isSaved} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
