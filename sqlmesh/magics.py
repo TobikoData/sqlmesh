@@ -73,7 +73,7 @@ class SQLMeshMagics(Magics):
                 model = loaded
 
         self.context.upsert_model(model)
-        expressions = model.render_definition()
+        expressions = model.render_definition(include_python=False)
 
         formatted = format_model_expressions(expressions, model.dialect)
 
