@@ -38,23 +38,23 @@ export function Editor() {
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
 
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
-  const [activeFile, setActiveFile] = useState<ModelFile>()
+  const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
 
-  const { data: fileData } = useApiFileByPath(activeFile?.path)
+  const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
-    onSuccess: () => {
+    onSuccess() {
       setIsSaved(true)
       setEditorFileStatus(EnumEditorFileStatus.Edit)
     },
-    onMutate: () => {
+    onMutate() {
       setIsSaved(false)
       setEditorFileStatus(EnumEditorFileStatus.Saving)
     }
   })
 
   useEffect(() => {
-    if (fileData == null || activeFile == null) return
+    if (fileData == null) return
 
     activeFile.content = fileData.content ?? ''
 
@@ -62,7 +62,11 @@ export function Editor() {
   }, [fileData])
 
   useEffect(() => {
-    setActiveFile(openedFiles.get(activeFileId))
+    const activeOpenedFile = openedFiles.get(activeFileId)
+
+    if (activeOpenedFile == null) return setActiveFileId(getNextOpenedFile().id)
+
+    setActiveFile(activeOpenedFile)
   }, [activeFileId])
 
   useEffect(() => {
@@ -77,8 +81,6 @@ export function Editor() {
 
 
   function closeEditorTab(file: ModelFile) {
-    if (file == null) return
-
     openedFiles.delete(file.id)
 
     if (activeFileId === file.id) {
@@ -97,20 +99,20 @@ export function Editor() {
   }
 
   function onChange(value: string): void{
-    if (activeFile == null || activeFile?.isLocal || activeFile.content === value) return
+    if (activeFile.isLocal || activeFile.content === value) return
 
     activeFile.content = value
 
     setOpenedFiles(openedFiles)
 
     mutationSaveFile.mutate({
-      path: activeFile?.path,
+      path: activeFile.path,
       body: { content: value },
     })
   }
 
   function sendQuery() {
-    console.log('Sending query', activeFile?.content)
+    console.log('Sending query', activeFile.content)
   }
 
   function cleanUp() {
@@ -184,10 +186,10 @@ export function Editor() {
       <div className="w-full h-full flex flex-col overflow-hidden">
         <div className="w-full h-full overflow-hidden ">
           <CodeEditor
-            key={activeFile?.id}
+            key={activeFile.id}
             className="h-full w-full"
-            extension={activeFile?.extension}
-            value={activeFile?.content}
+            extension={activeFile.extension}
+            value={activeFile.content}
             onChange={debouncedChange}
           />
         </div>
@@ -196,15 +198,19 @@ export function Editor() {
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
         <div className='flex align-center mr-4'>
           <Indicator text="Valid" ok={true} />
-          <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Saved" ok={isSaved} />
+          {activeFile.isLocal === false && (
+            <>
+              <Divider orientation='vertical' className='h-[12px] mx-3' />
+              <Indicator text="Saved" ok={isSaved} />
+            </>
+          )}
           <Divider orientation='vertical' className='h-[12px] mx-3' />
           <Indicator text="Status" value={fileStatus} />
           <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Language" value={getLanguageByExtension(activeFile?.extension)} />
+          <Indicator text="Language" value={getLanguageByExtension(activeFile.extension)} />
         </div>
         <div className="flex">
-          {activeFile?.extension === '.sql' && activeFile.content && (
+          {activeFile.extension === '.sql' && activeFile.content && (
             <>
               <Button size={EnumSize.sm} variant="alternative" onClick={e => {
                 e.stopPropagation()
@@ -223,7 +229,7 @@ export function Editor() {
             </>
           )}
 
-          {activeFile?.isLocal === false && (
+          {activeFile.isLocal === false && (
             <>
               <Button size={EnumSize.sm} variant="alternative">
                 Validate
