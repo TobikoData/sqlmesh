@@ -105,7 +105,7 @@ export function Plan({
     cleanUp()
 
     if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
-      setActivePlan(null)
+      setActivePlan(undefined)
     }
   }
 
