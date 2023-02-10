@@ -7,34 +7,33 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
-import { delay, isArrayEmpty, isNil } from '../../../utils'
+import { delay, includes, isArrayEmpty, isNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
-
 
 export function Plan({
   onClose,
   onCancel,
 }: {
-  onClose: any,
-  onCancel: any,
+  onClose: () => void,
+  onCancel: () => void,
 }) {
   const client = useQueryClient()
 
-  const planState = useStorePlan((s: any) => s.state)
-  const planAction = useStorePlan((s: any) => s.action)
-  const setPlanAction = useStorePlan((s: any) => s.setAction)
-  const setPlanState = useStorePlan((s: any) => s.setState)
-  const environment = useStorePlan((s: any) => s.environment)
-  const setActivePlan = useStorePlan((s: any) => s.setActivePlan)
-  const setEnvironment = useStorePlan((s: any) => s.setEnvironment)
-  const setCategory = useStorePlan((s: any) => s.setCategory)
-  const withBackfill = useStorePlan((s: any) => s.withBackfill)
-  const setWithBackfill = useStorePlan((s: any) => s.setWithBackfill)
-  const setBackfills = useStorePlan((s: any) => s.setBackfills)
-  const updateTasks = useStorePlan((s: any) => s.updateTasks)
-  const backfill_start = useStorePlan((s: any) => s.backfill_start)
-  const backfill_end = useStorePlan((s: any) => s.backfill_end)
+  const planState = useStorePlan(s => s.state)
+  const planAction = useStorePlan(s => s.action)
+  const setPlanAction = useStorePlan(s => s.setAction)
+  const setPlanState = useStorePlan(s => s.setState)
+  const environment = useStorePlan(s => s.environment)
+  const setActivePlan = useStorePlan(s => s.setActivePlan)
+  const setEnvironment = useStorePlan(s => s.setEnvironment)
+  const setCategory = useStorePlan(s => s.setCategory)
+  const withBackfill = useStorePlan(s => s.withBackfill)
+  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
+  const setBackfills = useStorePlan(s => s.setBackfills)
+  const updateTasks = useStorePlan(s => s.updateTasks)
+  const backfill_start = useStorePlan(s => s.backfill_start)
+  const backfill_end = useStorePlan(s => s.backfill_end)
 
   const [subscribe] = useChannel('/api/tasks', updateTasks)
 
@@ -71,7 +70,7 @@ export function Plan({
     setPlanState(EnumPlanState.Applying)
 
     try {
-      const data: any = await fetchAPI({
+      const data: { ok: boolean } = await fetchAPI({
         url: `/api/apply?environment=${environment}`,
         method: 'post',
         data: JSON.stringify({
@@ -92,10 +91,11 @@ export function Plan({
 
   function cleanUp() {
     useApiContextCancel(client)
-    setEnvironment(null)
-    setCategory(null)
+    setEnvironment(undefined)
+    setCategory(undefined)
     setWithBackfill(false)
     setBackfills([])
+    setActivePlan(undefined)
   }
 
   async function reset() {
@@ -106,7 +106,7 @@ export function Plan({
     cleanUp()
 
     if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
-      setActivePlan(null)
+      setActivePlan(undefined)
     }
   }
 
@@ -166,7 +166,7 @@ export function Plan({
                 onClick={() => reset()}
                 variant="alternative"
                 className='justify-self-end'
-                disabled={[EnumPlanAction.Resetting, EnumPlanAction.Applying, EnumPlanAction.Canceling, EnumPlanAction.Closing].includes(planAction)}
+                disabled={includes([EnumPlanAction.Resetting, EnumPlanAction.Applying, EnumPlanAction.Canceling, EnumPlanAction.Closing], planAction)}
               >
                 {getActionName(planAction, [EnumPlanAction.Resetting], 'Start Over')}
               </Button>
@@ -175,7 +175,7 @@ export function Plan({
               onClick={() => close()}
               variant={planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'}
               className='justify-self-end'
-              disabled={[EnumPlanAction.Closing, EnumPlanAction.Resetting, EnumPlanAction.Canceling].includes(planAction)}
+              disabled={includes([EnumPlanAction.Closing, EnumPlanAction.Resetting, EnumPlanAction.Canceling], planAction)}
             >
               {getActionName(planAction, [EnumPlanAction.Closing, EnumPlanAction.Done], 'Close')}
             </Button>

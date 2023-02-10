@@ -50,49 +50,53 @@ type PlanProgress = {
 interface PlanStore {
   state: PlanState;
   action: PlanAction;
-  setActivePlan: (activePlan: PlanProgress | null) => void;
-  setLastPlan: (lastPlan: PlanProgress | null) => void;
+  setActivePlan: (activePlan?: PlanProgress) => void;
+  setLastPlan: (lastPlan?: PlanProgress) => void;
   setState: (state: PlanState) => void;
   setAction: (action: PlanAction) => void;
-  setEnvironment: (environment: string) => void;
-  setCategory: (category: Category) => void;
-  activePlan?: PlanProgress | null;
-  lastPlan?: PlanProgress | null;
-  backfill_start: string | null;
-  backfill_end: string | null;
-  environment: string | null;
-  category: Category | null;
+  setEnvironment: (environment?: string) => void;
+  setCategory: (category?: Category) => void;
+  activePlan?: PlanProgress;
+  lastPlan?: PlanProgress;
+  backfill_start?: string;
+  backfill_end?: string;
+  setBackfillDate: (type: 'start' | 'end' , date: string) => void;
+  environment?: string;
+  category?: Category;
   categories: Category[];
   withBackfill: boolean;
   setWithBackfill: (withBackfill: boolean) => void;
   backfills: ContextEnvironmentBackfill[];
-  setBackfills: (backfills: ContextEnvironmentBackfill[]) => void;
+  setBackfills: (backfills?: ContextEnvironmentBackfill[]) => void;
   updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => void;
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
-  activePlan: null,
-  lastPlan: null,
-  setActivePlan: (activePlan: PlanProgress | null) => set(() => ({ activePlan })),
-  setLastPlan: (lastPlan: PlanProgress | null) => set(() => ({ lastPlan })),
+  activePlan: undefined,
+  lastPlan: undefined,
+  setActivePlan: (activePlan?: PlanProgress) => set(() => ({ activePlan })),
+  setLastPlan: (lastPlan?: PlanProgress) => set(() => ({ lastPlan })),
   setState: (state: PlanState) => set(() => ({ state })),
   setAction: (action: PlanAction) => set(() => ({ action })),
-  setEnvironment: (environment: string) => set(() => ({ environment })),
-  setCategory: (category: Category) => set(() => ({ category })),
-  backfill_start: null,
-  backfill_end: null,
+  setEnvironment: (environment?: string) => set(() => ({ environment })),
+  setCategory: (category?: Category) => set(() => ({ category })),
+  backfill_start: undefined,
+  backfill_end: undefined,
   setBackfillDate: (type: 'start' | 'end' , date: string) => set(() => ({
     [`backfill_${type}`]: date,
   })),
-  environment: null,
-  category: null,
+  environment: undefined,
+  category: undefined,
   categories: getCategories(),
   withBackfill: true,
   setWithBackfill: (withBackfill: boolean) => set(() => ({ withBackfill })),
   backfills: [],
-  setBackfills: (backfills: ContextEnvironmentBackfill[]) => set(() => ({ backfills })),
+  setBackfills: (backfills?: ContextEnvironmentBackfill[]) => set(() => backfills == null
+    ? { backfills: [] }
+    : { backfills }
+  ),
   updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => {
     const s = get()
 
@@ -132,13 +136,13 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
       s.setState(EnumPlanState.Finished)
 
       if (isObjectEmpty(s.activePlan?.tasks)) {
-        s.setLastPlan(null)
+        s.setLastPlan(undefined)
       } else {
         s.setLastPlan(plan)
       }
 
       if (isObjectEmpty(data.tasks)) {
-        s.setActivePlan(null)
+        s.setActivePlan(undefined)
       }
   
       channel?.close()
