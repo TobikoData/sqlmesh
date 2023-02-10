@@ -47,6 +47,7 @@ class Project:
         models: t.Dict[str, ModelConfig],
         sources: t.Dict[str, SourceConfig],
         seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
         config_paths: t.List[Path],
     ):
         """
@@ -57,6 +58,7 @@ class Project:
             models: Dict of model name to model config for all models within this project
             sources: Dict of source name to source config for all sources within this project
             seeds: Dict of seed name to seed config for all seeds within this project
+            variables: Dict of variable name to variable value for all variables within this project
             config_paths: Paths to all the config files used by the project
         """
         self.project_root = project_root
@@ -65,6 +67,7 @@ class Project:
         self.models = models
         self.sources = sources
         self.seeds = seeds
+        self.variables = variables
         self.config_paths = config_paths
 
     @classmethod
@@ -103,12 +106,14 @@ class Project:
         ]
         models, sources, paths = cls._load_models(models_dirs, project_config)
         config_paths.extend(paths)
+        variables = project_yaml.get("vars", {})
 
         seed_dirs = [Path(project_root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
         seeds, paths = cls._load_seeds(seed_dirs, project_config)
         config_paths.extend(paths)
 
-        return Project(project_root, project_name, profile, models, sources, seeds, config_paths)
+        return Project(project_root, project_name, profile, models, sources, seeds, variables, config_paths)
+
 
     @classmethod
     def _load_models(

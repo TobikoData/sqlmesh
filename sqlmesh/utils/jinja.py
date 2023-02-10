@@ -83,7 +83,6 @@ def capture_jinja(query: str) -> CapturedQuery:
 
     Args:
         query: The string to render
-        env: jinja methods to use during rendering
 
     Returns:
         The jinja rendered string

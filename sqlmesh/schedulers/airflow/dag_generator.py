@@ -104,7 +104,6 @@ class SnapshotDagGenerator:
                 "email_on_failure": True,
             },
         ) as dag:
-
             hwm_sensor_tasks = self._create_hwm_sensors(snapshot=snapshot)
 
             evaluator_task = self._create_snapshot_evaluator_operator(

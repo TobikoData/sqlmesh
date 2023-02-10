@@ -23,3 +23,6 @@ models:
   +start: Jan 1 2022
   sushi:
     +materialized: table
+
+vars:
+  top_waiters_limit: 10

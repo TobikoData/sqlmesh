@@ -69,6 +69,7 @@ class DbtLoader(Loader):
                     config.sources,
                     config.models,
                     config.seeds,
+                    config.variables,
                     macros,
                     self._macro_dependencies,
                 )

@@ -13,7 +13,7 @@ from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
-from sqlmesh.dbt.macros import ref_method, source_method
+from sqlmesh.dbt.macros import ref_method, source_method, var_method
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
@@ -129,6 +129,7 @@ class ModelConfig(GeneralConfig):
         sources: t.Dict[str, SourceConfig],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
         macros: MacroRegistry,
         macro_dependencies: t.Dict[str, Dependencies],
     ) -> Model:
@@ -158,6 +159,7 @@ class ModelConfig(GeneralConfig):
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
             "ref": ref_method(dependencies.refs, model_mapping),
+            "var": var_method(variables),
             **{k: v for k, v in macros.items() if k in dependencies.macros},
         }
 
