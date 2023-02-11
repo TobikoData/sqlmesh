@@ -1,10 +1,14 @@
-import { EnumPlanAction, PlanAction } from "../../../context/plan";
-import { isArrayNotEmpty } from "../../../utils";
+import { EnumPlanAction, PlanAction } from '../../../context/plan'
+import { isArrayNotEmpty } from '../../../utils'
 
-export function getActionName(action: PlanAction, options: Array<string> = [], fallback: string = 'Start'): string {
+export function getActionName(
+  action: PlanAction,
+  options: string[] = [],
+  fallback: string = 'Start'
+): string {
   if (!options.includes(action)) return fallback
 
-  let name: string;
+  let name: string
 
   switch (action) {
     case EnumPlanAction.Done:
@@ -39,6 +43,6 @@ export function getActionName(action: PlanAction, options: Array<string> = [], f
   return name
 }
 
-export function isModified(modified: unknown): boolean {
-  return (Object.values(modified || {}) as any[]).some(isArrayNotEmpty)
+export function isModified<T extends object>(modified?: T): boolean {
+  return Object.values(modified != null || {}).some(isArrayNotEmpty)
 }

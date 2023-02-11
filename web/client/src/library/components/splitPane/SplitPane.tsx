@@ -1,8 +1,7 @@
 import Split, { SplitProps } from 'react-split'
 import './SplitPane.css'
 
-export function SplitPane({ className, children, sizes, direction }: SplitProps) {
-
+export function SplitPane({ className, children, sizes, direction }: SplitProps): JSX.Element {
   return (
     <Split
       className={className}
@@ -14,5 +13,5 @@ export function SplitPane({ className, children, sizes, direction }: SplitProps)
     >
       {children}
     </Split>
-  );
-};
+  )
+}

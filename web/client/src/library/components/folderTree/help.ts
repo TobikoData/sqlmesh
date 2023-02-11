@@ -1,24 +1,21 @@
-import { ModelDirectory, ModelFile } from "../../../models"
+import { ModelDirectory, ModelFile } from '../../../models'
 
 export function getAllFilesInDirectory(directory: ModelDirectory): ModelFile[] {
-  const files = directory.files || []
-  const directories = directory.directories || []
+  const files = directory.files ?? []
+  const directories = directory.directories ?? []
 
-  return [
-    ...files,
-    ...directories.map(getAllFilesInDirectory).flat()
-  ]
+  return [...files, ...directories.map(getAllFilesInDirectory).flat()]
 }
 
 class Counter {
-  private store = new Map<ModelDirectory, number>();
+  private readonly store = new Map<ModelDirectory, number>()
 
   countByKey(key: ModelDirectory): number {
-    const count = (this.store.get(key) ?? 0) + 1;
+    const count = (this.store.get(key) ?? 0) + 1
 
-    this.store.set(key, count);
+    this.store.set(key, count)
 
-    return count;
+    return count
   }
 }
 

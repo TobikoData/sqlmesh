@@ -1,21 +1,30 @@
-import { isNil } from "../utils"
+import { isNil } from '../utils'
+
+type ChannelCallback = (data: any, channel: EventSource, unsubscribe: () => void) => void
 
 const channels = new Map<string, EventSource>()
 
-export function useChannel(topic: string, callback: any): [() => void, () => EventSource | undefined, () => boolean] {
+export function useChannel(
+  topic: string,
+  callback: ChannelCallback
+): [() => void, () => EventSource | undefined, () => boolean] {
   return [
-    () => subscribe(topic, callback),
+    () => {
+      subscribe(topic, callback)
+    },
     () => channels.get(topic),
-    () => channels.delete(topic)
+    () => channels.delete(topic),
   ]
 }
 
-function subscribe(topic: string, callback: any) {
+function subscribe(topic: string, callback: ChannelCallback): void {
   if (isNil(topic)) return
 
   let channel = channels.get(topic)
 
-  channel?.close()
+  if (channel == null) return
+
+  channel.close()
 
   channels.set(topic, getEventSource(topic))
 
@@ -23,11 +32,13 @@ function subscribe(topic: string, callback: any) {
 
   if (channel == null) return
 
-  channel.onmessage = (event: any) => {
-    callback && callback(JSON.parse(event.data), channel, () => channels.delete(topic))
+  channel.onmessage = (event: MessageEvent) => {
+    if (callback == null || channel == null) return
+
+    callback(JSON.parse(event.data), channel, () => channels.delete(topic))
   }
 }
 
-function getEventSource(topic: string) {
+function getEventSource(topic: string): EventSource {
   return new EventSource(topic)
 }

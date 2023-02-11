@@ -1,13 +1,19 @@
-import { FolderOpenIcon, DocumentIcon, FolderPlusIcon, DocumentPlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
+import {
+  FolderOpenIcon,
+  DocumentIcon,
+  FolderPlusIcon,
+  DocumentPlusIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/solid'
 import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import { ChevronRightIcon, ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
-import { FormEvent, MouseEvent, useMemo, useState } from 'react';
-import clsx from 'clsx';
-import { singular } from 'pluralize';
-import { ModelFile, ModelDirectory } from '../../../models';
-import type { Directory } from '../../../api/client';
-import { useStoreFileTree } from '../../../context/fileTree';
-import { getAllFilesInDirectory, counter } from './help';
+import { FormEvent, MouseEvent, useMemo, useState } from 'react'
+import clsx from 'clsx'
+import { singular } from 'pluralize'
+import { ModelFile, ModelDirectory } from '../../../models'
+import type { Directory as DirectoryFromAPI } from '../../../api/client'
+import { useStoreFileTree } from '../../../context/fileTree'
+import { getAllFilesInDirectory, counter } from './help'
 
 /* TODO:
   - connect to API
@@ -22,41 +28,37 @@ import { getAllFilesInDirectory, counter } from './help';
 */
 
 interface PropsDirectory {
-  directory: ModelDirectory;
+  directory: ModelDirectory
 }
 
 interface PropsFile {
-  file: ModelFile;
+  file: ModelFile
 }
 
-const CSS_ICON_SIZE = 'w-4 h-4';
+const CSS_ICON_SIZE = 'w-4 h-4'
 
-export function FolderTree({ project }: { project?: Directory }) {
+export function FolderTree({ project }: { project?: DirectoryFromAPI }): JSX.Element {
   const directory = useMemo(() => new ModelDirectory(project), [project])
 
   return (
-    <div
-      className='py-2 overflow-hidden'
-    >
-      <Directory
-        directory={directory}
-      />
+    <div className="py-2 overflow-hidden">
+      <Directory directory={directory} />
     </div>
-  );
+  )
 }
 
-function Directory({ directory }: PropsDirectory) {
+function Directory({ directory }: PropsDirectory): JSX.Element {
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
-  const isRoot = directory.withParent === false
+  const isRoot = !directory.withParent
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setOpen] = useState(false);
-  const [renamingDirectory, setRenamingDirectory] = useState<ModelDirectory>();
-  const [newName, setNewName] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false)
+  const [isOpen, setOpen] = useState(false)
+  const [renamingDirectory, setRenamingDirectory] = useState<ModelDirectory>()
+  const [newName, setNewName] = useState<string>('')
 
-  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon;
-  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon;
+  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
+  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
 
   function createDirectory(e: MouseEvent): void {
     e.stopPropagation()
@@ -69,10 +71,15 @@ function Directory({ directory }: PropsDirectory) {
       const count = counter.countByKey(directory)
       const name = `new_directory_${count}`.toLowerCase()
 
-      directory.addDirectory(new ModelDirectory({
-        name,
-        path: `${directory.path}/${name}`
-      }, directory))
+      directory.addDirectory(
+        new ModelDirectory(
+          {
+            name,
+            path: `${directory.path}/${name}`,
+          },
+          directory
+        )
+      )
 
       setOpen(true)
       setIsLoading(false)
@@ -94,13 +101,18 @@ function Directory({ directory }: PropsDirectory) {
         ? `new_file_${count}${extension}`
         : `new_${singular(directory.name)}_${count}${extension}`.toLowerCase()
 
-      directory.addFile(new ModelFile({
-        name,
-        extension,
-        path: `${directory.path}/${name}`,
-        content: '',
-        is_supported: true,
-      }, directory))
+      directory.addFile(
+        new ModelFile(
+          {
+            name,
+            extension,
+            path: `${directory.path}/${name}`,
+            content: '',
+            is_supported: true,
+          },
+          directory
+        )
+      )
 
       setOpen(true)
       setIsLoading(false)
@@ -147,13 +159,11 @@ function Directory({ directory }: PropsDirectory) {
 
   return (
     <>
-      {isRoot === false && (
-        <span
-          className='w-full text-base whitespace-nowrap px-2 hover:bg-secondary-100 group flex justify-between rounded-md'
-        >
-          <span className='w-full flex items-center'>
+      {!isRoot && (
+        <span className="w-full text-base whitespace-nowrap px-2 hover:bg-secondary-100 group flex justify-between rounded-md">
+          <span className="w-full flex items-center">
             <div
-              className='mr-2 flex items-center cursor-pointer'
+              className="mr-2 flex items-center cursor-pointer"
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
@@ -161,22 +171,20 @@ function Directory({ directory }: PropsDirectory) {
               }}
             >
               <IconChevron
-                className={clsx(
-                  `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`,
-                  { 'invisible pointer-events-none cursor-default': !directory.withDirectories && !directory.withFiles }
-                )}
+                className={clsx(`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`, {
+                  'invisible pointer-events-none cursor-default':
+                    !directory.withDirectories && !directory.withFiles,
+                })}
               />
-              <IconFolder
-                className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
-              />
+              <IconFolder className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`} />
             </div>
-            <span className='w-full h-[1.5rem] flex items-center cursor-pointer justify-between'>
+            <span className="w-full h-[1.5rem] flex items-center cursor-pointer justify-between">
               {renamingDirectory?.id === directory.id ? (
-                <div className='flex items-center'>
+                <div className="flex items-center">
                   <input
-                    type='text'
-                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
-                    value={newName || directory.name}
+                    type="text"
+                    className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
+                    value={newName === '' ? directory.name : newName}
                     onInput={(e: FormEvent<HTMLInputElement>) => {
                       e.stopPropagation()
 
@@ -185,7 +193,7 @@ function Directory({ directory }: PropsDirectory) {
                       setNewName(elInput.value)
                     }}
                   />
-                  <div className='flex'>
+                  <div className="flex">
                     <CheckCircleIcon
                       className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`}
                       onClick={(e: MouseEvent) => {
@@ -197,7 +205,7 @@ function Directory({ directory }: PropsDirectory) {
                   </div>
                 </div>
               ) : (
-                <span className='w-full flex justify-between items-center'>
+                <span className="w-full flex justify-between items-center">
                   <span
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
@@ -209,14 +217,23 @@ function Directory({ directory }: PropsDirectory) {
 
                       setRenamingDirectory(directory)
                     }}
-                    className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+                    className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
                   >
                     {directory.name}
                   </span>
-                  <span className='hidden group-hover:block'>
-                    <DocumentPlusIcon onClick={createFile} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-                    <FolderPlusIcon onClick={createDirectory} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`} />
-                    <XCircleIcon onClick={remove} className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`} />
+                  <span className="hidden group-hover:block">
+                    <DocumentPlusIcon
+                      onClick={createFile}
+                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
+                    />
+                    <FolderPlusIcon
+                      onClick={createDirectory}
+                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
+                    />
+                    <XCircleIcon
+                      onClick={remove}
+                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`}
+                    />
                   </span>
                 </span>
               )}
@@ -232,50 +249,39 @@ function Directory({ directory }: PropsDirectory) {
               className="border-l px-1"
               title={dir.name}
             >
-              <Directory
-                directory={dir}
-              />
+              <Directory directory={dir} />
             </li>
           ))}
         </ul>
       )}
       {(isOpen || isRoot) && directory.withFiles && (
         <ul
-          className={clsx(
-            'mr-1 overflow-hidden',
-            directory.withParent ? 'ml-4' : 'ml-[2px] mt-1'
-          )}
+          className={clsx('mr-1 overflow-hidden', directory.withParent ? 'ml-4' : 'ml-[2px] mt-1')}
         >
           {directory.files.map(file => (
             <li
               key={file.id}
               title={file.name}
-              className={clsx(
-                'pl-1',
-                file.parent?.withParent && 'border-l'
-              )}
+              className={clsx('pl-1', file.parent?.withParent != null && 'border-l')}
             >
-              <File
-                file={file}
-              />
+              <File file={file} />
             </li>
-          ))
-          }
+          ))}
         </ul>
       )}
     </>
   )
 }
 
-function File({ file }: PropsFile) {
+function File({ file }: PropsFile): JSX.Element {
   const activeFileId = useStoreFileTree(s => s.activeFileId)
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [renamingFile, setRenamingFile] = useState<ModelFile>();
-  const [newName, setNewName] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false)
+  const [renamingFile, setRenamingFile] = useState<ModelFile>()
+  const [newName, setNewName] = useState<string>('')
 
   function remove(file: ModelFile): void {
     if (isLoading) return
@@ -301,9 +307,7 @@ function File({ file }: PropsFile) {
 
     openedFiles.delete(renamingFile.id)
 
-    renamingFile.rename(
-      newName.trim().replace(`.${renamingFile.extension}`, '')
-    )
+    renamingFile.rename(newName.trim().replace(`.${renamingFile.extension}`, ''))
 
     if (shouldSelectAfterRename) {
       selectFile(renamingFile)
@@ -325,31 +329,37 @@ function File({ file }: PropsFile) {
       className={clsx(
         'text-base whitespace-nowrap group/file px-2 flex justify-between rounded-md',
         file.id === activeFileId ? 'text-secondary-500' : 'text-gray-800',
-        file.is_supported && 'group cursor-pointer hover:bg-secondary-100',
-      )}>
-      <span className={clsx(
-        'flex w-full items-center overflow-hidden overflow-ellipsis',
-        !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
-      )}>
-        <div className='flex items-center'>
-          {openedFiles?.has(file.id)
-            ? (<DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)
-            : (<DocumentIconOutline className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />)
-          }
+        file.is_supported && 'group cursor-pointer hover:bg-secondary-100'
+      )}
+    >
+      <span
+        className={clsx(
+          'flex w-full items-center overflow-hidden overflow-ellipsis',
+          !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800'
+        )}
+      >
+        <div className="flex items-center">
+          {openedFiles?.has(file.id) ? (
+            <DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />
+          ) : (
+            <DocumentIconOutline
+              className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`}
+            />
+          )}
         </div>
         {renamingFile?.id === file.id ? (
-          <div className='flex items-center'>
+          <div className="flex items-center">
             <input
-              type='text'
-              className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
-              value={newName || file.name}
+              type="text"
+              className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
+              value={newName === '' ? file.name : newName}
               onInput={(e: any) => {
                 e.stopPropagation()
 
                 setNewName(e.target.value)
               }}
             />
-            <div className='flex'>
+            <div className="flex">
               <CheckCircleIcon
                 className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`}
                 onClick={(e: MouseEvent) => {
@@ -374,19 +384,21 @@ function File({ file }: PropsFile) {
                 setNewName(file.name)
                 setRenamingFile(file)
               }}
-              className='w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500'
+              className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
             >
               {file.name}
             </span>
             <span
-              className='flex items-center invisible group-hover/file:visible min-w-8'
+              className="flex items-center invisible group-hover/file:visible min-w-8"
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
                 remove(file)
               }}
             >
-              <XCircleIcon className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500 cursor-pointer`} />
+              <XCircleIcon
+                className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500 cursor-pointer`}
+              />
             </span>
           </>
         )}

@@ -8,7 +8,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 
-const columnHelper = createColumnHelper<any>()
+const data: Array<{ id: string }> = []
+const columnHelper = createColumnHelper<{ id: string }>()
 
 const columns = [
   columnHelper.accessor('id', {
@@ -17,25 +18,24 @@ const columns = [
   }),
 ]
 
-export default function Tabs() {
-  const [data, setData] = useState([])
+export default function Tabs(): JSX.Element {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
 
-  let [categories] = useState({
+  const [categories] = useState({
     Table: [],
-    'Query Preview': []
+    'Query Preview': [],
   })
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <Tab.Group>
         <Tab.List className="w-full whitespace-nowrap px-2 pt-2">
-          <div className='w-full overflow-hidden overflow-x-auto'>
-            {Object.keys(categories).map((category) => (
+          <div className="w-full overflow-hidden overflow-x-auto">
+            {Object.keys(categories).map(category => (
               <Tab
                 key={category}
                 className={({ selected }) =>
@@ -59,19 +59,19 @@ export default function Tabs() {
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
             )}
           >
-            <div className='w-full h-full overflow-hidden overflow-y-auto'>
-              <table className='w-full h-full'>
-                <thead className='sticky top-0 bg-gray-100'>
+            <div className="w-full h-full overflow-hidden overflow-y-auto">
+              <table className="w-full h-full">
+                <thead className="sticky top-0 bg-gray-100">
                   {table.getHeaderGroups().map(headerGroup => (
                     <tr key={headerGroup.id}>
                       {headerGroup.headers.map(header => (
-                        <th key={header.id} className="px-1 px-3 text-left">
+                        <th
+                          key={header.id}
+                          className="px-1 px-3 text-left"
+                        >
                           {header.isPlaceholder
                             ? null
-                            : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
+                            : flexRender(header.column.columnDef.header, header.getContext())}
                         </th>
                       ))}
                     </tr>
@@ -81,24 +81,27 @@ export default function Tabs() {
                   {table.getRowModel().rows.map(row => (
                     <tr key={row.id}>
                       {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} className='px-1'>
+                        <td
+                          key={cell.id}
+                          className="px-1"
+                        >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
                       ))}
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className='text-left sticky bottom-0 bg-gray-100'>
+                <tfoot className="text-left sticky bottom-0 bg-gray-100">
                   {table.getFooterGroups().map(footerGroup => (
                     <tr key={footerGroup.id}>
                       {footerGroup.headers.map(header => (
-                        <th key={header.id} className='px-1 px-3'>
+                        <th
+                          key={header.id}
+                          className="px-1 px-3"
+                        >
                           {header.isPlaceholder
                             ? null
-                            : flexRender(
-                              header.column.columnDef.footer,
-                              header.getContext()
-                            )}
+                            : flexRender(header.column.columnDef.footer, header.getContext())}
                         </th>
                       ))}
                     </tr>
@@ -106,7 +109,6 @@ export default function Tabs() {
                 </tfoot>
               </table>
             </div>
-
           </Tab.Panel>
           <Tab.Panel
             className={clsx(
