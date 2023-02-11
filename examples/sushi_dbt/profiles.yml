@@ -17,4 +17,4 @@ sushi:
       type: snowflake
       user: "{{ env_var('SNOWFLAKE_USER') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
-  target: duckdb
+  target: in_memory

@@ -162,7 +162,7 @@ class ModelConfig(GeneralConfig):
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
             "ref": ref_method(dependencies.refs, model_mapping),
-            "var": var_method(variables),
+            "var": var_method(dependencies.variables, variables),
             **{k: v for k, v in macros.items() if k in dependencies.macros},
         }
 
@@ -236,6 +236,14 @@ class ModelConfig(GeneralConfig):
 
             dependencies.sources.add(source)
 
+        for var in self._variables:
+            if var not in variables:
+                raise ConfigError(
+                    f"Variable {var} for model {self.table_name} not found."
+                )
+
+            dependencies.variables.add(var)
+
         for dependency in self._depends_on:
             """Add seed/model as a dependency"""
             parent: t.Union[SeedConfig, ModelConfig, None] = seeds.get(dependency)
@@ -290,7 +298,7 @@ class ModelConfig(GeneralConfig):
 
             for var in macro_dependencies[macro].variables:
                 if var not in variables:
-                    raise ConfigError(f"Variable {var} not found.")
+                    raise ConfigError(f"Variable {var} for macro {macro} not found.")
                 dependencies.variables.add(var)
 
             for macro_call in macro_dependencies[macro].macros:
