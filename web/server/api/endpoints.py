@@ -13,10 +13,10 @@ import pandas as pd
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
-from sqlmesh.core.console import ApiConsole
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
+from web.server.console import ApiConsole
 from web.server.settings import Settings, get_context, get_loaded_context, get_settings
 from web.server.sse import SSEResponse
 from web.server.utils import run_in_executor, validate_path
