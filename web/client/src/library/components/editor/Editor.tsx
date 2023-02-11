@@ -38,13 +38,23 @@ export function Editor() {
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
 
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
-  const [activeFile, setActiveFile] = useState<ModelFile>()
+  const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
+  const [isSaved, setIsSaved] = useState(true)
 
-  const { data: fileData } = useApiFileByPath(activeFile?.path)
-  const mutationSaveFile = useMutationApiSaveFile(client)
+  const { data: fileData } = useApiFileByPath(activeFile.path)
+  const mutationSaveFile = useMutationApiSaveFile(client, {
+    onSuccess() {
+      setIsSaved(true)
+      setEditorFileStatus(EnumEditorFileStatus.Edit)
+    },
+    onMutate() {
+      setIsSaved(false)
+      setEditorFileStatus(EnumEditorFileStatus.Saving)
+    }
+  })
 
   useEffect(() => {
-    if (fileData == null || activeFile == null) return
+    if (fileData == null) return
 
     activeFile.content = fileData.content ?? ''
 
@@ -52,7 +62,11 @@ export function Editor() {
   }, [fileData])
 
   useEffect(() => {
-    setActiveFile(openedFiles.get(activeFileId))
+    const activeOpenedFile = openedFiles.get(activeFileId)
+
+    if (activeOpenedFile == null) return setActiveFileId(getNextOpenedFile().id)
+
+    setActiveFile(activeOpenedFile)
   }, [activeFileId])
 
   useEffect(() => {
@@ -67,8 +81,6 @@ export function Editor() {
 
 
   function closeEditorTab(file: ModelFile) {
-    if (file == null) return
-
     openedFiles.delete(file.id)
 
     if (activeFileId === file.id) {
@@ -86,29 +98,21 @@ export function Editor() {
     setActiveFileId(file.id)
   }
 
-  function onChange(value: string) {
-    setEditorFileStatus(EnumEditorFileStatus.Edit)
-
-    if (activeFile == null) return
-
-    setEditorFileStatus(EnumEditorFileStatus.Saving)
+  function onChange(value: string): void{
+    if (activeFile.isLocal || activeFile.content === value) return
 
     activeFile.content = value
 
     setOpenedFiles(openedFiles)
 
-    if (activeFile?.isLocal || activeFile.content === value) return
-
     mutationSaveFile.mutate({
-      path: activeFile?.path,
+      path: activeFile.path,
       body: { content: value },
     })
-
-    setEditorFileStatus(EnumEditorFileStatus.Saved)
   }
 
   function sendQuery() {
-    console.log('Sending query', activeFile?.content)
+    console.log('Sending query', activeFile.content)
   }
 
   function cleanUp() {
@@ -182,21 +186,31 @@ export function Editor() {
       <div className="w-full h-full flex flex-col overflow-hidden">
         <div className="w-full h-full overflow-hidden ">
           <CodeEditor
-            key={activeFile?.id}
+            key={activeFile.id}
             className="h-full w-full"
-            extension={activeFile?.extension}
-            value={activeFile?.content}
+            extension={activeFile.extension}
+            value={activeFile.content}
             onChange={debouncedChange}
           />
         </div>
       </div>
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
-        <small>validation: ok</small>
-        <small>File Status: {fileStatus}</small>
-        <small>{getLanguageByExtension(activeFile?.extension)}</small>
+        <div className='flex align-center mr-4'>
+          <Indicator text="Valid" ok={true} />
+          {activeFile.isLocal === false && (
+            <>
+              <Divider orientation='vertical' className='h-[12px] mx-3' />
+              <Indicator text="Saved" ok={isSaved} />
+            </>
+          )}
+          <Divider orientation='vertical' className='h-[12px] mx-3' />
+          <Indicator text="Status" value={fileStatus} />
+          <Divider orientation='vertical' className='h-[12px] mx-3' />
+          <Indicator text="Language" value={getLanguageByExtension(activeFile.extension)} />
+        </div>
         <div className="flex">
-          {activeFile?.extension === '.sql' && activeFile.content && (
+          {activeFile.extension === '.sql' && activeFile.content && (
             <>
               <Button size={EnumSize.sm} variant="alternative" onClick={e => {
                 e.stopPropagation()
@@ -215,7 +229,7 @@ export function Editor() {
             </>
           )}
 
-          {!activeFile?.isLocal && (
+          {activeFile.isLocal === false && (
             <>
               <Button size={EnumSize.sm} variant="alternative">
                 Validate
@@ -223,15 +237,20 @@ export function Editor() {
               <Button size={EnumSize.sm} variant="alternative">
                 Format
               </Button>
-              <Button size={EnumSize.sm} variant="success">
-                Save
-              </Button>
             </>
           )}
         </div>
       </div>
     </div >
   )
+}
+
+function Indicator({ text, value, ok = true }: { text: string, value?: string, ok?: boolean }) {
+  return <small className='font-bold text-xs whitespace-nowrap'>
+    {text}: {value
+      ? <span className='font-normal text-gray-600'>{value}</span>
+      : <span className={clsx(`bg-${ok ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')}></span>}
+  </small>
 }
 
 function CodeEditor({ className, value, onChange, extension }: any) {
