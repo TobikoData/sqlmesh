@@ -2,8 +2,8 @@ import asyncio
 
 from fastapi import FastAPI
 
-from sqlmesh.core.console import ApiConsole
 from web.server.api.endpoints import router
+from web.server.console import ApiConsole
 
 app = FastAPI()
 api_console = ApiConsole()
