@@ -23,7 +23,7 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       parent
     )
 
-    if ((initial as ModelDirectory).isModel) {
+    if ((initial as ModelDirectory)?.isModel) {
       this.directories = (initial as ModelDirectory).directories
       this.files = (initial as ModelDirectory).files
     } else {

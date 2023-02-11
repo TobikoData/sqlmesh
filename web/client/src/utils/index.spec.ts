@@ -145,12 +145,12 @@ describe('toDate', () => {
     expect(isDate(date)).toBe(true)
   })
 
-  it('returns null for an invalid date string', () => {
-    expect(toDate('not a date')).toBe(null)
+  it('returns undefined for an invalid date string', () => {
+    expect(toDate('not a date')).toBe(undefined)
   })
 
-  it('returns null for an invalid numeric value', () => {
-    expect(toDate('not a number')).toBe(null)
+  it('returns undefined for an invalid numeric value', () => {
+    expect(toDate('not a number')).toBe(undefined)
   })
 })
 

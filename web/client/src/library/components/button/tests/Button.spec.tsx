@@ -26,7 +26,7 @@ describe('Button', () => {
     )
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-primary-500')
+    expect(button).toHaveClass('bg-secondary-100')
     expect(button).not.toHaveClass('rounded-md')
     expect(button).toHaveClass('px-2 py-1 text-xs')
   })
@@ -69,7 +69,7 @@ describe('ButtonMenu', () => {
     )
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-primary-500')
+    expect(button).toHaveClass('bg-secondary-100')
     expect(button).not.toHaveClass('rounded-md')
     expect(button).toHaveClass('px-2 py-1 text-xs')
   })

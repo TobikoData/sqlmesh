@@ -16,15 +16,18 @@ import {
 import type { File, Directory, Context } from './client'
 
 export function useApiFileByPath(path?: string): UseQueryResult<File> {
+  const shouldEnable = path != null && path !== ''
+
   return useQuery({
     queryKey: [`/api/files`, path],
-    queryFn: path != null ? async () => await getFileApiFilesPathGet(path) : undefined,
-    enabled: path != null,
+    queryFn: shouldEnable ? async () => await getFileApiFilesPathGet(path) : undefined,
+    enabled: shouldEnable,
     cacheTime: 0,
   })
 }
 
 export function useApiFiles(): UseQueryResult<Directory> {
+  console.log('useApiFiles')
   return useQuery({
     queryKey: ['/api/files'],
     queryFn: getFilesApiFilesGet,

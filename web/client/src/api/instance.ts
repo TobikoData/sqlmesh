@@ -1,6 +1,6 @@
 const baseURL = window.location.origin
 
-export async function fetchAPI<T extends { ok: boolean }, B extends object = any>({
+export async function fetchAPI<T = any, B extends object = any>({
   url,
   method,
   params,
@@ -38,7 +38,7 @@ export async function fetchAPI<T extends { ok: boolean }, B extends object = any
       body: toRequestBody(data),
     })
       .then(async response => {
-        if (response.status === 204) return { ok: true }
+        if (response.status === 204) return {}
 
         let json = null
         const headerContentType = response.headers.get('Content-Type')
@@ -80,3 +80,5 @@ function toRequestBody(obj: unknown): BodyInit {
     return ''
   }
 }
+
+export default fetchAPI

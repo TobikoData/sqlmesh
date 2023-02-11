@@ -44,5 +44,5 @@ export function getActionName(
 }
 
 export function isModified<T extends object>(modified?: T): boolean {
-  return Object.values(modified != null || {}).some(isArrayNotEmpty)
+  return Object.values(modified ?? {}).some(isArrayNotEmpty)
 }
