@@ -68,6 +68,7 @@ class ModelConfig(GeneralConfig):
     _depends_on: t.Set[str] = set()
     _calls: t.Set[str] = set()
     _sources: t.Set[str] = set()
+    _variables: t.Set[str] = set()
 
     # DBT configuration fields
     start: t.Optional[str] = None
@@ -154,7 +155,9 @@ class ModelConfig(GeneralConfig):
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        dependencies = self._dependencies(source_mapping, models, seeds, macros, macro_dependencies)
+        dependencies = self._dependencies(
+            source_mapping, models, seeds, variables, macros, macro_dependencies
+        )
 
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
@@ -218,12 +221,13 @@ class ModelConfig(GeneralConfig):
         source_mapping: t.Dict[str, str],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
         macros: MacroRegistry,
         macro_dependencies: t.Dict[str, Dependencies],
     ) -> Dependencies:
         """Recursively gather all the dependencies for this model, including any from ephemeral parents and macros"""
         dependencies: Dependencies = self.__class__._macro_dependencies(
-            self, source_mapping, models, seeds, macros, macro_dependencies
+            self, source_mapping, models, seeds, variables, macros, macro_dependencies
         )
 
         for source in self._sources:
@@ -246,7 +250,7 @@ class ModelConfig(GeneralConfig):
             dependencies.refs.add(dependency)
             if parent.materialized == Materialization.EPHEMERAL:
                 parent_dependencies = parent._dependencies(
-                    source_mapping, models, seeds, macros, macro_dependencies
+                    source_mapping, models, seeds, variables, macros, macro_dependencies
                 )
                 dependencies = dependencies.union(parent_dependencies)
 
@@ -259,6 +263,7 @@ class ModelConfig(GeneralConfig):
         source_mapping: t.Dict[str, str],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
         macros: MacroRegistry,
         macro_dependencies: t.Dict[str, Dependencies],
     ) -> Dependencies:
@@ -282,6 +287,11 @@ class ModelConfig(GeneralConfig):
                 if ref not in models and ref not in seeds:
                     raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.refs.add(ref)
+
+            for var in macro_dependencies[macro].variables:
+                if var not in variables:
+                    raise ConfigError(f"Variable {var} not found.")
+                dependencies.variables.add(var)
 
             for macro_call in macro_dependencies[macro].macros:
                 if macro_call not in macros:

@@ -327,6 +327,7 @@ class Project:
         depends_on = set()
         calls = set()
         sources = set()
+        variables = set()
 
         for method, args, kwargs in capture_jinja(sql).calls:
             if method == "config":
@@ -343,6 +344,9 @@ class Project:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
+            elif method == "var":
+                if args:
+                    variables.add(args[0])
             else:
                 calls.add(method)
 
@@ -350,6 +354,7 @@ class Project:
         model_config._depends_on = depends_on
         model_config._calls = calls
         model_config._sources = sources
+        model_config._variables = variables
 
         return model_config
 
