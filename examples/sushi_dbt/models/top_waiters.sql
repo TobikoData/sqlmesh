@@ -6,7 +6,7 @@
 
 SELECT
   waiter_id::INT AS waiter_id,
-  revenue::DOUBLE AS revenue
+  revenue::DOUBLE AS {{ var('non_existent_variable', 'revenue') }}
 FROM {{ ref('waiter_revenue_by_day') }}
 WHERE
   ds = (

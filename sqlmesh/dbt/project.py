@@ -327,7 +327,7 @@ class Project:
         depends_on = set()
         calls = set()
         sources = set()
-        variables = set()
+        variables = {}
 
         for method, args, kwargs in capture_jinja(sql).calls:
             if method == "config":
@@ -346,7 +346,8 @@ class Project:
                     sources.add(source)
             elif method == "var":
                 if args:
-                    variables.add(args[0])
+                    has_default_value = len(args) == 2
+                    variables[args[0]] = has_default_value
             else:
                 calls.add(method)
 

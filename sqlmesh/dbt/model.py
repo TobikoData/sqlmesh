@@ -68,7 +68,7 @@ class ModelConfig(GeneralConfig):
     _depends_on: t.Set[str] = set()
     _calls: t.Set[str] = set()
     _sources: t.Set[str] = set()
-    _variables: t.Set[str] = set()
+    _variables: t.Dict[str, bool] = {}
 
     # DBT configuration fields
     start: t.Optional[str] = None
@@ -236,8 +236,8 @@ class ModelConfig(GeneralConfig):
 
             dependencies.sources.add(source)
 
-        for var in self._variables:
-            if var not in variables:
+        for var, has_default_value in self._variables.items():
+            if var not in variables and not has_default_value:
                 raise ConfigError(
                     f"Variable {var} for model {self.table_name} not found."
                 )
