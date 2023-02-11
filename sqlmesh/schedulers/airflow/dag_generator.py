@@ -60,9 +60,7 @@ class SnapshotDagGenerator:
     ):
         self._engine_operator = engine_operator
         self._engine_operator_args = engine_operator_args or {}
-        self._ddl_engine_operator_args = (
-            ddl_engine_operator_args or self._engine_operator_args
-        )
+        self._ddl_engine_operator_args = ddl_engine_operator_args or self._engine_operator_args
         self._snapshots = snapshots
 
     def generate_cadence_dags(self) -> t.List[DAG]:
@@ -184,8 +182,8 @@ class SnapshotDagGenerator:
     ) -> None:
         has_success_or_failed_notification = False
         for notification_target in request.notification_targets:
-            notification_operator_provider = (
-                NOTIFICATION_TARGET_TO_OPERATOR_PROVIDER.get(type(notification_target))
+            notification_operator_provider = NOTIFICATION_TARGET_TO_OPERATOR_PROVIDER.get(
+                type(notification_target)
             )
             if not notification_operator_provider:
                 continue
@@ -313,9 +311,7 @@ class SnapshotDagGenerator:
 
             snapshot = snapshots[sid]
 
-            task_id_prefix = (
-                f"snapshot_evaluator__{snapshot.name}__{snapshot.identifier}"
-            )
+            task_id_prefix = f"snapshot_evaluator__{snapshot.name}__{snapshot.identifier}"
             tasks = [
                 self._create_snapshot_evaluator_operator(
                     snapshots=snapshots,
@@ -465,10 +461,7 @@ class SnapshotDagGenerator:
         output = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            if (
-                not upstream_snapshot.is_embedded_kind
-                and not upstream_snapshot.is_seed_kind
-            ):
+            if not upstream_snapshot.is_embedded_kind and not upstream_snapshot.is_seed_kind:
                 output.append(
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,

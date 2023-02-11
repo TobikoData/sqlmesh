@@ -20,9 +20,7 @@ def orders(sushi_context_pre_scheduling: Context) -> Snapshot:
 def test_interval_params(
     scheduler: Scheduler, sushi_context_pre_scheduling: Context, orders: Snapshot
 ):
-    waiter_revenue = sushi_context_pre_scheduling.snapshots[
-        "sushi.waiter_revenue_by_day"
-    ]
+    waiter_revenue = sushi_context_pre_scheduling.snapshots["sushi.waiter_revenue_by_day"]
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
     assert scheduler._interval_params([orders, waiter_revenue], start_ds, end_ds) == {
@@ -54,9 +52,7 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     }
 
 
-def test_interval_params_missing(
-    scheduler: Scheduler, sushi_context_pre_scheduling: Context
-):
+def test_interval_params_missing(scheduler: Scheduler, sushi_context_pre_scheduling: Context):
     waiters = sushi_context_pre_scheduling.snapshots["sushi.waiter_as_customer_by_day"]
 
     start_ds = "2022-01-01"
@@ -81,9 +77,7 @@ def test_multi_version_snapshots(
         models=sushi_context_pre_scheduling.models,
         version="1",
     )
-    items_a.fingerprint = SnapshotFingerprint(
-        data_hash="data", metadata_hash="metadata"
-    )
+    items_a.fingerprint = SnapshotFingerprint(data_hash="data", metadata_hash="metadata")
     items_a.add_interval("2022-01-10", "2022-01-15")
     sushi_context_pre_scheduling.state_sync.push_snapshots([items_a])
 
@@ -110,9 +104,7 @@ def test_multi_version_snapshots(
 
     # Make sure that intervals of items_a are ignored in development mode.
     scheduler.snapshots[items_b.snapshot_id] = items_b
-    interval_params_dev_mode = scheduler._interval_params(
-        [items_b], start_ds, end_ds, is_dev=True
-    )
+    interval_params_dev_mode = scheduler._interval_params([items_b], start_ds, end_ds, is_dev=True)
     assert len(interval_params_dev_mode) == 1
     assert list(interval_params_dev_mode.values())[0] == [
         (to_datetime(start_ds), to_datetime("2022-01-20")),

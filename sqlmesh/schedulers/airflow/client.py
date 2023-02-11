@@ -76,23 +76,17 @@ class AirflowClient:
         )
         self._raise_for_status(response)
 
-    def get_snapshots(
-        self, snapshot_ids: t.Optional[t.List[SnapshotId]]
-    ) -> t.List[Snapshot]:
+    def get_snapshots(self, snapshot_ids: t.Optional[t.List[SnapshotId]]) -> t.List[Snapshot]:
         params: t.Dict[str, str] = {}
         if snapshot_ids is not None:
             params["ids"] = _list_to_json(snapshot_ids)
 
-        return common.SnapshotsResponse.parse_obj(
-            self._get(SNAPSHOTS_PATH, **params)
-        ).snapshots
+        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH, **params)).snapshots
 
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
         return set(
             common.SnapshotIdsResponse.parse_obj(
-                self._get(
-                    SNAPSHOTS_PATH, "check_existence", ids=_list_to_json(snapshot_ids)
-                )
+                self._get(SNAPSHOTS_PATH, "check_existence", ids=_list_to_json(snapshot_ids))
             ).snapshot_ids
         )
 
@@ -141,9 +135,7 @@ class AirflowClient:
 
             time.sleep(poll_interval_secs)
 
-    def wait_for_first_dag_run(
-        self, dag_id: str, poll_interval_secs: int, max_retries: int
-    ) -> str:
+    def wait_for_first_dag_run(self, dag_id: str, poll_interval_secs: int, max_retries: int) -> str:
         loading_id = self._console_loading_start()
 
         attempt_num = 1
@@ -190,9 +182,7 @@ class AirflowClient:
         self._session.close()
 
     def _get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
-        dag_runs_response = self._get(
-            f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}", limit="1"
-        )
+        dag_runs_response = self._get(f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}", limit="1")
         dag_runs = dag_runs_response["dag_runs"]
         if not dag_runs:
             return None

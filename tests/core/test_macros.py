@@ -40,9 +40,7 @@ def test_macro_str_replace(macro_evaluator):
 
 
 def test_macro_custom(macro_evaluator, assert_exp_eq):
-    assert_exp_eq(
-        macro_evaluator.transform(parse_one("SELECT @TEST()")), "SELECT 'test'"
-    )
+    assert_exp_eq(macro_evaluator.transform(parse_one("SELECT @TEST()")), "SELECT 'test'")
 
 
 def test_ast_correctness(macro_evaluator):

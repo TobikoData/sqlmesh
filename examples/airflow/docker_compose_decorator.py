@@ -115,9 +115,7 @@ for airflow_component in ["airflow-scheduler", "airflow-worker"]:
         environment_variables[
             "AIRFLOW_CONN_GITHUB_DEFAULT"
         ] = '{"conn_type": "github", "password": "${DEMO_GITHUB_PAT}"}'
-    docker_compose["services"][airflow_component]["environment"].update(
-        environment_variables
-    )
+    docker_compose["services"][airflow_component]["environment"].update(environment_variables)
 
 
 with open(DOCKER_COMPOSE_YAML, "w", encoding="utf-8") as fd:

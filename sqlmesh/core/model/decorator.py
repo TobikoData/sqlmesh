@@ -35,10 +35,7 @@ class model(registry_decorator):
                 if isinstance(call, str)
                 else (
                     call[0],
-                    {
-                        arg_key: exp.convert(arg_value)
-                        for arg_key, arg_value in call[1].items()
-                    },
+                    {arg_key: exp.convert(arg_value) for arg_key, arg_value in call[1].items()},
                 )
                 for call in calls
             ]

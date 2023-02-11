@@ -53,9 +53,7 @@ class Audit(AuditMeta, frozen=True):
     """
 
     query: t.Union[exp.Subqueryable, d.Jinja]
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="expressions"
-    )
+    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
 
     _path: t.Optional[pathlib.Path] = None
 
@@ -77,9 +75,7 @@ class Audit(AuditMeta, frozen=True):
             dialect: The default dialect if no audit dialect is configured.
         """
         if len(expressions) < 2:
-            _raise_config_error(
-                "Incomplete audit definition, missing AUDIT or QUERY", path
-            )
+            _raise_config_error("Incomplete audit definition, missing AUDIT or QUERY", path)
 
         meta, *statements, query = expressions
 
@@ -92,9 +88,7 @@ class Audit(AuditMeta, frozen=True):
 
         provided_meta_fields = {p.name for p in meta.expressions}
 
-        missing_required_fields = AuditMeta.missing_required_fields(
-            provided_meta_fields
-        )
+        missing_required_fields = AuditMeta.missing_required_fields(provided_meta_fields)
         if missing_required_fields:
             _raise_config_error(
                 f"Missing required fields {missing_required_fields} in the audit definition",
@@ -121,11 +115,7 @@ class Audit(AuditMeta, frozen=True):
                 **{
                     "dialect": dialect or "",
                     **AuditMeta(
-                        **{
-                            prop.name: prop.args.get("value")
-                            for prop in meta.expressions
-                            if prop
-                        },
+                        **{prop.name: prop.args.get("value") for prop in meta.expressions if prop},
                     ).dict(),
                 },
             )

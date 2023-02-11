@@ -30,9 +30,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
-def update_model_schemas(
-    dialect: str, dag: DAG[str], models: UniqueKeyDict[str, Model]
-) -> None:
+def update_model_schemas(dialect: str, dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
     schema = MappingSchema(dialect=dialect)
     for name in dag.sorted():
         model = models.get(name)
@@ -41,9 +39,7 @@ def update_model_schemas(
         if not model:
             continue
 
-        if model.contains_star_query and any(
-            dep not in models for dep in model.depends_on
-        ):
+        if model.contains_star_query and any(dep not in models for dep in model.depends_on):
             raise SQLMeshError(
                 f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
             )
@@ -114,9 +110,7 @@ class Loader(abc.ABC):
         """Loads all user defined hooks and macros."""
 
     @abc.abstractmethod
-    def _load_models(
-        self, macros: MacroRegistry, hooks: HookRegistry
-    ) -> UniqueKeyDict[str, Model]:
+    def _load_models(self, macros: MacroRegistry, hooks: HookRegistry) -> UniqueKeyDict[str, Model]:
         """Loads all models."""
 
     @abc.abstractmethod
@@ -127,9 +121,7 @@ class Loader(abc.ABC):
         self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
 
-    def _add_jinja_macros(
-        self, registry: MacroRegistry, paths: t.Iterable[Path]
-    ) -> MacroRegistry:
+    def _add_jinja_macros(self, registry: MacroRegistry, paths: t.Iterable[Path]) -> MacroRegistry:
         registry = t.cast(MacroRegistry, registry.copy())
 
         for path in paths:
@@ -179,9 +171,7 @@ class SqlMeshLoader(Loader):
 
         return macros, hooks
 
-    def _load_models(
-        self, macros: MacroRegistry, hooks: HookRegistry
-    ) -> UniqueKeyDict[str, Model]:
+    def _load_models(self, macros: MacroRegistry, hooks: HookRegistry) -> UniqueKeyDict[str, Model]:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
@@ -196,19 +186,13 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
-        for path in self._context.glob_path(
-            self._context.models_directory_path, ".sql"
-        ):
+        for path in self._context.glob_path(self._context.models_directory_path, ".sql"):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 try:
-                    expressions = parse_model(
-                        file.read(), default_dialect=self._context.dialect
-                    )
+                    expressions = parse_model(file.read(), default_dialect=self._context.dialect)
                 except SqlglotError as ex:
-                    raise ConfigError(
-                        f"Failed to parse a model definition at '{path}': {ex}"
-                    )
+                    raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}")
                 model = load_model(
                     expressions,
                     defaults=self._context.config.model_defaults.dict(),
@@ -253,14 +237,10 @@ class SqlMeshLoader(Loader):
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
-        for path in self._context.glob_path(
-            self._context.audits_directory_path, ".sql"
-        ):
+        for path in self._context.glob_path(self._context.audits_directory_path, ".sql"):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse_model(
-                    file.read(), default_dialect=self._context.dialect
-                )
+                expressions = parse_model(file.read(), default_dialect=self._context.dialect)
                 audits = Audit.load_multiple(
                     expressions=expressions,
                     path=path,

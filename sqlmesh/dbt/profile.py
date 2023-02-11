@@ -80,9 +80,7 @@ class Profile:
         return None
 
     @classmethod
-    def _read_profile(
-        cls, path: Path, project: str
-    ) -> t.Tuple[t.Dict[str, TargetConfig], str]:
+    def _read_profile(cls, path: Path, project: str) -> t.Tuple[t.Dict[str, TargetConfig], str]:
         contents = yaml_load(path)
 
         project_data = contents.get(project)

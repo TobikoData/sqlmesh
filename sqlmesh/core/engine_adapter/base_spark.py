@@ -38,9 +38,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
         table = exp.to_table(table_name)
         if isinstance(query_or_df, pd.DataFrame):
             if columns_to_types is None:
-                raise SQLMeshError(
-                    "columns_to_types must be provided when using Pandas DataFrames"
-                )
+                raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
             query_or_df = next(
                 pandas_to_sql(
                     query_or_df,
@@ -92,10 +90,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
         if dropped_columns:
             drop_columns = exp.Drop(
                 this=exp.Schema(
-                    expressions=[
-                        exp.to_identifier(column_name)
-                        for column_name in dropped_columns
-                    ]
+                    expressions=[exp.to_identifier(column_name) for column_name in dropped_columns]
                 ),
                 kind="COLUMNS",
             )

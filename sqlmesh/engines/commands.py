@@ -118,9 +118,7 @@ def create_tables(
         command_payload = CreateTablesCommandPayload.parse_raw(command_payload)
 
     snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
-    target_snapshots = [
-        snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids
-    ]
+    target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
     evaluator.create(target_snapshots, snapshots_by_id)
 
 

@@ -196,9 +196,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
         if self._session is None:
             self._session = AuthorizedSession(
-                google.auth.default(
-                    scopes=["https://www.googleapis.com/auth/cloud-platform"]
-                )[0]
+                google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])[0]
             )
             self._session.headers.update({"Content-Type": "application/json"})
         return self._session
@@ -222,8 +220,6 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
 
 SchedulerConfig = Annotated[
-    t.Union[
-        BuiltInSchedulerConfig, AirflowSchedulerConfig, CloudComposerSchedulerConfig
-    ],
+    t.Union[BuiltInSchedulerConfig, AirflowSchedulerConfig, CloudComposerSchedulerConfig],
     Field(discriminator="type_"),
 ]

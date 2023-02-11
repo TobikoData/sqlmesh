@@ -107,9 +107,7 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call("BEGIN"),
-            call(
-                "DELETE FROM \"test_table\" WHERE \"b\" BETWEEN '2022-01-01' AND '2022-01-02'"
-            ),
+            call("DELETE FROM \"test_table\" WHERE \"b\" BETWEEN '2022-01-01' AND '2022-01-02'"),
             call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
             call("COMMIT"),
         ]
@@ -336,6 +334,4 @@ def test_rename_table(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.rename_table("old_table", "new_table")
 
-    cursor_mock.execute.assert_called_once_with(
-        'ALTER TABLE "old_table" RENAME TO "new_table"'
-    )
+    cursor_mock.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')

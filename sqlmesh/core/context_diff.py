@@ -76,21 +76,17 @@ class ContextDiff(PydanticModel):
         modified_info = {
             name: existing_info[name]
             for name, snapshot in snapshots.items()
-            if name not in added
-            and snapshot.fingerprint != existing_info[name].fingerprint
+            if name not in added and snapshot.fingerprint != existing_info[name].fingerprint
         }
 
         stored = state_reader.get_snapshots(
-            list(modified_info.values())
-            + [snapshot.snapshot_id for snapshot in snapshots.values()]
+            list(modified_info.values()) + [snapshot.snapshot_id for snapshot in snapshots.values()]
         )
 
         merged_snapshots = {}
         modified_snapshots = {}
         new_snapshots = {}
-        snapshot_remote_versions: t.Dict[
-            str, t.Tuple[t.Tuple[SnapshotDataVersion, ...], int]
-        ] = {}
+        snapshot_remote_versions: t.Dict[str, t.Tuple[t.Tuple[SnapshotDataVersion, ...], int]] = {}
 
         for name, snapshot in snapshots.items():
             modified = modified_info.get(name)
@@ -102,10 +98,7 @@ class ContextDiff(PydanticModel):
                     modified_snapshots[name] = (existing, stored[modified.snapshot_id])
                     for child, versions in existing.indirect_versions.items():
                         existing_versions = snapshot_remote_versions.get(child)
-                        if (
-                            not existing_versions
-                            or existing_versions[1] < existing.created_ts
-                        ):
+                        if not existing_versions or existing_versions[1] < existing.created_ts:
                             snapshot_remote_versions[child] = (
                                 versions,
                                 existing.created_ts,
@@ -128,9 +121,7 @@ class ContextDiff(PydanticModel):
                 remote_head = remote_versions[-1].version
                 local_head = snapshot.previous_version.version
 
-                if remote_head in (
-                    local.version for local in snapshot.previous_versions
-                ):
+                if remote_head in (local.version for local in snapshot.previous_versions):
                     snapshot.set_version(local_head)
                 elif local_head in (remote.version for remote in remote_versions):
                     snapshot.set_version(remote_head)
@@ -183,8 +174,7 @@ class ContextDiff(PydanticModel):
         current, previous = self.modified_snapshots[model_name]
         return (
             current.fingerprint.data_hash == previous.fingerprint.data_hash
-            and current.fingerprint.parent_data_hash
-            != previous.fingerprint.parent_data_hash
+            and current.fingerprint.parent_data_hash != previous.fingerprint.parent_data_hash
         )
 
     def metadata_updated(self, model_name: str) -> bool:

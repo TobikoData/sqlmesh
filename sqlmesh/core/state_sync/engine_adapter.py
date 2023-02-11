@@ -130,9 +130,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if snapshots:
             self._push_snapshots(snapshots)
 
-    def _push_snapshots(
-        self, snapshots: t.Iterable[Snapshot], overwrite: bool = False
-    ) -> None:
+    def _push_snapshots(self, snapshots: t.Iterable[Snapshot], overwrite: bool = False) -> None:
         if overwrite:
             snapshots = tuple(snapshots)
             self.delete_snapshots(snapshots)
@@ -170,9 +168,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
         )
 
-    def snapshots_exist(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
-    ) -> t.Set[SnapshotId]:
+    def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return {
             SnapshotId(name=name, identifier=identifier)
             for name, identifier in self.engine_adapter.fetchall(
@@ -198,9 +194,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     [
                         (
                             environment.name,
-                            json.dumps(
-                                [snapshot.dict() for snapshot in environment.snapshots]
-                            ),
+                            json.dumps([snapshot.dict() for snapshot in environment.snapshots]),
                             environment.start_at,
                             environment.end_at,
                             environment.plan_id,
@@ -235,9 +229,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         ]
 
     def _environment_from_row(self, row: t.Tuple[str, ...]) -> Environment:
-        return Environment(
-            **{field: row[i] for i, field in enumerate(Environment.__fields__)}
-        )
+        return Environment(**{field: row[i] for i, field in enumerate(Environment.__fields__)})
 
     def _environments_query(
         self,
@@ -270,9 +262,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
-            .where(
-                None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids)
-            )
+            .where(None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids))
         )
         if lock_for_update:
             query = query.lock(copy=False)
@@ -325,9 +315,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if lock_for_update:
             query = query.lock(copy=False)
 
-        snapshot_rows = self.engine_adapter.fetchall(
-            query, ignore_unsupported_errors=True
-        )
+        snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_environment(

@@ -43,9 +43,7 @@ def get_files(
                 if (
                     entry.name == "__pycache__"
                     or entry.name.startswith(".")
-                    or any(
-                        entry_path.match(pattern) for pattern in context.ignore_patterns
-                    )
+                    or any(entry_path.match(pattern) for pattern in context.ignore_patterns)
                 ):
                     continue
 
@@ -62,9 +60,7 @@ def get_files(
                     )
                 else:
                     files.append(models.File(name=entry.name, path=relative_path))
-        return sorted(directories, key=lambda x: x.name), sorted(
-            files, key=lambda x: x.name
-        )
+        return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
     directories, files = walk_path(context.path)
     return models.Directory(
@@ -114,9 +110,7 @@ async def delete_file(
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except IsADirectoryError:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="File is a directory"
-        )
+        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="File is a directory")
 
 
 @router.post("/directories/{path:path}", response_model=models.Directory)
@@ -148,13 +142,9 @@ async def delete_directory(
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except NotADirectoryError:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not a directory"
-        )
+        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not a directory")
     except OSError:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory not empty"
-        )
+        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory not empty")
 
 
 @router.get(
@@ -200,9 +190,7 @@ def get_plan(
 
     if plan.context_diff.has_differences:
         batches = context.scheduler().batches()
-        tasks = {
-            snapshot.name: len(intervals) for snapshot, intervals in batches.items()
-        }
+        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
         payload.backfills = [
             models.ContextEnvironmentBackfill(
@@ -232,9 +220,7 @@ async def apply(
     context: Context = Depends(get_loaded_context),
 ) -> t.Any:
     """Apply a plan"""
-    plan = functools.partial(
-        context.plan, environment, no_prompts=True, auto_apply=True
-    )
+    plan = functools.partial(context.plan, environment, no_prompts=True, auto_apply=True)
 
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         task = asyncio.create_task(run_in_executor(plan))

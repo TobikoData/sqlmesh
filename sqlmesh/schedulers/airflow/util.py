@@ -42,9 +42,7 @@ def scoped_state_sync() -> t.Generator[StateSync, None, None]:
 
 @provide_session
 def get_snapshot_dag_ids(session: Session = PROVIDED_SESSION) -> t.List[str]:
-    dag_tags = (
-        session.query(DagTag).filter(DagTag.name == common.SNAPSHOT_AIRFLOW_TAG).all()
-    )
+    dag_tags = session.query(DagTag).filter(DagTag.name == common.SNAPSHOT_AIRFLOW_TAG).all()
     return [tag.dag_id for tag in dag_tags]
 
 
@@ -97,11 +95,7 @@ def delete_variables(
     keys: t.Set[str],
     session: Session = PROVIDED_SESSION,
 ) -> None:
-    (
-        session.query(Variable)
-        .filter(Variable.key.in_(keys))
-        .delete(synchronize_session=False)
-    )
+    (session.query(Variable).filter(Variable.key.in_(keys)).delete(synchronize_session=False))
 
 
 def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
@@ -124,9 +118,7 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
 
             return SQLMeshDatabricksSQLOperator
         except ImportError:
-            raise SQLMeshError(
-                "Failed to automatically discover an operator for Databricks"
-            )
+            raise SQLMeshError("Failed to automatically discover an operator for Databricks")
     if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
         try:
             from sqlmesh.schedulers.airflow.operators.snowflake import (
@@ -135,9 +127,7 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
 
             return SQLMeshSnowflakeOperator
         except ImportError:
-            raise SQLMeshError(
-                "Failed to automatically discover an operator for Snowflake"
-            )
+            raise SQLMeshError("Failed to automatically discover an operator for Snowflake")
     if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
         try:
             from sqlmesh.schedulers.airflow.operators.bigquery import (
@@ -146,9 +136,7 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
 
             return SQLMeshBigQueryOperator
         except ImportError:
-            raise SQLMeshError(
-                "Failed to automatically discover an operator for BigQuery"
-            )
+            raise SQLMeshError("Failed to automatically discover an operator for BigQuery")
     if name in ("redshift", "redshift-sql", "redshift_sql"):
         try:
             from sqlmesh.schedulers.airflow.operators.redshift import (
@@ -157,7 +145,5 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
 
             return SQLMeshRedshiftOperator
         except ImportError:
-            raise SQLMeshError(
-                "Failed to automatically discover an operator for Redshift"
-            )
+            raise SQLMeshError("Failed to automatically discover an operator for Redshift")
     raise ValueError(f"Unsupported engine name '{name}'")

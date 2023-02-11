@@ -73,9 +73,7 @@ def test_apply_plan_create_backfill_promote(
 
 @pytest.mark.integration
 @pytest.mark.airflow_integration
-def test_mult_snapshots_same_version(
-    airflow_client: AirflowClient, make_snapshot, random_name
-):
+def test_mult_snapshots_same_version(airflow_client: AirflowClient, make_snapshot, random_name):
     model_name = random_name()
 
     snapshot = make_snapshot(_create_model(model_name), version="1")
@@ -116,9 +114,7 @@ def _apply_plan_and_block(
         new_snapshots, environment, plan_request_id, is_dev=environment.name != c.PROD
     )
 
-    plan_application_dag_id = common.plan_application_dag_id(
-        environment.name, plan_request_id
-    )
+    plan_application_dag_id = common.plan_application_dag_id(environment.name, plan_request_id)
     plan_application_dag_run_id = airflow_client.wait_for_first_dag_run(
         plan_application_dag_id, DAG_CREATION_WAIT_INTERVAL, DAG_CREATION_RETRY_ATTEMPTS
     )
@@ -160,9 +156,7 @@ def _create_model(name: str) -> Model:
     )
 
 
-def _create_environment(
-    snapshot: Snapshot, name: t.Optional[str] = None
-) -> Environment:
+def _create_environment(snapshot: Snapshot, name: t.Optional[str] = None) -> Environment:
     return Environment(
         name=name or _random_environment_name(),
         snapshots=[snapshot.table_info],

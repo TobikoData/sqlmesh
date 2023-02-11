@@ -21,9 +21,7 @@ def model() -> Model:
 
 
 @pytest.mark.airflow
-def test_evaluation_target_execute(
-    mocker: MockerFixture, make_snapshot: t.Callable, model: Model
-):
+def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
     interval_ds = to_datetime("2022-01-01")
     logical_ds = to_datetime("2022-01-02")
 
@@ -81,9 +79,7 @@ def test_table_cleanup_target_execute(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
-    delete_xcom_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.operators.targets._delete_xcom"
-    )
+    delete_xcom_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets._delete_xcom")
 
     target = targets.SnapshotTableCleanupTarget()
 
@@ -91,9 +87,7 @@ def test_table_cleanup_target_execute(
 
     evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
 
-    task_instance_mock.xcom_pull.assert_called_once_with(
-        key="snapshot_table_cleanup_task"
-    )
+    task_instance_mock.xcom_pull.assert_called_once_with(key="snapshot_table_cleanup_task")
 
     delete_xcom_mock.assert_called_once()
 
@@ -114,9 +108,7 @@ def test_table_cleanup_target_skip_execution(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
-    delete_xcom_mock = mocker.patch(
-        "sqlmesh.schedulers.airflow.operators.targets._delete_xcom"
-    )
+    delete_xcom_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets._delete_xcom")
 
     target = targets.SnapshotTableCleanupTarget()
     with pytest.raises(AirflowSkipException):

@@ -81,9 +81,7 @@ def test_model_removed(sushi_context: Context):
 def test_non_breaking_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
-    validate_query_change(
-        sushi_context, environment, SnapshotChangeCategory.NON_BREAKING, False
-    )
+    validate_query_change(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING, False)
 
 
 @pytest.mark.integration
@@ -91,9 +89,7 @@ def test_non_breaking_change(sushi_context: Context):
 def test_breaking_change(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
-    validate_query_change(
-        sushi_context, environment, SnapshotChangeCategory.BREAKING, False
-    )
+    validate_query_change(sushi_context, environment, SnapshotChangeCategory.BREAKING, False)
 
 
 @pytest.mark.integration
@@ -101,9 +97,7 @@ def test_breaking_change(sushi_context: Context):
 def test_forward_only(sushi_context: Context):
     environment = "dev"
     initial_add(sushi_context, environment)
-    validate_query_change(
-        sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False
-    )
+    validate_query_change(sushi_context, environment, SnapshotChangeCategory.FORWARD_ONLY, False)
 
 
 @pytest.mark.integration
@@ -119,9 +113,7 @@ def test_logical_change(sushi_context: Context):
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    apply_to_environment(
-        sushi_context, environment, SnapshotChangeCategory.NON_BREAKING
-    )
+    apply_to_environment(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING)
 
     change_data_type(
         sushi_context,
@@ -129,13 +121,9 @@ def test_logical_change(sushi_context: Context):
         DataType.Type.FLOAT,
         DataType.Type.DOUBLE,
     )
-    apply_to_environment(
-        sushi_context, environment, SnapshotChangeCategory.NON_BREAKING
-    )
+    apply_to_environment(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING)
 
-    assert (
-        sushi_context.snapshots["sushi.items"].version == previous_sushi_items_version
-    )
+    assert sushi_context.snapshots["sushi.items"].version == previous_sushi_items_version
 
 
 def validate_query_change(
@@ -213,17 +201,13 @@ def validate_query_change(
         (ModelKindName.FULL, ModelKindName.INCREMENTAL_BY_TIME_RANGE),
     ],
 )
-def test_model_kind_change(
-    from_: ModelKindName, to: ModelKindName, sushi_context: Context
-):
+def test_model_kind_change(from_: ModelKindName, to: ModelKindName, sushi_context: Context):
     environment = "prod"
     incremental_snapshot = sushi_context.snapshots["sushi.items"].copy()
 
     if from_ != ModelKindName.INCREMENTAL_BY_TIME_RANGE:
         change_model_kind(sushi_context, from_)
-        apply_to_environment(
-            sushi_context, environment, SnapshotChangeCategory.NON_BREAKING
-        )
+        apply_to_environment(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING)
 
     if to == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
         sushi_context.upsert_model(incremental_snapshot.model)
@@ -271,9 +255,7 @@ def validate_model_kind_change(
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)
         assert (
             next(
-                snapshot
-                for snapshot in plan.snapshots
-                if snapshot.name == "sushi.items"
+                snapshot for snapshot in plan.snapshots if snapshot.name == "sushi.items"
             ).model.kind
             == kind
         )
@@ -329,23 +311,17 @@ def test_environment_promotion(sushi_context: Context):
     initial_add(sushi_context, "dev")
 
     # Simulate prod "ahead"
-    change_data_type(
-        sushi_context, "sushi.items", DataType.Type.DOUBLE, DataType.Type.FLOAT
-    )
+    change_data_type(sushi_context, "sushi.items", DataType.Type.DOUBLE, DataType.Type.FLOAT)
     apply_to_environment(sushi_context, "prod", SnapshotChangeCategory.BREAKING)
 
     # Simulate rebase
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.BREAKING)
 
     # Make changes in dev
-    change_data_type(
-        sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.INT
-    )
+    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.INT)
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.NON_BREAKING)
 
-    change_data_type(
-        sushi_context, "sushi.top_waiters", DataType.Type.DOUBLE, DataType.Type.INT
-    )
+    change_data_type(sushi_context, "sushi.top_waiters", DataType.Type.DOUBLE, DataType.Type.INT)
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.BREAKING)
 
     change_data_type(
@@ -359,9 +335,7 @@ def test_environment_promotion(sushi_context: Context):
     # Promote to prod
     def _validate_plan(context, plan):
         assert (
-            plan.snapshot_change_category(
-                plan.context_diff.modified_snapshots["sushi.items"][0]
-            )
+            plan.snapshot_change_category(plan.context_diff.modified_snapshots["sushi.items"][0])
             == SnapshotChangeCategory.NON_BREAKING
         )
         assert (
@@ -517,10 +491,7 @@ def setup_rebase(
                 context.snapshots["sushi.waiter_revenue_by_day"].version
                 != versions["sushi.waiter_revenue_by_day"]
             )
-            assert (
-                context.snapshots["sushi.top_waiters"].version
-                != versions["sushi.top_waiters"]
-            )
+            assert context.snapshots["sushi.top_waiters"].version != versions["sushi.top_waiters"]
             assert (
                 context.snapshots["sushi.customer_revenue_by_day"].version
                 != versions["sushi.customer_revenue_by_day"]
@@ -534,10 +505,7 @@ def setup_rebase(
             context.snapshots["sushi.waiter_revenue_by_day"].version
             == versions["sushi.waiter_revenue_by_day"]
         )
-        assert (
-            context.snapshots["sushi.top_waiters"].version
-            == versions["sushi.top_waiters"]
-        )
+        assert context.snapshots["sushi.top_waiters"].version == versions["sushi.top_waiters"]
         assert (
             context.snapshots["sushi.customer_revenue_by_day"].version
             == versions["sushi.customer_revenue_by_day"]
@@ -585,9 +553,7 @@ def test_revert(
         apply_to_environment(sushi_context, environment, category)
         assert sushi_context.snapshots["sushi.items"] != original_snapshot_id
 
-    change_data_type(
-        sushi_context, "sushi.items", types[len(change_categories)], types[0]
-    )
+    change_data_type(sushi_context, "sushi.items", types[len(change_categories)], types[0])
 
     def _validate_plan(_, plan):
         snapshot = next(s for s in plan.snapshots if s.name == "sushi.items")
@@ -607,9 +573,7 @@ def test_revert(
 @pytest.mark.core_integration
 def test_revert_after_downstream_change(sushi_context: Context):
     environment = "prod"
-    change_data_type(
-        sushi_context, "sushi.items", DataType.Type.DOUBLE, DataType.Type.FLOAT
-    )
+    change_data_type(sushi_context, "sushi.items", DataType.Type.DOUBLE, DataType.Type.FLOAT)
     apply_to_environment(sushi_context, environment, SnapshotChangeCategory.BREAKING)
 
     change_data_type(
@@ -618,19 +582,13 @@ def test_revert_after_downstream_change(sushi_context: Context):
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    apply_to_environment(
-        sushi_context, environment, SnapshotChangeCategory.NON_BREAKING
-    )
+    apply_to_environment(sushi_context, environment, SnapshotChangeCategory.NON_BREAKING)
 
-    change_data_type(
-        sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.DOUBLE
-    )
+    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.DOUBLE)
 
     def _validate_plan(_, plan):
         snapshot = next(s for s in plan.snapshots if s.name == "sushi.items")
-        assert (
-            plan.snapshot_change_category(snapshot) == SnapshotChangeCategory.BREAKING
-        )
+        assert plan.snapshot_change_category(snapshot) == SnapshotChangeCategory.BREAKING
         assert plan.missing_intervals
 
     apply_to_environment(
@@ -737,9 +695,7 @@ def validate_apply_basics(
     validate_environment_views(snapshots, environment, context)
 
 
-def validate_snapshots_in_state_sync(
-    snapshots: t.Iterable[Snapshot], context: Context
-) -> None:
+def validate_snapshots_in_state_sync(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     snapshot_infos = map(to_snapshot_info, snapshots)
     state_sync_table_infos = map(
         to_snapshot_info, context.state_reader.get_snapshots(snapshots).values()
@@ -774,9 +730,7 @@ def validate_environment_views(
         if snapshot.is_embedded_kind:
             continue
 
-        view_name = snapshot.qualified_view_name.for_environment(
-            environment=environment
-        )
+        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
         assert adapter.table_exists(view_name)
         assert select_all(
             snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter

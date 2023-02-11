@@ -179,14 +179,10 @@ class TerminalConsole(Console):
         """
         if not context_diff.has_differences:
             self.console.print(
-                Tree(
-                    f"[bold]No differences when compared to `{context_diff.environment}`"
-                )
+                Tree(f"[bold]No differences when compared to `{context_diff.environment}`")
             )
             return
-        tree = Tree(
-            f"[bold]Summary of differences against `{context_diff.environment}`:"
-        )
+        tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
 
         if context_diff.added:
             added_tree = Tree(f"[bold][added]Added Models:")
@@ -253,9 +249,7 @@ class TerminalConsole(Console):
         self._show_categorized_snapshots(plan)
 
         for snapshot in plan.uncategorized:
-            self.console.print(
-                Syntax(plan.context_diff.text_diff(snapshot.name), "sql")
-            )
+            self.console.print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name}")
             indirect_tree = None
 
@@ -273,12 +267,8 @@ class TerminalConsole(Console):
             if not context_diff.directly_modified(snapshot.name):
                 continue
 
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
-                plan.snapshot_change_category(snapshot)
-            ]
-            tree = Tree(
-                f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})"
-            )
+            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[plan.snapshot_change_category(snapshot)]
+            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
             syntax_dff = Syntax(context_diff.text_diff(snapshot.name), "sql")
             indirect_tree = None
             for child in plan.indirectly_modified[snapshot.name]:
@@ -323,9 +313,7 @@ class TerminalConsole(Console):
             if end:
                 plan.end = end
 
-        if not auto_apply and Confirm.ask(
-            f"Apply - {backfill_or_preview.capitalize()} Tables"
-        ):
+        if not auto_apply and Confirm.ask(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
@@ -355,9 +343,7 @@ class TerminalConsole(Console):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self.console.print(
-                        f"Failure Test: {test.model_name} {test.test_name}"
-                    )
+                    self.console.print(f"Failure Test: {test.model_name} {test.test_name}")
             self.console.print("=" * divider_length)
             self.console.print(output)
 
@@ -375,9 +361,7 @@ class TerminalConsole(Console):
 
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
         id = uuid.uuid4()
-        self.loading_status[id] = Status(
-            message or "", console=self.console, spinner="line"
-        )
+        self.loading_status[id] = Status(message or "", console=self.console, spinner="line")
         self.loading_status[id].start()
         return id
 
@@ -390,9 +374,7 @@ class TerminalConsole(Console):
     ) -> None:
         choices = self._snapshot_change_choices(snapshot)
         response = Prompt.ask(
-            "\n".join(
-                [f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]
-            ),
+            "\n".join([f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]),
             console=self.console,
             show_choices=False,
             choices=[f"{i+1}" for i in range(len(choices))],
@@ -430,9 +412,7 @@ class TerminalConsole(Console):
         return labeled_choices
 
 
-def add_to_layout_widget(
-    target_widget: LayoutWidget, *widgets: widgets.Widget
-) -> LayoutWidget:
+def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
     """Helper function to add a widget to a layout widget
     Args:
         target_widget: The layout widget to add the other widget(s) to
@@ -452,9 +432,7 @@ class NotebookMagicConsole(TerminalConsole):
     or capturing it and converting it into a widget.
     """
 
-    def __init__(
-        self, display: t.Callable, console: t.Optional[RichConsole] = None
-    ) -> None:
+    def __init__(self, display: t.Callable, console: t.Optional[RichConsole] = None) -> None:
         import ipywidgets as widgets
 
         super().__init__(console)
@@ -497,9 +475,7 @@ class NotebookMagicConsole(TerminalConsole):
 
         prompt = widgets.VBox()
 
-        backfill_or_preview = (
-            "Preview" if plan.is_dev and plan.forward_only else "Backfill"
-        )
+        backfill_or_preview = "Preview" if plan.is_dev and plan.forward_only else "Backfill"
 
         def _date_picker(
             plan: Plan, value: t.Any, on_change: t.Callable, disabled: bool = False
@@ -513,9 +489,7 @@ class NotebookMagicConsole(TerminalConsole):
             picker.observe(on_change, "value")
             return picker
 
-        def _checkbox(
-            description: str, value: bool, on_change: t.Callable
-        ) -> widgets.Checkbox:
+        def _checkbox(description: str, value: bool, on_change: t.Callable) -> widgets.Checkbox:
             checkbox = widgets.Checkbox(
                 value=value,
                 description=description,
@@ -538,9 +512,7 @@ class NotebookMagicConsole(TerminalConsole):
             prompt,
             widgets.HBox(
                 [
-                    widgets.Label(
-                        f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}
-                    ),
+                    widgets.Label(f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}),
                     _date_picker(plan, to_date(plan.start), start_change_callback),
                 ]
             ),
@@ -551,9 +523,7 @@ class NotebookMagicConsole(TerminalConsole):
                 prompt,
                 widgets.HBox(
                     [
-                        widgets.Label(
-                            f"End {backfill_or_preview} Date:", layout={"width": "8rem"}
-                        ),
+                        widgets.Label(f"End {backfill_or_preview} Date:", layout={"width": "8rem"}),
                         _date_picker(
                             plan,
                             to_date(plan.end),
@@ -596,9 +566,7 @@ class NotebookMagicConsole(TerminalConsole):
             plan.set_choice(snapshot, choices[change["owner"].index])
             self._show_options_after_categorization(plan, auto_apply)
 
-        choice_mapping = self._snapshot_change_choices(
-            snapshot, use_rich_formatting=False
-        )
+        choice_mapping = self._snapshot_change_choices(snapshot, use_rich_formatting=False)
         choices = list(choice_mapping)
         plan.set_choice(snapshot, choices[0])
 
@@ -640,9 +608,7 @@ class NotebookMagicConsole(TerminalConsole):
             fail_color = {"color": "#db3737"}
             fail_shared_style = {**shared_style, **fail_color}
             header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
-            message = str(
-                h("span", {"style": fail_shared_style}, "Test Failure Summary")
-            )
+            message = str(h("span", {"style": fail_shared_style}, "Test Failure Summary"))
             num_success = str(
                 h(
                     "span",
@@ -664,17 +630,11 @@ class NotebookMagicConsole(TerminalConsole):
                     )
             failures = "<br>".join(failure_tests)
             footer = str(h("span", {"style": fail_shared_style}, "=" * divider_length))
-            error_output = widgets.Textarea(
-                output, layout={"height": "300px", "width": "100%"}
-            )
+            error_output = widgets.Textarea(output, layout={"height": "300px", "width": "100%"})
             test_info = widgets.HTML(
                 "<br>".join([header, message, footer, num_success, failures, footer])
             )
-            self.display(
-                widgets.VBox(
-                    children=[test_info, error_output], layout={"width": "100%"}
-                )
-            )
+            self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
 def get_console() -> TerminalConsole:

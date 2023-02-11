@@ -29,9 +29,7 @@ class OrderItemDetails:
 
 @model(
     "src.order_item_details",
-    kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")
-    ),
+    kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")),
     start=DATA_START_DATE_STR,
     cron="@daily",
     batch_size=100,
@@ -99,9 +97,7 @@ def execute(
                 )
             ):
                 item_id = str(
-                    df_menu_items.iloc[[random.choice(range(num_menu_items))]][
-                        "item_id"
-                    ].values[0]
+                    df_menu_items.iloc[[random.choice(range(num_menu_items))]]["item_id"].values[0]
                 )
                 quantity = np.random.choice(range(1, 4), p=[0.8, 0.1, 0.1])
                 results.append(

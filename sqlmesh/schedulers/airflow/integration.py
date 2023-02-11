@@ -66,9 +66,7 @@ class SQLMeshAirflow:
 
         self._engine_operator = engine_operator
         self._engine_operator_args = engine_operator_args
-        self._ddl_engine_operator_args = (
-            ddl_engine_operator_args or engine_operator_args or {}
-        )
+        self._ddl_engine_operator_args = ddl_engine_operator_args or engine_operator_args or {}
         self._janitor_interval = janitor_interval
         self._plan_application_dag_ttl = plan_application_dag_ttl
 
@@ -93,8 +91,7 @@ class SQLMeshAirflow:
         cadence_dags = dag_generator.generate_cadence_dags()
 
         plan_application_dags = [
-            dag_generator.generate_plan_application_dag(s)
-            for s in _get_plan_dag_specs()
+            dag_generator.generate_plan_application_dag(s) for s in _get_plan_dag_specs()
         ]
 
         system_dags = [
@@ -123,9 +120,7 @@ class SQLMeshAirflow:
 
         return dag
 
-    def _create_system_dag(
-        self, dag_id: str, schedule_interval: t.Optional[timedelta]
-    ) -> DAG:
+    def _create_system_dag(self, dag_id: str, schedule_interval: t.Optional[timedelta]) -> DAG:
         return DAG(
             dag_id=dag_id,
             default_args=dict(
@@ -159,8 +154,7 @@ def _janitor_task(
 
         all_snapshot_dag_ids = set(util.get_snapshot_dag_ids())
         active_snapshot_dag_ids = {
-            common.dag_id_for_snapshot_info(s)
-            for s in state_sync.get_snapshots(None).values()
+            common.dag_id_for_snapshot_info(s) for s in state_sync.get_snapshots(None).values()
         }
         expired_snapshot_dag_ids = all_snapshot_dag_ids - active_snapshot_dag_ids
         logger.info("Deleting expired Snapshot DAGs: %s", expired_snapshot_dag_ids)
@@ -169,14 +163,9 @@ def _janitor_task(
         plan_application_dag_ids = util.get_finished_plan_application_dag_ids(
             ttl=plan_application_dag_ttl, session=session
         )
-        logger.info(
-            "Deleting expired Plan Application DAGs: %s", plan_application_dag_ids
-        )
+        logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
         util.delete_variables(
-            {
-                common.plan_dag_spec_key_from_dag_id(dag_id)
-                for dag_id in plan_application_dag_ids
-            },
+            {common.plan_dag_spec_key_from_dag_id(dag_id) for dag_id in plan_application_dag_ids},
             session=session,
         )
         util.delete_dags(plan_application_dag_ids, session=session)

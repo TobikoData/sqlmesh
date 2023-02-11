@@ -139,9 +139,7 @@ def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snaps
     parent_snapshot.set_version("test_version")
 
     evaluator = SnapshotEvaluator(mocker.Mock())
-    with pytest.raises(
-        SQLMeshError, match=r".*Create and apply a new plan to fix this issue."
-    ):
+    with pytest.raises(SQLMeshError, match=r".*Create and apply a new plan to fix this issue."):
         evaluator.evaluate(
             snapshot,
             "2020-01-01",
@@ -256,9 +254,7 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(
-        f"SELECT * FROM sqlmesh.db__model__{version}"
-    ).fetchall() == [(1,)]
+    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [(1,)]
 
     # test that existing tables work
     evaluator.evaluate(
@@ -269,9 +265,7 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(
-        f"SELECT * FROM sqlmesh.db__model__{version}"
-    ).fetchall() == [
+    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [
         (1,),
         (1,),
     ]
@@ -299,9 +293,9 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
         snapshots={},
     )
 
-    assert duck_conn.execute(
-        f"SELECT b FROM sqlmesh.db__model__{snapshot.version}"
-    ).fetchall() == [(1,)]
+    assert duck_conn.execute(f"SELECT b FROM sqlmesh.db__model__{snapshot.version}").fetchall() == [
+        (1,)
+    ]
 
 
 def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):

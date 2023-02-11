@@ -71,12 +71,7 @@ class DAG(t.Generic[T]):
     @property
     def leaves(self) -> t.Set[T]:
         """Returns all nodes in the graph without any upstream dependencies."""
-        return {
-            dep
-            for deps in self._graph.values()
-            for dep in deps
-            if dep not in self._graph
-        }
+        return {dep for deps in self._graph.values() for dep in deps if dep not in self._graph}
 
     @property
     def graph(self) -> t.Dict[T, t.Set[T]]:

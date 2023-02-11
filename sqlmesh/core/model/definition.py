@@ -99,12 +99,8 @@ class _Model(ModelMeta, frozen=True):
         python_env: Dictionary containing all global variables needed to render the model's macros.
     """
 
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(
-        default=None, alias="expressions"
-    )
-    python_env_: t.Optional[t.Dict[str, Executable]] = Field(
-        default=None, alias="python_env"
-    )
+    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -170,9 +166,9 @@ class _Model(ModelMeta, frozen=True):
                     expressions.append(
                         exp.Property(
                             this=field.alias or field.name,
-                            value=META_FIELD_CONVERTER.get(
-                                field.name, exp.to_identifier
-                            )(field_value),
+                            value=META_FIELD_CONVERTER.get(field.name, exp.to_identifier)(
+                                field_value
+                            ),
                         )
                     )
 
@@ -183,9 +179,7 @@ class _Model(ModelMeta, frozen=True):
         if include_python:
             python_env = d.PythonCode(
                 expressions=[
-                    v.payload
-                    if v.is_import or v.is_definition
-                    else f"{k} = {v.payload}"
+                    v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
                     for k, v in self.sorted_python_env
                     if k not in BUILTIN_METHODS
                 ]
@@ -274,9 +268,7 @@ class _Model(ModelMeta, frozen=True):
             end: The end date/time of the run.
             latest: The latest date/time to use for the run.
         """
-        self._run_hooks(
-            self.pre, context=context, start=start, end=end, latest=latest, **kwargs
-        )
+        self._run_hooks(self.pre, context=context, start=start, end=end, latest=latest, **kwargs)
 
     def run_post_hooks(
         self,
@@ -294,9 +286,7 @@ class _Model(ModelMeta, frozen=True):
             end: The end date/time of the run.
             latest: The latest date/time to use for the run.
         """
-        self._run_hooks(
-            self.post, context=context, start=start, end=end, latest=latest, **kwargs
-        )
+        self._run_hooks(self.post, context=context, start=start, end=end, latest=latest, **kwargs)
 
     def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
         """Returns audits referenced in this model.
@@ -346,9 +336,7 @@ class _Model(ModelMeta, frozen=True):
             )
         ).strip()
 
-    def set_time_format(
-        self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
-    ) -> None:
+    def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
         """Sets the default time format for a model.
 
         Args:
@@ -405,9 +393,7 @@ class _Model(ModelMeta, frozen=True):
         """Returns the mapping of column names to types of this model."""
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
-        raise SQLMeshError(
-            f"Column information has not been provided for model '{self.name}'"
-        )
+        raise SQLMeshError(f"Column information has not been provided for model '{self.name}'")
 
     @property
     def annotated(self) -> bool:
@@ -591,8 +577,7 @@ class SqlModel(_Model):
         if self._columns_to_types is None:
             query = annotate_types(self._query_renderer.render())
             self._columns_to_types = {
-                expression.alias_or_name: expression.type
-                for expression in query.expressions
+                expression.alias_or_name: expression.type for expression in query.expressions
             }
 
         return self._columns_to_types
@@ -612,9 +597,7 @@ class SqlModel(_Model):
         query = self._query_renderer.render()
 
         if not isinstance(query, exp.Subqueryable):
-            raise_config_error(
-                "Missing SELECT query in the model definition", self._path
-            )
+            raise_config_error("Missing SELECT query in the model definition", self._path)
 
         if not query.expressions:
             raise_config_error("Query missing select statements", self._path)
@@ -631,9 +614,7 @@ class SqlModel(_Model):
 
         for name, count in name_counts.items():
             if count > 1:
-                raise_config_error(
-                    f"Found duplicate outer select name `{name}`", self._path
-                )
+                raise_config_error(f"Found duplicate outer select name `{name}`", self._path)
 
         super().validate_definition()
 
@@ -749,9 +730,7 @@ class PythonModel(_Model):
                 if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
-                    if PySparkDataFrame is not None and isinstance(
-                        df, PySparkDataFrame
-                    ):
+                    if PySparkDataFrame is not None and isinstance(df, PySparkDataFrame):
                         import pyspark
 
                         df = df.where(
@@ -766,9 +745,7 @@ class PythonModel(_Model):
                         )
                     else:
                         if self.time_column.format:
-                            start_format: TimeLike = start.strftime(
-                                self.time_column.format
-                            )
+                            start_format: TimeLike = start.strftime(self.time_column.format)
                             end_format: TimeLike = end.strftime(self.time_column.format)
                         else:
                             start_format = start
@@ -794,9 +771,7 @@ class PythonModel(_Model):
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
 
-Model = Annotated[
-    t.Union[SqlModel, SeedModel, PythonModel], Field(discriminator="source_type")
-]
+Model = Annotated[t.Union[SqlModel, SeedModel, PythonModel], Field(discriminator="source_type")]
 
 
 def load_model(
@@ -857,9 +832,7 @@ def load_model(
 
     if isinstance(query, d.MacroVar):
         if python_env is None:
-            raise_config_error(
-                "The python environment must be provided for Python models", path
-            )
+            raise_config_error("The python environment must be provided for Python models", path)
             raise
 
         return create_python_model(
@@ -888,8 +861,7 @@ def load_model(
     else:
         try:
             seed_properties = {
-                p.name.lower(): p.args.get("value")
-                for p in meta_fields.pop("kind").expressions
+                p.name.lower(): p.args.get("value") for p in meta_fields.pop("kind").expressions
             }
             return create_seed_model(
                 name,
@@ -1083,9 +1055,7 @@ def _create_model(
     return t.cast(Model, model)
 
 
-def _validate_model_fields(
-    klass: t.Type[_Model], provided_fields: t.Set[str], path: Path
-) -> None:
+def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
         raise_config_error(
@@ -1095,9 +1065,7 @@ def _validate_model_fields(
 
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
-        raise_config_error(
-            f"Invalid extra fields {extra_fields} in the model definition", path
-        )
+        raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
 
 
 def _find_tables(query: exp.Expression) -> t.Set[str]:
@@ -1113,8 +1081,7 @@ def _find_tables(query: exp.Expression) -> t.Set[str]:
         exp.table_name(table)
         for scope in traverse_scope(query)
         for table in scope.tables
-        if isinstance(table.this, exp.Identifier)
-        and exp.table_name(table) not in scope.cte_sources
+        if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
     }
 
 
@@ -1159,9 +1126,7 @@ def _python_env(
     return serialize_env(python_env, path=module_path)
 
 
-def _parse_depends_on(
-    model_func: str, python_env: t.Dict[str, Executable]
-) -> t.Set[str]:
+def _parse_depends_on(model_func: str, python_env: t.Dict[str, Executable]) -> t.Set[str]:
     """Parses the source of a model function and finds upstream dependencies based on calls to context."""
     env = prepare_env(python_env)
     depends_on = set()
@@ -1183,11 +1148,7 @@ def _parse_depends_on(
                 table: t.Optional[ast.expr] = node.args[0]
             else:
                 table = next(
-                    (
-                        keyword.value
-                        for keyword in node.keywords
-                        if keyword.arg == "model_name"
-                    ),
+                    (keyword.value for keyword in node.keywords if keyword.arg == "model_name"),
                     None,
                 )
 
@@ -1208,9 +1169,7 @@ def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
     )
 
 
-def _list_of_calls_to_exp(
-    value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]
-) -> exp.Expression:
+def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:
     return exp.Tuple(
         expressions=[
             exp.Anonymous(
@@ -1243,8 +1202,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "post": _list_of_calls_to_exp,
     "audits": _list_of_calls_to_exp,
     "columns_to_types_": lambda value: exp.Schema(
-        expressions=[
-            exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()
-        ]
+        expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
 }

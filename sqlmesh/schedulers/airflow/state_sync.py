@@ -77,9 +77,7 @@ class HttpStateReader(StateReader):
         )
         return {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
-    def snapshots_exist(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
-    ) -> t.Set[SnapshotId]:
+    def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if multiple snapshots exist in the state sync.
 
         Args:

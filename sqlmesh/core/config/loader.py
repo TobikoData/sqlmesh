@@ -27,9 +27,7 @@ def load_config_from_paths(
 
         parent_path = path.parent
         if parent_path in visited_folders:
-            raise ConfigError(
-                f"Multiple configuration files found in folder '{parent_path}'."
-            )
+            raise ConfigError(f"Multiple configuration files found in folder '{parent_path}'.")
         visited_folders.add(parent_path)
 
         extension = path.name.split(".")[-1].lower()
@@ -60,9 +58,7 @@ def load_config_from_yaml(path: Path) -> Config:
     return Config.parse_obj(config_dict)
 
 
-def load_config_from_python_module(
-    module_path: Path, config_name: str = "config"
-) -> Config:
+def load_config_from_python_module(module_path: Path, config_name: str = "config") -> Config:
     with sys_path(module_path.parent):
         try:
             config_module = import_python_file(module_path, module_path.parent)

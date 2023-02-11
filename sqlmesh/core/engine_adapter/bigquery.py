@@ -76,9 +76,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         insert/overwrite.
         """
         if where is None:
-            raise SQLMeshError(
-                "Where condition is required when doing a BigQuery insert overwrite"
-            )
+            raise SQLMeshError("Where condition is required when doing a BigQuery insert overwrite")
         self.delete_from(table_name, where=where)
         self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 
@@ -122,9 +120,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             job_config = bigquery.QueryJobConfig(
                 create_session=False,
                 connection_properties=[
-                    bigquery.query.ConnectionProperty(
-                        key="session_id", value=self._session_id
-                    )
+                    bigquery.query.ConnectionProperty(key="session_id", value=self._session_id)
                 ],
             )
         super().execute(

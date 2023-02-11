@@ -187,9 +187,7 @@ class Scheduler:
         for error in errors:
             sid = error.node[0]
             formatted_exception = "".join(format_exception(error.__cause__ or error))
-            self.console.log_error(
-                f"FAILED processing snapshot {sid}\n{formatted_exception}"
-            )
+            self.console.log_error(f"FAILED processing snapshot {sid}\n{formatted_exception}")
 
         skipped_snapshots = {i[0] for i in skipped_intervals}
         for skipped in skipped_snapshots:
@@ -232,9 +230,7 @@ class Scheduler:
             if is_dev
             else snapshots
         )
-        stored_snapshots = self.state_sync.get_snapshots_with_same_version(
-            same_version_snapshots
-        )
+        stored_snapshots = self.state_sync.get_snapshots_with_same_version(same_version_snapshots)
         all_snapshots.update({s.snapshot_id: s for s in stored_snapshots})
 
         return compute_interval_params(
@@ -320,9 +316,7 @@ def compute_interval_params(
     snapshots_to_batches = {}
 
     for snapshot in Snapshot.merge_snapshots(target, snapshots):
-        model_start_dt = max(
-            start_date(snapshot, snapshots.values()) or start_dt, start_dt
-        )
+        model_start_dt = max(start_date(snapshot, snapshots.values()) or start_dt, start_dt)
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
             for s, e in snapshot.missing_intervals(model_start_dt, end, latest)
@@ -408,8 +402,7 @@ def _resolve_one_snapshot_per_version(
         else:
             prev_snapshot = snapshot_per_version[key]
             if snapshot.unpaused_ts and (
-                not prev_snapshot.unpaused_ts
-                or snapshot.created_ts > prev_snapshot.created_ts
+                not prev_snapshot.unpaused_ts or snapshot.created_ts > prev_snapshot.created_ts
             ):
                 snapshot_per_version[key] = snapshot
 

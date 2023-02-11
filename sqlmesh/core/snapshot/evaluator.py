@@ -199,9 +199,7 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def demote(
-        self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str
-    ) -> None:
+    def demote(self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
 
         Args:
@@ -311,17 +309,13 @@ class SnapshotEvaluator:
                 **audit_args,
                 **kwargs,
             )
-            count, *_ = self.adapter.fetchone(
-                select("COUNT(*)").from_(query.subquery())
-            )
+            count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(query.subquery()))
             if count and raise_exception:
                 message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
                 if audit.blocking:
                     raise AuditError(message)
                 else:
-                    logger.warning(
-                        f"{message}\nAudit is warn only so proceeding with execution."
-                    )
+                    logger.warning(f"{message}\nAudit is warn only so proceeding with execution.")
             results.append(AuditResult(audit=audit, count=count, query=query))
         return results
 
@@ -347,9 +341,7 @@ class SnapshotEvaluator:
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
 
-    def _create_snapshot(
-        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
-    ) -> None:
+    def _create_snapshot(self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]) -> None:
         if snapshot.is_embedded_kind:
             return
 
@@ -368,9 +360,7 @@ class SnapshotEvaluator:
             logger.info("Creating view '%s'", table_name)
             self.adapter.create_view(
                 table_name,
-                snapshot.model.render_query(
-                    snapshots=parent_snapshots_by_name, is_dev=is_dev
-                ),
+                snapshot.model.render_query(snapshots=parent_snapshots_by_name, is_dev=is_dev),
             )
         else:
             logger.info("Creating table '%s'", table_name)
@@ -390,9 +380,7 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
 
-        schema_deltas = self._schema_diff_calculator.calculate(
-            target_table_name, tmp_table_name
-        )
+        schema_deltas = self._schema_diff_calculator.calculate(target_table_name, tmp_table_name)
         if not schema_deltas:
             return
 
@@ -414,9 +402,7 @@ class SnapshotEvaluator:
         )
         self.adapter.alter_table(target_table_name, added_columns, dropped_columns)
 
-    def _promote_snapshot(
-        self, snapshot: SnapshotInfoLike, environment: str, is_dev: bool
-    ) -> None:
+    def _promote_snapshot(self, snapshot: SnapshotInfoLike, environment: str, is_dev: bool) -> None:
         qualified_view_name = snapshot.qualified_view_name
         schema = qualified_view_name.schema_for_environment(environment=environment)
         if schema is not None:
@@ -425,18 +411,14 @@ class SnapshotEvaluator:
         view_name = qualified_view_name.for_environment(environment=environment)
         if not snapshot.is_embedded_kind:
             table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
-            logger.info(
-                "Updating view '%s' to point at table '%s'", view_name, table_name
-            )
+            logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
             self.adapter.create_view(view_name, exp.select("*").from_(table_name))
         else:
             logger.info("Dropping view '%s' for non-materialized table", view_name)
             self.adapter.drop_view(view_name)
 
     def _demote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
-        view_name = snapshot.qualified_view_name.for_environment(
-            environment=environment
-        )
+        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
         logger.info("Dropping view '%s'", view_name)
         self.adapter.drop_view(view_name)
 

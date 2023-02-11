@@ -55,9 +55,7 @@ class QueryRenderer:
         self._time_converter = time_converter or (lambda v: exp.convert(v))
         self._only_latest = only_latest
 
-        self._query_cache: t.Dict[
-            t.Tuple[datetime, datetime, datetime], exp.Subqueryable
-        ] = {}
+        self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Subqueryable] = {}
         self._schema: t.Optional[MappingSchema] = None
 
     def render(
@@ -127,9 +125,7 @@ class QueryRenderer:
                         raise ConfigError(f"Failed to parse a Jinja query {query}")
                     query = parsed_query
                 except Exception as ex:
-                    raise ConfigError(
-                        f"Invalid model query. {ex} at '{self._path}'"
-                    ) from ex
+                    raise ConfigError(f"Invalid model query. {ex} at '{self._path}'") from ex
 
             macro_evaluator = MacroEvaluator(self._dialect, python_env=self._python_env)
             macro_evaluator.locals.update(render_kwargs)
@@ -138,16 +134,12 @@ class QueryRenderer:
                 try:
                     macro_evaluator.evaluate(definition)
                 except MacroEvalError as ex:
-                    raise_config_error(
-                        f"Failed to evaluate macro '{definition}'. {ex}", self._path
-                    )
+                    raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
             try:
                 self._query_cache[cache_key] = macro_evaluator.transform(query)  # type: ignore
             except MacroEvalError as ex:
-                raise_config_error(
-                    f"Failed to resolve macro for query. {ex}", self._path
-                )
+                raise_config_error(f"Failed to resolve macro for query. {ex}", self._path)
 
             if self._schema:
                 # This takes care of expanding star projections
@@ -207,18 +199,14 @@ class QueryRenderer:
             return exp.replace_tables(query, mapping)
 
         if not isinstance(query, exp.Subqueryable):
-            raise_config_error(
-                f"Query needs to be a SELECT or a UNION {query}.", self._path
-            )
+            raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
         return t.cast(exp.Subqueryable, query)
 
     @property
     def contains_star_query(self) -> bool:
         """Returns True if the model's query contains a star projection."""
-        return any(
-            isinstance(expression, exp.Star) for expression in self.render().expressions
-        )
+        return any(isinstance(expression, exp.Star) for expression in self.render().expressions)
 
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
@@ -228,9 +216,7 @@ class QueryRenderer:
             self._query_cache.clear()
             self.render()
 
-    def filter_time_column(
-        self, query: exp.Select, start: TimeLike, end: TimeLike
-    ) -> None:
+    def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
         if not self._time_column:
             return
