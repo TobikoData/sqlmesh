@@ -6,6 +6,7 @@ import { useApiContextByEnvironment } from '../../../api'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { includes, isArrayNotEmpty, toDate, toDateFormat, toRatio } from '../../../utils'
 import { Divider } from '../divider/Divider'
+import Spinner from '../logo/Spinner'
 import { Progress } from '../progress/Progress'
 import { isModified } from './help'
 
@@ -73,7 +74,7 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
   const isPlanInProgress =
     planAction === EnumPlanState.Canceling || planState === EnumPlanState.Applying
   const changes = context?.changes
-  const withChanges =
+  const hasChanges =
     isModified(changes?.modified) ||
     isArrayNotEmpty(changes?.added) ||
     isArrayNotEmpty(changes?.removed)
@@ -119,8 +120,8 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
         ) : (
           <div>
             <h4 className="ml-1">
-              Current Environment is{' '}
-              <b className="px-2 py-1 font-sm rounded-md bg-secondary-100">{environment}</b>
+              Current Environment is
+              <b className="ml-1 px-2 py-1 font-sm rounded-md bg-secondary-100">{environment}</b>
             </h4>
           </div>
         )}
@@ -128,9 +129,9 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
       <PlanWizardStep
         headline="Models"
         description="Review Changes"
-        disabled={context?.environment == null}
+        disabled={environment == null}
       >
-        {withChanges ? (
+        {hasChanges ? (
           <>
             <div className="flex">
               {isArrayNotEmpty(changes?.added) && (
@@ -224,6 +225,11 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
               </div>
             )}
           </>
+        ) : planAction === EnumPlanAction.Running ? (
+          <span className="flex items-center">
+            <Spinner className="w-4 h-4 mr-2" />
+            <small>Checking ...</small>
+          </span>
         ) : (
           <div className="ml-1 text-gray-700">
             <Divider className="h-1 w-full mb-4" />
@@ -231,11 +237,11 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
           </div>
         )}
       </PlanWizardStep>
-      {withChanges && (
+      {hasChanges && (
         <PlanWizardStep
           headline="Backfill"
           description="Progress"
-          disabled={context?.environment == null}
+          disabled={environment == null}
         >
           {includes(
             [EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed],

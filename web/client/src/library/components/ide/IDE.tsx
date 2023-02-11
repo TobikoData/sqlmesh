@@ -42,7 +42,9 @@ export function IDE(): JSX.Element {
   }
 
   function cancelPlan(): void {
-    setPlanState(EnumPlanState.Canceling)
+    if (planAction === EnumPlanAction.Applying) {
+      setPlanState(EnumPlanState.Canceling)
+    }
 
     if (planAction !== EnumPlanAction.None) {
       setPlanAction(EnumPlanAction.Canceling)

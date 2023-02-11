@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
-import { includes, isArrayEmpty, isNil } from '../../../utils'
+import { includes, isArrayEmpty } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
 
@@ -45,10 +45,19 @@ export function Plan({
   }, [])
 
   useEffect(() => {
-    if (isNil(environment)) {
-      setPlanAction(EnumPlanAction.Run)
+    if (environment != null) {
+      if (includes([EnumPlanAction.Run, EnumPlanAction.Running], planAction)) {
+        void refetch()
+      }
     } else {
-      void refetch()
+      if (
+        includes(
+          [EnumPlanAction.None, EnumPlanAction.Opening, EnumPlanAction.Resetting],
+          planAction
+        )
+      ) {
+        setPlanAction(EnumPlanAction.Run)
+      }
     }
   }, [environment])
 
@@ -86,13 +95,13 @@ export function Plan({
     setPlanState(EnumPlanState.Applying)
 
     try {
-      const data: T = await fetchAPI({
+      const data: T = await fetchAPI<T, { start?: string; end?: string }>({
         url: `/api/apply?environment=${environment ?? ''}`,
         method: 'post',
-        data: JSON.stringify({
+        data: {
           start: backfill_start,
           end: backfill_end,
-        }),
+        },
       })
 
       if (data.ok) {
@@ -114,10 +123,15 @@ export function Plan({
   }
 
   function close(): void {
-    reset()
+    cleanUp()
 
     onClose()
   }
+
+  const isRunning = includes(
+    [EnumPlanAction.Running, EnumPlanAction.Applying, EnumPlanAction.Canceling],
+    planAction
+  )
 
   return (
     <div className="flex items-start w-full h-[75vh] overflow-hidden">
@@ -161,8 +175,7 @@ export function Plan({
                 )}
               </Button>
             )}
-            {(planAction === EnumPlanAction.Applying ||
-              planAction === EnumPlanAction.Canceling) && (
+            {isRunning && (
               <Button
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation()
@@ -178,7 +191,7 @@ export function Plan({
             )}
           </div>
           <div className="flex items-center">
-            {environment != null && (
+            {environment != null && !isRunning && (
               <Button
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation()
