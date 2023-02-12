@@ -56,7 +56,7 @@ export function Button({
         'whitespace-nowrap flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         SHAPE.get(shape),
         SIZE.get(size),
-        disabled
+        disabled === true
           ? 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed'
           : VARIANT.get(variant),
         className

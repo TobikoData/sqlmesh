@@ -94,9 +94,11 @@ export function Plan({
   async function apply<T extends { ok: boolean }>(): Promise<void> {
     setPlanState(EnumPlanState.Applying)
 
+    const url = `/api/apply?environment=${environment == null ? '' : String(environment)}`
+
     try {
       const data: T = await fetchAPI<T, { start?: string; end?: string }>({
-        url: `/api/apply?environment=${environment ?? ''}`,
+        url,
         method: 'post',
         data: {
           start: backfill_start,
@@ -171,7 +173,7 @@ export function Plan({
                 {getActionName(
                   planAction,
                   [EnumPlanAction.Applying],
-                  withBackfill ? 'Apply And Backfill' : 'Apply'
+                  withBackfill === true ? 'Apply And Backfill' : 'Apply'
                 )}
               </Button>
             )}

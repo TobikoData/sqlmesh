@@ -75,7 +75,7 @@ export function Editor(): JSX.Element {
 
       selectFile(file)
     } else {
-      !openedFiles.has(activeFileId) && setActiveFileId(getNextOpenedFile().id)
+      openedFiles.has(activeFileId) === false && setActiveFileId(getNextOpenedFile().id)
     }
   }, [openedFiles])
 
@@ -98,7 +98,7 @@ export function Editor(): JSX.Element {
   }
 
   function onChange(value: string): void {
-    if (activeFile.isLocal || activeFile.content === value) return
+    if (activeFile.isLocal === true || activeFile.content === value) return
 
     activeFile.content = value
 
@@ -171,7 +171,7 @@ export function Editor(): JSX.Element {
                   )}
                 >
                   <small className="text-xs">
-                    {file.isUntitled ? `SQL-${idx + 1}` : file.name}
+                    {file.isUntitled === true ? `SQL-${idx + 1}` : file.name}
                   </small>
                   {openedFiles.size > 1 && (
                     <XCircleIcon
@@ -209,7 +209,7 @@ export function Editor(): JSX.Element {
             text="Valid"
             ok={true}
           />
-          {!activeFile.isLocal && (
+          {activeFile.isLocal === false && (
             <>
               <Divider
                 orientation="vertical"
@@ -266,7 +266,7 @@ export function Editor(): JSX.Element {
             </>
           )}
 
-          {!activeFile.isLocal && (
+          {activeFile.isLocal === false && (
             <>
               <Button
                 size={EnumSize.sm}

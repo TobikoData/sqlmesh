@@ -57,13 +57,13 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   const [renamingDirectory, setRenamingDirectory] = useState<ModelDirectory>()
   const [newName, setNewName] = useState<string>('')
 
-  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
-  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
+  const IconChevron = isOpen === true ? ChevronDownIcon : ChevronRightIcon
+  const IconFolder = isOpen === true ? FolderOpenIcon : FolderIcon
 
   function createDirectory(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading) return
+    if (isLoading === true) return
 
     setIsLoading(true)
 
@@ -89,7 +89,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   function createFile(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading) return
+    if (isLoading === true) return
 
     setIsLoading(true)
 
@@ -99,7 +99,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
 
       const name = directory.name.startsWith('new_')
         ? `new_file_${count}${extension}`
-        : `new_${singular(directory.name)}_${count}${extension}`.toLowerCase()
+        : `new_${String(singular(directory.name))}_${count}${extension}`.toLowerCase()
 
       directory.addFile(
         new ModelFile(
@@ -122,7 +122,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   function remove(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading) return
+    if (isLoading === true) return
 
     setIsLoading(true)
 
@@ -143,7 +143,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   }
 
   function rename(): void {
-    if (isLoading || renamingDirectory == null) return
+    if (isLoading === true || renamingDirectory == null) return
 
     setIsLoading(true)
 
@@ -167,7 +167,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                setOpen(!isOpen)
+                setOpen(isOpen === false)
               }}
             >
               <IconChevron
@@ -210,7 +210,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 
-                      setOpen(!isOpen)
+                      setOpen(isOpen === false)
                     }}
                     onDoubleClick={(e: MouseEvent) => {
                       e.stopPropagation()
@@ -241,7 +241,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
           </span>
         </span>
       )}
-      {(isOpen || isRoot) && directory.withDirectories && (
+      {(isOpen === true || isRoot) && directory.withDirectories && (
         <ul className="overflow-hidden">
           {directory.directories.map(dir => (
             <li
@@ -254,7 +254,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
           ))}
         </ul>
       )}
-      {(isOpen || isRoot) && directory.withFiles && (
+      {(isOpen === true || isRoot) && directory.withFiles && (
         <ul
           className={clsx('mr-1 overflow-hidden', directory.withParent ? 'ml-4' : 'ml-[2px] mt-1')}
         >
@@ -284,7 +284,7 @@ function File({ file }: PropsFile): JSX.Element {
   const [newName, setNewName] = useState<string>('')
 
   function remove(file: ModelFile): void {
-    if (isLoading) return
+    if (isLoading === true) return
 
     setIsLoading(true)
 
@@ -299,7 +299,7 @@ function File({ file }: PropsFile): JSX.Element {
   }
 
   function rename(): void {
-    if (isLoading || renamingFile == null) return
+    if (isLoading === true || renamingFile == null) return
 
     setIsLoading(true)
 
@@ -307,7 +307,7 @@ function File({ file }: PropsFile): JSX.Element {
 
     openedFiles.delete(renamingFile.id)
 
-    renamingFile.rename(newName.trim().replace(`.${renamingFile.extension}`, ''))
+    renamingFile.rename(newName.trim().replace(`.${String(renamingFile.extension)}`, ''))
 
     if (shouldSelectAfterRename) {
       selectFile(renamingFile)
@@ -339,7 +339,7 @@ function File({ file }: PropsFile): JSX.Element {
         )}
       >
         <div className="flex items-center">
-          {openedFiles?.has(file.id) ? (
+          {openedFiles?.has(file.id) === true ? (
             <DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />
           ) : (
             <DocumentIconOutline

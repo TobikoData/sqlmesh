@@ -283,12 +283,12 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
                         value={category}
                         className={({ active, checked }) =>
                           `${
-                            active
+                            active === true
                               ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
                               : ''
                           }
                           ${
-                            checked
+                            checked === true
                               ? 'bg-secondary-500 bg-opacity-75 text-white'
                               : 'bg-secondary-100'
                           }
@@ -303,7 +303,7 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
                                   <RadioGroup.Label
                                     as="p"
                                     className={`font-medium  ${
-                                      checked ? 'text-white' : 'text-gray-900'
+                                      checked === true ? 'text-white' : 'text-gray-900'
                                     }`}
                                   >
                                     {category.name}
@@ -311,14 +311,14 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
                                   <RadioGroup.Description
                                     as="span"
                                     className={`inline ${
-                                      checked ? 'text-sky-100' : 'text-gray-500'
+                                      checked === true ? 'text-sky-100' : 'text-gray-500'
                                     } text-xs`}
                                   >
                                     <span>{category.description}</span>
                                   </RadioGroup.Description>
                                 </div>
                               </div>
-                              {checked && (
+                              {checked === true && (
                                 <div className="shrink-0 text-white">
                                   <CheckCircleIcon className="h-6 w-6" />
                                 </div>

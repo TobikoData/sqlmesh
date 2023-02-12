@@ -5,7 +5,11 @@ import { Fragment } from 'react'
 import { EnumSize } from '../../../types/enum'
 import { ButtonMenu } from '../button/Button'
 
-export function DropdownPlan({ onSelect }: { onSelect: (item: any) => void }): JSX.Element {
+export function DropdownPlan({
+  onSelect,
+}: {
+  onSelect: (item: { text: string; value: string }) => void
+}): JSX.Element {
   return (
     <Menu
       as="div"
@@ -45,7 +49,7 @@ export function DropdownPlan({ onSelect }: { onSelect: (item: any) => void }): J
                   }}
                   className={clsx(
                     `whitespace-nowrap text-gray-600 px-2 py-1 cursor-pointer hover:bg-secondary-100`,
-                    active && 'bg-blue-500'
+                    active === true && 'bg-blue-500'
                   )}
                 >
                   {item.text}

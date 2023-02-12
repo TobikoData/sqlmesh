@@ -41,7 +41,7 @@ export default function Tabs(): JSX.Element {
                 className={({ selected }) =>
                   clsx(
                     'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md cursor-pointer',
-                    selected
+                    selected === true
                       ? 'bg-secondary-100 text-secondary-500'
                       : 'text-gray-900 hover:bg-white/[0.12] hover:text-gray-500'
                   )
@@ -69,7 +69,7 @@ export default function Tabs(): JSX.Element {
                           key={header.id}
                           className="px-1 px-3 text-left"
                         >
-                          {header.isPlaceholder
+                          {header.isPlaceholder === true
                             ? null
                             : flexRender(header.column.columnDef.header, header.getContext())}
                         </th>
@@ -99,7 +99,7 @@ export default function Tabs(): JSX.Element {
                           key={header.id}
                           className="px-1 px-3"
                         >
-                          {header.isPlaceholder
+                          {header.isPlaceholder === true
                             ? null
                             : flexRender(header.column.columnDef.footer, header.getContext())}
                         </th>
