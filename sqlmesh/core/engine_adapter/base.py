@@ -720,7 +720,7 @@ class EngineAdapter:
             **self.sql_gen_kwargs,
             **kwargs,
         }
-        return e.sql(**sql_gen_kwargs)  # type: ignore
+        return e.sql(**sql_gen_kwargs).replace(r"\n", r"\\n")  # type: ignore
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
