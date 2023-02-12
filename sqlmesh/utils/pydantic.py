@@ -10,7 +10,7 @@ class PydanticModel(BaseModel):
     class Config:
         arbitrary_types_allowed = True
         extra = "forbid"
-        json_encoders = {exp.Expression: lambda e: e.sql().replace(r"\n", r"\\n")}
+        json_encoders = {exp.Expression: lambda e: e.sql()}
         underscore_attrs_are_private = True
         smart_union = True
 

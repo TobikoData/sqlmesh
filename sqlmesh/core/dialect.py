@@ -463,6 +463,18 @@ def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expr
 @t.no_type_check
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
+
+    def old_literal_sql(self, expression: exp.Literal) -> str:
+        text = expression.this or ""
+        if expression.is_string:
+            if self._replace_backslash:
+                text = text.replace("\\", "\\\\")
+            text = text.replace(self.quote_end, self._escaped_quote_end)
+            if self.pretty:
+                text = text.replace("\n", self.SENTINEL_LINE_BREAK)
+            text = f"{self.quote_start}{text}{self.quote_end}"
+        return text
+
     parsers = {Parser}
     generators = {Generator}
 
@@ -488,6 +500,7 @@ def extend_sqlglot() -> None:
                     PythonCode: lambda self, e: self.expressions(
                         e, sep="\n", indent=False
                     ),
+                    exp.Literal: old_literal_sql,
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (
