@@ -18,6 +18,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.metaprogramming import Executable
 
 
 def test_load(assert_exp_eq):
@@ -382,7 +383,7 @@ def test_description(sushi_context):
     assert sushi_context.models["sushi.orders"].description == "Table of sushi orders."
 
 
-def test_render():
+def test_render_definition():
     expressions = parse(
         """
         MODEL (
@@ -407,6 +408,7 @@ def test_render():
             1::int AS d, -- d
             CAST(2 AS double) AS e, --e
             f::bool, --f
+            @test_macro(1),
         FROM
             db.other_table t1
             LEFT JOIN
@@ -417,10 +419,24 @@ def test_render():
         read="spark",
     )
 
-    model = load_model(expressions)
+    model = load_model(
+        expressions,
+        python_env={
+            "test_macro": Executable(
+                payload="def test_macro(evaluator, v):\n    return v"
+            ),
+        },
+    )
+
+    # Should not include the macro implementation.
     assert format_model_expressions(
-        model.render_definition()
+        model.render_definition(include_python=False)
     ) == format_model_expressions(expressions)
+
+    # Should include the macro implementation.
+    assert "def test_macro(evaluator, v):" in format_model_expressions(
+        model.render_definition()
+    )
 
 
 def test_cron():
