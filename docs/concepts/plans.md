@@ -31,9 +31,11 @@ If a directly modified model change is categorized as breaking, then it will be 
 A directly-modified model that is classified as non-breaking will be backfilled, but its downstream dependencies will not. This is a common choice in scenarios such as an addition of a new column, an action which doesn't affect downstream models as new columns can't be used by downstream models without modifying them directly.
 
 ## Plan application
-Once a plan has been created and reviewed, it should then be applied in order for the changes that are part of it to take effect.
+Once a plan has been created and reviewed, it should then be applied to a target [environment](/concepts/environments) in order for the changes that are part of it to take effect.
 
-Every time a model is changed as part of a plan, a new variant of this model gets created behind the scene (see [snapshots](/concepts/architecture/snapshots)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared, therefore an environment can be viewed as a collection of references to physical tables of model versions which that environment has been created/updated with.
+Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](/concepts/architecture/snapshots)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
+
+When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words each environment is a collection of references to model variants and the physical tables associated with them.
 
 ![Each model version gets its own physical table while environments only contain references to these tables](plans/model_versioning.png)
 
