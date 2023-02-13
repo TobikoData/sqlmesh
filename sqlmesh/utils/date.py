@@ -96,9 +96,7 @@ def to_timestamp(value: TimeLike, relative_base: t.Optional[datetime] = None) ->
     return int(to_datetime(value, relative_base=relative_base).timestamp() * 1000)
 
 
-def to_datetime(
-    value: TimeLike, relative_base: t.Optional[datetime] = None
-) -> datetime:
+def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> datetime:
     """Converts a value into a UTC datetime object.
 
     Args:
@@ -125,9 +123,7 @@ def to_datetime(
             epoch = None
 
         if epoch is None:
-            dt = dateparser.parse(
-                str(value), settings={"RELATIVE_BASE": relative_base or now()}
-            )
+            dt = dateparser.parse(str(value), settings={"RELATIVE_BASE": relative_base or now()})
         else:
             try:
                 dt = datetime.strptime(str(value), DATE_INT_FMT)

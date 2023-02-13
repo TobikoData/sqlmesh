@@ -74,21 +74,15 @@ def get_snapshots() -> Response:
     with util.scoped_state_sync() as state_sync:
         snapshot_name_versions = _snapshot_name_versions_from_request()
         if snapshot_name_versions is not None:
-            snapshots = state_sync.get_snapshots_with_same_version(
-                snapshot_name_versions
-            )
+            snapshots = state_sync.get_snapshots_with_same_version(snapshot_name_versions)
         else:
             snapshot_ids = _snapshot_ids_from_request()
 
             if "check_existence" in request.args:
                 existing_snapshot_ids = (
-                    state_sync.snapshots_exist(snapshot_ids)
-                    if snapshot_ids is not None
-                    else set()
+                    state_sync.snapshots_exist(snapshot_ids) if snapshot_ids is not None else set()
                 )
-                return _success(
-                    common.SnapshotIdsResponse(snapshot_ids=existing_snapshot_ids)
-                )
+                return _success(common.SnapshotIdsResponse(snapshot_ids=existing_snapshot_ids))
 
             snapshots = list(state_sync.get_snapshots(snapshot_ids).values())
 

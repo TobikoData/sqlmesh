@@ -43,20 +43,14 @@ def test_config_precedence():
     assert context.physical_schema == "test"
 
     # Context parameters take precedence over config
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev"
-    )
-    context = Context(
-        path="examples/sushi", dialect="spark", physical_schema="test", config=config
-    )
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev")
+    context = Context(path="examples/sushi", dialect="spark", physical_schema="test", config=config)
     assert context.dialect == "spark"
     assert context.physical_schema == "test"
 
 
 def test_config_parameter():
-    config = Config(
-        model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev"
-    )
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev")
     context = Context(path="examples/sushi", config=config)
     assert context.dialect == "presto"
     assert context.physical_schema == "dev"

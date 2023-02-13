@@ -54,9 +54,7 @@ class ModelMeta(PydanticModel):
     pre: t.List[HookCall] = []
     post: t.List[HookCall] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(
-        default=None, alias="columns"
-    )
+    columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     audits: t.List[AuditReference] = []
 
     _croniter: t.Optional[croniter] = None
@@ -175,9 +173,7 @@ class ModelMeta(PydanticModel):
         kind = values.get("kind")
         if kind and not kind.is_materialized:
             if values.get("partitioned_by_"):
-                raise ValueError(
-                    f"partitioned_by field cannot be set for {kind} models"
-                )
+                raise ValueError(f"partitioned_by field cannot be set for {kind} models")
         return values
 
     @property
@@ -275,6 +271,4 @@ class ModelMeta(PydanticModel):
         Returns:
             The timestamp floor.
         """
-        return preserve_time_like_kind(
-            value, self.croniter(self.cron_next(value)).get_prev()
-        )
+        return preserve_time_like_kind(value, self.croniter(self.cron_next(value)).get_prev())

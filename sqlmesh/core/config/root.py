@@ -38,9 +38,7 @@ class Config(BaseConfig):
         model_defaults: Default values for model definitions.
     """
 
-    connections: t.Union[
-        t.Dict[str, ConnectionConfig], ConnectionConfig
-    ] = DuckDBConnectionConfig()
+    connections: t.Union[t.Dict[str, ConnectionConfig], ConnectionConfig] = DuckDBConnectionConfig()
     default_connection: str = ""
     test_connection_: t.Union[ConnectionConfig, str] = Field(
         alias="test_connection", default=DuckDBConnectionConfig()

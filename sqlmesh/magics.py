@@ -109,9 +109,7 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
-    @argument(
-        "test_name", type=str, nargs="?", default=None, help="The test name to display"
-    )
+    @argument("test_name", type=str, nargs="?", default=None, help="The test name to display")
     @argument("--ls", action="store_true", help="List tests associated with a model")
     @line_cell_magic
     def test(self, line: str, test_def_raw: t.Optional[str] = None) -> None:

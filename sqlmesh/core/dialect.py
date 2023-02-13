@@ -101,11 +101,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
                     MacroDef, this=field.expressions[0], expression=field.expressions[1]
                 )
             if name == "SQL":
-                into = (
-                    field.expressions[1].this.lower()
-                    if len(field.expressions) > 1
-                    else None
-                )
+                into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
         return self.expression(MacroFunc, this=field)
 
@@ -192,9 +188,7 @@ def _parse_having(self: Parser) -> t.Optional[exp.Expression]:
 
 
 @t.no_type_check
-def _parse_order(
-    self: Parser, this: exp.Expression = None
-) -> t.Optional[exp.Expression]:
+def _parse_order(self: Parser, this: exp.Expression = None) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "ORDER_BY")
     if not macro:
         return self.__parse_order(this)
@@ -224,9 +218,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     return self.expression(exp.Property, this=key.name.lower(), value=value)
 
 
-def _create_parser(
-    parser_type: t.Type[exp.Expression], table_keys: t.List[str]
-) -> t.Callable:
+def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
 
@@ -260,9 +252,7 @@ def _create_parser(
                         ModelKindName.SEED,
                     ) and self._match(TokenType.L_PAREN):
                         self._retreat(index)
-                        props = self._parse_wrapped_csv(
-                            functools.partial(_parse_props, self)
-                        )
+                        props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
                         props = None
                     value = self.expression(
@@ -290,16 +280,14 @@ PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
 
 def _model_sql(self: Generator, expression: exp.Expression) -> str:
     props = ",\n".join(
-        self.indent(f"{prop.name} {self.sql(prop, 'value')}")
-        for prop in expression.expressions
+        self.indent(f"{prop.name} {self.sql(prop, 'value')}") for prop in expression.expressions
     )
     return "\n".join(["MODEL (", props, ")"])
 
 
 def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
     props = ",\n".join(
-        self.indent(f"{prop.this} {self.sql(prop, 'value')}")
-        for prop in expression.expressions
+        self.indent(f"{prop.this} {self.sql(prop, 'value')}") for prop in expression.expressions
     )
     if props:
         return "\n".join([f"{expression.this} (", props, ")"])
@@ -353,18 +341,14 @@ def format_model_expressions(
 
         if not isinstance(expression, exp.Alias):
             if expression.name:
-                expression = expression.replace(
-                    exp.alias_(expression.copy(), expression.name)
-                )
+                expression = expression.replace(exp.alias_(expression.copy(), expression.name))
 
         column = column or expression
         expression = expression.this
 
         if isinstance(expression, exp.Cast):
             this = expression.this
-            if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(
-                this, exp.Paren
-            ):
+            if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
                 expression.replace(DColonCast(this=this, to=expression.to))
         column.comments = comments
         selects.append(column)
@@ -387,12 +371,8 @@ def text_diff(
     """Find the unified text diff between two expressions."""
     return "\n".join(
         unified_diff(
-            a.sql(pretty=True, comments=False, dialect=dialect).split("\n")
-            if a
-            else "",
-            b.sql(pretty=True, comments=False, dialect=dialect).split("\n")
-            if b
-            else "",
+            a.sql(pretty=True, comments=False, dialect=dialect).split("\n") if a else "",
+            b.sql(pretty=True, comments=False, dialect=dialect).split("\n") if b else "",
         )
     )
 
@@ -428,8 +408,7 @@ def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expr
                 chunks.append(([], False))
         else:
             if token.token_type == TokenType.BLOCK_START or (
-                token.token_type == TokenType.STRING
-                and JINJA_PATTERN.search(token.text)
+                token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text)
             ):
                 chunks[-1] = (chunks[-1][0], True)
             chunks[-1][0].append(token)
@@ -449,9 +428,7 @@ def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expr
                 exp.Literal.string(var)
                 for var in find_undeclared_variables(Environment().parse(segment))
             ]
-            expressions.append(
-                Jinja(this=exp.Literal.string(segment), expressions=variables)
-            )
+            expressions.append(Jinja(this=exp.Literal.string(segment), expressions=variables))
         else:
             for expression in dialect.parser().parse(chunk, sql):
                 if expression:
@@ -485,9 +462,7 @@ def extend_sqlglot() -> None:
                     Model: _model_sql,
                     Jinja: lambda self, e: e.name,
                     ModelKind: _model_kind_sql,
-                    PythonCode: lambda self, e: self.expressions(
-                        e, sep="\n", indent=False
-                    ),
+                    PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (
@@ -535,8 +510,7 @@ def select_from_values(
         This method operates as a generator and yields a VALUES expression.
     """
     casted_columns = [
-        exp.alias_(exp.cast(column, to=kind), column)
-        for column, kind in columns_to_types.items()
+        exp.alias_(exp.cast(column, to=kind), column) for column, kind in columns_to_types.items()
     ]
     batch = []
     for row in values:

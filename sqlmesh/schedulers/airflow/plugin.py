@@ -28,8 +28,6 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
                 # There is a known issue in Postgres (https://stackoverflow.com/a/29908840) which occurs
                 # due to a race condition when a new schema is being created concurrently. Here we retry
                 # the schema initialization once as a workaround.
-                logger.warning(
-                    "Failed to initialize the SQLMesh State Sync: %s. Retrying...", ex
-                )
+                logger.warning("Failed to initialize the SQLMesh State Sync: %s. Retrying...", ex)
                 time.sleep(1)
                 state_sync.init_schema()

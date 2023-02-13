@@ -54,9 +54,9 @@ def test_update_with_connections():
         Config(connections=conn0_config)
     ) == Config(connections={"conn1": conn1_config, "": conn0_config})
 
-    assert Config(connections=conn0_config).update_with(
-        Config(connections=conn1_config)
-    ) == Config(connections=conn1_config)
+    assert Config(connections=conn0_config).update_with(Config(connections=conn1_config)) == Config(
+        connections=conn1_config
+    )
 
     assert Config(connections={"conn0": conn0_config}).update_with(
         Config(connections={"conn1": conn1_config})
@@ -90,9 +90,7 @@ def test_update_with_notification_targets():
 
 
 def test_update_with_model_defaults():
-    config_a = Config(
-        model_defaults=ModelDefaultsConfig(start="2022-01-01", dialect="duckdb")
-    )
+    config_a = Config(model_defaults=ModelDefaultsConfig(start="2022-01-01", dialect="duckdb"))
     config_b = Config(model_defaults=ModelDefaultsConfig(dialect="spark"))
 
     assert config_a.update_with(config_b) == Config(
@@ -115,9 +113,7 @@ def test_default_connection():
 
     assert config.get_connection() == conn_a
 
-    assert (
-        config.copy(update={"default_connection": "conn2"}).get_connection() == conn_c
-    )
+    assert config.copy(update={"default_connection": "conn2"}).get_connection() == conn_c
 
     assert (
         Config(
@@ -156,9 +152,7 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
     with open(config_b_path, "w") as fd:
         fd.write("physical_schema: schema_b")
 
-    with pytest.raises(
-        ConfigError, match=r"^Multiple configuration files found in folder.*"
-    ):
+    with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
         load_config_from_paths(config_a_path, config_b_path)
 
 
@@ -171,9 +165,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path = tmp_path / "config.txt"
     config_path.touch()
 
-    with pytest.raises(
-        ConfigError, match=r"^Unsupported config file extension 'txt'.*"
-    ):
+    with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
         load_config_from_paths(config_path)
 
 

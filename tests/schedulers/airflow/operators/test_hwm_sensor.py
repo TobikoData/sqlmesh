@@ -34,9 +34,7 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     context = Context(dag_run=dag_run_mock)  # type: ignore
     assert not task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with(
-        [target_snapshot.table_info]
-    )
+    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot.table_info])
 
 
 @pytest.mark.airflow
@@ -74,9 +72,7 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
 
     assert not task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with(
-        [target_snapshot_v1.table_info]
-    )
+    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot_v1.table_info])
 
 
 @pytest.mark.airflow
@@ -114,6 +110,4 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
 
     assert task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with(
-        [target_snapshot_v1.table_info]
-    )
+    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot_v1.table_info])

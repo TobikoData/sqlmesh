@@ -23,9 +23,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 IGNORE_DECORATORS = {"hook", "macro", "model"}
 
 
-def _is_relative_to(
-    path: t.Optional[Path | str], other: t.Optional[Path | str]
-) -> bool:
+def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str]) -> bool:
     """path.is_relative_to compatibility, was only supported >= 3.9"""
     if path is None or other is None:
         return False
@@ -141,9 +139,7 @@ def getsource(obj: t.Any) -> str:
             obj = obj.__code__
             if hasattr(obj, "co_firstlineno"):
                 lnum = obj.co_firstlineno - 1
-                pat = re.compile(
-                    r"^(\s*def\s)|(\s*async\s+def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)"
-                )
+                pat = re.compile(r"^(\s*def\s)|(\s*async\s+def\s)|(.*(?<!\w)lambda(:|\s))|^(\s*@)")
                 while lnum > 0:
                     try:
                         line = lines[lnum]
@@ -202,11 +198,7 @@ def normalize_source(obj: t.Any) -> str:
 
             # remove docstrings
             body = node.body
-            if (
-                body
-                and isinstance(body[0], ast.Expr)
-                and isinstance(body[0].value, ast.Str)
-            ):
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Str):
                 node.body = body[1:]
 
             # remove function return type annotation
@@ -428,7 +420,9 @@ def print_exception(
         executable = python_env[func]
         indent = error_line[: match.start()]
 
-        error_line = f"{indent}File '{executable.path}' (or imported file), line {line_num}, in {func}"
+        error_line = (
+            f"{indent}File '{executable.path}' (or imported file), line {line_num}, in {func}"
+        )
 
         code = executable.payload
         formatted = []

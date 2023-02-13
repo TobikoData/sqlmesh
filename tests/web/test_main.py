@@ -241,8 +241,6 @@ def test_evaluate(web_sushi_context: Context) -> None:
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:
-    response = client.post(
-        "/api/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"}
-    )
+    response = client.post("/api/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"})
     assert response.status_code == 200
     assert response.json()

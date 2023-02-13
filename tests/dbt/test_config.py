@@ -53,9 +53,7 @@ def sushi_dbt_project() -> ProjectConfig:
         ({}, {"uknown": "value"}, {"uknown": "value"}),
     ],
 )
-def test_update(
-    current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: t.Dict[str, t.Any]
-):
+def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: t.Dict[str, t.Any]):
     config = ModelConfig(**current).update_with(new)
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
@@ -82,14 +80,11 @@ def test_model_config(sushi_dbt_project: ProjectConfig):
         "schema_": "db",
     }
     actual_config = {
-        k: getattr(customer_revenue_by_day_config, k)
-        for k, v in expected_config.items()
+        k: getattr(customer_revenue_by_day_config, k) for k, v in expected_config.items()
     }
     assert actual_config == expected_config
 
-    assert (
-        customer_revenue_by_day_config.model_name == "sushi_db.customer_revenue_by_day"
-    )
+    assert customer_revenue_by_day_config.model_name == "sushi_db.customer_revenue_by_day"
 
 
 def test_source_config(sushi_dbt_project: ProjectConfig):
@@ -125,9 +120,7 @@ def test_seed_config(sushi_dbt_project: ProjectConfig):
     assert raw_items_seed.seed_name == "sushi_raw.items"
 
 
-def _test_warehouse_config(
-    config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str
-):
+def _test_warehouse_config(config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str):
     config_dict = yaml_load(config_yaml)
     for path in params_path:
         config_dict = config_dict[path]

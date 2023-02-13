@@ -37,18 +37,16 @@ def create_plan_dag_spec(
     snapshots_for_intervals = {**new_snapshots, **stored_snapshots}
     all_snapshots_by_version = defaultdict(set)
     for snapshot in snapshots_for_intervals.values():
-        all_snapshots_by_version[(snapshot.name, snapshot.version)].add(
-            snapshot.snapshot_id
-        )
+        all_snapshots_by_version[(snapshot.name, snapshot.version)].add(snapshot.snapshot_id)
 
     if request.is_dev:
         # When in development mode exclude snapshots that match the version of each
         # paused forward-only snapshot that is a part of the plan.
         for s in request.environment.snapshots:
             if s.is_forward_only and snapshots_for_intervals[s.snapshot_id].is_paused:
-                previous_snapshot_ids = all_snapshots_by_version[
-                    (s.name, s.version)
-                ] - {s.snapshot_id}
+                previous_snapshot_ids = all_snapshots_by_version[(s.name, s.version)] - {
+                    s.snapshot_id
+                }
                 for sid in previous_snapshot_ids:
                     snapshots_for_intervals.pop(sid)
 
@@ -112,9 +110,5 @@ def _get_demoted_snapshots(
     current_environment = state_sync.get_environment(new_environment.name)
     if current_environment:
         preserved_snapshot_names = {s.name for s in new_environment.snapshots}
-        return [
-            s
-            for s in current_environment.snapshots
-            if s.name not in preserved_snapshot_names
-        ]
+        return [s for s in current_environment.snapshots if s.name not in preserved_snapshot_names]
     return []

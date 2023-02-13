@@ -59,9 +59,7 @@ class CommonStateSyncMixin(StateSync):
         """
         return [
             snapshot
-            for snapshot in self._get_snapshots(
-                lock_for_update=lock_for_update
-            ).values()
+            for snapshot in self._get_snapshots(lock_for_update=lock_for_update).values()
             if snapshot.name in names
         ]
 
@@ -92,9 +90,7 @@ class CommonStateSyncMixin(StateSync):
                 f"Missing snapshots {missing}. Make sure to push and backfill your snapshots."
             )
 
-        existing_environment = self._get_environment(
-            environment.name, lock_for_update=True
-        )
+        existing_environment = self._get_environment(environment.name, lock_for_update=True)
 
         if existing_environment:
             if environment.previous_plan_id != existing_environment.plan_id:
@@ -108,15 +104,12 @@ class CommonStateSyncMixin(StateSync):
                 self._ensure_no_gaps(snapshots, existing_environment)
 
             existing_table_infos = {
-                table_info.name: table_info
-                for table_info in existing_environment.snapshots
+                table_info.name: table_info for table_info in existing_environment.snapshots
             }
         else:
             existing_table_infos = {}
 
-        missing_models = set(existing_table_infos) - {
-            snapshot.name for snapshot in snapshots
-        }
+        missing_models = set(existing_table_infos) - {snapshot.name for snapshot in snapshots}
 
         for snapshot in snapshots:
             existing_table_infos.get(snapshot.name)
@@ -147,9 +140,7 @@ class CommonStateSyncMixin(StateSync):
         def _is_snapshot_used(snapshot: Snapshot) -> bool:
             return (
                 snapshot.snapshot_id in promoted_snapshot_ids
-                or to_datetime(
-                    snapshot.ttl, relative_base=to_datetime(snapshot.updated_ts)
-                )
+                or to_datetime(snapshot.ttl, relative_base=to_datetime(snapshot.updated_ts))
                 > current_time
             )
 
@@ -206,9 +197,7 @@ class CommonStateSyncMixin(StateSync):
         self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         target_snapshot_ids = {s.snapshot_id for s in snapshots}
-        snapshots = self._get_snapshots_with_same_version(
-            snapshots, lock_for_update=True
-        )
+        snapshots = self._get_snapshots_with_same_version(snapshots, lock_for_update=True)
         for snapshot in snapshots:
             is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
             if is_target_snapshot and not snapshot.unpaused_ts:
@@ -233,9 +222,7 @@ class CommonStateSyncMixin(StateSync):
         }
 
         changed_version_target_snapshots = [
-            t
-            for t in target_snapshots
-            if t.name in changed_version_prev_snapshots_by_name
+            t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
         ]
 
         all_snapshots = {

@@ -49,9 +49,7 @@ class MacroExtractor(Parser):
                     self._advance()
 
                 calls = capture_jinja(self._find_sql(body_start, body_end)).calls
-                macros[name] = MacroInfo(
-                    macro=self._find_sql(macro_start, self._next), calls=calls
-                )
+                macros[name] = MacroInfo(macro=self._find_sql(macro_start, self._next), calls=calls)
 
             self._advance()
 
@@ -61,9 +59,7 @@ class MacroExtractor(Parser):
         super()._advance(times)
         self._tag = (
             self._curr.text.upper()
-            if self._curr
-            and self._prev
-            and self._prev.token_type == TokenType.BLOCK_START
+            if self._curr and self._prev and self._prev.token_type == TokenType.BLOCK_START
             else ""
         )
 
@@ -95,9 +91,7 @@ def capture_jinja(query: str) -> CapturedQuery:
     calls = []
 
     class UndefinedSpy(Undefined):
-        def _fail_with_undefined_error(  # type: ignore
-            self, *args: t.Any, **kwargs: t.Any
-        ):
+        def _fail_with_undefined_error(self, *args: t.Any, **kwargs: t.Any):  # type: ignore
             calls.append((self._undefined_name, args, kwargs))
             return Placeholder()
 

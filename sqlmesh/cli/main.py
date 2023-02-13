@@ -219,9 +219,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 )
 @click.pass_context
 @error_handler
-def plan(
-    ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
-) -> None:
+def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
@@ -238,9 +236,7 @@ def plan(
 )
 @click.pass_context
 @error_handler
-def run(
-    ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
-) -> None:
+def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluates the DAG of models using the built-in scheduler."""
     context = ctx.obj
     context.run(**kwargs)

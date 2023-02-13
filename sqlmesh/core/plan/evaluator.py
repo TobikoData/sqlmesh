@@ -94,9 +94,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         }
 
         stored_snapshots_by_id = self.state_sync.get_snapshots(parent_snapshot_ids)
-        new_snapshots_by_id = {
-            snapshot.snapshot_id: snapshot for snapshot in plan.new_snapshots
-        }
+        new_snapshots_by_id = {snapshot.snapshot_id: snapshot for snapshot in plan.new_snapshots}
         all_snapshots_by_id = {**stored_snapshots_by_id, **new_snapshots_by_id}
 
         self.snapshot_evaluator.create(plan.new_snapshots, all_snapshots_by_id)
@@ -207,12 +205,10 @@ class AirflowPlanEvaluator(PlanEvaluator):
                 plan_application_dag_run_id,
                 "plan application",
             )
-            plan_application_succeeded = (
-                self.airflow_client.wait_for_dag_run_completion(
-                    plan_application_dag_id,
-                    plan_application_dag_run_id,
-                    self.dag_run_poll_interval_secs,
-                )
+            plan_application_succeeded = self.airflow_client.wait_for_dag_run_completion(
+                plan_application_dag_id,
+                plan_application_dag_run_id,
+                self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
                 raise SQLMeshError("Plan application failed")

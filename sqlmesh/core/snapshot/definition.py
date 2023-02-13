@@ -155,23 +155,15 @@ class SnapshotInfoMixin:
 
     @property
     def is_forward_only(self) -> bool:
-        return (
-            not self.data_hash_matches(self.previous_version)
-            and not self.is_new_version
-        )
+        return not self.data_hash_matches(self.previous_version) and not self.is_new_version
 
     @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
 
-    def data_hash_matches(
-        self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]
-    ) -> bool:
-        return (
-            other is not None
-            and self.fingerprint.data_hash == other.fingerprint.data_hash
-        )
+    def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
+        return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
     def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -407,9 +399,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def __hash__(self) -> int:
         return hash((self.__class__, self.fingerprint))
 
-    def add_interval(
-        self, start: TimeLike, end: TimeLike, is_dev: bool = False
-    ) -> None:
+    def add_interval(self, start: TimeLike, end: TimeLike, is_dev: bool = False) -> None:
         """Add a newly processed time interval to the snapshot.
 
         The actual stored intervals are [start_ts, end_ts) or start epoch timestamp inclusive and end epoch
@@ -519,9 +509,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def set_version(
         self,
-        version: t.Optional[
-            str | SnapshotDataVersion | SnapshotTableInfo | Snapshot
-        ] = None,
+        version: t.Optional[str | SnapshotDataVersion | SnapshotTableInfo | Snapshot] = None,
     ) -> None:
         """Set the version of this snapshot.
 
@@ -541,9 +529,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             unpaused_dt: The datetime object of when this snapshot was unpaused.
         """
-        self.unpaused_ts = (
-            to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
-        )
+        self.unpaused_ts = to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -645,9 +631,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def _ensure_version(self) -> None:
         if not self.version:
-            raise SQLMeshError(
-                f"Snapshot {self.snapshot_id} has not been versioned yet."
-            )
+            raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been versioned yet.")
 
 
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
@@ -655,9 +639,7 @@ SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
 
 
-def table_name(
-    physical_schema: str, name: str, version: str, is_temp: bool = False
-) -> str:
+def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
     temp_suffx = "__temp" if is_temp else ""
     return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
 
@@ -705,9 +687,7 @@ def fingerprint_from_model(
         parent_data_hash = _hash(sorted(p.to_version() for p in parents))
 
         parent_metadata_hash = _hash(
-            sorted(
-                h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash)
-            )
+            sorted(h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash))
         )
 
         cache[model.name] = SnapshotFingerprint(
@@ -722,19 +702,14 @@ def fingerprint_from_model(
 
 def _model_data_hash(model: Model, physical_schema: str) -> str:
     data = [
-        model.render_query().sql(identify=True, comments=False)
-        if not model.is_seed
-        else None,
+        model.render_query().sql(identify=True, comments=False) if not model.is_seed else None,
         str(model.sorted_python_env),
         model.kind.name,
         model.cron,
         model.storage_format,
         physical_schema,
         *(model.partitioned_by or []),
-        *(
-            expression.sql(identify=True, comments=False)
-            for expression in model.expressions or []
-        ),
+        *(expression.sql(identify=True, comments=False) for expression in model.expressions or []),
         model.stamp,
     ]
 
@@ -785,9 +760,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
 
 
 def _hash(data: t.Iterable[t.Optional[str]]) -> str:
-    return str(
-        zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8"))
-    )
+    return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
 
 
 def _parents_from_model(
@@ -828,9 +801,7 @@ def merge_intervals(intervals: Intervals) -> Intervals:
     return merged
 
 
-def remove_interval(
-    intervals: Intervals, remove_start: int, remove_end: int
-) -> Intervals:
+def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:
     """Remove an interval from a list of intervals.
 
     Args:

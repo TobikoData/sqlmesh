@@ -8,9 +8,7 @@ from sqlglot.diff import Insert, Keep, diff
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotChangeCategory
 
 
-def categorize_change(
-    new: Snapshot, old: Snapshot
-) -> t.Optional[SnapshotChangeCategory]:
+def categorize_change(new: Snapshot, old: Snapshot) -> t.Optional[SnapshotChangeCategory]:
     """Attempts to automatically categorize a change between two snapshots.
 
     Presently the implementation only returns the NON_BREAKING category iff

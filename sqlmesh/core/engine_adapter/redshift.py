@@ -120,14 +120,10 @@ class RedshiftEngineAdapter(EngineAdapter):
         target_exists = self.table_exists(target_table)
         if target_exists:
             with self.transaction():
-                temp_table_name = (
-                    f"{target_table.alias_or_name}_temp_{self._short_hash()}"
-                )
+                temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
                 temp_table = target_table.copy()
                 temp_table.set("this", exp.to_identifier(temp_table_name))
-                old_table_name = (
-                    f"{target_table.alias_or_name}_old_{self._short_hash()}"
-                )
+                old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
                 old_table = target_table.copy()
                 old_table.set("this", exp.to_identifier(old_table_name))
                 self.create_table(temp_table, columns_to_types, exists=False)
@@ -161,7 +157,9 @@ class RedshiftEngineAdapter(EngineAdapter):
         if table.args.get("catalog"):
             return False
 
-        q: str = f"SELECT 1 FROM information_schema.tables WHERE table_name = '{table.alias_or_name}'"
+        q: str = (
+            f"SELECT 1 FROM information_schema.tables WHERE table_name = '{table.alias_or_name}'"
+        )
         database_name = table.args.get("db")
         if database_name:
             q += f" AND table_schema = '{database_name}'"

@@ -122,9 +122,7 @@ class BaseContext(abc.ABC):
         """
         return self.engine_adapter.fetchdf(query)
 
-    def fetch_pyspark_df(
-        self, query: t.Union[exp.Expression, str]
-    ) -> pyspark.sql.DataFrame:
+    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> pyspark.sql.DataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
 
         Args:
@@ -214,12 +212,8 @@ class Context(BaseContext):
 
         self.config = self._load_config(config or "config")
 
-        self.physical_schema = (
-            physical_schema or self.config.physical_schema or "sqlmesh"
-        )
-        self.snapshot_ttl = (
-            snapshot_ttl or self.config.snapshot_ttl or c.DEFAULT_SNAPSHOT_TTL
-        )
+        self.physical_schema = physical_schema or self.config.physical_schema or "sqlmesh"
+        self.snapshot_ttl = snapshot_ttl or self.config.snapshot_ttl or c.DEFAULT_SNAPSHOT_TTL
         self.dag: DAG[str] = DAG()
 
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -230,9 +224,7 @@ class Context(BaseContext):
         self.connection = connection
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
-        self._engine_adapter = (
-            engine_adapter or connection_config.create_engine_adapter()
-        )
+        self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
 
         test_connection_config = (
             self.config.test_connection
@@ -241,19 +233,13 @@ class Context(BaseContext):
         )
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
-        self.dialect = (
-            dialect
-            or self.config.model_defaults.dialect
-            or self._engine_adapter.dialect
-        )
+        self.dialect = dialect or self.config.model_defaults.dialect or self._engine_adapter.dialect
 
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks
         )
 
-        self.notification_targets = self.config.notification_targets + (
-            notification_targets or []
-        )
+        self.notification_targets = self.config.notification_targets + (notification_targets or [])
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -325,9 +311,8 @@ class Context(BaseContext):
     @property
     def state_sync(self) -> StateSync:
         if not self._state_sync:
-            self._state_sync = (
-                self._provided_state_sync
-                or self.config.scheduler.create_state_sync(self)
+            self._state_sync = self._provided_state_sync or self.config.scheduler.create_state_sync(
+                self
             )
             if not self._state_sync:
                 raise ConfigError(
@@ -455,10 +440,7 @@ class Context(BaseContext):
             [s.snapshot_id for s in local_snapshots.values()]
         )
 
-        return {
-            name: stored_snapshots.get(s.snapshot_id, s)
-            for name, s in local_snapshots.items()
-        }
+        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in local_snapshots.items()}
 
     @property
     def _model_tables(self) -> t.Dict[str, str]:
@@ -580,9 +562,7 @@ class Context(BaseContext):
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         if self._test_engine_adapter and not skip_tests:
             result, test_output = self.run_tests()
-            self.console.log_test_results(
-                result, test_output, self._test_engine_adapter.dialect
-            )
+            self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again"
@@ -778,9 +758,7 @@ class Context(BaseContext):
                 "Graphviz is pip-installed but the system install is missing. Instructions: https://graphviz.org/download/"
             ) from e
 
-    def run_tests(
-        self, path: t.Optional[str] = None
-    ) -> t.Tuple[unittest.result.TestResult, str]:
+    def run_tests(self, path: t.Optional[str] = None) -> t.Tuple[unittest.result.TestResult, str]:
         """Discover and run model tests"""
         test_output = StringIO()
         with contextlib.redirect_stderr(test_output):
@@ -814,9 +792,7 @@ class Context(BaseContext):
         """
 
         snapshots = (
-            [self.snapshots[model] for model in models]
-            if models
-            else self.snapshots.values()
+            [self.snapshots[model] for model in models] if models else self.snapshots.values()
         )
 
         num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
@@ -856,9 +832,7 @@ class Context(BaseContext):
     ) -> ContextDiff:
         environment = environment or c.PROD
         environment = Environment.normalize_name(environment)
-        return ContextDiff.create(
-            environment, snapshots or self.snapshots, self.state_reader
-        )
+        return ContextDiff.create(environment, snapshots or self.snapshots, self.state_reader)
 
     def _load_config(self, config: t.Union[str, Config]) -> Config:
         if isinstance(config, Config):
@@ -873,9 +847,7 @@ class Context(BaseContext):
         ]
         return load_config_from_paths(*lookup_paths, config_name=config)
 
-    def glob_path(
-        self, path: Path, file_extension: str
-    ) -> t.Generator[Path, None, None]:
+    def glob_path(self, path: Path, file_extension: str) -> t.Generator[Path, None, None]:
         """
         Globs the provided path for the file extension but also removes any filepaths that match an ignore
         pattern either set in constants or provided in config

@@ -41,9 +41,7 @@ class Seed(PydanticModel):
             result[str(column_name)] = exp_type
         return result
 
-    def read(
-        self, batch_size: t.Optional[int] = None
-    ) -> t.Generator[pd.DataFrame, None, None]:
+    def read(self, batch_size: t.Optional[int] = None) -> t.Generator[pd.DataFrame, None, None]:
         df = self._get_df()
 
         batch_size = batch_size or df.size

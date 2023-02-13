@@ -48,9 +48,7 @@ class GithubNotificationOperatorProvider(
             task_id=self.get_task_id(target, plan_status),
             trigger_rule=self.get_trigger_rule(plan_status),
             github_method="get_repo",
-            github_method_args={
-                "full_name_or_id": target.pull_request_info.full_repo_path
-            },
+            github_method_args={"full_name_or_id": target.pull_request_info.full_repo_path},
             result_processor=lambda repo: add_comment_to_pr(
                 repo,
                 target.pull_request_info,

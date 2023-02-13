@@ -59,7 +59,5 @@ class ApiConsole(TerminalConsole):
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
         self.queue.put_nowait(
-            Event(
-                data=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
-            )
+            Event(data=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}")
         )

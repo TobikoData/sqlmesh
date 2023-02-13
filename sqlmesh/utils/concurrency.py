@@ -82,9 +82,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
                 self._node_errors.append(error)
                 self._skip_next_nodes(node)
 
-    def _submit_next_nodes(
-        self, executor: Executor, processed_node: t.Optional[H] = None
-    ) -> None:
+    def _submit_next_nodes(self, executor: Executor, processed_node: t.Optional[H] = None) -> None:
         if not self._unprocessed_nodes_num:
             self._finished_future.set_result(None)
             return
@@ -105,9 +103,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
             self._finished_future.set_result(None)
             return
 
-        skipped_nodes = [
-            node for node, deps in self._unprocessed_nodes.items() if parent in deps
-        ]
+        skipped_nodes = [node for node, deps in self._unprocessed_nodes.items() if parent in deps]
 
         self._skipped_nodes.extend(skipped_nodes)
 

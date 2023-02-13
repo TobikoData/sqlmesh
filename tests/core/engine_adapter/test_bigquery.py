@@ -59,9 +59,7 @@ def test_replace_query(mocker: MockerFixture):
         else call[0].sql(dialect="bigquery", identify=True)
         for call in execute_mock.call_args_list
     ]
-    assert sql_calls == [
-        "CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"
-    ]
+    assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
 
 
 def test_replace_query_pandas(mocker: MockerFixture):

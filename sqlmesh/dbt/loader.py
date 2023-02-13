@@ -61,9 +61,7 @@ class DbtLoader(Loader):
         for path in config.project_files:
             self._track_file(path)
 
-        models.update(
-            {seed.seed_name: seed.to_sqlmesh() for seed in config.seeds.values()}
-        )
+        models.update({seed.seed_name: seed.to_sqlmesh() for seed in config.seeds.values()})
 
         models.update(
             {

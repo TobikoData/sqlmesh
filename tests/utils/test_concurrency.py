@@ -66,9 +66,7 @@ def test_concurrent_apply_to_snapshots_exception(mocker: MockerFixture, tasks_nu
 
 
 @pytest.mark.parametrize("tasks_num", [1, 2])
-def test_concurrent_apply_to_snapshots_return_failed_skipped(
-    mocker: MockerFixture, tasks_num: int
-):
+def test_concurrent_apply_to_snapshots_return_failed_skipped(mocker: MockerFixture, tasks_num: int):
     snapshot_a = mocker.Mock()
     snapshot_a.snapshot_id = SnapshotId(name="model_a", identifier="snapshot_a")
     snapshot_a.parents = []

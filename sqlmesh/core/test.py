@@ -72,9 +72,7 @@ class ModelTest(unittest.TestCase):
 
         self.snapshot = snapshots[self.model_name]
 
-        self.query = self.snapshot.model.render_query(
-            **self.body["outputs"].get("vars", {})
-        )
+        self.query = self.snapshot.model.render_query(**self.body["outputs"].get("vars", {}))
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {name: name for name in snapshots}
         if mapping:
@@ -86,9 +84,7 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        inputs = {
-            name: table["rows"] for name, table in self.body.get("inputs", {}).items()
-        }
+        inputs = {name: table["rows"] for name, table in self.body.get("inputs", {}).items()}
         self.engine_adapter.create_schema(self.snapshot.physical_schema)
         for table, rows in inputs.items():
             df = pd.DataFrame.from_records(rows)  # noqa
@@ -102,9 +98,7 @@ class ModelTest(unittest.TestCase):
 
         for snapshot_id in self.snapshot.parents:
             if snapshot_id.name not in inputs:
-                self._raise_error(
-                    f"Incomplete test, missing input for table {snapshot_id.name}"
-                )
+                self._raise_error(f"Incomplete test, missing input for table {snapshot_id.name}")
             self.view_names.append(
                 table_name(
                     self.snapshot.physical_schema,
@@ -149,9 +143,7 @@ class ModelTest(unittest.TestCase):
         for cte_name, value in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
                 if cte_name not in self.ctes:
-                    self._raise_error(
-                        f"No CTE named {cte_name} found in model {self.model_name}"
-                    )
+                    self._raise_error(f"No CTE named {cte_name} found in model {self.model_name}")
                 expected_df = pd.DataFrame.from_records(value["rows"])
                 actual_df = self.execute(self.ctes[cte_name].this)
                 self.assert_equal(expected_df, actual_df)
@@ -161,9 +153,7 @@ class ModelTest(unittest.TestCase):
 
         # Test model query
         if "rows" in self.body["outputs"].get("query", {}):
-            expected_df = pd.DataFrame.from_records(
-                self.body["outputs"]["query"]["rows"]
-            )
+            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"]["rows"])
             actual_df = self.execute(self.query)
             self.assert_equal(expected_df, actual_df)
 
@@ -234,10 +224,7 @@ def filter_tests_by_patterns(
     return unique(
         test
         for test, pattern in itertools.product(tests, patterns)
-        if (
-            "*" in pattern
-            and fnmatch.fnmatchcase(test.fully_qualified_test_name, pattern)
-        )
+        if ("*" in pattern and fnmatch.fnmatchcase(test.fully_qualified_test_name, pattern))
         or pattern in test.fully_qualified_test_name
     )
 
@@ -275,9 +262,7 @@ def get_all_model_tests(
     patterns: t.Optional[t.List[str]] = None,
     ignore_patterns: t.Optional[t.List[str]] = None,
 ) -> t.List[ModelTestMetadata]:
-    model_test_metadatas = list(
-        discover_model_tests(pathlib.Path(path), ignore_patterns)
-    )
+    model_test_metadatas = list(discover_model_tests(pathlib.Path(path), ignore_patterns))
     if patterns:
         model_test_metadatas = filter_tests_by_patterns(model_test_metadatas, patterns)
     return model_test_metadatas
@@ -325,9 +310,7 @@ def run_model_tests(
     """
     loaded_tests = []
     for test in tests:
-        filename, test_name = (
-            test.split("::", maxsplit=1) if "::" in test else (test, "")
-        )
+        filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
         path = pathlib.Path(filename)
         for ignore_pattern in ignore_patterns or []:
             if path.match(ignore_pattern):
