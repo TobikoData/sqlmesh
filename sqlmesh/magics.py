@@ -214,6 +214,12 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Automatically applies the new plan after creation.",
     )
+    @argument(
+        "--no-auto-categorization",
+        action="store_true",
+        help="Disable automatic change categorization.",
+        default=None,
+    )
     @line_magic
     def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
@@ -236,6 +242,7 @@ class SQLMeshMagics(Magics):
             forward_only=args.forward_only,
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
+            no_auto_categorization=args.no_auto_categorization,
         )
         self._context.console = console
 

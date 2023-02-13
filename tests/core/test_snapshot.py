@@ -7,7 +7,13 @@ from sqlglot import parse_one
 
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, fingerprint_from_model
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotFingerprint,
+    categorize_change,
+    fingerprint_from_model,
+)
 from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
@@ -384,3 +390,156 @@ def test_table_name(snapshot: Snapshot):
     )
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
+
+
+def test_categorize_change(make_snapshot):
+    old_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+
+    # A projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds"))),
+            old=old_snapshot,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # A complex projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))
+            ),
+            old=old_snapshot,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # Multiple projections have been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))
+            ),
+            old=old_snapshot,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # No change.
+    assert categorize_change(old_snapshot, old_snapshot) is None
+
+    # A projection has been removed.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select ds"))),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A projection has been replaced.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds"))),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A projection has been moved.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select ds, 1"))),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A WHERE clause has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A FROM clause has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # DISTINCT has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # An EXPLODE projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # An EXPLODE_OUTER projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, explode_outer(a)"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A POSEXPLODE projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # A POSEXPLODE_OUTER projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, posexplode_outer(a)"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
+
+    # An UNNEST projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(
+                SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))
+            ),
+            old=old_snapshot,
+        )
+        is None
+    )
