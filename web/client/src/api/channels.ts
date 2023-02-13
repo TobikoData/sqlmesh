@@ -25,19 +25,25 @@ function subscribe(
 ): EventSource | undefined {
   if (isNil(topic)) return
 
-  let channel = channels.get(topic)
-
-  channel?.close()
+  cleanUpChannel(topic, callback)
 
   channels.set(topic, getEventSource(topic))
 
-  channel = channels.get(topic)
+  const channel = channels.get(topic)
 
-  if (isNil(callback)) return
-
-  channel.onmessage = handleChannelMessage(topic, callback)
+  channel?.addEventListener('message', handleChannelMessage(topic, callback))
 
   return channel
+}
+
+function cleanUpChannel(topic: string, callback: ChannelCallback): void {
+  const channel = channels.get(topic)
+
+  channel?.close()
+
+  channel?.removeEventListener('message', handleChannelMessage(topic, callback))
+
+  channels.delete(topic)
 }
 
 function handleChannelMessage(
@@ -45,7 +51,7 @@ function handleChannelMessage(
   callback: ChannelCallback,
 ): (e: MessageEvent) => void {
   return (event: MessageEvent) => {
-    if (topic == null || callback == null || event.data == null) return
+    if (isNil(topic) || isNil(callback) || isNil(event.data)) return
 
     const channel = channels.get(topic)
 
