@@ -208,7 +208,7 @@ class SQLMeshMagics(Magics):
         help="Automatically applies the new plan after creation.",
     )
     @argument(
-        "--no-categorize-changes",
+        "--no-auto-categorization",
         action="store_true",
         help="Disable automatic change categorization.",
         default=None,
@@ -235,7 +235,7 @@ class SQLMeshMagics(Magics):
             forward_only=args.forward_only,
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
-            no_categorize_changes=args.no_categorize_changes,
+            no_auto_categorization=args.no_auto_categorization,
         )
         self.context.console = console
 
