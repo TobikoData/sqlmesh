@@ -62,6 +62,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotFingerprint,
+    categorize_change,
     to_table_mapping,
 )
 from sqlmesh.core.state_sync import StateReader, StateSync
@@ -603,6 +604,7 @@ class Context(BaseContext):
         forward_only: bool = False,
         no_prompts: bool = False,
         auto_apply: bool = False,
+        no_auto_categorization: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -630,6 +632,9 @@ class Context(BaseContext):
                 if this flag is set to true and there are uncategorized changes the plan creation will
                 fail. Default: False.
             auto_apply: Whether to automatically apply the new plan after creation. Default: False.
+            no_auto_categorization: Indicates whether to disable automatic categorization of model
+                changes (breaking / non-breaking). If not provided, then the corresponding configuration
+                option determines the behavior.
 
         Returns:
             The populated Plan object.
@@ -672,6 +677,19 @@ class Context(BaseContext):
             forward_only=forward_only,
             environment_ttl=self.config.environment_ttl,
         )
+
+        auto_categorize_changes = (
+            self.config.auto_categorize_changes
+            if no_auto_categorization is None
+            else not no_auto_categorization
+        )
+
+        if auto_categorize_changes and not forward_only:
+            # Attempt to automatically determine and assign change categories.
+            for new, old in plan.context_diff.modified_snapshots.values():
+                change_category = categorize_change(new, old)
+                if change_category is not None:
+                    plan.set_choice(new, change_category)
 
         if not no_prompts:
             self.console.plan(plan, auto_apply)
