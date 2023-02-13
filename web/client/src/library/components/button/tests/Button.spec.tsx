@@ -22,7 +22,7 @@ describe('Button', () => {
         size={EnumSize.sm}
       >
         Click me
-      </Button>
+      </Button>,
     )
     const button = getByText('Click me')
 
@@ -46,7 +46,7 @@ describe('ButtonMenu', () => {
     const { getByText } = render(
       <Menu>
         <ButtonMenu>Click me</ButtonMenu>
-      </Menu>
+      </Menu>,
     )
     const button = getByText('Click me')
 
@@ -65,7 +65,7 @@ describe('ButtonMenu', () => {
         >
           Click me
         </ButtonMenu>
-      </Menu>
+      </Menu>,
     )
     const button = getByText('Click me')
 

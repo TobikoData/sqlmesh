@@ -9,10 +9,14 @@ export type ButtonVariant =
   | 'danger'
   | 'warning'
   | 'alternative'
-export type ButtonSize = Subset<Size, typeof EnumSize.sm | typeof EnumSize.md | typeof EnumSize.lg>
+export type ButtonSize = Subset<
+  Size,
+  typeof EnumSize.sm | typeof EnumSize.md | typeof EnumSize.lg
+>
 export type ButtonShape = 'square' | 'rounded' | 'circle' | 'pill'
 
-export interface PropsButton extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface PropsButton
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
   shape?: ButtonShape
@@ -22,12 +26,30 @@ export interface PropsButton extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const VARIANT = new Map<ButtonVariant, string>([
-  ['primary', 'bg-secondary-100 hover:bg-secondary-100 active:bg-secondary-100 text-secondary-600'],
-  ['secondary', 'bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-gray-100'],
-  ['success', 'bg-success-500 hover:bg-success-600 active:bg-success-400 text-gray-100'],
-  ['danger', 'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-gray-100'],
-  ['warning', 'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-gray-100'],
-  ['alternative', 'bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-800'],
+  [
+    'primary',
+    'bg-secondary-100 hover:bg-secondary-100 active:bg-secondary-100 text-secondary-600',
+  ],
+  [
+    'secondary',
+    'bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-gray-100',
+  ],
+  [
+    'success',
+    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-gray-100',
+  ],
+  [
+    'danger',
+    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-gray-100',
+  ],
+  [
+    'warning',
+    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-gray-100',
+  ],
+  [
+    'alternative',
+    'bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-800',
+  ],
 ])
 
 const SHAPE = new Map<ButtonShape, string>([['rounded', `rounded-md`]])
@@ -56,10 +78,10 @@ export function Button({
         'whitespace-nowrap flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         SHAPE.get(shape),
         SIZE.get(size),
-        disabled === true
+        disabled
           ? 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed'
           : VARIANT.get(variant),
-        className
+        className,
       )}
       onClick={onClick}
     >
@@ -80,7 +102,7 @@ export function ButtonMenu({
         'whitespace-nowrap flex m-1 items-center justify-center font-medium focus:outline-none focus:ring-2 focus:ring-blue-500',
         VARIANT.get(variant),
         SHAPE.get(shape),
-        SIZE.get(size)
+        SIZE.get(size),
       )}
     >
       {children}

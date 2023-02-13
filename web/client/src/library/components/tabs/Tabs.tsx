@@ -7,6 +7,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { isTrue } from '../../../utils'
 
 const data: Array<{ id: string }> = []
 const columnHelper = createColumnHelper<{ id: string }>()
@@ -41,9 +42,9 @@ export default function Tabs(): JSX.Element {
                 className={({ selected }) =>
                   clsx(
                     'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md cursor-pointer',
-                    selected === true
+                    isTrue(selected)
                       ? 'bg-secondary-100 text-secondary-500'
-                      : 'text-gray-900 hover:bg-white/[0.12] hover:text-gray-500'
+                      : 'text-gray-900 hover:bg-white/[0.12] hover:text-gray-500',
                   )
                 }
               >
@@ -56,7 +57,7 @@ export default function Tabs(): JSX.Element {
           <Tab.Panel
             className={clsx(
               'w-full h-full overflow-hidden pt-4',
-              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
             )}
           >
             <div className="w-full h-full overflow-hidden overflow-y-auto">
@@ -69,9 +70,12 @@ export default function Tabs(): JSX.Element {
                           key={header.id}
                           className="px-1 px-3 text-left"
                         >
-                          {header.isPlaceholder === true
+                          {header.isPlaceholder
                             ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
                         </th>
                       ))}
                     </tr>
@@ -85,7 +89,10 @@ export default function Tabs(): JSX.Element {
                           key={cell.id}
                           className="px-1"
                         >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -99,9 +106,12 @@ export default function Tabs(): JSX.Element {
                           key={header.id}
                           className="px-1 px-3"
                         >
-                          {header.isPlaceholder === true
+                          {header.isPlaceholder
                             ? null
-                            : flexRender(header.column.columnDef.footer, header.getContext())}
+                            : flexRender(
+                                header.column.columnDef.footer,
+                                header.getContext(),
+                              )}
                         </th>
                       ))}
                     </tr>
@@ -112,7 +122,7 @@ export default function Tabs(): JSX.Element {
           </Tab.Panel>
           <Tab.Panel
             className={clsx(
-              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
             )}
           >
             Query Preview

@@ -20,7 +20,7 @@ export class ModelInitial<T extends object = any> {
               set() {
                 throw new Error('Cannot change initial file')
               },
-            }
+            },
           )
   }
 

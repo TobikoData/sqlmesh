@@ -164,6 +164,8 @@ describe('toDateFormat', () => {
   })
 
   it('returns a default formatted date string for a unsupported custom format', () => {
-    expect(toDateFormat(new Date('2023-02-07'), 'dd/mm/yyyy')).toBe('Tue Feb 07 2023')
+    expect(toDateFormat(new Date('2023-02-07'), 'dd/mm/yyyy')).toBe(
+      'Tue Feb 07 2023',
+    )
   })
 })

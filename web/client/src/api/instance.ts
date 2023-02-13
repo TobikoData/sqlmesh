@@ -17,8 +17,19 @@ export async function fetchAPI<T = any, B extends object = any>({
   headers?: Record<string, string>
   credentials?: 'omit' | 'same-origin' | 'include'
   mode?: 'cors' | 'no-cors' | 'same-origin'
-  cache?: 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'
-  params?: string | URLSearchParams | Record<string, string> | string[][] | undefined
+  cache?:
+    | 'default'
+    | 'no-store'
+    | 'reload'
+    | 'no-cache'
+    | 'force-cache'
+    | 'only-if-cached'
+  params?:
+    | string
+    | URLSearchParams
+    | Record<string, string>
+    | string[][]
+    | undefined
 }): Promise<T> {
   const hasSearchParams = Object.keys(params ?? {}).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')

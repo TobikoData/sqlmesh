@@ -23,7 +23,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
             is_supported: initial?.is_supported ?? true,
             content: initial?.content ?? '',
           },
-      parent
+      parent,
     )
 
     this.extension = initial?.extension ?? this.initial.extension

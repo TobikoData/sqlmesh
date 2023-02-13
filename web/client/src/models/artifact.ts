@@ -6,7 +6,9 @@ export interface InitialArtifact {
   path: string
 }
 
-export class ModelArtifact<T extends InitialArtifact = InitialArtifact> extends ModelInitial<T> {
+export class ModelArtifact<
+  T extends InitialArtifact = InitialArtifact,
+> extends ModelInitial<T> {
   private _path: string
   private _name: string
 
@@ -20,7 +22,7 @@ export class ModelArtifact<T extends InitialArtifact = InitialArtifact> extends 
             ...(initial as T),
             name: initial?.name ?? '',
             path: initial?.path ?? '',
-          }
+          },
     )
 
     this._path = initial?.path ?? this.initial.path

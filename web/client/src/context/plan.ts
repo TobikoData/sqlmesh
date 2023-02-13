@@ -68,7 +68,11 @@ interface PlanStore {
   setWithBackfill: (withBackfill: boolean) => void
   backfills: ContextEnvironmentBackfill[]
   setBackfills: (backfills?: ContextEnvironmentBackfill[]) => void
-  updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => void
+  updateTasks: (
+    data: PlanProgress,
+    channel: EventSource,
+    unsubscribe: () => void,
+  ) => void
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
@@ -112,7 +116,11 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setBackfills: (backfills?: ContextEnvironmentBackfill[]) => {
     set(() => (backfills == null ? { backfills: [] } : { backfills }))
   },
-  updateTasks: (data: PlanProgress, channel: EventSource, unsubscribe: () => void) => {
+  updateTasks: (
+    data: PlanProgress,
+    channel: EventSource,
+    unsubscribe: () => void,
+  ) => {
     const s = get()
 
     if (channel == null) return
@@ -145,7 +153,8 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
       return
     }
 
-    const isAllCompleted = isObjectEmpty(data.tasks) || isAllTasksCompleted(data.tasks)
+    const isAllCompleted =
+      isObjectEmpty(data.tasks) || isAllTasksCompleted(data.tasks)
 
     if (isAllCompleted) {
       s.setState(EnumPlanState.Finished)

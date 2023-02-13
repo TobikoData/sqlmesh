@@ -1,3 +1,19 @@
+export function isTrue(value: unknown): boolean {
+  return value === true
+}
+
+export function isFalse(value: unknown): boolean {
+  return value === false
+}
+
+export function isFalseOrNil(value: unknown): boolean {
+  return isNil(value) || isFalse(value)
+}
+
+export function isString(value: unknown): boolean {
+  return typeof value === 'string'
+}
+
 export function isArrayNotEmpty(value: unknown): boolean {
   return Array.isArray(value) && value.length > 0
 }
@@ -11,7 +27,9 @@ export function isObjectEmpty(value: unknown): boolean {
 }
 
 export function isObject(value: unknown): boolean {
-  return typeof value === 'object' && value !== null && value.constructor === Object
+  return (
+    typeof value === 'object' && value !== null && value.constructor === Object
+  )
 }
 
 export function isNil(value: unknown): boolean {
@@ -44,7 +62,10 @@ export function toDate(value?: string | number): Date | undefined {
   }
 }
 
-export function toDateFormat(date?: Date, format: string = 'yyyy-mm-dd'): string {
+export function toDateFormat(
+  date?: Date,
+  format: string = 'yyyy-mm-dd',
+): string {
   if (date == null) return ''
 
   const year = date.getFullYear()
@@ -54,11 +75,12 @@ export function toDateFormat(date?: Date, format: string = 'yyyy-mm-dd'): string
   const minute = date.getMinutes()
   const second = date.getSeconds()
 
-  if (format === 'yyyy-mm-dd') return `${year}-${toFormatted(month)}-${toFormatted(day)}`
+  if (format === 'yyyy-mm-dd')
+    return `${year}-${toFormatted(month)}-${toFormatted(day)}`
   if (format === 'yyyy-mm-dd hh-mm-ss')
-    return `${year}-${toFormatted(month)}-${toFormatted(day)} ${toFormatted(hour)}:${toFormatted(
-      minute
-    )}:${toFormatted(second)}`
+    return `${year}-${toFormatted(month)}-${toFormatted(day)} ${toFormatted(
+      hour,
+    )}:${toFormatted(minute)}:${toFormatted(second)}`
 
   return date.toDateString()
 
@@ -71,7 +93,11 @@ export function includes<T>(array: T[], value: T): boolean {
   return array.includes(value)
 }
 
-export function toRatio(top?: number, bottom?: number, multiplier = 100): number {
+export function toRatio(
+  top?: number,
+  bottom?: number,
+  multiplier = 100,
+): number {
   if (top == null || bottom == null || bottom === 0) return 0
   if (isNaN(top) || isNaN(bottom) || isNaN(multiplier)) return 0
 

@@ -1,3 +1,4 @@
+import React from 'react'
 import { Divider } from '../divider/Divider'
 import { IDE } from '../ide/IDE'
 import LogoTobiko from '../logo/Tobiko'

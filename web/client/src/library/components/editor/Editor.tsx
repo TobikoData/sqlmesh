@@ -22,7 +22,8 @@ export const EnumEditorFileStatus = {
   Saved: 'saved',
 } as const
 
-export type EditorFileStatus = typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
+export type EditorFileStatus =
+  typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
 
 export function Editor(): JSX.Element {
   const client = useQueryClient()
@@ -34,7 +35,9 @@ export function Editor(): JSX.Element {
   const selectFile = useStoreFileTree(s => s.selectFile)
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
 
-  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
+  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(
+    EnumEditorFileStatus.Edit,
+  )
   const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
 
@@ -75,7 +78,7 @@ export function Editor(): JSX.Element {
 
       selectFile(file)
     } else {
-      openedFiles.has(activeFileId) === false && setActiveFileId(getNextOpenedFile().id)
+      !openedFiles.has(activeFileId) && setActiveFileId(getNextOpenedFile().id)
     }
   }, [openedFiles])
 
@@ -98,7 +101,7 @@ export function Editor(): JSX.Element {
   }
 
   function onChange(value: string): void {
-    if (activeFile.isLocal === true || activeFile.content === value) return
+    if (activeFile.isLocal || activeFile.content === value) return
 
     activeFile.content = value
 
@@ -128,9 +131,9 @@ export function Editor(): JSX.Element {
         () => {
           setEditorFileStatus(EnumEditorFileStatus.Edit)
         },
-        200
+        200,
       ),
-    [activeFile]
+    [activeFile],
   )
 
   return (
@@ -154,7 +157,7 @@ export function Editor(): JSX.Element {
               <li
                 key={file.id}
                 className={clsx(
-                  'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer'
+                  'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
                 )}
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation()
@@ -167,11 +170,11 @@ export function Editor(): JSX.Element {
                     'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
                     file.id === activeFileId
                       ? 'bg-secondary-100'
-                      : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300'
+                      : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
                   )}
                 >
                   <small className="text-xs">
-                    {file.isUntitled === true ? `SQL-${idx + 1}` : file.name}
+                    {file.isUntitled ? `SQL-${idx + 1}` : file.name}
                   </small>
                   {openedFiles.size > 1 && (
                     <XCircleIcon
@@ -209,7 +212,7 @@ export function Editor(): JSX.Element {
             text="Valid"
             ok={true}
           />
-          {activeFile.isLocal === false && (
+          {!activeFile.isLocal && (
             <>
               <Divider
                 orientation="vertical"
@@ -239,34 +242,36 @@ export function Editor(): JSX.Element {
           />
         </div>
         <div className="flex">
-          {activeFile != null && activeFile.extension === '.sql' && activeFile.content !== '' && (
-            <>
-              <Button
-                size={EnumSize.sm}
-                variant="alternative"
-                onClick={e => {
-                  e.stopPropagation()
+          {activeFile != null &&
+            activeFile.extension === '.sql' &&
+            activeFile.content !== '' && (
+              <>
+                <Button
+                  size={EnumSize.sm}
+                  variant="alternative"
+                  onClick={e => {
+                    e.stopPropagation()
 
-                  sendQuery()
-                }}
-              >
-                Run Query
-              </Button>
-              <Button
-                size={EnumSize.sm}
-                variant="alternative"
-                onClick={e => {
-                  e.stopPropagation()
+                    sendQuery()
+                  }}
+                >
+                  Run Query
+                </Button>
+                <Button
+                  size={EnumSize.sm}
+                  variant="alternative"
+                  onClick={e => {
+                    e.stopPropagation()
 
-                  onChange('')
-                }}
-              >
-                Clear
-              </Button>
-            </>
-          )}
+                    onChange('')
+                  }}
+                >
+                  Clear
+                </Button>
+              </>
+            )}
 
-          {activeFile.isLocal === false && (
+          {!activeFile.isLocal && (
             <>
               <Button
                 size={EnumSize.sm}
@@ -304,7 +309,7 @@ function Indicator({
         <span
           className={clsx(
             `bg-${ok ? 'success' : 'warning'}-500`,
-            'inline-block w-2 h-2 rounded-full'
+            'inline-block w-2 h-2 rounded-full',
           )}
         ></span>
       ) : (
@@ -314,7 +319,12 @@ function Indicator({
   )
 }
 
-function CodeEditor({ className, value, onChange, extension }: any): JSX.Element {
+function CodeEditor({
+  className,
+  value,
+  onChange,
+  extension,
+}: any): JSX.Element {
   const extensions = [
     extension === '.sql' && sql(),
     extension === '.py' && python(),
@@ -337,7 +347,7 @@ function debounce(
   fn: (...args: any) => void,
   before: () => void,
   after: () => void,
-  delay: number = 500
+  delay: number = 500,
 ): (...args: any) => void {
   let timeoutID: ReturnType<typeof setTimeout>
 

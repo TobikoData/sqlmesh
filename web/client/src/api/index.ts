@@ -20,7 +20,9 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
 
   return useQuery({
     queryKey: [`/api/files`, path],
-    queryFn: shouldEnable ? async () => await getFileApiFilesPathGet(path) : undefined,
+    queryFn: shouldEnable
+      ? async () => await getFileApiFilesPathGet(path)
+      : undefined,
     enabled: shouldEnable,
     cacheTime: 0,
   })
@@ -43,7 +45,9 @@ export function useApiContext(): UseQueryResult<Context> {
   })
 }
 
-export function useApiContextByEnvironment(value?: string): UseQueryResult<ContextEnvironment> {
+export function useApiContextByEnvironment(
+  value?: string,
+): UseQueryResult<ContextEnvironment> {
   const environment = value ?? ''
 
   return useQuery({
@@ -59,7 +63,7 @@ export function useMutationApiSaveFile<T extends object>(
   callbacks: {
     onSuccess?: () => void
     onMutate?: () => void
-  }
+  },
 ): UseMutationResult<File, unknown, { path: string; body: T }, void> {
   return useMutation({
     mutationFn: saveFileByPath<T>,

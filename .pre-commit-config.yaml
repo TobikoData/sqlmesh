@@ -40,7 +40,7 @@ repos:
       - id: prettier
         name: prettier
         files: ^(web/client)
-        entry: prettier --write --ignore-path .prettierignore --config ./web/client/.prettierrc.json
+        entry: prettier --write --config ./web/client/prettier.config.cjs
         exclude: ^(web/client/node_modules)
         require_serial: true
         language: node
@@ -51,7 +51,7 @@ repos:
         name: eslint
         files: ^(web/client)
         exclude: ^(web/client/node_modules)
-        entry: eslint --fix -c ./web/client/.eslintrc.json --parser-options tsconfigRootDir:./web/client --ext .js,.jsx,.ts,.tsx .
+        entry: eslint --fix -c ./web/client/.eslintrc.cjs --parser-options tsconfigRootDir:./web/client
         additional_dependencies:
           [
             "@typescript-eslint/eslint-plugin",

@@ -37,19 +37,22 @@ html {
 
 @font-face {
   font-family: 'Circular STD';
-  src: url('./assets/fonts/Circular STD/CircularStd-Medium.otf') format('opentype');
+  src: url('./assets/fonts/Circular STD/CircularStd-Medium.otf')
+    format('opentype');
   font-weight: 500;
 }
 
 @font-face {
   font-family: 'Circular STD';
-  src: url('./assets/fonts/Circular STD/CircularStd-Bold.otf') format('opentype');
+  src: url('./assets/fonts/Circular STD/CircularStd-Bold.otf')
+    format('opentype');
   font-weight: 600;
 }
 
 @font-face {
   font-family: 'Circular STD';
-  src: url('./assets/fonts/Circular STD/CircularStd-Black.otf') format('opentype');
+  src: url('./assets/fonts/Circular STD/CircularStd-Black.otf')
+    format('opentype');
   font-weight: 900;
 }
 

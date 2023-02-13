@@ -4,7 +4,7 @@ import { isArrayNotEmpty } from '../../../utils'
 export function getActionName(
   action: PlanAction,
   options: string[] = [],
-  fallback: string = 'Start'
+  fallback: string = 'Start',
 ): string {
   if (!options.includes(action)) return fallback
 

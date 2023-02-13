@@ -16,7 +16,7 @@ export function Progress({
     <div
       className={clsx(
         'w-full h-1 bg-gray-100 overflow-hidden flex items-center rounded-lg my-1',
-        className
+        className,
       )}
     >
       <div

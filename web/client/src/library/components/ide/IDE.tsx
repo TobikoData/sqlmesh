@@ -10,7 +10,11 @@ import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover } from '@headlessui/react'
 import { useApiFiles } from '../../../api'
 import { Plan } from '../plan/Plan'
-import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
+import {
+  EnumPlanState,
+  EnumPlanAction,
+  useStorePlan,
+} from '../../../context/plan'
 import { Progress } from '../progress/Progress'
 import Spinner from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
@@ -27,7 +31,10 @@ export function IDE(): JSX.Element {
   const setEnvironment = useStorePlan(s => s.setEnvironment)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
-  const [subscribe, getChannel, unsubscribe] = useChannel('/api/tasks', updateTasks)
+  const [subscribe, getChannel, unsubscribe] = useChannel(
+    '/api/tasks',
+    updateTasks,
+  )
 
   const { data: project } = useApiFiles()
 
@@ -75,7 +82,8 @@ export function IDE(): JSX.Element {
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold">
-            <span className="inline-block text-secondary-500">/</span> {project?.name}
+            <span className="inline-block text-secondary-500">/</span>{' '}
+            {project?.name}
           </h3>
         </div>
 
@@ -88,7 +96,8 @@ export function IDE(): JSX.Element {
                     'mx-2 text-sm opacity-85 flex',
                     name === 'Editor' &&
                       'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
-                    ['Audits', 'Graph', 'Tests'].includes(name) && 'opacity-25 cursor-not-allowed'
+                    ['Audits', 'Graph', 'Tests'].includes(name) &&
+                      'opacity-25 cursor-not-allowed',
                   )}
                 >
                   {i > 0 && (
@@ -121,7 +130,9 @@ export function IDE(): JSX.Element {
             className="min-w-[6rem] justify-between"
           >
             {planState === EnumPlanState.Applying ||
-              (planState === EnumPlanState.Canceling && <Spinner className="w-3 h-3 mr-1" />)}
+              (planState === EnumPlanState.Canceling && (
+                <Spinner className="w-3 h-3 mr-1" />
+              ))}
             <span className="inline-block mr-3 min-w-20">
               {planState === EnumPlanState.Applying
                 ? 'Applying Plan...'
@@ -140,13 +151,16 @@ export function IDE(): JSX.Element {
                   <Popover.Button
                     className={clsx(
                       'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
-                      planState === EnumPlanState.Finished && 'bg-success-500 text-white',
-                      planState === EnumPlanState.Failed && 'bg-danger-500 text-white',
-                      planState === EnumPlanState.Applying && 'bg-secondary-500 text-white',
+                      planState === EnumPlanState.Finished &&
+                        'bg-success-500 text-white',
+                      planState === EnumPlanState.Failed &&
+                        'bg-danger-500 text-white',
+                      planState === EnumPlanState.Applying &&
+                        'bg-secondary-500 text-white',
                       planState !== EnumPlanState.Finished &&
                         planState !== EnumPlanState.Failed &&
                         planState !== EnumPlanState.Applying &&
-                        'bg-gray-100 text-gray-500'
+                        'bg-gray-100 text-gray-500',
                     )}
                   >
                     {plan == null ? 0 : 1}
@@ -174,7 +188,7 @@ export function IDE(): JSX.Element {
                               <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
                                 {
                                   Object.values(plan.tasks).filter(
-                                    (t: any) => t.completed === t.total
+                                    (t: any) => t.completed === t.total,
                                   ).length
                                 }{' '}
                                 of {Object.values(plan.tasks).length}
@@ -183,33 +197,38 @@ export function IDE(): JSX.Element {
                             <Progress
                               progress={Math.ceil(
                                 (Object.values(plan.tasks).filter(
-                                  (t: any) => t.completed === t.total
+                                  (t: any) => t.completed === t.total,
                                 ).length /
                                   Object.values(plan.tasks).length) *
-                                  100
+                                  100,
                               )}
                             />
                             <div className="my-4 px-4 py-2 bg-secondary-100 rounded-lg">
-                              {Object.entries(plan.tasks).map(([model_name, task]: any) => (
-                                <div key={model_name}>
-                                  <div className="flex justify-between items-baselin">
-                                    <small className="text-xs block whitespace-nowrap font-medium text-gray-900 mr-6">
-                                      {model_name}
-                                    </small>
-                                    <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
-                                      {task.completed} of {task.total}
-                                    </small>
+                              {Object.entries(plan.tasks).map(
+                                ([model_name, task]: any) => (
+                                  <div key={model_name}>
+                                    <div className="flex justify-between items-baselin">
+                                      <small className="text-xs block whitespace-nowrap font-medium text-gray-900 mr-6">
+                                        {model_name}
+                                      </small>
+                                      <small className="block whitespace-nowrap text-xs font-medium text-gray-900">
+                                        {task.completed} of {task.total}
+                                      </small>
+                                    </div>
+                                    <Progress
+                                      progress={Math.ceil(
+                                        (task.completed / task.total) * 100,
+                                      )}
+                                    />
                                   </div>
-                                  <Progress
-                                    progress={Math.ceil((task.completed / task.total) * 100)}
-                                  />
-                                </div>
-                              ))}
+                                ),
+                              )}
                             </div>
                             <div className="flex justify-end items-center px-2">
                               <div className="w-full">
                                 <small className="text-xs">
-                                  <b>Last Update:</b> {new Date(plan.updated_at).toDateString()}
+                                  <b>Last Update:</b>{' '}
+                                  {new Date(plan.updated_at).toDateString()}
                                 </small>
                               </div>
                               {planState === EnumPlanState.Applying && (
@@ -258,7 +277,10 @@ export function IDE(): JSX.Element {
       <div className="p-1">ide footer</div>
       <Transition
         appear
-        show={planAction !== EnumPlanAction.None && planAction !== EnumPlanAction.Closing}
+        show={
+          planAction !== EnumPlanAction.None &&
+          planAction !== EnumPlanAction.Closing
+        }
         as={Fragment}
         afterLeave={() => {
           setPlanAction(EnumPlanAction.None)

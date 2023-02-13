@@ -5,8 +5,15 @@ import {
   DocumentPlusIcon,
   XCircleIcon,
 } from '@heroicons/react/24/solid'
-import { FolderIcon, DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
-import { ChevronRightIcon, ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
+import {
+  FolderIcon,
+  DocumentIcon as DocumentIconOutline,
+} from '@heroicons/react/24/outline'
+import {
+  ChevronRightIcon,
+  ChevronDownIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/20/solid'
 import { FormEvent, MouseEvent, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { singular } from 'pluralize'
@@ -37,7 +44,11 @@ interface PropsFile {
 
 const CSS_ICON_SIZE = 'w-4 h-4'
 
-export function FolderTree({ project }: { project?: DirectoryFromAPI }): JSX.Element {
+export function FolderTree({
+  project,
+}: {
+  project?: DirectoryFromAPI
+}): JSX.Element {
   const directory = useMemo(() => new ModelDirectory(project), [project])
 
   return (
@@ -57,13 +68,13 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   const [renamingDirectory, setRenamingDirectory] = useState<ModelDirectory>()
   const [newName, setNewName] = useState<string>('')
 
-  const IconChevron = isOpen === true ? ChevronDownIcon : ChevronRightIcon
-  const IconFolder = isOpen === true ? FolderOpenIcon : FolderIcon
+  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
+  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
 
   function createDirectory(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading === true) return
+    if (isLoading) return
 
     setIsLoading(true)
 
@@ -77,8 +88,8 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
             name,
             path: `${directory.path}/${name}`,
           },
-          directory
-        )
+          directory,
+        ),
       )
 
       setOpen(true)
@@ -89,7 +100,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   function createFile(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading === true) return
+    if (isLoading) return
 
     setIsLoading(true)
 
@@ -99,7 +110,9 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
 
       const name = directory.name.startsWith('new_')
         ? `new_file_${count}${extension}`
-        : `new_${String(singular(directory.name))}_${count}${extension}`.toLowerCase()
+        : `new_${String(
+            singular(directory.name),
+          )}_${count}${extension}`.toLowerCase()
 
       directory.addFile(
         new ModelFile(
@@ -110,8 +123,8 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
             content: '',
             is_supported: true,
           },
-          directory
-        )
+          directory,
+        ),
       )
 
       setOpen(true)
@@ -122,7 +135,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   function remove(e: MouseEvent): void {
     e.stopPropagation()
 
-    if (isLoading === true) return
+    if (isLoading) return
 
     setIsLoading(true)
 
@@ -143,7 +156,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   }
 
   function rename(): void {
-    if (isLoading === true || renamingDirectory == null) return
+    if (isLoading || renamingDirectory == null) return
 
     setIsLoading(true)
 
@@ -167,16 +180,21 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                setOpen(isOpen === false)
+                setOpen(!isOpen)
               }}
             >
               <IconChevron
-                className={clsx(`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`, {
-                  'invisible pointer-events-none cursor-default':
-                    !directory.withDirectories && !directory.withFiles,
-                })}
+                className={clsx(
+                  `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`,
+                  {
+                    'invisible pointer-events-none cursor-default':
+                      !directory.withDirectories && !directory.withFiles,
+                  },
+                )}
               />
-              <IconFolder className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`} />
+              <IconFolder
+                className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
+              />
             </div>
             <span className="w-full h-[1.5rem] flex items-center cursor-pointer justify-between">
               {renamingDirectory?.id === directory.id ? (
@@ -210,7 +228,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 
-                      setOpen(isOpen === false)
+                      setOpen(!isOpen)
                     }}
                     onDoubleClick={(e: MouseEvent) => {
                       e.stopPropagation()
@@ -241,7 +259,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
           </span>
         </span>
       )}
-      {(isOpen === true || isRoot) && directory.withDirectories && (
+      {(isOpen || isRoot) && directory.withDirectories && (
         <ul className="overflow-hidden">
           {directory.directories.map(dir => (
             <li
@@ -254,15 +272,21 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
           ))}
         </ul>
       )}
-      {(isOpen === true || isRoot) && directory.withFiles && (
+      {(isOpen || isRoot) && directory.withFiles && (
         <ul
-          className={clsx('mr-1 overflow-hidden', directory.withParent ? 'ml-4' : 'ml-[2px] mt-1')}
+          className={clsx(
+            'mr-1 overflow-hidden',
+            directory.withParent ? 'ml-4' : 'ml-[2px] mt-1',
+          )}
         >
           {directory.files.map(file => (
             <li
               key={file.id}
               title={file.name}
-              className={clsx('pl-1', file.parent?.withParent != null && 'border-l')}
+              className={clsx(
+                'pl-1',
+                file.parent?.withParent != null && 'border-l',
+              )}
             >
               <File file={file} />
             </li>
@@ -284,7 +308,7 @@ function File({ file }: PropsFile): JSX.Element {
   const [newName, setNewName] = useState<string>('')
 
   function remove(file: ModelFile): void {
-    if (isLoading === true) return
+    if (isLoading) return
 
     setIsLoading(true)
 
@@ -299,7 +323,7 @@ function File({ file }: PropsFile): JSX.Element {
   }
 
   function rename(): void {
-    if (isLoading === true || renamingFile == null) return
+    if (isLoading || renamingFile == null) return
 
     setIsLoading(true)
 
@@ -307,7 +331,9 @@ function File({ file }: PropsFile): JSX.Element {
 
     openedFiles.delete(renamingFile.id)
 
-    renamingFile.rename(newName.trim().replace(`.${String(renamingFile.extension)}`, ''))
+    renamingFile.rename(
+      newName.trim().replace(`.${String(renamingFile.extension)}`, ''),
+    )
 
     if (shouldSelectAfterRename) {
       selectFile(renamingFile)
@@ -329,18 +355,20 @@ function File({ file }: PropsFile): JSX.Element {
       className={clsx(
         'text-base whitespace-nowrap group/file px-2 flex justify-between rounded-md',
         file.id === activeFileId ? 'text-secondary-500' : 'text-gray-800',
-        file.is_supported && 'group cursor-pointer hover:bg-secondary-100'
+        file.is_supported && 'group cursor-pointer hover:bg-secondary-100',
       )}
     >
       <span
         className={clsx(
           'flex w-full items-center overflow-hidden overflow-ellipsis',
-          !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800'
+          !file.is_supported && 'opacity-50 cursor-not-allowed text-gray-800',
         )}
       >
         <div className="flex items-center">
-          {openedFiles?.has(file.id) === true ? (
-            <DocumentIcon className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`} />
+          {openedFiles?.has(file.id) ? (
+            <DocumentIcon
+              className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`}
+            />
           ) : (
             <DocumentIconOutline
               className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`}
@@ -376,7 +404,9 @@ function File({ file }: PropsFile): JSX.Element {
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                file.is_supported && file.id !== activeFileId && selectFile(file)
+                file.is_supported &&
+                  file.id !== activeFileId &&
+                  selectFile(file)
               }}
               onDoubleClick={(e: MouseEvent) => {
                 e.stopPropagation()

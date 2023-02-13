@@ -49,7 +49,7 @@ export function DropdownPlan({
                   }}
                   className={clsx(
                     `whitespace-nowrap text-gray-600 px-2 py-1 cursor-pointer hover:bg-secondary-100`,
-                    active === true && 'bg-blue-500'
+                    active && 'bg-blue-500',
                   )}
                 >
                   {item.text}

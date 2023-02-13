@@ -1,11 +1,19 @@
 import { Button } from '../button/Button'
-import { useApiContext, useApiContextByEnvironment, useApiContextCancel } from '../../../api'
+import {
+  useApiContext,
+  useApiContextByEnvironment,
+  useApiContextCancel,
+} from '../../../api'
 import { useEffect, MouseEvent } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import { PlanWizard } from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
-import { EnumPlanState, EnumPlanAction, useStorePlan } from '../../../context/plan'
+import {
+  EnumPlanState,
+  EnumPlanAction,
+  useStorePlan,
+} from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
 import { includes, isArrayEmpty } from '../../../utils'
 import { useChannel } from '../../../api/channels'
@@ -52,8 +60,12 @@ export function Plan({
     } else {
       if (
         includes(
-          [EnumPlanAction.None, EnumPlanAction.Opening, EnumPlanAction.Resetting],
-          planAction
+          [
+            EnumPlanAction.None,
+            EnumPlanAction.Opening,
+            EnumPlanAction.Resetting,
+          ],
+          planAction,
         )
       ) {
         setPlanAction(EnumPlanAction.Run)
@@ -70,7 +82,10 @@ export function Plan({
       setPlanAction(EnumPlanAction.Canceling)
     }
 
-    if (planState === EnumPlanState.Finished || planState === EnumPlanState.Failed) {
+    if (
+      planState === EnumPlanState.Finished ||
+      planState === EnumPlanState.Failed
+    ) {
       setPlanAction(EnumPlanAction.Done)
     }
   }, [planState])
@@ -94,7 +109,9 @@ export function Plan({
   async function apply<T extends { ok: boolean }>(): Promise<void> {
     setPlanState(EnumPlanState.Applying)
 
-    const url = `/api/apply?environment=${environment == null ? '' : String(environment)}`
+    const url = `/api/apply?environment=${
+      environment == null ? '' : String(environment)
+    }`
 
     try {
       const data: T = await fetchAPI<T, { start?: string; end?: string }>({
@@ -119,7 +136,10 @@ export function Plan({
 
     cleanUp()
 
-    if (planState !== EnumPlanState.Applying && planState !== EnumPlanState.Canceling) {
+    if (
+      planState !== EnumPlanState.Applying &&
+      planState !== EnumPlanState.Canceling
+    ) {
       setActivePlan(undefined)
     }
   }
@@ -132,7 +152,7 @@ export function Plan({
 
   const isRunning = includes(
     [EnumPlanAction.Running, EnumPlanAction.Applying, EnumPlanAction.Canceling],
-    planAction
+    planAction,
   )
 
   return (
@@ -141,7 +161,9 @@ export function Plan({
       <div className="flex flex-col w-full h-full overflow-hidden">
         {isArrayEmpty(context?.models) ? (
           <div className="flex items-center justify-center w-full h-full">
-            <h2 className="text-2xl font-black text-gray-700">No Models Found</h2>
+            <h2 className="text-2xl font-black text-gray-700">
+              No Models Found
+            </h2>
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
@@ -151,17 +173,22 @@ export function Plan({
         <Divider className="h-2" />
         <div className="flex justify-between px-4 py-2 ">
           <div className="flex w-full">
-            {(planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running) && (
+            {(planAction === EnumPlanAction.Run ||
+              planAction === EnumPlanAction.Running) && (
               <Button
                 type="submit"
                 form="contextEnvironment"
                 disabled={planAction === EnumPlanAction.Running}
               >
-                {getActionName(planAction, [EnumPlanAction.Running, EnumPlanAction.Run])}
+                {getActionName(planAction, [
+                  EnumPlanAction.Running,
+                  EnumPlanAction.Run,
+                ])}
               </Button>
             )}
 
-            {(planAction === EnumPlanAction.Apply || planAction === EnumPlanAction.Applying) && (
+            {(planAction === EnumPlanAction.Apply ||
+              planAction === EnumPlanAction.Applying) && (
               <Button
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation()
@@ -173,7 +200,7 @@ export function Plan({
                 {getActionName(
                   planAction,
                   [EnumPlanAction.Applying],
-                  withBackfill === true ? 'Apply And Backfill' : 'Apply'
+                  withBackfill ? 'Apply And Backfill' : 'Apply',
                 )}
               </Button>
             )}
@@ -188,7 +215,11 @@ export function Plan({
                 className="justify-self-end"
                 disabled={planAction === EnumPlanAction.Canceling}
               >
-                {getActionName(planAction, [EnumPlanAction.Canceling], 'Cancel')}
+                {getActionName(
+                  planAction,
+                  [EnumPlanAction.Canceling],
+                  'Cancel',
+                )}
               </Button>
             )}
           </div>
@@ -209,10 +240,14 @@ export function Plan({
                     EnumPlanAction.Canceling,
                     EnumPlanAction.Closing,
                   ],
-                  planAction
+                  planAction,
                 )}
               >
-                {getActionName(planAction, [EnumPlanAction.Resetting], 'Start Over')}
+                {getActionName(
+                  planAction,
+                  [EnumPlanAction.Resetting],
+                  'Start Over',
+                )}
               </Button>
             )}
             <Button
@@ -221,14 +256,24 @@ export function Plan({
 
                 close()
               }}
-              variant={planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'}
+              variant={
+                planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'
+              }
               className="justify-self-end"
               disabled={includes(
-                [EnumPlanAction.Closing, EnumPlanAction.Resetting, EnumPlanAction.Canceling],
-                planAction
+                [
+                  EnumPlanAction.Closing,
+                  EnumPlanAction.Resetting,
+                  EnumPlanAction.Canceling,
+                ],
+                planAction,
               )}
             >
-              {getActionName(planAction, [EnumPlanAction.Closing, EnumPlanAction.Done], 'Close')}
+              {getActionName(
+                planAction,
+                [EnumPlanAction.Closing, EnumPlanAction.Done],
+                'Close',
+              )}
             </Button>
           </div>
         </div>
