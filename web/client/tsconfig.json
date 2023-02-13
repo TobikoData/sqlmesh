@@ -25,7 +25,8 @@
     "**/*.jsx",
     "**/*.json",
     "**/*.cjs",
-    "./.eslintrc.cjs"
+    "./.eslintrc.cjs",
+    "./.prettierrc.cjs"
   ],
   "exclude": ["node_modules", "src/api/client.ts"]
 }
