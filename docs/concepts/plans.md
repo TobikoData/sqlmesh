@@ -4,7 +4,7 @@ A plan is a set of changes that summarizes the difference between the local stat
 
 During plan creation:
 
-* the local state of the SQLMesh project is compared against the state of a target environment. The difference computed is what constitutes a plan. 
+* the local state of the SQLMesh project is compared against the state of a target environment. The difference computed is what constitutes a plan.
 * users are prompted to categorize changes (refer to [change categories](#change-categories)) to existing models in order for SQLMesh to devise a backfill strategy for models that have been affected indirectly (by being downstream dependencies of updated models).
 * each plan requires a date range to which it will be applied. If not specified, the date range is derived automatically based on model definitions and the target environment.
 
@@ -33,7 +33,7 @@ A directly-modified model that is classified as non-breaking will be backfilled,
 ## Plan application
 Once a plan has been created and reviewed, it should then be applied in order for the changes that are part of it to take effect.
 
-Typically, each model changed in a plan gets assigned with a new version. In turn, each model version gets a separate physical location for data. Data between different model versions is never shared, therefore an environment is simply a collection of references to physical tables of model versions which that environment has been created/updated with.
+Every time a model is changed as part of a plan, a new variant of this model gets created behind the scene (see [snapshots](/concepts/architecture/snapshots)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared, therefore an environment can be viewed as a collection of references to physical tables of model versions which that environment has been created/updated with.
 
 ![Each model version gets its own physical table while environments only contain references to these tables](plans/model_versioning.png)
 
@@ -52,7 +52,7 @@ Another benefit of the aforementioned approach is that data for a new model vers
 ## Forward-only plans
 Sometimes the runtime cost associated with rebuilding an entire physical table is too high, and outweighs the benefits a separate table provides. This is when a forward-only plan comes in handy.
 
-When a forward-only plan is applied, all of the contained model changes will not get separate physical tables assigned to them. Instead, physical tables of previous model versions are reused. The benefit of such a plan is that no backfilling is required, so there is no runtime overhead and hence no cost. The drawback is that reverting to a previous version is no longer as straightforward, and requires a combination of additional forward-only changes and restatements (refer to [restatement plans](#restatement-plans)). 
+When a forward-only plan is applied, all of the contained model changes will not get separate physical tables assigned to them. Instead, physical tables of previous model versions are reused. The benefit of such a plan is that no backfilling is required, so there is no runtime overhead and hence no cost. The drawback is that reverting to a previous version is no longer as straightforward, and requires a combination of additional forward-only changes and restatements (refer to [restatement plans](#restatement-plans)).
 
 Also note that once a forward-only change is applied to production, all development environments that referred to the previous versions of the updated models will be impacted.
 
@@ -69,7 +69,7 @@ $ sqlmesh plan --forward-only
 There are cases when models need to be re-evaluated for a given time range, even though changes may not have been made to those model definitions. This could be due to an upstream issue with a dataset defined outside the SQLMesh platform, or when a [forward-only plan](#forward-only-plans) change needs to be applied retroactively to a bounded interval of historical data.
 
 For this reason, the `plan` command supports the `--restate-model` option, which allows users to specify one or more names of a model to be reprocessed. Each name can also refer to an external table defined outside SQLMesh.
- 
+
 Application of such a plan will trigger a cascading backfill for all specified models (excluding external tables), as well as all models downstream from them. The plan's date range in this case determines data intervals that will be affected. For example:
 
 ```bash

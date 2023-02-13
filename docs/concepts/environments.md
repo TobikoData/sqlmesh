@@ -1,17 +1,19 @@
 ## Environments
-Environments are isolated namespaces that allow you to develop and deploy SQLMesh projects. If an environment isn't specified, the `prod` environment is used, which does not append a prefix to model names. Given a [model](/concepts/models) `db.table`, the `prod` environment would create this model in `db.table`. The `dev` environment would be located at `dev__db.table`. All environments other than `prod` are considered to be development environments.
+Environments are isolated namespaces that allow you to test and preview your changes.
 
-Models in `dev` environments also get a special suffix appended to the schema portion of their names. For example, if the model's name is `db.model_a`, it will be available under the name `db__my_dev.model_a` in the `my_dev` environment.
+SQLMesh differentiates between production and development environments. Currently only the environment with the name `prod` is treated by SQLMesh as the production one. Environments with other names are considered to be development ones.
 
-By default, the [`sqlmesh plan`](/concepts/plans) command targets the `prod` environment.
+[Models](/concepts/models) in development environments get a special suffix appended to the schema portion of their names. For example, to access data for a model with name `db.model_a` in the target environment `my_dev`, the `db__my_dev.model_a` table name should be used in a query. Models in the production environment are referred to by their original names.
 
-## Why use environments?
-It is important to be able to iterate and test changes to models with production data. Data pipelines can be very complex and can consist of many chained jobs. Being able to recreate your entire warehouse with these changes is powerful in order to understand the full impact of your changes, but usually expensive or time consuming.
+By default, the [`sqlmesh plan`](/concepts/plans) command targets the production (`prod`) environment.
 
-SQLMesh environments allow you to easily spin up 'clones' of your warehouse quickly and efficiently. SQLMesh understands which models have changed compared to the base environment, and only recomputes/backfills what doesn't already exist. Any changes or backfills within this environment **will not impact** other environments. However, any work that was done in this environment **can be reused safely** from other environments.
+## Why use environments
+Data pipelines and their dependencies tend to grow in complexity over time, and at some point accurately assessing the impact of any given local change becomes quite challenging. Pipeline owners may not be aware of all downstream consumers of their pipelines, or may drastically underestimate the impact a change would have. That's why it is so important to be able to iterate and test model changes using production dependencies and data, while simultaneously avoiding any impact to existing datasets and/or pipelines that are currently used in production. Recreating the entire data warehouse with given changes would be an ideal solution to fully understand their impact, but this process is usually excessively expensive and time consuming.
 
-## How do you use an environment?
-When running the [plan](/concepts/plans) command, the environment is the first variable. You can specify any string as your environment name. The only special environment by default is `prod`. All other environments will prefix the environment name to all models.
+SQLMesh environments allow you to easily spin up shallow 'clones' of the data warehouse quickly and efficiently. SQLMesh understands which models have changed compared to the target environment, and only computes data gaps that have been directly caused by the changes. Any changes or backfills within the target environment **do not impact** other environments. At the same time any computation that was done in this environment **can be safely reused** in other environments.
+
+## How to use environments
+When running the [plan](/concepts/plans) command, the environment name can be supplied in the first argument. An arbitrary string can be used as an environment name. The only special environment name by default is `prod`, which refers to the production environment. Environment with names other than `prod` are considered to be development environments.
 
 ### Example
 A custom name can be provided as an argument to create/update a development environment. For example, to target an environment with name `my_dev`, run:
@@ -21,8 +23,10 @@ $ sqlmesh plan my_dev
 ```
 A new environment is created automatically the first time a plan is applied to it.
 
-## How do environments work?
-Every model definition has a unique [fingerprint](/concepts/architecture/snapshots/#fingerprints). This fingerprint allows SQLMesh to detect if it exists in another environment or if it brand new. Because models depend on other models, the fingerprint also takes into account its upstream fingerprints. If a fingerpint already exists in SQLMesh, it is safe to reuse the existing table because the logic is exactly the same. An environment is essentially a collection of [snapshots](/concepts/architecture/snapshots) of models.
+## How do environments work
+Every time a change is made to a model definition, a new model snapshot is created and gets assigned a unique [fingerprint](/concepts/architecture/snapshots/#fingerprints). This fingerprint allows SQLMesh to detect if a given model variant exists in other environments or if it's a brand new variant. Because models may depend on other models, the fingerprint of a target model variant also includes fingerprints of its upstream dependencies. If a fingerprint already exists in SQLMesh, it is safe to reuse the existing physical table associated with that model variant, since we're confident that the logic that populates that table is exactly the same. This makes an environment a collection of references to model [snapshots](/concepts/architecture/snapshots).
 
-## Date ranges ##
-A non-production environment consists of a start date and end date. When creating development environments, you usally want to test your data on a subset of dates, such as the last week or last month of data. Non-production environments do not automatically schedule recurring jobs.
+Please refer to the [Plans](/concepts/plans) page for additional details.
+
+## Date range
+A development environment includes a start date and end date. When creating a development environment, the intent is usually to test changes on a subset of data. The size of such a subset is determined by a time range defined through the start and end date of the environment. Both start and end date are provided during the [plan](/concepts/plan) creation.
