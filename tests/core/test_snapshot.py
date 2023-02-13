@@ -348,9 +348,7 @@ def test_categorize_change(make_snapshot):
     # A complex projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
             old=old_snapshot,
         )
         == SnapshotChangeCategory.NON_BREAKING
@@ -359,9 +357,7 @@ def test_categorize_change(make_snapshot):
     # Multiple projections have been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))),
             old=old_snapshot,
         )
         == SnapshotChangeCategory.NON_BREAKING
@@ -400,9 +396,7 @@ def test_categorize_change(make_snapshot):
     # A WHERE clause has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))),
             old=old_snapshot,
         )
         is None
@@ -411,9 +405,7 @@ def test_categorize_change(make_snapshot):
     # A FROM clause has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))),
             old=old_snapshot,
         )
         is None
@@ -422,9 +414,7 @@ def test_categorize_change(make_snapshot):
     # DISTINCT has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))),
             old=old_snapshot,
         )
         is None
@@ -433,9 +423,7 @@ def test_categorize_change(make_snapshot):
     # An EXPLODE projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))),
             old=old_snapshot,
         )
         is None
@@ -455,9 +443,7 @@ def test_categorize_change(make_snapshot):
     # A POSEXPLODE projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))),
             old=old_snapshot,
         )
         is None
@@ -477,9 +463,7 @@ def test_categorize_change(make_snapshot):
     # An UNNEST projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))),
             old=old_snapshot,
         )
         is None

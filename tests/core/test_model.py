@@ -416,9 +416,7 @@ def test_render_definition():
     model = load_model(
         expressions,
         python_env={
-            "test_macro": Executable(
-                payload="def test_macro(evaluator, v):\n    return v"
-            ),
+            "test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v"),
         },
     )
 
@@ -428,9 +426,7 @@ def test_render_definition():
     ) == format_model_expressions(expressions)
 
     # Should include the macro implementation.
-    assert "def test_macro(evaluator, v):" in format_model_expressions(
-        model.render_definition()
-    )
+    assert "def test_macro(evaluator, v):" in format_model_expressions(model.render_definition())
 
 
 def test_cron():
