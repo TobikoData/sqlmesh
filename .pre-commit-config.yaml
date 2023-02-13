@@ -21,6 +21,8 @@ repos:
         args:
           - --target-version
           - py37
+          - --line-length
+          - '100'
         entry: black
         require_serial: true
         files: *files

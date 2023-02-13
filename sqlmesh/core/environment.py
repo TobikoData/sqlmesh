@@ -27,9 +27,7 @@ class Environment(PydanticModel):
 
     @validator("snapshots", pre=True)
     @classmethod
-    def _convert_snapshots(
-        cls, v: str | t.List[SnapshotTableInfo]
-    ) -> t.List[SnapshotTableInfo]:
+    def _convert_snapshots(cls, v: str | t.List[SnapshotTableInfo]) -> t.List[SnapshotTableInfo]:
         if isinstance(v, str):
             return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
         return v

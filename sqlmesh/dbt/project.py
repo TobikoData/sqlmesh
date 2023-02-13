@@ -75,11 +75,7 @@ class ProjectConfig:
             raise ConfigError(f"{project_file_path.stem} must include project name.")
 
         profile = Profile.load(project_root, project_name)
-        connection = (
-            profile.targets[target]
-            if target
-            else profile.targets[profile.default_target]
-        )
+        connection = profile.targets[target] if target else profile.targets[profile.default_target]
 
         models, sources, seeds, config_paths = cls._load_models_and_sources(
             project_root,
@@ -152,9 +148,7 @@ class ProjectConfig:
             # Layer on configs from the model file and create model configs
             for filepath in dirpath.glob("**/*.sql"):
                 scope = cls._scope_from_path(filepath, dirpath, project_name)
-                model_config = cls._load_model_config_from_model(
-                    filepath, scope, scoped_models
-                )
+                model_config = cls._load_model_config_from_model(filepath, scope, scoped_models)
                 if model_config.table_name:
                     model_configs[model_config.table_name] = model_config
 
@@ -248,9 +242,9 @@ class ProjectConfig:
                 continue
 
             model_scope = (*scope, value["name"])
-            scoped_configs[model_scope] = cls._config_for_scope(
-                scope, scoped_configs
-            ).update_with(fields)
+            scoped_configs[model_scope] = cls._config_for_scope(scope, scoped_configs).update_with(
+                fields
+            )
 
         return scoped_configs
 

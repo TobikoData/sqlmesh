@@ -54,9 +54,7 @@ class SparkSessionCursor:
         if size is None:
             size = len(self._last_output) - self._last_output_cursor
 
-        output = self._last_output[
-            self._last_output_cursor : self._last_output_cursor + size
-        ]
+        output = self._last_output[self._last_output_cursor : self._last_output_cursor + size]
         self._last_output_cursor += size
 
         return output
@@ -67,9 +65,7 @@ class SparkSessionConnection:
         self.spark = spark
 
     def cursor(self) -> SparkSessionCursor:
-        self.spark.sparkContext.setLocalProperty(
-            "spark.scheduler.pool", f"pool_{get_ident()}"
-        )
+        self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:

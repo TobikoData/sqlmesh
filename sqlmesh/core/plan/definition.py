@@ -78,9 +78,7 @@ class Plan:
         self.is_dev = is_dev
         self.forward_only = forward_only
         self.environment_ttl = environment_ttl
-        self._start = (
-            start if start or not (is_dev and forward_only) else yesterday_ds()
-        )
+        self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
         self._apply = apply
         self._dag = dag
@@ -121,18 +119,14 @@ class Plan:
     def categorized(self) -> t.List[Snapshot]:
         """Returns the already categorized snapshots."""
         if self._categorized is None:
-            self._categorized = [
-                s for s in self.added_and_directly_modified if s.version
-            ]
+            self._categorized = [s for s in self.added_and_directly_modified if s.version]
         return self._categorized
 
     @property
     def uncategorized(self) -> t.List[Snapshot]:
         """Returns the uncategorized snapshots."""
         if self._uncategorized is None:
-            self._uncategorized = [
-                s for s in self.added_and_directly_modified if not s.version
-            ]
+            self._uncategorized = [s for s in self.added_and_directly_modified if not s.version]
         return self._uncategorized
 
     @property
@@ -163,9 +157,7 @@ class Plan:
 
     @property
     def requires_backfill(self) -> bool:
-        return not self.skip_backfill and (
-            bool(self.restatements) or bool(self.missing_intervals)
-        )
+        return not self.skip_backfill and (bool(self.restatements) or bool(self.missing_intervals))
 
     @property
     def missing_intervals(self) -> t.List[MissingIntervals]:
@@ -307,19 +299,13 @@ class Plan:
             snapshot: The snapshot within this plan
         """
         if snapshot not in self.snapshots:
-            raise SQLMeshError(
-                f"Snapshot {snapshot.snapshot_id} does not exist in this plan."
-            )
+            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} does not exist in this plan.")
 
         if not snapshot.version:
-            raise SQLMeshError(
-                f"Snapshot {snapshot.snapshot_id} has not be categorized yet."
-            )
+            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not be categorized yet.")
 
         if snapshot.name not in self.context_diff.modified_snapshots:
-            raise SQLMeshError(
-                f"Snapshot {snapshot.snapshot_id} has not been modified."
-            )
+            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not been modified.")
 
         current, previous = self.context_diff.modified_snapshots[snapshot.name]
         if current.version == previous.version:
@@ -387,9 +373,7 @@ class Plan:
             upstream_model_names = self._dag.upstream(model_name)
 
             if not self.forward_only:
-                self._ensure_no_paused_forward_only_upstream(
-                    model_name, upstream_model_names
-                )
+                self._ensure_no_paused_forward_only_upstream(model_name, upstream_model_names)
 
             snapshot = self.context_diff.snapshots[model_name]
 
@@ -452,9 +436,7 @@ class Plan:
 
     def _ensure_valid_end(self, end: t.Optional[TimeLike]) -> None:
         if end and not self.is_end_allowed:
-            raise PlanError(
-                "The end date can't be set for a production plan without restatements."
-            )
+            raise PlanError("The end date can't be set for a production plan without restatements.")
 
     def _ensure_no_forward_only_revert(self) -> None:
         """Ensures that a previously superseded breaking / non-breaking snapshot is not being
@@ -480,9 +462,7 @@ class Plan:
 
     def _ensure_no_forward_only_new_models(self) -> None:
         if self.forward_only and self.context_diff.added:
-            raise PlanError(
-                "New models can't be added as part of the forward-only plan."
-            )
+            raise PlanError("New models can't be added as part of the forward-only plan.")
 
     def _ensure_no_forward_only_seed_models(self) -> None:
         if self.forward_only:

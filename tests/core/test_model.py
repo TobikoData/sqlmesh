@@ -237,9 +237,7 @@ def test_json_serde():
 
 
 def test_column_descriptions(sushi_context, assert_exp_eq):
-    assert sushi_context.models[
-        "sushi.customer_revenue_by_day"
-    ].column_descriptions == {
+    assert sushi_context.models["sushi.customer_revenue_by_day"].column_descriptions == {
         "customer_id": "Customer id",
         "revenue": "Revenue from orders made by this customer",
         "ds": "Date",
@@ -347,12 +345,8 @@ def test_seed_model_diff(tmp_path):
 """
         )
 
-    model_a = create_seed_model(
-        "test_db.test_model", SeedKind(path=str(model_a_csv_path))
-    )
-    model_b = create_seed_model(
-        "test_db.test_model", SeedKind(path=str(model_b_csv_path))
-    )
+    model_a = create_seed_model("test_db.test_model", SeedKind(path=str(model_a_csv_path)))
+    model_b = create_seed_model("test_db.test_model", SeedKind(path=str(model_b_csv_path)))
 
     diff = model_a.text_diff(model_b)
     assert diff.endswith("-1,value_a\n+2,value_b")
@@ -422,9 +416,7 @@ def test_render_definition():
     model = load_model(
         expressions,
         python_env={
-            "test_macro": Executable(
-                payload="def test_macro(evaluator, v):\n    return v"
-            ),
+            "test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v"),
         },
     )
 
@@ -434,31 +426,21 @@ def test_render_definition():
     ) == format_model_expressions(expressions)
 
     # Should include the macro implementation.
-    assert "def test_macro(evaluator, v):" in format_model_expressions(
-        model.render_definition()
-    )
+    assert "def test_macro(evaluator, v):" in format_model_expressions(model.render_definition())
 
 
 def test_cron():
     daily = ModelMeta(name="x", cron="@daily")
     assert daily.cron_prev("2020-01-01") == to_date("2019-12-31")
     assert daily.cron_floor("2020-01-01") == to_date("2020-01-01")
-    assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp(
-        "2020-01-01"
-    )
-    assert to_timestamp(daily.cron_next("2020-01-01 10:00:00")) == to_timestamp(
-        "2020-01-02"
-    )
+    assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
+    assert to_timestamp(daily.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
     offset = ModelMeta(name="x", cron="1 0 * * *")
     assert offset.cron_prev("2020-01-01") == to_date("2019-12-31")
     assert offset.cron_floor("2020-01-01") == to_date("2020-01-01")
-    assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp(
-        "2020-01-01"
-    )
-    assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp(
-        "2020-01-02"
-    )
+    assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
+    assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
     hourly = ModelMeta(name="x", cron="1 * * * *")
     assert hourly.normalized_cron() == "0 * * * *"
@@ -631,9 +613,7 @@ def test_convert_to_time_column():
     )
     model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == parse_one("'2022-01-01'")
-    assert model.convert_to_time_column(to_datetime("2022-01-01")) == parse_one(
-        "'2022-01-01'"
-    )
+    assert model.convert_to_time_column(to_datetime("2022-01-01")) == parse_one("'2022-01-01'")
 
     expressions = parse(
         """
@@ -678,9 +658,7 @@ def test_convert_to_time_column():
     """
     )
     model = load_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == parse_one(
-        "CAST('20220101' AS date)"
-    )
+    assert model.convert_to_time_column("2022-01-01") == parse_one("CAST('20220101' AS date)")
 
 
 def test_filter_time_column(assert_exp_eq):

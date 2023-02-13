@@ -90,9 +90,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         return payload
 
 
-class SnapshotEvaluationTarget(
-    BaseTarget[commands.EvaluateCommandPayload], PydanticModel
-):
+class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], PydanticModel):
     """The target which contains attributes necessary to evaluate a given snapshot.
 
     Args:
@@ -131,9 +129,7 @@ class SnapshotEvaluationTarget(
                 is_dev=self.is_dev,
             )
 
-    def _get_command_payload(
-        self, context: Context
-    ) -> t.Optional[commands.EvaluateCommandPayload]:
+    def _get_command_payload(self, context: Context) -> t.Optional[commands.EvaluateCommandPayload]:
         return commands.EvaluateCommandPayload(
             snapshot=self.snapshot,
             parent_snapshots=self.parent_snapshots,
@@ -153,9 +149,7 @@ class SnapshotEvaluationTarget(
         return self.latest or context["dag_run"].logical_date
 
 
-class SnapshotPromotionTarget(
-    BaseTarget[commands.PromoteCommandPayload], PydanticModel
-):
+class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], PydanticModel):
     """The target which contains attributes necessary to perform snapshot promotion in a given environment.
 
     The promotion means creation of views associated with the environment which target physical tables
@@ -180,9 +174,7 @@ class SnapshotPromotionTarget(
     ddl_concurrent_tasks: int
     is_dev: bool
 
-    def _get_command_payload(
-        self, context: Context
-    ) -> t.Optional[commands.PromoteCommandPayload]:
+    def _get_command_payload(self, context: Context) -> t.Optional[commands.PromoteCommandPayload]:
         return commands.PromoteCommandPayload(
             snapshots=self.snapshots,
             environment=self.environment,
@@ -209,18 +201,14 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
     environment: str
     ddl_concurrent_tasks: int
 
-    def _get_command_payload(
-        self, context: Context
-    ) -> t.Optional[commands.DemoteCommandPayload]:
+    def _get_command_payload(self, context: Context) -> t.Optional[commands.DemoteCommandPayload]:
         return commands.DemoteCommandPayload(
             snapshots=self.snapshots,
             environment=self.environment,
         )
 
 
-class SnapshotTableCleanupTarget(
-    BaseTarget[commands.CleanupCommandPayload], PydanticModel
-):
+class SnapshotTableCleanupTarget(BaseTarget[commands.CleanupCommandPayload], PydanticModel):
     """The target which contains attributes necessary to perform table cleanup of expired snapshots"""
 
     command_type: commands.CommandType = commands.CommandType.CLEANUP
@@ -243,9 +231,7 @@ class SnapshotTableCleanupTarget(
             session,
         )
 
-    def _get_command_payload(
-        self, context: Context
-    ) -> t.Optional[commands.CleanupCommandPayload]:
+    def _get_command_payload(self, context: Context) -> t.Optional[commands.CleanupCommandPayload]:
         snapshots = self._get_snapshots(context)
         if not snapshots:
             return None
@@ -254,15 +240,11 @@ class SnapshotTableCleanupTarget(
     def _get_snapshots(self, context: Context) -> t.List[SnapshotTableInfo]:
         return [
             SnapshotTableInfo.parse_obj(s)
-            for s in json.loads(
-                context["ti"].xcom_pull(key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY)
-            )
+            for s in json.loads(context["ti"].xcom_pull(key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY))
         ]
 
 
-class SnapshotCreateTablesTarget(
-    BaseTarget[commands.CreateTablesCommandPayload], PydanticModel
-):
+class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload], PydanticModel):
     """The target which creates physical tables for the given set of new snapshots."""
 
     command_type: commands.CommandType = commands.CommandType.CREATE_TABLES
@@ -289,16 +271,12 @@ class SnapshotCreateTablesTarget(
             snapshots=stored_snapshots + self.new_snapshots,
         )
 
-    def _get_stored_snapshots(
-        self, snapshot_ids: t.Set[SnapshotId]
-    ) -> t.List[Snapshot]:
+    def _get_stored_snapshots(self, snapshot_ids: t.Set[SnapshotId]) -> t.List[Snapshot]:
         with util.scoped_state_sync() as state_sync:
             return list(state_sync.get_snapshots(snapshot_ids).values())
 
 
-class SnapshotMigrateTablesTarget(
-    BaseTarget[commands.MigrateTablesCommandPayload], PydanticModel
-):
+class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayload], PydanticModel):
     """The target which updates schemas of existing physical tables to bring them in correspondance
     with schemas of target snapshots.
     """

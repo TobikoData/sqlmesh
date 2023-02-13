@@ -33,9 +33,7 @@ class PydanticModel(BaseModel):
         return cls.required_fields() - provided_fields
 
     @classmethod
-    def extra_fields(
-        cls: t.Type["PydanticModel"], provided_fields: t.Set[str]
-    ) -> t.Set[str]:
+    def extra_fields(cls: t.Type["PydanticModel"], provided_fields: t.Set[str]) -> t.Set[str]:
         return provided_fields - cls.all_fields()
 
     @classmethod

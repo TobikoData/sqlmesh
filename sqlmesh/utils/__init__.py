@@ -32,9 +32,7 @@ def optional_import(name: str) -> t.Optional[types.ModuleType]:
     return module
 
 
-def unique(
-    iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i
-) -> t.List[T]:
+def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) -> t.List[T]:
     return list({by(i): None for i in iterable})
 
 

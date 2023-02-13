@@ -66,9 +66,7 @@ class EngineAdapter:
         multithreaded: bool = False,
     ):
         self.dialect = dialect.lower() or self.DIALECT
-        self._connection_pool = create_connection_pool(
-            connection_factory, multithreaded
-        )
+        self._connection_pool = create_connection_pool(connection_factory, multithreaded)
         self._transaction = False
         self.sql_gen_kwargs = sql_gen_kwargs or {}
 
@@ -308,9 +306,7 @@ class EngineAdapter:
                 self.execute(alter_table)
 
             for column_name in dropped_columns:
-                drop_column = exp.Drop(
-                    this=exp.column(column_name, quoted=True), kind="COLUMN"
-                )
+                drop_column = exp.Drop(this=exp.column(column_name, quoted=True), kind="COLUMN")
                 alter_table.set("actions", [drop_column])
 
                 self.execute(alter_table)
@@ -338,9 +334,7 @@ class EngineAdapter:
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
 
         if isinstance(query_or_df, DF_TYPES):
-            if PySparkDataFrame is not None and isinstance(
-                query_or_df, PySparkDataFrame
-            ):
+            if PySparkDataFrame is not None and isinstance(query_or_df, PySparkDataFrame):
                 query_or_df = query_or_df.toPandas()
 
             if not isinstance(query_or_df, pd.DataFrame):
@@ -354,9 +348,7 @@ class EngineAdapter:
                 this=schema,
                 expressions=[exp.column(column) for column in columns_to_types],
             )
-            query_or_df = next(
-                self._pandas_to_sql(query_or_df, columns_to_types=columns_to_types)
-            )
+            query_or_df = next(self._pandas_to_sql(query_or_df, columns_to_types=columns_to_types))
 
         self.execute(
             exp.Create(
@@ -391,14 +383,10 @@ class EngineAdapter:
             )
         )
 
-    def drop_view(
-        self, view_name: TableName, ignore_if_not_exists: bool = True
-    ) -> None:
+    def drop_view(self, view_name: TableName, ignore_if_not_exists: bool = True) -> None:
         """Drop a view."""
         self.execute(
-            exp.Drop(
-                this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW"
-            )
+            exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
         )
 
     def columns(self, table_name: TableName) -> t.Dict[str, str]:
@@ -420,9 +408,7 @@ class EngineAdapter:
         except Exception:
             return False
 
-    def delete_from(
-        self, table_name: TableName, where: t.Union[str, exp.Expression]
-    ) -> None:
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
         self.execute(exp.delete(table_name, where))
 
     @classmethod
@@ -448,9 +434,7 @@ class EngineAdapter:
             query_or_df = t.cast(Query, query_or_df)
             return self._insert_append_query(table_name, query_or_df, columns_to_types)
         if isinstance(query_or_df, pd.DataFrame):
-            return self._insert_append_pandas_df(
-                table_name, query_or_df, columns_to_types
-            )
+            return self._insert_append_pandas_df(table_name, query_or_df, columns_to_types)
         raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
 
     def _insert_append_query(
@@ -523,9 +507,7 @@ class EngineAdapter:
             low=low,
             high=high,
         )
-        return self._insert_overwrite_by_condition(
-            table_name, query_or_df, where, columns_to_types
-        )
+        return self._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
 
     @classmethod
     def _pandas_to_sql(
@@ -550,9 +532,7 @@ class EngineAdapter:
             )
         with self.transaction():
             self.delete_from(table_name, where=where)
-            self.insert_append(
-                table_name, query_or_df, columns_to_types=columns_to_types
-            )
+            self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 
     def update_table(
         self,
@@ -650,9 +630,7 @@ class EngineAdapter:
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark DataFrame from the cursor"""
-        raise NotImplementedError(
-            f"Engine does not support PySpark DataFrames: {type(self)}"
-        )
+        raise NotImplementedError(f"Engine does not support PySpark DataFrames: {type(self)}")
 
     @contextlib.contextmanager
     def transaction(
@@ -686,15 +664,9 @@ class EngineAdapter:
     ) -> None:
         """Execute a sql query."""
         to_sql_kwargs = (
-            {"unsupported_level": ErrorLevel.IGNORE}
-            if ignore_unsupported_errors
-            else {}
+            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-        sql = (
-            self._to_sql(sql, **to_sql_kwargs)
-            if isinstance(sql, exp.Expression)
-            else sql
-        )
+        sql = self._to_sql(sql, **to_sql_kwargs) if isinstance(sql, exp.Expression) else sql
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql, **kwargs)
 
@@ -761,8 +733,6 @@ class EngineAdapterWithIndexSupport(EngineAdapter):
         schema = expression.this
         schema.append(
             "expressions",
-            exp.Anonymous(
-                this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key]
-            ),
+            exp.Anonymous(this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key]),
         )
         return expression

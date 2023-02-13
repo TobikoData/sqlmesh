@@ -65,16 +65,12 @@ def update_field(
         combined = old.copy()
         for key, value in new.items():
             if not isinstance(value, list):
-                raise ConfigError(
-                    "KEY_EXTEND behavior requires list values in dictionary."
-                )
+                raise ConfigError("KEY_EXTEND behavior requires list values in dictionary.")
 
             old_value = combined.get(key)
             if old_value:
                 if not isinstance(old_value, list):
-                    raise ConfigError(
-                        "KEY_EXTEND behavior requires list values in dictionary."
-                    )
+                    raise ConfigError("KEY_EXTEND behavior requires list values in dictionary.")
 
                 combined[key] = old_value + value
             else:

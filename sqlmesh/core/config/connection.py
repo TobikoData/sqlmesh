@@ -49,11 +49,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
             lambda: self._connection_factory(
                 **{
                     **self._static_connection_kwargs,
-                    **{
-                        k: v
-                        for k, v in self.dict().items()
-                        if k in self._connection_kwargs_keys
-                    },
+                    **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
                 }
             ),
             multithreaded=self.concurrent_tasks > 1,
@@ -223,9 +219,7 @@ class DatabricksSparkSessionConnectionConfig(_ConnectionConfig):
                 spark_config.set(k, v)
 
         return dict(
-            spark=SparkSession.builder.config(conf=spark_config)
-            .enableHiveSupport()
-            .getOrCreate()
+            spark=SparkSession.builder.config(conf=spark_config).enableHiveSupport().getOrCreate()
         )
 
 

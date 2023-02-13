@@ -25,9 +25,7 @@ COLUMN_TO_TYPE = {
 
 @model(
     "db.order_f",
-    kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")
-    ),
+    kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")),
     start=DATA_START_DATE_STR,
     cron="@daily",
     batch_size=200,
@@ -69,9 +67,7 @@ def execute(
 
     df_order_item_f = df_order_item_f.merge(df_item_d, how="inner", on="item_id")
     df_order_item_f["item_price"] = 1.00
-    df_order_item_f["item_total"] = (
-        df_order_item_f["item_price"] * df_order_item_f["quantity"]
-    )
+    df_order_item_f["item_total"] = df_order_item_f["item_price"] * df_order_item_f["quantity"]
     df_order_item_f = (
         df_order_item_f.groupby(["order_id", "customer_id", "order_ds"], dropna=False)
         .agg(order_total=("item_total", "sum"))

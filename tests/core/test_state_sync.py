@@ -87,9 +87,7 @@ def test_push_snapshots(
     snapshot_b.set_version("2")
     state_sync.push_snapshots([snapshot_a, snapshot_b])
 
-    assert state_sync.get_snapshots(
-        [snapshot_a.snapshot_id, snapshot_b.snapshot_id]
-    ) == {
+    assert state_sync.get_snapshots([snapshot_a.snapshot_id, snapshot_b.snapshot_id]) == {
         snapshot_a.snapshot_id: snapshot_a,
         snapshot_b.snapshot_id: snapshot_b,
     }
@@ -126,9 +124,7 @@ def test_push_snapshots(
     )
 
 
-def test_duplicates(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-) -> None:
+def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -162,9 +158,7 @@ def test_duplicates(
     )
 
 
-def test_delete_snapshots(
-    state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]
-) -> None:
+def test_delete_snapshots(state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]) -> None:
     state_sync.push_snapshots(snapshots)
     snapshot_ids = [s.snapshot_id for s in snapshots]
     assert state_sync.get_snapshots(snapshot_ids)
@@ -194,17 +188,13 @@ def test_get_snapshots_with_same_version(
     ]
 
 
-def test_snapshots_exists(
-    state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]
-) -> None:
+def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[Snapshot]) -> None:
     state_sync.push_snapshots(snapshots)
     snapshot_ids = {snapshot.snapshot_id for snapshot in snapshots}
     assert state_sync.snapshots_exist(snapshot_ids) == snapshot_ids
 
 
-def test_add_interval(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-) -> None:
+def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -237,9 +227,7 @@ def test_add_interval(
     ]
 
 
-def test_remove_interval(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-) -> None:
+def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -272,9 +260,7 @@ def test_remove_interval(
     ]
 
 
-def test_promote_snapshots(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
+def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -399,9 +385,7 @@ def test_promote_snapshots_parent_plan_id_mismatch(
         state_sync.promote(stale_new_environment)
 
 
-def test_promote_snapshots_no_gaps(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
+def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     model = SqlModel(
         name="a",
         query=parse_one("select 1, ds"),
@@ -431,9 +415,7 @@ def test_promote_snapshots_no_gaps(
         SQLMeshError,
         match=r"Detected gaps in snapshot.*",
     ):
-        promote_snapshots(
-            state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True
-        )
+        promote_snapshots(state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True)
 
     new_snapshot_same_interval = make_snapshot(model, version="c")
     new_snapshot_same_interval.fingerprint = snapshot.fingerprint.copy(
@@ -444,9 +426,7 @@ def test_promote_snapshots_no_gaps(
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
 
 
-def test_delete_expired_environments(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
+def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -470,9 +450,7 @@ def test_delete_expired_environments(
     )
     state_sync.promote(env_a)
 
-    env_b = env_a.copy(
-        update={"name": "test_environment_b", "expiration_ts": now_ts + 1000}
-    )
+    env_b = env_a.copy(update={"name": "test_environment_b", "expiration_ts": now_ts + 1000})
     state_sync.promote(env_b)
 
     assert state_sync.get_environment(env_a.name) == env_a
@@ -487,18 +465,14 @@ def test_delete_expired_environments(
 def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:
     sushi_context = sushi_context_pre_scheduling
     state_sync = sushi_context.state_reader
-    missing = state_sync.missing_intervals(
-        "prod", "2022-01-01", "2022-01-07", latest="2022-01-07"
-    )
+    missing = state_sync.missing_intervals("prod", "2022-01-01", "2022-01-07", latest="2022-01-07")
     assert missing
     assert missing == sushi_context.state_reader.missing_intervals(
         sushi_context.snapshots.values(), "2022-01-01", "2022-01-07", "2022-01-07"
     )
 
 
-def test_unpause_snapshots(
-    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
-):
+def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
             name="test_snapshot",
@@ -527,6 +501,4 @@ def test_unpause_snapshots(
 
     actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
     assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
-    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(
-        unpaused_dt
-    )
+    assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)

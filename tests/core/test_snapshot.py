@@ -86,9 +86,7 @@ def test_json(snapshot: Snapshot):
         },
         "audits": [],
         "name": "name",
-        "parents": [
-            {"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}
-        ],
+        "parents": [{"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
         "indirect_versions": {},
         "updated_ts": 1663891973000,
@@ -101,14 +99,10 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
         snapshot.add_interval("2020-01-02", "2020-01-01")
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
-    assert snapshot.intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
-    ]
+    assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
 
     snapshot.add_interval("2020-01-02", "2020-01-02")
-    assert snapshot.intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-03"))
-    ]
+    assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-03"))]
 
     snapshot.add_interval("2020-01-04", "2020-01-05")
     assert snapshot.intervals == [
@@ -161,17 +155,11 @@ def test_add_interval_dev(snapshot: Snapshot):
     snapshot.version = "existing_version"
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
-    assert snapshot.intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
-    ]
+    assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
 
     snapshot.add_interval("2020-01-02", "2020-01-02", is_dev=True)
-    assert snapshot.intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
-    ]
-    assert snapshot.dev_intervals == [
-        (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
-    ]
+    assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+    assert snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
 
 
 def test_missing_intervals(snapshot: Snapshot):
@@ -196,9 +184,7 @@ def test_missing_intervals(snapshot: Snapshot):
         (to_timestamp("2020-01-06"), to_timestamp("2020-01-07")),
         (to_timestamp("2020-01-07"), to_timestamp("2020-01-08")),
     ]
-    assert (
-        snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-05 00:00:02") == []
-    )
+    assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-05 00:00:02") == []
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-07 00:00:02") == [
         (to_timestamp("2020-01-06"), to_timestamp("2020-01-07")),
     ]
@@ -212,9 +198,7 @@ def test_remove_intervals(snapshot: Snapshot):
     snapshot.add_interval("2020-01-01", "2020-01-01")
     snapshot.add_interval("2020-01-03", "2020-01-03")
     snapshot.remove_interval("2020-01-01", "2020-01-01")
-    assert snapshot.intervals == [
-        (to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))
-    ]
+    assert snapshot.intervals == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
 
     snapshot.remove_interval("2020-01-01", "2020-01-05")
     assert snapshot.intervals == []
@@ -270,9 +254,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
 
     parent_fingerprint = fingerprint_from_model(parent_model, models={})
-    with_parent_fingerprint = fingerprint_from_model(
-        model, models={"parent.tbl": parent_model}
-    )
+    with_parent_fingerprint = fingerprint_from_model(model, models={"parent.tbl": parent_model})
     assert with_parent_fingerprint != fingerprint
     assert int(with_parent_fingerprint.parent_data_hash) > 0
     assert int(with_parent_fingerprint.parent_metadata_hash) > 0
@@ -280,11 +262,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     assert (
         fingerprint_from_model(
             model,
-            models={
-                "parent.tbl": SqlModel(
-                    **{**model.dict(), "query": parse_one("select 2, ds")}
-                )
-            },
+            models={"parent.tbl": SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})},
         )
         != with_parent_fingerprint
     )
@@ -293,9 +271,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     new_fingerprint = fingerprint_from_model(model, models={})
     assert new_fingerprint != fingerprint
 
-    model = SqlModel(
-        **{**model.dict(), "query": parse_one("select 1, ds -- annotation")}
-    )
+    model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint != fingerprint_from_model(model, models={})
 
 
@@ -315,15 +291,9 @@ def test_table_name(snapshot: Snapshot):
     )
     snapshot.version = snapshot.fingerprint.to_version()
     snapshot.previous_versions = ()
-    assert (
-        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    )
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
@@ -334,16 +304,9 @@ def test_table_name(snapshot: Snapshot):
         data_hash="1", metadata_hash="1", parent_data_hash="2"
     )
     snapshot.previous_versions = (previous_data_version,)
-    assert (
-        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False)
-        == "sqlmesh.name__781051917__temp"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    )
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__781051917__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
@@ -353,41 +316,19 @@ def test_table_name(snapshot: Snapshot):
         data_hash="2", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.previous_versions = (previous_data_version,)
-    assert (
-        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False)
-        == "sqlmesh.name__3049392110__temp"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=True)
-        == "sqlmesh.name__3049392110__temp"
-    )
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3049392110__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3049392110__temp"
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
-    assert (
-        snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3049392110__temp"
-    )
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3049392110__temp"
 
     # Mimic a propmoted forward-only snapshot.
     snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
-    assert (
-        snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False)
-        == "sqlmesh.name__3049392110__temp"
-    )
-    assert (
-        snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    )
-    assert (
-        snapshot.table_name(is_dev=True, for_read=True)
-        == "sqlmesh.name__3049392110__temp"
-    )
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3049392110__temp"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3049392110__temp"
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
 
@@ -407,9 +348,7 @@ def test_categorize_change(make_snapshot):
     # A complex projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
             old=old_snapshot,
         )
         == SnapshotChangeCategory.NON_BREAKING
@@ -418,9 +357,7 @@ def test_categorize_change(make_snapshot):
     # Multiple projections have been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))),
             old=old_snapshot,
         )
         == SnapshotChangeCategory.NON_BREAKING
@@ -459,9 +396,7 @@ def test_categorize_change(make_snapshot):
     # A WHERE clause has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))),
             old=old_snapshot,
         )
         is None
@@ -470,9 +405,7 @@ def test_categorize_change(make_snapshot):
     # A FROM clause has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))),
             old=old_snapshot,
         )
         is None
@@ -481,9 +414,7 @@ def test_categorize_change(make_snapshot):
     # DISTINCT has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))),
             old=old_snapshot,
         )
         is None
@@ -492,9 +423,7 @@ def test_categorize_change(make_snapshot):
     # An EXPLODE projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))),
             old=old_snapshot,
         )
         is None
@@ -514,9 +443,7 @@ def test_categorize_change(make_snapshot):
     # A POSEXPLODE projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))),
             old=old_snapshot,
         )
         is None
@@ -536,9 +463,7 @@ def test_categorize_change(make_snapshot):
     # An UNNEST projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(
-                SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))
-            ),
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))),
             old=old_snapshot,
         )
         is None

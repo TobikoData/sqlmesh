@@ -52,9 +52,7 @@ class BaseNotificationTarget(PydanticModel):
 
     type_: str
 
-    def send(
-        self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any
-    ) -> None:
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
         """
         Sends notification with the provided message. Currently only used by the built-in scheduler.
         """
@@ -74,9 +72,7 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
             self._console = get_console()
         return self._console
 
-    def send(
-        self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any
-    ) -> None:
+    def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
         if notification_status.is_success:
             self.console.log_success(msg)
         elif notification_status.is_failure:

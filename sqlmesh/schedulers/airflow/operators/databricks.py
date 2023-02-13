@@ -36,6 +36,4 @@ class SQLMeshDatabricksSQLOperator(BaseOperator):
 
     def execute(self, context: Context) -> None:
         """Executes the desired target against the configured Databricks connection"""
-        self._target.execute(
-            context, lambda: self.get_db_hook().get_conn(), "databricks"
-        )
+        self._target.execute(context, lambda: self.get_db_hook().get_conn(), "databricks")

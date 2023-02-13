@@ -56,9 +56,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
 
     request_id = "test_request_id"
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
 
     apply_plan_mock.assert_called_once()
@@ -144,9 +142,7 @@ def test_get_snapshots(mocker: MockerFixture, snapshot: Snapshot):
     get_snapshots_mock = mocker.patch("requests.Session.get")
     get_snapshots_mock.return_value = get_snapshots_response_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_snapshots([snapshot.snapshot_id])
 
     assert result == [snapshot]
@@ -165,9 +161,7 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     snapshots_exist_mock = mocker.patch("requests.Session.get")
     snapshots_exist_mock.return_value = snapshots_exist_response_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.snapshots_exist([snapshot.snapshot_id])
 
     assert result == {snapshot.snapshot_id}
@@ -186,9 +180,7 @@ def test_get_snapshots_with_same_version(mocker: MockerFixture, snapshot: Snapsh
     get_snapshots_mock = mocker.patch("requests.Session.get")
     get_snapshots_mock.return_value = get_snapshots_response_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     versions = [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
     result = client.get_snapshots_with_same_version(versions)
 
@@ -215,9 +207,7 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
     get_environment_mock = mocker.patch("requests.Session.get")
     get_environment_mock.return_value = get_environment_response_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environment("dev")
 
     assert result == environment
@@ -244,9 +234,7 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
     get_environments_mock = mocker.patch("requests.Session.get")
     get_environments_mock.return_value = get_environments_response_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_environments()
 
     assert result == [environment]
@@ -263,9 +251,7 @@ def test_get_dag_run_state(mocker: MockerFixture):
     get_snapshot_mock = mocker.patch("requests.Session.get")
     get_snapshot_mock.return_value = get_dag_run_state_mock
 
-    client = AirflowClient(
-        airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session()
-    )
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     result = client.get_dag_run_state("test_dag_id", "test_dag_run_id")
 
     assert result == "failed"

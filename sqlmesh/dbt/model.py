@@ -149,15 +149,11 @@ class ModelConfig(GeneralConfig):
             if isinstance(jinja, d.Jinja):
                 pass
 
-        source_mapping = {
-            config.config_name: config.source_name for config in sources.values()
-        }
+        source_mapping = {config.config_name: config.source_name for config in sources.values()}
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        dependencies = self._dependencies(
-            source_mapping, models, seeds, macros, macro_dependencies
-        )
+        dependencies = self._dependencies(source_mapping, models, seeds, macros, macro_dependencies)
 
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
@@ -187,9 +183,7 @@ class ModelConfig(GeneralConfig):
             The sqlmesh model name
         """
         schema = "_".join(part for part in (self.target_schema, self.schema_) if part)
-        return ".".join(
-            part for part in (schema, self.alias or self.table_name) if part
-        )
+        return ".".join(part for part in (schema, self.alias or self.table_name) if part)
 
     @property
     def model_kind(self) -> str:
@@ -229,9 +223,7 @@ class ModelConfig(GeneralConfig):
 
         for source in self._sources:
             if source not in source_mapping:
-                raise ConfigError(
-                    f"Source {source} for model {self.table_name} not found."
-                )
+                raise ConfigError(f"Source {source} for model {self.table_name} not found.")
 
             dependencies.sources.add(source)
 
@@ -244,9 +236,7 @@ class ModelConfig(GeneralConfig):
 
             parent = models.get(dependency)
             if not parent:
-                raise ConfigError(
-                    f"Ref {dependency} for Model {self.table_name} not found."
-                )
+                raise ConfigError(f"Ref {dependency} for Model {self.table_name} not found.")
 
             dependencies.refs.add(dependency)
             if parent.materialized == Materialization.EPHEMERAL:
@@ -272,9 +262,7 @@ class ModelConfig(GeneralConfig):
         def add_dependency(macro: str) -> None:
             """Add macro and everything it recursively uses as dependencies"""
             if macro not in macros:
-                raise ConfigError(
-                    f"Macro {call} for model {model.table_name} not found."
-                )
+                raise ConfigError(f"Macro {call} for model {model.table_name} not found.")
 
             dependencies.macros.add(macro)
             if macro not in macro_dependencies:
@@ -292,9 +280,7 @@ class ModelConfig(GeneralConfig):
 
             for macro_call in macro_dependencies[macro].macros:
                 if macro_call not in macros:
-                    raise ConfigError(
-                        f"Macro {macro_call} used by macro {macro} not found."
-                    )
+                    raise ConfigError(f"Macro {macro_call} used by macro {macro} not found.")
 
                 add_dependency(macro_call)
 

@@ -177,9 +177,7 @@ def test_not_null_audit(model: Model):
 
 
 def test_unique_values_audit(model: Model):
-    rendered_query_a = builtin.unique_values_audit.render_query(
-        model, columns=[exp.to_column("a")]
-    )
+    rendered_query_a = builtin.unique_values_audit.render_query(model, columns=[exp.to_column("a")])
     assert (
         rendered_query_a.sql()
         == "SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY a ORDER BY 1) AS a_rank FROM (SELECT * FROM db.test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01')) WHERE a_rank > 1"

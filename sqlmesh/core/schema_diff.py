@@ -22,15 +22,11 @@ class SchemaDelta(PydanticModel):
 
     @classmethod
     def add(cls, column_name: str, column_type: str) -> SchemaDelta:
-        return cls(
-            column_name=column_name, column_type=column_type, op=SchemaDeltaOp.ADD
-        )
+        return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.ADD)
 
     @classmethod
     def drop(cls, column_name: str, column_type: str) -> SchemaDelta:
-        return cls(
-            column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP
-        )
+        return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP)
 
     @classmethod
     def alter_type(cls, column_name: str, column_type: str) -> SchemaDelta:
@@ -57,13 +53,9 @@ class SchemaDiffCalculator:
         is_type_transition_allowed: t.Optional[t.Callable[[str, str], bool]] = None,
     ):
         self.engine_adapter = engine_adapter
-        self.is_type_transition_allowed = is_type_transition_allowed or (
-            lambda src, tgt: False
-        )
+        self.is_type_transition_allowed = is_type_transition_allowed or (lambda src, tgt: False)
 
-    def calculate(
-        self, apply_to_table: str, schema_from_table: str
-    ) -> t.List[SchemaDelta]:
+    def calculate(self, apply_to_table: str, schema_from_table: str) -> t.List[SchemaDelta]:
         """Calculates a list of schema deltas between the two tables, applying which in order to the first table
         brings its schema in correspondence with the schema of the second table.
 
@@ -91,9 +83,7 @@ class SchemaDiffCalculator:
                 if from_column_type and self.is_type_transition_allowed(
                     to_column_type, from_column_type
                 ):
-                    result.append(
-                        SchemaDelta.alter_type(to_column_name, from_column_type)
-                    )
+                    result.append(SchemaDelta.alter_type(to_column_name, from_column_type))
                 else:
                     result.append(SchemaDelta.drop(to_column_name, to_column_type))
                     if from_column_type:

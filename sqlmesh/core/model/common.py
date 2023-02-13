@@ -24,9 +24,7 @@ def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str
 
 
 def parse_expression(
-    v: t.Union[
-        t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None
-    ],
+    v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
 ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
     """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
     if v is None:

@@ -35,6 +35,4 @@ class SQLMeshSnowflakeOperator(BaseOperator):
 
     def execute(self, context: Context) -> None:
         """Executes the desired target against the configured Snowflake connection"""
-        self._target.execute(
-            context, lambda: self.get_db_hook().get_conn(), "snowflake"
-        )
+        self._target.execute(context, lambda: self.get_db_hook().get_conn(), "snowflake")

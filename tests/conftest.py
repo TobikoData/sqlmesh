@@ -31,9 +31,7 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
     context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
 
-    plan_evaluator = BuiltInPlanEvaluator(
-        context.state_sync, context.snapshot_evaluator
-    )
+    plan_evaluator = BuiltInPlanEvaluator(context.state_sync, context.snapshot_evaluator)
     plan_evaluator._push(plan)
     plan_evaluator._promote(plan)
 
@@ -52,9 +50,7 @@ def sushi_context(mocker: MockerFixture) -> Context:
 def sushi_dbt_context(mocker: MockerFixture) -> Context:
     from examples.sushi_dbt.seed_sources import init_raw_schema
 
-    context, plan = init_and_plan_sushi_context(
-        "examples/sushi_dbt", mocker, "Jan 1 2022"
-    )
+    context, plan = init_and_plan_sushi_context("examples/sushi_dbt", mocker, "Jan 1 2022")
     init_raw_schema(context.engine_adapter)
 
     context.apply(plan)
@@ -79,9 +75,7 @@ def init_and_plan_sushi_context(
 
 @pytest.fixture
 def assert_exp_eq() -> t.Callable:
-    def _assert_exp_eq(
-        source: exp.Expression | str, expected: exp.Expression | str
-    ) -> None:
+    def _assert_exp_eq(source: exp.Expression | str, expected: exp.Expression | str) -> None:
         source_exp = maybe_parse(source)
         expected_exp = maybe_parse(expected)
 
@@ -99,9 +93,7 @@ def assert_exp_eq() -> t.Callable:
 
 @pytest.fixture
 def make_snapshot() -> t.Callable:
-    def _make_function(
-        model: Model, version: t.Optional[str] = None, **kwargs
-    ) -> Snapshot:
+    def _make_function(model: Model, version: t.Optional[str] = None, **kwargs) -> Snapshot:
         return Snapshot.from_model(
             model,
             **{  # type: ignore

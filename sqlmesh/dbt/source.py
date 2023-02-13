@@ -58,6 +58,4 @@ class SourceConfig(GeneralConfig):
 
     @property
     def source_name(self) -> str:
-        return ".".join(
-            part for part in (self.schema_, self.identifier or self.name) if part
-        )
+        return ".".join(part for part in (self.schema_, self.identifier or self.name) if part)

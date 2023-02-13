@@ -13,13 +13,9 @@ def add_one(evaluator: MacroEvaluator, column: str) -> exp.Expression:
 @macro()
 def incremental_by_ds(evaluator: MacroEvaluator, column: exp.Column) -> exp.Expression:
     expression = evaluator.transform(
-        exp.Between(
-            this=column, low=MacroVar(this="start_ds"), high=MacroVar(this="end_ds")
-        )
+        exp.Between(this=column, low=MacroVar(this="start_ds"), high=MacroVar(this="end_ds"))
     )
     if not isinstance(expression, exp.Expression):
-        raise MacroEvalError(
-            f"Return type is {type(expression)}, expected exp.Expression"
-        )
+        raise MacroEvalError(f"Return type is {type(expression)}, expected exp.Expression")
 
     return expression

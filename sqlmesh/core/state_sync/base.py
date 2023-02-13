@@ -51,9 +51,7 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def snapshots_exist(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
-    ) -> t.Set[SnapshotId]:
+    def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if multiple snapshots exist in the state sync.
 
         Args:
@@ -124,18 +122,14 @@ class StateReader(abc.ABC):
         elif isinstance(env_or_snapshots, str):
             snapshots_by_id = {}
         elif not isinstance(env_or_snapshots, Environment):
-            snapshots_by_id = {
-                snapshot.snapshot_id: snapshot for snapshot in env_or_snapshots
-            }
+            snapshots_by_id = {snapshot.snapshot_id: snapshot for snapshot in env_or_snapshots}
         else:
             raise SQLMeshError("This shouldn't be possible.")
 
         if not snapshots_by_id:
             return {}
 
-        unversioned = [
-            snapshot for snapshot in snapshots_by_id.values() if not snapshot.version
-        ]
+        unversioned = [snapshot for snapshot in snapshots_by_id.values() if not snapshot.version]
 
         snapshots_by_id = {
             **snapshots_by_id,
@@ -147,17 +141,13 @@ class StateReader(abc.ABC):
             **{
                 snapshot.snapshot_id: snapshot
                 for snapshot in self.get_snapshots_with_same_version(
-                    snapshot
-                    for snapshot in snapshots_by_id.values()
-                    if snapshot.version
+                    snapshot for snapshot in snapshots_by_id.values() if snapshot.version
                 )
             },
         }
 
         missing = {}
-        start_date = to_datetime(
-            start or scheduler.earliest_start_date(snapshots_by_id.values())
-        )
+        start_date = to_datetime(start or scheduler.earliest_start_date(snapshots_by_id.values()))
         end_date = end or now()
         restatements = set(restatements or [])
 
@@ -168,8 +158,7 @@ class StateReader(abc.ABC):
                 max(
                     start_date,
                     to_datetime(
-                        scheduler.start_date(snapshot, snapshots_by_id.values())
-                        or start_date
+                        scheduler.start_date(snapshot, snapshots_by_id.values()) or start_date
                     ),
                 ),
                 end_date,

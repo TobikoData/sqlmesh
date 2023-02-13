@@ -127,9 +127,7 @@ class IncrementalByTimeRangeKind(ModelKind):
     def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
         return super().to_expression(
             expressions=[
-                exp.Property(
-                    this="time_column", value=self.time_column.to_expression(dialect)
-                )
+                exp.Property(this="time_column", value=self.time_column.to_expression(dialect))
             ],
         )
 
@@ -172,9 +170,7 @@ class SeedKind(ModelKind):
         """Convert the seed kind into a SQLGlot expression."""
         return super().to_expression(
             expressions=[
-                exp.Property(
-                    this=exp.Var(this="path"), value=exp.Literal.string(self.path)
-                ),
+                exp.Property(this=exp.Var(this="path"), value=exp.Literal.string(self.path)),
                 exp.Property(
                     this=exp.Var(this="batch_size"),
                     value=exp.Literal.number(self.batch_size),
@@ -220,6 +216,4 @@ def _model_kind_validator(v: t.Any) -> ModelKind:
         raise ConfigError(f"Invalid model kind '{name}'")
 
 
-model_kind_validator = validator("kind", pre=True, allow_reuse=True)(
-    _model_kind_validator
-)
+model_kind_validator = validator("kind", pre=True, allow_reuse=True)(_model_kind_validator)

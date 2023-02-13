@@ -65,9 +65,7 @@ class MacroDialect(Python):
             exp.Column: lambda self, e: f"exp.to_column('{self.sql(e, 'this')}')",
             exp.Lambda: lambda self, e: f"lambda {self.expressions(e)}: {self.sql(e, 'this')}",
             MacroFunc: _macro_func_sql,
-            MacroSQL: lambda self, e: _macro_sql(
-                self.sql(e, "this"), e.args.get("into")
-            ),
+            MacroSQL: lambda self, e: _macro_sql(self.sql(e, "this"), e.args.get("into")),
             MacroStrReplace: lambda self, e: _macro_str_replace(self.sql(e, "this")),
         }
 
@@ -92,17 +90,13 @@ class MacroEvaluator:
         python_env: Serialized Python environment.
     """
 
-    def __init__(
-        self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None
-    ):
+    def __init__(self, dialect: str = "", python_env: t.Optional[t.Dict[str, Executable]] = None):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
-        self.macros = {
-            normalize_macro_name(k): v.func for k, v in macro.get_registry().items()
-        }
+        self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
             if v.is_definition:
@@ -122,9 +116,7 @@ class MacroEvaluator:
             print_exception(e, self.python_env)
             raise MacroEvalError(f"Error trying to eval macro.") from e
 
-    def transform(
-        self, query: exp.Expression
-    ) -> exp.Expression | t.List[exp.Expression] | None:
+    def transform(self, query: exp.Expression) -> exp.Expression | t.List[exp.Expression] | None:
         query = query.transform(
             lambda node: exp.convert(_norm_env_value(self.locals[node.name]))
             if isinstance(node, MacroVar)
@@ -144,9 +136,7 @@ class MacroEvaluator:
         transformed = evaluate_macros(query)
 
         if isinstance(transformed, list):
-            return [
-                self.parse_one(node.sql(dialect=self.dialect)) for node in transformed
-            ]
+            return [self.parse_one(node.sql(dialect=self.dialect)) for node in transformed]
         elif isinstance(transformed, exp.Expression):
             return self.parse_one(transformed.sql(dialect=self.dialect))
 
@@ -162,13 +152,9 @@ class MacroEvaluator:
         Returns:
            The rendered string.
         """
-        return MacroStrTemplate(str(text)).safe_substitute(
-            self.locals, **local_variables
-        )
+        return MacroStrTemplate(str(text)).safe_substitute(self.locals, **local_variables)
 
-    def evaluate(
-        self, node: MacroFunc
-    ) -> exp.Expression | t.List[exp.Expression] | None:
+    def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
             self.locals[node.name] = node.expression
             return node
@@ -281,16 +267,12 @@ def _norm_var_arg_lambda(
 
     if len(items) == 1:
         item = items[0]
-        expressions = (
-            item.expressions if isinstance(item, (exp.Array, exp.Tuple)) else item
-        )
+        expressions = item.expressions if isinstance(item, (exp.Array, exp.Tuple)) else item
     else:
         expressions = items
 
     if not callable(func):
-        arg_index = {
-            expression.name: i for i, expression in enumerate(func.expressions)
-        }
+        arg_index = {expression.name: i for i, expression in enumerate(func.expressions)}
         body = func.this
         return expressions, lambda *x: body.transform(substitute, arg_index, *x)
 

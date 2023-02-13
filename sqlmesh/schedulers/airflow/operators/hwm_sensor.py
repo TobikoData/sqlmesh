@@ -41,9 +41,7 @@ class HighWaterMarkSensor(BaseSensorOperator):
         else:
             current_high_water_mark = None
 
-        target_high_water_mark = self._compute_target_high_water_mark(
-            dag_run, target_snapshot
-        )
+        target_high_water_mark = self._compute_target_high_water_mark(dag_run, target_snapshot)
 
         logger.info(
             "The current high water mark for snapshot %s is '%s' (target is '%s')",

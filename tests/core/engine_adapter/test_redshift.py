@@ -90,9 +90,7 @@ def test_pandas_to_sql(mocker: MockerFixture):
 
     adapter = RedshiftEngineAdapter(lambda: connection_mock)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    results = list(
-        adapter._pandas_to_sql(df=df, columns_to_types={"a": "int", "b": "int"})
-    )
+    results = list(adapter._pandas_to_sql(df=df, columns_to_types={"a": "int", "b": "int"}))
     assert len(results) == 1
     assert (
         results[0].sql(dialect="redshift")
@@ -106,9 +104,7 @@ def test_replace_query_with_query(mocker: MockerFixture):
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = RedshiftEngineAdapter(lambda: connection_mock)
-    adapter.replace_query(
-        table_name="test_table", query_or_df=parse_one("SELECT cola FROM table")
-    )
+    adapter.replace_query(table_name="test_table", query_or_df=parse_one("SELECT cola FROM table"))
 
     cursor_mock.execute.assert_called_once_with(
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "cola" FROM "table"'

@@ -36,9 +36,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         kind=ModelKind(name=ModelKindName.VIEW),
         owner="jen",
         start="2020-01-01",
-        query=parse_one(
-            "SELECT 1::INT AS one FROM sushi.new_test_model, sushi.waiters"
-        ),
+        query=parse_one("SELECT 1::INT AS one FROM sushi.new_test_model, sushi.waiters"),
     )
 
     sushi_context.upsert_model(new_view_model)
@@ -65,25 +63,17 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     evaluator._push(plan)
 
     assert (
-        len(
-            sushi_context.state_sync.get_snapshots(
-                [new_model_snapshot, new_view_model_snapshot]
-            )
-        )
+        len(sushi_context.state_sync.get_snapshots([new_model_snapshot, new_view_model_snapshot]))
         == 2
     )
     assert sushi_context.engine_adapter.table_exists(new_model_snapshot.table_name())
-    assert sushi_context.engine_adapter.table_exists(
-        new_view_model_snapshot.table_name()
-    )
+    assert sushi_context.engine_adapter.table_exists(new_view_model_snapshot.table_name())
 
 
 def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     airflow_client_mock = mocker.Mock()
     airflow_client_mock.wait_for_dag_run_completion.return_value = True
-    airflow_client_mock.wait_for_first_dag_run.return_value = (
-        "test_plan_application_dag_run_id"
-    )
+    airflow_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
 
     evaluator = AirflowPlanEvaluator(airflow_client_mock)
     evaluator.evaluate(sushi_plan)
@@ -106,14 +96,10 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     airflow_client_mock.wait_for_first_dag_run.assert_called_once()
 
 
-def test_airflow_evaluator_plan_application_dag_fails(
-    sushi_plan: Plan, mocker: MockerFixture
-):
+def test_airflow_evaluator_plan_application_dag_fails(sushi_plan: Plan, mocker: MockerFixture):
     airflow_client_mock = mocker.Mock()
     airflow_client_mock.wait_for_dag_run_completion.return_value = False
-    airflow_client_mock.wait_for_first_dag_run.return_value = (
-        "test_plan_application_dag_run_id"
-    )
+    airflow_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
 
     evaluator = AirflowPlanEvaluator(airflow_client_mock)
 
