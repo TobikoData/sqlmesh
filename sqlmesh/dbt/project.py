@@ -347,8 +347,7 @@ class Project:
                     sources.add(source)
             elif method == "var":
                 if args:
-                    has_default_value = len(args) == 2
-                    variables[args[0]] = has_default_value
+                    variables[args[0]] = len(args) > 1
             else:
                 calls.add(method)
 
