@@ -1,33 +1,31 @@
-import { useEffect, useMemo, useState, MouseEvent } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { sql } from '@codemirror/lang-sql';
-import { python } from '@codemirror/lang-python';
-import { StreamLanguage } from '@codemirror/language';
-import { yaml } from '@codemirror/legacy-modes/mode/yaml';
-import clsx from 'clsx';
-import { Extension } from '@codemirror/state';
-import {
-  useMutationApiSaveFile,
-  useApiFileByPath,
-} from '../../../api'
-import { useQueryClient } from '@tanstack/react-query';
-import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid';
-import { Divider } from '../divider/Divider';
-import { Button } from '../button/Button';
-import { EnumSize } from '../../../types/enum';
-import { ModelFile } from '../../../models';
-import { useStoreFileTree } from '../../../context/fileTree';
+import { useEffect, useMemo, useState, MouseEvent } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { sql } from '@codemirror/lang-sql'
+import { python } from '@codemirror/lang-python'
+import { StreamLanguage } from '@codemirror/language'
+import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import clsx from 'clsx'
+import { Extension } from '@codemirror/state'
+import { useMutationApiSaveFile, useApiFileByPath } from '../../../api'
+import { useQueryClient } from '@tanstack/react-query'
+import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
+import { Divider } from '../divider/Divider'
+import { Button } from '../button/Button'
+import { EnumSize } from '../../../types/enum'
+import { ModelFile } from '../../../models'
+import { useStoreFileTree } from '../../../context/fileTree'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
   Editing: 'editing',
   Saving: 'saving',
   Saved: 'saved',
-} as const;
+} as const
 
-export type EditorFileStatus = typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
+export type EditorFileStatus =
+  typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
 
-export function Editor() {
+export function Editor(): JSX.Element {
   const client = useQueryClient()
 
   const activeFileId = useStoreFileTree(s => s.activeFileId)
@@ -37,12 +35,14 @@ export function Editor() {
   const selectFile = useStoreFileTree(s => s.selectFile)
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
 
-  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(EnumEditorFileStatus.Edit)
+  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(
+    EnumEditorFileStatus.Edit,
+  )
   const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
-  const mutationSaveFile = useMutationApiSaveFile(client, {
+  const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
     onSuccess() {
       setIsSaved(true)
       setEditorFileStatus(EnumEditorFileStatus.Edit)
@@ -50,7 +50,7 @@ export function Editor() {
     onMutate() {
       setIsSaved(false)
       setEditorFileStatus(EnumEditorFileStatus.Saving)
-    }
+    },
   })
 
   useEffect(() => {
@@ -64,7 +64,10 @@ export function Editor() {
   useEffect(() => {
     const activeOpenedFile = openedFiles.get(activeFileId)
 
-    if (activeOpenedFile == null) return setActiveFileId(getNextOpenedFile().id)
+    if (activeOpenedFile == null) {
+      setActiveFileId(getNextOpenedFile().id)
+      return
+    }
 
     setActiveFile(activeOpenedFile)
   }, [activeFileId])
@@ -75,12 +78,11 @@ export function Editor() {
 
       selectFile(file)
     } else {
-      openedFiles.has(activeFileId) === false && setActiveFileId(getNextOpenedFile().id)
+      !openedFiles.has(activeFileId) && setActiveFileId(getNextOpenedFile().id)
     }
   }, [openedFiles])
 
-
-  function closeEditorTab(file: ModelFile) {
+  function closeEditorTab(file: ModelFile): void {
     openedFiles.delete(file.id)
 
     if (activeFileId === file.id) {
@@ -90,7 +92,7 @@ export function Editor() {
     }
   }
 
-  function addNewFileAndSelect() {
+  function addNewFileAndSelect(): void {
     const file = new ModelFile()
 
     openedFiles.set(file.id, file)
@@ -98,7 +100,7 @@ export function Editor() {
     setActiveFileId(file.id)
   }
 
-  function onChange(value: string): void{
+  function onChange(value: string): void {
     if (activeFile.isLocal || activeFile.content === value) return
 
     activeFile.content = value
@@ -111,36 +113,43 @@ export function Editor() {
     })
   }
 
-  function sendQuery() {
+  function sendQuery(): void {
     console.log('Sending query', activeFile.content)
   }
 
-  function cleanUp() {
+  function cleanUp(): void {
     setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
 
-  const debouncedChange = useMemo(() => debounce(
-    onChange,
-    () => setEditorFileStatus(EnumEditorFileStatus.Editing),
-    () => setEditorFileStatus(EnumEditorFileStatus.Edit),
-    200
-  ), [activeFile])
+  const debouncedChange = useMemo(
+    () =>
+      debounce(
+        onChange,
+        () => {
+          setEditorFileStatus(EnumEditorFileStatus.Editing)
+        },
+        () => {
+          setEditorFileStatus(EnumEditorFileStatus.Edit)
+        },
+        200,
+      ),
+    [activeFile],
+  )
 
   return (
     <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
-      <div className='flex items-center'>
+      <div className="flex items-center">
         <Button
-          className='m-0 ml-1 mr-3'
-          variant='primary'
-          size='sm'
+          className="m-0 ml-1 mr-3"
+          variant="primary"
+          size="sm"
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
             addNewFileAndSelect()
-          }}>
-          <PlusIcon
-            className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer "
-          />
+          }}
+        >
+          <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
         </Button>
         <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
           {openedFiles.size > 0 &&
@@ -156,12 +165,14 @@ export function Editor() {
                   setActiveFileId(file.id)
                 }}
               >
-                <span className={clsx(
-                  "flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md",
-                  file.id === activeFileId
-                    ? 'bg-secondary-100'
-                    : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300'
-                )}>
+                <span
+                  className={clsx(
+                    'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
+                    file.id === activeFileId
+                      ? 'bg-secondary-100'
+                      : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
+                  )}
+                >
                   <small className="text-xs">
                     {file.isUntitled ? `SQL-${idx + 1}` : file.name}
                   </small>
@@ -196,64 +207,124 @@ export function Editor() {
       </div>
       <Divider />
       <div className="px-2 flex justify-between items-center min-h-[2rem]">
-        <div className='flex align-center mr-4'>
-          <Indicator text="Valid" ok={true} />
-          {activeFile.isLocal === false && (
+        <div className="flex align-center mr-4">
+          <Indicator
+            text="Valid"
+            ok={true}
+          />
+          {!activeFile.isLocal && (
             <>
-              <Divider orientation='vertical' className='h-[12px] mx-3' />
-              <Indicator text="Saved" ok={isSaved} />
+              <Divider
+                orientation="vertical"
+                className="h-[12px] mx-3"
+              />
+              <Indicator
+                text="Saved"
+                ok={isSaved}
+              />
             </>
           )}
-          <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Status" value={fileStatus} />
-          <Divider orientation='vertical' className='h-[12px] mx-3' />
-          <Indicator text="Language" value={getLanguageByExtension(activeFile.extension)} />
+          <Divider
+            orientation="vertical"
+            className="h-[12px] mx-3"
+          />
+          <Indicator
+            text="Status"
+            value={fileStatus}
+          />
+          <Divider
+            orientation="vertical"
+            className="h-[12px] mx-3"
+          />
+          <Indicator
+            text="Language"
+            value={getLanguageByExtension(activeFile.extension)}
+          />
         </div>
         <div className="flex">
-          {activeFile.extension === '.sql' && activeFile.content && (
+          {activeFile != null &&
+            activeFile.extension === '.sql' &&
+            activeFile.content !== '' && (
+              <>
+                <Button
+                  size={EnumSize.sm}
+                  variant="alternative"
+                  onClick={e => {
+                    e.stopPropagation()
+
+                    sendQuery()
+                  }}
+                >
+                  Run Query
+                </Button>
+                <Button
+                  size={EnumSize.sm}
+                  variant="alternative"
+                  onClick={e => {
+                    e.stopPropagation()
+
+                    onChange('')
+                  }}
+                >
+                  Clear
+                </Button>
+              </>
+            )}
+
+          {!activeFile.isLocal && (
             <>
-              <Button size={EnumSize.sm} variant="alternative" onClick={e => {
-                e.stopPropagation()
-
-                sendQuery()
-              }}>
-                Run Query
-              </Button>
-              <Button size={EnumSize.sm} variant="alternative" onClick={e => {
-                e.stopPropagation()
-
-                onChange('')
-              }}>
-                Clear
-              </Button>
-            </>
-          )}
-
-          {activeFile.isLocal === false && (
-            <>
-              <Button size={EnumSize.sm} variant="alternative">
+              <Button
+                size={EnumSize.sm}
+                variant="alternative"
+              >
                 Validate
               </Button>
-              <Button size={EnumSize.sm} variant="alternative">
+              <Button
+                size={EnumSize.sm}
+                variant="alternative"
+              >
                 Format
               </Button>
             </>
           )}
         </div>
       </div>
-    </div >
+    </div>
   )
 }
 
-function Indicator({ text, value, ok = true }: { text: string, value?: string, ok?: boolean }) {
-  return <small className='font-bold text-xs whitespace-nowrap'>
-    {text}: {value
-      ? <span className='font-normal text-gray-600'>{value}</span>
-      : <span className={clsx(`bg-${ok ? 'success' : 'warning'}-500`, 'inline-block w-2 h-2 rounded-full')}></span>}
-  </small>
+function Indicator({
+  text,
+  value,
+  ok = true,
+}: {
+  text: string
+  value?: string
+  ok?: boolean
+}): JSX.Element {
+  return (
+    <small className="font-bold text-xs whitespace-nowrap">
+      {text}:{' '}
+      {value == null ? (
+        <span
+          className={clsx(
+            `bg-${ok ? 'success' : 'warning'}-500`,
+            'inline-block w-2 h-2 rounded-full',
+          )}
+        ></span>
+      ) : (
+        <span className="font-normal text-gray-600">{value}</span>
+      )}
+    </small>
+  )
 }
 
-function CodeEditor({ className, value, onChange, extension }: any) {
+function CodeEditor({
+  className,
+  value,
+  onChange,
+  extension,
+}: any): JSX.Element {
   const extensions = [
     extension === '.sql' && sql(),
     extension === '.py' && python(),
@@ -263,37 +334,41 @@ function CodeEditor({ className, value, onChange, extension }: any) {
   return (
     <CodeMirror
       value={value}
-      height='100%'
-      width='100%'
+      height="100%"
+      width="100%"
       className={clsx('w-full h-full overflow-auto', className)}
       extensions={extensions}
       onChange={onChange}
     />
-  );
+  )
 }
 
 function debounce(
   fn: (...args: any) => void,
   before: () => void,
   after: () => void,
-  delay: number = 500
-) {
+  delay: number = 500,
+): (...args: any) => void {
   let timeoutID: ReturnType<typeof setTimeout>
 
   return function callback(...args: any) {
     clearTimeout(timeoutID)
 
-    before && before()
+    if (before != null) {
+      before()
+    }
 
     timeoutID = setTimeout(() => {
       fn(...args)
 
-      after && after()
+      if (after != null) {
+        after()
+      }
     }, delay)
   }
 }
 
-function getLanguageByExtension(extension?: string) {
+function getLanguageByExtension(extension?: string): string {
   switch (extension) {
     case '.sql':
       return 'SQL'

@@ -2,19 +2,31 @@ import { fetchAPI } from './instance'
 
 import type { File } from './client'
 
-export async function saveFileByPath({ path, body = '' }: any) {
-  return await fetchAPI<File>({
+export async function saveFileByPath<T extends object>({
+  path,
+  body,
+}: {
+  path: string
+  body: T
+}): Promise<File> {
+  return await fetchAPI<File & { ok: boolean }, T>({
     url: `/api/files/${path}`,
     method: 'post',
-    data: body
+    data: body,
   })
 }
 
-export async function applyPlan({ body, params }: any) {
-  return await fetchAPI({
+export async function applyPlan<T extends object>({
+  body,
+  params,
+}: {
+  body: T
+  params: Record<string, string>
+}): Promise<void> {
+  await fetchAPI({
     url: `/api/plan`,
     method: 'post',
     data: body,
-    params
+    params,
   })
 }

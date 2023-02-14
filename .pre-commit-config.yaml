@@ -5,14 +5,14 @@ repos:
         name: autoflake
         entry: autoflake
         language: system
-        "types": [ python ]
+        "types": [python]
         require_serial: true
         files: &files ^(sqlmesh/|tests/|web/|examples/|setup.py)
       - id: isort
         name: isort
         entry: isort
         language: system
-        "types": [ python ]
+        "types": [python]
         files: *files
         require_serial: true
       - id: black
@@ -33,6 +33,38 @@ repos:
         name: mypy
         language: system
         entry: mypy
-        "types": [ python ]
+        "types": [python]
         files: *files
         require_serial: true
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "cafd550"
+    hooks:
+      - id: prettier
+        name: prettier
+        files: ^(web/client)
+        entry: prettier --write
+        exclude: ^(web/client/node_modules)
+        require_serial: true
+        language: node
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: "5d73b35"
+    hooks:
+      - id: eslint
+        name: eslint
+        files: ^(web/client)
+        exclude: ^(web/client/node_modules)
+        entry: eslint --fix
+        additional_dependencies:
+          [
+            "@typescript-eslint/eslint-plugin",
+            "@typescript-eslint/parser",
+            eslint@8.31.0,
+            eslint-config-prettier@8.6.0,
+            eslint-config-standard-with-typescript@27.0.1,
+            eslint-plugin-import@2.27.4,
+            eslint-plugin-n@15.6.1,
+            eslint-plugin-promise@6.1.1,
+            eslint-plugin-react@7.32.0,
+          ]
+        require_serial: true
+        language: node
