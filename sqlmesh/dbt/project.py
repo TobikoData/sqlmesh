@@ -92,31 +92,23 @@ class Project:
 
         profile = Profile.load(project_root, project_name)
         target = (
-            profile.targets[target_name]
-            if target_name
-            else profile.targets[profile.default_target]
+            profile.targets[target_name] if target_name else profile.targets[profile.default_target]
         )
 
         config_paths = [project_file_path]
         project_config = cls._load_project_config(project_yaml, target.schema_)
 
         models_dirs = [
-            Path(project_root, dir)
-            for dir in project_yaml.get("model-paths") or ["models"]
+            Path(project_root, dir) for dir in project_yaml.get("model-paths") or ["models"]
         ]
         models, sources, paths = cls._load_models(models_dirs, project_config)
         config_paths.extend(paths)
 
-        seed_dirs = [
-            Path(project_root, dir)
-            for dir in project_yaml.get("seed-paths") or ["seeds"]
-        ]
+        seed_dirs = [Path(project_root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
         seeds, paths = cls._load_seeds(seed_dirs, project_config)
         config_paths.extend(paths)
 
-        return Project(
-            project_root, project_name, profile, models, sources, seeds, config_paths
-        )
+        return Project(project_root, project_name, profile, models, sources, seeds, config_paths)
 
     @classmethod
     def _load_models(
@@ -161,9 +153,7 @@ class Project:
                 paths.append(path)
 
                 scope = cls._scope_from_path(path, root)
-                model_config = cls._load_model_config_from_model(
-                    path, scope, scoped_models
-                )
+                model_config = cls._load_model_config_from_model(path, scope, scoped_models)
                 if model_config.table_name:
                     models[model_config.table_name] = model_config
 
@@ -244,9 +234,7 @@ class Project:
 
         scope = ()
         return ProjectConfig(
-            source_config=load_config(
-                project_yaml.get("sources", {}), SourceConfig(), scope
-            ),
+            source_config=load_config(project_yaml.get("sources", {}), SourceConfig(), scope),
             seed_config=load_config(
                 project_yaml.get("seeds", {}),
                 SeedConfig(target_schema=target_schema),
