@@ -4,4 +4,4 @@ export const EnumSize = {
   md: 'md',
   lg: 'lg',
   xl: 'xl',
-} as const;
+} as const

@@ -14,8 +14,22 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "composite": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "typeRoots": ["./src/types", "./node_modules/@types"]
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "./.eslintrc.js",
+    "./.prettierrc.js",
+    "./postcss.config.js",
+    "./tailwind.config.js"
+  ],
+  "exclude": ["node_modules", "src/api/client.ts"]
 }

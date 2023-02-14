@@ -1,9 +1,5 @@
-import { ModelFile } from './file';
-import { ModelDirectory } from './directory';
-import { ModelInitial } from './initial';
+import { ModelFile } from './file'
+import { ModelDirectory } from './directory'
+import { ModelInitial } from './initial'
 
-export {
-  ModelFile,
-  ModelDirectory,
-  ModelInitial,
-}
+export { ModelFile, ModelDirectory, ModelInitial }

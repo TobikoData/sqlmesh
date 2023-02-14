@@ -1,69 +1,95 @@
-const baseURL = window.location.origin;
+const baseURL = window.location.origin
 
-export const fetchAPI = async <T>({
-	url,
-	method,
-	params,
-	data,
-	headers,
-	credentials,
-	mode,
-	cache,
+export async function fetchAPI<T = any, B extends object = any>({
+  url,
+  method,
+  params,
+  data,
+  headers,
+  credentials,
+  mode,
+  cache,
 }: {
-	url: string;
-	method: "get" | "post" | "put" | "delete" | "patch";
-	data?: BodyInit;
-	responseType?: string;
-	headers?: { [key: string]: string };
-	credentials?: "omit" | "same-origin" | "include";
-	mode?: "cors" | "no-cors" | "same-origin";
-	cache?:
-		| "default"
-		| "no-store"
-		| "reload"
-		| "no-cache"
-		| "force-cache"
-		| "only-if-cached";
-	params?: any;
-}): Promise<T> => {
-	const withSearchParams =
-		Object.keys(params || {}).length > 0;
-	const fullUrl = url.replace(/([^:]\/)\/+/g, "$1");
-	const input = new URL(fullUrl, baseURL);
+  url: string
+  method: 'get' | 'post' | 'put' | 'delete' | 'patch'
+  data?: B
+  responseType?: string
+  headers?: Record<string, string>
+  credentials?: 'omit' | 'same-origin' | 'include'
+  mode?: 'cors' | 'no-cors' | 'same-origin'
+  cache?:
+    | 'default'
+    | 'no-store'
+    | 'reload'
+    | 'no-cache'
+    | 'force-cache'
+    | 'only-if-cached'
+  params?:
+    | string
+    | URLSearchParams
+    | Record<string, string>
+    | string[][]
+    | undefined
+}): Promise<T> {
+  const hasSearchParams = Object.keys(params ?? {}).length > 0
+  const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
+  const input = new URL(fullUrl, baseURL)
 
-	if (withSearchParams) {
-		input.search = new URLSearchParams(params).toString();
-	}
+  if (hasSearchParams) {
+    input.search = new URLSearchParams(params).toString()
+  }
 
-	return new Promise(async (resolve , reject) => {
-		try {
-			const response = await fetch(input, {
-				method,
-				headers: {...headers, ...(data && { 'Content-Type': 'application/json' })},
-				credentials,
-				mode,
-				cache,
-				...(data && { body: JSON.stringify(data) }),
-			});
+  return await new Promise<T>((resolve, reject) => {
+    fetch(input, {
+      method,
+      credentials,
+      mode,
+      cache,
+      headers: toRequestHeaders(headers),
+      body: toRequestBody(data),
+    })
+      .then(async response => {
+        if (response.status === 204) return {}
 
-			if (response.status === 204) return resolve({ ok: true } as T)
+        let json = null
+        const headerContentType = response.headers.get('Content-Type')
 
-			let json = null;
+        if (headerContentType == null) return { ok: false }
 
-			if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
-				const data  = await response.text()
+        const isEventStream = headerContentType.includes('text/event-stream')
+        const isApplicationJson = headerContentType.includes('application/json')
 
-				json = JSON.parse(data.trim().replace('data: ', '').trim())
+        if (isEventStream) {
+          const text = await response.text()
+          const message = text.trim().replace('data: ', '').trim()
 
-			} else if (response.headers.get('Content-Type')?.includes('application/json')) {
-				json = await response.json()
-			}
+          json = JSON.parse(message)
+        }
 
-			resolve(json)
-		} catch (error) {
-			reject(error)
-		}
-	});
-};
+        if (isApplicationJson) {
+          json = await response.json()
+        }
 
-export default fetchAPI;
+        return json
+      })
+      .then(resolve)
+      .catch(reject)
+  })
+}
+
+function toRequestHeaders(headers?: Record<string, string>): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    ...(headers ?? {}),
+  }
+}
+
+function toRequestBody(obj: unknown): BodyInit {
+  try {
+    return JSON.stringify(obj)
+  } catch (error) {
+    return ''
+  }
+}
+
+export default fetchAPI

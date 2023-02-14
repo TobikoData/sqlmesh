@@ -1,14 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       boxShadow: {
-        'border': 'inset 0 0 0 1px'
-      }
+        border: 'inset 0 0 0 1px',
+      },
     },
     colors: {
       gray: {
@@ -58,7 +55,5 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
-  plugins: [
-    require('@tailwindcss/typography'),
-  ],
-};
+  plugins: [require('@tailwindcss/typography')],
+}
