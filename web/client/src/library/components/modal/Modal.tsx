@@ -1,14 +1,26 @@
 import { Transition, Dialog } from '@headlessui/react'
-import { Fragment } from 'react';
+import { Fragment } from 'react'
 
-export default function Modal({ show, children }: any) {
+interface PropsModal extends React.HTMLAttributes<HTMLElement> {
+  show: boolean
+  onClose: () => void
+}
 
+export default function Modal({
+  show,
+  children,
+  onClose = () => undefined,
+}: PropsModal): JSX.Element {
   return (
     <Transition
       appear
       show={show}
     >
-      <Dialog as="div" className="relative z-[100]" onClose={() => undefined}>
+      <Dialog
+        as="div"
+        className="relative z-[100]"
+        onClose={onClose}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -38,5 +50,5 @@ export default function Modal({ show, children }: any) {
         </div>
       </Dialog>
     </Transition>
-  );
+  )
 }
