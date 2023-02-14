@@ -4,13 +4,18 @@ import re
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core import constants as c
+from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.dbt.common import BaseConfig, Dependencies, project_config_path
+from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import capture_jinja
+from sqlmesh.utils.jinja import MacroExtractor, capture_jinja
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -40,6 +45,7 @@ class Project:
         models: t.Dict[str, ModelConfig],
         sources: t.Dict[str, SourceConfig],
         seeds: t.Dict[str, SeedConfig],
+        macros: UniqueKeyDict[str, MacroConfig],
         variables: t.Dict[str, t.Any],
         config_paths: t.Set[Path],
     ):
@@ -51,6 +57,7 @@ class Project:
             models: Dict of model name to model config for all models within this project
             sources: Dict of source name to source config for all sources within this project
             seeds: Dict of seed name to seed config for all seeds within this project
+            macros: Dict of macro name to macro config for all macros within this project
             variables: Dict of variable name to variable value for all variables within this project
             config_paths: Paths to all the config files used by the project
         """
@@ -60,6 +67,7 @@ class Project:
         self.models = models
         self.sources = sources
         self.seeds = seeds
+        self.macros = macros
         self.variables = variables
         self.config_paths = config_paths
 
@@ -101,6 +109,7 @@ class Project:
             package.models,
             package.sources,
             package.seeds,
+            package.macros,
             package.files,
         )
 
@@ -113,11 +122,12 @@ class Project:
 
 
 class Package(PydanticModel):
-    """Package configuration"""
+    """Class to contain package configuration"""
 
     sources: t.Dict[str, SourceConfig]
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
+    macros: UniqueKeyDict[str, MacroConfig]
     files: t.Set[Path]
 
 
@@ -152,12 +162,21 @@ class PackageLoader:
         ]
         models, sources = self._load_models(models_dirs)
 
-        seed_dirs = [Path(self._root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
-        seeds = self._load_seeds(seed_dirs)
+        seeds_dirs = [Path(self._root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
+        seeds = self._load_seeds(seeds_dirs)
+
+        macros_dirs = [
+            Path(self._root, dir) for dir in project_yaml.get("macro-paths") or ["macros"]
+        ]
+        macros = self._load_macros(macros_dirs)
 
         variables = project_yaml.get("vars", {})
 
-        return Package(models=models, sources=sources, seeds=seeds, files=self._config_paths)
+        package = Package(
+            models=models, sources=sources, seeds=seeds, macros=macros, files=self._config_paths
+        )
+        package.macros = macros
+        return package
 
     def reset(self) -> None:
         self._root = Path()
@@ -289,6 +308,45 @@ class PackageLoader:
                 seeds[path.stem] = seed_config
 
         return seeds
+
+    def _load_macros(self, macros_dirs: t.List[Path]) -> UniqueKeyDict[str, MacroConfig]:
+        macros: UniqueKeyDict[str, MacroConfig] = UniqueKeyDict("macros")
+
+        for root in macros_dirs:
+            for path in root.glob("**/*.sql"):
+                macros.update(self._load_macro_file(path))
+
+        return macros
+
+    def _load_macro_file(self, path: Path) -> UniqueKeyDict[str, MacroConfig]:
+        macros: UniqueKeyDict[str, MacroConfig] = UniqueKeyDict("macros")
+
+        with open(path, mode="r", encoding="utf8") as file:
+            for name, macro in MacroExtractor().extract(file.read()).items():
+                executable: ExecutableOrMacro = Executable(
+                    payload=f"""{c.JINJA_MACROS}.append('''{macro.macro}''')""",
+                    kind=ExecutableKind.STATEMENT,
+                    name=name,
+                    path=str(path),
+                )
+
+                dependencies = Dependencies()
+                if macro.calls:
+                    for method, args, kwargs in macro.calls:
+                        if method == "ref":
+                            dep = ".".join(args + tuple(kwargs.values()))
+                            if dep:
+                                dependencies.refs.add(dep)
+                        elif method == "source":
+                            source = ".".join(args + tuple(kwargs.values()))
+                            if source:
+                                dependencies.sources.add(dep)
+                        else:
+                            dependencies.macros.add(method)
+
+                macros[name] = MacroConfig(macro=executable, dependencies=dependencies)
+
+        return macros
 
     def _load_config_section_from_properties(
         self,

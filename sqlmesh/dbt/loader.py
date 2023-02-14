@@ -11,7 +11,7 @@ from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.common import Dependencies
-from sqlmesh.dbt.macros import builtin_methods
+from sqlmesh.dbt.macros import MacroConfig, builtin_methods
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.utils import UniqueKeyDict
@@ -43,10 +43,7 @@ class DbtLoader(Loader):
         registry.update(builtin_methods())
 
         return (
-            self._add_jinja_macros(
-                registry,
-                Path(self._context.path, "macros").glob("**/*.sql"),
-            ),
+            registry,
             UniqueKeyDict("hooks"),
         )
 
@@ -63,6 +60,10 @@ class DbtLoader(Loader):
 
         models.update({seed.seed_name: seed.to_sqlmesh() for seed in config.seeds.values()})
 
+        macro_configs = config.macros
+        for name, macro in macros.items():
+            macro_configs[name] = MacroConfig(macro=macro, dependencies=Dependencies())
+
         models.update(
             {
                 model.model_name: model.to_sqlmesh(
@@ -70,8 +71,7 @@ class DbtLoader(Loader):
                     config.models,
                     config.seeds,
                     config.variables,
-                    macros,
-                    self._macro_dependencies,
+                    macro_configs,
                 )
                 for model in config.models.values()
             }

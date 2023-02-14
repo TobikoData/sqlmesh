@@ -9,13 +9,13 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
-from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelKindName, load_model
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
-from sqlmesh.dbt.macros import ref_method, source_method, var_method
+from sqlmesh.dbt.macros import MacroConfig, ref_method, source_method, var_method
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
 
@@ -129,8 +129,7 @@ class ModelConfig(GeneralConfig):
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        macros: MacroRegistry,
-        macro_dependencies: t.Dict[str, Dependencies],
+        macros: UniqueKeyDict[str, MacroConfig],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         expressions = d.parse_model(
@@ -153,15 +152,13 @@ class ModelConfig(GeneralConfig):
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        dependencies = self._all_dependencies(
-            source_mapping, models, seeds, variables, macros, macro_dependencies
-        )
+        dependencies = self._all_dependencies(source_mapping, models, seeds, variables, macros)
 
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
             "ref": ref_method(dependencies.refs, model_mapping),
             "var": var_method(dependencies.variables, variables),
-            **{k: v for k, v in macros.items() if k in dependencies.macros},
+            **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
         }
 
         depends_on = {
@@ -220,12 +217,11 @@ class ModelConfig(GeneralConfig):
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        macros: MacroRegistry,
-        macro_dependencies: t.Dict[str, Dependencies],
+        macros: UniqueKeyDict[str, MacroConfig],
     ) -> Dependencies:
         """Recursively gather all the dependencies for this model, including any from ephemeral parents and macros"""
         dependencies: Dependencies = self.__class__._macro_dependencies(
-            self, source_mapping, models, seeds, variables, macros, macro_dependencies
+            self, source_mapping, models, seeds, variables, macros
         )
 
         for source in self._dependencies.sources:
@@ -254,7 +250,7 @@ class ModelConfig(GeneralConfig):
             dependencies.refs.add(dependency)
             if parent.materialized == Materialization.EPHEMERAL:
                 parent_dependencies = parent._all_dependencies(
-                    source_mapping, models, seeds, variables, macros, macro_dependencies
+                    source_mapping, models, seeds, variables, macros
                 )
                 dependencies = dependencies.union(parent_dependencies)
 
@@ -268,8 +264,7 @@ class ModelConfig(GeneralConfig):
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        macros: MacroRegistry,
-        macro_dependencies: t.Dict[str, Dependencies],
+        macros: UniqueKeyDict[str, MacroConfig],
     ) -> Dependencies:
         dependencies = Dependencies()
 
@@ -279,15 +274,15 @@ class ModelConfig(GeneralConfig):
                 raise ConfigError(f"Macro {call} for model {model.table_name} not found.")
 
             dependencies.macros.add(macro)
-            if macro not in macro_dependencies:
-                return
 
-            for source in macro_dependencies[macro].sources:
+            macros_dependencies = macros[macro].dependencies
+
+            for source in macros_dependencies.sources:
                 if source not in source_mapping:
                     raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.sources.add(source)
 
-            for ref in macro_dependencies[macro].refs:
+            for ref in macros_dependencies.refs:
                 if ref not in models and ref not in seeds:
                     raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.refs.add(ref)
@@ -297,7 +292,7 @@ class ModelConfig(GeneralConfig):
                     raise ConfigError(f"Variable {var} for macro {macro} not found.")
                 dependencies.variables[var] = has_default_value
 
-            for macro_call in macro_dependencies[macro].macros:
+            for macro_call in macros_dependencies.macros:
                 if macro_call not in macros:
                     raise ConfigError(f"Macro {macro_call} used by macro {macro} not found.")
 
