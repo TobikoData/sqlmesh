@@ -1,10 +1,3 @@
-from pathlib import Path
-
-import pytest
-
-from sqlmesh.core.context import Context
-
-
 def test_variables(assert_exp_eq, sushi_dbt_context):
     assert_exp_eq(
         sushi_dbt_context.models["sushi.top_waiters"].render_query(),
