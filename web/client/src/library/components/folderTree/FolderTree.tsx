@@ -142,7 +142,7 @@ function Directory({
           return
         }
 
-        directory.addDirectory(created)
+        directory.addDirectory(new ModelDirectory(created, directory))
 
         setOpen(true)
       })
@@ -173,7 +173,7 @@ function Directory({
           return
         }
 
-        directory.addFile(created)
+        directory.addFile(new ModelFile(created, directory))
 
         setOpen(true)
       })

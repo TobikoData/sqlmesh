@@ -18,7 +18,6 @@
     "composite": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
-    "baseUrl": ".",
     "paths": {
       "~/*": ["./src/*"]
     },

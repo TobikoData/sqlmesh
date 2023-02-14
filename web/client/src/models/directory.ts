@@ -58,12 +58,12 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     return this.withFiles || this.withDirectories
   }
 
-  addFile(file: File): void {
-    this.files.push(new ModelFile(file, this))
+  addFile(file: ModelFile): void {
+    this.files.push(file)
   }
 
-  addDirectory(directory: Directory): void {
-    this.directories.push(new ModelDirectory(directory, this))
+  addDirectory(directory: ModelDirectory): void {
+    this.directories.push(directory)
   }
 
   removeFile(file: ModelFile): void {
