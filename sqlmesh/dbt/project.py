@@ -4,7 +4,7 @@ import re
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import BaseConfig, project_config_path
+from sqlmesh.dbt.common import BaseConfig, Dependencies, project_config_path
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.seed import SeedConfig
@@ -41,7 +41,7 @@ class Project:
         sources: t.Dict[str, SourceConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        config_paths: t.List[Path],
+        config_paths: t.Set[Path],
     ):
         """
         Args:
@@ -105,36 +105,47 @@ class Project:
         )
 
     @property
-    def project_files(self) -> t.List[Path]:
+    def project_files(self) -> t.Set[Path]:
         paths = self.config_paths.copy()
-        paths.append(self.profile.path)
-        paths.extend(model.path for model in self.models.values())
-        paths.extend(seed.path for seed in self.seeds.values())
+        paths.add(self.profile.path)
 
         return paths
 
 
 class Package(PydanticModel):
+    """Package configuration"""
+
     sources: t.Dict[str, SourceConfig]
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
-    files: t.List[Path]
+    files: t.Set[Path]
 
 
 class PackageLoader:
+    """Loader for DBT packages"""
+
     def load(self, path: Path, target_schema: str, overrides: ProjectConfig) -> Package:
-        """"""
+        """
+        Loads the specified package.
+
+        Args:
+            path: Path to the package
+            target_schema: Schema for the profile target
+            overrides: Project-level configuration overrides which take precedence over package configuration
+
+        Returns:
+            Package containing the configuration found within this package
+        """
         self.reset()
 
         self._root = path
         self._overrides = overrides
-        self._config_paths: t.List[Path] = []
 
         project_file_path = project_config_path(self._root)
-        self._config_paths.append(project_file_path)
+        self._config_paths.add(project_file_path)
         project_yaml = yaml_load(project_file_path)
 
-        self._project_config = self._load_project_config(project_yaml, target_schema)
+        self._load_project_config(project_yaml, target_schema)
 
         models_dirs = [
             Path(self._root, dir) for dir in project_yaml.get("model-paths") or ["models"]
@@ -151,10 +162,10 @@ class PackageLoader:
     def reset(self) -> None:
         self._root = Path()
         self._overrides = ProjectConfig()
-        self._config_paths = []
+        self._config_paths: t.Set[Path] = set()
         self._project_config = ProjectConfig()
 
-    def _load_project_config(self, yaml: t.Dict[str, t.Any], schema: str) -> ProjectConfig:
+    def _load_project_config(self, yaml: t.Dict[str, t.Any], schema: str) -> None:
         def load_config(
             data: t.Dict[str, t.Any],
             parent: C,
@@ -181,18 +192,18 @@ class PackageLoader:
         return scoped_configs
 
         scope = ()
-        return ProjectConfig(
-            source_config=load_config(yaml.get("sources", {}), SourceConfig(), scope),
-            seed_config=load_config(
-                yaml.get("seeds", {}),
-                SeedConfig(target_schema=schema),
-                scope,
-            ),
-            model_config=load_config(
-                yaml.get("models", {}),
-                ModelConfig(target_schema=schema),
-                scope,
-            ),
+        self._project_config.source_config = load_config(
+            yaml.get("sources", {}), SourceConfig(), scope
+        )
+        self._project_config.seed_config = load_config(
+            yaml.get("seeds", {}),
+            SeedConfig(target_schema=schema),
+            scope,
+        )
+        self._project_config.model_config = load_config(
+            yaml.get("models", {}),
+            ModelConfig(target_schema=schema),
+            scope,
         )
 
     def _load_models(
@@ -214,7 +225,7 @@ class PackageLoader:
         for root in models_dirs:
             # Layer on configs in properties files
             for path in root.glob("**/*.yml"):
-                self._config_paths.append(path)
+                self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
                 properties_yaml = yaml_load(path)
@@ -230,7 +241,7 @@ class PackageLoader:
 
             # Layer on configs from the model file and create model configs
             for path in root.glob("**/*.sql"):
-                self._config_paths.append(path)
+                self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
                 model_config = self._load_model_config_from_model(path, scope)
@@ -254,12 +265,11 @@ class PackageLoader:
             Tuple containing Dicts of seed configs and list of config files used by them
         """
         seeds: t.Dict[str, SeedConfig] = {}
-        paths: t.List[Path] = []
 
         for root in seeds_dirs:
             # Layer on configs in properties files
             for path in root.glob("**/*.yml"):
-                paths.append(path)
+                self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
                 properties_yaml = yaml_load(path)
@@ -270,7 +280,7 @@ class PackageLoader:
 
             # Layer on configs from the model file and create seed configs
             for path in root.glob("**/*.csv"):
-                paths.append(path)
+                self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
                 seed_config = self._config_for_scope(scope, self._project_config.seed_config).copy()
@@ -373,9 +383,7 @@ class PackageLoader:
                 calls.add(method)
 
         model_config.sql = self._remove_config_jinja(sql)
-        model_config._depends_on = depends_on
-        model_config._calls = calls
-        model_config._sources = sources
+        model_config._dependencies = Dependencies(macros=calls, sources=sources, refs=depends_on)
         model_config._variables = variables
 
         return model_config

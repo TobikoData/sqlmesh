@@ -65,9 +65,7 @@ class ModelConfig(GeneralConfig):
     sql: str = ""
     time_column: t.Optional[str] = None
     table_name: t.Optional[str] = None
-    _depends_on: t.Set[str] = set()
-    _calls: t.Set[str] = set()
-    _sources: t.Set[str] = set()
+    _dependencies: Dependencies = Dependencies()
     _variables: t.Dict[str, bool] = {}
 
     # DBT configuration fields
@@ -155,7 +153,7 @@ class ModelConfig(GeneralConfig):
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        dependencies = self._dependencies(
+        dependencies = self._all_dependencies(
             source_mapping, models, seeds, variables, macros, macro_dependencies
         )
 
@@ -216,7 +214,7 @@ class ModelConfig(GeneralConfig):
             return ModelKindName.EMBEDDED.value
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
-    def _dependencies(
+    def _all_dependencies(
         self,
         source_mapping: t.Dict[str, str],
         models: t.Dict[str, ModelConfig],
@@ -230,7 +228,7 @@ class ModelConfig(GeneralConfig):
             self, source_mapping, models, seeds, variables, macros, macro_dependencies
         )
 
-        for source in self._sources:
+        for source in self._dependencies.sources:
             if source not in source_mapping:
                 raise ConfigError(f"Source {source} for model {self.table_name} not found.")
 
@@ -242,7 +240,7 @@ class ModelConfig(GeneralConfig):
 
             dependencies.variables[var] = has_default_value
 
-        for dependency in self._depends_on:
+        for dependency in self._dependencies.refs:
             """Add seed/model as a dependency"""
             parent: t.Union[SeedConfig, ModelConfig, None] = seeds.get(dependency)
             if parent:
@@ -255,7 +253,7 @@ class ModelConfig(GeneralConfig):
 
             dependencies.refs.add(dependency)
             if parent.materialized == Materialization.EPHEMERAL:
-                parent_dependencies = parent._dependencies(
+                parent_dependencies = parent._all_dependencies(
                     source_mapping, models, seeds, variables, macros, macro_dependencies
                 )
                 dependencies = dependencies.union(parent_dependencies)
@@ -305,7 +303,7 @@ class ModelConfig(GeneralConfig):
 
                 add_dependency(macro_call)
 
-        for call in model._calls:
+        for call in model._dependencies.macros:
             add_dependency(call)
 
         return dependencies
