@@ -87,10 +87,8 @@ jobs:
           path: /tmp/airflow_logs
 
 workflows:
-  main_pr:
-    when:
-      or:
-        - << pipeline.parameters.python >>
+  main_pr_core:
+    when: << pipeline.parameters.python >>
     jobs:
       - style_and_unit_tests:
           matrix:
@@ -105,9 +103,7 @@ workflows:
               only:
                 - main
 
-  client:
-    when:
-      or:
-        - << pipeline.parameters.client >>
+  main_pr_web_client:
+    when: << pipeline.parameters.client >>
     jobs:
       - ui_style
