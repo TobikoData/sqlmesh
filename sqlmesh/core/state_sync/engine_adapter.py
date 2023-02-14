@@ -23,7 +23,7 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.dialect import select_from_values
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -80,7 +80,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "expiration_ts": exp.DataType.build("bigint"),
         }
 
-    @transactional
+    @transactional(transaction_type=TransactionType.DDL)
     def init_schema(self) -> None:
         """Creates the schema and table to store state."""
         self.engine_adapter.create_schema(self.snapshots_table)
@@ -101,7 +101,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             primary_key=("name",),
         )
 
-    @transactional
+    @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
 
@@ -392,6 +392,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     @contextlib.contextmanager
-    def _transaction(self) -> t.Generator[None, None, None]:
-        with self.engine_adapter.transaction():
+    def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
+        with self.engine_adapter.transaction(transaction_type=transaction_type):
             yield

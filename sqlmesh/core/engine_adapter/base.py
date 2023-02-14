@@ -67,7 +67,6 @@ class EngineAdapter:
     ):
         self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(connection_factory, multithreaded)
-        self._transaction = False
         self.sql_gen_kwargs = sql_gen_kwargs or {}
 
     @property
@@ -637,20 +636,19 @@ class EngineAdapter:
         self, transaction_type: TransactionType = TransactionType.DML
     ) -> t.Generator[None, None, None]:
         """A transaction context manager."""
-        if self._transaction or not self.supports_transactions(transaction_type):
+        if self._connection_pool.is_transaction_active or not self.supports_transactions(
+            transaction_type
+        ):
             yield
             return
-        self._transaction = True
-        self.execute(exp.Transaction())
+        self._connection_pool.begin()
         try:
             yield
         except Exception as e:
-            self.execute(exp.Rollback())
+            self._connection_pool.rollback()
             raise e
         else:
-            self.execute(exp.Commit())
-        finally:
-            self._transaction = False
+            self._connection_pool.commit()
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         """Whether or not the engine adapter supports transactions for the given transaction type."""
