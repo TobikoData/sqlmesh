@@ -42,8 +42,9 @@ workflows:
       - path-filtering/filter:
           mapping: |
             web/client/.* client true
-            (sqlmesh|tests|web/server|examples)/.* python true
-            setup.py python true
+            (sqlmesh|tests|examples|web/server)/.* python true
+            pytest.ini|setup.cfg|setup.py python true
+            \.circleci/.*|Makefile common true
 
   release:
     jobs:

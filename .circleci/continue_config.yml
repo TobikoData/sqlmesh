@@ -4,10 +4,13 @@ orbs:
   python: circleci/python@1.5.0
 
 parameters:
-  python:
+  client:
     type: boolean
     default: false
-  client:
+  common:
+    type: boolean
+    default: false
+  python:
     type: boolean
     default: false
 
@@ -88,7 +91,10 @@ jobs:
 
 workflows:
   main_pr_core:
-    when: << pipeline.parameters.python >>
+    when:
+      or:
+        - << pipeline.parameters.common >>
+        - << pipeline.parameters.python >>
     jobs:
       - style_and_unit_tests:
           matrix:
@@ -104,6 +110,9 @@ workflows:
                 - main
 
   main_pr_web_client:
-    when: << pipeline.parameters.client >>
+    when:
+      or:
+        - << pipeline.parameters.client >>
+        - << pipeline.parameters.common >>
     jobs:
       - ui_style
