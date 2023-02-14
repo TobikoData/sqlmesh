@@ -98,9 +98,8 @@ class DbtLoader(Loader):
                 if source:
                     dependencies.sources.add(dep)
             elif method == "var":
-                if args and len(args) == 1:
-                    # Only add the variable as a dependency if it doesn't have a default value
-                    dependencies.sources.add(dep)
+                if args:
+                    dependencies.variables[args[0]] = len(args) > 1
             else:
                 dependencies.macros.add(method)
 

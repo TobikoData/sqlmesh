@@ -43,20 +43,21 @@ class Dependencies(PydanticModel):
         macros: The names of macros used
         sources: The "source_name.table_name" for source tables used
         refs: The table_name for models used
-        variables: The names of variables used
+        variables: The names of variables used, mapped to a flag that indicates whether their
+            definition is optional or not.
     """
 
     macros: t.Set[str] = set()
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
-    variables: t.Set[str] = set()
+    variables: t.Dict[str, bool] = {}
 
     def union(self, other: Dependencies) -> Dependencies:
         dependencies = Dependencies()
         dependencies.macros = self.macros.union(other.macros)
         dependencies.sources = self.sources.union(other.sources)
         dependencies.refs = self.refs.union(other.refs)
-        dependencies.variables = self.variables.union(other.variables)
+        dependencies.variables = {**self.variables, **other.variables}
 
         return dependencies
 

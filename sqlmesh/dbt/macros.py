@@ -48,7 +48,7 @@ def ref_method(refs: t.Set[str], mapping: t.Dict[str, str]) -> Executable:
     )
 
 
-def var_method(variables: t.Set[str], mapping: t.Dict[str, t.Any]) -> Executable:
+def var_method(variables: t.Dict[str, bool], mapping: t.Dict[str, t.Any]) -> Executable:
     """Create a var method that only includes the variables specified by the caller."""
 
     def variable_map() -> str:
