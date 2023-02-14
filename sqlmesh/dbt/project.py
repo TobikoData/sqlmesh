@@ -112,8 +112,9 @@ class Project:
         seeds, paths = cls._load_seeds(seed_dirs, project_config)
         config_paths.extend(paths)
 
-        return Project(project_root, project_name, profile, models, sources, seeds, variables, config_paths)
-
+        return Project(
+            project_root, project_name, profile, models, sources, seeds, variables, config_paths
+        )
 
     @classmethod
     def _load_models(

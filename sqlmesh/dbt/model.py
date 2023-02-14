@@ -238,9 +238,7 @@ class ModelConfig(GeneralConfig):
 
         for var, has_default_value in self._variables.items():
             if var not in variables and not has_default_value:
-                raise ConfigError(
-                    f"Variable {var} for model {self.table_name} not found."
-                )
+                raise ConfigError(f"Variable {var} for model {self.table_name} not found.")
 
             dependencies.variables.add(var)
 
