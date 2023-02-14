@@ -144,7 +144,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             snapshot.name,
                             snapshot.identifier,
                             snapshot.version,
-                            snapshot.json(),
+                            self.engine_adapter.to_json(snapshot),
                         )
                         for snapshot in snapshots
                     ],
@@ -211,7 +211,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _update_snapshot(self, snapshot: Snapshot) -> None:
         self.engine_adapter.update_table(
             self.snapshots_table,
-            {"snapshot": snapshot.json()},
+            {"snapshot": self.engine_adapter.to_json(snapshot)},
             where=self._snapshot_id_filter([snapshot.snapshot_id]),
         )
 
