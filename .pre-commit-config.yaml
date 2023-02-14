@@ -64,6 +64,5 @@ repos:
             eslint-plugin-promise@6.1.1,
             eslint-plugin-react@7.32.0,
           ]
-
         require_serial: true
         language: node
