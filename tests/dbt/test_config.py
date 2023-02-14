@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.dbt.model import Materialization, ModelConfig
-from sqlmesh.dbt.project import ProjectConfig
+from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import (
     DatabricksConfig,
     PostgresConfig,
@@ -16,8 +16,8 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 @pytest.fixture
-def sushi_dbt_project() -> ProjectConfig:
-    return ProjectConfig.load(Path("examples/sushi_dbt_with_sources"))
+def sushi_dbt_project() -> Project:
+    return Project.load(Path("examples/sushi_dbt"))
 
 
 @pytest.mark.parametrize(
@@ -58,17 +58,15 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_config(sushi_dbt_project: ProjectConfig):
+def test_model_config(sushi_dbt_project: Project):
     model_configs = sushi_dbt_project.models
     assert set(model_configs) == {
-        "items",
         "customers",
-        "orders",
-        "order_items",
         "waiters",
         "top_waiters",
         "customer_revenue_by_day",
         "waiter_revenue_by_day",
+        "waiter_as_customer_by_day",
     }
 
     customer_revenue_by_day_config = model_configs["customer_revenue_by_day"]
@@ -77,25 +75,26 @@ def test_model_config(sushi_dbt_project: ProjectConfig):
         "materialized": Materialization.INCREMENTAL,
         "incremental_strategy": "delete+insert",
         "cluster_by": ["ds"],
-        "schema_": "db",
+        "target_schema": "sushi",
     }
     actual_config = {
         k: getattr(customer_revenue_by_day_config, k) for k, v in expected_config.items()
     }
     assert actual_config == expected_config
 
-    assert customer_revenue_by_day_config.model_name == "sushi_db.customer_revenue_by_day"
+    assert customer_revenue_by_day_config.model_name == "sushi.customer_revenue_by_day"
 
 
-def test_source_config(sushi_dbt_project: ProjectConfig):
+def test_source_config(sushi_dbt_project: Project):
     source_configs = sushi_dbt_project.sources
     assert set(source_configs) == {
+        "items",
         "orders",
         "order_items",
     }
 
     expected_config = {
-        "schema_": "sushi_raw",
+        "schema_": "raw",
         "identifier": "order_items",
     }
     actual_config = {
@@ -103,21 +102,22 @@ def test_source_config(sushi_dbt_project: ProjectConfig):
     }
     assert actual_config == expected_config
 
+    assert source_configs["order_items"].source_name == "raw.order_items"
 
-def test_seed_config(sushi_dbt_project: ProjectConfig):
+
+def test_seed_config(sushi_dbt_project: Project):
     seed_configs = sushi_dbt_project.seeds
-    assert set(seed_configs) == {"raw_items"}
-    raw_items_seed = seed_configs["raw_items"]
+    assert set(seed_configs) == {"waiter_names"}
+    raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
-        "path": Path(sushi_dbt_project.project_root, "seeds/raw/raw_items.csv"),
-        "alias": "items",
-        "schema_": "raw",
+        "path": Path(sushi_dbt_project.project_root, "seeds/waiter_names.csv"),
+        "target_schema": "sushi",
     }
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert raw_items_seed.seed_name == "sushi_raw.items"
+    assert raw_items_seed.seed_name == "sushi.waiter_names"
 
 
 def _test_warehouse_config(config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str):

@@ -13,7 +13,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.macros import builtin_methods
 from sqlmesh.dbt.profile import Profile
-from sqlmesh.dbt.project import ProjectConfig
+from sqlmesh.dbt.project import Project
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.jinja import MacroInfo
 
@@ -57,7 +57,7 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
-        config = ProjectConfig.load(self._context.path, self._context.connection)
+        config = Project.load(self._context.path, self._context.connection)
         for path in config.project_files:
             self._track_file(path)
 
