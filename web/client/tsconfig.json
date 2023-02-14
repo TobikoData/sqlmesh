@@ -16,17 +16,22 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "composite": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "importsNotUsedAsValues": "error",
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "typeRoots": ["./src/types", "./node_modules/@types"]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "**/*.js",
-    "**/*.jsx",
-    "**/*.json",
-    "**/*.cjs",
-    "./.eslintrc.cjs",
-    "./.prettierrc.cjs"
+    "./.eslintrc.js",
+    "./.prettierrc.js",
+    "./postcss.config.js",
+    "./tailwind.config.js"
   ],
   "exclude": ["node_modules", "src/api/client.ts"]
 }

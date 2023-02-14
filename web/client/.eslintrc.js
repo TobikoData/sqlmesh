@@ -10,7 +10,8 @@ module.exports = {
   extends: ['plugin:react/recommended', 'standard-with-typescript', 'prettier'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: ['./tsconfig.json'],
+    tsconfigRootDir: __dirname,
+    project: './tsconfig.json',
   },
   plugins: ['react', '@typescript-eslint'],
   rules: {

@@ -1,8 +1,10 @@
 {
   "name": "tobiko",
-  "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "engines": {
+    "node": "18",
+    "npm": "8"
+  },
   "scripts": {
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",

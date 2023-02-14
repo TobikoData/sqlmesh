@@ -40,7 +40,6 @@ function cleanUpChannel(topic: string, callback: ChannelCallback): void {
   const channel = channels.get(topic)
 
   channel?.close()
-
   channel?.removeEventListener('message', handleChannelMessage(topic, callback))
 
   channels.delete(topic)
