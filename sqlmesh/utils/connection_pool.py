@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionPool(abc.ABC):
+    @abc.abstractmethod
     def get_cursor(self) -> t.Any:
         """Returns cached cursor instance.
 
@@ -16,6 +17,7 @@ class ConnectionPool(abc.ABC):
             A cursor instance.
         """
 
+    @abc.abstractmethod
     def get(self) -> t.Any:
         """Returns cached connection instance.
 
@@ -25,15 +27,35 @@ class ConnectionPool(abc.ABC):
             A connection instance.
         """
 
+    @abc.abstractmethod
+    def begin(self) -> None:
+        """Starts a new transaction."""
+
+    @abc.abstractmethod
+    def commit(self) -> None:
+        """Commits the current transaction."""
+
+    @abc.abstractmethod
+    def rollback(self) -> None:
+        """Rolls back the current transaction."""
+
+    @property
+    @abc.abstractmethod
+    def is_transaction_active(self) -> bool:
+        """Returns True if there is an active transaction and False otherwise."""
+
+    @abc.abstractmethod
     def close_cursor(self) -> None:
         """Closes the current cursor instance if exists."""
 
+    @abc.abstractmethod
     def close(self) -> None:
         """Closes the current connection instance if exists.
 
         Note: if there is a cursor instance available it will be closed as well.
         """
 
+    @abc.abstractmethod
     def close_all(self, exclude_calling_thread: bool = False) -> None:
         """Closes all cached cursors and connections.
 
@@ -43,13 +65,40 @@ class ConnectionPool(abc.ABC):
         """
 
 
-class ThreadLocalConnectionPool(ConnectionPool):
+class _TransactionManagementMixin(ConnectionPool):
+    def _do_begin(self) -> None:
+        cursor = self.get_cursor()
+        if hasattr(cursor, "begin"):
+            cursor.begin()
+        else:
+            conn = self.get()
+            if hasattr(conn, "begin"):
+                conn.begin()
+
+    def _do_commit(self) -> None:
+        cursor = self.get_cursor()
+        if hasattr(cursor, "commit"):
+            cursor.commit()
+        else:
+            self.get().commit()
+
+    def _do_rollback(self) -> None:
+        cursor = self.get_cursor()
+        if hasattr(cursor, "rollback"):
+            cursor.rollback()
+        else:
+            self.get().rollback()
+
+
+class ThreadLocalConnectionPool(_TransactionManagementMixin):
     def __init__(self, connection_factory: t.Callable[[], t.Any]):
         self._connection_factory = connection_factory
         self._thread_connections: t.Dict[t.Hashable, t.Any] = {}
         self._thread_cursors: t.Dict[t.Hashable, t.Any] = {}
+        self._thread_transactions: t.Set[t.Hashable] = set()
         self._thread_connections_lock = Lock()
         self._thread_cursors_lock = Lock()
+        self._thread_transactions_lock = Lock()
 
     def get_cursor(self) -> t.Any:
         thread_id = get_ident()
@@ -65,6 +114,24 @@ class ThreadLocalConnectionPool(ConnectionPool):
                 self._thread_connections[thread_id] = self._connection_factory()
             return self._thread_connections[thread_id]
 
+    def begin(self) -> None:
+        self._do_begin()
+        with self._thread_transactions_lock:
+            self._thread_transactions.add(get_ident())
+
+    def commit(self) -> None:
+        self._do_commit()
+        self._discard_transaction(get_ident())
+
+    def rollback(self) -> None:
+        self._do_rollback()
+        self._discard_transaction(get_ident())
+
+    @property
+    def is_transaction_active(self) -> bool:
+        with self._thread_transactions_lock:
+            return get_ident() in self._thread_transactions
+
     def close_cursor(self) -> None:
         thread_id = get_ident()
         with self._thread_cursors_lock:
@@ -79,6 +146,7 @@ class ThreadLocalConnectionPool(ConnectionPool):
                 _try_close(self._thread_connections[thread_id], "connection")
                 self._thread_connections.pop(thread_id)
                 self._thread_cursors.pop(thread_id, None)
+                self._discard_transaction(thread_id)
 
     def close_all(self, exclude_calling_thread: bool = False) -> None:
         calling_thread_id = get_ident()
@@ -89,13 +157,19 @@ class ThreadLocalConnectionPool(ConnectionPool):
                     _try_close(connection, "connection")
                     self._thread_connections.pop(thread_id)
                     self._thread_cursors.pop(thread_id, None)
+                    self._discard_transaction(thread_id)
+
+    def _discard_transaction(self, thread_id: t.Hashable) -> None:
+        with self._thread_transactions_lock:
+            self._thread_transactions.discard(thread_id)
 
 
-class SingletonConnectionPool(ConnectionPool):
+class SingletonConnectionPool(_TransactionManagementMixin):
     def __init__(self, connection_factory: t.Callable[[], t.Any]):
         self._connection_factory = connection_factory
         self._connection: t.Optional[t.Any] = None
         self._cursor: t.Optional[t.Any] = None
+        self._is_transaction_active: bool = False
 
     def get_cursor(self) -> t.Any:
         if not self._cursor:
@@ -107,6 +181,22 @@ class SingletonConnectionPool(ConnectionPool):
             self._connection = self._connection_factory()
         return self._connection
 
+    def begin(self) -> None:
+        self._do_begin()
+        self._is_transaction_active = True
+
+    def commit(self) -> None:
+        self._do_commit()
+        self._is_transaction_active = False
+
+    def rollback(self) -> None:
+        self._do_rollback()
+        self._is_transaction_active = False
+
+    @property
+    def is_transaction_active(self) -> bool:
+        return self._is_transaction_active
+
     def close_cursor(self) -> None:
         _try_close(self._cursor, "cursor")
         self._cursor = None
@@ -115,6 +205,7 @@ class SingletonConnectionPool(ConnectionPool):
         _try_close(self._connection, "connection")
         self._connection = None
         self._cursor = None
+        self._is_transaction_active = False
 
     def close_all(self, exclude_calling_thread: bool = False) -> None:
         if not exclude_calling_thread:

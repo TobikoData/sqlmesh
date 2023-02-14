@@ -69,10 +69,10 @@ class SparkSessionConnection:
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:
-        raise NotSupportedError("Committing is not supported with Spark SQL")
+        pass
 
     def rollback(self) -> None:
-        raise NotSupportedError("Rollback is not supported with Spark SQL")
+        pass
 
     def close(self) -> None:
         pass

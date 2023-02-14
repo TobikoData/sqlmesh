@@ -104,12 +104,13 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
+    cursor_mock.begin.assert_called_once()
+    cursor_mock.commit.assert_called_once()
+
     cursor_mock.execute.assert_has_calls(
         [
-            call("BEGIN"),
             call("DELETE FROM \"test_table\" WHERE \"b\" BETWEEN '2022-01-01' AND '2022-01-02'"),
             call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
-            call("COMMIT"),
         ]
     )
 
@@ -147,13 +148,14 @@ def test_insert_append_pandas(mocker: MockerFixture):
         },
     )
 
+    cursor_mock.begin.assert_called_once()
+    cursor_mock.commit.assert_called_once()
+
     cursor_mock.execute.assert_has_calls(
         [
-            call("BEGIN"),
             call(
                 'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS "t"("a", "b")'
             ),
-            call("COMMIT"),
         ]
     )
 
@@ -211,14 +213,15 @@ def test_alter_table(mocker: MockerFixture):
         ["c", "d"],
     )
 
+    cursor_mock.begin.assert_called_once()
+    cursor_mock.commit.assert_called_once()
+
     cursor_mock.execute.assert_has_calls(
         [
-            call("BEGIN"),
             call("""ALTER TABLE "test_table" ADD COLUMN "a" INT"""),
             call("""ALTER TABLE "test_table" ADD COLUMN "b" TEXT"""),
             call("""ALTER TABLE "test_table" DROP COLUMN "c\""""),
             call("""ALTER TABLE "test_table" DROP COLUMN "d\""""),
-            call("COMMIT"),
         ]
     )
 
