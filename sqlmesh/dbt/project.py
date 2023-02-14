@@ -24,16 +24,9 @@ ScopedModels = t.Dict[Scope, ModelConfig]
 
 
 class ProjectConfig(PydanticModel):
-    source_config: ScopedSources
-    seed_config: ScopedSeeds
-    model_config: ScopedModels
-
-
-class Package(PydanticModel):
-    sources: t.Dict[str, SourceConfig]
-    seeds: t.Dict[str, SeedConfig]
-    models: t.Dict[str, ModelConfig]
-    files: t.List[Path]
+    source_config: ScopedSources = {(): SourceConfig()}
+    seed_config: ScopedSeeds = {(): SeedConfig()}
+    model_config: ScopedModels = {(): ModelConfig()}
 
 
 class Project:
@@ -98,128 +91,77 @@ class Project:
             profile.targets[target_name] if target_name else profile.targets[profile.default_target]
         )
 
-        config_paths = [project_file_path]
-        project_config = cls._load_project_config(project_yaml, target.schema_)
-
-        models_dirs = [
-            Path(project_root, dir) for dir in project_yaml.get("model-paths") or ["models"]
-        ]
-        models, sources, paths = cls._load_models(models_dirs, project_config)
-        config_paths.extend(paths)
-        variables = project_yaml.get("vars", {})
-
-        seed_dirs = [Path(project_root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
-        seeds, paths = cls._load_seeds(seed_dirs, project_config)
-        config_paths.extend(paths)
+        loader = PackageLoader()
+        package = loader.load(project_root, target.schema_, ProjectConfig())
 
         return Project(
-            project_root, project_name, profile, models, sources, seeds, variables, config_paths
+            project_root,
+            project_name,
+            profile,
+            package.models,
+            package.sources,
+            package.seeds,
+            package.files,
         )
 
-    @classmethod
-    def _load_models(
-        cls,
-        models_dirs: t.List[Path],
-        project_config: ProjectConfig,
-    ) -> t.Tuple[t.Dict[str, ModelConfig], t.Dict[str, SourceConfig], t.List[Path],]:
-        """
-        Loads the configuration of all models within the DBT project.
+    @property
+    def project_files(self) -> t.List[Path]:
+        paths = self.config_paths.copy()
+        paths.append(self.profile.path)
+        paths.extend(model.path for model in self.models.values())
+        paths.extend(seed.path for seed in self.seeds.values())
 
-        Args:
-            models_dirs: List of dirs containing models
-            project_config: Configuration from the dbt_project file
+        return paths
 
-        Returns:
-            Tuple containing Dicts of model configs, source configs, and list of config files
-            used by them
-        """
-        models: t.Dict[str, ModelConfig] = {}
-        sources: t.Dict[str, SourceConfig] = {}
-        paths: t.List[Path] = []
 
-        for root in models_dirs:
-            # Layer on configs in properties files
-            for path in root.glob("**/*.yml"):
-                paths.append(path)
+class Package(PydanticModel):
+    sources: t.Dict[str, SourceConfig]
+    seeds: t.Dict[str, SeedConfig]
+    models: t.Dict[str, ModelConfig]
+    files: t.List[Path]
 
-                scope = cls._scope_from_path(path, root)
-                properties_yaml = yaml_load(path)
 
-                scoped_models = cls._load_config_section_from_properties(
-                    properties_yaml, "models", scope, project_config.model_config
-                )
+class PackageLoader:
+    def load(self, path: Path, target_schema: str, overrides: ProjectConfig) -> Package:
+        """"""
+        self.reset()
 
-                source_configs_in_file = cls._load_sources_config_from_properties(
-                    properties_yaml, scope, project_config.source_config
-                )
-                sources.update(source_configs_in_file)
+        self._root = path
+        self._overrides = overrides
+        self._config_paths: t.List[Path] = []
 
-            # Layer on configs from the model file and create model configs
-            for path in root.glob("**/*.sql"):
-                paths.append(path)
+        project_file_path = project_config_path(self._root)
+        self._config_paths.append(project_file_path)
+        project_yaml = yaml_load(project_file_path)
 
-                scope = cls._scope_from_path(path, root)
-                model_config = cls._load_model_config_from_model(path, scope, scoped_models)
-                if model_config.table_name:
-                    models[model_config.table_name] = model_config
+        self._project_config = self._load_project_config(project_yaml, target_schema)
 
-        return (models, sources, paths)
+        models_dirs = [
+            Path(self._root, dir) for dir in project_yaml.get("model-paths") or ["models"]
+        ]
+        models, sources = self._load_models(models_dirs)
 
-    @classmethod
-    def _load_seeds(
-        cls,
-        seeds_dirs: t.List[Path],
-        project_config: ProjectConfig,
-    ) -> t.Tuple[t.Dict[str, SeedConfig], t.List[Path],]:
-        """
-        Loads the configuration of all seeds within the DBT project.
+        seed_dirs = [Path(self._root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
+        seeds = self._load_seeds(seed_dirs)
 
-        Args:
-            seeds_dirs: List of dirs containing seeds
-            project_config: Configuration from the dbt_project file
+        variables = project_yaml.get("vars", {})
 
-        Returns:
-            Tuple containing Dicts of seed configs and list of config files used by them
-        """
-        seeds: t.Dict[str, SeedConfig] = {}
-        paths: t.List[Path] = []
+        return Package(models=models, sources=sources, seeds=seeds, files=self._config_paths)
 
-        for root in seeds_dirs:
-            # Layer on configs in properties files
-            for path in root.glob("**/*.yml"):
-                paths.append(path)
+    def reset(self) -> None:
+        self._root = Path()
+        self._overrides = ProjectConfig()
+        self._config_paths = []
+        self._project_config = ProjectConfig()
 
-                scope = cls._scope_from_path(path, root)
-                properties_yaml = yaml_load(path)
-
-                scoped_seeds = cls._load_config_section_from_properties(
-                    properties_yaml, "seeds", scope, project_config.seed_config
-                )
-
-            # Layer on configs from the model file and create seed configs
-            for path in root.glob("**/*.csv"):
-                paths.append(path)
-
-                scope = cls._scope_from_path(path, root)
-                seed_config = cls._config_for_scope(scope, scoped_seeds).copy()
-                seed_config.path = path
-                seeds[path.stem] = seed_config
-
-        return (seeds, paths)
-
-    @classmethod
-    def _load_project_config(
-        cls,
-        project_yaml: t.Dict[str, t.Any],
-        target_schema: str,
-    ) -> ProjectConfig:
+    def _load_project_config(self, yaml: t.Dict[str, t.Any], schema: str) -> ProjectConfig:
         def load_config(
             data: t.Dict[str, t.Any],
             parent: C,
             scope: Scope,
             scoped_configs: t.Optional[t.Dict[Scope, C]] = None,
         ) -> t.Dict[Scope, C]:
-            """Recursively load nested configs in the parsed yaml"""
+            """Recursively loads config and nested configs in the provided yaml"""
             scoped_configs = scoped_configs or {}
 
             nested_config = {}
@@ -236,34 +178,118 @@ class Project:
                 nested_scope = (*scope, key)
                 load_config(value, config, nested_scope, scoped_configs)
 
-            return scoped_configs
+        return scoped_configs
 
         scope = ()
         return ProjectConfig(
-            source_config=load_config(project_yaml.get("sources", {}), SourceConfig(), scope),
+            source_config=load_config(yaml.get("sources", {}), SourceConfig(), scope),
             seed_config=load_config(
-                project_yaml.get("seeds", {}),
-                SeedConfig(target_schema=target_schema),
+                yaml.get("seeds", {}),
+                SeedConfig(target_schema=schema),
                 scope,
             ),
             model_config=load_config(
-                project_yaml.get("models", {}),
-                ModelConfig(target_schema=target_schema),
+                yaml.get("models", {}),
+                ModelConfig(target_schema=schema),
                 scope,
             ),
         )
 
-    @classmethod
+    def _load_models(
+        self, models_dirs: t.List[Path]
+    ) -> t.Tuple[t.Dict[str, ModelConfig], t.Dict[str, SourceConfig]]:
+        """
+        Loads the configuration of all models within the DBT project.
+
+        Args:
+            models_dirs: List of dirs containing models
+
+        Returns:
+            Tuple containing Dicts of model configs, source configs, and list of config files
+            used by them
+        """
+        models: t.Dict[str, ModelConfig] = {}
+        sources: t.Dict[str, SourceConfig] = {}
+
+        for root in models_dirs:
+            # Layer on configs in properties files
+            for path in root.glob("**/*.yml"):
+                self._config_paths.append(path)
+
+                scope = self._scope_from_path(path, root)
+                properties_yaml = yaml_load(path)
+
+                self._load_config_section_from_properties(
+                    properties_yaml, "models", scope, self._project_config.model_config
+                )
+
+                source_configs_in_file = self._load_sources_config_from_properties(
+                    properties_yaml, scope, self._project_config.source_config
+                )
+                sources.update(source_configs_in_file)
+
+            # Layer on configs from the model file and create model configs
+            for path in root.glob("**/*.sql"):
+                self._config_paths.append(path)
+
+                scope = self._scope_from_path(path, root)
+                model_config = self._load_model_config_from_model(path, scope)
+                model_config.update_with(self._overridden_model_fields(scope))
+                if model_config.table_name:
+                    models[model_config.table_name] = model_config
+
+        return (models, sources)
+
+    def _load_seeds(
+        self,
+        seeds_dirs: t.List[Path],
+    ) -> t.Dict[str, SeedConfig]:
+        """
+        Loads the configuration of all seeds within the DBT project.
+
+        Args:
+            seeds_dirs: List of dirs containing seeds
+
+        Returns:
+            Tuple containing Dicts of seed configs and list of config files used by them
+        """
+        seeds: t.Dict[str, SeedConfig] = {}
+        paths: t.List[Path] = []
+
+        for root in seeds_dirs:
+            # Layer on configs in properties files
+            for path in root.glob("**/*.yml"):
+                paths.append(path)
+
+                scope = self._scope_from_path(path, root)
+                properties_yaml = yaml_load(path)
+
+                self._load_config_section_from_properties(
+                    properties_yaml, "seeds", scope, self._project_config.seed_config
+                )
+
+            # Layer on configs from the model file and create seed configs
+            for path in root.glob("**/*.csv"):
+                paths.append(path)
+
+                scope = self._scope_from_path(path, root)
+                seed_config = self._config_for_scope(scope, self._project_config.seed_config).copy()
+                seed_config.update_with(self._overridden_seed_fields(scope))
+                seed_config.path = path
+                seeds[path.stem] = seed_config
+
+        return seeds
+
     def _load_config_section_from_properties(
-        cls,
+        self,
         yaml: t.Dict[str, t.Any],
         section_name: str,
         scope: Scope,
         scoped_configs: t.Dict[Scope, C],
-    ) -> t.Dict[Scope, C]:
+    ) -> None:
         section_yaml = yaml.get(section_name)
         if not section_yaml:
-            return scoped_configs
+            return
 
         for value in section_yaml:
             fields = value.get("config")
@@ -271,15 +297,12 @@ class Project:
                 continue
 
             model_scope = (*scope, value["name"])
-            scoped_configs[model_scope] = cls._config_for_scope(scope, scoped_configs).update_with(
+            scoped_configs[model_scope] = self._config_for_scope(scope, scoped_configs).update_with(
                 fields
             )
 
-        return scoped_configs
-
-    @classmethod
     def _load_sources_config_from_properties(
-        cls,
+        self,
         properties_yaml: t.Dict[str, t.Any],
         scope: Scope,
         scoped_configs: t.Dict[Scope, SourceConfig],
@@ -292,7 +315,7 @@ class Project:
 
         for source in sources_yaml:
             source_name = source["name"]
-            source_config = cls._config_for_scope((*scope, source_name), scoped_configs)
+            source_config = self._config_for_scope((*scope, source_name), scoped_configs)
 
             source_config.schema_ = source_name
             config_fields = source.get("config")
@@ -314,14 +337,11 @@ class Project:
 
         return configs
 
-    @classmethod
-    def _load_model_config_from_model(
-        cls, filepath: Path, scope: Scope, configs: t.Dict[Scope, ModelConfig]
-    ) -> ModelConfig:
+    def _load_model_config_from_model(self, filepath: Path, scope: Scope) -> ModelConfig:
         with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
-        model_config = cls._config_for_scope(scope, configs).copy(
+        model_config = self._config_for_scope(scope, self._project_config.model_config).copy(
             update={"path": filepath, "table_name": filepath.stem}
         )
 
@@ -352,13 +372,25 @@ class Project:
             else:
                 calls.add(method)
 
-        model_config.sql = cls._remove_config_jinja(sql)
+        model_config.sql = self._remove_config_jinja(sql)
         model_config._depends_on = depends_on
         model_config._calls = calls
         model_config._sources = sources
         model_config._variables = variables
 
         return model_config
+
+    def _overridden_source_fields(self, scope: Scope) -> t.Dict[str, t.Any]:
+        return self._overridden_fields(scope, self._overrides.source_config)
+
+    def _overridden_model_fields(self, scope: Scope) -> t.Dict[str, t.Any]:
+        return self._overridden_fields(scope, self._overrides.model_config)
+
+    def _overridden_seed_fields(self, scope: Scope) -> t.Dict[str, t.Any]:
+        return self._overridden_fields(scope, self._overrides.seed_config)
+
+    def _overridden_fields(self, scope: Scope, config: t.Dict[Scope, C]) -> t.Dict[str, t.Any]:
+        return self._config_for_scope(scope, config).dict(exclude_defaults=True, exclude_none=True)
 
     @classmethod
     def _scope_from_path(cls, path: Path, root_path: Path) -> Scope:
@@ -380,12 +412,3 @@ class Project:
     @classmethod
     def _remove_config_jinja(cls, query: str) -> str:
         return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
-
-    @property
-    def project_files(self) -> t.List[Path]:
-        paths = self.config_paths.copy()
-        paths.append(self.profile.path)
-        paths.extend(model.path for model in self.models.values())
-        paths.extend(seed.path for seed in self.seeds.values())
-
-        return paths
