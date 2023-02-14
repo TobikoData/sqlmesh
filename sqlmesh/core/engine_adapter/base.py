@@ -33,6 +33,7 @@ from sqlmesh.utils import optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -76,6 +77,13 @@ class EngineAdapter:
     @property
     def spark(self) -> t.Optional[PySparkSession]:
         return None
+
+    def to_json(self, model: PydanticModel) -> str:
+        """
+        For engines that are going to be submitting their query through an API they need to have their backslashes
+        escaped again to make sure the output that executed is valid JSON.
+        """
+        return model.json().replace("\\", "\\\\")
 
     def recycle(self) -> t.Any:
         """Closes all open connections and releases all allocated resources associated with any thread
