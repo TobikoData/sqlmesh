@@ -40,7 +40,7 @@ def get_api_context(
         engine_adapter=context.engine_adapter.dialect,
         scheduler=context.config.scheduler.type_,
         time_column_format=context.config.time_column_format,
-        models=list(context.models.keys()),
+        models=list(context.models),
         config=settings.config,
     )
 
