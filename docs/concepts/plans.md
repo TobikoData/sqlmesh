@@ -1,6 +1,6 @@
 # Plans
 
-A plan is a set of changes that summarizes the difference between the local state of a project and the state of a target [environment](/concepts/environments). In order for any model changes to take effect in a target environment, a plan needs to be created and applied.
+A plan is a set of changes that summarizes the difference between the local state of a project and the state of a target [environment](environments.md). In order for any model changes to take effect in a target environment, a plan needs to be created and applied.
 
 During plan creation:
 
@@ -31,9 +31,9 @@ If a directly modified model change is categorized as breaking, then it will be 
 A directly-modified model that is classified as non-breaking will be backfilled, but its downstream dependencies will not. This is a common choice in scenarios such as an addition of a new column, an action which doesn't affect downstream models as new columns can't be used by downstream models without modifying them directly.
 
 ## Plan application
-Once a plan has been created and reviewed, it should then be applied to a target [environment](/concepts/environments) in order for the changes that are part of it to take effect.
+Once a plan has been created and reviewed, it should then be applied to a target [environment](environments.md) in order for the changes that are part of it to take effect.
 
-Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](/concepts/architecture/snapshots)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
+Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](architecture/snapshots.md)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
 
 When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words each environment is a collection of references to model variants and the physical tables associated with them.
 
@@ -46,7 +46,7 @@ This approach allows SQLMesh to ensure complete isolation between environments, 
 ### Backfilling
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
 
-Despite the fact that backfilling happens incrementally, there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](/concepts/plan_kinds#forward-only-plans) can be used instead.
+Despite the fact that backfilling happens incrementally, there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
 
 ### Logical updates
 Another benefit of the aforementioned approach is that data for a new model version can be fully pre-built while still in a development environment. This means that all changes and their downstream dependencies can be fully previewed before they get promoted to the production environment. Therefore, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as logical. Logical updates impose no additional runtime overhead or cost.
@@ -60,7 +60,7 @@ Also note that once a forward-only change is applied to production, all developm
 
 To preserve isolation between environments during development, SQLMesh creates temporary physical tables for forward-only model versions and uses them for evaluation in development environments. However, the implication of this is that only a limited change preview is available in the development environment before the change makes it to production. The date range of the preview is provided as part of plan creation.
 
- Note that all changes made as part of a forward-only plan automatically get a **forward-only** category assigned to them. These types of changes can't be mixed together with breaking and non-breaking changes (refer to [change categories](/concepts/plans#change-categories)) as part of the same plan.
+ Note that all changes made as part of a forward-only plan automatically get a **forward-only** category assigned to them. These types of changes can't be mixed together with breaking and non-breaking changes (refer to [change categories](#change-categories)) as part of the same plan.
 
 To create a forward-only plan, the `--forward-only` option has to be added to the `plan` command:
 ```bash

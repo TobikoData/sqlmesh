@@ -20,10 +20,10 @@ A common approach for organizations that have grown past manual pipelines is to 
 ### Model-aware
 The final class of data transformation platforms provides more integrations to common data modeling patterns like SQLMesh, [dbt](https://www.getdbt.com/), and [coalesce](https://coalesce.io/). Unlike generic scheduling tools, these platforms provide automation around common patterns such as  natively supporting various materialization strategies.
 
-Read more about why SQLMesh is the most efficient and powerful data transformation platform [here](/#why-sqlmesh).
+Read more about why SQLMesh is the most efficient and powerful data transformation platform [here](../index.md).
 
 ## How SQLMesh works
-SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and schedulers](/integrations/overview). It was created with a focus on both data and organizational scale.
+SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and schedulers](../integrations/overview.md). It was created with a focus on both data and organizational scale.
 
 ### Create models
 You begin by writing your business logic in SQL or Python, which will result in a table or view.
@@ -33,9 +33,9 @@ Changing SQL query models can have dramatic effects downstream when working with
 
 Deploying new pipelines can be time-consuming, expensive, and error-prone. A SQLMesh plan can be applied to allow developers to deploy their changes to isolated environments for testing and validation, seamlessly handling backfilling and reuse of existing tables. When development is complete, promoting an environment to production is quick and has no downtime. SQLMesh is able to accomplish all of this regardless of your data warehouse or SQL engine's capabilities.
 
-You can interact with SQLMesh through a [CLI](/api/cli), [notebook](/api/notebook), or [Python](/api/python) API.
+You can interact with SQLMesh through a [CLI](../reference/cli.md), [notebook](../reference/notebook.md), or [Python](../reference/python.md) API.
 
 ## Infrastructure and deployment
-Every company's data infrastructure is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use. The only requirement for SQLMesh is that you have access to a SQL engine.
+Every company's data infrastructure is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use. The only requirement for SQLMesh is to have access to the target SQL / analytics engine.
 
-SQLMesh is able to keep track of model versions and intervals using your existing infrastructure. If SQLMesh is configured without a scheduler, it will automatically create a `sqlmesh` database in your warehouse. It will use this database for internal metadata and physical storage of SQLMesh managed tables. If SQLMesh is configured with Airflow, then it will store all metadata in [XComs](https://airflow.apache.org/docs/apache-airflow/stable/concepts/xcoms.html). Read more about how [SQLMesh integrates with Airflow](/integrations/airflow).
+SQLMesh is able to keep track of model versions and intervals using your existing infrastructure. If SQLMesh is configured without a scheduler, it will automatically create a `sqlmesh` database in your data warehouse. It will use this database for internal metadata and physical storage of SQLMesh managed tables. If SQLMesh is configured with Airflow, then it will store all its metadata in the Airflow database. Read more about how [SQLMesh integrates with Airflow](../integrations/airflow.md).

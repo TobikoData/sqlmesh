@@ -1,5 +1,5 @@
 # Quickstart
-In this quickstart guide, you'll learn how to get up and running with SQLMesh's scaffold generator. 
+In this quickstart guide, you'll learn how to get up and running with SQLMesh's scaffold generator.
 
 This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
@@ -47,15 +47,15 @@ sqlmesh init
 This will create the directories and files that you can use to organize your SQLMesh project code.
 
 - config.py
-    - The file for database configuration. Refer to [configs](/concepts/configs).
+    - The file for project configuration. Refer to [configuration reference](reference/configuration.md).
 - ./models
-    - The place for sql and python models. Refer to [models](/concepts/models/overview).
+    - The place for sql and python models. Refer to [models](concepts/models/overview.md).
 - ./audits
-    - The place for shared audits. Refer to [auditing](/concepts/audits).
+    - The place for shared audits. Refer to [auditing](concepts/audits.md).
 - ./tests
-    - The place for unit tests. Refer to [testing](/concepts/tests).
+    - The place for unit tests. Refer to [testing](concepts/tests.md).
 - ./macros
-    - The place for macros. Refer to [macros](/concepts/macros).
+    - The place for macros. Refer to [macros](concepts/macros.md).
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
@@ -85,7 +85,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called **dev**. 
+Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called **dev**.
 
 Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type `y` to perform the logical update:
 
@@ -263,10 +263,10 @@ Finally, double-check that the data did indeed land in prod by running `sqlmesh 
 
 ## 5. Next steps
 
-Congratulations, you've now conquered the basics of using SQLMesh! 
+Congratulations, you've now conquered the basics of using SQLMesh!
 
-Feel free to explore [guides](/guides/tests) and [concepts](/concepts/overview) for more details about how SQLMesh works, or peruse the following resources:
+Feel free to explore [guides](guides/create_a_project.md) and [concepts](concepts/overview.md) for more details about how SQLMesh works, or peruse the following resources:
 
-* For API documentation, refer to [API overview](api/overview.md).
+* For API documentation, refer to [API reference](reference/overview.md).
 * For information about integrations with SQLMesh, refer to [integrations](integrations/overview.md).
 * To get involved in our community, refer to [community](community.md).

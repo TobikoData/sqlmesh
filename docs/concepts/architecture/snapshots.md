@@ -9,4 +9,4 @@ sophisticated ways such that superficial changes to a model, such as applying fo
 return a new fingerprint as nothing was meaningfully changed.
 
 ## Change categories
-Refer to [change categories](/concepts/plans#change-categories).
+Refer to [change categories](../plans.md#change-categories).

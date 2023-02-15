@@ -15,7 +15,7 @@ To revert your change:
 3. Observe that a logical update is made.
 
 ### Logical updates
-Reverting to a previous version is a quick operation as no additional work is being done. For more information, refer to [plan application](/concepts/plans#plan-application) and [logical updates](/concepts/plans#logical-updates).
+Reverting to a previous version is a quick operation as no additional work is being done. For more information, refer to [plan application](../concepts/plans.md#plan-application) and [logical updates](../concepts/plans.md#logical-updates).
 
-## TODO 
+## TODO
 Link to documentation on the Janitor when it is written, which will include information like how to determine the TTL for tables. This TTL determines how much time can pass before reverting is no longer possible.

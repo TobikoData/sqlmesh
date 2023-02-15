@@ -2,9 +2,9 @@
 
 ## Evaluate a model
 
-To evaluate a model, you can run the `evaluate` command with either the [CLI](/reference/cli) or [Notebook](/reference/notebook). This command will run a query against your database or engine and return a dataframe. It is used to test or iterate on models without side effects, and since SQLMesh isn't materializing any data, with minimal cost.
+To evaluate a model, you can run the `evaluate` command with either the [CLI](../reference/cli.md) or [Notebook](../reference/notebook.md). This command will run a query against your database or engine and return a dataframe. It is used to test or iterate on models without side effects, and since SQLMesh isn't materializing any data, with minimal cost.
 
-An example of the `evaluate` command using the example incremental model from the [quickstart](/quick_start) is as follows:
+An example of the `evaluate` command using the example incremental model from the [quickstart](../quick_start.md) is as follows:
 
 ```
 sqlmesh evaluate sqlmesh_example.example_incremental_model --start=2020-01-07 --end=2020-01-07

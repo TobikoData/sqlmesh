@@ -121,7 +121,7 @@ The name of a connection to use when running tests.
 **Default:** A DuckDB connection which creates an in-memory database.
 
 ## scheduler
-Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and executing [plans](/concepts/plans). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata and has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow.
+Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata and has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow.
 
 ```yaml
 scheduler:
@@ -243,7 +243,7 @@ model_defaults:
 ```
 
 ### kind
-The default model kind (see [model kinds](/concepts/models/model_kind)). Example:
+The default model kind (see [model kinds](../concepts/models/model_kinds.md)). Example:
 ```
 model_defaults:
     kind: full

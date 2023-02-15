@@ -1,5 +1,5 @@
 # Testing
-Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](/concepts/audits), they are a great way to ensure the quality of your data and to build trust in it across your organization. 
+Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](audits.md), they are a great way to ensure the quality of your data and to build trust in it across your organization. 
 
 Similar to unit tests in software engineering, SQLMesh tests compare inputs and the expected outputs with the output from your model query; you can even test individual CTEs in your model queries. These tests are input and output data fixtures defined in YAML files in a test directory in your project. A comprehensive suite of tests can empower your data engineers and analysts to work with confidence, since you can validate that downstream models are behaving as expcted when model changes are made.
 

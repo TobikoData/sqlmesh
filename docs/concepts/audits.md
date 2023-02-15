@@ -1,5 +1,5 @@
 # Auditing
-Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](/concepts/tests), they are a great way to ensure the quality of your data and to build trust in it across your organization.
+Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](tests.md), they are a great way to ensure the quality of your data and to build trust in it across your organization.
 
 A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models.
 
@@ -42,7 +42,7 @@ AUDIT (
 SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
-In the example above we utilized [Macros](/concepts/macros) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
+In the example above we utilized [Macros](macros.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
 
 The generic audit can now be applied to a model by being referenced in its definition:
 ```
