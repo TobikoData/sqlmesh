@@ -69,6 +69,7 @@ class DbtLoader(Loader):
                     config.sources,
                     config.models,
                     config.seeds,
+                    config.variables,
                     macros,
                     self._macro_dependencies,
                 )
@@ -96,6 +97,10 @@ class DbtLoader(Loader):
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     dependencies.sources.add(dep)
+            elif method == "var":
+                if args:
+                    # We map the var key to True if and only if it includes a default value
+                    dependencies.variables[args[0]] = len(args) > 1
             else:
                 dependencies.macros.add(method)
 

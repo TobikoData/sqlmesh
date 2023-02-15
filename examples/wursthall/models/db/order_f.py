@@ -38,7 +38,6 @@ def execute(
     end: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-
     item_d_table_name = context.table("db.item_d")
     order_item_f_table_name = context.table("db.order_item_f")
 

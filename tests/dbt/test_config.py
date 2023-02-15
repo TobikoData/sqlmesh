@@ -12,6 +12,7 @@ from sqlmesh.dbt.target import (
     SnowflakeConfig,
     TargetConfig,
 )
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
 
@@ -83,6 +84,42 @@ def test_model_config(sushi_dbt_project: Project):
     assert actual_config == expected_config
 
     assert customer_revenue_by_day_config.model_name == "sushi.customer_revenue_by_day"
+
+
+def test_variables(assert_exp_eq):
+    # Case 1: using an undefined variable without a default value
+    defined_variables = {}
+    model_variables = {"foo": False}
+
+    model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
+    model_config._variables = model_variables
+
+    kwargs = {
+        "sources": {},
+        "models": {},
+        "seeds": {},
+        "variables": defined_variables,
+        "macros": {},
+        "macro_dependencies": model_variables,
+    }
+
+    with pytest.raises(ConfigError, match=r"Variable foo for model test not found."):
+        model_config.to_sqlmesh(**kwargs)
+
+    # Case 2: using a defined variable without a default value
+    defined_variables["foo"] = 6
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+
+    # Case 3: using a defined variable with a default value
+    model_config._variables["foo"] = True
+    model_config.sql = "SELECT {{ var('foo', 5) }}"
+
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+
+    # Case 4: using an undefined variable with a default value
+    del defined_variables["foo"]
+
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 5")
 
 
 def test_source_config(sushi_dbt_project: Project):

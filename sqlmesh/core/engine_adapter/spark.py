@@ -14,7 +14,6 @@ if t.TYPE_CHECKING:
 
 
 class SparkEngineAdapter(BaseSparkEngineAdapter):
-
     DIALECT = "spark"
 
     @property
