@@ -347,6 +347,7 @@ class Project:
                     sources.add(source)
             elif method == "var":
                 if args:
+                    # We map the var key to True if and only if it includes a default value
                     variables[args[0]] = len(args) > 1
             else:
                 calls.add(method)
