@@ -203,7 +203,10 @@ class ModelConfig(GeneralConfig):
                 return f"{ModelKindName.INCREMENTAL_BY_TIME_RANGE.value} (TIME_COLUMN {self.time_column})"
             if self.unique_key:
                 return f"{ModelKindName.INCREMENTAL_BY_UNIQUE_KEY.value} (UNIQUE_KEY ({','.join(self.unique_key)}))"
-            raise ConfigError(f"Incremental needs either unique key or time column.")
+            raise ConfigError(
+                "SQLMesh ensures idempotent incremental loads and thus does not support append."
+                " Add either an unique key (merge) or a time column (insert-overwrite)."
+            )
         if materialization == Materialization.EPHEMERAL:
             return ModelKindName.EMBEDDED.value
         raise ConfigError(f"{materialization.value} materialization not supported.")
