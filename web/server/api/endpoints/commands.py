@@ -58,6 +58,10 @@ async def apply(
         task = asyncio.create_task(run_in_executor(plan))
         setattr(task, "_environment", environment)
         request.app.state.task = task
+    else:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
+        )
 
     return {"ok": True}
 
@@ -101,23 +105,6 @@ async def tasks(
         yield create_response({})
 
     return SSEResponse(running_tasks())
-
-
-@router.get("/events")
-async def events(
-    request: Request,
-) -> SSEResponse:
-    async def generator() -> t.AsyncGenerator:
-        queue: asyncio.Queue = asyncio.Queue()
-        request.app.state.console_listeners.append(queue)
-        try:
-            while True:
-                yield await queue.get()
-            queue.task_done()
-        finally:
-            request.app.state.console_listeners.remove(queue)
-
-    return SSEResponse(generator())
 
 
 @router.post("/evaluate")
