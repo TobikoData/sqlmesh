@@ -117,6 +117,7 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
                         key={env}
                         className="mr-3 border-b cursor-pointer hover:opacity-50"
                         onClick={() => {
+                          setPlanAction(EnumPlanAction.Running)
                           setEnvironment(env)
                         }}
                       >

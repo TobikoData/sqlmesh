@@ -29,7 +29,6 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
 }
 
 export function useApiFiles(): UseQueryResult<Directory> {
-  console.log('useApiFiles')
   return useQuery({
     queryKey: ['/api/files'],
     queryFn: getFilesApiFilesGet,

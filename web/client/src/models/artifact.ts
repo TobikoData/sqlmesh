@@ -32,7 +32,7 @@ export class ModelArtifact<
   }
 
   get id(): ID {
-    return this.path ?? this.initial.id
+    return this.path === '' ? this.initial.id : this.path
   }
 
   get name(): string {

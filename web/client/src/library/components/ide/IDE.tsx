@@ -2,7 +2,7 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
-import Tabs from '../tabs/Tabs'
+
 import { Fragment, useEffect, MouseEvent } from 'react'
 import clsx from 'clsx'
 import { PlayIcon } from '@heroicons/react/24/solid'
@@ -264,13 +264,7 @@ export function IDE(): JSX.Element {
         </div>
         <Divider orientation="vertical" />
         <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
-          <div className="w-full h-full flex overflow-hidden">
-            <Editor />
-          </div>
-          <Divider />
-          <div className="w-full min-h-[10rem] overflow-auto">
-            <Tabs />
-          </div>
+          <Editor />
         </div>
       </div>
       <Divider />
