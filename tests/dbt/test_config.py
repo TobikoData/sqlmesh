@@ -60,17 +60,21 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 
 
 def test_model_config(sushi_dbt_project: Project):
-    model_configs = sushi_dbt_project.packages["sushi"].models
-    assert set(model_configs) == {
-        "customers",
+    assert set(sushi_dbt_project.packages["sushi"].models) == {
         "waiters",
         "top_waiters",
-        "customer_revenue_by_day",
         "waiter_revenue_by_day",
         "waiter_as_customer_by_day",
     }
 
-    customer_revenue_by_day_config = model_configs["customer_revenue_by_day"]
+    assert set(sushi_dbt_project.packages["customers"].models) == {
+        "customers",
+        "customer_revenue_by_day",
+    }
+
+    customer_revenue_by_day_config = sushi_dbt_project.packages["customers"].models[
+        "customer_revenue_by_day"
+    ]
 
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
