@@ -31,7 +31,7 @@ jobs:
           name: Install dependencies
           command: make install-dev
       - run:
-          name: Run liners and code style checks
+          name: Run linters and code style checks
           command: make py-style
       - run:
           name: Run unit tests
@@ -50,7 +50,7 @@ jobs:
           name: Install pre-commit
           command: pip install pre-commit
       - run:
-          name: Run liners and code style checks
+          name: Run linters and code style checks
           command: make ui-style
 
   core_integration_tests:
@@ -95,6 +95,7 @@ workflows:
       or:
         - << pipeline.parameters.common >>
         - << pipeline.parameters.python >>
+        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - style_and_unit_tests:
           matrix:
@@ -114,5 +115,6 @@ workflows:
       or:
         - << pipeline.parameters.client >>
         - << pipeline.parameters.common >>
+        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - ui_style
