@@ -62,7 +62,7 @@ The MODEL statement takes various properties, which are used for both metadata a
 - Name is ***required***, and must be ***unique***.
 
 ### kind
-- Kind specifies what [kind](/concepts/model_kinds) a model is. A model's kind determines how it is computed and stored. The default kind is `incremental`, which means that a model processes and stores data incrementally by minute, hour, or day.
+- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `incremental`, which means that a model processes and stores data incrementally by minute, hour, or day.
 
 ### dialect
 - Dialect defines the SQL dialect of the file. By default, this uses the dialect of the SQLMesh `sqlmesh.core.config`.

@@ -13,24 +13,24 @@ SQLMesh automatically validates your models in order to ensure the quality and a
 * Evaluating a model
 * Testing a model using unit tests
 * Auditing a model
-* Previewing changes using the `plan` command 
+* Previewing changes using the `plan` command
 
 ### Evaluating a model
 
-Refer to [evaluate a model](/guides/evaluate_model).
+Refer to [evaluate a model](evaluate_model.md).
 
 ### Testing a model using unit tests
 
-Refer to [test a model](/guides/test_model).
+Refer to [test a model](test_model.md).
 
 ### Auditing a model
 
-Refer to [audit a model](/guides/audit_model).
+Refer to [audit a model](audit_model.md).
 
 ### Previewing changes using the `plan` command
 
 To preview changes using `plan`, enter the `sqlmesh plan <environment name>` command.
 
-SQLMesh will then run the `plan` command on your `<environment name>` environment and show you whether any downstream models are impacted by your changes. If so, SQLMesh will prompt you to classify the changes as [Breaking](/../concepts/plans#breaking-change) or [Non-Breaking](/../concepts/plans#non-breaking-change) before applying the changes.
+SQLMesh will then run the `plan` command on your `<environment name>` environment and show you whether any downstream models are impacted by your changes. If so, SQLMesh will prompt you to classify the changes as [Breaking](../concepts/plans.md#breaking-change) or [Non-Breaking](../concepts/plans.md#non-breaking-change) before applying the changes.
 
-For more information, refer to [plans](/concepts/plans).
+For more information, refer to [plans](../concepts/plans.md).

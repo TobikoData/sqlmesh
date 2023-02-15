@@ -4,7 +4,7 @@
 
 SQLMesh integrates with an open source Airflow instance, as well as cloud composer.
 
-To integrate with [Airflow](/integrations/airflow):
+To integrate with [Airflow](../integrations/airflow.md):
 
 1. Install the SQLMesh Python package on all nodes of the Airflow cluster using the following command:
 
@@ -23,11 +23,11 @@ To integrate with [Airflow](/integrations/airflow):
         for dag in sqlmesh_airflow.dags:
             globals()[dag.dag_id] = dag
 
-    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`. Please note that an Airflow Connection must be configured for each engine accordingly. See [Engine support](/integrations/airflow#engine-support) for more details.
+    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`. Please note that an Airflow Connection must be configured for each engine accordingly. See [Engine support](../integrations/airflow.md#engine-support) for more details.
 
 If the setup was successful, the following DAGs should become available on Airflow UI when filtered by the `sqlmesh` tag:
 
-![Airflow UI after successful setup](integrate_airflow//airflow_successful_setup.png)
+![Airflow UI after successful setup](integrate_airflow/airflow_successful_setup.png)
 
 ## Client configuration
 
@@ -75,4 +75,4 @@ Track plan application progress using link
 
 Once the command above finishes, the following DAGs should become available on Airflow UI:
 
-![Airflow UI after successful plan application](integrate_airflow//airflow_successful_plan_apply.png)
+![Airflow UI after successful plan application](integrate_airflow/airflow_successful_plan_apply.png)

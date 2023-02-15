@@ -22,8 +22,8 @@ To run a specific model test, pass in the module followed by `::` and the name o
 
 ## Run a subset of tests
 
-To run a test that matches a pattern or substring, use the following syntax: `project.tests.test_order*`. 
+To run a test that matches a pattern or substring, use the following syntax: `project.tests.test_order*`.
 For example, this will match the following tests: `project.tests.test_orders`, `project.tests.test_order_items`.
 
-For more information about tests, refer to [testing](/concepts/tests).
-For more information about related data quality checks, or audits, refer to [auditing](/concepts/tests).
+For more information about tests, refer to [testing](../concepts/tests.md).
+For more information about related data quality checks, or audits, refer to [auditing](../concepts/tests.md).

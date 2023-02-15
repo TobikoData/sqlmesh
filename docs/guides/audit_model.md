@@ -2,7 +2,7 @@
 
 ## Audit changes to models
 
-To audit your models, use the `sqlmesh audit` command. 
+To audit your models, use the `sqlmesh audit` command.
 
 Running the `sqlmesh audit` command produces the following example output:
 
@@ -16,7 +16,7 @@ Done.
 
 **Note:** Ensure that you have already planned and applied your changes before running an audit.
 
-By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits by defining them as [non-blocking](/concepts/audits#non-blocking-audits).
+By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits by defining them as [non-blocking](../concepts/audits.md#non-blocking-audits).
 
-For more information about audits, refer to [auditing](/concepts/audits).
-For more information about testing with unit tests, refer to [testing](/concepts/tests).
+For more information about audits, refer to [auditing](../concepts/audits.md).
+For more information about testing with unit tests, refer to [testing](../concepts/tests.md).

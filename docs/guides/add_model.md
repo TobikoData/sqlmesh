@@ -4,7 +4,7 @@
 
 ---
 
-Before adding a model, ensure that you have [already created your project](/guides/create_a_project) and that you are working in a [dev environment](/concepts/environments).
+Before adding a model, ensure that you have [already created your project](create_a_project.md) and that you are working in a [dev environment](../concepts/environments.md).
 
 ---
 
@@ -24,7 +24,7 @@ To add a model:
         FROM sqlmesh_example.example_incremental_model
         WHERE ds BETWEEN @start_ds and @end_ds
 
-    **Note:** The last line in this file is required if your model is incremental. Refer to [model kinds](/../concepts/models/model_kinds) for more information about the kinds of models you can create.
+    **Note:** The last line in this file is required if your model is incremental. Refer to [model kinds](../concepts/models/model_kinds.md) for more information about the kinds of models you can create.
 
 ## Edit an existing model
 
@@ -32,4 +32,4 @@ To edit an existing model, open the model file you wish to edit in your preferre
 
 ### Preview changes
 
-To preview an example of what your change looks like without actually creating a table, use the `evaluate` command. Refer to [evaluate a model](/guides/evalute_model). To materialize this change, use the `plan` command. Refer to [preview changes using the `plan` command](/guides/validate_model#previewing-changes-using-the-`plan`-command).
+To preview an example of what your change looks like without actually creating a table, use the `evaluate` command. Refer to [evaluate a model](evalute_model.md). To materialize this change, use the `plan` command. Refer to [preview changes using the `plan` command](validate_model.md#previewing-changes-using-the-`plan`-command).
