@@ -15,9 +15,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 @pytest.fixture
 def snapshot(make_snapshot, random_name) -> Snapshot:
-    return make_snapshot(
-        create_sql_model(random_name(), parse_one("SELECT 1, ds"), []), version="1"
-    )
+    return make_snapshot(create_sql_model(random_name(), parse_one("SELECT 1, ds")), version="1")
 
 
 @pytest.mark.airflow
@@ -145,7 +143,7 @@ def test_create_plan_dag_spec_unbounded_end(
     unbounded_end: t.Optional[str],
 ):
     unrelated_snapshot = make_snapshot(
-        create_sql_model(random_name(), parse_one("SELECT 2, ds"), []), version="1"
+        create_sql_model(random_name(), parse_one("SELECT 2, ds")), version="1"
     )
 
     environment_name = random_name()

@@ -847,7 +847,7 @@ def load_model(
         return create_sql_model(
             name,
             query,
-            statements,
+            statements=statements,
             defaults=defaults,
             path=path,
             module_path=module_path,
@@ -880,8 +880,8 @@ def load_model(
 def create_sql_model(
     name: str,
     query: exp.Expression,
-    statements: t.List[exp.Expression],
     *,
+    statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
@@ -898,7 +898,7 @@ def create_sql_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
-        statements: The list of all SQL statements that are not a query or a model definition.
+        statemets: The list of all SQL statements that are not a query or a model definition.
         defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
@@ -936,7 +936,7 @@ def create_sql_model(
         time_column_format=time_column_format,
         python_env=python_env,
         dialect=dialect,
-        expressions=statements,
+        expressions=statements or [],
         query=query,
         **kwargs,
     )
