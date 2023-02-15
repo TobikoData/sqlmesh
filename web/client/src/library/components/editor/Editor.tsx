@@ -14,6 +14,10 @@ import { Button } from '../button/Button'
 import { EnumSize } from '../../../types/enum'
 import { ModelFile } from '../../../models'
 import { useStoreFileTree } from '../../../context/fileTree'
+import { useStoreEditor } from '../../../context/editor'
+import { fetchdfApiFetchdfPost } from '../../../api/client'
+import Tabs from '../tabs/Tabs'
+import { isString } from '../../../utils'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -34,6 +38,13 @@ export function Editor(): JSX.Element {
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
+  const setTabTableContent = useStoreEditor(s => s.setTabTableContent)
+  const setTabQueryPreviewContent = useStoreEditor(
+    s => s.setTabQueryPreviewContent,
+  )
+  const setTabTerminalContent = useStoreEditor(s => s.setTabTerminalContent)
+  const tabTableContent = useStoreEditor(s => s.tabTableContent)
+  const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
 
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(
     EnumEditorFileStatus.Edit,
@@ -52,6 +63,21 @@ export function Editor(): JSX.Element {
       setEditorFileStatus(EnumEditorFileStatus.Saving)
     },
   })
+
+  const debouncedChange = useMemo(
+    () =>
+      debounce(
+        onChange,
+        () => {
+          setEditorFileStatus(EnumEditorFileStatus.Editing)
+        },
+        () => {
+          setEditorFileStatus(EnumEditorFileStatus.Edit)
+        },
+        200,
+      ),
+    [activeFile],
+  )
 
   useEffect(() => {
     if (fileData == null) return
@@ -101,40 +127,42 @@ export function Editor(): JSX.Element {
   }
 
   function onChange(value: string): void {
-    if (activeFile.isLocal || activeFile.content === value) return
+    if (activeFile.content === value) return
 
     activeFile.content = value
 
-    setOpenedFiles(openedFiles)
-
-    mutationSaveFile.mutate({
-      path: activeFile.path,
-      body: { content: value },
-    })
+    if (activeFile.isLocal) {
+      setOpenedFiles(openedFiles)
+    } else {
+      mutationSaveFile.mutate({
+        path: activeFile.path,
+        body: { content: value },
+      })
+    }
   }
 
   function sendQuery(): void {
-    console.log('Sending query', activeFile.content)
+    if (activeFile.isLocal) {
+      setTabQueryPreviewContent(activeFile.content)
+
+      fetchdfApiFetchdfPost({
+        sql: activeFile.content,
+      })
+        .then((result: any) => {
+          if (isString(result)) {
+            setTabTableContent(JSON.parse(result))
+            setTabTerminalContent(undefined)
+          } else {
+            setTabTerminalContent(result.detail)
+          }
+        })
+        .catch(console.log)
+    }
   }
 
   function cleanUp(): void {
     setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
-
-  const debouncedChange = useMemo(
-    () =>
-      debounce(
-        onChange,
-        () => {
-          setEditorFileStatus(EnumEditorFileStatus.Editing)
-        },
-        () => {
-          setEditorFileStatus(EnumEditorFileStatus.Edit)
-        },
-        200,
-      ),
-    [activeFile],
-  )
 
   return (
     <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
@@ -195,9 +223,8 @@ export function Editor(): JSX.Element {
 
       <Divider />
       <div className="w-full h-full flex flex-col overflow-hidden">
-        <div className="w-full h-full overflow-hidden ">
+        <div className="w-full h-full overflow-hidden">
           <CodeEditor
-            key={activeFile.id}
             className="h-full w-full"
             extension={activeFile.extension}
             value={activeFile.content}
@@ -289,6 +316,15 @@ export function Editor(): JSX.Element {
           )}
         </div>
       </div>
+
+      {[tabTableContent, tabTerminalContent].some(Boolean) && (
+        <>
+          <Divider />
+          <div className="w-full min-h-[10rem] overflow-auto">
+            <Tabs />
+          </div>
+        </>
+      )}
     </div>
   )
 }
