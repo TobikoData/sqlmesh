@@ -1,0 +1,118 @@
+version: 2.1
+
+orbs:
+  python: circleci/python@1.5.0
+
+parameters:
+  client:
+    type: boolean
+    default: false
+  common:
+    type: boolean
+    default: false
+  python:
+    type: boolean
+    default: false
+
+jobs:
+  style_and_unit_tests:
+    parameters:
+      python_version:
+        type: string
+    docker:
+      - image: cimg/python:<< parameters.python_version >>
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install OpenJDK
+          command: sudo apt-get update && sudo apt-get install default-jdk
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run liners and code style checks
+          command: make py-style
+      - run:
+          name: Run unit tests
+          command: make unit-test
+      - run:
+          name: Run doc tests
+          command: make doc-test
+
+  ui_style:
+    docker:
+      - image: cimg/python:3.7
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install pre-commit
+          command: pip install pre-commit
+      - run:
+          name: Run liners and code style checks
+          command: make ui-style
+
+  core_integration_tests:
+    docker:
+      - image: cimg/python:3.7
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run Core integration tests
+          command: make core-it-test
+
+  airflow_integration_tests:
+    machine:
+      image: ubuntu-2204:2022.10.2
+      docker_layer_caching: true
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install envsubst
+          command: sudo apt-get update && sudo apt-get install gettext-base
+      - run:
+          name: Run Airflow integration tests
+          command: make airflow-it-test-docker-with-env
+      - run:
+          name: Collect Airflow logs
+          command: |
+            tar -czf ./airflow_logs.tgz -C ./examples/airflow/logs .
+            mkdir -p /tmp/airflow_logs
+            cp ./airflow_logs.tgz /tmp/airflow_logs/
+          when: on_fail
+      - store_artifacts:
+          path: /tmp/airflow_logs
+
+workflows:
+  main_pr_core:
+    when:
+      or:
+        - << pipeline.parameters.common >>
+        - << pipeline.parameters.python >>
+    jobs:
+      - style_and_unit_tests:
+          matrix:
+            parameters:
+              python_version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+      - core_integration_tests
+      - airflow_integration_tests:
+          requires:
+            - style_and_unit_tests
+          filters:
+            branches:
+              only:
+                - main
+
+  main_pr_web_client:
+    when:
+      or:
+        - << pipeline.parameters.client >>
+        - << pipeline.parameters.common >>
+    jobs:
+      - ui_style

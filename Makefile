@@ -9,6 +9,12 @@ install-pre-commit:
 style:
 	pre-commit run --all-files
 
+py-style:
+	SKIP=prettier,eslint pre-commit run --all-files
+
+ui-style:
+	SKIP=autoflake,isort,black,mypy pre-commit run --all-files
+
 unit-test:
 	pytest -m "not integration"
 
