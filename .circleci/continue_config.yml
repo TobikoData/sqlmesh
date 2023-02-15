@@ -95,6 +95,7 @@ workflows:
       or:
         - << pipeline.parameters.common >>
         - << pipeline.parameters.python >>
+        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - style_and_unit_tests:
           matrix:
@@ -114,5 +115,6 @@ workflows:
       or:
         - << pipeline.parameters.client >>
         - << pipeline.parameters.common >>
+        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - ui_style
