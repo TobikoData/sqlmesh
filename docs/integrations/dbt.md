@@ -19,9 +19,7 @@ SQLMesh supports the DBT project structure.
 - SQLMesh uses true incremental models, capable of detecting and backfilling any missing intervals. DBT's recommend incremental logic does not support intervals and is not compatible with SQLMesh.
 
 ## Mapping DBT incremental to SQLMesh incremental
-- SQLMesh supports incremental by time (link) and incremental by unique key (link). If the DBT model specifies a time_column, incremental by time will be used and conversely, if a unique_key is defined, incremental by key will be used.
-- SQLMesh simplifies incremental deployment by internally choosing the best incremental_strategy for the destination database. For example, if the destination database changes from redshift to snowflake or vice versa, SQLMesh will automatically change 
-
+- SQLMesh ensures idempotent (link to idempotent) incremental loads through use of merge (sqlmesh calls this incremental_by_unique_key) and insert-overwrite (sqlmesh calls this incremental_by_time) incremental strategies. To use insert-overwrite, add a time_column configuration field with the value being the name of the model's time column to use. For merge, specify the unique_key configuration field containing the name of the model's unique key column to use. Append is not idempotent and thus is not supported.
 ## Model Modifications
 - Since SQLMesh tracks intervals to deliver true incremental behavior, the DBT incremental WHERE statements are not compatible with SQLMesh's incremental WHERE statements. 
 - In order to maintain backwards compatibility with DBT, SQLMesh will ignore any jinja blocks using {% if is_incremental() %} and instead ask you define a new jinja block gated by {% if sqlmesh is defined %}. For example for incremental by time using a ds time_column:
