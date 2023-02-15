@@ -45,10 +45,13 @@ export default function Tabs(): JSX.Element {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  const isDisabledTabTable = (tabName: string): boolean =>
-    tabName === 'Table' && tabTableContent == null
-  const isDisabledTabTerminal = (tabName: string): boolean =>
-    tabName === 'Terminal Output' && tabTerminalContent == null
+  function isDisabledTabTable(tabName: string): boolean {
+    return tabName === 'Table' && tabTableContent == null
+  }
+
+  function isDisabledTabTerminal(tabName: string): boolean {
+    return tabName === 'Terminal Output' && tabTerminalContent == null
+  }
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
@@ -185,24 +188,23 @@ export default function Tabs(): JSX.Element {
   )
 }
 
-function getData(data: any): any[] {
+type TableCellValue = number | string | null
+type TableRow = Record<keyof ResponseTableColumns, TableCellValue>
+type ResponseTableRows = Record<string, TableCellValue>
+type ResponseTableColumns = Record<string, ResponseTableRows>
+
+function getData(data: ResponseTableColumns = {}): TableRow[] {
   const keys: string[] = Object.keys(data)
-  const rowsCount = Object.values(data).map((v: any) => Object.values(v).length)
+  const rowsCount = Object.values(data).map(v => Object.values(v).length)
   const count = Math.max(...rowsCount)
-  const rows = []
+  const rows: TableRow[] = []
 
   for (let i = 0; i < count && i < 100; i++) {
-    const row = keys.reduce(
-      (acc, key) =>
-        Object.assign(
-          acc,
-          {
-            [key]: data[key][i],
-          },
-          {},
-        ),
-      {},
-    )
+    const row = keys.reduce((acc: TableRow, key) => {
+      acc[key] = data[key]?.[i] ?? null
+
+      return acc
+    }, {})
 
     rows.push(row)
   }
