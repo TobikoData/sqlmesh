@@ -1,10 +1,10 @@
 # Glossary
 
 ## CI/CD
-An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](concepts/tests.md) and [audits](concepts/audits.md).
+An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](tests.md) and [audits](audits.md).
 
 ## CTE
-A Common Table Expression is a temporary named result set created from a SELECT statement, which can then be used in a subsequent SELECT statement. For more information, refer to [tests](concepts/tests.md).
+A Common Table Expression is a temporary named result set created from a SELECT statement, which can then be used in a subsequent SELECT statement. For more information, refer to [tests](tests.md).
 
 ## DAG
 Directed Acyclic Graph. In this type of graph, objects are represented as nodes with relationships that show the dependencies between them; as such, the relationships are directed, meaning there is no way for data to travel through the graph in a loop that can circle back to the starting point. SQLMesh uses a DAG to keep track of a project's models. This allows SQLMesh to easily determine a model's lineage and to identify upstream and downstream dependencies.

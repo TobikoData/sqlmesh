@@ -37,9 +37,9 @@ Every time a model is changed as part of a plan, a new variant of this model get
 
 When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words each environment is a collection of references to model variants and the physical tables associated with them.
 
-![Each model version gets its own physical table while environments only contain references to these tables](plans/model_versioning.png)
+![Each model variant gets its own physical table while environments only contain references to these tables](plans/model_versioning.png)
 
-*Each model version gets its own physical table while environments only contain references to these tables.*
+*Each model variant gets its own physical table while environments only contain references to these tables.*
 
 This approach allows SQLMesh to ensure complete isolation between environments, while allowing it to share physical data assets between environments when appropriate and safe to do so. Additionally, since each model change is captured in a separate physical table, reverting to a previous version becomes a simple and quick operation (refer to [logical updates](#logical-updates)) as long as its physical table hasn't been garbage collected by the janitor process. SQLMesh makes it really hard to accidentally and irreversibly break things.
 

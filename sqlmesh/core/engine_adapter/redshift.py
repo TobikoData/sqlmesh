@@ -110,7 +110,7 @@ class RedshiftEngineAdapter(EngineAdapter):
 
         If the table doesn't exist then we just create it and load it with insert statements
         If it does exist then we need to do the:
-            `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAE TABLE...`, DROP TABLE...`  dance.
+            `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
         if not isinstance(query_or_df, pd.DataFrame):
             return super().replace_query(table_name, query_or_df, columns_to_types)
