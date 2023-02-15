@@ -29,7 +29,7 @@ import { getAllFilesInDirectory, toUniqueName } from './help'
 import ModalConfirmation from '../modal/ModalConfirmation'
 import type { Confirmation, WithConfirmation } from '../modal/ModalConfirmation'
 import { Button } from '../button/Button'
-import { isFalse, isTrue } from '~/utils'
+import { isFalse, isNotNil, isTrue } from '~/utils'
 
 /* TODO:
   - add ability to create file or directory on top level
@@ -58,16 +58,16 @@ export function FolderTree({
 }): JSX.Element {
   const directory = useMemo(() => new ModelDirectory(project), [project])
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
-  const [showCofirmation, setShowConfirmation] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
 
   useEffect(() => {
-    setShowConfirmation(confirmation != null)
+    setShowConfirmation(isNotNil(confirmation))
   }, [confirmation])
 
   return (
     <div className="py-2 px-1 overflow-hidden">
       <ModalConfirmation
-        show={showCofirmation}
+        show={showConfirmation}
         headline={confirmation?.headline}
         description={confirmation?.description}
         onClose={() => {
@@ -135,7 +135,7 @@ function Directory({
       .then(created => {
         if (isFalse((created as any).ok)) {
           console.warn([
-            `Diroctory: ${directory.path}`,
+            `Directory: ${directory.path}`,
             (created as any).detail,
           ])
 
@@ -195,7 +195,7 @@ function Directory({
       .then(response => {
         if (isFalse((response as any).ok)) {
           console.warn([
-            `Diroctory: ${directory.path}`,
+            `Directory: ${directory.path}`,
             (response as any).detail,
           ])
 

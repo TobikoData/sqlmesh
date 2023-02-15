@@ -20,7 +20,7 @@ export interface Confirmation {
 }
 
 export interface WithConfirmation {
-  setConfirmation: (confirmation: Confirmation | undefined) => void
+  setConfirmation: (confirmation?: Confirmation) => void
 }
 
 export default function ModalConfirmation({
