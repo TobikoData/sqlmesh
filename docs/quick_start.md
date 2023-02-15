@@ -261,7 +261,7 @@ Finally, double-check that the data did indeed land in prod by running `sqlmesh 
 7   7        1           1  2020-01-07
 ```
 
-## 8. Next steps
+## 5. Next steps
 
 Congratulations, you've now conquered the basics of using SQLMesh! 
 
