@@ -14,19 +14,26 @@ import {
   ChevronDownIcon,
   CheckCircleIcon,
 } from '@heroicons/react/20/solid'
-import { FormEvent, MouseEvent, useMemo, useState } from 'react'
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { singular } from 'pluralize'
 import { ModelFile, ModelDirectory } from '../../../models'
-import type { Directory as DirectoryFromAPI } from '../../../api/client'
+import {
+  createDirectoryApiDirectoriesPathPost,
+  deleteDirectoryApiDirectoriesPathDelete,
+  deleteFileApiFilesPathDelete,
+  Directory as DirectoryApi,
+  writeFileApiFilesPathPost,
+} from '../../../api/client'
 import { useStoreFileTree } from '../../../context/fileTree'
-import { getAllFilesInDirectory, counter } from './help'
+import { getAllFilesInDirectory, toUniqueName } from './help'
+import ModalConfirmation from '../modal/ModalConfirmation'
+import type { Confirmation, WithConfirmation } from '../modal/ModalConfirmation'
+import { Button } from '../button/Button'
+import { isFalse, isNotNil, isTrue } from '~/utils'
 
 /* TODO:
-  - connect to API
   - add ability to create file or directory on top level
   - add context menu
-  - add confirmation before delete
   - add rename
   - add drag and drop
   - add copy and paste
@@ -34,11 +41,11 @@ import { getAllFilesInDirectory, counter } from './help'
   - add search
 */
 
-interface PropsDirectory {
+interface PropsDirectory extends WithConfirmation {
   directory: ModelDirectory
 }
 
-interface PropsFile {
+interface PropsFile extends WithConfirmation {
   file: ModelFile
 }
 
@@ -47,21 +54,65 @@ const CSS_ICON_SIZE = 'w-4 h-4'
 export function FolderTree({
   project,
 }: {
-  project?: DirectoryFromAPI
+  project?: DirectoryApi
 }): JSX.Element {
   const directory = useMemo(() => new ModelDirectory(project), [project])
+  const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
+  const [showConfirmation, setShowConfirmation] = useState(false)
+
+  useEffect(() => {
+    setShowConfirmation(isNotNil(confirmation))
+  }, [confirmation])
 
   return (
-    <div className="py-2 overflow-hidden">
-      <Directory directory={directory} />
+    <div className="py-2 px-1 overflow-hidden">
+      <ModalConfirmation
+        show={showConfirmation}
+        headline={confirmation?.headline}
+        description={confirmation?.description}
+        onClose={() => {
+          confirmation?.cancel?.()
+        }}
+      >
+        <Button
+          size="md"
+          variant="danger"
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            confirmation?.action?.()
+
+            setShowConfirmation(false)
+          }}
+        >
+          {confirmation?.yesText ?? 'Confirm'}
+        </Button>
+        <Button
+          size="md"
+          variant="alternative"
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            setShowConfirmation(false)
+          }}
+        >
+          {confirmation?.noText ?? 'Cancel'}
+        </Button>
+      </ModalConfirmation>
+      <Directory
+        directory={directory}
+        setConfirmation={setConfirmation}
+      />
     </div>
   )
 }
 
-function Directory({ directory }: PropsDirectory): JSX.Element {
+function Directory({
+  directory,
+  setConfirmation,
+}: PropsDirectory): JSX.Element {
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
-  const isRoot = !directory.withParent
 
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setOpen] = useState(false)
@@ -78,23 +129,30 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
 
     setIsLoading(true)
 
-    setTimeout(() => {
-      const count = counter.countByKey(directory)
-      const name = `new_directory_${count}`.toLowerCase()
+    const name = toUniqueName('new_directory')
 
-      directory.addDirectory(
-        new ModelDirectory(
-          {
-            name,
-            path: `${directory.path}/${name}`,
-          },
-          directory,
-        ),
-      )
+    createDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`)
+      .then(created => {
+        if (isFalse((created as any).ok)) {
+          console.warn([
+            `Directory: ${directory.path}`,
+            (created as any).detail,
+          ])
 
-      setOpen(true)
-      setIsLoading(false)
-    })
+          return
+        }
+
+        directory.addDirectory(new ModelDirectory(created, directory))
+
+        setOpen(true)
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }
 
   function createFile(e: MouseEvent): void {
@@ -104,54 +162,77 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
 
     setIsLoading(true)
 
-    setTimeout(() => {
-      const extension = '.py'
-      const count = counter.countByKey(directory)
+    const extension = '.py'
+    const name = toUniqueName('new_file', extension)
 
-      const name = directory.name.startsWith('new_')
-        ? `new_file_${count}${extension}`
-        : `new_${String(
-            singular(directory.name),
-          )}_${count}${extension}`.toLowerCase()
+    writeFileApiFilesPathPost(`${directory.path}/${name}`, { content: '' })
+      .then(created => {
+        if (isFalse((created as any).ok)) {
+          console.warn([`File: ${directory.path}`, (created as any).detail])
 
-      directory.addFile(
-        new ModelFile(
-          {
-            name,
-            extension,
-            path: `${directory.path}/${name}`,
-            content: '',
-            is_supported: true,
-          },
-          directory,
-        ),
-      )
+          return
+        }
 
-      setOpen(true)
-      setIsLoading(false)
-    })
+        directory.addFile(new ModelFile(created, directory))
+
+        setOpen(true)
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }
 
-  function remove(e: MouseEvent): void {
-    e.stopPropagation()
-
+  function remove(): void {
     if (isLoading) return
 
     setIsLoading(true)
 
-    setTimeout(() => {
-      if (directory.isNotEmpty) {
-        const files = getAllFilesInDirectory(directory)
+    deleteDirectoryApiDirectoriesPathDelete(directory.path)
+      .then(response => {
+        if (isFalse((response as any).ok)) {
+          console.warn([
+            `Directory: ${directory.path}`,
+            (response as any).detail,
+          ])
 
-        files.forEach(file => {
-          openedFiles.delete(file.id)
-        })
-      }
+          return
+        }
 
-      directory.parent?.removeDirectory(directory)
+        if (directory.isNotEmpty) {
+          const files = getAllFilesInDirectory(directory)
 
-      setOpenedFiles(openedFiles)
-      setIsLoading(false)
+          files.forEach(file => {
+            openedFiles.delete(file.id)
+          })
+        }
+
+        directory.parent?.removeDirectory(directory)
+
+        setOpenedFiles(openedFiles)
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log({ error })
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }
+
+  function removeWithConfirmation(): void {
+    setConfirmation({
+      headline: 'Removing Directory',
+      description: `Are you sure you want to remove the directory "${directory.name}"?`,
+      yesText: 'Yes, Remove',
+      noText: 'No, Cancel',
+      action: remove,
+      cancel: () => {
+        setConfirmation(undefined)
+      },
     })
   }
 
@@ -170,113 +251,140 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
     })
   }
 
+  function renameWithConfirmation(): void {
+    setConfirmation({
+      headline: 'Renaming Directory',
+      description: `Are you sure you want to rename the directory "${directory.name}"?`,
+      yesText: 'Yes, Rename',
+      noText: 'No, Cancel',
+      action: rename,
+      cancel: () => {
+        setConfirmation(undefined)
+      },
+    })
+  }
+
   return (
     <>
-      {!isRoot && (
-        <span className="w-full text-base whitespace-nowrap px-2 hover:bg-secondary-100 group flex justify-between rounded-md">
-          <span className="w-full flex items-center">
-            <div
-              className="mr-2 flex items-center cursor-pointer"
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
+      {directory.withParent && (
+        <span className="w-full overflow-hidden hover:bg-secondary-100 group flex justify-between items-center rounded-md">
+          <div
+            className={clsx(
+              'mr-1 flex items-center cursor-pointer',
+              directory.withDirectories || directory.withFiles
+                ? 'ml-0'
+                : 'ml-[0.5rem]',
+            )}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-                setOpen(!isOpen)
-              }}
-            >
+              setOpen(!isOpen)
+            }}
+          >
+            {(directory.withDirectories || directory.withFiles) && (
               <IconChevron
                 className={clsx(
-                  `inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`,
-                  {
-                    'invisible pointer-events-none cursor-default':
-                      !directory.withDirectories && !directory.withFiles,
-                  },
+                  `inline-block ${CSS_ICON_SIZE} ml-1 mr-1 text-secondary-500`,
                 )}
               />
-              <IconFolder
-                className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
-              />
-            </div>
-            <span className="w-full h-[1.5rem] flex items-center cursor-pointer justify-between">
-              {renamingDirectory?.id === directory.id ? (
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
-                    value={newName === '' ? directory.name : newName}
-                    onInput={(e: FormEvent<HTMLInputElement>) => {
-                      e.stopPropagation()
+            )}
+            <IconFolder
+              className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
+            />
+          </div>
+          <span className="w-full h-[1.5rem]  overflow-hidden flex items-center cursor-pointer justify-between pr-1">
+            {renamingDirectory?.id === directory.id ? (
+              <div className="flex  overflow-hidden items-center">
+                <input
+                  type="text"
+                  className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
+                  value={newName ?? directory.name}
+                  onInput={(e: FormEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                      const elInput = e.target as HTMLInputElement
+                    const elInput = e.target as HTMLInputElement
 
-                      setNewName(elInput.value)
-                    }}
-                  />
-                  <div className="flex">
-                    <CheckCircleIcon
-                      className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`}
-                      onClick={(e: MouseEvent) => {
-                        e.stopPropagation()
-
-                        rename()
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <span className="w-full flex justify-between items-center">
-                  <span
+                    setNewName(elInput.value)
+                  }}
+                />
+                <div className="flex">
+                  <CheckCircleIcon
+                    className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`}
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 
-                      setOpen(!isOpen)
+                      renameWithConfirmation()
                     }}
-                    onDoubleClick={(e: MouseEvent) => {
+                  />
+                </div>
+              </div>
+            ) : (
+              <span className="w-full flex text-base overflow-hidden items-center">
+                <span
+                  className="w-full text-sm overflow-hidden overflow-ellipsis justify-between group-hover:text-secondary-500"
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation()
+
+                    setOpen(!isOpen)
+                  }}
+                  onDoubleClick={(e: MouseEvent) => {
+                    e.stopPropagation()
+
+                    setNewName(directory.name)
+                    setRenamingDirectory(directory)
+                  }}
+                >
+                  {directory.name}
+                </span>
+                <span className="hidden w-full group-hover:flex items-center justify-end">
+                  <DocumentPlusIcon
+                    onClick={createFile}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
+                  />
+                  <FolderPlusIcon
+                    onClick={createDirectory}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
+                  />
+                  <XCircleIcon
+                    onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 
-                      setRenamingDirectory(directory)
+                      removeWithConfirmation()
                     }}
-                    className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
-                  >
-                    {directory.name}
-                  </span>
-                  <span className="hidden group-hover:block">
-                    <DocumentPlusIcon
-                      onClick={createFile}
-                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
-                    />
-                    <FolderPlusIcon
-                      onClick={createDirectory}
-                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-300 hover:text-secondary-500`}
-                    />
-                    <XCircleIcon
-                      onClick={remove}
-                      className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`}
-                    />
-                  </span>
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-300 hover:text-danger-500`}
+                  />
                 </span>
-              )}
-            </span>
+              </span>
+            )}
           </span>
         </span>
       )}
-      {(isOpen || isRoot) && directory.withDirectories && (
-        <ul className="overflow-hidden">
+      {(isOpen || !directory.withParent) && directory.withDirectories && (
+        <ul
+          className={clsx(
+            'mr-1 overflow-hidden',
+            directory.withParent ? 'pl-3' : 'mt-1',
+          )}
+        >
           {directory.directories.map(dir => (
             <li
               key={dir.id}
-              className="border-l px-1"
               title={dir.name}
+              className={clsx(isTrue(dir.parent?.withParent) && 'border-l')}
             >
-              <Directory directory={dir} />
+              <Directory
+                directory={dir}
+                setConfirmation={setConfirmation}
+              />
             </li>
           ))}
         </ul>
       )}
-      {(isOpen || isRoot) && directory.withFiles && (
+      {(isOpen || !directory.withParent) && directory.withFiles && (
         <ul
           className={clsx(
-            'mr-1 overflow-hidden',
-            directory.withParent ? 'ml-4' : 'ml-[2px] mt-1',
+            'mr-1 overflow-hidden block ',
+            directory.withParent ? 'pl-3' : 'mt-1',
           )}
         >
           {directory.files.map(file => (
@@ -284,11 +392,13 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
               key={file.id}
               title={file.name}
               className={clsx(
-                'pl-1',
-                file.parent?.withParent != null && 'border-l',
+                isTrue(file.parent?.withParent) && 'border-l px-0',
               )}
             >
-              <File file={file} />
+              <File
+                file={file}
+                setConfirmation={setConfirmation}
+              />
             </li>
           ))}
         </ul>
@@ -297,7 +407,7 @@ function Directory({ directory }: PropsDirectory): JSX.Element {
   )
 }
 
-function File({ file }: PropsFile): JSX.Element {
+function File({ file, setConfirmation }: PropsFile): JSX.Element {
   const activeFileId = useStoreFileTree(s => s.activeFileId)
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
@@ -307,18 +417,42 @@ function File({ file }: PropsFile): JSX.Element {
   const [renamingFile, setRenamingFile] = useState<ModelFile>()
   const [newName, setNewName] = useState<string>('')
 
-  function remove(file: ModelFile): void {
+  function remove(): void {
     if (isLoading) return
 
     setIsLoading(true)
 
-    setTimeout(() => {
-      openedFiles.delete(file.id)
+    deleteFileApiFilesPathDelete(file.path)
+      .then(response => {
+        if ((response as unknown as { ok: boolean }).ok) {
+          openedFiles.delete(file.id)
 
-      file.parent?.removeFile(file)
+          file.parent?.removeFile(file)
 
-      setOpenedFiles(openedFiles)
-      setIsLoading(false)
+          setOpenedFiles(openedFiles)
+        } else {
+          // TODO: Show error notification
+        }
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }
+
+  function removeWithConfirmation(): void {
+    setConfirmation({
+      headline: 'Deleting File',
+      description: `Are you sure you want to remove the file "${file.name}"?`,
+      yesText: 'Yes, Delete',
+      noText: 'No, Cancel',
+      action: remove,
+      cancel: () => {
+        setConfirmation(undefined)
+      },
     })
   }
 
@@ -353,7 +487,7 @@ function File({ file }: PropsFile): JSX.Element {
   return (
     <span
       className={clsx(
-        'text-base whitespace-nowrap group/file px-2 flex justify-between rounded-md',
+        'text-base whitespace-nowrap group/file px-[5px] flex justify-between rounded-md',
         file.id === activeFileId ? 'text-secondary-500' : 'text-gray-800',
         file.is_supported && 'group cursor-pointer hover:bg-secondary-100',
       )}
@@ -367,11 +501,11 @@ function File({ file }: PropsFile): JSX.Element {
         <div className="flex items-center">
           {openedFiles?.has(file.id) ? (
             <DocumentIcon
-              className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`}
+              className={`inline-block ${CSS_ICON_SIZE} mr-2 text-secondary-500`}
             />
           ) : (
             <DocumentIconOutline
-              className={`inline-block ${CSS_ICON_SIZE} mr-3 text-secondary-500`}
+              className={`inline-block ${CSS_ICON_SIZE} mr-2 text-secondary-500`}
             />
           )}
         </div>
@@ -423,7 +557,7 @@ function File({ file }: PropsFile): JSX.Element {
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                remove(file)
+                removeWithConfirmation()
               }}
             >
               <XCircleIcon

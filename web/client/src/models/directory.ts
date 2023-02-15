@@ -27,10 +27,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       this.directories = (initial as ModelDirectory).directories
       this.files = (initial as ModelDirectory).files
     } else {
-      this.directories = this.initial.directories.map(
+      this.directories = this.initial.directories?.map(
         d => new ModelDirectory(d, this),
       )
-      this.files = this.initial.files.map(f => new ModelFile(f, this))
+      this.files = this.initial.files?.map(f => new ModelFile(f, this))
     }
   }
 

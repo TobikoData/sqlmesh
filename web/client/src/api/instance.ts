@@ -49,12 +49,16 @@ export async function fetchAPI<T = any, B extends object = any>({
       body: toRequestBody(data),
     })
       .then(async response => {
-        if (response.status === 204) return {}
-
-        let json = null
         const headerContentType = response.headers.get('Content-Type')
 
-        if (headerContentType == null) return { ok: false }
+        if (headerContentType == null)
+          return { ok: false, detail: 'Empty response' }
+        if (response.status === 204)
+          return { ok: true, ...(await response.json()) }
+        if (response.status >= 400)
+          return { ok: false, ...(await response.json()) }
+
+        let json = null
 
         const isEventStream = headerContentType.includes('text/event-stream')
         const isApplicationJson = headerContentType.includes('application/json')
