@@ -53,10 +53,9 @@ export async function fetchAPI<T = any, B extends object = any>({
 
         if (headerContentType == null)
           return { ok: false, detail: 'Empty response' }
-        if (response.status === 204)
-          return { ok: true, ...(await response.json()) }
+        if (response.status === 204) return { ok: true }
         if (response.status >= 400)
-          return { ok: false, ...(await response.json()) }
+          return { ok: false, ...((await response.json()) ?? {}) }
 
         let json = null
 
