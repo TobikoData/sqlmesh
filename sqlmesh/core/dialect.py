@@ -437,16 +437,28 @@ def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expr
     return expressions
 
 
+def _escaped_literal_sql(self: Generator, expression: exp.Literal) -> str:
+    if expression.is_string and not self.SINGLE_ESCAPE:  # type: ignore
+        expression = exp.Literal(this=expression.this.replace("\\", "\\\\"), is_string=True)
+    return self.literal_sql(expression)
+
+
+DIALECTS_SINGLE_ESCAPE = {"duckdb", "postgres", "redshift"}
+
+
 @t.no_type_check
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
     parsers = {Parser}
-    generators = {Generator}
+    default_generator = Generator
+    default_generator.SINGLE_ESCAPE = True
+    generators = {default_generator}
 
-    for dialect in Dialect.classes.values():
+    for dialect_name, dialect in Dialect.classes.items():
         if hasattr(dialect, "Parser"):
             parsers.add(dialect.Parser)
         if hasattr(dialect, "Generator"):
+            dialect.Generator.SINGLE_ESCAPE = dialect_name in DIALECTS_SINGLE_ESCAPE
             generators.add(dialect.Generator)
 
     for generator in generators:
@@ -463,6 +475,7 @@ def extend_sqlglot() -> None:
                     Jinja: lambda self, e: e.name,
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
+                    exp.Literal: _escaped_literal_sql,
                 }
             )
             generator.WITH_SEPARATED_COMMENTS = (
