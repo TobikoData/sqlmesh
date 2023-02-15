@@ -2,13 +2,13 @@ import asyncio
 
 from fastapi import FastAPI
 
-from web.server.api.endpoints import router
+from web.server.api.endpoints import api_router
 from web.server.console import ApiConsole
 
 app = FastAPI()
 api_console = ApiConsole()
 
-app.include_router(router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 
 @app.on_event("startup")
