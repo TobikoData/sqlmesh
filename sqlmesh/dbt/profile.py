@@ -4,7 +4,7 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.core.config.connection import ConnectionConfig
-from sqlmesh.dbt.common import project_config_path
+from sqlmesh.dbt.common import PROJECT_FILENAME
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
@@ -54,7 +54,10 @@ class Profile:
         project_root = project_root or Path()
 
         if not project_name:
-            project_file = project_config_path(project_root)
+            project_file = Path(project_root, PROJECT_FILENAME)
+            if not project_file.exists():
+                raise ConfigError(f"Could not find {PROJECT_FILENAME} in {project_root}")
+
             project_name = yaml_load(project_file).get("name")
             if not project_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")

@@ -6,12 +6,13 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.dbt.common import BaseConfig, Dependencies, project_config_path
+from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, Dependencies
 from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroExtractor, capture_jinja
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
@@ -64,7 +65,10 @@ class PackageLoader:
         self._root = path
         self._overrides = overrides
 
-        project_file_path = project_config_path(self._root)
+        project_file_path = Path(path, PROJECT_FILENAME)
+        if not project_file_path.exists():
+            raise ConfigError(f"Could not find {PROJECT_FILENAME} in {path}")
+
         self._config_paths.add(project_file_path)
         project_yaml = yaml_load(project_file_path)
 
@@ -93,7 +97,7 @@ class PackageLoader:
         self._root = Path()
         self._overrides = ProjectConfig()
         self._config_paths: t.Set[Path] = set()
-        self._project_config = ProjectConfig()
+        self.project_config = ProjectConfig()
 
     def _load_project_config(self, yaml: t.Dict[str, t.Any], schema: str) -> None:
         def load_config(
@@ -122,15 +126,15 @@ class PackageLoader:
             return scoped_configs
 
         scope = ()
-        self._project_config.source_config = load_config(
+        self.project_config.source_config = load_config(
             yaml.get("sources", {}), SourceConfig(), scope
         )
-        self._project_config.seed_config = load_config(
+        self.project_config.seed_config = load_config(
             yaml.get("seeds", {}),
             SeedConfig(target_schema=schema),
             scope,
         )
-        self._project_config.model_config = load_config(
+        self.project_config.model_config = load_config(
             yaml.get("models", {}),
             ModelConfig(target_schema=schema),
             scope,
@@ -161,11 +165,11 @@ class PackageLoader:
                 properties_yaml = yaml_load(path)
 
                 self._load_config_section_from_properties(
-                    properties_yaml, "models", scope, self._project_config.model_config
+                    properties_yaml, "models", scope, self.project_config.model_config
                 )
 
                 source_configs_in_file = self._load_sources_config_from_properties(
-                    properties_yaml, scope, self._project_config.source_config
+                    properties_yaml, scope, self.project_config.source_config
                 )
                 sources.update(source_configs_in_file)
 
@@ -205,7 +209,7 @@ class PackageLoader:
                 properties_yaml = yaml_load(path)
 
                 self._load_config_section_from_properties(
-                    properties_yaml, "seeds", scope, self._project_config.seed_config
+                    properties_yaml, "seeds", scope, self.project_config.seed_config
                 )
 
             # Layer on configs from the model file and create seed configs
@@ -213,7 +217,7 @@ class PackageLoader:
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
-                seed_config = self._config_for_scope(scope, self._project_config.seed_config).copy()
+                seed_config = self._config_for_scope(scope, self.project_config.seed_config).copy()
                 seed_config.update_with(self._overridden_seed_fields(scope))
                 seed_config.path = path
                 seeds[path.stem] = seed_config
@@ -301,7 +305,6 @@ class PackageLoader:
             config_fields = source.get("config")
             if config_fields:
                 source_config = source_config.update_with(config_fields)
-                print(source_config.schema_)
 
             for table in source["tables"]:
                 table_name = table["name"]
@@ -321,7 +324,7 @@ class PackageLoader:
         with filepath.open(encoding="utf-8") as file:
             sql = file.read()
 
-        model_config = self._config_for_scope(scope, self._project_config.model_config).copy(
+        model_config = self._config_for_scope(scope, self.project_config.model_config).copy(
             update={"path": filepath, "table_name": filepath.stem}
         )
 

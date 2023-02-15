@@ -60,7 +60,7 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 
 
 def test_model_config(sushi_dbt_project: Project):
-    model_configs = sushi_dbt_project.models
+    model_configs = sushi_dbt_project.packages["sushi"].models
     assert set(model_configs) == {
         "customers",
         "waiters",
@@ -123,7 +123,7 @@ def test_variables(assert_exp_eq):
 
 
 def test_source_config(sushi_dbt_project: Project):
-    source_configs = sushi_dbt_project.sources
+    source_configs = sushi_dbt_project.packages["sushi"].sources
     assert set(source_configs) == {
         "items",
         "orders",
@@ -143,7 +143,7 @@ def test_source_config(sushi_dbt_project: Project):
 
 
 def test_seed_config(sushi_dbt_project: Project):
-    seed_configs = sushi_dbt_project.seeds
+    seed_configs = sushi_dbt_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
     raw_items_seed = seed_configs["waiter_names"]
 
