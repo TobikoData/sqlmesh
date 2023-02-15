@@ -196,8 +196,8 @@ def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
     (new_dir / "foo.txt").touch()
 
     response = client.delete("/api/directories/new_dir")
-    assert response.status_code == 422
-    assert response.json() == {"detail": "Directory not empty"}
+    assert response.status_code == 204
+    assert not new_dir.exists()
 
 
 def test_apply() -> None:
