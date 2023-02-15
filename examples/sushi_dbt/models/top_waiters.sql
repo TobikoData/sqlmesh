@@ -16,4 +16,4 @@ WHERE
   )
 ORDER BY
   revenue DESC
-LIMIT 10
+LIMIT {{ var('top_waiters_limit') }}

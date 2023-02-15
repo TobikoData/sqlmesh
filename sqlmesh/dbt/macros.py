@@ -46,3 +46,17 @@ def ref_method(refs: t.Set[str], mapping: t.Dict[str, str]) -> Executable:
     return {ref_map()}[model_name]
 """,
     )
+
+
+def var_method(variables: t.Dict[str, bool], mapping: t.Dict[str, t.Any]) -> Executable:
+    """Create a var method that only includes the variables specified by the caller."""
+
+    def variable_map() -> str:
+        vars_ = ", ".join(f"'{var}': {mapping[var]}" for var in sorted(variables) if var in mapping)
+        return f"{{{vars_}}}"
+
+    return Executable(
+        payload=f"""def var(key, default=None):
+    return {variable_map()}.get(key, default)
+""",
+    )
