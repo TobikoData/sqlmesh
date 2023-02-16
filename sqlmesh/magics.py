@@ -9,7 +9,7 @@ from IPython.core.magic_arguments import argument, magic_arguments, parse_argstr
 
 from sqlmesh.core.console import NotebookMagicConsole
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import format_model_expressions, parse_model
+from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
@@ -69,7 +69,7 @@ class SQLMeshMagics(Magics):
 
         if sql:
             loaded = load_model(
-                parse_model(sql, default_dialect=self._context.dialect),
+                parse(sql, default_dialect=self._context.dialect),
                 macros=self._context._macros,
                 path=model._path,
                 dialect=self._context.dialect,

@@ -15,7 +15,7 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.dialect import parse_model
+from sqlmesh.core.dialect import parse
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import Model, SeedModel, load_model
@@ -190,7 +190,7 @@ class SqlMeshLoader(Loader):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 try:
-                    expressions = parse_model(file.read(), default_dialect=self._context.dialect)
+                    expressions = parse(file.read(), default_dialect=self._context.dialect)
                 except SqlglotError as ex:
                     raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}")
                 model = load_model(
@@ -240,7 +240,7 @@ class SqlMeshLoader(Loader):
         for path in self._context.glob_path(self._context.audits_directory_path, ".sql"):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse_model(file.read(), default_dialect=self._context.dialect)
+                expressions = parse(file.read(), default_dialect=self._context.dialect)
                 audits = Audit.load_multiple(
                     expressions=expressions,
                     path=path,

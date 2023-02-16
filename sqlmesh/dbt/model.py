@@ -157,7 +157,7 @@ class ModelConfig(GeneralConfig):
             for ref in dependencies.refs
         }
 
-        expressions = d.parse_model(self.sql)
+        expressions = d.parse(self.sql)
 
         return create_sql_model(
             self.model_name,

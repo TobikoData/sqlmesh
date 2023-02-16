@@ -7,7 +7,7 @@ from sqlglot import exp, maybe_parse
 from sqlglot.expressions import split_num_words
 from sqlglot.helper import seq_get
 
-from sqlmesh.core.dialect import parse_model
+from sqlmesh.core.dialect import parse
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -37,7 +37,7 @@ def parse_expression(
         return [e for e in (maybe_parse(i) for i in v) if e]
 
     if isinstance(v, str):
-        return seq_get(parse_model(v), 0)
+        return seq_get(parse(v), 0)
 
     if not v:
         raise ConfigError(f"Could not parse {v}")

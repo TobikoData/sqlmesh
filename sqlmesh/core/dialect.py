@@ -383,9 +383,10 @@ DIALECT_PATTERN = re.compile(
 JINJA_PATTERN = re.compile(r"{{|{%|{#")
 
 
-def parse_model(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression]:
-    """Parse a sql string containing a model definition.
+def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression]:
+    """Parse a sql string.
 
+    Supports parsing model definition.
     If a jinja block is detected, the query is stored as raw string in a Jinja node.
 
     Args:

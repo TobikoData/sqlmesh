@@ -49,7 +49,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse_model
+from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
@@ -552,7 +552,7 @@ class Context(BaseContext):
             if not model.is_sql:
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
-                expressions = parse_model(file.read(), default_dialect=self.dialect)
+                expressions = parse(file.read(), default_dialect=self.dialect)
                 file.seek(0)
                 file.write(format_model_expressions(expressions, model.dialect))
                 file.truncate()
