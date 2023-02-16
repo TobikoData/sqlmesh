@@ -8,7 +8,7 @@ Specifies that the model should be computed incrementally based on a time range.
 
 As the name suggests a model of this kind is computed incrementally, meaning only missing data intervals are processed during each evaluation. This is in contrast to the [FULL](#full) model kind, which causes the recomputation of the entire dataset every time the model is evaluated.
 
-In order to take advantage of the incremental evaluation, the model query must contain an expression in its `WHERE` clause which filters the upstream records by time range. SQLMesh provides special macros which represent the start and the end of the time range that is being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Please refer to [Macros](overview.md#macros) to find more information on these.
+In order to take advantage of the incremental evaluation, the model query must contain an expression in its `WHERE` clause which filters the upstream records by time range. SQLMesh provides special macros which represent the start and the end of the time range that is being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Please refer to [Macros](../macros.md#predefined-variables) to find more information on these.
 
 Below is an example of a definition which takes full advantage of the model's incremental nature:
 ```sql
@@ -126,7 +126,7 @@ MODEL (
 );
 ```
 
-Similarly to the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind, the upstream records can be filtered by time range using the `@start_date`, `@end_date`, etc. [macros](overview.md#macros) in order to process the input data incrementally:
+Similarly to the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind, the upstream records can be filtered by time range using the `@start_date`, `@end_date`, etc. [macros](../macros.md#predefined-variables) in order to process the input data incrementally:
 ```sql
 SELECT
   name::TEXT as name,
