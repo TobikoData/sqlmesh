@@ -50,11 +50,12 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         if isinstance(query_or_df, PySparkDataFrame):
             self._insert_append_pyspark_df(table_name, query_or_df)
         else:
-            super().insert_append(table_name, query_or_df, columns_to_types)
+            super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
 
     def _insert_append_pandas_df(
         self,

@@ -20,6 +20,7 @@ if t.TYPE_CHECKING:
 class BigQueryEngineAdapter(EngineAdapter):
     DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
+    ESCAPE_JSON = True
 
     def __init__(
         self,

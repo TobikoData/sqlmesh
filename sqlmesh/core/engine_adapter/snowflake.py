@@ -13,6 +13,7 @@ if t.TYPE_CHECKING:
 class SnowflakeEngineAdapter(EngineAdapter):
     DEFAULT_SQL_GEN_KWARGS = {"identify": False}
     DIALECT = "snowflake"
+    ESCAPE_JSON = True
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)
