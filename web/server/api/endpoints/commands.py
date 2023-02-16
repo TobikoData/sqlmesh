@@ -142,3 +142,15 @@ async def fetchdf(
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
+
+
+@router.get("/dag")
+async def dag(
+    context: Context = Depends(get_loaded_context),
+) -> t.Dict[str, t.Any]:
+    try:
+        return dict(graph=context.dag.graph, sorted=context.dag.sorted())
+    except Exception:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        )
