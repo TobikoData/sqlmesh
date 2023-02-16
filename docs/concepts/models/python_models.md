@@ -24,7 +24,9 @@ def execute(
 ) -> pd.DataFrame:
 ```
 
-The function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators) which is used for metadata, like the Model DDL in SQL models. The function itself takes in an Execution context which you can use to run SQL queries, dates, as well as arbitrary kwargs passed in at runtime. You can either return a Pandas or PySpark Dataframe. If your results are too large, you can also yield a dataframe to insert the results in chunks.
+The `execute` function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators) which is used to capture model's metadata, similarly to the `MODEL` statement in [SQL models](#sql_models.md). The function itself takes in an Execution context which can be used to run SQL queries, retrieve the current time interval that is being processed, as well as arbitrary key-value arguments passed in at runtime. You can either return a Pandas or a PySpark Dataframe instance. 
+
+If the output is too large, it can also be returned in chunks using Python generators:
 
 ## Execution Context
 Python models can do anything you want, although it is strongly recommended for all models to be [idempotent](../../glossary/#idempotency). Python models can easily fetch data from upstream models or even data outside of SQLMesh. Given an execution context, you can fetch a dataframe with `fetchdf`.
