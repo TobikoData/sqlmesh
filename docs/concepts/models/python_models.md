@@ -57,7 +57,7 @@ def execute(
     latest: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-    context.table("another dependency")
+    context.table("another_dependency")
 ```
 
 The dependencies defined in the model decorator take precedence over any dynamic references inside the function. Therefore, in the example above, only `upstream_dependency` will be captured while `another_dependency` will be ignored.
