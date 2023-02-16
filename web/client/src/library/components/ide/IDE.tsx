@@ -2,8 +2,7 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
-
-import { Fragment, useEffect, MouseEvent } from 'react'
+import { Fragment, useEffect, MouseEvent, useState } from 'react'
 import clsx from 'clsx'
 import { PlayIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
@@ -20,6 +19,7 @@ import Spinner from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
 import fetchAPI from '../../../api/instance'
 import SplitPane from '../splitPane/SplitPane'
+import Graph from './Graph'
 
 export function IDE(): JSX.Element {
   const planState = useStorePlan(s => s.state)
@@ -31,6 +31,8 @@ export function IDE(): JSX.Element {
   const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setEnvironment = useStorePlan(s => s.setEnvironment)
   const updateTasks = useStorePlan(s => s.updateTasks)
+
+  const [isGraphOpen, setIsGraphOpen] = useState(false)
 
   const [subscribe, getChannel, unsubscribe] = useChannel(
     '/api/tasks',
@@ -78,6 +80,16 @@ export function IDE(): JSX.Element {
     setEnvironment(undefined)
   }
 
+  function showGraph(): void {
+    setIsGraphOpen(true)
+    // setPlanAction(EnumPlanAction.Graph)
+  }
+
+  function closeGraph(): void {
+    setIsGraphOpen(false)
+    // setPlanAction(EnumPlanAction.Graph)
+  }
+
   return (
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
@@ -96,9 +108,9 @@ export function IDE(): JSX.Element {
                   className={clsx(
                     'mx-2 text-sm opacity-85 flex',
                     name === 'Editor' &&
-                      'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
+                    'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
                     ['Audits', 'Graph', 'Tests'].includes(name) &&
-                      'opacity-25 cursor-not-allowed',
+                    'opacity-25 cursor-not-allowed',
                   )}
                 >
                   {i > 0 && (
@@ -116,6 +128,18 @@ export function IDE(): JSX.Element {
 
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
+            variant="alternative"
+            size={EnumSize.sm}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              showGraph()
+            }}
+          >
+            Graph
+          </Button>
+          <Button
+            className="min-w-[6rem] justify-between"
             disabled={
               planAction !== EnumPlanAction.None ||
               planState === EnumPlanState.Applying ||
@@ -123,12 +147,11 @@ export function IDE(): JSX.Element {
             }
             variant="primary"
             size={EnumSize.sm}
-            onClick={e => {
+            onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
               startPlan()
             }}
-            className="min-w-[6rem] justify-between"
           >
             {planState === EnumPlanState.Applying ||
               (planState === EnumPlanState.Canceling && (
@@ -138,10 +161,10 @@ export function IDE(): JSX.Element {
               {planState === EnumPlanState.Applying
                 ? 'Applying Plan...'
                 : planState === EnumPlanState.Canceling
-                ? 'Canceling Plan...'
-                : planAction !== EnumPlanAction.None
-                ? 'Setting Plan...'
-                : 'Run Plan'}
+                  ? 'Canceling Plan...'
+                  : planAction !== EnumPlanAction.None
+                    ? 'Setting Plan...'
+                    : 'Run Plan'}
             </span>
             <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
           </Button>
@@ -153,15 +176,15 @@ export function IDE(): JSX.Element {
                     className={clsx(
                       'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
                       planState === EnumPlanState.Finished &&
-                        'bg-success-500 text-white',
+                      'bg-success-500 text-white',
                       planState === EnumPlanState.Failed &&
-                        'bg-danger-500 text-white',
+                      'bg-danger-500 text-white',
                       planState === EnumPlanState.Applying &&
-                        'bg-secondary-500 text-white',
+                      'bg-secondary-500 text-white',
                       planState !== EnumPlanState.Finished &&
-                        planState !== EnumPlanState.Failed &&
-                        planState !== EnumPlanState.Applying &&
-                        'bg-gray-100 text-gray-500',
+                      planState !== EnumPlanState.Failed &&
+                      planState !== EnumPlanState.Applying &&
+                      'bg-gray-100 text-gray-500',
                     )}
                   >
                     {plan == null ? 0 : 1}
@@ -201,7 +224,7 @@ export function IDE(): JSX.Element {
                                   (t: any) => t.completed === t.total,
                                 ).length /
                                   Object.values(plan.tasks).length) *
-                                  100,
+                                100,
                               )}
                             />
                             <div className="my-4 px-4 py-2 bg-secondary-100 rounded-lg">
@@ -272,8 +295,9 @@ export function IDE(): JSX.Element {
       <Transition
         appear
         show={
-          planAction !== EnumPlanAction.None &&
-          planAction !== EnumPlanAction.Closing
+          (planAction !== EnumPlanAction.None &&
+            planAction !== EnumPlanAction.Closing) ||
+          isGraphOpen
         }
         as={Fragment}
         afterLeave={() => {
@@ -309,10 +333,14 @@ export function IDE(): JSX.Element {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan
-                    onClose={closePlan}
-                    onCancel={cancelPlan}
-                  />
+                  {isGraphOpen && <Graph closeGraph={closeGraph} />}
+                  {planAction !== EnumPlanAction.None &&
+                    planAction !== EnumPlanAction.Closing && (
+                      <Plan
+                        onClose={closePlan}
+                        onCancel={cancelPlan}
+                      />
+                    )}
                 </Dialog.Panel>
               </Transition.Child>
             </div>
