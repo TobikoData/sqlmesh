@@ -1,6 +1,6 @@
 # Python models
 
-Although SQL is a powerful tool, there are some use cases that are better handled by Python. For example pipelines that involve machine learning, interacting with external APIs, and complex business logic that cannot be expressed in SQL. SQLMesh has first class support for model defined in Python. You can do anything that you could with Python as long as you return a Pandas or Spark dataframe.
+Although SQL is a powerful tool, there are some use cases that are better handled by Python. For example pipelines that involve machine learning, interacting with external APIs, and complex business logic that cannot be expressed in SQL. SQLMesh has first class support for models defined in Python. There are no restrictions on what can be done in the Python model implementation as long as it returns a Pandas or a Spark DataFrame instance.
 
 ## Definition
 
