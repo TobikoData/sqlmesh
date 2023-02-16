@@ -30,7 +30,6 @@ RENDER_OPTIMIZER_RULES = (
     qualify_tables,
     qualify_columns,
     expand_laterals,
-    annotate_types,
 )
 
 
@@ -151,6 +150,8 @@ class QueryRenderer:
                 pass
             except SqlglotError as ex:
                 raise_config_error(f"Invalid model query. {ex}", self._path)
+
+            self._query_cache[cache_key] = annotate_types(self._query_cache[cache_key])
 
         query = self._query_cache[cache_key]
 
