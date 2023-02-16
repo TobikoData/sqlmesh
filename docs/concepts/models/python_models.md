@@ -60,7 +60,7 @@ def execute(
     context.table("another dependency")
 ```
 
-The dependencies defined in the model decorator take precedence of any dynamic references inside the function. So in this case, there is only one dependency, "upstream_dependency".
+The dependencies defined in the model decorator take precedence over any dynamic references inside the function. Therefore, in the example above, only `upstream_dependency` will be captured while `another_dependency` will be ignored.
 
 ## Batching
 If the result of a Python model is very large, it may be required to split up the upload into multiple batches. With PySpark, this won't be a problem because all computation is done in a distributed fashion, but with Pandas, all data is stored in memory. Instead of returning a single dataframe, you can yield dataframes to minimize the amount of data needed to be processed at once.
