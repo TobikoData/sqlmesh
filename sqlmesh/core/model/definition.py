@@ -11,7 +11,6 @@ from pathlib import Path
 from astor import to_source
 from pydantic import Field
 from sqlglot import exp
-from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
@@ -575,9 +574,9 @@ class SqlModel(_Model):
             return self.columns_to_types_
 
         if self._columns_to_types is None:
-            query = annotate_types(self._query_renderer.render())
             self._columns_to_types = {
-                expression.alias_or_name: expression.type for expression in query.expressions
+                expression.alias_or_name: expression.type
+                for expression in self._query_renderer.render().expressions
             }
 
         return self._columns_to_types
