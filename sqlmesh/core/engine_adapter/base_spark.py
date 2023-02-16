@@ -16,6 +16,8 @@ if t.TYPE_CHECKING:
 
 
 class BaseSparkEngineAdapter(EngineAdapter):
+    ESCAPE_JSON = True
+
     def replace_query(
         self,
         table_name: TableName,

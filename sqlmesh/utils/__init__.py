@@ -131,3 +131,10 @@ def word_characters_only(s: str, replacement_char: str = "_") -> str:
     'Helloworld123'
     """
     return re.sub(r"\W", replacement_char, s)
+
+
+def double_escape(s: str) -> str:
+    """
+    Replace backslashes with another backslash.
+    """
+    return s.replace("\\", "\\\\")

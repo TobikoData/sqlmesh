@@ -144,13 +144,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             snapshot.name,
                             snapshot.identifier,
                             snapshot.version,
-                            self.engine_adapter.to_json(snapshot),
+                            snapshot.json(),
                         )
                         for snapshot in snapshots
                     ],
                     columns_to_types=self.snapshot_columns_to_types,
                 )
             ),
+            contains_json=True,
         )
 
     def delete_expired_environments(self) -> None:
@@ -206,13 +207,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 )
             ),
             columns_to_types=self.environment_columns_to_types,
+            contains_json=True,
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
         self.engine_adapter.update_table(
             self.snapshots_table,
-            {"snapshot": self.engine_adapter.to_json(snapshot)},
+            {"snapshot": snapshot.json()},
             where=self._snapshot_id_filter([snapshot.snapshot_id]),
+            contains_json=True,
         )
 
     def get_environments(self) -> t.List[Environment]:
