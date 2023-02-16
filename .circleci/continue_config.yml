@@ -25,6 +25,16 @@ commands:
               - equal: [ main, << pipeline.git.branch >> ]
           steps:
             - run: circleci-agent step halt
+  halt_unless_client:
+    steps:
+      - unless:
+          condition:
+            or:
+              - << pipeline.parameters.common >>
+              - << pipeline.parameters.client >>
+              - equal: [ main, << pipeline.git.branch >> ]
+          steps:
+            - run: circleci-agent step halt
 
 jobs:
   style_and_unit_tests:
@@ -58,6 +68,7 @@ jobs:
       - image: cimg/python:3.7
     resource_class: small
     steps:
+      - halt_unless_client
       - checkout
       - run:
           name: Install pre-commit
@@ -120,10 +131,5 @@ workflows:
                 - main
 
   main_pr_web_client:
-    when:
-      or:
-        - << pipeline.parameters.client >>
-        - << pipeline.parameters.common >>
-        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - ui_style
