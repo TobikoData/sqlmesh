@@ -17,7 +17,12 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
-from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
+from sqlmesh.dbt.column import (
+    ColumnConfig,
+    column_descriptions_to_sqlmesh,
+    column_types_to_sqlmesh,
+    yaml_to_columns,
+)
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
 from sqlmesh.dbt.macros import MacroConfig, ref_method, source_method, var_method
 from sqlmesh.dbt.seed import SeedConfig
@@ -115,6 +120,9 @@ class ModelConfig(GeneralConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
+        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
+            return v
+
         return yaml_to_columns(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -164,6 +172,8 @@ class ModelConfig(GeneralConfig):
             expressions[-1],
             kind=self.model_kind,
             statements=expressions[0:-1],
+            columns=column_types_to_sqlmesh(self.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
             python_env=python_env,
             depends_on=depends_on,
             start=self.start,

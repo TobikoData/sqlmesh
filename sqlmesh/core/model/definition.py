@@ -383,11 +383,6 @@ class _Model(ModelMeta, frozen=True):
         return self._depends_on
 
     @property
-    def column_descriptions(self) -> t.Dict[str, str]:
-        """A dictionary of column names to annotation comments."""
-        return {}
-
-    @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         """Returns the mapping of column names to types of this model."""
         if self.columns_to_types_ is not None:
@@ -583,6 +578,9 @@ class SqlModel(_Model):
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
+        if self.column_descriptions_ is not None:
+            return self.column_descriptions_
+
         if self._column_descriptions is None:
             self._column_descriptions = {
                 select.alias: "\n".join(comment.strip() for comment in select.comments)
