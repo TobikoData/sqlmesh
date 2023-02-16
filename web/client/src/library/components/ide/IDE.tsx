@@ -82,12 +82,10 @@ export function IDE(): JSX.Element {
 
   function showGraph(): void {
     setIsGraphOpen(true)
-    // setPlanAction(EnumPlanAction.Graph)
   }
 
   function closeGraph(): void {
     setIsGraphOpen(false)
-    // setPlanAction(EnumPlanAction.Graph)
   }
 
   return (
@@ -102,7 +100,7 @@ export function IDE(): JSX.Element {
 
         <div className="flex w-full justify-center">
           <ul className="flex w-full items-center justify-center">
-            {['Editor', 'Graph', 'Audits', 'Tests'].map((name, i) => (
+            {['Editor', 'Audits', 'Tests'].map((name, i) => (
               <li key={name}>
                 <div
                   className={clsx(
