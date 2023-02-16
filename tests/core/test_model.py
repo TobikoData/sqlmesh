@@ -102,10 +102,7 @@ def test_load(assert_exp_eq):
 @pytest.mark.parametrize(
     "query, error",
     [
-        ("sum(x)::int", "must have inferrable names"),
-        ("CAST(x + 1 AS INT)", "must have inferrable names"),
         ("y::int, x::int AS y", "duplicate"),
-        ("sum(x)::int -- annotation", "must have inferrable names"),
     ],
 )
 def test_model_validation(query, error):
@@ -113,6 +110,7 @@ def test_model_validation(query, error):
         f"""
         MODEL (
             name db.table,
+            kind FULL,
         );
 
         SELECT {query}
@@ -473,25 +471,27 @@ def test_render_query(assert_exp_eq):
     assert_exp_eq(
         model.render_query(start="2020-10-28", end="2020-10-28"),
         """
-        SELECT y
-        FROM x
+        SELECT
+          x.y AS y
+        FROM x AS x
         WHERE
-          y <= '2020-10-28'
-          AND y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
-          AND y >= '2020-10-28'
-          AND y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
+          x.y <= '2020-10-28'
+          AND x.y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
+          AND x.y >= '2020-10-28'
+          AND x.y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
         """,
     )
     assert_exp_eq(
         model.render_query(start="2020-10-28", end=to_datetime("2020-10-29")),
         """
-        SELECT y
-        FROM x
+        SELECT
+          x.y AS y
+        FROM x AS x
         WHERE
-          y <= '2020-10-28'
-          AND y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
-          AND y >= '2020-10-28'
-          AND y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
+          x.y <= '2020-10-28'
+          AND x.y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
+          AND x.y >= '2020-10-28'
+          AND x.y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
         """,
     )
 
@@ -685,13 +685,13 @@ def test_filter_time_column(assert_exp_eq):
         model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
         """
         SELECT
-          id::INT AS id,
-          name::TEXT AS name,
-          price::DOUBLE AS price,
-          ds::TEXT AS ds
-        FROM raw.items
+          items.id::INT AS id,
+          items.name::TEXT AS name,
+          items.price::DOUBLE AS price,
+          items.ds::TEXT AS ds
+        FROM raw.items AS items
         WHERE
-          CAST(ds AS TEXT) <= '20210101' AND CAST(ds as TEXT) >= '20210101'
+          CAST(items.ds AS TEXT) <= '20210101' AND CAST(items.ds AS TEXT) >= '20210101'
         """,
     )
 
@@ -720,13 +720,13 @@ def test_filter_time_column(assert_exp_eq):
         model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
         """
         SELECT
-          id::INT AS id,
-          name::TEXT AS name,
-          price::DOUBLE AS price,
-          ds::TEXT AS ds
-        FROM raw.items
+          items.id::INT AS id,
+          items.name::TEXT AS name,
+          items.price::DOUBLE AS price,
+          items.ds::TEXT AS ds
+        FROM raw.items AS items
         WHERE
-          CAST(ds AS TEXT) <= '20210101' AND CAST(ds as TEXT) >= '20210101'
+          CAST(items.ds AS TEXT) <= '20210101' AND CAST(items.ds as TEXT) >= '20210101'
         """,
     )
 
@@ -761,11 +761,11 @@ def test_parse_model(assert_exp_eq):
         model.render_query(),
         """
       SELECT
-        CAST(id AS INT) AS id,
-        ds
-      FROM x
+        CAST(x.id AS INT) AS id,
+        x.ds AS ds
+      FROM x AS x
       WHERE
-        ds <= '1970-01-01' AND ds >= '1970-01-01'
+        x.ds <= '1970-01-01' AND x.ds >= '1970-01-01'
     """,
     )
 
