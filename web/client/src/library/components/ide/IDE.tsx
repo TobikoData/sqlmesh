@@ -2,24 +2,25 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
-import { Fragment, useEffect, MouseEvent, useState } from 'react'
+import { Fragment, useEffect, MouseEvent, useState, lazy } from 'react'
 import clsx from 'clsx'
 import { PlayIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover } from '@headlessui/react'
 import { useApiFiles } from '../../../api'
-import { Plan } from '../plan/Plan'
+import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
-import { Progress } from '../progress/Progress'
-import Spinner from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
-import fetchAPI from '../../../api/instance'
 import SplitPane from '../splitPane/SplitPane'
-import Graph from './Graph'
+
+const Plan = lazy(async () => await import('../plan/Plan'))
+const Graph = lazy(async () => await import('./Graph'))
+const Spinner = lazy(async () => await import('../logo/Spinner'))
+const Progress = lazy(async () => await import('../progress/Progress'))
 
 export function IDE(): JSX.Element {
   const planState = useStorePlan(s => s.state)

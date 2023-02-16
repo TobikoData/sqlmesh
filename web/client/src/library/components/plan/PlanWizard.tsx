@@ -17,7 +17,7 @@ import {
 } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Spinner from '../logo/Spinner'
-import { Progress } from '../progress/Progress'
+import Progress from '../progress/Progress'
 import { isModified } from './help'
 
 export function PlanWizard({ id }: { id: string }): JSX.Element {

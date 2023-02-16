@@ -1,5 +1,4 @@
-import { MouseEvent, useEffect, useMemo } from 'react'
-
+import { MouseEvent, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Controls,
   Background,
@@ -13,74 +12,43 @@ import ReactFlow, {
 import { Button } from '../button/Button'
 import { useApiDag } from '../../../api'
 import 'reactflow/dist/base.css'
-import { isArrayNotEmpty } from '../../../utils'
-import dagre from 'dagre'
-
-const dagreGraph = new dagre.graphlib.Graph()
-
-dagreGraph.setDefaultEdgeLabel(() => ({}))
-
-const nodeWidth = 172
-const nodeHeight = 32
+import { getNodesAndEdges } from './help'
+import { isFalse } from '../../../utils'
 
 export default function Graph({ closeGraph }: any): JSX.Element {
   const { data } = useApiDag()
-
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
-    if (data == null) return []
-
-    const nodes = data.sorted.reduce((acc: any, label: string, idx: number) => {
-      const node = {
-        id: label,
-        type: 'model',
-        position: { x: 0, y: 0 },
-        data: { label },
-        connectable: false,
-        selectable: false,
-        deletable: false,
-        focusable: false,
-      }
-
-      acc[label] = node
-
-      return acc
-    }, {})
-
-    const edges = Object.keys(data.graph).reduce((acc: any, source: string) => {
-      if (isArrayNotEmpty(data.graph[source])) {
-        data.graph[source].forEach((target: string) => {
-          const id = `${source}_${target}`
-          const edge = {
-            id,
-            source,
-            target,
-            style: {
-              strokeWidth: 2,
-              stroke: 'hsl(260, 100%, 80%)',
-            },
-          }
-          acc[id] = edge
-        })
-      }
-
-      return acc
-    }, {})
-
-    return getLayoutedElements(
-      Object.values(nodes),
-      Object.values(edges),
-      data.graph,
-    )
-  }, [data])
+  const [graph, setGraph] = useState<{ nodes: any[]; edges: any[] }>()
+  const [algorithm, setAlgorithm] = useState('layered')
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   useEffect(() => {
-    setNodes(initialNodes)
-    setEdges(initialEdges)
-  }, [initialNodes, initialEdges])
+    let active = true
+
+    void load()
+
+    return () => {
+      active = false
+    }
+
+    async function load(): Promise<void> {
+      setGraph(undefined)
+
+      const graph = await getNodesAndEdges({ data, algorithm })
+
+      if (isFalse(active)) return
+
+      setGraph(graph)
+    }
+  }, [data, algorithm])
+
+  useEffect(() => {
+    if (graph == null) return
+
+    setNodes(graph.nodes)
+    setEdges(graph.edges)
+  }, [graph])
 
   return (
     <div className="px-2 py-1 w-full h-[90vh]">
@@ -93,11 +61,28 @@ export default function Graph({ closeGraph }: any): JSX.Element {
         nodeTypes={nodeTypes}
         fitView
       >
-        <Panel position="top-right">
+        <Panel
+          position="top-right"
+          className="flex"
+        >
+          <select
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              e.stopPropagation()
+
+              setAlgorithm(e.target.value)
+            }}
+            value={algorithm}
+          >
+            <option value="layered">Layered</option>
+            <option value="stress">Stress</option>
+            <option value="mrtree">Mr. Tree</option>
+            <option value="radial">Radial</option>
+            <option value="force">Force</option>
+          </select>
           <Button
             size="sm"
             variant="alternative"
-            className="mx-0"
+            className="mx-0 ml-4"
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
@@ -116,43 +101,6 @@ export default function Graph({ closeGraph }: any): JSX.Element {
       </ReactFlow>
     </div>
   )
-}
-
-function getLayoutedElements(nodes: any, edges: any, graph: any): any {
-  const targets = new Set(Object.values(graph).flat())
-
-  dagreGraph.setGraph({ rankdir: 'LR' })
-
-  nodes.forEach((node: any) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight })
-  })
-
-  edges.forEach((edge: any) => {
-    dagreGraph.setEdge(edge.source, edge.target)
-  })
-
-  dagre.layout(dagreGraph)
-
-  nodes.forEach((node: any) => {
-    const nodeWithPosition = dagreGraph.node(node.id)
-
-    if (isArrayNotEmpty(graph[node.id])) {
-      node.sourcePosition = 'right'
-    }
-
-    if (targets.has(node.id)) {
-      node.targetPosition = 'left'
-    }
-
-    node.position = {
-      x: nodeWithPosition.x - nodeWidth / 2,
-      y: nodeWithPosition.y - nodeHeight / 2,
-    }
-
-    return node
-  })
-
-  return { nodes, edges }
 }
 
 function ModelNode({ data, sourcePosition, targetPosition }: any): JSX.Element {
