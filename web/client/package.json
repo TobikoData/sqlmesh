@@ -1,10 +1,6 @@
 {
   "name": "tobiko",
   "version": "0.0.0",
-  "engines": {
-    "node": "18",
-    "npm": "8"
-  },
   "scripts": {
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",
@@ -29,19 +25,21 @@
     "@tanstack/react-table": "^8.7.9",
     "@uiw/react-codemirror": "^4.19.7",
     "clsx": "^1.2.1",
+    "dagre": "^0.8.5",
     "pluralize": "^8.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.6.2",
     "react-split": "^2.0.14",
+    "reactflow": "^11.5.6",
     "zustand": "^4.3.2"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.9",
-    "@tanstack/react-query-devtools": "^4.22.0",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^14.4.3",
+    "@types/dagre": "^0.7.48",
     "@types/pluralize": "^0.0.29",
     "@types/react": "^18.0.26",
     "@types/react-dom": "^18.0.9",
