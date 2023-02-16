@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
@@ -34,11 +35,9 @@ async def delete_directory(
 ) -> None:
     """Delete a directory."""
     try:
-        (settings.project_path / path).rmdir()
+        shutil.rmtree(settings.project_path / path)
         response.status_code = status.HTTP_204_NO_CONTENT
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except NotADirectoryError:
         raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not a directory")
-    except OSError:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory not empty")
