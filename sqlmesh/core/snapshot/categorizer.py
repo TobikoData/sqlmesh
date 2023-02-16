@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlglot import exp
-from sqlglot.diff import Insert, Keep, diff
+from sqlglot.diff import ChangeDistiller, Insert, Keep
 
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotChangeCategory
 
@@ -33,7 +33,7 @@ def categorize_change(new: Snapshot, old: Snapshot) -> t.Optional[SnapshotChange
     ):
         return None
 
-    edits = diff(old_model.render_query(), new_model.render_query())
+    edits = ChangeDistiller(t=0.5).diff(old_model.render_query(), new_model.render_query())
     inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
     for edit in edits:

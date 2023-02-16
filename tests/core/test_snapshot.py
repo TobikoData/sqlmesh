@@ -336,24 +336,24 @@ def test_table_name(snapshot: Snapshot):
 def test_categorize_change(make_snapshot):
     old_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
 
-#    # A projection has been added.
-#    assert (
-#        categorize_change(
-#            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds"))),
-#            old=old_snapshot,
-#        )
-#        == SnapshotChangeCategory.NON_BREAKING
-#    )
-#
-#    # A complex projection has been added.
-#    assert (
-#        categorize_change(
-#            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
-#            old=old_snapshot,
-#        )
-#        == SnapshotChangeCategory.NON_BREAKING
-#    )
-#
+    # A projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds"))),
+            old=old_snapshot,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # A complex projection has been added.
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
+            old=old_snapshot,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
     # Multiple projections have been added.
     assert (
         categorize_change(
