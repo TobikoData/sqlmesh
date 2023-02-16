@@ -29,7 +29,7 @@ from sqlmesh.core.engine_adapter._typing import (
 )
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.model.kind import TimeColumn
-from sqlmesh.utils import optional_import
+from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
@@ -57,6 +57,7 @@ class EngineAdapter:
     DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
+    ESCAPE_JSON = False
 
     def __init__(
         self,
@@ -428,13 +429,42 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         if isinstance(query_or_df, QUERY_TYPES):
-            query_or_df = t.cast(Query, query_or_df)
-            return self._insert_append_query(table_name, query_or_df, columns_to_types)
+            query = t.cast(Query, query_or_df)
+            if contains_json:
+                query = self._escape_json(query)
+            return self._insert_append_query(table_name, query, columns_to_types)
         if isinstance(query_or_df, pd.DataFrame):
             return self._insert_append_pandas_df(table_name, query_or_df, columns_to_types)
         raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
+
+    @t.overload
+    @classmethod
+    def _escape_json(cls, value: Query) -> Query:
+        ...
+
+    @t.overload
+    @classmethod
+    def _escape_json(cls, value: str) -> str:
+        ...
+
+    @classmethod
+    def _escape_json(cls, value: Query | str) -> Query | str:
+        """
+        Some engines need to add an extra escape to literals that contain JSON values. By default we don't do this
+        though
+        """
+        if cls.ESCAPE_JSON:
+            if isinstance(value, str):
+                return double_escape(value)
+            return value.transform(
+                lambda e: exp.Literal(this=double_escape(e.this), is_string=True)
+                if isinstance(e, exp.Literal) and e.args["is_string"]
+                else e
+            )
+        return value
 
     def _insert_append_query(
         self,
@@ -538,7 +568,15 @@ class EngineAdapter:
         table_name: TableName,
         properties: t.Optional[t.Dict[str, t.Any]] = None,
         where: t.Optional[str | exp.Condition] = None,
+        contains_json: bool = False,
     ) -> None:
+        if contains_json and properties:
+            properties = {
+                k: self._escape_json(v)
+                if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
+                else v
+                for k, v in properties.items()
+            }
         self.execute(exp.update(table_name, properties, where=where))
 
     def merge(
