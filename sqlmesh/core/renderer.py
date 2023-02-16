@@ -6,7 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment
 from sqlglot import exp, parse_one
-from sqlglot.errors import SchemaError, SqlglotError
+from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
@@ -141,24 +141,16 @@ class QueryRenderer:
             except MacroEvalError as ex:
                 raise_config_error(f"Failed to resolve macro for query. {ex}", self._path)
 
-            if self._schema:
-                # This takes care of expanding star projections
-
-                try:
-                    self._query_cache[cache_key] = optimize(
-                        self._query_cache[cache_key],
-                        schema=self._schema,
-                        rules=RENDER_OPTIMIZER_RULES,
-                    )
-                except SchemaError:
-                    pass
-                except SqlglotError as ex:
-                    raise_config_error(f"Invalid model query. {ex}", self._path)
-
-                self._columns_to_types = {
-                    expression.alias_or_name: expression.type
-                    for expression in self._query_cache[cache_key].expressions
-                }
+            try:
+                self._query_cache[cache_key] = optimize(
+                    self._query_cache[cache_key],
+                    schema=self._schema,
+                    rules=RENDER_OPTIMIZER_RULES,
+                )
+            except (SchemaError, OptimizeError):
+                pass
+            except SqlglotError as ex:
+                raise_config_error(f"Invalid model query. {ex}", self._path)
 
         query = self._query_cache[cache_key]
 

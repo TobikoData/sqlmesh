@@ -108,18 +108,18 @@ def test_variables(assert_exp_eq):
 
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
     model_config._variables["foo"] = True
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 5")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
 
 def test_source_config(sushi_dbt_project: Project):
