@@ -14,6 +14,18 @@ parameters:
     type: boolean
     default: false
 
+commands:
+  halt_unless_core:
+    steps:
+      - unless:
+          condition:
+            or:
+              - << pipeline.parameters.common >>
+              - << pipeline.parameters.python >>
+              - equal: [ main, << pipeline.git.branch >> ]
+          steps:
+            - run: circleci-agent step halt
+
 jobs:
   style_and_unit_tests:
     parameters:
@@ -23,6 +35,7 @@ jobs:
       - image: cimg/python:<< parameters.python_version >>
     resource_class: small
     steps:
+      - halt_unless_core
       - checkout
       - run:
           name: Install OpenJDK
@@ -58,6 +71,7 @@ jobs:
       - image: cimg/python:3.7
     resource_class: small
     steps:
+      - halt_unless_core
       - checkout
       - run:
           name: Install dependencies
@@ -91,11 +105,6 @@ jobs:
 
 workflows:
   main_pr_core:
-    when:
-      or:
-        - << pipeline.parameters.common >>
-        - << pipeline.parameters.python >>
-        - equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - style_and_unit_tests:
           matrix:
