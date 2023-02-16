@@ -443,7 +443,7 @@ def extend_sqlglot() -> None:
     parsers = {Parser}
     generators = {Generator}
 
-    for dialect_name, dialect in Dialect.classes.items():
+    for dialect in Dialect.classes.values():
         if hasattr(dialect, "Parser"):
             parsers.add(dialect.Parser)
         if hasattr(dialect, "Generator"):
