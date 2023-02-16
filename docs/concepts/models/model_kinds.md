@@ -44,6 +44,7 @@ MODEL (
   )
 );
 ```
+Please note that the time format should be defined using the same dialect as the one used to define the model's query.
 
 SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime which prevents records that are not a part of the target interval from being stored. This is a safety mechanism which prevents the unintended overriding of unrelated records when handling late arriving data.
 
@@ -73,6 +74,9 @@ WHERE
   receipt_date BETWEEN @start_ds AND @end_ds
   AND event_date BETWEEN @start_ds AND @end_ds;
 ```
+
+### Idempotency
+It's recommended to ensure that queries of models of this kind are [idempotent](../../glossary/#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans). Please note, however, that upstream models and tables can impact the extent to which the idempotency property can be guaranteed. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically renders such a model as non-idempotent.
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind are materialized using the following strategies:
