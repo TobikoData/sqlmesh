@@ -18,6 +18,7 @@ import fetchAPI from '../../../api/instance'
 import { includes, isArrayEmpty } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
+import SplitPane from '../splitPane/SplitPane'
 
 export function Plan({
   onClose,
@@ -156,9 +157,12 @@ export function Plan({
   )
 
   return (
-    <div className="flex items-start w-full h-[75vh] overflow-hidden">
+    <SplitPane
+      sizes={[25, 75]}
+      className="flex w-full h-[75vh] overflow-hidden"
+    >
       <PlanSidebar context={context} />
-      <div className="flex flex-col w-full h-full overflow-hidden">
+      <div className="flex flex-col overflow-hidden">
         {isArrayEmpty(context?.models) ? (
           <div className="flex items-center justify-center w-full h-full">
             <h2 className="text-2xl font-black text-gray-700">
@@ -278,6 +282,6 @@ export function Plan({
           </div>
         </div>
       </div>
-    </div>
+    </SplitPane>
   )
 }

@@ -1,10 +1,11 @@
 import Split, { SplitProps } from 'react-split'
 import './SplitPane.css'
 
-export function SplitPane({
+export default function SplitPane({
   className,
   children,
   sizes,
+  minSize,
   direction,
 }: SplitProps): JSX.Element {
   return (
@@ -13,8 +14,9 @@ export function SplitPane({
       sizes={sizes}
       expandToMin={false}
       gutterAlign="center"
-      gutterSize={5}
+      gutterSize={3}
       direction={direction}
+      minSize={minSize}
     >
       {children}
     </Split>

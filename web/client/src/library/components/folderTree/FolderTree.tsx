@@ -49,13 +49,16 @@ interface PropsFile extends WithConfirmation {
   file: ModelFile
 }
 
+interface PropsFolderTree extends React.HTMLAttributes<HTMLElement> {
+  project?: DirectoryApi
+}
+
 const CSS_ICON_SIZE = 'w-4 h-4'
 
 export function FolderTree({
   project,
-}: {
-  project?: DirectoryApi
-}): JSX.Element {
+  className,
+}: PropsFolderTree): JSX.Element {
   const directory = useMemo(() => new ModelDirectory(project), [project])
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -65,7 +68,9 @@ export function FolderTree({
   }, [confirmation])
 
   return (
-    <div className="py-2 px-1 overflow-hidden">
+    <div
+      className={clsx('py-2 px-1 overflow-hidden overflow-y-auto', className)}
+    >
       <ModalConfirmation
         show={showConfirmation}
         headline={confirmation?.headline}
