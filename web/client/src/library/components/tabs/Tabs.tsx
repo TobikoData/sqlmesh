@@ -11,7 +11,9 @@ import { useStoreFileTree } from '../../../context/fileTree'
 
 const TABS = ['Table', 'Query Preview', 'Terminal Output']
 
-export default function Tabs(): JSX.Element {
+interface PropsTabs extends React.HTMLAttributes<HTMLElement> {}
+
+export default function Tabs({ className }: PropsTabs): JSX.Element {
   const tabTableContent = useStoreEditor(s => s.tabTableContent)
   const tabQueryPreviewContent = useStoreEditor(s => s.tabQueryPreviewContent)
   const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
@@ -54,7 +56,7 @@ export default function Tabs(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
+    <div className={clsx('flex flex-col overflow-hidden', className)}>
       <Tab.Group>
         <Tab.List className="w-full whitespace-nowrap px-2 pt-3">
           <div className="w-full overflow-hidden overflow-x-auto py-1">
