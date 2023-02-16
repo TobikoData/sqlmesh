@@ -4,7 +4,7 @@ Although SQL is a powerful tool, there are some use cases that are better handle
 
 ## Definition
 
-Python models can be created by creating a file in the `models/` directory with the `*.py` suffix. Inside the file, you need to write a function called `execute` like this.
+To create a Python model add a new file with the `*.py` extension to the `models/` directory. Inside the file, define a function named `execute` as in the following example:
 
 ```python
 import typing as t
