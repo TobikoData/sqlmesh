@@ -18,6 +18,7 @@ import { useStoreEditor } from '../../../context/editor'
 import { fetchdfApiFetchdfPost } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import { isString } from '../../../utils'
+import SplitPane from '../splitPane/SplitPane'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -29,7 +30,9 @@ export const EnumEditorFileStatus = {
 export type EditorFileStatus =
   typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
 
-export function Editor(): JSX.Element {
+interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
+
+export function Editor({ className }: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
   const activeFileId = useStoreFileTree(s => s.activeFileId)
@@ -164,168 +167,172 @@ export function Editor(): JSX.Element {
     setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
 
+  const sizes = [tabTableContent, tabTerminalContent].some(Boolean)
+    ? [75, 25]
+    : [100, 0]
+
   return (
-    <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
-      <div className="flex items-center">
-        <Button
-          className="m-0 ml-1 mr-3"
-          variant="primary"
-          size="sm"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
-
-            addNewFileAndSelect()
-          }}
-        >
-          <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
-        </Button>
-        <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
-          {openedFiles.size > 0 &&
-            [...openedFiles.values()].map((file, idx) => (
-              <li
-                key={file.id}
-                className={clsx(
-                  'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
-                )}
-                onClick={(e: MouseEvent) => {
-                  e.stopPropagation()
-
-                  setActiveFileId(file.id)
-                }}
-              >
-                <span
-                  className={clsx(
-                    'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
-                    file.id === activeFileId
-                      ? 'bg-secondary-100'
-                      : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
-                  )}
-                >
-                  <small className="text-xs">
-                    {file.isUntitled ? `SQL-${idx + 1}` : file.name}
-                  </small>
-                  {openedFiles.size > 1 && (
-                    <XCircleIcon
-                      className="inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700"
-                      onClick={(e: MouseEvent) => {
-                        e.stopPropagation()
-
-                        cleanUp()
-                        closeEditorTab(file)
-                      }}
-                    />
-                  )}
-                </span>
-              </li>
-            ))}
-        </ul>
-      </div>
-
-      <Divider />
+    <SplitPane
+      sizes={sizes}
+      direction="vertical"
+      minSize={0}
+      className={className}
+    >
       <div className="w-full h-full flex flex-col overflow-hidden">
-        <div className="w-full h-full overflow-hidden">
-          <CodeEditor
-            className="h-full w-full"
-            extension={activeFile.extension}
-            value={activeFile.content}
-            onChange={debouncedChange}
-          />
+        <div className="flex items-center">
+          <Button
+            className="m-0 ml-1 mr-3"
+            variant="primary"
+            size="sm"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              addNewFileAndSelect()
+            }}
+          >
+            <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
+          </Button>
+          <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
+            {openedFiles.size > 0 &&
+              [...openedFiles.values()].map((file, idx) => (
+                <li
+                  key={file.id}
+                  className={clsx(
+                    'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
+                  )}
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation()
+
+                    setActiveFileId(file.id)
+                  }}
+                >
+                  <span
+                    className={clsx(
+                      'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
+                      file.id === activeFileId
+                        ? 'bg-secondary-100'
+                        : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
+                    )}
+                  >
+                    <small className="text-xs">
+                      {file.isUntitled ? `SQL-${idx + 1}` : file.name}
+                    </small>
+                    {openedFiles.size > 1 && (
+                      <XCircleIcon
+                        className="inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700"
+                        onClick={(e: MouseEvent) => {
+                          e.stopPropagation()
+
+                          cleanUp()
+                          closeEditorTab(file)
+                        }}
+                      />
+                    )}
+                  </span>
+                </li>
+              ))}
+          </ul>
         </div>
-      </div>
-      <Divider />
-      <div className="px-2 flex justify-between items-center min-h-[2rem]">
-        <div className="flex align-center mr-4">
-          <Indicator
-            text="Valid"
-            ok={true}
-          />
-          {!activeFile.isLocal && (
-            <>
-              <Divider
-                orientation="vertical"
-                className="h-[12px] mx-3"
-              />
-              <Indicator
-                text="Saved"
-                ok={isSaved}
-              />
-            </>
-          )}
-          <Divider
-            orientation="vertical"
-            className="h-[12px] mx-3"
-          />
-          <Indicator
-            text="Status"
-            value={fileStatus}
-          />
-          <Divider
-            orientation="vertical"
-            className="h-[12px] mx-3"
-          />
-          <Indicator
-            text="Language"
-            value={getLanguageByExtension(activeFile.extension)}
-          />
+
+        <Divider />
+        <div className="w-full h-full flex flex-col overflow-hidden">
+          <div className="w-full h-full overflow-hidden">
+            <CodeEditor
+              className="h-full w-full"
+              extension={activeFile.extension}
+              value={activeFile.content}
+              onChange={debouncedChange}
+            />
+          </div>
         </div>
-        <div className="flex">
-          {activeFile != null &&
-            activeFile.extension === '.sql' &&
-            activeFile.content !== '' && (
+
+        <Divider />
+        <div className="px-2 flex justify-between items-center min-h-[2rem]">
+          <div className="flex align-center mr-4">
+            <Indicator
+              text="Valid"
+              ok={true}
+            />
+            {!activeFile.isLocal && (
+              <>
+                <Divider
+                  orientation="vertical"
+                  className="h-[12px] mx-3"
+                />
+                <Indicator
+                  text="Saved"
+                  ok={isSaved}
+                />
+              </>
+            )}
+            <Divider
+              orientation="vertical"
+              className="h-[12px] mx-3"
+            />
+            <Indicator
+              text="Status"
+              value={fileStatus}
+            />
+            <Divider
+              orientation="vertical"
+              className="h-[12px] mx-3"
+            />
+            <Indicator
+              text="Language"
+              value={getLanguageByExtension(activeFile.extension)}
+            />
+          </div>
+          <div className="flex">
+            {activeFile != null &&
+              activeFile.extension === '.sql' &&
+              activeFile.content !== '' && (
+                <>
+                  <Button
+                    size={EnumSize.sm}
+                    variant="alternative"
+                    onClick={e => {
+                      e.stopPropagation()
+
+                      sendQuery()
+                    }}
+                  >
+                    Run Query
+                  </Button>
+                  <Button
+                    size={EnumSize.sm}
+                    variant="alternative"
+                    onClick={e => {
+                      e.stopPropagation()
+
+                      onChange('')
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
+
+            {!activeFile.isLocal && (
               <>
                 <Button
                   size={EnumSize.sm}
                   variant="alternative"
-                  onClick={e => {
-                    e.stopPropagation()
-
-                    sendQuery()
-                  }}
                 >
-                  Run Query
+                  Validate
                 </Button>
                 <Button
                   size={EnumSize.sm}
                   variant="alternative"
-                  onClick={e => {
-                    e.stopPropagation()
-
-                    onChange('')
-                  }}
                 >
-                  Clear
+                  Format
                 </Button>
               </>
             )}
-
-          {!activeFile.isLocal && (
-            <>
-              <Button
-                size={EnumSize.sm}
-                variant="alternative"
-              >
-                Validate
-              </Button>
-              <Button
-                size={EnumSize.sm}
-                variant="alternative"
-              >
-                Format
-              </Button>
-            </>
-          )}
+          </div>
         </div>
       </div>
-
-      {[tabTableContent, tabTerminalContent].some(Boolean) && (
-        <>
-          <Divider />
-          <div className="w-full min-h-[10rem] overflow-auto">
-            <Tabs />
-          </div>
-        </>
-      )}
-    </div>
+      <Tabs className="h-full w-full overflow-auto" />
+    </SplitPane>
   )
 }
 

@@ -19,6 +19,7 @@ import { Progress } from '../progress/Progress'
 import Spinner from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
 import fetchAPI from '../../../api/instance'
+import SplitPane from '../splitPane/SplitPane'
 
 export function IDE(): JSX.Element {
   const planState = useStorePlan(s => s.state)
@@ -258,17 +259,16 @@ export function IDE(): JSX.Element {
         </div>
       </div>
       <Divider />
-      <div className="flex w-full h-full overflow-hidden">
-        <div className="w-[16rem] overflow-hidden overflow-y-auto">
-          <FolderTree project={project} />
-        </div>
-        <Divider orientation="vertical" />
-        <div className={clsx('h-full w-full flex flex-col overflow-hidden')}>
-          <Editor />
-        </div>
-      </div>
+      <SplitPane
+        sizes={[25, 75]}
+        minSize={120}
+        className="flex w-full h-full overflow-hidden"
+      >
+        <FolderTree project={project} />
+        <Editor className="w-full h-full" />
+      </SplitPane>
       <Divider />
-      <div className="p-1">ide footer</div>
+      <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
       <Transition
         appear
         show={
