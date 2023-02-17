@@ -29,12 +29,11 @@ def column_types_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, e
     Returns:
         A dict of column name to exp.DataType
     """
-    data_types: t.Dict[str, exp.DataType] = {}
-    for name, column in columns.items():
-        if column.data_type:
-            data_types[name] = parse_one(column.data_type, into=exp.DataType)
-
-    return data_types
+    return {
+        name: parse_one(column.data_type, into=exp.DataType)
+        for name, column in columns.items()
+        if column.data_type
+    }
 
 
 def column_descriptions_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, str]:
@@ -44,12 +43,7 @@ def column_descriptions_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict
     Returns:
         A dict of column name to description
     """
-    descriptions = {}
-    for name, column in columns.items():
-        if column.description:
-            descriptions[name] = column.description
-
-    return descriptions
+    return {name: column.description for name, column in columns.items() if column.description}
 
 
 class ColumnConfig(GeneralConfig):
