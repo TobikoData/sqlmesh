@@ -14,6 +14,7 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.tree import Tree
 
+from sqlmesh import RuntimeEnv
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -119,6 +120,15 @@ class TerminalConsole(Console):
         self.tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
+    def _print(self, value: t.Any, **kwargs: t.Any) -> None:
+        self.console.print(value)
+
+    def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
+        return Prompt.ask(message, console=self.console, **kwargs)
+
+    def _confirm(self, message: str, **kwargs: t.Any) -> bool:
+        return Confirm.ask(message, console=self.console, **kwargs)
+
     def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
         """Indicates that a new load progress has begun."""
         if not self.progress:
@@ -178,9 +188,7 @@ class TerminalConsole(Console):
             detailed: Show the actual SQL differences if True.
         """
         if not context_diff.has_differences:
-            self.console.print(
-                Tree(f"[bold]No differences when compared to `{context_diff.environment}`")
-            )
+            self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
             return
         tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
 
@@ -217,7 +225,7 @@ class TerminalConsole(Console):
                 tree.add(indirect)
             if metadata.children:
                 tree.add(metadata)
-        self.console.print(tree)
+        self._print(tree)
 
     def plan(self, plan: Plan, auto_apply: bool) -> None:
         """The main plan flow.
@@ -249,7 +257,7 @@ class TerminalConsole(Console):
         self._show_categorized_snapshots(plan)
 
         for snapshot in plan.uncategorized:
-            self.console.print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
+            self._print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name}")
             indirect_tree = None
 
@@ -258,7 +266,7 @@ class TerminalConsole(Console):
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(f"[indirect]{child}")
-            self.console.print(tree)
+            self._print(tree)
             self._get_snapshot_change_category(snapshot, plan, auto_apply)
 
     def _show_categorized_snapshots(self, plan: Plan) -> None:
@@ -276,8 +284,8 @@ class TerminalConsole(Console):
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(f"[indirect]{child}")
-            self.console.print(syntax_dff)
-            self.console.print(tree)
+            self._print(syntax_dff)
+            self._print(tree)
 
     def _show_missing_dates(self, plan: Plan) -> None:
         """Displays the models with missing dates"""
@@ -286,7 +294,7 @@ class TerminalConsole(Console):
         backfill = Tree("[bold]Models needing backfill (missing dates):")
         for missing in plan.missing_intervals:
             backfill.add(f"{missing.snapshot_name}: {missing.format_missing_range()}")
-        self.console.print(backfill)
+        self._print(backfill)
 
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
@@ -298,28 +306,25 @@ class TerminalConsole(Console):
                 if is_forward_only_dev
                 else "for the beginning of history"
             )
-            start = Prompt.ask(
+            start = self._prompt(
                 f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
-                console=self.console,
             )
             if start:
                 plan.start = start
 
         if plan.is_end_allowed and not plan.override_end:
-            end = Prompt.ask(
+            end = self._prompt(
                 f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
-                console=self.console,
             )
             if end:
                 plan.end = end
 
-        if not auto_apply and Confirm.ask(f"Apply - {backfill_or_preview.capitalize()} Tables"):
+        if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
-        if Confirm.ask(
+        if self._confirm(
             f"Apply - Logical Update",
-            console=self.console,
         ):
             plan.apply()
 
@@ -328,36 +333,36 @@ class TerminalConsole(Console):
     ) -> None:
         divider_length = 70
         if result.wasSuccessful():
-            self.console.print("=" * divider_length)
-            self.console.print(
+            self._print("=" * divider_length)
+            self._print(
                 f"Successfully Ran {str(result.testsRun)} tests against {target_dialect}",
                 style="green",
             )
-            self.console.print("-" * divider_length)
+            self._print("-" * divider_length)
         else:
-            self.console.print("-" * divider_length)
-            self.console.print("Test Failure Summary")
-            self.console.print("=" * divider_length)
-            self.console.print(
+            self._print("-" * divider_length)
+            self._print("Test Failure Summary")
+            self._print("=" * divider_length)
+            self._print(
                 f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}"
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self.console.print(f"Failure Test: {test.model_name} {test.test_name}")
-            self.console.print("=" * divider_length)
-            self.console.print(output)
+                    self._print(f"Failure Test: {test.model_name} {test.test_name}")
+            self._print("=" * divider_length)
+            self._print(output)
 
     def show_sql(self, sql: str) -> None:
-        self.console.print(Syntax(sql, "sql"))
+        self._print(Syntax(sql, "sql"))
 
     def log_status_update(self, message: str) -> None:
-        self.console.print(message)
+        self._print(message)
 
     def log_error(self, message: str) -> None:
-        self.console.print(f"[red]{message}[/red]")
+        self._print(f"[red]{message}[/red]")
 
     def log_success(self, message: str) -> None:
-        self.console.print(f"\n[green]{message}[/green]\n")
+        self._print(f"\n[green]{message}[/green]\n")
 
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
         id = uuid.uuid4()
@@ -373,9 +378,8 @@ class TerminalConsole(Console):
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
     ) -> None:
         choices = self._snapshot_change_choices(snapshot)
-        response = Prompt.ask(
+        response = self._prompt(
             "\n".join([f"[{i+1}] {choice}" for i, choice in enumerate(choices.values())]),
-            console=self.console,
             show_choices=False,
             choices=[f"{i+1}" for i in range(len(choices))],
         )
@@ -637,10 +641,39 @@ class NotebookMagicConsole(TerminalConsole):
             self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
-def get_console() -> TerminalConsole:
+class DatabricksMagicConsole(TerminalConsole):
     """
-    Currently we only return TerminalConsole since the MagicConsole is only referenced in the magics and
-    called directly. Seems reasonable we will want dynamic consoles in the future based on runtime environment
-    so going to leave this for now.
+    Note: Databricks Magic Console currently does not support progress bars while a plan is being applied. The
+    NotebookMagicConsole does support progress bars, but they will time out after 5 minutes of execution
+    and it makes it difficult to see the progress of the plan.
     """
-    return TerminalConsole()
+
+    def _print(self, value: t.Any, **kwargs: t.Any) -> None:
+        with self.console.capture() as capture:
+            self.console.print(value, **kwargs)
+        output = capture.get()
+        print(output)
+
+    def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
+        self._print(message, **kwargs)
+        return super()._prompt("", **kwargs)
+
+    def _confirm(self, message: str, **kwargs: t.Any) -> bool:
+        self._print(message, **kwargs)
+        return super()._confirm("", **kwargs)
+
+
+def get_console() -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
+    """
+    Returns the console that is appropriate for the current runtime environment.
+
+    Note: Google Colab environment is untested and currently assumes is compatible with the base
+    NotebookMagicConsole.
+    """
+    runtime_env_mapping = {
+        RuntimeEnv.DATABRICKS: DatabricksMagicConsole,
+        RuntimeEnv.JUPYTER: NotebookMagicConsole,
+        RuntimeEnv.TERMINAL: TerminalConsole,
+        RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
+    }
+    return runtime_env_mapping[RuntimeEnv.get()]()
