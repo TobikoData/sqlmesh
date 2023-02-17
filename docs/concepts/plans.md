@@ -19,7 +19,7 @@ The benefit of having a plan is that all changes can be reviewed and verified be
 
 To create a new plan, run the following command:
 ```bash
-$ sqlmesh plan
+sqlmesh plan
 ```
 ## Change categories
 Categories only need to be provided for models that have been modified directly. The categorization of indirectly modified downstream models is inferred based on upstream decisions. If more than one upstream dependency of an indirectly modified model has been modified and they have conflicting categories, the most conservative category (breaking) is assigned to this model.
@@ -64,7 +64,7 @@ To preserve isolation between environments during development, SQLMesh creates t
 
 To create a forward-only plan, the `--forward-only` option has to be added to the `plan` command:
 ```bash
-$ sqlmesh plan --forward-only
+sqlmesh plan --forward-only
 ```
 
 ## Restatement plans
