@@ -111,7 +111,7 @@ async def tasks(
 async def evaluate(
     options: models.EvaluateInput,
     context: Context = Depends(get_loaded_context),
-) -> t.Optional[str]:
+) -> models.QueryResults:
     """Evaluate a model with a default limit of 1000"""
     try:
         df = context.evaluate(
@@ -125,19 +125,35 @@ async def evaluate(
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
+    sql = (
+        context.render(  # type: ignore
+            options.model,
+            start=options.start,
+            end=options.end,
+            latest=options.latest,
+        )
+        .limit(options.limit)
+        .sql(dialect=context.dialect)
+    )
     if isinstance(df, pd.DataFrame):
-        return df.to_json()
-    return df.toPandas().to_json()
+        return models.QueryResults(query=sql, results=df.to_json())
+    return models.QueryResults(
+        query=sql,
+        results=df.toPandas().to_json(),
+    )
 
 
 @router.post("/fetchdf")
 async def fetchdf(
     sql: str = Body(embed=True),
     context: Context = Depends(get_loaded_context),
-) -> t.Optional[str]:
+) -> models.QueryResults:
     """Fetches a dataframe given a sql string"""
     try:
-        return context.fetchdf(sql).to_json()
+        return models.QueryResults(
+            query=sql,
+            results=context.fetchdf(sql).to_json(),
+        )
     except Exception:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()

@@ -109,4 +109,9 @@ class EvaluateInput(PydanticModel):
     start: TimeLike
     end: TimeLike
     latest: TimeLike
-    limit: t.Optional[int] = None
+    limit: t.Optional[int] = 1000
+
+
+class QueryResults(PydanticModel):
+    query: str
+    results: str
