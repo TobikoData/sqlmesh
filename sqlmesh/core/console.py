@@ -445,7 +445,7 @@ class NotebookMagicConsole(TerminalConsole):
         from IPython.display import display as ipython_display
 
         super().__init__(console, **kwargs)
-        self.display = display or ipython_display
+        self.display = display or get_ipython().user_ns.get("display", ipython_display)  # type: ignore
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
 
