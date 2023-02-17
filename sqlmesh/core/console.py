@@ -436,12 +436,16 @@ class NotebookMagicConsole(TerminalConsole):
     """
 
     def __init__(
-        self, display: t.Callable, console: t.Optional[RichConsole] = None, **kwargs: t.Any
+        self,
+        display: t.Optional[t.Callable] = None,
+        console: t.Optional[RichConsole] = None,
+        **kwargs: t.Any,
     ) -> None:
         import ipywidgets as widgets
+        from IPython.display import display as ipython_display
 
         super().__init__(console, **kwargs)
-        self.display = display
+        self.display = display or get_ipython().user_ns.get("display", ipython_display)  # type: ignore
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
 
