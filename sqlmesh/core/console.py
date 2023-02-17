@@ -113,7 +113,7 @@ class Console(abc.ABC):
 class TerminalConsole(Console):
     """A rich based implementation of the console"""
 
-    def __init__(self, console: t.Optional[RichConsole] = None) -> None:
+    def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         self.console: RichConsole = console or srich.console
         self.progress: t.Optional[Progress] = None
         self.tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
@@ -435,10 +435,12 @@ class NotebookMagicConsole(TerminalConsole):
     or capturing it and converting it into a widget.
     """
 
-    def __init__(self, display: t.Callable, console: t.Optional[RichConsole] = None) -> None:
+    def __init__(
+        self, display: t.Callable, console: t.Optional[RichConsole] = None, **kwargs: t.Any
+    ) -> None:
         import ipywidgets as widgets
 
-        super().__init__(console)
+        super().__init__(console, **kwargs)
         self.display = display
         self.missing_dates_output = widgets.Output()
         self.dynamic_options_after_categorization_output = widgets.VBox()
@@ -663,7 +665,7 @@ class DatabricksMagicConsole(TerminalConsole):
         return super()._confirm("", **kwargs)
 
 
-def get_console() -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
+def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
     """
     Returns the console that is appropriate for the current runtime environment.
 
@@ -678,4 +680,4 @@ def get_console() -> TerminalConsole | DatabricksMagicConsole | NotebookMagicCon
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
     }
-    return runtime_env_mapping[runtime_env]()
+    return runtime_env_mapping[runtime_env](**kwargs)

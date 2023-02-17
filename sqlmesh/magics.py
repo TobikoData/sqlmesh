@@ -226,7 +226,7 @@ class SQLMeshMagics(Magics):
 
         # Since the magics share a context we want to clear out any state before generating a new plan
         console = self._context.console
-        self._context.console = get_console()
+        self._context.console = get_console(display=self.display)
 
         self._context.plan(
             args.environment,
