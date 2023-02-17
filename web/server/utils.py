@@ -1,8 +1,10 @@
 import asyncio
+import traceback
 import typing as t
+from pathlib import Path
 
 from fastapi import Depends, HTTPException
-from starlette.status import HTTP_404_NOT_FOUND
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from web.server.settings import get_context
@@ -29,3 +31,16 @@ def validate_path(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
     return path
+
+
+def replace_file(src: Path, dst: Path) -> None:
+    """Move a file or directory at src to dst."""
+    if src != dst:
+        try:
+            src.replace(dst)
+        except FileNotFoundError:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+        except OSError:
+            raise HTTPException(
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+            )
