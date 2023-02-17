@@ -1,12 +1,13 @@
 import json
+from pathlib import Path
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model import Model, SqlModel, load_model
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -273,6 +274,40 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint != fingerprint_from_model(model, models={})
+
+
+def test_fingerprint_seed_model():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv'
+            )
+        );
+    """
+    )
+
+    expected_fingerprint = SnapshotFingerprint(
+        data_hash="941582290",
+        metadata_hash="2750000337",
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    actual_fingerprint = fingerprint_from_model(model, models={})
+    assert actual_fingerprint == expected_fingerprint
+
+    updated_model = model.copy(
+        update={
+            "columns_to_types_": {
+                "id": exp.DataType.build("int"),
+                "name": exp.DataType.build("text"),
+            }
+        }
+    )
+    updated_actual_fingerprint = fingerprint_from_model(updated_model, models={})
+    assert updated_actual_fingerprint.data_hash != expected_fingerprint.data_hash
+    assert updated_actual_fingerprint.metadata_hash == expected_fingerprint.metadata_hash
 
 
 def test_stamp(model: Model):
