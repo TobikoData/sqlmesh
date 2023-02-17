@@ -138,6 +138,81 @@ def test_update_file(project_tmp_path: Path) -> None:
     assert (project_tmp_path / "foo.txt").read_text() == "baz"
 
 
+def test_rename_file(project_tmp_path: Path) -> None:
+    txt_file = project_tmp_path / "foo.txt"
+    txt_file.write_text("bar")
+
+    response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "baz.txt",
+        "path": "baz.txt",
+        "extension": ".txt",
+        "is_supported": False,
+        "content": "bar",
+    }
+    assert not txt_file.exists()
+    assert (project_tmp_path / "baz.txt").read_text() == "bar"
+
+
+def test_rename_and_update_file(project_tmp_path: Path) -> None:
+    txt_file = project_tmp_path / "foo.txt"
+    txt_file.write_text("bar")
+
+    response = client.post(
+        "/api/files/foo.txt", json={"content": "hello world", "new_path": "baz.txt"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "baz.txt",
+        "path": "baz.txt",
+        "extension": ".txt",
+        "is_supported": False,
+        "content": "hello world",
+    }
+    assert not txt_file.exists()
+    assert (project_tmp_path / "baz.txt").read_text() == "hello world"
+
+
+def test_rename_file_not_found(project_tmp_path: Path) -> None:
+    response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
+    assert response.status_code == 404
+
+
+def test_rename_file_already_exists(project_tmp_path: Path) -> None:
+    foo_file = project_tmp_path / "foo.txt"
+    foo_file.write_text("foo")
+    bar_file = project_tmp_path / "bar.txt"
+    bar_file.write_text("bar")
+
+    response = client.post("/api/files/foo.txt", json={"new_path": "bar.txt"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "bar.txt",
+        "path": "bar.txt",
+        "extension": ".txt",
+        "is_supported": False,
+        "content": "foo",
+    }
+    assert not foo_file.exists()
+
+
+def test_rename_file_to_existing_directory(project_tmp_path: Path) -> None:
+    foo_file = project_tmp_path / "foo.txt"
+    foo_file.touch()
+    existing_dir = project_tmp_path / "existing_dir"
+    existing_dir.mkdir()
+
+    response = client.post("/api/files/foo.txt", json={"new_path": "existing_dir"})
+    assert response.status_code == 422
+    assert foo_file.exists()
+
+
+def test_write_file_empty_body(project_tmp_path: Path) -> None:
+    response = client.post("/api/files/foo.txt", json={})
+    assert response.status_code == 404
+
+
 def test_delete_file(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
@@ -156,6 +231,7 @@ def test_create_directory(project_tmp_path: Path) -> None:
     response = client.post("/api/directories/new_dir")
     assert response.status_code == 200
     assert (project_tmp_path / "new_dir").exists()
+    assert response.json() == {"directories": [], "files": [], "name": "new_dir", "path": "new_dir"}
 
 
 def test_create_directory_already_exists(project_tmp_path: Path) -> None:
@@ -165,6 +241,64 @@ def test_create_directory_already_exists(project_tmp_path: Path) -> None:
     response = client.post("/api/directories/new_dir")
     assert response.status_code == 422
     assert response.json() == {"detail": "Directory already exists"}
+
+
+def test_rename_directory(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+
+    response = client.post("/api/directories/new_dir", json={"new_path": "renamed_dir"})
+    assert response.status_code == 200
+    assert not new_dir.exists()
+    assert (project_tmp_path / "renamed_dir").exists()
+    assert response.json() == {
+        "directories": [],
+        "files": [],
+        "name": "renamed_dir",
+        "path": "renamed_dir",
+    }
+
+
+def test_rename_directory_already_exists_empty(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+    existing_dir = project_tmp_path / "renamed_dir"
+    existing_dir.mkdir()
+
+    response = client.post("/api/directories/new_dir", json={"new_path": "renamed_dir"})
+    assert response.status_code == 200
+    assert not new_dir.exists()
+    assert (project_tmp_path / "renamed_dir").exists()
+    assert response.json() == {
+        "directories": [],
+        "files": [],
+        "name": "renamed_dir",
+        "path": "renamed_dir",
+    }
+
+
+def test_rename_directory_already_exists_not_empty(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+    existing_dir = project_tmp_path / "renamed_dir"
+    existing_dir.mkdir()
+    existing_file = existing_dir / "foo.txt"
+    existing_file.touch()
+
+    response = client.post("/api/directories/new_dir", json={"new_path": "renamed_dir"})
+    assert response.status_code == 422
+    assert new_dir.exists()
+
+
+def test_rename_directory_to_existing_file(project_tmp_path: Path) -> None:
+    new_dir = project_tmp_path / "new_dir"
+    new_dir.mkdir()
+    existing_file = project_tmp_path / "foo.txt"
+    existing_file.touch()
+
+    response = client.post("/api/directories/new_dir", json={"new_path": "foo.txt"})
+    assert response.status_code == 422
+    assert new_dir.exists()
 
 
 def test_delete_directory(project_tmp_path: Path) -> None:
