@@ -8,7 +8,12 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
-from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
+from sqlmesh.dbt.column import (
+    ColumnConfig,
+    column_descriptions_to_sqlmesh,
+    column_types_to_sqlmesh,
+    yaml_to_columns,
+)
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils.conversions import ensure_bool
 
@@ -66,6 +71,9 @@ class SeedConfig(GeneralConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
+        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
+            return v
+
         return yaml_to_columns(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -82,7 +90,11 @@ class SeedConfig(GeneralConfig):
     def to_sqlmesh(self) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
         return create_seed_model(
-            self.seed_name, SeedKind(path=self.path.absolute()), path=self.path
+            self.seed_name,
+            SeedKind(path=self.path.absolute()),
+            path=self.path,
+            columns=column_types_to_sqlmesh(self.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
         )
 
     @property

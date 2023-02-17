@@ -9,8 +9,20 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
-from sqlmesh.core.model import Model, ModelKindName, load_model
-from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
+    Model,
+    ModelKind,
+    ModelKindName,
+    create_sql_model,
+)
+from sqlmesh.dbt.column import (
+    ColumnConfig,
+    column_descriptions_to_sqlmesh,
+    column_types_to_sqlmesh,
+    yaml_to_columns,
+)
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
 from sqlmesh.dbt.macros import MacroConfig, ref_method, source_method, var_method
 from sqlmesh.dbt.seed import SeedConfig
@@ -108,6 +120,9 @@ class ModelConfig(GeneralConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
+        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
+            return v
+
         return yaml_to_columns(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -132,22 +147,6 @@ class ModelConfig(GeneralConfig):
         macros: UniqueKeyDict[str, MacroConfig],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        expressions = d.parse_model(
-            f"""
-            MODEL (
-              name {self.model_name},
-              kind {self.model_kind},
-            );
-            """
-            + self.sql,
-            default_dialect="",
-        )
-
-        for jinja in expressions[1:]:
-            # find all the refs here and filter the python env?
-            if isinstance(jinja, d.Jinja):
-                pass
-
         source_mapping = {config.config_name: config.source_name for config in sources.values()}
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
@@ -166,9 +165,15 @@ class ModelConfig(GeneralConfig):
             for ref in dependencies.refs
         }
 
-        return load_model(
-            expressions,
-            path=self.path,
+        expressions = d.parse(self.sql)
+
+        return create_sql_model(
+            self.model_name,
+            expressions[-1],
+            kind=self.model_kind,
+            statements=expressions[0:-1],
+            columns=column_types_to_sqlmesh(self.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
             python_env=python_env,
             depends_on=depends_on,
             start=self.start,
@@ -186,7 +191,7 @@ class ModelConfig(GeneralConfig):
         return ".".join(part for part in (schema, self.alias or self.table_name) if part)
 
     @property
-    def model_kind(self) -> str:
+    def model_kind(self) -> ModelKind:
         """
         Get the sqlmesh ModelKind
 
@@ -195,20 +200,20 @@ class ModelConfig(GeneralConfig):
         """
         materialization = self.materialized
         if materialization == Materialization.TABLE:
-            return ModelKindName.FULL.value
+            return ModelKind(name=ModelKindName.FULL)
         if materialization == Materialization.VIEW:
-            return ModelKindName.VIEW.value
+            return ModelKind(name=ModelKindName.VIEW)
         if materialization == Materialization.INCREMENTAL:
             if self.time_column:
-                return f"{ModelKindName.INCREMENTAL_BY_TIME_RANGE.value} (TIME_COLUMN {self.time_column})"
+                return IncrementalByTimeRangeKind(time_column=self.time_column)
             if self.unique_key:
-                return f"{ModelKindName.INCREMENTAL_BY_UNIQUE_KEY.value} (UNIQUE_KEY ({','.join(self.unique_key)}))"
+                return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
             raise ConfigError(
                 "SQLMesh ensures idempotent incremental loads and thus does not support append."
                 " Add either an unique key (merge) or a time column (insert-overwrite)."
             )
         if materialization == Materialization.EPHEMERAL:
-            return ModelKindName.EMBEDDED.value
+            return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     def _all_dependencies(

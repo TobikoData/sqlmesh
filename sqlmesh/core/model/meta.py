@@ -55,6 +55,7 @@ class ModelMeta(PydanticModel):
     post: t.List[HookCall] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
+    column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
 
     _croniter: t.Optional[croniter] = None
@@ -192,6 +193,11 @@ class ModelMeta(PydanticModel):
     def partitioned_by(self) -> t.List[str]:
         time_column = [self.time_column.column] if self.time_column else []
         return unique([*time_column, *self.partitioned_by_])
+
+    @property
+    def column_descriptions(self) -> t.Dict[str, str]:
+        """A dictionary of column names to annotation comments."""
+        return self.column_descriptions_ or {}
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

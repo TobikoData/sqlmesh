@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from sqlglot import exp, parse, parse_one
 
+import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import Jinja, format_model_expressions, parse_model
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelMeta,
@@ -419,12 +419,12 @@ def test_render_definition():
     )
 
     # Should not include the macro implementation.
-    assert format_model_expressions(
+    assert d.format_model_expressions(
         model.render_definition(include_python=False)
-    ) == format_model_expressions(expressions)
+    ) == d.format_model_expressions(expressions)
 
     # Should include the macro implementation.
-    assert "def test_macro(evaluator, v):" in format_model_expressions(model.render_definition())
+    assert "def test_macro(evaluator, v):" in d.format_model_expressions(model.render_definition())
 
 
 def test_cron():
@@ -731,8 +731,8 @@ def test_filter_time_column(assert_exp_eq):
     )
 
 
-def test_parse_model(assert_exp_eq):
-    expressions = parse_model(
+def test_parse(assert_exp_eq):
+    expressions = d.parse(
         """
         MODEL (
           name sushi.items,
@@ -755,8 +755,8 @@ def test_parse_model(assert_exp_eq):
         "id": exp.DataType.build("int"),
     }
     assert model.dialect == ""
-    assert isinstance(model.query, Jinja)
-    assert isinstance(SqlModel.parse_raw(model.json()).query, Jinja)
+    assert isinstance(model.query, d.Jinja)
+    assert isinstance(SqlModel.parse_raw(model.json()).query, d.Jinja)
     assert_exp_eq(
         model.render_query(),
         """
@@ -789,7 +789,7 @@ def test_star_expansion(assert_exp_eq) -> None:
     context = Context(config=Config())
 
     model1 = load_model(
-        parse_model(
+        d.parse(
             """
         MODEL (name db.model1, kind full);
 
@@ -815,7 +815,7 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
     model2 = load_model(
-        parse_model(
+        d.parse(
             """
         MODEL (name db.model2, kind full);
 
@@ -827,7 +827,7 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
     model3 = load_model(
-        parse_model(
+        d.parse(
             """
             MODEL(name db.model3, kind full);
 
