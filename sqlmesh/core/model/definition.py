@@ -896,7 +896,7 @@ def create_sql_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
-        statemets: The list of all SQL statements that are not a query or a model definition.
+        statements: The list of all SQL statements that are not a query or a model definition.
         defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
