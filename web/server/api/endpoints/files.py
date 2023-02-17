@@ -10,7 +10,7 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.settings import Settings, get_context, get_settings
-from web.server.utils import validate_path
+from web.server.utils import replace_file, validate_path
 
 router = APIRouter()
 
@@ -77,14 +77,30 @@ def get_file(
 
 @router.post("/{path:path}", response_model=models.File)
 async def write_file(
-    content: str = Body(embed=True),
+    content: t.Optional[str] = Body(None, embed=True),
+    new_path: t.Optional[str] = Body(None, embed=True),
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
+    context: Context = Depends(get_context),
 ) -> models.File:
-    """Create or update a file."""
-    with open(settings.project_path / path, "w", encoding="utf-8") as f:
-        f.write(content)
-    return models.File(name=os.path.basename(path), path=path, content=content)
+    """Create, update, or rename a file."""
+    path_or_new_path = path
+    if new_path:
+        path_or_new_path = validate_path(new_path, context)
+        replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
+
+    if content:
+        with open(settings.project_path / path_or_new_path, "w", encoding="utf-8") as f:
+            f.write(content)
+    else:
+        try:
+            with open(settings.project_path / path_or_new_path) as f:
+                content = f.read()
+        except FileNotFoundError:
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    return models.File(
+        name=os.path.basename(path_or_new_path), path=path_or_new_path, content=content
+    )
 
 
 @router.delete("/{path:path}")
