@@ -6,7 +6,7 @@ To run unit tests for your models, use the `sqlmesh test` command.
 
 Running the `sqlmesh test` command produces the following example output:
 
-```
+```bash
 .
 ----------------------------------------------------------------------
 Ran 1 test in 0.138s

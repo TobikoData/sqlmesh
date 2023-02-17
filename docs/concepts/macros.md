@@ -2,7 +2,7 @@
 
 Although SQL is not dynamic, data pipelines need some form of dynamicism to be useful. For example, you may want a SQL query that runs the same logic except for a filter on dates that should change with every invocation.
 
-```sql
+```sql linenums="1"
 SELECT *
 FROM table
 WHERE ds BETWEEN @start_ds and @end_ds
@@ -13,7 +13,7 @@ The syntax for the parameters `@start_ds` and `@end_ds` are passed in at run tim
 ## Variables
 The most common use case for dynamicism is simple variable substitution. You may want to swap out a constant in a filter at runtime. Variables can be referenced in Models by using the `@` symbol. They are type aware and can be used naturally in your SQL.
 
-```sql
+```sql linenums="1"
 SELECT *
 FROM table
 WHERE ds BETWEEN @start_ds and @end_ds
@@ -74,19 +74,19 @@ Variables:
 [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) is a popular templating tool for creating dynamic SQL and **is supported** by SQLMesh, but there are some drawbacks which lead for us to create our own Macro system.
 
 * Jinja is not valid SQL and not parseable.
-```sql
+```sql linenums="1"
 -- templating allows for arbitrary string replacements which is not feasible to parse
 SE{{ 'lect' }} x {{ 'AS ' + var }}
 FROM {{ 'table CROSS JOIN z' }}
 ```
 
 * Jinja is verbose and difficult to debug
-```sql
+```sql linenums="1"
 TODO example with multiple for loops with trailing or leading comma
 ```
 * No concepts of types. Easy to miss quotes.
 
-```sql
+```sql linenums="1"
 SELECT *
 FROM table
 WHERE ds BETWEEN '{{ start_ds }}' and '{{ end_ds }}'  -- quotes are needed

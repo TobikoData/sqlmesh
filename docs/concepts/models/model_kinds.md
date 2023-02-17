@@ -11,7 +11,7 @@ As the name suggests a model of this kind is computed incrementally, meaning onl
 In order to take advantage of the incremental evaluation, the model query must contain an expression in its `WHERE` clause which filters the upstream records by time range. SQLMesh provides special macros which represent the start and the end of the time range that is being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Please refer to [Macros](../macros.md#predefined-variables) to find more information on these.
 
 Below is an example of a definition which takes full advantage of the model's incremental nature:
-```sql
+```sql linenums="1"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE
@@ -26,7 +26,7 @@ WHERE
 
 ### Time column
 SQLMesh needs to know which column in the model's output represents a timestamp or a date associated with each record. This column is used to determine which records will be overridden during data [restatement](../plans.md#restatement-plans) as well as a partition key for engines that support partitioning (eg. Apache Spark). By default the `ds` column name is used but it can be overridden in the model definition:
-```sql
+```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
@@ -36,7 +36,7 @@ MODEL (
 ```
 
 Additionally, the format in which the timestamp/date is stored is required. By default SQLMesh uses the `%Y-%m-%d` format but it can be overridden as follows:
-```sql
+```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
@@ -49,7 +49,7 @@ Please note that the time format should be defined using the same dialect as the
 SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime which prevents records that are not a part of the target interval from being stored. This is a safety mechanism which prevents the unintended overriding of unrelated records when handling late arriving data.
 
 Consider the following model definition:
-```sql
+```sql linenums="1"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
@@ -65,7 +65,7 @@ WHERE
 ```
 
 At runtime, SQLMesh will automatically modify the model's query to look like following:
-```sql
+```sql linenums="1" hl_lines="7"
 SELECT
   event_date::TEXT as event_date,
   event_payload::TEXT as payload
@@ -102,7 +102,7 @@ This kind signifies that a model should be computed incrementally based on a uni
 [SCD](https://en.wikipedia.org/wiki/Slowly_changing_dimension) (Slowly Changing Dimensions) is one example that fits this description well.
 
 The name of the unique key column must be provided as part of the model definition as in the following example:
-```sql
+```sql linenums="1"
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
@@ -117,7 +117,7 @@ FROM raw_employees;
 ```
 
 Composite keys are also supported:
-```sql
+```sql linenums="1"
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
@@ -127,7 +127,7 @@ MODEL (
 ```
 
 Similarly to the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind, the upstream records can be filtered by time range using the `@start_date`, `@end_date`, etc. [macros](../macros.md#predefined-variables) in order to process the input data incrementally:
-```sql
+```sql linenums="1"
 SELECT
   name::TEXT as name,
   title::TEXT as title,
@@ -158,7 +158,7 @@ As the name suggests, this kind causes the dataset associated with a model to be
 This kind can be a good fit for aggregate tables that lack temporal dimension. For aggregate tables with temporal dimension consider the [INCREMENTAL_BY_TIME_RANGE](#incremental_by_time_range) kind instead.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name db.salary_by_title_agg,
   kind FULL
@@ -189,7 +189,7 @@ Up until now each model kind caused the output of a model query to be materializ
 Please note that with this kind the model's query is evaluated every time the model gets referenced in downstream queries. This may incur undesirable compute cost in case when the model's query is compute intensive or when the model is referenced in many downstream queries.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name db.highest_salary,
   kind VIEW
@@ -205,7 +205,7 @@ This kind is similar to [VIEW](#view), except models of this kind are never eval
 Embedded models are a way to share common logic between different models of other kinds.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name db.unique_employees,
   kind EMBEDDED

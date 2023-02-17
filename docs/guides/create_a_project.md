@@ -12,13 +12,13 @@ To create a project from the command line, follow these steps:
 
 1. Create a directory for your project:
 
-    ```
+    ```bash
     mkdir my-project
     ```
 
 2. Change directories into your new project:
 
-    ```
+    ```bash
     cd my-project
     ```
 
@@ -26,15 +26,15 @@ To create a project from the command line, follow these steps:
 
 1. To scaffold a project, it is recommended that you use a virtual environment by running the following commands:
 
-    ```
+    ```bash
     python -m venv .env
     ```
 
-    ```
+    ```bash
     source .env/bin/active
     ```
 
-    ```
+    ```bash
     pip install sqlmesh
     ```
 
@@ -42,10 +42,10 @@ To create a project from the command line, follow these steps:
 
 1. Once you have activated your environment, run the following command and SQLMesh will build out your project:
 
-    ```
+    ```bash
     sqlmesh init
     ```
-   
+
     The following directories and files will be created that you can use to organize your SQLMesh project:
 
     - config.py (database configuration file)
@@ -60,7 +60,7 @@ To edit an existing project, open the project file you wish to edit in your pref
 
 If using CLI or Notebook, you can open a file in your project for editing by using the `sqlmesh` command with the `--path` varaible, and pointing to your project's path as follows:
 
-```
+```bash
 sqlmesh --path <your-project-path>
 ```
 
@@ -70,6 +70,6 @@ For more details, refer to [CLI](../../api/cli) and [Notebook](../..api/notebook
 
 To import a dbt project, use the `sqlmesh init` command with the `dbt` flag as follows:
 
-```
+```bash
 sqlmesh init -t dbt
 ```

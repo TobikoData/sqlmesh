@@ -1,6 +1,6 @@
 # CLI
 
-```
+```bash
 Usage: sqlmesh [OPTIONS] COMMAND [ARGS]...
 
   SQLMesh command line tool.
@@ -25,7 +25,7 @@ Commands:
 ```
 
 ## plan
-```
+```bash
 Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
 
   Plan a migration of the current context's models with the given environment.
@@ -60,7 +60,7 @@ Options:
 ```
 
 ## evaluate
-```
+```bash
 Usage: sqlmesh evaluate [OPTIONS] MODEL
 
   Evaluate a model and return a dataframe with a default limit of 1000.
@@ -77,7 +77,7 @@ Options:
 ```
 
 ## render
-```
+```bash
 Usage: sqlmesh render [OPTIONS] MODEL
 
   Renders a model's query, optionally expanding referenced models.
@@ -97,7 +97,7 @@ Options:
 ```
 
 ## fetchdf
-```
+```bash
 Usage: sqlmesh fetchdf [OPTIONS] SQL
 
   Runs a sql query and displays the results.
@@ -107,7 +107,7 @@ Options:
 ```
 
 ## test
-```
+```bash
 Usage: sqlmesh test [OPTIONS] [TESTS]...
 
   Run model unit tests.
@@ -119,7 +119,7 @@ Options:
 ```
 
 ## audit
-```
+```bash
 Usage: sqlmesh audit [OPTIONS]
 
   Run audits.
@@ -136,7 +136,7 @@ Options:
 ```
 
 ## format
-```
+```bash
 Usage: sqlmesh format [OPTIONS]
 
   Format all models in a given directory.
@@ -146,7 +146,7 @@ Options:
 ```
 
 ## diff
-```
+```bash
 Usage: sqlmesh diff [OPTIONS] ENVIRONMENT
 
   Show the diff between the current context and a given environment.
@@ -156,7 +156,7 @@ Options:
 ```
 
 ## dag
-```
+```bash
 Usage: sqlmesh dag [OPTIONS]
 
   Renders the dag using graphviz.
