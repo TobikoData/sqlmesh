@@ -14,7 +14,6 @@ from rich.status import Status
 from rich.syntax import Syntax
 from rich.tree import Tree
 
-from sqlmesh import RuntimeEnv
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -670,10 +669,12 @@ def get_console() -> TerminalConsole | DatabricksMagicConsole | NotebookMagicCon
     Note: Google Colab environment is untested and currently assumes is compatible with the base
     NotebookMagicConsole.
     """
+    from sqlmesh import RuntimeEnv, runtime_env
+
     runtime_env_mapping = {
         RuntimeEnv.DATABRICKS: DatabricksMagicConsole,
         RuntimeEnv.JUPYTER: NotebookMagicConsole,
         RuntimeEnv.TERMINAL: TerminalConsole,
         RuntimeEnv.GOOGLE_COLAB: NotebookMagicConsole,
     }
-    return runtime_env_mapping[RuntimeEnv.get()]()
+    return runtime_env_mapping[runtime_env]()
