@@ -16,6 +16,7 @@ MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE
 );
+
 SELECT
   event_date::TEXT as ds,
   event_payload::TEXT as payload
@@ -44,7 +45,7 @@ MODEL (
   )
 );
 ```
-Please note that the time format should be defined using the same dialect as the one used to define the model's query.
+**Note:** the time format should be defined using the same dialect as the one used to define the model's query.
 
 SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime which prevents records that are not a part of the target interval from being stored. This is a safety mechanism which prevents the unintended overriding of unrelated records when handling late arriving data.
 
@@ -56,6 +57,7 @@ MODEL (
     time_column event_date
   )
 );
+
 SELECT
   event_date::TEXT as event_date,
   event_payload::TEXT as payload
@@ -109,6 +111,7 @@ MODEL (
     unique_key name
   )
 );
+
 SELECT
   name::TEXT as name,
   title::TEXT as title,
@@ -137,7 +140,7 @@ WHERE
   event_date BETWEEN @start_date AND @end_date;
 ```
 
-Note, however, that models of this kind don't support data [restatement](../plans.md#restatement-plans).
+**Note:** models of this kind are inherently [non-idempotent](../../glossary/#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans).
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:
@@ -163,6 +166,7 @@ MODEL (
   name db.salary_by_title_agg,
   kind FULL
 );
+
 SELECT
   title,
   AVG(salary)
@@ -194,6 +198,7 @@ MODEL (
   name db.highest_salary,
   kind VIEW
 );
+
 SELECT
   MAX(salary)
 FROM db.employees;
@@ -210,6 +215,7 @@ MODEL (
   name db.unique_employees,
   kind EMBEDDED
 );
+
 SELECT DISTINCT
   name
 FROM db.employees;

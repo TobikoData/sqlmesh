@@ -96,9 +96,7 @@ class Plan:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
             restate_models = [
-                s.name
-                for s in context_diff.new_snapshots.values()
-                if s.is_materialized and not s.is_incremental_by_unique_key_kind
+                s.name for s in context_diff.new_snapshots.values() if s.is_materialized
             ]
 
         self._add_restatements(restate_models or [])
@@ -338,12 +336,7 @@ class Plan:
                 downstream.append(table)
 
             snapshots = self.context_diff.snapshots
-            downstream = [
-                d
-                for d in downstream
-                if snapshots[d].is_materialized
-                and not snapshots[d].is_incremental_by_unique_key_kind
-            ]
+            downstream = [d for d in downstream if snapshots[d].is_materialized]
 
             if not downstream:
                 raise PlanError(

@@ -3,7 +3,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import IncrementalByUniqueKeyKind, SeedKind, SeedModel, SqlModel
+from sqlmesh.core.model import SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import (
@@ -153,7 +153,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         SqlModel(
             name="a",
             query=parse_one("select 1, key"),
-            kind=IncrementalByUniqueKeyKind(unique_key=["key"]),
+            kind="VIEW",
         )
     )
 
