@@ -42,7 +42,7 @@ class Package(PydanticModel):
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
     variables: t.Dict[str, t.Any]
-    macros: UniqueKeyDict[str, MacroConfig]
+    macros: t.Dict[str, MacroConfig]
     files: t.Set[Path]
 
 
@@ -90,7 +90,7 @@ class PackageLoader:
         ]
         macros = self._load_macros(macros_dirs)
 
-        package = Package(
+        return Package(
             models=models,
             sources=sources,
             seeds=seeds,
@@ -98,8 +98,6 @@ class PackageLoader:
             macros=macros,
             files=self._config_paths,
         )
-        package.macros = macros
-        return package
 
     def reset(self) -> None:
         self._root = Path()
