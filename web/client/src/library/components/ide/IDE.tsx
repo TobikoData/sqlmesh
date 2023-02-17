@@ -2,24 +2,25 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
-
-import { Fragment, useEffect, MouseEvent } from 'react'
+import { Fragment, useEffect, MouseEvent, useState, lazy } from 'react'
 import clsx from 'clsx'
 import { PlayIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover } from '@headlessui/react'
 import { useApiFiles } from '../../../api'
-import { Plan } from '../plan/Plan'
+import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
-import { Progress } from '../progress/Progress'
-import Spinner from '../logo/Spinner'
 import { useChannel } from '../../../api/channels'
-import fetchAPI from '../../../api/instance'
 import SplitPane from '../splitPane/SplitPane'
+
+const Plan = lazy(async () => await import('../plan/Plan'))
+const Graph = lazy(async () => await import('../graph/Graph'))
+const Spinner = lazy(async () => await import('../logo/Spinner'))
+const Progress = lazy(async () => await import('../progress/Progress'))
 
 export function IDE(): JSX.Element {
   const planState = useStorePlan(s => s.state)
@@ -31,6 +32,8 @@ export function IDE(): JSX.Element {
   const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setEnvironment = useStorePlan(s => s.setEnvironment)
   const updateTasks = useStorePlan(s => s.updateTasks)
+
+  const [isGraphOpen, setIsGraphOpen] = useState(false)
 
   const [subscribe, getChannel, unsubscribe] = useChannel(
     '/api/tasks',
@@ -78,6 +81,14 @@ export function IDE(): JSX.Element {
     setEnvironment(undefined)
   }
 
+  function showGraph(): void {
+    setIsGraphOpen(true)
+  }
+
+  function closeGraph(): void {
+    setIsGraphOpen(false)
+  }
+
   return (
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
@@ -88,34 +99,20 @@ export function IDE(): JSX.Element {
           </h3>
         </div>
 
-        <div className="flex w-full justify-center">
-          <ul className="flex w-full items-center justify-center">
-            {['Editor', 'Graph', 'Audits', 'Tests'].map((name, i) => (
-              <li key={name}>
-                <div
-                  className={clsx(
-                    'mx-2 text-sm opacity-85 flex',
-                    name === 'Editor' &&
-                      'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
-                    ['Audits', 'Graph', 'Tests'].includes(name) &&
-                      'opacity-25 cursor-not-allowed',
-                  )}
-                >
-                  {i > 0 && (
-                    <Divider
-                      orientation="vertical"
-                      className="h-3 mx-2"
-                    />
-                  )}
-                  {name}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
+            variant="alternative"
+            size={EnumSize.sm}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              showGraph()
+            }}
+          >
+            Graph
+          </Button>
+          <Button
+            className="min-w-[6rem] justify-between"
             disabled={
               planAction !== EnumPlanAction.None ||
               planState === EnumPlanState.Applying ||
@@ -123,12 +120,11 @@ export function IDE(): JSX.Element {
             }
             variant="primary"
             size={EnumSize.sm}
-            onClick={e => {
+            onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
               startPlan()
             }}
-            className="min-w-[6rem] justify-between"
           >
             {planState === EnumPlanState.Applying ||
               (planState === EnumPlanState.Canceling && (
@@ -272,8 +268,9 @@ export function IDE(): JSX.Element {
       <Transition
         appear
         show={
-          planAction !== EnumPlanAction.None &&
-          planAction !== EnumPlanAction.Closing
+          (planAction !== EnumPlanAction.None &&
+            planAction !== EnumPlanAction.Closing) ||
+          isGraphOpen
         }
         as={Fragment}
         afterLeave={() => {
@@ -309,10 +306,14 @@ export function IDE(): JSX.Element {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  <Plan
-                    onClose={closePlan}
-                    onCancel={cancelPlan}
-                  />
+                  {isGraphOpen && <Graph closeGraph={closeGraph} />}
+                  {planAction !== EnumPlanAction.None &&
+                    planAction !== EnumPlanAction.Closing && (
+                      <Plan
+                        onClose={closePlan}
+                        onCancel={cancelPlan}
+                      />
+                    )}
                 </Dialog.Panel>
               </Transition.Child>
             </div>
