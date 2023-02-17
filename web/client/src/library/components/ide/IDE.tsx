@@ -256,12 +256,11 @@ export function IDE(): JSX.Element {
       </div>
       <Divider />
       <SplitPane
-        sizes={[25, 75]}
-        minSize={120}
+        sizes={[20, 80]}
         className="flex w-full h-full overflow-hidden"
       >
         <FolderTree project={project} />
-        <Editor className="w-full h-full" />
+        <Editor />
       </SplitPane>
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>

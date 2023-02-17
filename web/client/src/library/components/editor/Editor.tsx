@@ -171,6 +171,8 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     ? [75, 25]
     : [100, 0]
 
+  console.log([tabTableContent, tabTerminalContent], sizes)
+
   return (
     <SplitPane
       sizes={sizes}
@@ -178,7 +180,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
       minSize={0}
       className={className}
     >
-      <div className="w-full h-full flex flex-col overflow-hidden">
+      <div className="flex flex-col overflow-hidden">
         <div className="flex items-center">
           <Button
             className="m-0 ml-1 mr-3"
@@ -331,7 +333,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           </div>
         </div>
       </div>
-      <Tabs className="h-full w-full overflow-auto" />
+      <Tabs className="overflow-auto" />
     </SplitPane>
   )
 }
