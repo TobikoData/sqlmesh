@@ -65,10 +65,13 @@ class DbtLoader(Loader):
         all_sources: UniqueKeyDict[str, SourceConfig] = UniqueKeyDict("sources")
         all_seeds: UniqueKeyDict[str, SeedConfig] = UniqueKeyDict("seeds")
         all_models: UniqueKeyDict[str, ModelConfig] = UniqueKeyDict("models")
+        all_variables: UniqueKeyDict[str, t.Any] = UniqueKeyDict("variables")
+
         for package in config.packages.values():
             all_sources.update(package.sources)
             all_seeds.update(package.seeds)
             all_models.update(package.models)
+            all_variables.update(package.variables)
 
         for name, package in config.packages.items():
             all_macros = self._macros_for_package(name, config.packages)

@@ -230,7 +230,7 @@ class ModelConfig(GeneralConfig):
 
             dependencies.sources.add(source)
 
-        for var, has_default_value in self._variables.items():
+        for var, has_default_value in self._dependencies.variables.items():
             if var not in variables and not has_default_value:
                 raise ConfigError(f"Variable {var} for model {self.table_name} not found.")
 
@@ -287,7 +287,7 @@ class ModelConfig(GeneralConfig):
                     raise ConfigError(f"Source {source} for macro {macro} not found.")
                 dependencies.refs.add(ref)
 
-            for var, has_default_value in macro_dependencies[macro].variables.items():
+            for var, has_default_value in macros_dependencies.variables.items():
                 if var not in variables:
                     raise ConfigError(f"Variable {var} for macro {macro} not found.")
                 dependencies.variables[var] = has_default_value

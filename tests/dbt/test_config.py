@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import (
@@ -96,7 +97,7 @@ def test_variables(assert_exp_eq):
     model_variables = {"foo": False}
 
     model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
-    model_config._variables = model_variables
+    model_config._dependencies = Dependencies(variables=model_variables)
 
     kwargs = {
         "sources": {},
@@ -104,7 +105,6 @@ def test_variables(assert_exp_eq):
         "seeds": {},
         "variables": defined_variables,
         "macros": {},
-        "macro_dependencies": model_variables,
     }
 
     with pytest.raises(ConfigError, match=r"Variable foo for model test not found."):
@@ -115,7 +115,7 @@ def test_variables(assert_exp_eq):
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
-    model_config._variables["foo"] = True
+    model_config._dependencies.variables["foo"] = True
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')

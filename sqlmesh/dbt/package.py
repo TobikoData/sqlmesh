@@ -41,6 +41,7 @@ class Package(PydanticModel):
     sources: t.Dict[str, SourceConfig]
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
+    variables: t.Dict[str, t.Any]
     macros: UniqueKeyDict[str, MacroConfig]
     files: t.Set[Path]
 
@@ -72,6 +73,8 @@ class PackageLoader:
         self._config_paths.add(project_file_path)
         project_yaml = yaml_load(project_file_path)
 
+        variables = project_yaml.get("vars", {})
+
         self._load_project_config(project_yaml, target_schema)
 
         models_dirs = [
@@ -88,7 +91,12 @@ class PackageLoader:
         macros = self._load_macros(macros_dirs)
 
         package = Package(
-            models=models, sources=sources, seeds=seeds, macros=macros, files=self._config_paths
+            models=models,
+            sources=sources,
+            seeds=seeds,
+            variables=variables,
+            macros=macros,
+            files=self._config_paths,
         )
         package.macros = macros
         return package
@@ -331,6 +339,7 @@ class PackageLoader:
         depends_on = set()
         calls = set()
         sources = set()
+        variables = {}
 
         for method, args, kwargs in capture_jinja(sql).calls:
             if method == "config":
@@ -347,11 +356,17 @@ class PackageLoader:
                 source = ".".join(args + tuple(kwargs.values()))
                 if source:
                     sources.add(source)
+            elif method == "var":
+                if args:
+                    # We map the var key to True if and only if it includes a default value
+                    variables[args[0]] = len(args) > 1
             else:
                 calls.add(method)
 
         model_config.sql = self._remove_config_jinja(sql)
-        model_config._dependencies = Dependencies(macros=calls, sources=sources, refs=depends_on)
+        model_config._dependencies = Dependencies(
+            macros=calls, sources=sources, refs=depends_on, variables=variables
+        )
 
         return model_config
 
