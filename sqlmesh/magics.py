@@ -7,7 +7,7 @@ from IPython.core.display import HTML, display
 from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
-from sqlmesh.core.console import NotebookMagicConsole
+from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse_model
 from sqlmesh.core.model import load_model
@@ -226,7 +226,7 @@ class SQLMeshMagics(Magics):
 
         # Since the magics share a context we want to clear out any state before generating a new plan
         console = self._context.console
-        self._context.console = NotebookMagicConsole(self.display)
+        self._context.console = get_console(display=self.display)
 
         self._context.plan(
             args.environment,
