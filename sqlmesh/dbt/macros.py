@@ -3,7 +3,17 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.macros import ExecutableOrMacro
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.pydantic import PydanticModel
+
+
+class MacroConfig(PydanticModel):
+    """Container class for macro configuration"""
+
+    macro: ExecutableOrMacro
+    dependencies: Dependencies = Dependencies()
+
 
 BUILTIN_METHODS: t.Dict[str, ExecutableOrMacro] = {
     "is_incremental": Executable(

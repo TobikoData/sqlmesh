@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import (
@@ -60,17 +61,21 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 
 
 def test_model_config(sushi_dbt_project: Project):
-    model_configs = sushi_dbt_project.models
-    assert set(model_configs) == {
-        "customers",
+    assert set(sushi_dbt_project.packages["sushi"].models) == {
         "waiters",
         "top_waiters",
-        "customer_revenue_by_day",
         "waiter_revenue_by_day",
         "waiter_as_customer_by_day",
     }
 
-    customer_revenue_by_day_config = model_configs["customer_revenue_by_day"]
+    assert set(sushi_dbt_project.packages["customers"].models) == {
+        "customers",
+        "customer_revenue_by_day",
+    }
+
+    customer_revenue_by_day_config = sushi_dbt_project.packages["customers"].models[
+        "customer_revenue_by_day"
+    ]
 
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
@@ -92,7 +97,7 @@ def test_variables(assert_exp_eq):
     model_variables = {"foo": False}
 
     model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
-    model_config._variables = model_variables
+    model_config._dependencies = Dependencies(variables=model_variables)
 
     kwargs = {
         "sources": {},
@@ -100,7 +105,6 @@ def test_variables(assert_exp_eq):
         "seeds": {},
         "variables": defined_variables,
         "macros": {},
-        "macro_dependencies": model_variables,
     }
 
     with pytest.raises(ConfigError, match=r"Variable foo for model test not found."):
@@ -111,7 +115,7 @@ def test_variables(assert_exp_eq):
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
-    model_config._variables["foo"] = True
+    model_config._dependencies.variables["foo"] = True
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
@@ -123,7 +127,7 @@ def test_variables(assert_exp_eq):
 
 
 def test_source_config(sushi_dbt_project: Project):
-    source_configs = sushi_dbt_project.sources
+    source_configs = sushi_dbt_project.packages["sushi"].sources
     assert set(source_configs) == {
         "items",
         "orders",
@@ -143,7 +147,7 @@ def test_source_config(sushi_dbt_project: Project):
 
 
 def test_seed_config(sushi_dbt_project: Project):
-    seed_configs = sushi_dbt_project.seeds
+    seed_configs = sushi_dbt_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
     raw_items_seed = seed_configs["waiter_names"]
 
