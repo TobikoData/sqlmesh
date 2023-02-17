@@ -6,7 +6,7 @@ Although SQL is a powerful tool, there are some use cases that are better handle
 
 To create a Python model add a new file with the `*.py` extension to the `models/` directory. Inside the file, define a function named `execute` as in the following example:
 
-```python
+```python linenums="1"
 import typing as t
 from datetime import datetime
 
@@ -36,14 +36,14 @@ If the output is too large, it can also be returned in chunks using Python gener
 ## Execution Context
 Python models can do anything you want, although it is strongly recommended for all models to be [idempotent](../../glossary/#idempotency). Python models can easily fetch data from upstream models or even data outside of SQLMesh. Given an execution context, you can fetch a dataframe with `fetchdf`.
 
-```python
+```python linenums="1"
 df = context.fetchdf("SELECT * FROM my_table")
 ```
 
 ## Dependencies
 In order to fetch data from an upstream model, it's required to get the table name using the `table` method. This returns the appropriate table name given the current runtime [environment](../../environments).
 
-```python
+```python linenums="1"
 table = context.table("upstream_model")
 df = context.fetchdf(f"SELECT * FROM {table}")
 ```
@@ -72,7 +72,7 @@ The dependencies defined in the model decorator take precedence over any dynamic
 ### Basic
 The following is simple example of a Python model returning a static Pandas dataframe. Note that all of the [meta-data](../overview#properties) fields are the same is in SQL.
 
-```python
+```python linenums="1"
 import typing as t
 from datetime import datetime
 
@@ -103,7 +103,7 @@ def execute(
 ### SQL Query and Pandas
 The following is a more complex example that queries an upstream model and then outputs a Pandas dataframe.
 
-```python
+```python linenums="1"
 import typing as t
 from datetime import datetime
 
