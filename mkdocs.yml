@@ -21,8 +21,8 @@ nav:
     - Models:
       - concepts/models/overview.md
       - concepts/models/model_kinds.md
-      - concepts/models/python_models.md
       - concepts/models/sql_models.md
+      - concepts/models/python_models.md
       - concepts/models/seed_models.md
     - concepts/plans.md
     - concepts/environments.md
