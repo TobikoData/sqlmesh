@@ -5,7 +5,7 @@ Models are comprised of metadata and queries that create tables and views, which
 ## Example
 The following is an example of a model defined in SQL. The first statement of a model.sql file should be the MODEL DDL. The last statement will be a `SELECT` statement that defines the logic needed to create the table:
 
-```sql
+```sql linenums="1"
 -- Customer revenue computed and stored daily.
 MODEL (
   name sushi.customer_revenue_by_day,
@@ -32,7 +32,7 @@ The final selects of a model's query must be unique.
 ### Explict types
 The final selects of a model's query must be explicitly casted to a type. This way, SQLMesh can automatically create tables with the appropriate schema. SQLMesh uses the postgres `x::int` syntax for casting because it is elegant. These postgres style casts will be transpiled automatically to the appropriate format of the execution engine.
 
-```sql
+```sql linenums="1"
 WITH cte AS (
 SELECT 1 AS foo -- don't need to cast here
 )
@@ -42,7 +42,7 @@ SELECT foo::int -- need to cast here because it's in the final select statement
 ### Inferrable names
 The final selects of a model's query must have inferrable names or aliases. An explicit alias is preferable, but not necessary. Aliases will be automatically added by the SQLMesh formatter.
 
-```sql
+```sql linenums="1"
 SELECT
   1, -- not inferrable
   x + 1, -- not infererrable
@@ -88,7 +88,7 @@ The MODEL statement takes various properties, which are used for both metadata a
 ### partitioned_by
 - Partition by is an optional property for engines like Spark/Hive that support partitioning. Use this to add additional columns to the time column partition key. Models can also have descriptions associated with them in the form of comments, such as in the following example:
 
-```sql
+```sql linenums="1"
 /* Customer revenue computed and stored daily. */
 MODEL (
   name sushi.customer_revenue_by_day,
@@ -134,7 +134,7 @@ Macros can be used for passing in paramaterized arguments such as dates, as well
 ## Statements
 Models can have additional statements that run before the main query. This can be useful for loading things like [UDFs](https://en.wikipedia.org/wiki/User-defined_function). In general, statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior.
 
-```SQL
+```sql linenums="1"
 MODEL (
 ...
 );
@@ -149,7 +149,7 @@ FROM y
 ## Time column
 Models that are loaded incrementally require a time column to partition data. A time column is a column in a model with an optional format string in the dialect of the model; for example, '%Y-%m-%d' for DuckDB or 'yyyy-mm-dd' for Snowflake.
 
-```sql
+```sql linenums="1"
 -- Orders are partitioned by the ds column
 MODEL (
   name sushi.orders,
@@ -179,7 +179,7 @@ The format string tells SQLMesh how your dates are formatted so it can compare s
 ## Advanced usage
 The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer.
 
-```sql
+```sql linenums="1"
 -- Orders are partitioned by the di int column
 MODEL (
   name sushi.orders,

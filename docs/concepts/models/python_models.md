@@ -45,7 +45,7 @@ df = context.fetchdf(f"SELECT * FROM {table}")
 
 Using `table` will automatically add the referenced model to the Python model's dependencies. The only other way to set dependencies of models in Python models is to define them explicitly in the decorator using the keyword `dependencies`.
 
-```
+```python linenums="1"
 @model(
     "my_model.with_explicit_dependencies",
     dependencies=["upstream_dependency"],
@@ -65,7 +65,7 @@ The dependencies defined in the model decorator take precedence over any dynamic
 ## Batching
 If the output of a Python model is very large, it may be required to split up the upload into multiple batches. With PySpark, this won't be a problem because all computation is done in a distributed fashion, but with Pandas, all data is stored in memory. Instead of returning a single DataFrame instance, you can return multiple instances using Python generator API to minimize the memory footprint by reducing the size of data that is loaded into memory at any given point.
 
-```
+```python linenums="1"
 @model(
     "my_model.with_batching",
 )
@@ -86,7 +86,7 @@ def execute(
 ## Example
 The following is an example of a Python model. Note that all of the [meta-data](../overview#properties) fields are the same is in SQL.
 
-```python
+```python linenums="1"
 import random
 import typing as t
 from datetime import datetime

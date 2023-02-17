@@ -8,13 +8,13 @@ This example project will run locally on your computer using [DuckDB](https://du
 [//]: # (If anything changes here, update prerequisites.md as well.)
 
 You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running the following command:
-```
+```bash
 python3 --version
 ```
 
 or:
 
-```
+```bash
 python --version
 ```
 
@@ -23,14 +23,14 @@ python --version
 ## 1. Create a SQLMesh project
 Create a project directory and navigate to it, as in the following example:
 
-```
+```bash
 mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
 It is recommended, but not required, that you use a virtual environment:
 
-```
+```bash
 python -m venv .env
 source .env/bin/active
 pip install sqlmesh
@@ -40,7 +40,7 @@ When using a virtual environment, you must ensure it's activated first: you shou
 
 Now, create a SQLMesh scaffold by using the following command:
 
-```
+```bash
 sqlmesh init
 ```
 
@@ -61,7 +61,7 @@ This will create the directories and files that you can use to organize your SQL
 ### 2.1 Create a prod environment
 This example project structure is a two-model pipeline, where example_full_model depends on example_incremental_model. To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Type `y`:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
@@ -89,7 +89,7 @@ Now that you've created a production environment, it's time to create a developm
 
 Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type `y` to perform the logical update:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
@@ -107,7 +107,7 @@ Logical Update executed successfully
 ### 3.1 Edit the configuration
 Now, let's add a new column. Open the **models/example_incremental_model.sql** file and add `1 AS new_column` under item_id as follows:
 
-```
+```bash
 diff --git a/models/example_incremental_model.sql b/models/example_incremental_model.sql
 index e1407e6..8154da2 100644
 --- a/models/example_incremental_model.sql
@@ -125,7 +125,7 @@ index e1407e6..8154da2 100644
 ## 4. Plan and apply updates
 Once this change is made, we can preview it using plan to understand the impact it had. Run `sqlmesh plan dev` and hit `Enter` to leave the backfill start and end dates empty:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
@@ -172,7 +172,7 @@ SQLMesh now applies the change to **sqlmesh_example.example_incremental_model** 
 ### 4.1 Validate updates in dev
 You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_example__dev.example_incremental_model"`:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example__dev.example_incremental_model"
 
    id  item_id  new_column          ds
@@ -188,7 +188,7 @@ You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_
 
 You can see that **new_column** was added to your dataset. The production table was not modified; you can validate this by querying the table using `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
 
    id  item_id          ds
@@ -207,7 +207,7 @@ Notice that the production table does not have **new_column**.
 ### 4.2 Apply updates to prod
 Now that you've tested your changes in dev, it's time to move this change to prod. Run `sqlmesh plan` to plan and apply your changes to the prod environment:
 
-```
+```bash
 (.env) [toby@muc sqlmesh-example]$ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
@@ -247,7 +247,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 ### 4.3. Validate updates in prod
 Finally, double-check that the data did indeed land in prod by running `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
 
-```
+```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
 
    id  item_id  new_column          ds

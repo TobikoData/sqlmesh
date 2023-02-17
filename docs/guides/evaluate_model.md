@@ -6,7 +6,7 @@ To evaluate a model, you can run the `evaluate` command with either the [CLI](..
 
 An example of the `evaluate` command using the example incremental model from the [quickstart](../quick_start.md) is as follows:
 
-```
+```bash
 sqlmesh evaluate sqlmesh_example.example_incremental_model --start=2020-01-07 --end=2020-01-07
 ```
 

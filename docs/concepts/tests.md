@@ -1,12 +1,12 @@
 # Testing
-Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](audits.md), they are a great way to ensure the quality of your data and to build trust in it across your organization. 
+Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](audits.md), they are a great way to ensure the quality of your data and to build trust in it across your organization.
 
 Similar to unit tests in software engineering, SQLMesh tests compare inputs and the expected outputs with the output from your model query; you can even test individual CTEs in your model queries. These tests are input and output data fixtures defined in YAML files in a test directory in your project. A comprehensive suite of tests can empower your data engineers and analysts to work with confidence, since you can validate that downstream models are behaving as expcted when model changes are made.
 
 ## Example test
 In the following example, we define a model test for the `sushi.customer_revenue_by_day` model to ensure the model query behaves as expcted. The test provides upstream data as input for the model, as well as expected output for the model and a CTE used by the model. SQLMesh will load the input rows, execute your model's CTE and query, and compare them to the output rows:
 
-```yaml
+```yaml linenums="1"
 test_customer_revenue_by_day:
   model: sushi.customer_revenue_by_day
   inputs:
@@ -80,8 +80,8 @@ test_customer_revenue_by_day:
 ## Run a test
 ### The CLI test command
 You can execute tests with the `sqlmesh test` command as follows:
-```
-% sqlmesh --path examples/sushi test
+```bash
+$ sqlmesh --path examples/sushi test
 ...F
 ======================================================================
 FAIL: test_customer_revenue_by_day (examples/sushi/models/tests/test_customer_revenue_by_day.yaml:1)

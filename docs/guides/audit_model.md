@@ -6,7 +6,7 @@ To audit your models, use the `sqlmesh audit` command.
 
 Running the `sqlmesh audit` command produces the following example output:
 
-```
+```bash
 Found 1 audit(s).
 assert_positive_order_ids PASS.
 

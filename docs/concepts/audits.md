@@ -6,7 +6,7 @@ A comprehensive suite of audits can identify data issues upstream, whether they 
 ## Example audit
 In SQLMesh, audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong. In its simplest form, an audit is defined with the custom AUDIT expression along with a query, as in the following example:
 
-```sql
+```sql linenums="1"
 AUDIT (
   name assert_item_price_is_not_null,
   dialect spark
@@ -21,7 +21,7 @@ In the example, we defined an audit named `assert_item_price_is_not_null`, ensur
 **Note:** If the query is in a different dialect than the rest of your project, you can specify it here as we did in the example, and SQLGlot will automatically understand how to execute the query.
 
 In order for this audit to take effect it should first be included in the target model's definition:
-```sql
+```sql linenums="1"
 MODEL (
   name sushi.items,
   audits (
@@ -35,7 +35,7 @@ Now the `assert_item_price_is_not_null` will run every time the `sushi.items` mo
 Audits can also be parameterized and implemented in a model-agnostic way.
 
 As an example consider the following audit definition which checks whether the target column exceeds a configured threshold:
-```sql
+```sql linenums="1"
 AUDIT (
   name does_not_exceed_threshold
 );
@@ -45,7 +45,7 @@ WHERE @column >= @threshold;
 In the example above we utilized [Macros](macros.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
 
 The generic audit can now be applied to a model by being referenced in its definition:
-```
+```sql linenums="1"
 MODEL (
   name sushi.items,
   audits (
@@ -65,7 +65,7 @@ SQLMesh comes with a suite of built-in generic audits which covers a broad set o
 Ensures that specified columns are not null.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name sushi.orders,
   audits (
@@ -78,7 +78,7 @@ MODEL (
 Makes sure that provided columns only contain unique values.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name sushi.orders,
   audits (
@@ -91,7 +91,7 @@ MODEL (
 Ensures that the value of the target column is one of the accepted values.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name sushi.items,
   audits (
@@ -104,7 +104,7 @@ MODEL (
 Ensures that the number of rows in the model's table exceeds the configured threshold. For incremental models this check only applies to a data interval that is being evaluated, and not to the entire table.
 
 Example:
-```sql
+```sql linenums="1"
 MODEL (
   name sushi.orders,
   audits (
@@ -117,8 +117,8 @@ MODEL (
 ### The CLI audit command
 
 You can execute audits with the `sqlmesh audit` command as follows:
-```
-% sqlmesh --path project audit -start 2022-01-01 -end 2022-01-02
+```bash
+$ sqlmesh --path project audit -start 2022-01-01 -end 2022-01-02
 Found 1 audit(s).
 assert_item_price_is_not_null FAIL.
 
@@ -137,7 +137,7 @@ When you apply a plan, SQLMesh will automatically run each model's audits. By de
 ### Skipping audits
 Audits can be skipped by setting the `skip` argument to `true` as in the following example:
 
-```sql
+```sql linenums="1" hl_lines="3"
 AUDIT (
   name assert_item_price_is_not_null,
   skip true
@@ -150,7 +150,7 @@ WHERE ds BETWEEN @start_ds AND @end_ds AND
 ### Non-blocking audits
 By default, audits that fail will stop the execution of the pipeline in order to prevent bad data from propagating further. An audit can be configured to notify you when it fails without blocking the execution of the pipeline, as in the following example:
 
-```sql
+```sql linenums="1" hl_lines="3"
 AUDIT (
   name assert_item_price_is_not_null,
   blocking false

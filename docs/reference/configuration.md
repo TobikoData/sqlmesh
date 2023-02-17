@@ -9,7 +9,7 @@ Configuration options from different sources have the following order of precede
 ## connections
 A dictionary of supported connections and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly, omitting the dictionary.
 
-```yaml
+```yaml linenums="1"
 connections:
     my_connection:
         type: snowflake
@@ -123,7 +123,7 @@ The name of a connection to use when running tests.
 ## scheduler
 Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata and has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow.
 
-```yaml
+```yaml linenums="1"
 scheduler:
     type: builtin
 ```
@@ -235,7 +235,7 @@ Indicates whether SQLMesh should attempt to automatically categorize model chang
 
 This section contains options that are specific to models and which are set automatically unless explicitly overriden in the model definition.
 
-```yaml
+```yaml linenums="1"
 model_defaults:
     dialect: snowflake
     owner: jen
@@ -244,13 +244,13 @@ model_defaults:
 
 ### kind
 The default model kind (see [model kinds](../concepts/models/model_kinds.md)). Example:
-```
+```yaml linenums="1"
 model_defaults:
     kind: full
 ```
 
 Alternatively if a kind requires additional parameters it can be provided as an object:
-```
+```yaml linenums="1"
 model_defaults:
     kind:
         name: incremental_by_time_range
