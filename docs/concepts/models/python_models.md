@@ -14,6 +14,9 @@ from sqlmesh import ExecutionContext, model
 
 @model(
     "my_model.name",
+    columns={
+        "column_name": "int",
+    },
 )
 def execute(
     context: ExecutionContext,
@@ -24,9 +27,11 @@ def execute(
 ) -> pd.DataFrame:
 ```
 
-The `execute` function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators) which is used to capture model's metadata, similarly to the `MODEL` statement in [SQL models](#sql_models.md). The function itself takes in an Execution context which can be used to run SQL queries, retrieve the current time interval that is being processed, as well as arbitrary key-value arguments passed in at runtime. You can either return a Pandas or a PySpark Dataframe instance. 
+The `execute` function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators) which is used to capture model's metadata, similarly to the `MODEL` statement in [SQL models](#sql_models.md). The function itself takes in an Execution context which can be used to run SQL queries, retrieve the current time interval that is being processed, as well as arbitrary key-value arguments passed in at runtime. You can either return a Pandas or a PySpark Dataframe instance.
 
-If the output is too large, it can also be returned in chunks using Python generators:
+Because SQLMesh creates tables before evaluating models, the schema of the output dataframe is a required argument. The argument `columns` is a dictionary of column name to type.
+
+If the output is too large, it can also be returned in chunks using Python generators.
 
 ## Execution Context
 Python models can do anything you want, although it is strongly recommended for all models to be [idempotent](../../glossary/#idempotency). Python models can easily fetch data from upstream models or even data outside of SQLMesh. Given an execution context, you can fetch a dataframe with `fetchdf`.
@@ -62,97 +67,26 @@ def execute(
 
 The dependencies defined in the model decorator take precedence over any dynamic references inside the function. Therefore, in the example above, only `upstream_dependency` will be captured while `another_dependency` will be ignored.
 
-## Batching
-If the output of a Python model is very large, it may be required to split up the upload into multiple batches. With PySpark, this won't be a problem because all computation is done in a distributed fashion, but with Pandas, all data is stored in memory. Instead of returning a single DataFrame instance, you can return multiple instances using Python generator API to minimize the memory footprint by reducing the size of data that is loaded into memory at any given point.
 
-```python linenums="1"
-@model(
-    "my_model.with_batching",
-)
-def execute(
-    context: ExecutionContext,
-    start: datetime,
-    end: datetime,
-    latest: datetime,
-    **kwargs: t.Any,
-) -> pd.DataFrame:
-    ...
+## Examples
+### Basic
+The following is simple example of a Python model returning a static Pandas dataframe. Note that all of the [meta-data](../overview#properties) fields are the same is in SQL.
 
-    for _ in range(3):
-        yield df
-```
-
-
-## Example
-The following is an example of a Python model. Note that all of the [meta-data](../overview#properties) fields are the same is in SQL.
-
-```python linenums="1"
-import random
+```python
 import typing as t
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
-from sqlglot.expressions import to_column
-
-from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
-from sqlmesh.core.model import IncrementalByTimeRangeKind
-from sqlmesh.utils.date import to_ds
-
-ITEMS = [
-    "Ahi",
-    "Aji",
-    "Amaebi",
-    "Anago",
-    "Aoyagi",
-    "Bincho",
-    "Katsuo",
-    "Ebi",
-    "Escolar",
-    "Hamachi",
-    "Hamachi Toro",
-    "Hirame",
-    "Hokigai",
-    "Hotate",
-    "Ika",
-    "Ikura",
-    "Iwashi",
-    "Kani",
-    "Kanpachi",
-    "Maguro",
-    "Saba",
-    "Sake",
-    "Sake Toro",
-    "Tai",
-    "Tako",
-    "Tamago",
-    "Tobiko",
-    "Toro",
-    "Tsubugai",
-    "Umi Masu",
-    "Unagi",
-    "Uni",
-]
-
 
 @model(
-    "sushi.items",
-    kind=IncrementalByTimeRangeKind(time_column="ds"),
-    start="Jan 1 2022",
+    "basic",
+    owner="janet",
     cron="@daily",
-    batch_size=30,
     columns={
         "id": "int",
         "name": "text",
-        "price": "double",
-        "ds": "text",
     },
-    audits=[
-        ("accepted_values", {"column": to_column("name"), "values": ITEMS}),
-        ("not_null", {"columns": [to_column("name"), to_column("price")]}),
-        ("assert_items_price_exceeds_threshold", {"price": 0}),
-    ],
 )
 def execute(
     context: ExecutionContext,
@@ -161,22 +95,108 @@ def execute(
     latest: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
-    dfs = []
-    for dt in iter_dates(start, end):
-        num_items = random.randint(10, len(ITEMS))
-        dfs.append(
-            pd.DataFrame(
-                {
-                    "name": random.sample(ITEMS, num_items),
-                    "price": np.random.uniform(3.0, 10.0, size=num_items).round(2),
-                    "ds": to_ds(dt),
-                }
-            )
-            .reset_index()
-            .rename(columns={"index": "id"})
-        )
+    return pd.DataFrame([
+        {"id": 1, "name": "name"}
+    ])
+```
 
-    return pd.concat(dfs)
+### SQL Query and Pandas
+The following is a more complex example that queries an upstream model and then outputs a Pandas dataframe.
+
+```python
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "sql_pandas",
+    columns={
+        "id": "int",
+        "name": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    latest: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    # get the upstream model's name and register it as a dependency
+    table = context.table("upstream.model")
+
+    # fetch data from the model as a pandas dataframe
+    # if the engine is spark, this would return a spark dataframe
+    df = context.fetchdf(f"SELECT id, name FROM {table}")
+
+    # do some pandas stuff
+    df[id] += 1
+    return df
+```
+
+### PySpark
+This example shows using the PySpark dataframe API. If you use Spark, this is preferred over Pandas because you're able to computation in a distributed fashion.
+
+```python
+import typing as t
+from datetime import datetime
+
+import pandas as pd
+from pyspark.sql import DataFrame, functions
+
+from sqlmesh import ExecutionContext, model
+
+@model(
+    "pyspark",
+    columns={
+        "id": "int",
+        "name": "text",
+        "country": "text",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime
+    latest: datetime,
+    **kwargs: t.Any,
+) -> DataFrame:
+    # get the upstream model's name and register it as a dependency
+    table = context.table("upstream.model")
+
+    # use the spark dataframe api to add the country column
+    df = context.spark.table(table).withColumn("country", functions.lit("USA"))
+
+    # returns the pyspark dataframe directly, this means no data is computed locally
+    return df
+```
+
+### Batching
+If the output of a Python model is very large and you cannot use Spark, it may be required to split up the upload into multiple batches. With Pandas or other single machine dataframe libraries, all data is stored in memory. Instead of returning a single DataFrame instance, you can return multiple instances using Python generator API to minimize the memory footprint by reducing the size of data that is loaded into memory at any given point.
+
+```
+@model(
+    "batching",
+    columns={
+        "id": "int",
+    },
+)
+def execute(
+    context: ExecutionContext,
+    start: datetime,
+    end: datetime,
+    latest: datetime,
+    **kwargs: t.Any,
+) -> pd.DataFrame:
+    # get the upstream model's table name
+    table = context.table("upstream.model")
+
+    for i in range(3):
+        # run 3 queries to get chunks of data to not run out of memory
+        df = context.fetchdf(f"SELECT id from {table} WHERE id = {i}")
+        yield df
 ```
 
 ## Serialization
