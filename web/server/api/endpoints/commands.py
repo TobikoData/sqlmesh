@@ -147,7 +147,7 @@ async def fetchdf(
 @router.get("/dag")
 async def dag(
     context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, t.Any]:
+) -> t.Dict[str, t.Set[str]]:
     try:
         return context.dag.graph
     except Exception:
