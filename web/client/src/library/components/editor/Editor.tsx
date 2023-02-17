@@ -171,8 +171,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     ? [75, 25]
     : [100, 0]
 
-  console.log([tabTableContent, tabTerminalContent], sizes)
-
   return (
     <SplitPane
       sizes={sizes}
