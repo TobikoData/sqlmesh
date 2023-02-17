@@ -15,10 +15,15 @@ import { EnumSize } from '../../../types/enum'
 import { ModelFile } from '../../../models'
 import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
-import { fetchdfApiFetchdfPost } from '../../../api/client'
+import {
+  evaluateApiEvaluatePost,
+  fetchdfApiFetchdfPost,
+} from '../../../api/client'
 import Tabs from '../tabs/Tabs'
-import { isString } from '../../../utils'
 import SplitPane from '../splitPane/SplitPane'
+import { isFalse, isNil, isString } from '../../../utils'
+import { debounce, getLanguageByExtension } from './help'
+import './Editor.css'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -31,6 +36,8 @@ export type EditorFileStatus =
   typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
+
+const cache: Record<string, Map<string, any>> = {}
 
 export function Editor({ className }: PropsEditor): JSX.Element {
   const client = useQueryClient()
@@ -111,7 +118,21 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     }
   }, [openedFiles])
 
+  useEffect(() => {
+    if (isNil(cache[activeFile.id])) {
+      cache[activeFile.id] = new Map()
+    }
+
+    const bucket = cache[activeFile.id]
+
+    setTabQueryPreviewContent(bucket?.get('queryPreview'))
+    setTabTableContent(bucket?.get('table'))
+    setTabTerminalContent(bucket?.get('terminal'))
+  }, [activeFile])
+
   function closeEditorTab(file: ModelFile): void {
+    delete cache[file.id]
+
     openedFiles.delete(file.id)
 
     if (activeFileId === file.id) {
@@ -145,21 +166,49 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   }
 
   function sendQuery(): void {
+    const bucket = cache[activeFile.id]
+
     if (activeFile.isLocal) {
-      setTabQueryPreviewContent(activeFile.content)
+      bucket?.set('terminal', undefined)
+      setTabTerminalContent(bucket?.get('terminal'))
+
+      bucket?.set('queryPreview', activeFile.content)
+      setTabQueryPreviewContent(bucket?.get('queryPreview'))
 
       fetchdfApiFetchdfPost({
         sql: activeFile.content,
       })
-        .then((result: any) => {
-          if (isString(result)) {
-            setTabTableContent(JSON.parse(result))
-            setTabTerminalContent(undefined)
-          } else {
-            setTabTerminalContent(result.detail)
-          }
-        })
+        .then(updateTabs)
         .catch(console.log)
+    }
+  }
+
+  function evaluateModel(): void {
+    const bucket = cache[activeFile.id]
+    const WEEK = 1000 * 60 * 60 * 24 * 7
+
+    bucket?.set('terminal', undefined)
+    setTabTerminalContent(bucket?.get('terminal'))
+
+    evaluateApiEvaluatePost({
+      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+      start: Date.now() - WEEK,
+      end: Date.now(),
+      latest: Date.now() - WEEK,
+    })
+      .then(updateTabs)
+      .catch(console.log)
+  }
+
+  function updateTabs(result: string | { detail: string }): void {
+    const bucket = cache[activeFile.id]
+
+    if (isString(result)) {
+      bucket?.set('table', JSON.parse(result as string))
+      setTabTableContent(bucket?.get('table'))
+    } else {
+      bucket?.set('terminal', (result as { detail: string }).detail)
+      setTabTerminalContent(bucket?.get('terminal'))
     }
   }
 
@@ -170,6 +219,9 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   const sizes = [tabTableContent, tabTerminalContent].some(Boolean)
     ? [75, 25]
     : [100, 0]
+
+  // TODO: remove once we have a better way to determine if a file is a model
+  const isModel = activeFile.path.includes('models/')
 
   return (
     <SplitPane
@@ -283,7 +335,22 @@ export function Editor({ className }: PropsEditor): JSX.Element {
             />
           </div>
           <div className="flex">
-            {activeFile != null &&
+            {isFalse(activeFile.isLocal) && isModel && (
+              <>
+                <Button
+                  size={EnumSize.sm}
+                  variant="alternative"
+                  onClick={e => {
+                    e.stopPropagation()
+
+                    evaluateModel()
+                  }}
+                >
+                  Evaluate
+                </Button>
+              </>
+            )}
+            {isFalse(isModel) &&
               activeFile.extension === '.sql' &&
               activeFile.content !== '' && (
                 <>
@@ -298,35 +365,20 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                   >
                     Run Query
                   </Button>
-                  <Button
-                    size={EnumSize.sm}
-                    variant="alternative"
-                    onClick={e => {
-                      e.stopPropagation()
-
-                      onChange('')
-                    }}
-                  >
-                    Clear
-                  </Button>
                 </>
               )}
+            {activeFile.content !== '' && (
+              <Button
+                size={EnumSize.sm}
+                variant="alternative"
+                onClick={e => {
+                  e.stopPropagation()
 
-            {!activeFile.isLocal && (
-              <>
-                <Button
-                  size={EnumSize.sm}
-                  variant="alternative"
-                >
-                  Validate
-                </Button>
-                <Button
-                  size={EnumSize.sm}
-                  variant="alternative"
-                >
-                  Format
-                </Button>
-              </>
+                  onChange('')
+                }}
+              >
+                Clear
+              </Button>
             )}
           </div>
         </div>
@@ -384,42 +436,4 @@ function CodeEditor({
       onChange={onChange}
     />
   )
-}
-
-function debounce(
-  fn: (...args: any) => void,
-  before: () => void,
-  after: () => void,
-  delay: number = 500,
-): (...args: any) => void {
-  let timeoutID: ReturnType<typeof setTimeout>
-
-  return function callback(...args: any) {
-    clearTimeout(timeoutID)
-
-    if (before != null) {
-      before()
-    }
-
-    timeoutID = setTimeout(() => {
-      fn(...args)
-
-      if (after != null) {
-        after()
-      }
-    }, delay)
-  }
-}
-
-function getLanguageByExtension(extension?: string): string {
-  switch (extension) {
-    case '.sql':
-      return 'SQL'
-    case '.py':
-      return 'Python'
-    case '.yaml':
-      return 'YAML'
-    default:
-      return 'Plain Text'
-  }
 }
