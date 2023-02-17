@@ -78,7 +78,7 @@ def test_model_columns():
     assert column_types_to_sqlmesh(model.columns) == expected_column_types
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
-    sqlmesh_model = model.to_sqlmesh({}, {}, {}, {})
+    sqlmesh_model = model.to_sqlmesh({}, {}, {}, {}, {})
     assert sqlmesh_model.columns_to_types == expected_column_types
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
 
