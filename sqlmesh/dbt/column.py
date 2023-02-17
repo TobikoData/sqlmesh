@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
+from sqlglot import exp, parse_one
 from sqlglot.helper import ensure_list
 
 from sqlmesh.dbt.common import GeneralConfig
@@ -19,6 +20,30 @@ def yaml_to_columns(
         columns[config.name] = config
 
     return columns
+
+
+def column_types_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, exp.DataType]:
+    """
+    Get the sqlmesh column types
+
+    Returns:
+        A dict of column name to exp.DataType
+    """
+    return {
+        name: parse_one(column.data_type, into=exp.DataType)
+        for name, column in columns.items()
+        if column.data_type
+    }
+
+
+def column_descriptions_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, str]:
+    """
+    Get the sqlmesh column types
+
+    Returns:
+        A dict of column name to description
+    """
+    return {name: column.description for name, column in columns.items() if column.description}
 
 
 class ColumnConfig(GeneralConfig):

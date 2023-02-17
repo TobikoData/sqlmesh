@@ -383,11 +383,6 @@ class _Model(ModelMeta, frozen=True):
         return self._depends_on
 
     @property
-    def column_descriptions(self) -> t.Dict[str, str]:
-        """A dictionary of column names to annotation comments."""
-        return {}
-
-    @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         """Returns the mapping of column names to types of this model."""
         if self.columns_to_types_ is not None:
@@ -583,6 +578,9 @@ class SqlModel(_Model):
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
+        if self.column_descriptions_ is not None:
+            return self.column_descriptions_
+
         if self._column_descriptions is None:
             self._column_descriptions = {
                 select.alias: "\n".join(comment.strip() for comment in select.comments)
@@ -847,7 +845,7 @@ def load_model(
         return create_sql_model(
             name,
             query,
-            statements,
+            statements=statements,
             defaults=defaults,
             path=path,
             module_path=module_path,
@@ -880,8 +878,8 @@ def load_model(
 def create_sql_model(
     name: str,
     query: exp.Expression,
-    statements: t.List[exp.Expression],
     *,
+    statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
@@ -936,7 +934,7 @@ def create_sql_model(
         time_column_format=time_column_format,
         python_env=python_env,
         dialect=dialect,
-        expressions=statements,
+        expressions=statements or [],
         query=query,
         **kwargs,
     )

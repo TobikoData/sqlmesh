@@ -1,10 +1,10 @@
-from sqlglot import exp, parse, parse_one
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import (
     Jinja,
     Model,
     format_model_expressions,
-    parse_model,
+    parse,
     text_diff,
 )
 
@@ -72,7 +72,7 @@ SELECT
     )
 
     x = format_model_expressions(
-        parse_model(
+        parse(
             """
             MODEL(name a.b, kind FULL);
             SELECT * FROM x WHERE y = {{ 1 }};"""
@@ -136,8 +136,8 @@ def test_text_diff():
     )
 
 
-def test_parse_model():
-    expressions = parse_model(
+def test_parse():
+    expressions = parse(
         """
         MODEL (
             kind full,
