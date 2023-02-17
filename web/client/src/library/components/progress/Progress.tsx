@@ -1,12 +1,12 @@
 import clsx from 'clsx'
 
-export interface PropsProgress extends React.ButtonHTMLAttributes<HTMLElement> {
+export interface PropsProgress extends React.HTMLAttributes<HTMLElement> {
   progress: number
   delay?: number
   duration?: number
 }
 
-export function Progress({
+export default function Progress({
   progress = 0,
   delay = 150,
   duration = 500,

@@ -20,7 +20,7 @@ import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
 import SplitPane from '../splitPane/SplitPane'
 
-export function Plan({
+export default function Plan({
   onClose,
   onCancel,
 }: {

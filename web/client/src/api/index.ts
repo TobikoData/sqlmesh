@@ -12,6 +12,8 @@ import {
   getPlanApiPlanGet,
   getApiContextApiContextGet,
   ContextEnvironment,
+  DagApiDagGet200,
+  dagApiDagGet,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -33,6 +35,13 @@ export function useApiFiles(): UseQueryResult<Directory> {
     queryKey: ['/api/files'],
     queryFn: getFilesApiFilesGet,
     cacheTime: 0,
+  })
+}
+
+export function useApiDag(): UseQueryResult<DagApiDagGet200> {
+  return useQuery({
+    queryKey: ['/api/dag'],
+    queryFn: dagApiDagGet,
   })
 }
 
