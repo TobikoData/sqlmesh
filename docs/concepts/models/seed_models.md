@@ -1,8 +1,8 @@
 # Seed models
 
-Seed is a special kind of model, data for which is sourced from a static dataset defined as a CSV file rather than from a SQL / Python implementation defined by a user.
+Seed is a special kind of model where data is sourced from a static dataset defined as a CSV file rather than from a SQL / Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
 
-Since seeds are also models in SQLMesh, they enjoy all the same benefits the latter provides:
+Since seeds are also models in SQLMesh, they enjoy all the same benefits that SQL / Python models provide:
 
 * A physical table gets created in the data warehouse which reflects the contents of the seed's CSV file.
 * Seed models can be referenced in downstream models the same way as other models.
