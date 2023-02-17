@@ -99,32 +99,6 @@ export function IDE(): JSX.Element {
           </h3>
         </div>
 
-        <div className="flex w-full justify-center">
-          <ul className="flex w-full items-center justify-center">
-            {['Editor', 'Audits', 'Tests'].map((name, i) => (
-              <li key={name}>
-                <div
-                  className={clsx(
-                    'mx-2 text-sm opacity-85 flex',
-                    name === 'Editor' &&
-                    'font-bold opacity-100 border-b-2 border-secondary-500 text-secondary-500 cursor-default',
-                    ['Audits', 'Graph', 'Tests'].includes(name) &&
-                    'opacity-25 cursor-not-allowed',
-                  )}
-                >
-                  {i > 0 && (
-                    <Divider
-                      orientation="vertical"
-                      className="h-3 mx-2"
-                    />
-                  )}
-                  {name}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
             variant="alternative"
@@ -160,10 +134,10 @@ export function IDE(): JSX.Element {
               {planState === EnumPlanState.Applying
                 ? 'Applying Plan...'
                 : planState === EnumPlanState.Canceling
-                  ? 'Canceling Plan...'
-                  : planAction !== EnumPlanAction.None
-                    ? 'Setting Plan...'
-                    : 'Run Plan'}
+                ? 'Canceling Plan...'
+                : planAction !== EnumPlanAction.None
+                ? 'Setting Plan...'
+                : 'Run Plan'}
             </span>
             <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
           </Button>
@@ -175,15 +149,15 @@ export function IDE(): JSX.Element {
                     className={clsx(
                       'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
                       planState === EnumPlanState.Finished &&
-                      'bg-success-500 text-white',
+                        'bg-success-500 text-white',
                       planState === EnumPlanState.Failed &&
-                      'bg-danger-500 text-white',
+                        'bg-danger-500 text-white',
                       planState === EnumPlanState.Applying &&
-                      'bg-secondary-500 text-white',
+                        'bg-secondary-500 text-white',
                       planState !== EnumPlanState.Finished &&
-                      planState !== EnumPlanState.Failed &&
-                      planState !== EnumPlanState.Applying &&
-                      'bg-gray-100 text-gray-500',
+                        planState !== EnumPlanState.Failed &&
+                        planState !== EnumPlanState.Applying &&
+                        'bg-gray-100 text-gray-500',
                     )}
                   >
                     {plan == null ? 0 : 1}
@@ -223,7 +197,7 @@ export function IDE(): JSX.Element {
                                   (t: any) => t.completed === t.total,
                                 ).length /
                                   Object.values(plan.tasks).length) *
-                                100,
+                                  100,
                               )}
                             />
                             <div className="my-4 px-4 py-2 bg-secondary-100 rounded-lg">
