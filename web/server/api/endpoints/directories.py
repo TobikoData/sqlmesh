@@ -1,6 +1,5 @@
 import os
 import shutil
-import traceback
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
@@ -9,7 +8,7 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.settings import Settings, get_context, get_settings
-from web.server.utils import validate_path
+from web.server.utils import replace_file, validate_path
 
 router = APIRouter()
 
@@ -23,16 +22,9 @@ async def write_directory(
     context: Context = Depends(get_context),
 ) -> models.Directory:
     """Create or rename a directory."""
-    if new_path and new_path != path:
+    if new_path:
         validate_path(new_path, context)
-        try:
-            (settings.project_path / path).replace(settings.project_path / new_path)
-        except FileNotFoundError:
-            raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-        except OSError:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
-            )
+        replace_file(settings.project_path / path, settings.project_path / new_path)
         return models.Directory(name=os.path.basename(new_path), path=new_path)
 
     try:

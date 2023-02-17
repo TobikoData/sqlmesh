@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import traceback
 import typing as t
 from pathlib import Path
 
@@ -11,7 +10,7 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.settings import Settings, get_context, get_settings
-from web.server.utils import validate_path
+from web.server.utils import replace_file, validate_path
 
 router = APIRouter()
 
@@ -86,16 +85,9 @@ async def write_file(
 ) -> models.File:
     """Create, update, or rename a file."""
     path_or_new_path = path
-    if new_path and new_path != path:
+    if new_path:
         path_or_new_path = validate_path(new_path, context)
-        try:
-            (settings.project_path / path).replace(settings.project_path / path_or_new_path)
-        except FileNotFoundError:
-            raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-        except OSError:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
-            )
+        replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
 
     if content:
         with open(settings.project_path / path_or_new_path, "w", encoding="utf-8") as f:
