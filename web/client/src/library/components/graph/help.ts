@@ -13,7 +13,7 @@ interface GraphNodePosition {
 
 interface GraphNode {
   id: string
-  interface: string
+  type: string
   position: GraphNodePosition
   data: GraphNodeData
   connectable: boolean
@@ -100,7 +100,7 @@ export async function getNodesAndEdges({
     nodes.push(output)
   })
 
-  return { edges, nodes }
+  return { nodes, edges }
 }
 
 function getNodeEdges(targets: string[] = [], source: string): GraphEdge[] {

@@ -18,7 +18,7 @@ import { useChannel } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
-const Graph = lazy(async () => await import('./Graph'))
+const Graph = lazy(async () => await import('../graph/Graph'))
 const Spinner = lazy(async () => await import('../logo/Spinner'))
 const Progress = lazy(async () => await import('../progress/Progress'))
 

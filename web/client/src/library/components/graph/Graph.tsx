@@ -13,7 +13,7 @@ import { Button } from '../button/Button'
 import { useApiDag } from '../../../api'
 import 'reactflow/dist/base.css'
 import { getNodesAndEdges } from './help'
-import { isFalse } from '../../../utils'
+import { isFalse, isNil } from '../../../utils'
 
 export default function Graph({ closeGraph }: any): JSX.Element {
   const { data } = useApiDag()
@@ -24,6 +24,8 @@ export default function Graph({ closeGraph }: any): JSX.Element {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   useEffect(() => {
+    if (isNil(data)) return
+
     let active = true
 
     void load()
@@ -33,6 +35,8 @@ export default function Graph({ closeGraph }: any): JSX.Element {
     }
 
     async function load(): Promise<void> {
+      console.log('start')
+
       setGraph(undefined)
 
       const graph = await getNodesAndEdges({ data, algorithm })
