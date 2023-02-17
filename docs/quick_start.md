@@ -105,7 +105,7 @@ Logical Update executed successfully
 
 ## 3. Make your first update
 ### 3.1 Edit the configuration
-Now, let's add a new column. Open the **models/example_incremental_model.sql** file and add `1 AS new_column` under item_id as follows:
+Now, let's add a new column. Open the **models/example_incremental_model.sql** file and add `#!sql 1 AS new_column` under item_id as follows:
 
 ```bash
 diff --git a/models/example_incremental_model.sql b/models/example_incremental_model.sql
