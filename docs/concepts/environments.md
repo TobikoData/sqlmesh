@@ -19,7 +19,7 @@ By default, the [`sqlmesh plan`](plans.md) command targets the production (`prod
 A custom name can be provided as an argument to create/update a development environment. For example, to target an environment with name `my_dev`, run:
 
 ```bash
-$ sqlmesh plan my_dev
+sqlmesh plan my_dev
 ```
 A new environment is created automatically the first time a plan is applied to it.
 
