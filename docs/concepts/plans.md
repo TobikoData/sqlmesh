@@ -33,7 +33,7 @@ A directly-modified model that is classified as non-breaking will be backfilled,
 ## Plan application
 Once a plan has been created and reviewed, it should then be applied to a target [environment](environments.md) in order for the changes that are part of it to take effect.
 
-Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](architecture/snapshots.md)). In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
+Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](architecture/snapshots.md)) with a unique [fingerprint](architecture/snapshots.md#fingerprints) assigned to it. In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
 
 When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words each environment is a collection of references to model variants and the physical tables associated with them.
 
