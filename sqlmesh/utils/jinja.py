@@ -27,7 +27,7 @@ class MacroExtractor(Parser):
             A dictionary of macro name to macro definition.
         """
         self.reset()
-        self.sql = jinja or ""
+        self.sql = jinja
         self._tokens = Dialect.get_or_raise(dialect)().tokenizer.tokenize(jinja)
         self._index = -1
         self._advance()
@@ -35,17 +35,26 @@ class MacroExtractor(Parser):
         macros: t.Dict[str, MacroInfo] = {}
 
         while self._curr:
-            if self._curr.token_type == TokenType.BLOCK_START:
+            if self._at_block_start():
+                if self._prev and self._prev.token_type == TokenType.L_BRACE:
+                    self._advance()
                 macro_start = self._curr
             elif self._tag == "MACRO" and self._next:
                 name = self._next.text
-                while self._curr and self._curr.token_type != TokenType.BLOCK_END:
+                while self._curr and self._at_block_end():
                     self._advance()
+                else:
+                    if self._prev.token_type == TokenType.R_BRACE:
+                        self._advance()
+
                 body_start = self._next
 
                 while self._curr and self._tag != "ENDMACRO":
-                    if self._curr.token_type == TokenType.BLOCK_START:
+                    if self._at_block_start():
                         body_end = self._prev
+                        if self._prev.token_type == TokenType.L_BRACE:
+                            self._advance()
+
                     self._advance()
 
                 calls = capture_jinja(self._find_sql(body_start, body_end)).calls
@@ -55,11 +64,30 @@ class MacroExtractor(Parser):
 
         return macros
 
+    def _at_block_start(self) -> bool:
+        return self._curr.token_type == TokenType.BLOCK_START or self._match_pair(
+            TokenType.L_BRACE, TokenType.L_BRACE, advance=False
+        )
+
+    def _at_block_end(self) -> bool:
+        return self._curr.token_type == TokenType.BLOCK_END or self._match_pair(
+            TokenType.R_BRACE, TokenType.R_BRACE, advance=False
+        )
+
     def _advance(self, times: int = 1) -> None:
         super()._advance(times)
         self._tag = (
             self._curr.text.upper()
-            if self._curr and self._prev and self._prev.token_type == TokenType.BLOCK_START
+            if self._curr
+            and self._prev
+            and (
+                self._prev.token_type == TokenType.BLOCK_START
+                or (
+                    self._index > 1
+                    and self._tokens[self._index - 1].token_type == TokenType.L_BRACE
+                    and self._tokens[self._index - 2].token_type == TokenType.L_BRACE
+                )
+            )
             else ""
         )
 

@@ -8,7 +8,7 @@ from difflib import unified_diff
 import pandas as pd
 from jinja2 import Environment
 from jinja2.meta import find_undeclared_variables
-from sqlglot import Dialect, Generator, Parser, TokenType, exp
+from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
 
 
 class Model(exp.Expression):
@@ -408,8 +408,14 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
             if i < total - 1:
                 chunks.append(([], False))
         else:
-            if token.token_type == TokenType.BLOCK_START or (
-                token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text)
+            if (
+                token.token_type == TokenType.BLOCK_START
+                or (
+                    i < total - 1
+                    and token.token_type == TokenType.L_BRACE
+                    and tokens[i + 1].token_type == TokenType.L_BRACE
+                )
+                or (token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text))
             ):
                 chunks[-1] = (chunks[-1][0], True)
             chunks[-1][0].append(token)
@@ -443,12 +449,15 @@ def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
     parsers = {Parser}
     generators = {Generator}
+    tokenizers = {Tokenizer}
 
     for dialect in Dialect.classes.values():
         if hasattr(dialect, "Parser"):
             parsers.add(dialect.Parser)
         if hasattr(dialect, "Generator"):
             generators.add(dialect.Generator)
+        if hasattr(dialect, "Tokenizer"):
+            tokenizers.add(dialect.Tokenizer)
 
     for generator in generators:
         if MacroFunc not in generator.TRANSFORMS:
@@ -482,6 +491,12 @@ def extend_sqlglot() -> None:
                 TokenType.PARAMETER: _parse_macro,
             }
         )
+
+    for tokenizer in tokenizers:
+        tokenizer.KEYWORDS.pop("{{", None)
+        tokenizer.KEYWORDS.pop("}}", None)
+        tokenizer.KEYWORD_TRIE.get("{", {}).get("{", {}).pop(0, None)
+        tokenizer.KEYWORD_TRIE.get("}", {}).get("}", {}).pop(0, None)
 
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
