@@ -660,12 +660,12 @@ class DatabricksMagicConsole(TerminalConsole):
         print(output)
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
-        self._print(message, **kwargs)
+        self._print(message)
         return super()._prompt("", **kwargs)
 
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         message = f"{message} \[y/n]"
-        self._print(message, **kwargs)
+        self._print(message)
         return super()._confirm("", **kwargs)
 
 
