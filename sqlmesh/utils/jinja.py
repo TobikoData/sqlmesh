@@ -41,10 +41,10 @@ class MacroExtractor(Parser):
                 macro_start = self._curr
             elif self._tag == "MACRO" and self._next:
                 name = self._next.text
-                while self._curr and self._at_block_end():
+                while self._curr and not self._at_block_end():
                     self._advance()
                 else:
-                    if self._prev.token_type == TokenType.R_BRACE:
+                    if self._prev and self._prev.token_type == TokenType.R_BRACE:
                         self._advance()
 
                 body_start = self._next
@@ -52,7 +52,7 @@ class MacroExtractor(Parser):
                 while self._curr and self._tag != "ENDMACRO":
                     if self._at_block_start():
                         body_end = self._prev
-                        if self._prev.token_type == TokenType.L_BRACE:
+                        if self._prev and self._prev.token_type == TokenType.L_BRACE:
                             self._advance()
 
                     self._advance()
