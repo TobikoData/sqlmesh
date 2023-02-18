@@ -1,9 +1,9 @@
 # SQL models
 
-SQL Models are the main types of models of SQLMesh. SQL models consist of a `Model` DDL, optional sql statements to run before the main query, and the main SQL query. SQL models are designed to look and feel like you're simply usning SQL, but can be customized for advanced use cases as well.
+SQL Models are the main types of models of SQLMesh. SQL models consist of a `Model` DDL, optional sql statements to run before the main query, and the main SQL query. SQL models are designed to look and feel like you're simply using SQL, but can be customized for advanced use cases as well.
 
 ## Definition
-To create a SQL model, just add a file named `my_model.sql` into the `models/` directory in your SQLMesh project. Although the name of the file doesn't matter, it is recommended to name it the model. Each file can only have one model defined within it.
+To create a SQL model, just add a file named `my_model.sql` into the `models/` directory (or subdirectory of `models/`) in your SQLMesh project. Although the name of the file doesn't matter, it is recommended to name it the model. Each file can only have one model defined within it.
 
 ### Example
 ```sql
