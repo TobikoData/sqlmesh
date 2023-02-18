@@ -524,8 +524,8 @@ class Context(BaseContext):
             latest: The latest time used for non incremental datasets.
             limit: A limit applied to the model, this must be > 0. If this argument is omitted
                 and the model contains a LIMIT clause, then the clause's expression will be used
-                instead. In any case, the final limit is bounded by the MAX_MODEL_LIMIT constant.
-                Default: MAX_MODEL_LIMIT
+                instead. In any case, the final limit is bounded by the DEFAULT_MAX_LIMIT constant.
+                Default: DEFAULT_MAX_LIMIT
         """
         if isinstance(model_or_snapshot, str):
             snapshot = self.snapshots[model_or_snapshot]
@@ -535,7 +535,7 @@ class Context(BaseContext):
             snapshot = self.snapshots[model_or_snapshot.name]
 
         if not limit or limit <= 0:
-            limit = c.MAX_MODEL_LIMIT
+            limit = c.DEFAULT_MAX_LIMIT
             if isinstance(snapshot.model, SqlModel):
                 model_limit = snapshot.model.render_query().args.get("limit")
 
