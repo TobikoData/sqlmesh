@@ -12,10 +12,11 @@ import { includes, isArrayNotEmpty, toDate, toDateFormat } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Spinner from '../logo/Spinner'
 import { isModified } from './help'
+import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
 
-export default function PlanWizard({ id }: { id: string }): JSX.Element {
+export default function PlanWizard(): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const setPlanAction = useStorePlan(s => s.setAction)
@@ -102,131 +103,27 @@ export default function PlanWizard({ id }: { id: string }): JSX.Element {
   )
 
   return (
-    <ul>
-      <PlanWizardStep
-        headline="Setup"
-        description="Set Options"
-      >
-        {environment == null ? (
-          <form
-            onSubmit={getContext}
-            id={id}
-          >
-            <fieldset className="mb-4">
-              <label htmlFor="">
-                <small>Environment (Optional)</small>
-                <input
-                  type="text"
-                  name="environment"
-                  className="block bg-gray-100 px-2 py-1 rounded-md w-full"
-                />
-                <div className="flex items-center">
-                  <small>Maybe?</small>
-                  <ul className="flex ml-2">
-                    {['prod', 'dev', 'stage'].map(env => (
-                      <li
-                        key={env}
-                        className="mr-3 border-b cursor-pointer hover:opacity-50"
-                        onClick={() => {
-                          setPlanAction(EnumPlanAction.Running)
-                          setEnvironment(env)
-                        }}
-                      >
-                        <small className="font-sm">{env}</small>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </label>
-            </fieldset>
-          </form>
-        ) : (
-          <div>
-            <h4 className="ml-1">
-              Current Environment is
-              <b className="ml-1 px-2 py-1 font-sm rounded-md bg-secondary-100">
-                {environment}
-              </b>
-            </h4>
-          </div>
-        )}
-      </PlanWizardStep>
-      <PlanWizardStep
-        headline="Models"
-        description="Review Changes"
-        disabled={environment == null}
-      >
-        {hasChanges ? (
-          <>
-            <div className="flex">
-              {isArrayNotEmpty(changes?.added) && (
-                <div className="ml-4 mb-8">
-                  <h4 className="text-success-500 mb-2">Added Models</h4>
-                  <ul className="ml-2">
-                    {changes?.added.map((modelName: string) => (
-                      <li
-                        key={modelName}
-                        className="text-success-500 font-sm h-[1.5rem]"
-                      >
-                        <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">
-                          {modelName}
-                        </small>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {isArrayNotEmpty(changes?.removed?.length) && (
-                <div className="ml-4 mb-8">
-                  <h4 className="text-danger-500 mb-2">Removed Models</h4>
-                  <ul className="ml-2">
-                    {changes?.added.map((modelName: string) => (
-                      <li
-                        key={modelName}
-                        className="text-danger-500 font-sm h-[1.5rem]"
-                      >
-                        <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">
-                          {modelName}
-                        </small>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            {isModified(changes?.modified) && (
+    <ul className="flex flex-col w-full">
+      <PlanWizardStepOptions />
+      {hasChanges && (
+        <PlanWizardStep
+          headline="Models"
+          description="Review Changes"
+          disabled={environment == null}
+        >
+          {hasChanges ? (
+            <>
               <div className="flex">
-                {isArrayNotEmpty(changes?.modified.direct) && (
-                  <div className="ml-1">
-                    <h4 className="text-secondary-500 mb-2">
-                      Modified Directly
-                    </h4>
-                    <ul className="ml-1 mr-3">
-                      {changes?.modified.direct.map(change => (
-                        <li
-                          key={change.model_name}
-                          className="text-secondary-500 font-sm h-[1.5rem]"
-                        >
-                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">
-                            {change.model_name}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {isArrayNotEmpty(changes?.modified.indirect) && (
-                  <div className="ml-1 mr-3">
-                    <h4 className="text-warning-500 mb-2">
-                      Modified Indirectly
-                    </h4>
-                    <ul className="ml-1">
-                      {changes?.modified?.indirect.map((modelName: string) => (
+                {isArrayNotEmpty(changes?.added) && (
+                  <div className="ml-4 mb-8">
+                    <h4 className="text-success-500 mb-2">Added Models</h4>
+                    <ul className="ml-2">
+                      {changes?.added.map((modelName: string) => (
                         <li
                           key={modelName}
-                          className="text-warning-500 font-sm h-[1.5rem]"
+                          className="text-success-500 font-sm h-[1.5rem]"
                         >
-                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">
                             {modelName}
                           </small>
                         </li>
@@ -234,16 +131,16 @@ export default function PlanWizard({ id }: { id: string }): JSX.Element {
                     </ul>
                   </div>
                 )}
-                {isArrayNotEmpty(changes?.modified.metadata) && (
-                  <div className="ml-1">
-                    <small>Modified Metadata</small>
-                    <ul className="ml-1">
-                      {changes?.modified?.metadata.map((modelName: string) => (
+                {isArrayNotEmpty(changes?.removed?.length) && (
+                  <div className="ml-4 mb-8">
+                    <h4 className="text-danger-500 mb-2">Removed Models</h4>
+                    <ul className="ml-2">
+                      {changes?.added.map((modelName: string) => (
                         <li
                           key={modelName}
-                          className="text-gray-500 font-sm h-[1.5rem]"
+                          className="text-danger-500 font-sm h-[1.5rem]"
                         >
-                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">
+                          <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">
                             {modelName}
                           </small>
                         </li>
@@ -252,20 +149,83 @@ export default function PlanWizard({ id }: { id: string }): JSX.Element {
                   </div>
                 )}
               </div>
-            )}
-          </>
-        ) : planAction === EnumPlanAction.Running ? (
-          <span className="flex items-center">
-            <Spinner className="w-4 h-4 mr-2" />
-            <small>Checking ...</small>
-          </span>
-        ) : (
-          <div className="ml-1 text-gray-700">
-            <Divider className="h-1 w-full mb-4" />
-            <h3>No Changes</h3>
-          </div>
-        )}
-      </PlanWizardStep>
+              {isModified(changes?.modified) && (
+                <div className="flex">
+                  {isArrayNotEmpty(changes?.modified.direct) && (
+                    <div className="ml-1">
+                      <h4 className="text-secondary-500 mb-2">
+                        Modified Directly
+                      </h4>
+                      <ul className="ml-1 mr-3">
+                        {changes?.modified.direct.map(change => (
+                          <li
+                            key={change.model_name}
+                            className="text-secondary-500 font-sm h-[1.5rem]"
+                          >
+                            <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">
+                              {change.model_name}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {isArrayNotEmpty(changes?.modified.indirect) && (
+                    <div className="ml-1 mr-3">
+                      <h4 className="text-warning-500 mb-2">
+                        Modified Indirectly
+                      </h4>
+                      <ul className="ml-1">
+                        {changes?.modified?.indirect.map(
+                          (modelName: string) => (
+                            <li
+                              key={modelName}
+                              className="text-warning-500 font-sm h-[1.5rem]"
+                            >
+                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">
+                                {modelName}
+                              </small>
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {isArrayNotEmpty(changes?.modified.metadata) && (
+                    <div className="ml-1">
+                      <small>Modified Metadata</small>
+                      <ul className="ml-1">
+                        {changes?.modified?.metadata.map(
+                          (modelName: string) => (
+                            <li
+                              key={modelName}
+                              className="text-gray-500 font-sm h-[1.5rem]"
+                            >
+                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">
+                                {modelName}
+                              </small>
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : planAction === EnumPlanAction.Running ? (
+            <span className="flex items-center">
+              <Spinner className="w-4 h-4 mr-2" />
+              <small>Checking ...</small>
+            </span>
+          ) : (
+            <div className="ml-1 text-gray-700">
+              <Divider className="h-1 w-full mb-4" />
+              <h3>No Changes</h3>
+            </div>
+          )}
+        </PlanWizardStep>
+      )}
       {hasChanges && (
         <PlanWizardStep
           headline="Backfill"
@@ -466,8 +426,8 @@ function PlanWizardStep({
   disabled = false,
 }: PropsPlanWizardStep): JSX.Element {
   return (
-    <li className="mb-2">
-      <div className="flex items-start">
+    <li className="mb-2 flex items-center w-full">
+      <div className="flex items-start w-full">
         <PlanWizardStepHeader
           className="min-w-[25%] text-right pr-12"
           headline={headline}

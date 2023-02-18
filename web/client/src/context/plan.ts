@@ -50,6 +50,19 @@ interface PlanProgress {
   updated_at: string
 }
 
+interface PlanOptions {
+  environment?: string
+  skipTests?: boolean
+  noGaps?: boolean
+  skipBackfill?: boolean
+  forwardOnly?: boolean
+  autoApply?: boolean
+  start?: string
+  end?: string
+  from?: string
+  restateModel?: string
+}
+
 interface PlanStore {
   state: PlanState
   action: PlanAction
@@ -76,13 +89,36 @@ interface PlanStore {
     channel: EventSource,
     unsubscribe: () => void,
   ) => void
+  planOptions: PlanOptions
+  setPlanOptions: (planOptions: PlanOptions) => void
+  resetPlanOptions: () => void
+}
+
+const planOptions: PlanOptions = {
+  skipTests: false,
+  noGaps: false,
+  skipBackfill: false,
+  forwardOnly: true,
+  autoApply: false,
+  environment: '',
+  start: '',
+  end: '',
+  from: '',
+  restateModel: '',
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
+  planOptions,
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
   activePlan: undefined,
   lastPlan: undefined,
+  setPlanOptions: (planOptions: PlanOptions) => {
+    set(s => ({ planOptions: { ...s.planOptions, ...planOptions } }))
+  },
+  resetPlanOptions: () => {
+    set(() => ({ planOptions }))
+  },
   setActivePlan: (activePlan?: PlanProgress) => {
     set(() => ({ activePlan }))
   },

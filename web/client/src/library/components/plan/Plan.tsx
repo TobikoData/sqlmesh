@@ -8,17 +8,17 @@ import { useEffect, MouseEvent } from 'react'
 import { PlanSidebar } from './PlanSidebar'
 import PlanWizard from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
-import { Divider } from '../divider/Divider'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
 import fetchAPI from '../../../api/instance'
-import { includes, isArrayEmpty } from '../../../utils'
+import { includes, isArrayEmpty, isNil } from '../../../utils'
 import { useChannel } from '../../../api/channels'
 import { getActionName } from './help'
 import SplitPane from '../splitPane/SplitPane'
+import { Divider } from '../divider/Divider'
 
 export default function Plan({
   onClose,
@@ -43,10 +43,13 @@ export default function Plan({
   const updateTasks = useStorePlan(s => s.updateTasks)
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
+  const planOptions = useStorePlan(s => s.planOptions)
+  const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
   const [subscribe] = useChannel('/api/tasks', updateTasks)
-
-  const { refetch } = useApiContextByEnvironment(environment)
+  const { refetch, data: contextPlan } = useApiContextByEnvironment(
+    planOptions.environment,
+  )
   const { data: context } = useApiContext()
 
   useEffect(() => {
@@ -54,23 +57,22 @@ export default function Plan({
   }, [])
 
   useEffect(() => {
-    if (environment != null) {
-      if (includes([EnumPlanAction.Run, EnumPlanAction.Running], planAction)) {
-        void refetch()
-      }
-    } else {
-      if (
-        includes(
-          [
-            EnumPlanAction.None,
-            EnumPlanAction.Opening,
-            EnumPlanAction.Resetting,
-          ],
-          planAction,
-        )
-      ) {
-        setPlanAction(EnumPlanAction.Run)
-      }
+    console.log({ planOptions })
+    if (contextPlan != null) {
+      setEnvironment(contextPlan.environment)
+    }
+  }, [contextPlan])
+
+  useEffect(() => {
+    if (environment != null) return
+
+    if (
+      includes(
+        [EnumPlanAction.None, EnumPlanAction.Opening, EnumPlanAction.Resetting],
+        planAction,
+      )
+    ) {
+      setPlanAction(EnumPlanAction.Run)
     }
   }, [environment])
 
@@ -99,6 +101,7 @@ export default function Plan({
     setWithBackfill(false)
     setBackfills()
     setActivePlan(undefined)
+    resetPlanOptions()
   }
 
   function cancel(): void {
@@ -160,7 +163,7 @@ export default function Plan({
   return (
     <SplitPane
       sizes={[25, 75]}
-      className="flex w-full h-[75vh] overflow-hidden"
+      className="flex w-full h-[90vh] overflow-hidden"
     >
       <PlanSidebar context={context} />
       <div className="flex flex-col overflow-hidden">
@@ -172,24 +175,47 @@ export default function Plan({
           </div>
         ) : (
           <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard id="contextEnvironment" />
+            <PlanWizard />
           </div>
         )}
-        <Divider className="h-2" />
+        <Divider />
         <div className="flex justify-between px-4 py-2 ">
-          <div className="flex w-full">
+          <div className="flex w-full items-center">
             {(planAction === EnumPlanAction.Run ||
               planAction === EnumPlanAction.Running) && (
-              <Button
-                type="submit"
-                form="contextEnvironment"
-                disabled={planAction === EnumPlanAction.Running}
-              >
-                {getActionName(planAction, [
-                  EnumPlanAction.Running,
-                  EnumPlanAction.Run,
-                ])}
-              </Button>
+              <>
+                <Button
+                  type="submit"
+                  disabled={
+                    planAction === EnumPlanAction.Running ||
+                    isNil(planOptions.environment) ||
+                    planOptions.environment === ''
+                  }
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation()
+
+                    setPlanAction(EnumPlanAction.Running)
+
+                    void refetch()
+                  }}
+                >
+                  {getActionName(planAction, [
+                    EnumPlanAction.Running,
+                    EnumPlanAction.Run,
+                  ])}
+                </Button>
+                {planAction === EnumPlanAction.Run &&
+                  planOptions.environment != null &&
+                  planOptions.environment !== '' && (
+                    <p className="ml-2 text-gray-600">
+                      Plan for{' '}
+                      <b className="text-secondary-500 font-bold">
+                        {planOptions.environment}
+                      </b>{' '}
+                      Environment
+                    </p>
+                  )}
+              </>
             )}
 
             {(planAction === EnumPlanAction.Apply ||

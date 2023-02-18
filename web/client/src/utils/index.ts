@@ -14,6 +14,10 @@ export function isString(value: unknown): boolean {
   return typeof value === 'string'
 }
 
+export function isStringEmptyOrNil(value: unknown): boolean {
+  return isNil(value) || value === ''
+}
+
 export function isArrayNotEmpty(value: unknown): boolean {
   return Array.isArray(value) && value.length > 0
 }

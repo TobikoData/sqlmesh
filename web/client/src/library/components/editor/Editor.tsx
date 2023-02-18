@@ -284,7 +284,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           >
             <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
           </Button>
-          <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
+          <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
             {openedFiles.size > 0 &&
               [...openedFiles.values()].map((file, idx) => (
                 <li
