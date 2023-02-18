@@ -29,7 +29,6 @@ from sqlglot import exp, select
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.core.model import SqlModel
 from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
@@ -158,14 +157,6 @@ class SnapshotEvaluator:
             latest=latest,
             **kwargs,
         )
-
-        if isinstance(model, SqlModel):
-            query_limit = model.render_query(
-                start=start, end=end, latest=latest, snapshots=snapshots, is_dev=is_dev, **kwargs
-            ).args.get("limit")
-
-            if query_limit:
-                limit = min(limit, eval(query_limit.expression.sql(self.adapter.dialect)))
 
         with self.adapter.transaction(
             transaction_type=TransactionType.DDL

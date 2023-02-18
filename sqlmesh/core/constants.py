@@ -28,3 +28,6 @@ EPOCH_DS = "1970-01-01"
 
 JINJA_MACROS = "JINJA_MACROS"
 """Used to store jinja macros in the execution env."""
+
+MAX_MODEL_LIMIT = 1000
+"""The maximum limit that can be used when evaluating a model."""
