@@ -2,18 +2,18 @@
 
 SQLMesh provides first-class support for Airflow with the following capabilities:
 
-* A Directed Acyclic Graph (DAG) is generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
+* A Directed Acyclic Graph (DAG) generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
 * Each Plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
 * The Airflow [Database Backend](https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html) is used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
-To integrate SQLMesh with Airflow, configure the following:
-
 ## Airflow cluster configuration
-To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed in that cluster. Please note that the Airflow Webserver instance(s) needs to be restarted after installation.
+To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. 
 
-Once the package is installed, the following Python module needs to be created in the `dags/` folder of the target DAG repository with the following contents:
+**Note:** The Airflow Webserver instance(s) must be restarted after installation.
+
+Once the package is installed, the following Python module must be created in the `dags/` folder of the target DAG repository with the following contents:
 
 ```python linenums="1"
 from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
@@ -70,6 +70,7 @@ Similarly, the `engine_operator_args` parameter can be used to override other jo
 
 **Cluster mode**
 <br><br>
+
 Each Spark job submitted by SQLMesh is a PySpark application that depends on the SQLMesh library in its Driver process (but not in Executors). This means that if the Airflow connection is configured to submit jobs in `cluster` mode as opposed to `client` mode, the user must ensure that the SQLMesh Python library is installed on each node of a cluster where Spark jobs are submitted. This is because there is no way to know in advance which specific node to which a Driver process will be scheduled. No additional configuration is required if the deploy mode is set to `client`.
 
 ### Databricks

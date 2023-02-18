@@ -1,22 +1,22 @@
 # Seed models
 
-Seed is a special kind of model where data is sourced from a static dataset defined as a CSV file rather than from a SQL / Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
+Seed models are special kinds of models in which data is sourced from a static dataset defined as a CSV file rather than from a SQL or Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
 
-Since seeds are also models in SQLMesh, they enjoy all the same benefits that SQL / Python models provide:
+Since seeds are also models in SQLMesh, they capitalize on all the same benefits that SQL or Python models provide:
 
-* A physical table gets created in the data warehouse which reflects the contents of the seed's CSV file.
-* Seed models can be referenced in downstream models the same way as other models.
+* A physical table gets created in the data warehouse, which reflects the contents of the seed's CSV file.
+* Seed models can be referenced in downstream models in the same way as other models.
 * Changes to CSV files are captured during [planning](../plans.md#plan-application) and versioned using the same [fingerprinting](../architecture/snapshots.md#fingerprinting) mechanism.
 * [Environment](../environments.md) isolation also applies to seed models.
 
 Seed models are a good fit for static datasets that don't change often or at all. Examples of such datasets include:
 
-* Names of national holidays and their dates.
-* A static list of identifiers that should be excluded.
+* Names of national holidays and their dates
+* A static list of identifiers that should be excluded
 
 ## Creating a seed model
 
-Similarly to [SQL models](sql_models.md), seed models are defined in files with the `.sql` extension as part of the `models/` folder of the SQLMesh project. To indicate that the model is a seed model, the special kind `SEED` should be used in the model definition:
+Similar to [SQL models](sql_models.md), seed models are defined in files with the `.sql` extension as part of the `models/` folder of the SQLMesh project. To indicate that the model is a seed model, the special kind `SEED` should be used in the model definition:
 ```sql linenums="1"
 MODEL (
   name test_db.national_holidays,
@@ -40,11 +40,11 @@ MODEL (
   )
 );
 ```
-**Note:** the dataset schema provided in the definition takes precedence over column names defined in the header of a CSV file. This means that the order in which columns are provided in the model definition must match the order of columns in the CSV file.
+**Note:** The dataset schema provided in the definition takes precedence over column names defined in the header of a CSV file. This means that the order in which columns are provided in the model definition must match the order of columns in the CSV file.
 
 ## Example
 
-For this example we use the model definition from the previous section and assume it's been saved to the `models/national_holidays.sql` file of the SQLMesh project.
+In this example, we'll use the model definition from the previous section,\ and assume it's been saved to the `models/national_holidays.sql` file of the SQLMesh project.
 
 Add the seed's CSV file with name `national_holidays.csv` to the `models/` folder with the following contents:
 ```csv linenums="1"
@@ -53,7 +53,7 @@ New Year,2023-01-01
 Christmas,2023-12-25
 ```
 
-When running the `sqlmesh plan` command the new model gets automatically detected:
+When running the `sqlmesh plan` command, the new model is automatically detected:
 ```bash
 $ sqlmesh plan
 ======================================================================
@@ -72,7 +72,7 @@ All model batches have been executed successfully
 test_db.national_holidays ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-After successful plan application you can now query the table which resulted from model evaluation:
+After successful plan application, you can now query the table that resulted from model evaluation:
 ```bash
 $ sqlmesh fetchdf "SELECT * FROM test_db.national_holidays"
 

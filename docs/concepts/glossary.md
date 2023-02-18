@@ -1,5 +1,8 @@
 # Glossary
 
+## Abstract Syntax Tree
+A tree representation of the syntactic structure of source code. Each tree node represents a construct that occurs. The tree is abstract because it does not represent every detail appearing in the actual syntax; it also does not have a standard representation.
+
 ## CI/CD
 An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](tests.md) and [audits](audits.md).
 
