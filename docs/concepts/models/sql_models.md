@@ -9,7 +9,8 @@ To create a SQL model, just add a file named `my_model.sql` into the `models/` d
 ```sql
 -- The Model DDL where you specify options regarding the model.
 MODEL (
-  name db.customers
+  name db.customers,
+  kind FULL,
 );
 
 /*
@@ -54,7 +55,7 @@ JOIN countries
   ON employees.id = countries.employee_id
 ```
 
-SQLMesh will detect that the model depends on both employees and countries. When evaluating this model, it will ensure that employees and countries will be evaluated first. External dependencies that are not defined in SQLMesh are also supported. SQLMesh can either depend on them via a schedule or through signals if you are using [Airflow](../../../integrations/airflow).
+SQLMesh will detect that the model depends on both employees and countries. When evaluating this model, it will ensure that employees and countries will be evaluated first. External dependencies that are not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through a candence or through signals if you are using [Airflow](../../../integrations/airflow).
 
 Although automatic dependency detection works most of the time, there may be specific cases where you want to define them manually. You can do so in the Model DDL with the [dependencies property](../overview/#properties).
 
@@ -74,6 +75,8 @@ SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) in order to pars
 Additionally you don't have to worry about things like trailing commas as SQLGlot will remove them at parse time.
 
 ## Macros
-Although SQL is very powerful, it is often required to run SQL queries with dynamic components like date filters. Additionally, large queries can be difficult to read and maintain, so having macros is powerful tool to address these advanced use cases.
+Although SQL is very powerful, it is often required to run SQL queries with dynamic components like date filters. For example, you may want to change the date ranges in a `between` statement so that you can get the latest batch of data. SQLMesh provides these dates automatically through macro variables.
+
+Additionally, large queries can be difficult to read and maintain. In order to make queries less bloated and repetitive, SQLMesh allows for you to write powerful macros that can make your SQL queries easier to manage.
 
 SQLMesh supports a powerful [macro syntax](../../macros) and [Jinja](https://jinja.palletsprojects.com/en/3.1.x/).
