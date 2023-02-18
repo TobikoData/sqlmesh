@@ -8,7 +8,7 @@ from sqlglot import parse_one
 import sqlmesh.core.constants
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import _parse_model
+from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.errors import ConfigError
@@ -241,7 +241,7 @@ def test_evaluate_limit():
 
     context.upsert_model(
         load_model(
-            _parse_model(
+            parse(
                 """
         MODEL(name limit_test, kind FULL);
         SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
