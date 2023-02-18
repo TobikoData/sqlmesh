@@ -8,6 +8,8 @@ from sqlglot import parse_one
 import sqlmesh.core.constants
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import parse
+from sqlmesh.core.model import load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
@@ -232,6 +234,24 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1"))
     sushi_context.diff("test")
     assert mock_console.show_model_difference_summary.called
+
+
+def test_evaluate_limit():
+    context = Context(config=Config())
+
+    context.upsert_model(
+        load_model(
+            parse(
+                """
+        MODEL(name limit_test, kind FULL);
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
+            )
+        )
+    )
+
+    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02").size == 3
+    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 4
+    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
 def test_ignore_files(mocker: MockerFixture, tmpdir):
