@@ -408,8 +408,14 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
             if i < total - 1:
                 chunks.append(([], False))
         else:
-            if token.token_type == TokenType.BLOCK_START or (
-                token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text)
+            if (
+                token.token_type == TokenType.BLOCK_START
+                or (
+                    i < total - 1
+                    and token.token_type == TokenType.L_BRACE
+                    and tokens[i + 1].token_type == TokenType.L_BRACE
+                )
+                or (token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text))
             ):
                 chunks[-1] = (chunks[-1][0], True)
             chunks[-1][0].append(token)

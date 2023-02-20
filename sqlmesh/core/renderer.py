@@ -10,6 +10,7 @@ from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
+from sqlglot.optimizer.pushdown_projections import pushdown_projections
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
@@ -30,6 +31,8 @@ RENDER_OPTIMIZER_RULES = (
     qualify_tables,
     qualify_columns,
     expand_laterals,
+    pushdown_projections,
+    annotate_types,
 )
 
 
@@ -150,8 +153,6 @@ class QueryRenderer:
                 pass
             except SqlglotError as ex:
                 raise_config_error(f"Invalid model query. {ex}", self._path)
-
-            self._query_cache[cache_key] = annotate_types(self._query_cache[cache_key])
 
         query = self._query_cache[cache_key]
 
