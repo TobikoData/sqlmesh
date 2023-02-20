@@ -6,6 +6,7 @@ export default function SplitPane({
   children,
   sizes,
   minSize,
+  maxSize,
   direction,
 }: SplitProps): JSX.Element {
   return (
@@ -17,6 +18,7 @@ export default function SplitPane({
       gutterSize={3}
       direction={direction}
       minSize={minSize}
+      maxSize={maxSize}
     >
       {children}
     </Split>

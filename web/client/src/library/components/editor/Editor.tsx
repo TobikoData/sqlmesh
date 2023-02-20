@@ -21,7 +21,7 @@ import {
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
-import { isFalse, isNil, isString } from '../../../utils'
+import { isFalse, isNil, isString, isTrue } from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
 
@@ -32,8 +32,7 @@ export const EnumEditorFileStatus = {
   Saved: 'saved',
 } as const
 
-export type EditorFileStatus =
-  typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
+export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
 
@@ -61,6 +60,13 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   )
   const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
+  const [formEvaluate, setFormEvaluate] = useState({
+    model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+    start: '',
+    end: '',
+    latest: '',
+    limit: 1000,
+  })
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
@@ -128,6 +134,11 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     setTabQueryPreviewContent(bucket?.get('queryPreview'))
     setTabTableContent(bucket?.get('table'))
     setTabTerminalContent(bucket?.get('terminal'))
+
+    setFormEvaluate({
+      ...formEvaluate,
+      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+    })
   }, [activeFile])
 
   function closeEditorTab(file: ModelFile): void {
@@ -185,19 +196,11 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
   function evaluateModel(): void {
     const bucket = cache[activeFile.id]
-    const WEEK = 1000 * 60 * 60 * 24 * 7
 
     bucket?.set('terminal', undefined)
     setTabTerminalContent(bucket?.get('terminal'))
 
-    evaluateApiEvaluatePost({
-      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
-      start: Date.now() - WEEK,
-      end: Date.now(),
-      latest: Date.now() - WEEK,
-    })
-      .then(updateTabs)
-      .catch(console.log)
+    evaluateApiEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
   }
 
   function updateTabs(result: string | { detail: string }): void {
@@ -216,16 +219,18 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
 
-  const sizes = [tabTableContent, tabTerminalContent].some(Boolean)
+  // TODO: remove once we have a better way to determine if a file is a model
+  const isModel = activeFile.path.includes('models/')
+  const shouldEvaluate = isModel && Object.values(formEvaluate).every(Boolean)
+  const sizesMain = [tabTableContent, tabTerminalContent].some(Boolean)
     ? [75, 25]
     : [100, 0]
 
-  // TODO: remove once we have a better way to determine if a file is a model
-  const isModel = activeFile.path.includes('models/')
+  const sizesActions = activeFile.content === '' ? [100, 0] : [70, 30]
 
   return (
     <SplitPane
-      sizes={sizes}
+      sizes={sizesMain}
       direction="vertical"
       minSize={0}
       className={className}
@@ -285,19 +290,189 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               ))}
           </ul>
         </div>
-
         <Divider />
-        <div className="w-full h-full flex flex-col overflow-hidden">
-          <div className="w-full h-full overflow-hidden">
-            <CodeEditor
-              className="h-full w-full"
-              extension={activeFile.extension}
-              value={activeFile.content}
-              onChange={debouncedChange}
-            />
-          </div>
-        </div>
+        <div className="flex h-full flex-col overflow-hidden">
+          <SplitPane
+            className="flex h-full"
+            sizes={sizesActions}
+            minSize={0}
+          >
+            <div className="flex h-full">
+              <CodeEditor
+                extension={activeFile.extension}
+                value={activeFile.content}
+                onChange={debouncedChange}
+              />
+            </div>
 
+            <div className="flex flex-col h-full overflow-hidden">
+              <div className="px-4 py-2">
+                <p className="inline-block font-bold text-xs text-secondary-500 border-b-2 border-secondary-500 mr-3">
+                  Actions
+                </p>
+                <p className="inline-block font-bold text-xs text-gray-500 border-b-2 border-white mr-3 opacity-50 cursor-not-allowed">
+                  Docs
+                </p>
+              </div>
+              <Divider />
+              <div className="w-full h-full flex flex-col items-center overflow-hidden">
+                <div className="w-full max-w-md h-full py-1 px-3 justify-center overflow-hidden  overflow-y-auto">
+                  {isTrue(isModel) && (
+                    <form className="my-3 w-full">
+                      <fieldset>
+                        <div className="flex items-center mb-1 px-3 text-sm font-bold">
+                          <h3 className="whitespace-nowrap ml-2">Model Name</h3>
+                          <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-sm rounded">
+                            {formEvaluate.model}
+                          </p>
+                        </div>
+                      </fieldset>
+                      <fieldset className="my-3">
+                        <div className="p-4 bg-warning-100 text-warning-700 rounded-xl">
+                          <p className="text-sm">
+                            Please, fill out all fileds to{' '}
+                            <b>
+                              {isModel ? 'evaluate the model' : 'run query'}
+                            </b>
+                            .
+                          </p>
+                        </div>
+                      </fieldset>
+                      <fieldset className="mb-4">
+                        <Input
+                          label="Start Date"
+                          placeholder="02/11/2023"
+                          value={formEvaluate.start}
+                          onInput={(e: KeyboardEvent) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              start: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          label="End Date"
+                          placeholder="02/13/2023"
+                          value={formEvaluate.end}
+                          onInput={(e: KeyboardEvent) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              end: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          label="Latest Date"
+                          placeholder="02/13/2023"
+                          value={formEvaluate.latest}
+                          onInput={(e: KeyboardEvent) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              latest: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          label="Limit"
+                          placeholder="1000"
+                          value={formEvaluate.limit}
+                          onInput={(e: KeyboardEvent) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              limit: el?.valueAsNumber ?? formEvaluate.limit,
+                            })
+                          }}
+                        />
+                      </fieldset>
+                    </form>
+                  )}
+                  {isFalse(isModel) && activeFile.isLocal && (
+                    <form className="my-3 w-full ">
+                      <fieldset className="mb-4">
+                        <Input
+                          label="Environment Name (Optional)"
+                          placeholder="prod"
+                        />
+                      </fieldset>
+                    </form>
+                  )}
+                </div>
+
+                <Divider />
+                <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
+                  {isFalse(activeFile.isLocal) && isModel && (
+                    <div className="flex w-full justify-between">
+                      <div className="flex">
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          disabled={true}
+                        >
+                          Validate
+                        </Button>
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          disabled={true}
+                        >
+                          Format
+                        </Button>
+                      </div>
+                      {isTrue(isModel) && (
+                        <Button
+                          size={EnumSize.sm}
+                          variant="secondary"
+                          disabled={isFalse(shouldEvaluate)}
+                          onClick={e => {
+                            e.stopPropagation()
+
+                            evaluateModel()
+                          }}
+                        >
+                          Evaluate
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {isFalse(isModel) &&
+                    activeFile.extension === '.sql' &&
+                    activeFile.content !== '' && (
+                      <>
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          onClick={e => {
+                            e.stopPropagation()
+
+                            sendQuery()
+                          }}
+                        >
+                          Run Query
+                        </Button>
+                      </>
+                    )}
+                </div>
+              </div>
+            </div>
+          </SplitPane>
+        </div>
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <div className="flex align-center mr-4">
@@ -333,53 +508,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               text="Language"
               value={getLanguageByExtension(activeFile.extension)}
             />
-          </div>
-          <div className="flex">
-            {isFalse(activeFile.isLocal) && isModel && (
-              <>
-                <Button
-                  size={EnumSize.sm}
-                  variant="alternative"
-                  onClick={e => {
-                    e.stopPropagation()
-
-                    evaluateModel()
-                  }}
-                >
-                  Evaluate
-                </Button>
-              </>
-            )}
-            {isFalse(isModel) &&
-              activeFile.extension === '.sql' &&
-              activeFile.content !== '' && (
-                <>
-                  <Button
-                    size={EnumSize.sm}
-                    variant="alternative"
-                    onClick={e => {
-                      e.stopPropagation()
-
-                      sendQuery()
-                    }}
-                  >
-                    Run Query
-                  </Button>
-                </>
-              )}
-            {activeFile.content !== '' && (
-              <Button
-                size={EnumSize.sm}
-                variant="alternative"
-                onClick={e => {
-                  e.stopPropagation()
-
-                  onChange('')
-                }}
-              >
-                Clear
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -435,5 +563,35 @@ function CodeEditor({
       extensions={extensions}
       onChange={onChange}
     />
+  )
+}
+
+function Input({
+  type = 'text',
+  label,
+  info,
+  value,
+  placeholder,
+  onInput,
+  className,
+  readOnly,
+}: any): JSX.Element {
+  return (
+    <div className={clsx('relative block m-2', className)}>
+      <label className="block whitespace-nowrap mb-1 px-3 text-sm font-bold">
+        {label}
+      </label>
+      <input
+        readOnly={readOnly}
+        className={clsx(
+          'w-full px-3 py-2 bg-secondary-100 rounded-md focus:outline-none border-2 border-secondary-100 focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 bg-secondary-100',
+        )}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onInput={onInput}
+      />
+      <small className="block text-xs mt-1 px-3 text-gray-500">{info}</small>
+    </div>
   )
 }
