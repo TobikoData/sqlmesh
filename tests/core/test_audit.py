@@ -140,7 +140,7 @@ def test_no_query():
 
 
 def test_macro(model: Model):
-    expected_query = "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL"
+    expected_query = "SELECT * FROM (SELECT test_model.a AS a FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL"
 
     audit = Audit(
         name="test_audit",
@@ -163,7 +163,7 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL"
+        == "SELECT * FROM (SELECT test_model.a AS a FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL"
     )
 
     rendered_query_a_and_b = builtin.not_null_audit.render_query(
@@ -172,7 +172,7 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL OR _q_0.b IS NULL"
+        == "SELECT * FROM (SELECT test_model.a AS a, test_model.b AS b FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE _q_0.a IS NULL OR _q_0.b IS NULL"
     )
 
 
@@ -180,7 +180,7 @@ def test_unique_values_audit(model: Model):
     rendered_query_a = builtin.unique_values_audit.render_query(model, columns=[exp.to_column("a")])
     assert (
         rendered_query_a.sql()
-        == "SELECT _q_1.a_rank AS a_rank FROM (SELECT ROW_NUMBER() OVER (PARTITION BY _q_0.a ORDER BY 1) AS a_rank FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0) AS _q_1 WHERE _q_1.a_rank > 1"
+        == "SELECT _q_1.a_rank AS a_rank FROM (SELECT ROW_NUMBER() OVER (PARTITION BY _q_0.a ORDER BY 1) AS a_rank FROM (SELECT test_model.a AS a FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0) AS _q_1 WHERE _q_1.a_rank > 1"
     )
 
     rendered_query_a_and_b = builtin.unique_values_audit.render_query(
@@ -188,7 +188,7 @@ def test_unique_values_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == "SELECT _q_1.a_rank AS a_rank, _q_1.b_rank AS b_rank FROM (SELECT ROW_NUMBER() OVER (PARTITION BY _q_0.a ORDER BY 1) AS a_rank, ROW_NUMBER() OVER (PARTITION BY _q_0.b ORDER BY 1) AS b_rank FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0) AS _q_1 WHERE _q_1.a_rank > 1 OR _q_1.b_rank > 1"
+        == "SELECT _q_1.a_rank AS a_rank, _q_1.b_rank AS b_rank FROM (SELECT ROW_NUMBER() OVER (PARTITION BY _q_0.a ORDER BY 1) AS a_rank, ROW_NUMBER() OVER (PARTITION BY _q_0.b ORDER BY 1) AS b_rank FROM (SELECT test_model.a AS a, test_model.b AS b FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0) AS _q_1 WHERE _q_1.a_rank > 1 OR _q_1.b_rank > 1"
     )
 
 
@@ -200,7 +200,7 @@ def test_accepted_values_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE NOT _q_0.a IN ('value_a', 'value_b')"
+        == "SELECT * FROM (SELECT test_model.a AS a FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE NOT _q_0.a IN ('value_a', 'value_b')"
     )
 
 
@@ -211,5 +211,5 @@ def test_number_of_rows_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == """SELECT 1 AS "1" FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 HAVING COUNT(*) <= 0 LIMIT 0 + 1"""
+        == """SELECT 1 AS "1" FROM (SELECT 1 AS _ FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 HAVING COUNT(*) <= 0 LIMIT 0 + 1"""
     )
