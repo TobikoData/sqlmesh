@@ -127,7 +127,8 @@ def init_example_project(
     path: t.Union[str, Path], template: ProjectTemplate = ProjectTemplate.DEFAULT
 ) -> None:
     root_path = Path(path)
-    config_path = root_path / "config.yaml"
+    config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
+    config_path = root_path / f"config.{config_extension}"
     audits_path = root_path / "audits"
     macros_path = root_path / "macros"
     models_path = root_path / "models"
@@ -149,7 +150,7 @@ def init_example_project(
 
 def _create_folders(target_folders: t.Sequence[Path]) -> None:
     for folder_path in target_folders:
-        folder_path.mkdir()
+        folder_path.mkdir(exist_ok=True)
         (folder_path / ".gitkeep").touch()
 
 
