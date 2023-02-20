@@ -1,5 +1,5 @@
 # Testing
-Tests are the way of protecting your project from regression by continuously verifying that the output of each model matches the expectations. Unlike [audits](audits.md), tests are executed either on demand (eg. as part of a CI / CD job) or every time a new [plan](plans.md) is created.
+Testing is how you can protect your project from regression by continuously verifying that the output of each model matches the expectations. Unlike [audits](audits.md), tests are executed either on demand (eg. as part of a CI / CD job) or every time a new [plan](plans.md) is created.
 
 Similarly to unit testing in software development, SQLMesh evaluates the model's logic against predefined inputs and compares the output to expected outcomes provided as part of each test.
 
@@ -8,7 +8,7 @@ A comprehensive suite of tests can empower data practitioners to work with confi
 ## Creating tests
 Test suites are defined using YAML format in files with the `.yaml` extension as part of the `tests/` folder of your SQLMesh project. Each test within a suite file consists of the following attributes:
 
-* The name of the test, eg. `test_my_model`
+* The unique name of a test
 * The name of the model that is targeted by this test
 * Test inputs. Inputs are defined per external table or upstream model referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
