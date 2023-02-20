@@ -2,6 +2,7 @@ import difflib
 import fnmatch
 import itertools
 import pathlib
+import types
 import typing as t
 import unittest
 
@@ -164,6 +165,27 @@ class ModelTest(unittest.TestCase):
         raise TestError(f"{msg} at {self.path}")
 
 
+class ModelTextTestResult(unittest.TextTestResult):
+    def addFailure(
+        self,
+        test: unittest.TestCase,
+        err: t.Union[
+            t.Tuple[t.Type[BaseException], BaseException, types.TracebackType],
+            t.Tuple[None, None, None],
+        ],
+    ) -> None:
+        """Called when the test case test signals a failure.
+
+        The traceback is suppressed because it is redundant and not useful.
+
+        Args:
+            test: The test case.
+            err: A tuple of the form returned by sys.exc_info(), i.e., (type, value, traceback).
+        """
+        exctype, value, tb = err
+        return super().addFailure(test, (exctype, value, None))  # type: ignore
+
+
 def load_model_test_file(
     path: pathlib.Path,
 ) -> t.Dict[str, ModelTestMetadata]:
@@ -254,7 +276,7 @@ def run_tests(
         )
         for metadata in model_test_metadata
     )
-    return unittest.TextTestRunner(verbosity=verbosity).run(suite)
+    return unittest.TextTestRunner(verbosity=verbosity, resultclass=ModelTextTestResult).run(suite)
 
 
 def get_all_model_tests(
