@@ -14,10 +14,6 @@ test_customer_d:
         phone: 555-555-5555
         register_ds: '2022-10-01'
   outputs:
-    vars:
-      start: 2022-10-01
-      end: 2022-10-01
-      latest: 2022-10-01
     query:
       rows:
       - customer_id: '12345'
@@ -30,3 +26,7 @@ test_customer_d:
         email: 6d123ebf971031273b12882801adf3ba
         phone: c6d93dd6a266f33038af03534ab8192f
         register_ds: '2022-10-01'
+  vars:
+    start: 2022-10-01
+    end: 2022-10-01
+    latest: 2022-10-01

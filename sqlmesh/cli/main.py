@@ -266,7 +266,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
     # Set Python unittest verbosity level
     verbosity = 2 if verbose else 1
     if tests:
-        run_model_tests(
+        result = run_model_tests(
             tests=tests,
             snapshots=obj.snapshots,
             engine_adapter=obj.engine_adapter,
@@ -275,7 +275,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
             ignore_patterns=obj.ignore_patterns,
         )
     else:
-        run_all_model_tests(
+        result = run_all_model_tests(
             path=obj.path,
             snapshots=obj.snapshots,
             engine_adapter=obj.engine_adapter,
@@ -283,6 +283,9 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
             patterns=k,
             ignore_patterns=obj.ignore_patterns,
         )
+
+    if not result.wasSuccessful():
+        exit(1)
 
 
 @cli.command("audit")

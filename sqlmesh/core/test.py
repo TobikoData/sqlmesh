@@ -72,7 +72,7 @@ class ModelTest(unittest.TestCase):
 
         self.snapshot = snapshots[self.model_name]
 
-        self.query = self.snapshot.model.render_query(**self.body["outputs"].get("vars", {}))
+        self.query = self.snapshot.model.render_query(**self.body.get("vars", {}))
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {name: name for name in snapshots}
         if mapping:

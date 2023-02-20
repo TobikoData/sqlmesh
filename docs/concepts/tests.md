@@ -1,111 +1,180 @@
 # Testing
-Tests are one of the tools SQLMesh provides to validate your models. Along with [audits](audits.md), they are a great way to ensure the quality of your data and to build trust in it across your organization.
+Tests are the way of protecting your project from regression by continuously verifying that the output of each model matches the expectations. Unlike [audits](audits.md), tests are executed either on demand (eg. as part of a CI / CD job) or every time a new [plan](plans.md) is created.
 
-Similar to unit tests in software engineering, SQLMesh tests compare inputs and the expected outputs with the output from your model query; you can even test individual CTEs in your model queries. These tests are input and output data fixtures defined in YAML files in a test directory in your project. A comprehensive suite of tests can empower your data engineers and analysts to work with confidence, since you can validate that downstream models are behaving as expcted when model changes are made.
+Similarly to unit testing in software development, SQLMesh evaluates the model's logic against predefined inputs and compares the output to expected outcomes provided as part of each test.
 
-## Example test
-In the following example, we define a model test for the `sushi.customer_revenue_by_day` model to ensure the model query behaves as expcted. The test provides upstream data as input for the model, as well as expected output for the model and a CTE used by the model. SQLMesh will load the input rows, execute your model's CTE and query, and compare them to the output rows:
+A comprehensive suite of tests can empower data practitioners to work with confidence, since it allows them to make sure that models behave as expected after changes have been applied to them.
 
+## Creating tests
+Test suites are defined using YAML format in files with the `.yaml` extension as part of the `tests/` folder of your SQLMesh project. Each test within a suite file consists of the following attributes:
+
+* The name of the test, eg. `test_my_model`
+* The name of the model that is targeted by this test
+* Test inputs. Inputs are defined per external table or upstream model referenced by the target model. Each test input consists of the following:
+    * The name of an upstream model or external table
+    * The list of rows defined as a mapping from a column name to a value associated with it
+* Expected outputs which are defined as follows:
+    * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
+    * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query.
+* [Optional] The dictionary of values for macro variables that will be set during model testing.
+
+The YAML format is defined as follows:
 ```yaml linenums="1"
-test_customer_revenue_by_day:
-  model: sushi.customer_revenue_by_day
+<unique_test_name>:
+  model: <target_model_name>
   inputs:
-    sushi.orders:
+    <upstream_model_or_external_table_name>:
       rows:
-        - id: 1
-          customer_id: 1
-          waiter_id: 1
-          start_ts: 2022-01-01 01:59:00
-          end_ts: 2022-01-01 02:29:00
-          ds: 2022-01-01
-        - id: 2
-          customer_id: 1
-          waiter_id: 2
-          start_ts: 2022-01-01 03:59:00
-          end_ts: 2022-01-01 03:29:00
-          ds: 2022-01-01
-    sushi.order_items:
-      rows:
-        - id: 1
-          order_id: 1
-          item_id: 1
-          quantity: 2
-          ds: 2022-01-01
-        - id: 2
-          order_id: 1
-          item_id: 2
-          quantity: 3
-          ds: 2022-01-01
-        - id: 3
-          order_id: 2
-          item_id: 1
-          quantity: 4
-          ds: 2022-01-01
-        - id: 4
-          order_id: 2
-          item_id: 2
-          quantity: 5
-          ds: 2022-01-01
-    sushi.items:
-      rows:
-        - id: 1
-          name: maguro
-          price: 1.23
-          ds: 2022-01-01
-        - id: 2
-          name: ika
-          price: 2.34
-          ds: 2022-01-01
+        - <column_name>: <column_value>
   outputs:
-    vars:
-      start: 2022-01-01
-      end: 2022-01-01
-      latest: 2022-01-01
-    ctes:
-      order_total:
-        rows:
-        - order_id: 1
-          total: 9.48
-          ds: 2022-01-01
-        - order_id: 2
-          total: 16.62
-          ds: 2022-01-01
     query:
       rows:
-      - customer_id: 1
-        revenue: 26.1
-        ds: '2022-01-01'
+        - <column_name>: <column_value>
+    ctes:  # Optional
+      <cte_alias>:
+        rows:
+          - <column_name>: <column_value>
+  vars:  # Optional
+    <macro_variable_name>: <macro_variable_value>
 ```
 
-## Run a test
+## Example
+
+In this example we'll use the `sqlmesh_example.example_full_model` model which is provided as part of the `sqlmesh init` command and is defined as follows:
+```sql linenums="1"
+MODEL (
+  name sqlmesh_example.example_full_model,
+  kind FULL,
+  cron '@daily'
+);
+
+SELECT
+  item_id,
+  COUNT(distinct id) AS num_orders,
+FROM
+    sqlmesh_example.example_incremental_model
+GROUP BY item_id
+```
+
+Notice how the query of the model definition above references one upstream model - `sqlmesh_example.example_incremental_model`.
+
+The test definition for this model may look like following:
+```yaml linenums="1"
+test_example_full_model:
+  model: sqlmesh_example.example_full_model
+  inputs:
+    sqlmesh_example.example_incremental_model:
+        rows:
+        - id: 1
+          item_id: 1
+          ds: '2020-01-01'
+        - id: 2
+          item_id: 1
+          ds: '2020-01-02'
+        - id: 3
+          item_id: 2
+          ds: '2020-01-03'
+  outputs:
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+      - item_id: 2
+        num_orders: 1
+```
+
+### Testing CTEs
+
+As mentioned previously, individual CTEs within the model's query can also be tested. In this example let's slightly modify the query of the model used in the previous example:
+```sql linenums="1"
+WITH filtered_orders_cte AS (
+    SELECT
+      id,
+      item_id
+    FROM
+        sqlmesh_example.example_incremental_model
+    WHERE
+        item_id = 1
+)
+SELECT
+  item_id,
+  COUNT(distinct id) AS num_orders,
+FROM
+    filtered_orders_cte
+GROUP BY item_id
+```
+
+Below is the example of a test which verifies individual rows returned by the `filtered_orders_cte` CTE before aggregation takes place:
+```yaml linenums="1" hl_lines="16-22"
+test_example_full_model:
+  model: sqlmesh_example.example_full_model
+  inputs:
+    sqlmesh_example.example_incremental_model:
+        rows:
+        - id: 1
+          item_id: 1
+          ds: '2020-01-01'
+        - id: 2
+          item_id: 1
+          ds: '2020-01-02'
+        - id: 3
+          item_id: 2
+          ds: '2020-01-03'
+  outputs:
+    ctes:
+      filtered_orders_cte:
+        rows:
+          - id: 1
+            item_id: 1
+          - id: 2
+            item_id: 1
+    query:
+      rows:
+      - item_id: 1
+        num_orders: 2
+```
+
+## Running tests
+Tests run automatically every time a new [plan](plans.md) is created. Additionally tests can be run on demand using the `sqlmesh test` command.
+
 ### The CLI test command
-You can execute tests with the `sqlmesh test` command as follows:
+You can execute tests using the `sqlmesh test` command as follows:
 ```bash
-$ sqlmesh --path examples/sushi test
-...F
+$ sqlmesh test
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.005s
+
+OK
+```
+
+The command returns a non-zero exit code if on any failures and reports them in the standard error stream:
+```bash
+$ sqlmesh test
+F
 ======================================================================
-FAIL: test_customer_revenue_by_day (examples/sushi/models/tests/test_customer_revenue_by_day.yaml:1)
+FAIL: test_example_full_model (/Users/izeigerman/github/tmp/tests/test_suite.yaml:1)
 ----------------------------------------------------------------------
 AssertionError: Data differs
-- {'customer_id': 1, 'revenue': 26.2, 'ds': '2022-01-01'}
-?                                  ^
+- {'item_id': 1, 'num_orders': 3}
+?                              ^
 
-+ {'customer_id': 1, 'revenue': 26.1, 'ds': '2022-01-01'}
-?                                  ^
++ {'item_id': 1, 'num_orders': 2}
+?                              ^
 
 
 ----------------------------------------------------------------------
-Ran 4 tests in 0.030s
+Ran 1 test in 0.008s
 
 FAILED (failures=1)
 ```
 
-As the tests run, SQLMesh will identify any that fail.
+To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
+```
+sqlmesh test tests/test_suite.yaml::test_example_full_model
+```
 
-To run a specific model test, pass in the module followed by `::` and the name of the test, such as
-`project.tests.test_order_items::test_single_order_item`. 
-
-You can also run tests that match a pattern or substring using a glob pathname expansion syntax. For example, `project.tests.test_order*` will match `project.tests.test_orders` and `project.tests.test_order_items`.
-
-## Advanced usage
-### Reusable Data Fixtures
+You can also run tests that match a pattern or substring using a glob pathname expansion syntax:
+```
+sqlmesh test tests/test_*
+```
