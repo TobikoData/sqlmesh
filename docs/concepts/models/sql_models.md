@@ -6,7 +6,7 @@ SQL Models are the main types of models of SQLMesh. SQL models consist of a `Mod
 To create a SQL model, just add a file named `my_model.sql` into the `models/` directory (or subdirectory of `models/`) in your SQLMesh project. Although the name of the file doesn't matter, it is recommended to name it the model. Each file can only have one model defined within it.
 
 ### Example
-```sql
+```sql linenums="1"
 -- The Model DDL where you specify options regarding the model.
 MODEL (
   name db.customers,
@@ -48,7 +48,7 @@ The main query must contain a standalone SQL Statement that explicitly lists out
 ## Automatic Dependencies
 SQLMesh parses your SQL so it has a first class understanding of what you're trying to do. There is no need for you to manually specify dependencies to other models with special tags or commands. For example, given a model with the query
 
-```sql
+```sql linenums="1"
 SELECT employees.id
 FROM employees
 JOIN countries

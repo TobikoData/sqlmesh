@@ -26,11 +26,11 @@ nav:
       - concepts/models/seed_models.md
     - concepts/plans.md
     - concepts/environments.md
-    - concepts/team_development.md
-    - concepts/macros.md
-    - concepts/hooks.md
     - concepts/tests.md
     - concepts/audits.md
+    - concepts/macros.md
+    - concepts/hooks.md
+    - concepts/team_development.md
     - Architecture:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md

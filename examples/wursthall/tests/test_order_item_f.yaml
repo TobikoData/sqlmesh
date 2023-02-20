@@ -25,10 +25,6 @@ test_order_item_f:
         item_group: SNACKS
         item_price: 10.00
   outputs:
-    vars:
-      start: 2022-10-01
-      end: 2022-10-01
-      latest: 2022-10-01
     query:
       rows:
       - order_id: 1
@@ -42,3 +38,7 @@ test_order_item_f:
         quantity: 1
         order_amount: 10.00
         order_ds: '2022-10-01'
+  vars:
+    start: 2022-10-01
+    end: 2022-10-01
+    latest: 2022-10-01
