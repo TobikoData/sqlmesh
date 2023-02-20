@@ -48,10 +48,6 @@ test_customer_revenue_by_day:
           price: 2.34
           ds: 2022-01-01
   outputs:
-    vars:
-      start: 2022-01-01
-      end: 2022-01-01
-      latest: 2022-01-01
     ctes:
       order_total:
         rows:
@@ -66,3 +62,7 @@ test_customer_revenue_by_day:
       - customer_id: 1
         revenue: 26.1
         ds: '2022-01-01'
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+    latest: 2022-01-01

@@ -139,7 +139,7 @@ def execute(
 ### PySpark
 This example shows using the PySpark dataframe API. If you use Spark, this is preferred over Pandas because you're able to computation in a distributed fashion.
 
-```python
+```python linenums="1"
 import typing as t
 from datetime import datetime
 
@@ -176,7 +176,7 @@ def execute(
 ### Batching
 If the output of a Python model is very large and you cannot use Spark, it may be required to split up the upload into multiple batches. With Pandas or other single machine dataframe libraries, all data is stored in memory. Instead of returning a single DataFrame instance, you can return multiple instances using Python generator API to minimize the memory footprint by reducing the size of data that is loaded into memory at any given point.
 
-```
+```python linenums="1"
 @model(
     "batching",
     columns={
