@@ -26,6 +26,7 @@ import typing as t
 from contextlib import contextmanager
 
 from sqlglot import exp, select
+from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
@@ -66,7 +67,7 @@ class SnapshotEvaluator:
         end: TimeLike,
         latest: TimeLike,
         snapshots: t.Dict[str, Snapshot],
-        limit: int = 0,
+        limit: t.Optional[int] = None,
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> t.Optional[DF]:
@@ -78,8 +79,7 @@ class SnapshotEvaluator:
             end: The end datetime to render.
             latest: The latest datetime to use for non-incremental queries.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-            limit: If limit is >= 0, the query will not be persisted but evaluated and returned
-                as a dataframe.
+            limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
@@ -164,8 +164,16 @@ class SnapshotEvaluator:
             else TransactionType.DML
         ):
             for index, query_or_df in enumerate(queries_or_dfs):
-                if limit > 0:
+                if limit and limit > 0:
+                    if isinstance(query_or_df, exp.Select):
+                        existing_limit = query_or_df.args.get("limit")
+                        if existing_limit:
+                            limit = min(
+                                limit,
+                                execute(exp.select(existing_limit.expression)).rows[0][0],
+                            )
                     return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
+
                 apply(query_or_df, index)
 
             model.run_post_hooks(
