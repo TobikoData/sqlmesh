@@ -1,3 +1,5 @@
+import { tableFromIPC } from 'apache-arrow'
+
 const baseURL = window.location.origin
 
 export async function fetchAPI<T = any, B extends object = any>({
@@ -61,6 +63,9 @@ export async function fetchAPI<T = any, B extends object = any>({
 
         const isEventStream = headerContentType.includes('text/event-stream')
         const isApplicationJson = headerContentType.includes('application/json')
+        const isArrow = headerContentType.includes(
+          'application/vnd.apache.arrow.stream',
+        )
 
         if (isEventStream) {
           const text = await response.text()
@@ -71,6 +76,10 @@ export async function fetchAPI<T = any, B extends object = any>({
 
         if (isApplicationJson) {
           json = await response.json()
+        }
+
+        if (isArrow) {
+          return await tableFromIPC(response)
         }
 
         return json

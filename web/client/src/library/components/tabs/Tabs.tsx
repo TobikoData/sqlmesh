@@ -27,7 +27,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   )
 
   const data: any = useMemo(
-    () => (tabTableContent == null ? [] : getData(tabTableContent)),
+    () => (tabTableContent == null ? [] : tabTableContent.toArray()),
     [tabTableContent],
   )
 
@@ -35,8 +35,8 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
     () =>
       tabTableContent == null
         ? []
-        : Object.keys(tabTableContent).map(accessorKey => ({
-            accessorKey,
+        : tabTableContent.schema.fields.map(field => ({
+            accessorKey: field['name'],
             cell: (info: any) => info.getValue(),
           })),
     [tabTableContent],
@@ -196,28 +196,4 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
       </Tab.Group>
     </div>
   )
-}
-
-type TableCellValue = number | string | null
-type TableRow = Record<keyof ResponseTableColumns, TableCellValue>
-type ResponseTableRows = Record<string, TableCellValue>
-type ResponseTableColumns = Record<string, ResponseTableRows>
-
-function getData(data: ResponseTableColumns = {}): TableRow[] {
-  const keys: string[] = Object.keys(data)
-  const rowsCount = Object.values(data).map(v => Object.values(v).length)
-  const count = Math.max(...rowsCount)
-  const rows: TableRow[] = []
-
-  for (let i = 0; i < count && i < 100; i++) {
-    const row = keys.reduce((acc: TableRow, key) => {
-      acc[key] = data[key]?.[i] ?? null
-
-      return acc
-    }, {})
-
-    rows.push(row)
-  }
-
-  return rows
 }
