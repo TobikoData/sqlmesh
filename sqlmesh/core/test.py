@@ -222,7 +222,11 @@ def discover_model_tests(
         A list of ModelTestMetadata named tuples.
     """
     search_path = pathlib.Path(path)
-    for yaml_file in search_path.glob("**/test*.yaml"):
+
+    for yaml_file in itertools.chain(
+        search_path.glob("**/test*.yaml"),
+        search_path.glob("**/test*.yml"),
+    ):
         for ignore_pattern in ignore_patterns or []:
             if yaml_file.match(ignore_pattern):
                 break

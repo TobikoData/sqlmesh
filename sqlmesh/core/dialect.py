@@ -6,9 +6,10 @@ import typing as t
 from difflib import unified_diff
 
 import pandas as pd
-from jinja2 import Environment
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
+
+from sqlmesh.utils.jinja import ENVIRONMENT
 
 
 class Model(exp.Expression):
@@ -433,7 +434,7 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
             segment = "\n".join(lines)
             variables = [
                 exp.Literal.string(var)
-                for var in find_undeclared_variables(Environment().parse(segment))
+                for var in find_undeclared_variables(ENVIRONMENT.parse(segment))
             ]
             expressions.append(Jinja(this=exp.Literal.string(segment), expressions=variables))
         else:
