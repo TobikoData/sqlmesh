@@ -42,7 +42,6 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.executor import execute
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
@@ -56,7 +55,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model import Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
@@ -522,10 +521,7 @@ class Context(BaseContext):
             start: The start of the interval to evaluate.
             end: The end of the interval to evaluate.
             latest: The latest time used for non incremental datasets.
-            limit: A limit applied to the model, this must be > 0. If this argument is omitted
-                and the model contains a LIMIT clause, then the clause's expression will be used
-                instead. In any case, the final limit is bounded by the DEFAULT_MAX_LIMIT constant.
-                Default: DEFAULT_MAX_LIMIT
+            limit: A limit applied to the model.
         """
         if isinstance(model_or_snapshot, str):
             snapshot = self.snapshots[model_or_snapshot]
@@ -534,25 +530,18 @@ class Context(BaseContext):
         else:
             snapshot = self.snapshots[model_or_snapshot.name]
 
-        if not limit or limit <= 0:
-            limit = c.DEFAULT_MAX_LIMIT
-            if isinstance(snapshot.model, SqlModel):
-                model_limit = snapshot.model.render_query().args.get("limit")
-
-                if model_limit:
-                    limit = min(limit, execute(exp.select(model_limit.expression)).rows[0][0])
-
         df = self.snapshot_evaluator.evaluate(
             snapshot,
             start,
             end,
             latest,
             snapshots=self.snapshots,
-            limit=t.cast(int, limit),
+            limit=limit or c.DEFAULT_MAX_LIMIT,
         )
 
         if df is None:
             raise RuntimeError(f"Error evaluating {snapshot.model.name}")
+
         return df
 
     def format(self) -> None:

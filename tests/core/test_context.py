@@ -243,15 +243,29 @@ def test_evaluate_limit():
         load_model(
             parse(
                 """
-        MODEL(name limit_test, kind FULL);
+        MODEL(name with_limit, kind FULL);
         SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v) LIMIT 1 + 2"""
             )
         )
     )
 
-    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02").size == 3
-    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 4
-    assert context.evaluate("limit_test", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
+    assert context.evaluate("with_limit", "2020-01-01", "2020-01-02", "2020-01-02").size == 3
+    assert context.evaluate("with_limit", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 3
+    assert context.evaluate("with_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
+
+    context.upsert_model(
+        load_model(
+            parse(
+                """
+        MODEL(name without_limit, kind FULL);
+        SELECT t.v as v FROM (VALUES (1), (2), (3), (4), (5)) AS t(v)"""
+            )
+        )
+    )
+
+    assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02").size == 5
+    assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 4).size == 4
+    assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
 def test_ignore_files(mocker: MockerFixture, tmpdir):
