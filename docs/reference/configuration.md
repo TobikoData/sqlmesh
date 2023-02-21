@@ -225,11 +225,21 @@ This time format uses python format codes. https://docs.python.org/3/library/dat
 **Default:** `%Y-%m-%d`
 
 ## auto_categorize_changes
-Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking) during plan creation.
+Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type.
 
-**Type:** boolean
+Default values are set as follows:
+```yaml linenums="1"
+auto_categorize_changes:
+    python: off
+    sql: full
+    seed: full
+```
 
-**Default:** `True`
+Supported values:
+
+* `full` - never prompt the user for input, fall back to the most conservative category ([breaking](../concepts/plans.md#breaking-change)) if the category can't be determined automatically
+* `semi` - prompt the user for input only if the change category can't be determined automatically
+* `off` - always prompt the user for input. Automatica categorization will not be attempted
 
 ## model_defaults
 

@@ -13,7 +13,6 @@ from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.schedulers.airflow.common import AIRFLOW_LOCAL_URL
 
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
@@ -130,7 +129,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
     """
 
-    airflow_url: str = AIRFLOW_LOCAL_URL
+    airflow_url: str = "http://localhost:8080/"
     username: str = "airflow"
     password: str = "airflow"
     dag_run_poll_interval_secs: int = 10

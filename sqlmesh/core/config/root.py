@@ -7,6 +7,7 @@ from pydantic import Field, root_validator, validator
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
@@ -50,7 +51,7 @@ class Config(BaseConfig):
     environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
-    auto_categorize_changes: bool = True
+    auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     users: t.List[User] = []
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     loader: t.Type[Loader] = SqlMeshLoader
@@ -61,6 +62,7 @@ class Config(BaseConfig):
         "ignore_patterns": UpdateStrategy.EXTEND,
         "users": UpdateStrategy.EXTEND,
         "model_defaults": UpdateStrategy.NESTED_UPDATE,
+        "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
     }
 
     @validator("connections", always=True)
