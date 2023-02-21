@@ -4,7 +4,7 @@ import typing as t
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_numeric_dtype
+from pandas.core.dtypes.common import is_numeric_dtype
 from sqlglot import exp
 from sqlglot.diff import ChangeDistiller, Insert, Keep
 

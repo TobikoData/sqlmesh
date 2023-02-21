@@ -239,7 +239,7 @@ Supported values:
 
 * `full` - never prompt the user for input, fall back to the most conservative category ([breaking](../concepts/plans.md#breaking-change)) if the category can't be determined automatically
 * `semi` - prompt the user for input only if the change category can't be determined automatically
-* `off` - always prompt the user for input. Automatica categorization will not be attempted
+* `off` - always prompt the user for input. Automatic categorization will not be attempted
 
 ## model_defaults
 
