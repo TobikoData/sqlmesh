@@ -7,6 +7,15 @@ from jinja2 import Environment, Undefined
 from sqlglot import Dialect, Parser, TokenType
 
 
+def environment(**kwargs: t.Any) -> Environment:
+    extensions = kwargs.pop("extensions", [])
+    extensions.append("jinja2.ext.do")
+    return Environment(extensions=extensions, **kwargs)
+
+
+ENVIRONMENT = environment()
+
+
 @dataclass
 class MacroInfo:
     """Class to hold macro and its calls"""
@@ -134,6 +143,6 @@ def capture_jinja(query: str) -> CapturedQuery:
         __pow__ = __rpow__ = _fail_with_undefined_error
 
     return CapturedQuery(
-        query=Environment(undefined=UndefinedSpy).from_string(query).render(),
+        query=environment(undefined=UndefinedSpy).from_string(query).render(),
         calls=calls,  # type: ignore
     )

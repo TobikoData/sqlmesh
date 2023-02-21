@@ -4,7 +4,6 @@ import typing as t
 from datetime import datetime
 from pathlib import Path
 
-from jinja2 import Environment
 from sqlglot import exp, parse_one
 from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
@@ -22,6 +21,7 @@ from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, raise_config_error
+from sqlmesh.utils.jinja import ENVIRONMENT
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
@@ -118,9 +118,9 @@ class QueryRenderer:
 
                 try:
                     parsed_query = parse_one(
-                        Environment()
-                        .from_string("\n".join((*env[c.JINJA_MACROS], query.name)))
-                        .render(**env, **render_kwargs),
+                        ENVIRONMENT.from_string(
+                            "\n".join((*env[c.JINJA_MACROS], query.name))
+                        ).render(**env, **render_kwargs),
                         read=self._dialect,
                     )
                     if not parsed_query:
