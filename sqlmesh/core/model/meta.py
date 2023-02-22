@@ -11,6 +11,7 @@ from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     ModelKind,
+    ModelKindName,
     TimeColumn,
     model_kind_validator,
 )
@@ -41,7 +42,7 @@ class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
     name: str
-    kind: ModelKind = ModelKind.default_kind()
+    kind: ModelKind = ModelKind(name=ModelKindName.VIEW)
     dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
