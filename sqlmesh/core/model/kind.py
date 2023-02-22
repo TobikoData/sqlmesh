@@ -12,7 +12,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-# switch to autoname with sqlglot is typed
+# TODO: switch to autoname when sqlglot is typed
 class ModelKindName(str, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
 
@@ -64,6 +64,11 @@ class ModelKind(PydanticModel):
     def only_latest(self) -> bool:
         """Whether or not this model only cares about latest date to render."""
         return self.name in (ModelKindName.VIEW, ModelKindName.FULL)
+
+    @classmethod
+    def default_kind(cls) -> ModelKind:
+        """The default kind when a kind is not provided."""
+        return cls(name=ModelKindName.VIEW)
 
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
         return d.ModelKind(this=self.name.value.upper(), **kwargs)

@@ -6,7 +6,7 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import ModelKind, ModelKindName, SqlModel
+from sqlmesh.core.model import ModelKind, ModelKindName, SqlModel, IncrementalByTimeRangeKind
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
@@ -389,6 +389,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     model = SqlModel(
         name="a",
         query=parse_one("select 1, ds"),
+        kind=IncrementalByTimeRangeKind(),
         cron="@daily",
     )
 

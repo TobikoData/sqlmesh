@@ -41,7 +41,7 @@ class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
     name: str
-    kind: ModelKind = IncrementalByTimeRangeKind()
+    kind: ModelKind = ModelKind.default_kind()
     dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]

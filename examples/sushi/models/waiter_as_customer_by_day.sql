@@ -1,6 +1,9 @@
 
 MODEL (
   name sushi.waiter_as_customer_by_day,
+  kind incremental_by_time_range (
+    time_column (ds, '%Y-%m-%d')
+  ),
   owner jen,
   cron '@daily',
   audits (

@@ -7,7 +7,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import SqlModel
+from sqlmesh.core.model import SqlModel, IncrementalByTimeRangeKind
 from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
@@ -19,6 +19,7 @@ def snapshot() -> Snapshot:
     snapshot = Snapshot.from_model(
         SqlModel(
             name="test_model",
+            kind=IncrementalByTimeRangeKind(),
             storage_format="parquet",
             partitioned_by=["a"],
             query=parse_one("SELECT a, ds FROM tbl"),

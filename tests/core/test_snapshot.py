@@ -8,7 +8,7 @@ from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, SeedKind, SqlModel, create_seed_model, load_model
+from sqlmesh.core.model import Model, SeedKind, SqlModel, create_seed_model, load_model, IncrementalByTimeRangeKind
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -23,6 +23,7 @@ from sqlmesh.utils.date import to_datetime, to_timestamp
 def parent_model():
     return SqlModel(
         name="parent.tbl",
+        kind=IncrementalByTimeRangeKind(),
         dialect="spark",
         query=parse_one("SELECT 1, ds"),
     )
@@ -32,6 +33,7 @@ def parent_model():
 def model():
     return SqlModel(
         name="name",
+        kind=IncrementalByTimeRangeKind(),
         owner="owner",
         dialect="spark",
         cron="1 0 * * *",
