@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
 
-from jinja2 import Environment, Undefined
+from jinja2 import Environment, Undefined, nodes
 from sqlglot import Dialect, Parser, TokenType
 
 
@@ -21,7 +21,7 @@ class MacroInfo:
     """Class to hold macro and its calls"""
 
     macro: str
-    calls: t.List[t.Tuple[str, t.Tuple[t.Any, ...], t.Dict[str, t.Any]]]
+    calls: t.List[str]
 
 
 class MacroExtractor(Parser):
@@ -66,8 +66,8 @@ class MacroExtractor(Parser):
 
                     self._advance()
 
-                calls = capture_jinja(self._find_sql(body_start, body_end)).calls
-                macros[name] = MacroInfo(macro=self._find_sql(macro_start, self._next), calls=calls)
+                macro_str = self._find_sql(macro_start, self._next)
+                macros[name] = MacroInfo(macro=macro_str, calls=find_call_names(macro_str))
 
             self._advance()
 
@@ -101,48 +101,61 @@ class MacroExtractor(Parser):
         )
 
 
-class Placeholder(str):
-    def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
-        return ""
+def call_name(node: nodes.Name | nodes.Getattr | nodes.Call) -> str:
+    if isinstance(node, nodes.Name):
+        return node.name
+    if isinstance(node, nodes.Getattr):
+        return f"{call_name(node.node)}.{node.attr}"
+    return call_name(node.node)
 
 
-@dataclass
-class CapturedQuery:
-    """Helper class to hold a rendered jinja query and all function calls."""
-
-    query: str
-    calls: t.List[t.Tuple[str, t.Tuple[t.Any, ...], t.Dict[str, t.Any]]]
+def find_call_names(node: node.Node) -> t.List[str]:
+    """Find all call names in a Jinja node."""
+	return [call_name(call) for call in node.find_all(nodes.Call)]
 
 
-def capture_jinja(query: str) -> CapturedQuery:
-    """
-    Render the jinja in the provided string using the passed in environment
-
-    Args:
-        query: The string to render
-
-    Returns:
-        The jinja rendered string
-    """
-    calls = []
-
-    class UndefinedSpy(Undefined):
-        def _fail_with_undefined_error(self, *args: t.Any, **kwargs: t.Any):  # type: ignore
-            calls.append((self._undefined_name, args, kwargs))
-            return Placeholder()
-
-        __add__ = __radd__ = __sub__ = __rsub__ = _fail_with_undefined_error
-        __mul__ = __rmul__ = __div__ = __rdiv__ = _fail_with_undefined_error
-        __truediv__ = __rtruediv__ = _fail_with_undefined_error
-        __floordiv__ = __rfloordiv__ = _fail_with_undefined_error
-        __mod__ = __rmod__ = _fail_with_undefined_error
-        __pos__ = __neg__ = _fail_with_undefined_error
-        __call__ = __getitem__ = _fail_with_undefined_error
-        __lt__ = __le__ = __gt__ = __ge__ = _fail_with_undefined_error
-        __int__ = __float__ = __complex__ = _fail_with_undefined_error
-        __pow__ = __rpow__ = _fail_with_undefined_error
-
-    return CapturedQuery(
-        query=environment(undefined=UndefinedSpy).from_string(query).render(),
-        calls=calls,  # type: ignore
-    )
+#class Placeholder(str):
+#    def __call__(self, *args: t.Any, **kwargs: t.Any) -> str:
+#        return ""
+#
+#
+#@dataclass
+#class CapturedQuery:
+#    """Helper class to hold a rendered jinja query and all function calls."""
+#
+#    query: str
+#    calls: t.List[t.Tuple[str, t.Tuple[t.Any, ...], t.Dict[str, t.Any]]]
+#
+#
+#def capture_jinja(query: str) -> CapturedQuery:
+#    """
+#    Render the jinja in the provided string using the passed in environment
+#
+#    Args:
+#        query: The string to render
+#
+#    Returns:
+#        The jinja rendered string
+#    """
+#    calls = []
+#
+#    class UndefinedSpy(Undefined):
+#        def _fail_with_undefined_error(self, *args: t.Any, **kwargs: t.Any):  # type: ignore
+#            calls.append((self._undefined_name, args, kwargs))
+#            return Placeholder()
+#
+#        __add__ = __radd__ = __sub__ = __rsub__ = _fail_with_undefined_error
+#        __mul__ = __rmul__ = __div__ = __rdiv__ = _fail_with_undefined_error
+#        __truediv__ = __rtruediv__ = _fail_with_undefined_error
+#        __floordiv__ = __rfloordiv__ = _fail_with_undefined_error
+#        __mod__ = __rmod__ = _fail_with_undefined_error
+#        __pos__ = __neg__ = _fail_with_undefined_error
+#        __call__ = __getitem__ = _fail_with_undefined_error
+#        __lt__ = __le__ = __gt__ = __ge__ = _fail_with_undefined_error
+#        __int__ = __float__ = __complex__ = _fail_with_undefined_error
+#        __pow__ = __rpow__ = _fail_with_undefined_error
+#
+#    return CapturedQuery(
+#        query=environment(undefined=UndefinedSpy).from_string(query).render(),
+#        calls=calls,  # type: ignore
+#    )

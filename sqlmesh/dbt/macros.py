@@ -12,7 +12,7 @@ class MacroConfig(PydanticModel):
     """Container class for macro configuration"""
 
     macro: ExecutableOrMacro
-    dependencies: Dependencies = Dependencies()
+    dependencies: t.Set[str] = set()
 
 
 BUILTIN_METHODS: t.Dict[str, ExecutableOrMacro] = {
