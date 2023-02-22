@@ -25,4 +25,4 @@ models:
       +materialized: view
 
 vars:
-  some_other_var: 5
+  some_other_var: 5  # this is only used for testing purposes

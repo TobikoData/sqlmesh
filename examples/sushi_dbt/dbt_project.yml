@@ -30,4 +30,4 @@ vars:
   top_waiters_limit: 10
 
   customers:
-    some_var: ["foo", "bar"]
+    some_var: ["foo", "bar"]  # this is only used for testing purposes
