@@ -15,10 +15,16 @@ import { EnumSize } from '../../../types/enum'
 import { ModelFile } from '../../../models'
 import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
-import { fetchdfApiFetchdfPost } from '../../../api/client'
+import {
+  evaluateApiEvaluatePost,
+  fetchdfApiFetchdfPost,
+} from '../../../api/client'
 import Tabs from '../tabs/Tabs'
-import { isString } from '../../../utils'
 import SplitPane from '../splitPane/SplitPane'
+import { isFalse, isNil, isString, isTrue } from '../../../utils'
+import { debounce, getLanguageByExtension } from './help'
+import './Editor.css'
+import Input from '../input/Input'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -27,10 +33,18 @@ export const EnumEditorFileStatus = {
   Saved: 'saved',
 } as const
 
-export type EditorFileStatus =
-  typeof EnumEditorFileStatus[keyof typeof EnumEditorFileStatus]
+export const EnumEditorTabs = {
+  QueryPreview: 'queryPreview',
+  Table: 'table',
+  Terminal: 'terminal',
+} as const
+
+export type EditorTabs = KeyOf<typeof EnumEditorTabs>
+export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
+
+const cache: Record<string, Map<EditorTabs, any>> = {}
 
 export function Editor({ className }: PropsEditor): JSX.Element {
   const client = useQueryClient()
@@ -54,6 +68,13 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   )
   const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
+  const [formEvaluate, setFormEvaluate] = useState({
+    model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+    start: '',
+    end: '',
+    latest: '',
+    limit: 1000,
+  })
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
@@ -111,7 +132,28 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     }
   }, [openedFiles])
 
+  useEffect(() => {
+    if (isNil(cache[activeFile.id])) {
+      cache[activeFile.id] = new Map()
+    }
+
+    const bucket = cache[activeFile.id]
+
+    if (bucket == null) return
+
+    setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+    setTabTableContent(bucket.get(EnumEditorTabs.Table))
+    setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+
+    setFormEvaluate({
+      ...formEvaluate,
+      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+    })
+  }, [activeFile])
+
   function closeEditorTab(file: ModelFile): void {
+    delete cache[file.id]
+
     openedFiles.delete(file.id)
 
     if (activeFileId === file.id) {
@@ -145,21 +187,45 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   }
 
   function sendQuery(): void {
-    if (activeFile.isLocal) {
-      setTabQueryPreviewContent(activeFile.content)
+    const bucket = cache[activeFile.id]
+
+    if (activeFile.isLocal && bucket != null) {
+      bucket.set(EnumEditorTabs.Terminal, undefined)
+      setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+
+      bucket.set(EnumEditorTabs.QueryPreview, activeFile.content)
+      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
 
       fetchdfApiFetchdfPost({
         sql: activeFile.content,
       })
-        .then((result: any) => {
-          if (isString(result)) {
-            setTabTableContent(JSON.parse(result))
-            setTabTerminalContent(undefined)
-          } else {
-            setTabTerminalContent(result.detail)
-          }
-        })
+        .then(updateTabs)
         .catch(console.log)
+    }
+  }
+
+  function evaluateModel(): void {
+    const bucket = cache[activeFile.id]
+
+    if (bucket == null) return
+
+    bucket.set(EnumEditorTabs.Terminal, undefined)
+    setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+
+    evaluateApiEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
+  }
+
+  function updateTabs(result: string | { detail: string }): void {
+    const bucket = cache[activeFile.id]
+
+    if (bucket == null) return
+
+    if (isString(result)) {
+      bucket.set(EnumEditorTabs.Table, JSON.parse(result as string))
+      setTabTableContent(bucket.get(EnumEditorTabs.Table))
+    } else {
+      bucket.set(EnumEditorTabs.Terminal, (result as { detail: string }).detail)
+      setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
     }
   }
 
@@ -167,13 +233,18 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     setEditorFileStatus(EnumEditorFileStatus.Edit)
   }
 
-  const sizes = [tabTableContent, tabTerminalContent].some(Boolean)
+  // TODO: remove once we have a better way to determine if a file is a model
+  const isModel = activeFile.path.includes('models/')
+  const shouldEvaluate = isModel && Object.values(formEvaluate).every(Boolean)
+  const sizesMain = [tabTableContent, tabTerminalContent].some(Boolean)
     ? [75, 25]
     : [100, 0]
 
+  const sizesActions = activeFile.content === '' ? [100, 0] : [70, 30]
+
   return (
     <SplitPane
-      sizes={sizes}
+      sizes={sizesMain}
       direction="vertical"
       minSize={0}
       className={className}
@@ -233,19 +304,195 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               ))}
           </ul>
         </div>
-
         <Divider />
-        <div className="w-full h-full flex flex-col overflow-hidden">
-          <div className="w-full h-full overflow-hidden">
-            <CodeEditor
-              className="h-full w-full"
-              extension={activeFile.extension}
-              value={activeFile.content}
-              onChange={debouncedChange}
-            />
-          </div>
-        </div>
+        <div className="flex h-full flex-col overflow-hidden">
+          <SplitPane
+            className="flex h-full"
+            sizes={sizesActions}
+            minSize={0}
+          >
+            <div className="flex h-full">
+              <CodeEditor
+                extension={activeFile.extension}
+                value={activeFile.content}
+                onChange={debouncedChange}
+              />
+            </div>
 
+            <div className="flex flex-col h-full overflow-hidden">
+              <div className="px-4 py-2">
+                <p className="inline-block font-bold text-xs text-secondary-500 border-b-2 border-secondary-500 mr-3">
+                  Actions
+                </p>
+                <p className="inline-block font-bold text-xs text-gray-500 border-b-2 border-white mr-3 opacity-50 cursor-not-allowed">
+                  Docs
+                </p>
+              </div>
+              <Divider />
+              <div className="w-full h-full flex flex-col items-center overflow-hidden">
+                <div className="w-full max-w-md h-full py-1 px-3 justify-center overflow-hidden  overflow-y-auto">
+                  {isTrue(isModel) && (
+                    <form className="my-3 w-full">
+                      <fieldset>
+                        <div className="flex items-center mb-1 px-3 text-sm font-bold">
+                          <h3 className="whitespace-nowrap ml-2">Model Name</h3>
+                          <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-sm rounded">
+                            {formEvaluate.model}
+                          </p>
+                        </div>
+                      </fieldset>
+                      <fieldset className="my-3">
+                        <div className="p-4 bg-warning-100 text-warning-700 rounded-xl">
+                          <p className="text-sm">
+                            Please, fill out all fileds to{' '}
+                            <b>
+                              {isModel ? 'evaluate the model' : 'run query'}
+                            </b>
+                            .
+                          </p>
+                        </div>
+                      </fieldset>
+                      <fieldset className="mb-4">
+                        <Input
+                          className="w-full"
+                          label="Start Date"
+                          placeholder="02/11/2023"
+                          value={formEvaluate.start}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              start: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          className="w-full"
+                          label="End Date"
+                          placeholder="02/13/2023"
+                          value={formEvaluate.end}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              end: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          className="w-full"
+                          label="Latest Date"
+                          placeholder="02/13/2023"
+                          value={formEvaluate.latest}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              latest: el?.value ?? '',
+                            })
+                          }}
+                        />
+                        <Input
+                          className="w-full"
+                          type="number"
+                          label="Limit"
+                          placeholder="1000"
+                          value={formEvaluate.limit}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            const el = e.target as HTMLInputElement
+
+                            setFormEvaluate({
+                              ...formEvaluate,
+                              limit: el?.valueAsNumber ?? formEvaluate.limit,
+                            })
+                          }}
+                        />
+                      </fieldset>
+                    </form>
+                  )}
+                  {isFalse(isModel) && activeFile.isLocal && (
+                    <form className="my-3 w-full">
+                      <fieldset className="mb-4">
+                        <Input
+                          className="w-full"
+                          label="Environment Name (Optional)"
+                          placeholder="prod"
+                          value="prod"
+                        />
+                      </fieldset>
+                    </form>
+                  )}
+                </div>
+
+                <Divider />
+                <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
+                  {isFalse(activeFile.isLocal) && isModel && (
+                    <div className="flex w-full justify-between">
+                      <div className="flex">
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          disabled={true}
+                        >
+                          Validate
+                        </Button>
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          disabled={true}
+                        >
+                          Format
+                        </Button>
+                      </div>
+                      {isTrue(isModel) && (
+                        <Button
+                          size={EnumSize.sm}
+                          variant="secondary"
+                          disabled={isFalse(shouldEvaluate)}
+                          onClick={e => {
+                            e.stopPropagation()
+
+                            evaluateModel()
+                          }}
+                        >
+                          Evaluate
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {isFalse(isModel) &&
+                    activeFile.extension === '.sql' &&
+                    activeFile.content !== '' && (
+                      <>
+                        <Button
+                          size={EnumSize.sm}
+                          variant="alternative"
+                          onClick={e => {
+                            e.stopPropagation()
+
+                            sendQuery()
+                          }}
+                        >
+                          Run Query
+                        </Button>
+                      </>
+                    )}
+                </div>
+              </div>
+            </div>
+          </SplitPane>
+        </div>
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <div className="flex align-center mr-4">
@@ -282,53 +529,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               value={getLanguageByExtension(activeFile.extension)}
             />
           </div>
-          <div className="flex">
-            {activeFile != null &&
-              activeFile.extension === '.sql' &&
-              activeFile.content !== '' && (
-                <>
-                  <Button
-                    size={EnumSize.sm}
-                    variant="alternative"
-                    onClick={e => {
-                      e.stopPropagation()
-
-                      sendQuery()
-                    }}
-                  >
-                    Run Query
-                  </Button>
-                  <Button
-                    size={EnumSize.sm}
-                    variant="alternative"
-                    onClick={e => {
-                      e.stopPropagation()
-
-                      onChange('')
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </>
-              )}
-
-            {!activeFile.isLocal && (
-              <>
-                <Button
-                  size={EnumSize.sm}
-                  variant="alternative"
-                >
-                  Validate
-                </Button>
-                <Button
-                  size={EnumSize.sm}
-                  variant="alternative"
-                >
-                  Format
-                </Button>
-              </>
-            )}
-          </div>
         </div>
       </div>
       <Tabs className="overflow-auto" />
@@ -363,11 +563,14 @@ function Indicator({
 }
 
 function CodeEditor({
-  className,
   value,
   onChange,
   extension,
-}: any): JSX.Element {
+}: {
+  value: string
+  extension: string
+  onChange: (value: string) => void
+}): JSX.Element {
   const extensions = [
     extension === '.sql' && sql(),
     extension === '.py' && python(),
@@ -379,47 +582,9 @@ function CodeEditor({
       value={value}
       height="100%"
       width="100%"
-      className={clsx('w-full h-full overflow-auto', className)}
+      className="w-full h-full overflow-auto"
       extensions={extensions}
       onChange={onChange}
     />
   )
-}
-
-function debounce(
-  fn: (...args: any) => void,
-  before: () => void,
-  after: () => void,
-  delay: number = 500,
-): (...args: any) => void {
-  let timeoutID: ReturnType<typeof setTimeout>
-
-  return function callback(...args: any) {
-    clearTimeout(timeoutID)
-
-    if (before != null) {
-      before()
-    }
-
-    timeoutID = setTimeout(() => {
-      fn(...args)
-
-      if (after != null) {
-        after()
-      }
-    }, delay)
-  }
-}
-
-function getLanguageByExtension(extension?: string): string {
-  switch (extension) {
-    case '.sql':
-      return 'SQL'
-    case '.py':
-      return 'Python'
-    case '.yaml':
-      return 'YAML'
-    default:
-      return 'Plain Text'
-  }
 }

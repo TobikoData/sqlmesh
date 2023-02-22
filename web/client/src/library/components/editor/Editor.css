@@ -1,0 +1,18 @@
+.cm-gutters {
+  background-color: transparent !important;
+  border-color: var(--color-secondary-100) !important;
+  color: var(--color-secondary-500) !important;
+  padding-left: 0.25rem !important;
+}
+
+.cm-activeLineGutter {
+  background-color: var(--color-secondary-100) !important;
+}
+
+.cm-activeLine {
+  background-color: var(--color-gray-100) !important;
+}
+
+.cm-line {
+  color: var(--color-gray-600) !important;
+}

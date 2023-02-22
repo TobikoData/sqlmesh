@@ -17,6 +17,7 @@ module.exports = {
   rules: {
     'react/jsx-uses-react': OFF,
     'react/react-in-jsx-scope': OFF,
+    '@typescript-eslint/no-dynamic-delete': OFF,
     '@typescript-eslint/naming-convention': [
       ERROR,
       {
