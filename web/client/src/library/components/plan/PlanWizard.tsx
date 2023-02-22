@@ -1,15 +1,31 @@
-import { RadioGroup } from '@headlessui/react'
-import { CheckCircleIcon } from '@heroicons/react/24/solid'
+import { Disclosure, RadioGroup } from '@headlessui/react'
+import {
+  CheckCircleIcon,
+  MinusCircleIcon,
+  PlusCircleIcon,
+} from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { lazy, useEffect, useMemo, Suspense } from 'react'
 import { useApiContextByEnvironment } from '../../../api'
+import { useEffect } from 'react'
+import { useStoreContext } from '~/context/context'
+import { useApiPlan } from '../../../api'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
-import { includes, isArrayNotEmpty, toDate, toDateFormat } from '../../../utils'
+import {
+  includes,
+  isArrayNotEmpty,
+  isFalse,
+  isNotNil,
+  toDate,
+  toDateFormat,
+  toRatio,
+} from '../../../utils'
 import { Divider } from '../divider/Divider'
+import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
 import { isModified } from './help'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
@@ -22,8 +38,6 @@ export default function PlanWizard(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setAction)
   const backfills = useStorePlan(s => s.backfills)
   const setBackfills = useStorePlan(s => s.setBackfills)
-  const setEnvironment = useStorePlan(s => s.setEnvironment)
-  const environment = useStorePlan(s => s.environment)
   const setCategory = useStorePlan(s => s.setCategory)
   const category = useStorePlan(s => s.category)
   const categories = useStorePlan(s => s.categories)
@@ -33,7 +47,10 @@ export default function PlanWizard(): JSX.Element {
   const backfill_end = useStorePlan(s => s.backfill_end)
   const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
 
-  const { data: context } = useApiContextByEnvironment(environment)
+  const environment = useStoreContext(s => s.environment)
+  const setEnvironment = useStoreContext(s => s.setEnvironment)
+
+  const { data: context } = useApiPlan(environment)
 
   useEffect(() => {
     if (context?.environment == null) return
@@ -62,24 +79,17 @@ export default function PlanWizard(): JSX.Element {
     setWithBackfill(isArrayNotEmpty(backfills) && category?.id !== 'no-change')
   }, [backfills, category])
 
-  function getContext(e: React.FormEvent<HTMLFormElement>): void {
-    e.preventDefault()
-    e.stopPropagation()
-
-    setPlanAction(EnumPlanAction.Running)
-
-    const elForm = e.target as HTMLFormElement
-    const data = new FormData(elForm)
-
-    setEnvironment(String(data.get('environment')))
-
-    elForm.reset()
-  }
-
-  const isPlanInProgress = includes(
-    [EnumPlanState.Canceling, EnumPlanState.Applying],
-    planAction,
-  )
+  const isPlanInProgress =
+    planAction === EnumPlanState.Canceling ||
+    planState === EnumPlanState.Applying
+  const isRun =
+    planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running
+  const isDone =
+    includes(
+      [EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed],
+      planState,
+    ) && planAction === EnumPlanAction.Done
+  const hasContext = isNotNil(context)
   const changes = context?.changes
   const hasChanges =
     isModified(changes?.modified) ||
@@ -102,10 +112,30 @@ export default function PlanWizard(): JSX.Element {
     [backfills, plan],
   )
 
+  console.log({
+    hasChanges,
+    backfills,
+    hasContext,
+    planAction,
+    planState,
+    isPlanInProgress,
+    isRun,
+  })
+
   return (
-    <ul className="flex flex-col w-full">
-      <PlanWizardStepOptions />
-      {hasChanges && (
+    <ul className="w-[70%] mx-auto">
+      <li className="mt-6 mb-10">
+        <div className="h-full w-full p-4 bg-secondary-100 rounded-xl">
+          <h4 className="text-xl  text-center">
+            <span className="font-bold">Target Environment is</span>
+            <b className="ml-2 px-2 py-1 font-sm rounded-md bg-secondary-500 text-secondary-100">
+              {environment}
+            </b>
+          </h4>
+        </div>
+      </li>
+      {isRun && <PlanWizardStepOptions />}
+      {isFalse(isRun) && (
         <PlanWizardStep
           headline="Models"
           description="Review Changes"
@@ -152,7 +182,7 @@ export default function PlanWizard(): JSX.Element {
               {isModified(changes?.modified) && (
                 <div className="flex">
                   {isArrayNotEmpty(changes?.modified.direct) && (
-                    <div className="ml-1">
+                    <div className="w-full ml-1">
                       <h4 className="text-secondary-500 mb-2">
                         Modified Directly
                       </h4>
@@ -160,18 +190,57 @@ export default function PlanWizard(): JSX.Element {
                         {changes?.modified.direct.map(change => (
                           <li
                             key={change.model_name}
-                            className="text-secondary-500 font-sm h-[1.5rem]"
+                            className="text-secondary-500"
                           >
-                            <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-secondary-500">
-                              {change.model_name}
-                            </small>
+                            <Disclosure>
+                              {({ open }) => (
+                                <>
+                                  <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
+                                    <small className="inline-block text-sm">
+                                      {change.model_name}
+                                    </small>
+                                    <Divider className="mx-4" />
+                                    {(() => {
+                                      const Tag = open
+                                        ? MinusCircleIcon
+                                        : PlusCircleIcon
+
+                                      return (
+                                        <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-500" />
+                                      )
+                                    })()}
+                                  </Disclosure.Button>
+                                  <Disclosure.Panel className="text-sm text-gray-500">
+                                    <pre className="my-4 bg-secondary-100 rounded-lg p-4">
+                                      {change.diff
+                                        ?.split('\n')
+                                        .map((s, idx) => (
+                                          <p
+                                            key={idx}
+                                            className={clsx(
+                                              s.startsWith('+') &&
+                                                'text-success-500',
+                                              s.startsWith('-') &&
+                                                'text-danger-500',
+                                              s.startsWith('@@') &&
+                                                'text-secondary-500 my-5',
+                                            )}
+                                          >
+                                            {s}
+                                          </p>
+                                        ))}
+                                    </pre>
+                                  </Disclosure.Panel>
+                                </>
+                              )}
+                            </Disclosure>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
                   {isArrayNotEmpty(changes?.modified.indirect) && (
-                    <div className="ml-1 mr-3">
+                    <div className="ml-1">
                       <h4 className="text-warning-500 mb-2">
                         Modified Indirectly
                       </h4>
@@ -180,9 +249,9 @@ export default function PlanWizard(): JSX.Element {
                           (modelName: string) => (
                             <li
                               key={modelName}
-                              className="text-warning-500 font-sm h-[1.5rem]"
+                              className="flex text-warning-500"
                             >
-                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-warning-500">
+                              <small className="inline-block text-sm leading-4">
                                 {modelName}
                               </small>
                             </li>
@@ -220,50 +289,38 @@ export default function PlanWizard(): JSX.Element {
             </span>
           ) : (
             <div className="ml-1 text-gray-700">
-              <Divider className="h-1 w-full mb-4" />
               <h3>No Changes</h3>
             </div>
           )}
         </PlanWizardStep>
       )}
-      {hasChanges && (
+      {(hasChanges || isDone) && isFalse(isRun) && (
         <PlanWizardStep
           headline="Backfill"
           description="Progress"
           disabled={environment == null}
         >
-          {includes(
-            [
-              EnumPlanState.Cancelled,
-              EnumPlanState.Finished,
-              EnumPlanState.Failed,
-            ],
-            planState,
-          ) &&
-            planAction === EnumPlanAction.Done && (
-              <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
-                <h3
-                  className={clsx(
-                    'font-bold text-lg ',
-                    planState === EnumPlanState.Cancelled && 'text-gray-700',
-                    planState === EnumPlanState.Finished && 'text-success-500',
-                    planState === EnumPlanState.Failed && 'text-danger-500',
-                  )}
-                >
-                  {planState === EnumPlanState.Finished
-                    ? 'Completed'
-                    : planState === EnumPlanState.Cancelled
-                    ? 'Canceled'
-                    : 'Failed'}
-                </h3>
-                <p className="text-xs text-gray-600">
-                  {toDateFormat(
-                    toDate(plan?.updated_at),
-                    'yyyy-mm-dd hh-mm-ss',
-                  )}
-                </p>
-              </div>
-            )}
+          {isDone && (
+            <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
+              <h3
+                className={clsx(
+                  'font-bold text-lg ',
+                  planState === EnumPlanState.Cancelled && 'text-gray-700',
+                  planState === EnumPlanState.Finished && 'text-success-500',
+                  planState === EnumPlanState.Failed && 'text-danger-500',
+                )}
+              >
+                {planState === EnumPlanState.Finished
+                  ? 'Completed'
+                  : planState === EnumPlanState.Cancelled
+                  ? 'Canceled'
+                  : 'Failed'}
+              </h3>
+              <p className="text-xs text-gray-600">
+                {toDateFormat(toDate(plan?.updated_at), 'yyyy-mm-dd hh-mm-ss')}
+              </p>
+            </div>
+          )}
           {isArrayNotEmpty(backfills) ? (
             <>
               {isModified(changes?.modified) &&
@@ -343,63 +400,32 @@ export default function PlanWizard(): JSX.Element {
                       />
                     </Suspense>
                     {
-                      <form className={clsx('flex ml-1 mt-1')}>
-                        <label
-                          className={clsx(
-                            'mb-3 mr-4 text-left',
-                            (isPlanInProgress ||
-                              planAction === EnumPlanAction.Done) &&
-                              'opacity-50 pointer-events-none cursor-not-allowed',
-                          )}
-                        >
-                          <small>Start Date</small>
-                          <input
-                            type="text"
-                            name="start_date"
-                            className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
-                            disabled={
-                              isPlanInProgress ||
-                              planAction === EnumPlanAction.Done
-                            }
-                            value={backfill_start}
-                            onChange={e => {
-                              setBackfillDate('start', e.target.value)
-                            }}
-                          />
-                          <small className="text-xs text-gray-500">
-                            eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
-                          </small>
-                        </label>
-                        <label
-                          className={clsx(
-                            'mb-3 text-left',
-                            (isPlanInProgress ||
-                              planAction === EnumPlanAction.Done) &&
-                              'opacity-50 pointer-events-none cursor-not-allowed',
-                          )}
-                        >
-                          <small>End Date</small>
-                          <input
-                            type="text"
-                            name="end_date"
-                            className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
-                            disabled={
-                              isPlanInProgress ||
-                              planAction === EnumPlanAction.Done
-                            }
-                            value={backfill_end}
-                            onChange={e => {
-                              setBackfillDate('end', e.target.value)
-                            }}
-                          />
-                          <small className="text-xs text-gray-500">
-                            eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
-                          </small>
-                        </label>
-                      </form>
-                    }
-                  </>
-                )}
+      
+                    <form className={clsx('flex ml-1 mt-1')}>
+                      <Input
+                        label="Start Date"
+                        disabled={
+                          isPlanInProgress || planAction === EnumPlanAction.Done
+                        }
+                        value={backfill_start}
+                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          setBackfillDate('start', e.target.value)
+                        }}
+                      />
+                      <Input
+                        label="End Date"
+                        disabled={
+                          isPlanInProgress || planAction === EnumPlanAction.Done
+                        }
+                        value={backfill_end}
+                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          setBackfillDate('end', e.target.value)
+                        }}
+                      />
+                    </form>
+                  }
+                </>
+              )}
             </>
           ) : (
             <div className="ml-1 text-gray-700">
@@ -464,7 +490,9 @@ function PlanWizardStepHeader({
       <h3 className="whitespace-nowrap text-gray-600 font-bold text-lg">
         {headline}
       </h3>
-      {children != null && <small className="text-gray-500">{children}</small>}
+      {children != null && (
+        <small className="whitespace-nowrap text-gray-500">{children}</small>
+      )}
     </div>
   )
 }

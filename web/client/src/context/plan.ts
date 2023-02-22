@@ -51,7 +51,6 @@ interface PlanProgress {
 }
 
 interface PlanOptions {
-  environment?: string
   skipTests?: boolean
   noGaps?: boolean
   skipBackfill?: boolean
@@ -70,14 +69,12 @@ interface PlanStore {
   setLastPlan: (lastPlan?: PlanProgress) => void
   setState: (state: PlanState) => void
   setAction: (action: PlanAction) => void
-  setEnvironment: (environment?: string) => void
   setCategory: (category?: Category) => void
   activePlan?: PlanProgress
   lastPlan?: PlanProgress
   backfill_start?: string
   backfill_end?: string
   setBackfillDate: (type: 'start' | 'end', date: string) => void
-  environment?: string
   category?: Category
   categories: Category[]
   withBackfill: boolean
@@ -100,7 +97,6 @@ const planOptions: PlanOptions = {
   skipBackfill: false,
   forwardOnly: true,
   autoApply: false,
-  environment: '',
   start: '',
   end: '',
   from: '',
@@ -131,9 +127,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setAction: (action: PlanAction) => {
     set(() => ({ action }))
   },
-  setEnvironment: (environment?: string) => {
-    set(() => ({ environment }))
-  },
   setCategory: (category?: Category) => {
     set(() => ({ category }))
   },
@@ -144,7 +137,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
       [`backfill_${type}`]: date,
     }))
   },
-  environment: undefined,
   category: undefined,
   categories: getCategories(),
   withBackfill: true,

@@ -27,6 +27,7 @@ import './Editor.css'
 import Input from '../input/Input'
 import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
+import type { File } from '../../../api/client'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -80,9 +81,15 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
-    onSuccess() {
+    onSuccess(file: File) {
       setIsSaved(true)
       setEditorFileStatus(EnumEditorFileStatus.Edit)
+
+      if (file == null) return
+
+      activeFile.content = file.content ?? ''
+
+      setOpenedFiles(openedFiles)
     },
     onMutate() {
       setIsSaved(false)

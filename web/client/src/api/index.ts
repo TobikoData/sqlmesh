@@ -53,9 +53,7 @@ export function useApiContext(): UseQueryResult<Context> {
   })
 }
 
-export function useApiContextByEnvironment(
-  value?: string,
-): UseQueryResult<ContextEnvironment> {
+export function useApiPlan(value?: string): UseQueryResult<ContextEnvironment> {
   const environment = value ?? ''
 
   return useQuery({
@@ -69,7 +67,7 @@ export function useApiContextByEnvironment(
 export function useMutationApiSaveFile<T extends object>(
   client: QueryClient,
   callbacks: {
-    onSuccess?: () => void
+    onSuccess?: (file: File) => void
     onMutate?: () => void
   },
 ): UseMutationResult<File, unknown, { path: string; body: T }, void> {
@@ -84,13 +82,9 @@ export function useMutationApiSaveFile<T extends object>(
         callbacks.onMutate()
       }
     },
-    async onSuccess({ path }) {
-      await client.invalidateQueries({
-        queryKey: [`/api/files`, path],
-      })
-
+    async onSuccess({ path, ...args }) {
       if (callbacks.onSuccess != null) {
-        callbacks.onSuccess()
+        callbacks.onSuccess({ path, ...args })
       }
     },
   })
