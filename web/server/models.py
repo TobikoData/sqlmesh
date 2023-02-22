@@ -6,6 +6,7 @@ import typing as t
 from pydantic import BaseModel, validator
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.environment import Environment
 from sqlmesh.utils.date import TimeLike
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
@@ -45,6 +46,7 @@ class Context(BaseModel):
     scheduler: str
     models: t.List[str] = []
     config: str
+    environments: t.Dict[str, Environment] = {}
 
 
 class ModelsDiff(BaseModel):
