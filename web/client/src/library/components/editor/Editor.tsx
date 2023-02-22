@@ -354,6 +354,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                       </fieldset>
                       <fieldset className="mb-4">
                         <Input
+                          className="w-full"
                           label="Start Date"
                           placeholder="02/11/2023"
                           value={formEvaluate.start}
@@ -369,6 +370,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
+                          className="w-full"
                           label="End Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.end}
@@ -384,6 +386,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
+                          className="w-full"
                           label="Latest Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.latest}
@@ -399,6 +402,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
+                          className="w-full"
                           type="number"
                           label="Limit"
                           placeholder="1000"
@@ -418,9 +422,10 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                     </form>
                   )}
                   {isFalse(isModel) && activeFile.isLocal && (
-                    <form className="my-3 w-full ">
+                    <form className="my-3 w-full">
                       <fieldset className="mb-4">
                         <Input
+                          className="w-full"
                           label="Environment Name (Optional)"
                           placeholder="prod"
                           value="prod"
