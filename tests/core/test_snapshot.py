@@ -6,8 +6,9 @@ from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
 
+from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, SqlModel, load_model
+from sqlmesh.core.model import Model, SeedKind, SqlModel, create_seed_model, load_model
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -368,14 +369,17 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
 
 
-def test_categorize_change(make_snapshot):
+def test_categorize_change_sql(make_snapshot):
     old_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+
+    config = CategorizerConfig(sql=AutoCategorizationMode.SEMI)
 
     # A projection has been added.
     assert (
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds"))),
             old=old_snapshot,
+            config=config,
         )
         == SnapshotChangeCategory.NON_BREAKING
     )
@@ -385,6 +389,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
             old=old_snapshot,
+            config=config,
         )
         == SnapshotChangeCategory.NON_BREAKING
     )
@@ -394,18 +399,20 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, a, b, ds"))),
             old=old_snapshot,
+            config=config,
         )
         == SnapshotChangeCategory.NON_BREAKING
     )
 
     # No change.
-    assert categorize_change(old_snapshot, old_snapshot) is None
+    assert categorize_change(old_snapshot, old_snapshot, config=config) is None
 
     # A projection has been removed.
     assert (
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select ds"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -415,6 +422,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -424,6 +432,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select ds, 1"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -433,6 +442,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds WHERE a = 2"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -442,6 +452,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM test_table"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -451,6 +462,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select DISTINCT 1, ds"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -460,6 +472,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, explode(a)"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -471,6 +484,7 @@ def test_categorize_change(make_snapshot):
                 SqlModel(name="a", query=parse_one("select 1, ds, explode_outer(a)"))
             ),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -480,6 +494,7 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, posexplode(a)"))),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -491,6 +506,7 @@ def test_categorize_change(make_snapshot):
                 SqlModel(name="a", query=parse_one("select 1, ds, posexplode_outer(a)"))
             ),
             old=old_snapshot,
+            config=config,
         )
         is None
     )
@@ -500,6 +516,168 @@ def test_categorize_change(make_snapshot):
         categorize_change(
             new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds, unnest(a)"))),
             old=old_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+
+def test_categorize_change_seed(make_snapshot, tmp_path):
+    config = CategorizerConfig(seed=AutoCategorizationMode.SEMI)
+    model_name = "test_db.test_seed_model"
+    seed_path = tmp_path / "seed.csv"
+    model_kind = SeedKind(path=str(seed_path.absolute()))
+
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,2.0"""
+        )
+
+    original_snapshot = make_snapshot(create_seed_model(model_name, model_kind))
+
+    # New column.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_d,col_b,col_c
+1,,text_a,1.0
+2,test,text_b,2.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+
+    # Column removed.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_c
+1,1.0
+2,2.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # Column renamed.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_d
+1,text_a,1.0
+2,text_b,2.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # New row.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,2.0
+3,text_c,3.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # Deleted row.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # Numeric column changed.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_b,3.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # Text column changed.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2,text_c,2.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
+        )
+        is None
+    )
+
+    # Column type changed.
+    with open(seed_path, "w") as fd:
+        fd.write(
+            """
+col_a,col_b,col_c
+1,text_a,1.0
+2.0,text_b,2.0"""
+        )
+
+    assert (
+        categorize_change(
+            new=make_snapshot(create_seed_model(model_name, model_kind)),
+            old=original_snapshot,
+            config=config,
         )
         is None
     )

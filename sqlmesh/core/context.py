@@ -656,17 +656,13 @@ class Context(BaseContext):
             environment_ttl=self.config.environment_ttl,
         )
 
-        auto_categorize_changes = (
-            self.config.auto_categorize_changes
-            if no_auto_categorization is None
-            else not no_auto_categorization
-        )
-
-        if auto_categorize_changes and not forward_only:
+        if not no_auto_categorization and not forward_only:
             # Attempt to automatically determine and assign change categories.
             for new, old in plan.context_diff.modified_snapshots.values():
                 if plan.is_new_snapshot(new):
-                    change_category = categorize_change(new, old)
+                    change_category = categorize_change(
+                        new, old, config=self.config.auto_categorize_changes
+                    )
                     if change_category is not None:
                         plan.set_choice(new, change_category)
 

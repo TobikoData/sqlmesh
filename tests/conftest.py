@@ -60,7 +60,7 @@ def sushi_dbt_context(mocker: MockerFixture) -> Context:
 def init_and_plan_sushi_context(
     path: str, mocker: MockerFixture, start: TimeLike = "1 week ago"
 ) -> t.Tuple[Context, Plan]:
-    sushi_context = Context(path=path)
+    sushi_context = Context(path=path, config="test_config")
 
     for snapshot in sushi_context.snapshots.values():
         snapshot.set_version()

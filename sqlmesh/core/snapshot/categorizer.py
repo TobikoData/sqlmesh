@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlglot import exp
-from sqlglot.diff import ChangeDistiller, Insert, Keep
-
+from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotChangeCategory
 
 
-def categorize_change(new: Snapshot, old: Snapshot) -> t.Optional[SnapshotChangeCategory]:
+def categorize_change(
+    new: Snapshot, old: Snapshot, config: t.Optional[CategorizerConfig] = None
+) -> t.Optional[SnapshotChangeCategory]:
     """Attempts to automatically categorize a change between two snapshots.
 
     Presently the implementation only returns the NON_BREAKING category iff
@@ -26,36 +26,23 @@ def categorize_change(new: Snapshot, old: Snapshot) -> t.Optional[SnapshotChange
     old_model = old.model
     new_model = new.model
 
-    if (
-        not new_model.is_sql
-        or not old_model.is_sql
-        or new.fingerprint.data_hash == old.fingerprint.data_hash
-    ):
+    config = config or CategorizerConfig()
+    mode = config.dict().get(new_model.source_type, AutoCategorizationMode.OFF)
+    if mode == AutoCategorizationMode.OFF:
         return None
 
-    edits = ChangeDistiller(t=0.5).diff(old_model.render_query(), new_model.render_query())
-    inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
+    default_category = (
+        SnapshotChangeCategory.BREAKING if mode == AutoCategorizationMode.FULL else None
+    )
 
-    for edit in edits:
-        if isinstance(edit, Insert):
-            expr = edit.expression
-            if _is_udtf(expr) or (
-                not _is_projection(expr) and expr.parent not in inserted_expressions
-            ):
-                return None
-        elif not isinstance(edit, Keep):
-            return None
+    if type(new_model) != type(old_model) or new.fingerprint.data_hash == old.fingerprint.data_hash:
+        return default_category
 
-    return SnapshotChangeCategory.NON_BREAKING
-
-
-def _is_projection(expr: exp.Expression) -> bool:
-    parent = expr.parent
-    return isinstance(parent, exp.Select) and expr in parent.expressions
-
-
-def _is_udtf(expr: exp.Expression) -> bool:
-    return isinstance(expr, (exp.Explode, exp.Posexplode, exp.Unnest)) or (
-        isinstance(expr, exp.Anonymous)
-        and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
+    is_breaking_change = new_model.is_breaking_change(old_model)
+    if is_breaking_change is None:
+        return default_category
+    return (
+        SnapshotChangeCategory.BREAKING
+        if is_breaking_change
+        else SnapshotChangeCategory.NON_BREAKING
     )

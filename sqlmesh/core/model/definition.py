@@ -8,9 +8,13 @@ from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from astor import to_source
+from pandas.core.dtypes.common import is_numeric_dtype
 from pydantic import Field
 from sqlglot import exp
+from sqlglot.diff import ChangeDistiller, Insert, Keep
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
@@ -476,6 +480,18 @@ class _Model(ModelMeta, frozen=True):
                 self._path,
             )
 
+    def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        """Determines whether this model is a breaking change in relation to the `previous` model.
+
+        Args:
+            previous: The previous model to compare against.
+
+        Returns:
+            True if this model instance represents a breaking change, False if it's a non-breaking change
+            and None if the nature of the change can't be determined.
+        """
+        return None
+
     def _run_hooks(
         self,
         hooks: t.List[HookCall],
@@ -615,6 +631,25 @@ class SqlModel(_Model):
 
         super().validate_definition()
 
+    def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        if not isinstance(previous, SqlModel):
+            return None
+
+        edits = ChangeDistiller(t=0.5).diff(previous.render_query(), self.render_query())
+        inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
+
+        for edit in edits:
+            if isinstance(edit, Insert):
+                expr = edit.expression
+                if _is_udtf(expr) or (
+                    not _is_projection(expr) and expr.parent not in inserted_expressions
+                ):
+                    return None
+            elif not isinstance(edit, Keep):
+                return None
+
+        return False
+
     @property
     def _query_renderer(self) -> QueryRenderer:
         if self.__query_renderer is None:
@@ -688,6 +723,31 @@ class SeedModel(_Model):
         if not seed_path.is_absolute():
             return self._path.parent / seed_path
         return seed_path
+
+    def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        if not isinstance(previous, SeedModel):
+            return None
+
+        new_df = pd.concat([df for df in self.seed.read()])
+        old_df = pd.concat([df for df in previous.seed.read()])
+
+        new_columns = set(new_df.columns)
+        old_columns = set(old_df.columns)
+
+        if not new_columns.issuperset(old_columns):
+            return None
+
+        for col in old_columns:
+            if new_df[col].dtype != old_df[col].dtype or new_df[col].shape != old_df[col].shape:
+                return None
+            elif is_numeric_dtype(new_df[col]):
+                if not all(np.isclose(new_df[col], old_df[col])):
+                    return None
+            else:
+                if not new_df[col].equals(old_df[col]):
+                    return None
+
+        return False
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
@@ -1178,6 +1238,18 @@ def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> ex
             )
             for v in value
         ]
+    )
+
+
+def _is_projection(expr: exp.Expression) -> bool:
+    parent = expr.parent
+    return isinstance(parent, exp.Select) and expr in parent.expressions
+
+
+def _is_udtf(expr: exp.Expression) -> bool:
+    return isinstance(expr, (exp.Explode, exp.Posexplode, exp.Unnest)) or (
+        isinstance(expr, exp.Anonymous)
+        and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
     )
 
 
