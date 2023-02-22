@@ -1,13 +1,25 @@
+from __future__ import annotations
+
 import asyncio
+import io
 import traceback
 import typing as t
 from pathlib import Path
 
+import pandas as pd
+import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
+from starlette.responses import StreamingResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from web.server.settings import get_context
+
+
+class ArrowStreamingResponse(StreamingResponse):
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        kwargs["media_type"] = "application/vnd.apache.arrow.stream"
+        super().__init__(*args, **kwargs)
 
 
 async def run_in_executor(func: t.Callable) -> t.Any:
@@ -44,3 +56,15 @@ def replace_file(src: Path, dst: Path) -> None:
             raise HTTPException(
                 status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
             )
+
+
+def df_to_pyarrow_bytes(df: pd.DataFrame) -> io.BytesIO:
+    """Convert a DataFrame to pyarrow bytes stream"""
+    table = pa.Table.from_pandas(df)
+    sink = pa.BufferOutputStream()
+
+    with pa.ipc.new_stream(sink, table.schema) as writer:
+        for batch in table.to_batches():
+            writer.write_batch(batch)
+
+    return io.BytesIO(sink.getvalue().to_pybytes())

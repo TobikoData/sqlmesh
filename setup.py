@@ -70,6 +70,7 @@ setup(
         "web": [
             "fastapi==0.89.1",
             "hyperscript==0.0.1",
+            "pyarrow==11.0.0",
             "uvicorn==0.20.0",
         ],
         "snowflake": [
