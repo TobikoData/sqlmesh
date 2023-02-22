@@ -216,12 +216,16 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   }
 
   function updateTabs(result: string | { detail: string }): void {
+    console.log(typeof result)
     const bucket = cache[activeFile.id]
 
     if (bucket == null) return
 
     if (isString(result)) {
       bucket.set(EnumEditorTabs.Table, JSON.parse(result as string))
+      setTabTableContent(bucket.get(EnumEditorTabs.Table))
+    } else if (typeof result === 'object') {
+      bucket.set(EnumEditorTabs.Table, result)
       setTabTableContent(bucket.get(EnumEditorTabs.Table))
     } else {
       bucket.set(EnumEditorTabs.Terminal, (result as { detail: string }).detail)

@@ -16,7 +16,11 @@ from web.server import models
 from web.server.console import ApiConsole
 from web.server.settings import Settings, get_loaded_context, get_settings
 from web.server.sse import SSEResponse
-from web.server.utils import run_in_executor
+from web.server.utils import (
+    ArrowStreamingResponse,
+    df_to_pyarrow_bytes,
+    run_in_executor,
+)
 
 SSE_DELAY = 1  # second
 router = APIRouter()
@@ -111,7 +115,7 @@ async def tasks(
 async def evaluate(
     options: models.EvaluateInput,
     context: Context = Depends(get_loaded_context),
-) -> t.Optional[str]:
+) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
     try:
         df = context.evaluate(
@@ -125,23 +129,24 @@ async def evaluate(
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
-    if isinstance(df, pd.DataFrame):
-        return df.to_json()
-    return df.toPandas().to_json()
+    if not isinstance(df, pd.DataFrame):
+        df = df.toPandas()
+    return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
 
 
 @router.post("/fetchdf")
 async def fetchdf(
     sql: str = Body(embed=True),
     context: Context = Depends(get_loaded_context),
-) -> t.Optional[str]:
+) -> ArrowStreamingResponse:
     """Fetches a dataframe given a sql string"""
     try:
-        return context.fetchdf(sql).to_json()
+        df = context.fetchdf(sql)
     except Exception:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
+    return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
 
 
 @router.get("/dag")

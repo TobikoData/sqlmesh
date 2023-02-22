@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 
+import pyarrow as pa  # type: ignore
 import pytest
 from fastapi.testclient import TestClient
 
@@ -371,10 +372,14 @@ def test_evaluate(web_sushi_context: Context) -> None:
         },
     )
     assert response.status_code == 200
-    assert response.json()
+    with pa.ipc.open_stream(response.content) as reader:
+        df = reader.read_pandas()
+    assert not df.empty
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:
     response = client.post("/api/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"})
     assert response.status_code == 200
-    assert response.json()
+    with pa.ipc.open_stream(response.content) as reader:
+        df = reader.read_pandas()
+    assert not df.empty
