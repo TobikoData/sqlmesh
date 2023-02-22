@@ -5,7 +5,7 @@ A plan is a set of changes that summarizes the difference between the local stat
 During plan creation:
 
 * the local state of the SQLMesh project is compared against the state of a target environment. The difference computed is what constitutes a plan.
-* users are prompted to categorize changes (refer to [change categories](#change-categories)) to existing models in order for SQLMesh to devise a backfill strategy for models that have been affected indirectly (by being downstream dependencies of updated models).
+* users may be prompted to categorize changes (refer to [change categories](#change-categories)) to existing models in order for SQLMesh to devise a backfill strategy for models that have been affected indirectly (by being downstream dependencies of updated models). By default, SQLMesh attempts to categorize changes automatically, but this behavior can be changed through [configuration](../reference/configuration.md#auto_categorize_changes).
 * each plan requires a date range to which it will be applied. If not specified, the date range is derived automatically based on model definitions and the target environment.
 
 The benefit of having a plan is that all changes can be reviewed and verified before they are applied to the data warehouse. A typical plan contains a combination of the following:
