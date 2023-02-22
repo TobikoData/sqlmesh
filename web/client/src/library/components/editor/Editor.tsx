@@ -24,6 +24,7 @@ import SplitPane from '../splitPane/SplitPane'
 import { isFalse, isNil, isString, isTrue } from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
+import Input from '../input/Input'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -32,11 +33,18 @@ export const EnumEditorFileStatus = {
   Saved: 'saved',
 } as const
 
+export const EnumEditorTabs = {
+  QueryPreview: 'queryPreview',
+  Table: 'table',
+  Terminal: 'terminal',
+} as const
+
+export type EditorTabs = KeyOf<typeof EnumEditorTabs>
 export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
 
-const cache: Record<string, Map<string, any>> = {}
+const cache: Record<string, Map<EditorTabs, any>> = {}
 
 export function Editor({ className }: PropsEditor): JSX.Element {
   const client = useQueryClient()
@@ -131,9 +139,11 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
     const bucket = cache[activeFile.id]
 
-    setTabQueryPreviewContent(bucket?.get('queryPreview'))
-    setTabTableContent(bucket?.get('table'))
-    setTabTerminalContent(bucket?.get('terminal'))
+    if (bucket == null) return
+
+    setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+    setTabTableContent(bucket.get(EnumEditorTabs.Table))
+    setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
     setFormEvaluate({
       ...formEvaluate,
@@ -179,12 +189,12 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   function sendQuery(): void {
     const bucket = cache[activeFile.id]
 
-    if (activeFile.isLocal) {
-      bucket?.set('terminal', undefined)
-      setTabTerminalContent(bucket?.get('terminal'))
+    if (activeFile.isLocal && bucket != null) {
+      bucket.set(EnumEditorTabs.Terminal, undefined)
+      setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-      bucket?.set('queryPreview', activeFile.content)
-      setTabQueryPreviewContent(bucket?.get('queryPreview'))
+      bucket.set(EnumEditorTabs.QueryPreview, activeFile.content)
+      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
 
       fetchdfApiFetchdfPost({
         sql: activeFile.content,
@@ -197,8 +207,10 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   function evaluateModel(): void {
     const bucket = cache[activeFile.id]
 
-    bucket?.set('terminal', undefined)
-    setTabTerminalContent(bucket?.get('terminal'))
+    if (bucket == null) return
+
+    bucket.set(EnumEditorTabs.Terminal, undefined)
+    setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
     evaluateApiEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
   }
@@ -206,12 +218,14 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   function updateTabs(result: string | { detail: string }): void {
     const bucket = cache[activeFile.id]
 
+    if (bucket == null) return
+
     if (isString(result)) {
-      bucket?.set('table', JSON.parse(result as string))
-      setTabTableContent(bucket?.get('table'))
+      bucket.set(EnumEditorTabs.Table, JSON.parse(result as string))
+      setTabTableContent(bucket.get(EnumEditorTabs.Table))
     } else {
-      bucket?.set('terminal', (result as { detail: string }).detail)
-      setTabTerminalContent(bucket?.get('terminal'))
+      bucket.set(EnumEditorTabs.Terminal, (result as { detail: string }).detail)
+      setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
     }
   }
 
@@ -343,7 +357,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           label="Start Date"
                           placeholder="02/11/2023"
                           value={formEvaluate.start}
-                          onInput={(e: KeyboardEvent) => {
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                             e.stopPropagation()
 
                             const el = e.target as HTMLInputElement
@@ -358,7 +372,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           label="End Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.end}
-                          onInput={(e: KeyboardEvent) => {
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                             e.stopPropagation()
 
                             const el = e.target as HTMLInputElement
@@ -373,7 +387,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           label="Latest Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.latest}
-                          onInput={(e: KeyboardEvent) => {
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                             e.stopPropagation()
 
                             const el = e.target as HTMLInputElement
@@ -389,7 +403,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           label="Limit"
                           placeholder="1000"
                           value={formEvaluate.limit}
-                          onInput={(e: KeyboardEvent) => {
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                             e.stopPropagation()
 
                             const el = e.target as HTMLInputElement
@@ -409,6 +423,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                         <Input
                           label="Environment Name (Optional)"
                           placeholder="prod"
+                          value="prod"
                         />
                       </fieldset>
                     </form>
@@ -543,11 +558,14 @@ function Indicator({
 }
 
 function CodeEditor({
-  className,
   value,
   onChange,
   extension,
-}: any): JSX.Element {
+}: {
+  value: string
+  extension: string
+  onChange: (value: string) => void
+}): JSX.Element {
   const extensions = [
     extension === '.sql' && sql(),
     extension === '.py' && python(),
@@ -559,39 +577,9 @@ function CodeEditor({
       value={value}
       height="100%"
       width="100%"
-      className={clsx('w-full h-full overflow-auto', className)}
+      className="w-full h-full overflow-auto"
       extensions={extensions}
       onChange={onChange}
     />
-  )
-}
-
-function Input({
-  type = 'text',
-  label,
-  info,
-  value,
-  placeholder,
-  onInput,
-  className,
-  readOnly,
-}: any): JSX.Element {
-  return (
-    <div className={clsx('relative block m-2', className)}>
-      <label className="block whitespace-nowrap mb-1 px-3 text-sm font-bold">
-        {label}
-      </label>
-      <input
-        readOnly={readOnly}
-        className={clsx(
-          'w-full px-3 py-2 bg-secondary-100 rounded-md focus:outline-none border-2 border-secondary-100 focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 bg-secondary-100',
-        )}
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onInput={onInput}
-      />
-      <small className="block text-xs mt-1 px-3 text-gray-500">{info}</small>
-    </div>
   )
 }

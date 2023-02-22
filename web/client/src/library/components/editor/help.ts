@@ -30,6 +30,7 @@ export function getLanguageByExtension(extension?: string): string {
     case '.py':
       return 'Python'
     case '.yaml':
+    case '.yml':
       return 'YAML'
     default:
       return 'Plain Text'
