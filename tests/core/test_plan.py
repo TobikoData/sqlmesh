@@ -3,7 +3,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import SeedKind, SeedModel, SqlModel
+from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import (
@@ -52,7 +52,9 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), kind=IncrementalByTimeRangeKind())
+    )
 
     expected_start = "2022-01-01"
     expected_end = to_datetime("2022-01-02")
@@ -195,7 +197,9 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), kind=IncrementalByTimeRangeKind())
+    )
 
     dag = DAG[str]({"a": set()})
 

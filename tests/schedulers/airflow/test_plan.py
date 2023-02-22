@@ -5,7 +5,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import create_sql_model
+from sqlmesh.core.model import IncrementalByTimeRangeKind, create_sql_model
 from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
@@ -15,7 +15,12 @@ from sqlmesh.utils.errors import SQLMeshError
 
 @pytest.fixture
 def snapshot(make_snapshot, random_name) -> Snapshot:
-    return make_snapshot(create_sql_model(random_name(), parse_one("SELECT 1, ds")), version="1")
+    return make_snapshot(
+        create_sql_model(
+            random_name(), parse_one("SELECT 1, ds"), kind=IncrementalByTimeRangeKind()
+        ),
+        version="1",
+    )
 
 
 @pytest.mark.airflow

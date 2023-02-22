@@ -192,6 +192,8 @@ Up until now each model kind caused the output of a model query to be materializ
 
 Please note that with this kind the model's query is evaluated every time the model gets referenced in downstream queries. This may incur undesirable compute cost in case when the model's query is compute intensive or when the model is referenced in many downstream queries.
 
+View is the default model kind if kind is not specified.
+
 Example:
 ```sql linenums="1"
 MODEL (
