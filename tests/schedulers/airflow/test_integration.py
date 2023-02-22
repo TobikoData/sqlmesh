@@ -7,7 +7,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -146,6 +146,7 @@ def _get_snapshot_dag(
 def _create_model(name: str) -> Model:
     return SqlModel(
         name=name,
+        kind=IncrementalByTimeRangeKind(),
         description="Dummy table",
         owner="jen",
         cron="@daily",

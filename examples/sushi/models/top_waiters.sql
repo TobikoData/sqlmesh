@@ -1,7 +1,6 @@
 /* View of top waiters. */
 MODEL (
   name sushi.top_waiters,
-  kind VIEW,
   owner jen,
   audits (
     unique_values(columns=[waiter_id])

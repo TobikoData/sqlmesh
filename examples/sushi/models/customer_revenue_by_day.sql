@@ -1,6 +1,9 @@
 /* Table of revenue from customers by day. */
 MODEL (
   name sushi.customer_revenue_by_day,
+  kind incremental_by_time_range (
+    time_column (ds, 'YYYY-MM-dd')
+  ),
   owner jen,
   cron '@daily',
   dialect hive,

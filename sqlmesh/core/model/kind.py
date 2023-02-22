@@ -12,7 +12,7 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-# switch to autoname with sqlglot is typed
+# TODO: switch to autoname when sqlglot is typed
 class ModelKindName(str, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
 
