@@ -2,12 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+@layer base {
+  :root {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+
+    --color-gray-100: hsl(0, 0%, 96%);
+    --color-gray-600: hsl(0, 0%, 32%);
+
+    --color-secondary-100: hsl(264, 100%, 98%);
+    --color-secondary-500: hsl(264, 100%, 60%);
+  }
 }
 
 html {

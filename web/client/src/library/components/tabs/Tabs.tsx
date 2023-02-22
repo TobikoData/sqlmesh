@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useStoreEditor } from '../../../context/editor'
 import { useStoreFileTree } from '../../../context/fileTree'
+import { isNil } from '~/utils'
 
 const TABS = ['Table', 'Query Preview', 'Terminal Output']
 
@@ -48,29 +49,36 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   })
 
   function isDisabledTabTable(tabName: string): boolean {
-    return tabName === 'Table' && tabTableContent == null
+    return tabName === 'Table' && isNil(tabTableContent)
   }
 
   function isDisabledTabTerminal(tabName: string): boolean {
-    return tabName === 'Terminal Output' && tabTerminalContent == null
+    return tabName === 'Terminal Output' && isNil(tabTerminalContent)
+  }
+
+  function isDisabledTabQueryPreview(tabName: string): boolean {
+    return tabName === 'Query Preview' && isNil(tabQueryPreviewContent)
   }
 
   return (
     <div className={clsx('flex flex-col overflow-hidden', className)}>
-      <Tab.Group>
+      <Tab.Group defaultIndex={1}>
         <Tab.List className="w-full whitespace-nowrap px-2 pt-3">
           <div className="w-full overflow-hidden overflow-x-auto py-1">
             {TABS.map(tabName => (
               <Tab
                 key={tabName}
                 disabled={
-                  isDisabledTabTable(tabName) || isDisabledTabTerminal(tabName)
+                  isDisabledTabTable(tabName) ||
+                  isDisabledTabTerminal(tabName) ||
+                  isDisabledTabQueryPreview(tabName)
                 }
                 className={({ selected }) =>
                   clsx(
                     'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md relative',
                     isDisabledTabTable(tabName) ||
-                      isDisabledTabTerminal(tabName)
+                      isDisabledTabTerminal(tabName) ||
+                      isDisabledTabQueryPreview(tabName)
                       ? 'text-gray-400 cursor-not-allowed'
                       : selected
                       ? 'bg-secondary-100 text-secondary-500 cursor-default'
@@ -78,7 +86,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                   )
                 }
               >
-                {tabName === 'Table' &&
+                {(tabName === 'Table' || tabName === 'Query Preview') &&
                   activeFile?.content !== tabQueryPreviewContent && (
                     <span
                       title="Outdated Data. Does not match editor query!"
@@ -97,7 +105,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             ))}
           </div>
         </Tab.List>
-        <Tab.Panels className="w-full overflow-hidden max-h-[70vh]">
+        <Tab.Panels className="w-full overflow-hidden">
           <Tab.Panel
             className={clsx(
               'w-full h-full overflow-hidden pt-4 relative pl-2',
@@ -107,13 +115,13 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             {table != null && (
               <div className="w-full h-full overflow-hidden overflow-y-auto">
                 <table className="w-full h-full">
-                  <thead className="sticky top-0 bg-secondary-100">
+                  <thead className="sticky top-0">
                     {table.getHeaderGroups().map(headerGroup => (
                       <tr key={headerGroup.id}>
                         {headerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="px-2 text-sm text-left text-gray-600"
+                            className="px-2 text-sm text-left text-gray-600 border-b-2 border-gray-100"
                           >
                             {header.isPlaceholder
                               ? null
@@ -132,7 +140,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {row.getVisibleCells().map(cell => (
                           <td
                             key={cell.id}
-                            className="px-2 py-1 text-sm text-left text-gray-600"
+                            className="px-2 py-1 text-sm text-left text-gray-600 border-b border-gray-100"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
@@ -168,16 +176,16 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
           </Tab.Panel>
           <Tab.Panel
             className={clsx(
-              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+              'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            <pre className="p-4 bg-secondary-100 rounded-lg">
+            <pre className="w-full h-full  p-4 bg-secondary-100 rounded-lg">
               {tabQueryPreviewContent}
             </pre>
           </Tab.Panel>
           <Tab.Panel
             className={clsx(
-              'flex w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+              'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
             <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg text-danger-500 overflow-auto text-xs">
