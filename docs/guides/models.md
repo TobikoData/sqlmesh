@@ -1,12 +1,14 @@
 # Models guide
 
-## Adding a model
+## Prerequisites
 
 ---
 
 Before adding a model, ensure that you have [already created your project](/guides/projects) and that you are working in a [dev environment](/concepts/environments).
 
 ---
+
+## Adding a model
 
 To add a model:
 

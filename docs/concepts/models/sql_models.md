@@ -3,8 +3,8 @@
 SQL models are the main types of models used by SQLMesh. SQL models consist of:
 
 * a `Model` DDL
-* optional sql statements to run before the main query, and 
-* the main SQL query
+* any optional sql statements, and 
+* the model's `SELECT` statement
 
 SQL models are designed to look and feel like you're simply using SQL, but can be customized for advanced use cases.
 
@@ -20,7 +20,7 @@ MODEL (
 );
 
 /*
-  Optional SQL statements to run before the main query.
+  Optional SQL statements to run before the model's `SELECT` statement.
   You should NOT do things that cause side effects that could
   error out when multiple queries run, such as creating physical tables.
 */
@@ -41,15 +41,15 @@ JOIN countries AS c
 ```
 
 ### Model DDL
-The Model DDL is used to specify metadata about the model such as name, [kind](../model_kinds), owner, and cron. The Model statement should be the first statement in your model SQL file.
+The Model DDL is used to specify metadata about the model such as name, [kind](../model_kinds), owner, cron, and others. The Model statement should be the first statement in your model SQL file.
 
 Refer to `model` [properties](../overview/#properties) for the full list of properties.
 
-### Statements
-Statements are optional SQL statements that can help you prepare the main query. You can do things like create temp tables or set permissions. However, you should be careful not to run any command that could conflict with a parallel running model, such as creating a physical table.
+### Optional statements
+Optional SQL statements can help you prepare the model's `SELECT` statement. You can do things like create temporary tables or set permissions. However, you should be careful not to run any command that could conflict with the evaluation of the model's query, such as creating a physical table.
 
-### Main query
-The main query must contain a standalone SQL Statement that explicitly lists out its columns. The result of this query will be used to populate the model table.
+### Model `SELECT` statement
+The model's `SELECT` statement must be a standalone SQL Statement that explicitly lists out its columns. The result of this query will be used to populate the model table.
 
 ## Automatic dependencies
 SQLMesh parses your SQL, so it has a first class understanding of what you're trying to do. There is no need for you to manually specify dependencies to other models with special tags or commands. For example, given a model with the query as follows:
@@ -66,9 +66,9 @@ SQLMesh will detect that the model depends on both employees and countries. When
 Although automatic dependency detection works most of the time, there may be specific cases in which you want to define them manually. You can do so in the Model DDL with the [dependencies property](../overview/#properties).
 
 ## Conventions
-SQLMesh encourages explicitly typing and selecting each column of a model. This allows SQLMesh to understand the types of your models, as well as to prevent unexpected type inference from occurring.
+SQLMesh encourages explicitly data typing and assigning a data type for each model's column individually. This allows SQLMesh to understand the types of your models, as well as to prevent unexpected type inference from occurring.
 
-### Typing
+### Column types
 SQLMesh encourages explicit type casting. SQL's type coercion can be tricky to deal with, so it is best to ensure that the data in your model is exactly as you want it.
 
 ### Explicit SELECTs

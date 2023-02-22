@@ -1,6 +1,6 @@
 # Seed models
 
-Seed models are special kinds of models in which data is sourced from a static dataset defined as a CSV file rather than from a SQL or Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
+A seed is a special kind of model, in which data is sourced from a static dataset defined as a CSV file rather than from a SQL or Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
 
 Since seeds are also models in SQLMesh, they capitalize on all the same benefits that SQL or Python models provide:
 
@@ -44,7 +44,7 @@ MODEL (
 
 ## Example
 
-In this example, we'll use the model definition from the previous section,\ and assume it's been saved to the `models/national_holidays.sql` file of the SQLMesh project.
+In this example, we'll use the model definition from the previous section, and assume it's been saved to the `models/national_holidays.sql` file of the SQLMesh project.
 
 Add the seed's CSV file with name `national_holidays.csv` to the `models/` folder with the following contents:
 ```csv linenums="1"

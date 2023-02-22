@@ -12,4 +12,4 @@ This allows SQLMesh to be faster and more scalable than other frameworks, allowi
 
 SQLMesh also automates away complexity, so configuring models is no longer difficult due to complex macros that require contextual understanding for execution. Writing your data pipelines incrementally with SQLMesh not only saves you money and time, but keeps your systems maintainable, reliable, and accessible to all of your data practictioners.
 
-Read on for more about the [advantages of SQLMesh](/why_sqlmesh)!
+Read on for more about the [advantages of SQLMesh](./docs/why_sqlmesh.md)!
