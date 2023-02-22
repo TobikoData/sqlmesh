@@ -34,7 +34,7 @@ ENV_KEY_PREFIX = "sqlmesh__environment"
 
 AIRFLOW_LOCAL_URL = "http://localhost:8080/"
 
-SQLMESH_API_BASE_PATH = f"{c.SQLMESH}/api/v1"
+SQLMESH_API_BASE_PATH: str = f"{c.SQLMESH}/api/v1"
 
 
 class PlanApplicationRequest(PydanticModel):

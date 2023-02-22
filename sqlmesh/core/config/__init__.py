@@ -1,3 +1,4 @@
+from sqlmesh.core.config.categorizer import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DuckDBConnectionConfig,
