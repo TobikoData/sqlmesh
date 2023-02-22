@@ -8,19 +8,16 @@ The following is an example of a model defined in SQL. The first statement of a 
 ```sql linenums="1"
 -- Customer revenue computed and stored daily.
 MODEL (
-  name sushi.customer_revenue_by_day,
+  name sushi.customer_total_revenue,
   owner toby,
   cron '@daily',
 );
 
 SELECT
-  c.customer_id::TEXT,
+  o.customer_id::TEXT,
   SUM(o.amount)::DOUBLE AS revenue
-  o.ds::TEXT
 FROM sushi.orders AS o
-JOIN sushi.customers AS c
-  ON o.customer_id = c.customer_id
-WHERE o.ds BETWEEN @start_ds and @end_ds
+GROUP BY o.customer_id;
 ```
 
 ## Conventions
@@ -62,7 +59,7 @@ The MODEL statement takes various properties, which are used for both metadata a
 - Name is ***required***, and must be ***unique***.
 
 ### kind
-- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `incremental`, which means that a model processes and stores data incrementally by minute, hour, or day.
+- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `view`, which means a view is created and your query is run each time that view is accessed. 
 
 ### dialect
 - Dialect defines the SQL dialect of the file. By default, this uses the dialect of the SQLMesh `sqlmesh.core.config`.
