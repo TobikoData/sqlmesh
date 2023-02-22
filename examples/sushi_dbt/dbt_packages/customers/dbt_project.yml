@@ -23,3 +23,6 @@ clean-targets:         # directories to be removed by `dbt clean`
 models:
   customers:
       +materialized: view
+
+vars:
+  some_other_var: 5

@@ -28,3 +28,6 @@ models:
 
 vars:
   top_waiters_limit: 10
+
+  customers:
+    some_var: ["foo", "bar"]
