@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, MouseEvent } from 'react'
+import clsx from 'clsx'
 import CodeMirror from '@uiw/react-codemirror'
 import { sql } from '@codemirror/lang-sql'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import clsx from 'clsx'
 import { Extension } from '@codemirror/state'
 import { useMutationApiSaveFile, useApiFileByPath } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
@@ -240,7 +240,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     ? [75, 25]
     : [100, 0]
 
-  const sizesActions = activeFile.content === '' ? [100, 0] : [70, 30]
+  const sizesActions = activeFile.content === '' ? [100, 0] : [80, 20]
 
   return (
     <SplitPane
@@ -309,7 +309,10 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
-            minSize={0}
+            minSize={[320, 240]}
+            maxSize={[Infinity, 320]}
+            snapOffset={0}
+            expandToMin={true}
           >
             <div className="flex h-full">
               <CodeEditor
@@ -320,7 +323,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
             </div>
 
             <div className="flex flex-col h-full overflow-hidden">
-              <div className="px-4 py-2">
+              <div className="px-4 py-2 w-full">
                 <p className="inline-block font-bold text-xs text-secondary-500 border-b-2 border-secondary-500 mr-3">
                   Actions
                 </p>
@@ -329,19 +332,17 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                 </p>
               </div>
               <Divider />
-              <div className="w-full h-full flex flex-col items-center overflow-hidden">
-                <div className="w-full max-w-md h-full py-1 px-3 justify-center overflow-hidden  overflow-y-auto">
+              <div className="flex flex-col w-full h-full items-center overflow-hidden">
+                <div className="flex w-full h-full py-1 px-3 justify-center overflow-hidden overflow-y-auto">
                   {isTrue(isModel) && (
-                    <form className="my-3 w-full">
-                      <fieldset>
-                        <div className="flex items-center mb-1 px-3 text-sm font-bold">
-                          <h3 className="whitespace-nowrap ml-2">Model Name</h3>
-                          <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-sm rounded">
-                            {formEvaluate.model}
-                          </p>
-                        </div>
+                    <form className="my-3">
+                      <fieldset className="flex items-center my-3 px-3 text-sm font-bold">
+                        <h3 className="whitespace-nowrap ml-2">Model Name</h3>
+                        <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-sm rounded">
+                          {formEvaluate.model}
+                        </p>
                       </fieldset>
-                      <fieldset className="my-3">
+                      <fieldset className="flex my-3 px-3">
                         <div className="p-4 bg-warning-100 text-warning-700 rounded-xl">
                           <p className="text-sm">
                             Please, fill out all fileds to{' '}
@@ -352,9 +353,9 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           </p>
                         </div>
                       </fieldset>
-                      <fieldset className="mb-4">
+                      <fieldset className="my-3 px-3">
                         <Input
-                          className="w-full"
+                          className="w-full mx-0"
                           label="Start Date"
                           placeholder="02/11/2023"
                           value={formEvaluate.start}
@@ -370,7 +371,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
-                          className="w-full"
+                          className="w-full mx-0"
                           label="End Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.end}
@@ -386,7 +387,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
-                          className="w-full"
+                          className="w-full mx-0"
                           label="Latest Date"
                           placeholder="02/13/2023"
                           value={formEvaluate.latest}
@@ -402,7 +403,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                           }}
                         />
                         <Input
-                          className="w-full"
+                          className="w-full mx-0"
                           type="number"
                           label="Limit"
                           placeholder="1000"
@@ -425,10 +426,13 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                     <form className="my-3 w-full">
                       <fieldset className="mb-4">
                         <Input
-                          className="w-full"
+                          className="w-full mx-0"
                           label="Environment Name (Optional)"
                           placeholder="prod"
                           value="prod"
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            console.log(e.target.value)
+                          }}
                         />
                       </fieldset>
                     </form>
