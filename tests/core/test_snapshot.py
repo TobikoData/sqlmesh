@@ -8,7 +8,14 @@ from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.macros import macro
-from sqlmesh.core.model import Model, SeedKind, SqlModel, create_seed_model, load_model, IncrementalByTimeRangeKind
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    Model,
+    SeedKind,
+    SqlModel,
+    create_seed_model,
+    load_model,
+)
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
