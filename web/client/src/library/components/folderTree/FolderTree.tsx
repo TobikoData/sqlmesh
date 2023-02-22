@@ -18,7 +18,7 @@ import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { ModelFile, ModelDirectory } from '../../../models'
 import {
-  createDirectoryApiDirectoriesPathPost,
+  writeDirectoryApiDirectoriesPathPost,
   deleteDirectoryApiDirectoriesPathDelete,
   deleteFileApiFilesPathDelete,
   Directory as DirectoryApi,
@@ -136,7 +136,7 @@ function Directory({
 
     const name = toUniqueName('new_directory')
 
-    createDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`)
+    writeDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`)
       .then(created => {
         if (isFalse((created as any).ok)) {
           console.warn([

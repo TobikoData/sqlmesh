@@ -2,6 +2,11 @@ import { tableFromIPC } from 'apache-arrow'
 
 const baseURL = window.location.origin
 
+export interface ResponseWithDetail {
+  ok: boolean
+  detail?: string
+}
+
 export async function fetchAPI<T = any, B extends object = any>({
   url,
   method,
@@ -32,7 +37,7 @@ export async function fetchAPI<T = any, B extends object = any>({
     | Record<string, string>
     | string[][]
     | undefined
-}): Promise<T> {
+}): Promise<T & ResponseWithDetail> {
   const hasSearchParams = Object.keys(params ?? {}).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
@@ -41,7 +46,7 @@ export async function fetchAPI<T = any, B extends object = any>({
     input.search = new URLSearchParams(params).toString()
   }
 
-  return await new Promise<T>((resolve, reject) => {
+  return await new Promise<T & ResponseWithDetail>((resolve, reject) => {
     fetch(input, {
       method,
       credentials,
@@ -59,30 +64,22 @@ export async function fetchAPI<T = any, B extends object = any>({
         if (response.status >= 400)
           return { ok: false, ...(await response.json()) }
 
-        let json = null
-
         const isEventStream = headerContentType.includes('text/event-stream')
         const isApplicationJson = headerContentType.includes('application/json')
-        const isArrow = headerContentType.includes(
+        const isArrowStream = headerContentType.includes(
           'application/vnd.apache.arrow.stream',
         )
 
+        console.log({ isArrowStream })
+
+        if (isApplicationJson) return await response.json()
+        if (isArrowStream) return await tableFromIPC(response)
         if (isEventStream) {
           const text = await response.text()
           const message = text.trim().replace('data: ', '').trim()
 
-          json = JSON.parse(message)
+          return JSON.parse(message)
         }
-
-        if (isApplicationJson) {
-          json = await response.json()
-        }
-
-        if (isArrow) {
-          return await tableFromIPC(response)
-        }
-
-        return json
       })
       .then(resolve)
       .catch(reject)
