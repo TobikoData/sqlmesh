@@ -79,6 +79,13 @@ class Project:
                 path.parent, target.schema_, cls._overrides_for_package(name, project_config)
             )
 
+        variables = project_yaml.get("vars", {})
+        for name, package in packages.items():
+            package_vars = variables.get(name)
+
+            if isinstance(package_vars, dict):
+                package.variables.update(package_vars)
+
         return Project(project_root, project_name, profile, packages)
 
     @classmethod
