@@ -46,6 +46,7 @@ def get_api_context(
         time_column_format=context.config.time_column_format,
         models=list(context.models),
         config=settings.config,
+        environments={env.name: env for env in context.state_reader.get_environments()},
     )
 
 
