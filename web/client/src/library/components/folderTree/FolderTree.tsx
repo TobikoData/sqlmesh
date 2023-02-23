@@ -136,7 +136,7 @@ function Directory({
 
     const name = toUniqueName('new_directory')
 
-    writeDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`)
+    writeDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`, {})
       .then(created => {
         if (isFalse((created as any).ok)) {
           console.warn([

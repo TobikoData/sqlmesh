@@ -626,11 +626,7 @@ function getTableDataFromArrowStreamResult(
 
   const data: ResponseTableColumns = result.toArray() // result.toArray() returns an array of Proxies
   const rows = Array.from(data).map(toTableRow) // using Array.from to convert the Proxies to real objects
-  const firstRow = rows[0]
-
-  if (firstRow == null) return []
-
-  const columns = Object.keys(firstRow)
+  const columns = result.schema.fields.map(field => field.name)
 
   return [columns, rows]
 }
