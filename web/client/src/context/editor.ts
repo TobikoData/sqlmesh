@@ -2,10 +2,10 @@ import { create } from 'zustand'
 
 interface EditorStore {
   tabQueryPreviewContent?: string
-  tabTableContent?: any
+  tabTableContent?: any[]
   tabTerminalContent?: string
   setTabQueryPreviewContent: (tabQueryPreviewContent?: string) => void
-  setTabTableContent: (tabTableContent?: any) => void
+  setTabTableContent: (tabTableContent?: any[]) => void
   setTabTerminalContent: (tabTerminalContent?: string) => void
 }
 
@@ -16,7 +16,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   setTabQueryPreviewContent: (tabQueryPreviewContent?: string) => {
     set(() => ({ tabQueryPreviewContent }))
   },
-  setTabTableContent: (tabTableContent?: any) => {
+  setTabTableContent: (tabTableContent?: any[]) => {
     set(() => ({ tabTableContent }))
   },
   setTabTerminalContent: (tabTerminalContent?: string) => {

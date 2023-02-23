@@ -32,6 +32,10 @@ export function isObject(value: unknown): boolean {
   )
 }
 
+export function isObjectLike(value: unknown): boolean {
+  return isNotNil(value) && typeof value === 'object'
+}
+
 export function isNil(value: unknown): boolean {
   return value == null
 }
