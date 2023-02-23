@@ -139,7 +139,7 @@ class GeneralConfig(BaseConfig):
             elif isinstance(val, GeneralConfig):
                 return val.render_non_sql_jinja(methods)
             elif isinstance(val, (list, set)):
-                return type(val)([render_value(collection_val) for collection_val in val])
+                return type(val)(render_value(collection_val) for collection_val in val)
             elif isinstance(val, dict):
                 return {
                     entry_name: render_value(entry_val) for entry_name, entry_val in val.items()
@@ -148,7 +148,7 @@ class GeneralConfig(BaseConfig):
             return val
 
         config = self.copy()
-        for name in config.__fields__.keys():
+        for name in config.__fields__:
             setattr(config, name, render_value(getattr(config, name)))
 
         return config

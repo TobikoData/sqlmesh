@@ -120,7 +120,7 @@ class ModelConfig(GeneralConfig):
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[SqlStr]:
-        return [SqlStr(v)] if isinstance(v, str) else [SqlStr(val) for val in v]
+        return [SqlStr(val) for val in ensure_list(v)]
 
     @validator("sql", pre=True)
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:

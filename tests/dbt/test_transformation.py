@@ -142,7 +142,7 @@ def test_config_containing_jinja():
     sources = {
         "package.table": SourceConfig(config_name="package.table", schema_="raw", name="baz")
     }
-    model._dependencies.sources = sources.keys()
+    model._dependencies.sources = sources
 
     sqlmesh_model = model.to_sqlmesh(sources, {}, {}, vars, {})
     assert str(sqlmesh_model.query) == model.sql
