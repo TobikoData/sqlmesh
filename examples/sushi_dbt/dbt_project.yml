@@ -28,7 +28,6 @@ models:
 
 vars:
   top_waiters_limit: 10
-  customers:customer_id: "customer_id"
 
   # The following are only used for testing purposes
   customers:boo: ["a", "b"]
