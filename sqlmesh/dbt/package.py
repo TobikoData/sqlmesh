@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, Dependencies
+from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, Dependencies, SqlStr
 from sqlmesh.dbt.macros import BUILTIN_METHOD_NAMES, MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig

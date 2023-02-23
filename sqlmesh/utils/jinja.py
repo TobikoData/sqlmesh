@@ -109,6 +109,13 @@ def call_name(node: nodes.Expr) -> str:
         return call_name(node.node)
     return ""
 
+def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> str:
+    environment = Environment()
+    if methods:
+        environment.globals.update(methods)
+
+    return environment.from_string(query).render()
+
 
 def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[str]:
     vars_in_scope = vars_in_scope.copy()

@@ -72,7 +72,7 @@ class DbtLoader(Loader):
                 )
 
             for seed in package.seeds.values():
-                models[seed.seed_name] = seed.to_sqlmesh()
+                models[seed.seed_name] = seed.to_sqlmesh(all_variables)
 
         return models
 

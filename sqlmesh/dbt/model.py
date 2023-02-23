@@ -25,7 +25,7 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
     yaml_to_columns,
 )
-from sqlmesh.dbt.common import Dependencies, GeneralConfig
+from sqlmesh.dbt.common import Dependencies, GeneralConfig, SqlStr
 from sqlmesh.dbt.macros import (
     BUILTIN_METHODS,
     MacroConfig,
@@ -85,7 +85,7 @@ class ModelConfig(GeneralConfig):
     # sqlmesh fields
     path: Path = Path()
     target_schema: str = ""
-    sql: str = ""
+    sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
     table_name: t.Optional[str] = None
     _dependencies: Dependencies = Dependencies()
@@ -100,8 +100,8 @@ class ModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     incremental_strategy: t.Optional[str] = None
     materialized: Materialization = Materialization.VIEW
-    post_hook: t.List[str] = Field([], alias="post-hook")
-    pre_hook: t.List[str] = Field([], alias="pre-hook")
+    post_hook: t.List[SqlStr] = Field([], alias="post-hook")
+    pre_hook: t.List[SqlStr] = Field([], alias="pre-hook")
     schema_: t.Optional[str] = Field(None, alias="schema")
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
@@ -111,14 +111,20 @@ class ModelConfig(GeneralConfig):
     bind: t.Optional[bool] = None
 
     @validator(
-        "pre_hook",
-        "post_hook",
         "unique_key",
         "cluster_by",
         pre=True,
     )
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
+
+    @validator("pre_hook", "post_hook", pre=True)
+    def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[SqlStr]:
+        return [SqlStr(v)] if isinstance(v, str) else [SqlStr(val) for val in v]
+
+    @validator("sql", pre=True)
+    def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
+        return SqlStr(v)
 
     @validator("full_refresh", pre=True)
     def _validate_bool(cls, v: str) -> bool:
@@ -151,6 +157,49 @@ class ModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
+
+    def to_sqlmesh(
+        self,
+        sources: t.Dict[str, SourceConfig],
+        models: t.Dict[str, ModelConfig],
+        seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
+        macros: UniqueKeyDict[str, MacroConfig],
+    ) -> Model:
+        """Converts the dbt model into a SQLMesh model."""
+        source_mapping = {config.config_name: config.source_name for config in sources.values()}
+        model_mapping = {name: config.model_name for name, config in models.items()}
+        model_mapping.update({name: config.seed_name for name, config in seeds.items()})
+
+        rendered = self.render_non_sql_jinja(self.jinja_methods(variables))
+
+        dependencies = rendered._all_dependencies(source_mapping, models, seeds, variables, macros)
+
+        python_env = {
+            "source": source_method(dependencies.sources, source_mapping),
+            "ref": ref_method(dependencies.refs, model_mapping),
+            "var": var_method(dependencies.variables, variables),
+            **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
+        }
+
+        depends_on = {
+            seeds[ref].seed_name if ref in seeds else models[ref].model_name
+            for ref in dependencies.refs
+        }
+
+        expressions = d.parse(rendered.sql)
+
+        return create_sql_model(
+            rendered.model_name,
+            expressions[-1],
+            kind=rendered.model_kind,
+            statements=expressions[0:-1],
+            columns=column_types_to_sqlmesh(rendered.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(rendered.columns) or None,
+            python_env=python_env,
+            depends_on=depends_on,
+            start=rendered.start,
+        )
 
     @property
     def model_name(self) -> str:

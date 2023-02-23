@@ -87,14 +87,16 @@ class SeedConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(self) -> Model:
+    def to_sqlmesh(self, variables: t.Dict[str, t.Any]) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
+        rendered = self.render_non_sql_jinja(self.jinja_methods(variables))
+
         return create_seed_model(
-            self.seed_name,
-            SeedKind(path=self.path.absolute()),
-            path=self.path,
-            columns=column_types_to_sqlmesh(self.columns) or None,
-            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
+            rendered.seed_name,
+            SeedKind(path=rendered.path.absolute()),
+            path=rendered.path,
+            columns=column_types_to_sqlmesh(rendered.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(rendered.columns) or None,
         )
 
     @property

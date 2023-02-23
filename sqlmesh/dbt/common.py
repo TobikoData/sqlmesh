@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import typing as t
+from os import getenv
 
 from pydantic import validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.utils.jinja import render_jinja
 from sqlmesh.utils.pydantic import PydanticModel
 
 T = t.TypeVar("T", bound="BaseConfig")
 
 
 PROJECT_FILENAME = "dbt_project.yml"
+
+
+class SqlStr(str):
+    pass
 
 
 class Dependencies(PydanticModel):
@@ -105,6 +111,8 @@ class GeneralConfig(BaseConfig):
         },
     }
 
+    _SQL_FIELDS: t.ClassVar[t.List[str]] = []
+
     def replace(self, other: T) -> None:
         """
         Replace the contents of this instance with the passed in instance.
@@ -114,6 +122,36 @@ class GeneralConfig(BaseConfig):
         """
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
+
+    def jinja_methods(self, variables: t.Dict[str, t.Any]) -> t.Dict[str, t.Callable]:
+        methods: t.Dict[str, t.Callable] = {}
+        methods["env_var"] = lambda name, default=None: getenv(name, default)
+        methods["var"] = lambda name, default=None: variables.get(name, default)
+
+        return methods
+
+    def render_non_sql_jinja(self: T, methods: t.Dict[str, t.Callable]) -> T:
+        def render_value(val: t.Any) -> t.Any:
+            if type(val) is SqlStr:
+                return val
+            elif type(val) is str:
+                return render_jinja(val, methods)
+            elif isinstance(val, GeneralConfig):
+                return val.render_non_sql_jinja(methods)
+            elif isinstance(val, (list, set)):
+                return type(val)([render_value(collection_val) for collection_val in val])
+            elif isinstance(val, dict):
+                return {
+                    entry_name: render_value(entry_val) for entry_name, entry_val in val.items()
+                }
+
+            return val
+
+        config = self.copy()
+        for name in config.__fields__.keys():
+            setattr(config, name, render_value(getattr(config, name)))
+
+        return config
 
 
 def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:

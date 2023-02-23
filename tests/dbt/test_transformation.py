@@ -16,6 +16,7 @@ from sqlmesh.dbt.column import (
 )
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -106,6 +107,44 @@ def test_seed_columns():
         "zipcode": "Business zipcode",
     }
 
-    sqlmesh_seed = seed.to_sqlmesh()
+    sqlmesh_seed = seed.to_sqlmesh({})
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
+
+
+def test_config_containing_jinja():
+    model = ModelConfig(
+        **{"pre-hook": "GRANT INSERT ON {{ source('package', 'table') }}"},
+        target_schema="{{ var('schema') }}",
+        table_name="bar",
+        sql="SELECT * FROM {{ source('package', 'table') }}",
+        columns={
+            "address": ColumnConfig(
+                name="address", data_type="text", description="Business address"
+            ),
+            "zipcode": ColumnConfig(
+                name="zipcode",
+                data_type="varchar({{ var('size') }})",
+                description="Business zipcode",
+            ),
+        },
+    )
+
+    vars = {"schema": "foo", "size": "5"}
+    rendered = model.render_non_sql_jinja(model.jinja_methods(vars))
+    assert rendered.pre_hook == model.pre_hook
+    assert rendered.sql == model.sql
+    assert rendered.target_schema != model.target_schema
+    assert rendered.target_schema == "foo"
+    assert rendered.columns["zipcode"] != model.columns["zipcode"]
+    assert rendered.columns["zipcode"].data_type == "varchar(5)"
+
+    sources = {
+        "package.table": SourceConfig(config_name="package.table", schema_="raw", name="baz")
+    }
+    model._dependencies.sources = sources.keys()
+
+    sqlmesh_model = model.to_sqlmesh(sources, {}, {}, vars, {})
+    assert str(sqlmesh_model.query) == model.sql
+    assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz"
+    assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
