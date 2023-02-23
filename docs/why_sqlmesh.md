@@ -1,8 +1,4 @@
-# Why SQLMesh?
-
-One of the main advantages over other transformation frameworks is that SQLMesh does not categorize incrementality as an "advanced" use case that should be avoided unless absolutely necessary. While other frameworks default to full refresh compute, the default for SQLMesh is to optimize for incremental compute, i.e. computing one day or hour at a time. This allows SQLMesh to be faster and more scalable than other frameworks, allowing you to take advantage of the cost and time savings of incrementality.
-
-SQLMesh also automates away complexity, so configuring models is no longer tricky due to complex macros that require understanding of the context for execution. Writing your data pipelines incrementally with SQLMesh not only saves you money and time, but keeps your systems maintainable, reliable, and accessible to all of your data practictioners.
+# SQLMesh advantages
 
 ## Reduced cost
 Incremental compute is significantly cheaper than full refresh compute.
