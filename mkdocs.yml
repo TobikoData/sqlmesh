@@ -1,21 +1,17 @@
 site_name: SQLMesh
 nav:
-  - "Overview": index.md
+  - Overview:
+    - "What is SQLMesh?": index.md
+    - "SQLMesh advantages": why_sqlmesh.md
   - Get started:
-    - "Why SQLMesh?": why_sqlmesh.md
-    - prerequisites.md
-    - quick_start.md
+    - Quick start:
+      - quick_start.md
+      - prerequisites.md
   - Guides:
-    - guides/create_a_project.md
-    - guides/add_model.md
-    - guides/delete_model.md
-    - guides/evaluate_model.md
-    - guides/test_model.md
-    - guides/audit_model.md
-    - guides/validate_model.md
-    - guides/revert_change.md
-    - guides/view_dag.md
-    - guides/integrate_airflow.md
+    - guides/projects.md
+    - guides/models.md
+    - guides/testing.md
+    - guides/scheduling.md
   - Concepts:
     - concepts/overview.md
     - Models:
@@ -53,7 +49,6 @@ nav:
     - release_notes.md
     - community.md
     - development.md
-
 theme:
   name: material
   logo: sqlmesh.png
@@ -76,9 +71,10 @@ theme:
   features:
     - navigation.tracking
     - navigation.tabs
-    - navigation.path
+    - navigation.sections
 plugins:
   - include-markdown
+  - search
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true

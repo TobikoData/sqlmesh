@@ -1,24 +1,7 @@
-# Quickstart
-In this quickstart guide, you'll learn how to get up and running with SQLMesh's scaffold generator.
+# Overview
+In this quick start guide, you'll get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine. 
 
-This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
-
-## Prerequisites
-
-[//]: # (If anything changes here, update prerequisites.md as well.)
-
-You'll need Python 3.7 or higher to use SQLMesh. You can check your python version by running the following command:
-```bash
-python3 --version
-```
-
-or:
-
-```bash
-python --version
-```
-
-**Note:** If `python --version` returns 2.x, replace all `python` commands with `python3`, and `pip` with `pip3`.
+Before beginning, ensure that you meet all the [prerequisites](prerequisites.md) for using SQLMesh.
 
 ## 1. Create a SQLMesh project
 Create a project directory and navigate to it, as in the following example:
@@ -38,28 +21,30 @@ pip install sqlmesh
 
 When using a virtual environment, you must ensure it's activated first: you should see `(.env)` in your command line. If you don't, run `source .env/bin/activate` from your project directory to activate the environment.
 
-Now, create a SQLMesh scaffold by using the following command:
+Create a SQLMesh scaffold by using the following command:
 
 ```bash
 sqlmesh init
 ```
 
-This will create the directories and files that you can use to organize your SQLMesh project code.
+This will create the directories and files that you can use to organize your SQLMesh project code:
 
 - config.py
-    - The file for project configuration. Refer to [configuration reference](reference/configuration.md).
+    - The file for project configuration. Refer to [configuration](reference/configuration.md).
 - ./models
-    - The place for sql and python models. Refer to [models](concepts/models/overview.md).
+    - SQL and Python models. Refer to [models](concepts/models/overview.md).
 - ./audits
-    - The place for shared audits. Refer to [auditing](concepts/audits.md).
+    - Shared audit files. Refer to [auditing](concepts/audits.md).
 - ./tests
-    - The place for unit tests. Refer to [testing](concepts/tests.md).
+    - Unit test files. Refer to [testing](concepts/tests.md).
 - ./macros
-    - The place for macros. Refer to [macros](concepts/macros.md).
+    - Macro files. Refer to [macros](concepts/macros.md).
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
-This example project structure is a two-model pipeline, where example_full_model depends on example_incremental_model. To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Type `y`:
+This example project structure is a two-model pipeline, where `sqlmesh_example.example_full_model` depends on `sqlmesh_example.example_incremental_model`. 
+
+To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Enter `y`:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan
@@ -85,9 +70,9 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called **dev**.
+Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called `dev`.
 
-Notice that although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Type `y` to perform the logical update:
+Although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Enter `y` to perform the logical update:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -105,7 +90,7 @@ Logical Update executed successfully
 
 ## 3. Make your first update
 ### 3.1 Edit the configuration
-Now, let's add a new column. Open the **models/example_incremental_model.sql** file and add `#!sql 1 AS new_column` under item_id as follows:
+Let's add a new column. Open the `models/example_incremental_model.sq` file and add `#!sql 1 AS new_column` under `item_id` as follows:
 
 ```bash
 diff --git a/models/example_incremental_model.sql b/models/example_incremental_model.sql
@@ -123,7 +108,9 @@ index e1407e6..8154da2 100644
 ```
 
 ## 4. Plan and apply updates
-Once this change is made, we can preview it using plan to understand the impact it had. Run `sqlmesh plan dev` and hit `Enter` to leave the backfill start and end dates empty:
+Once this change is made, we can preview it using the `sqlmesh plan` command to understand the impact it had. 
+
+Run `sqlmesh plan dev` and hit `Enter` to leave the backfill start and end dates empty:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -165,9 +152,9 @@ All model batches have been executed successfully
 sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-Notice that SQLMesh has detected that you've added **new_column**. It also shows you that the downstream model **sqlmesh_example.example_full_model** was indirectly modified. It asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column, this change should be classified as `Non-Breaking`. Type `2`.
+Notice that SQLMesh has detected that you've added `new_column`. It also shows you that the downstream model `sqlmesh_example.example_full_model` was indirectly modified, and asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column, this change should be classified as `Non-Breaking`. Enter `2`.
 
-SQLMesh now applies the change to **sqlmesh_example.example_incremental_model** and backfills the model. SQLMesh did not need to backfill **sqlmesh_example.example_full_model** since `Non-Breaking` change was selected.
+SQLMesh now applies the change to `sqlmesh_example.example_incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.example_full_model`, since `Non-Breaking` change was selected.
 
 ### 4.1 Validate updates in dev
 You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_example__dev.example_incremental_model"`:
@@ -186,7 +173,7 @@ You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_
 7   7        1           1  2020-01-07
 ```
 
-You can see that **new_column** was added to your dataset. The production table was not modified; you can validate this by querying the table using `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
+You can see that `new_column` was added to your dataset. The production table was not modified; you can validate this by querying the table using `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
@@ -202,10 +189,10 @@ You can see that **new_column** was added to your dataset. The production table 
 7   7        1  2020-01-07
 ```
 
-Notice that the production table does not have **new_column**.
+Notice that the production table does not have `new_column`.
 
 ### 4.2 Apply updates to prod
-Now that you've tested your changes in dev, it's time to move this change to prod. Run `sqlmesh plan` to plan and apply your changes to the prod environment:
+Now that you've tested your changes in dev, it's time to move your changes to prod. Run `sqlmesh plan` to plan and apply your changes to the prod environment:
 
 ```bash
 (.env) [toby@muc sqlmesh-example]$ sqlmesh plan
@@ -245,7 +232,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 ```
 
 ### 4.3. Validate updates in prod
-Finally, double-check that the data did indeed land in prod by running `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
+Double-check that the data did indeed update in prod by running `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"
@@ -265,8 +252,6 @@ Finally, double-check that the data did indeed land in prod by running `sqlmesh 
 
 Congratulations, you've now conquered the basics of using SQLMesh!
 
-Feel free to explore [guides](guides/create_a_project.md) and [concepts](concepts/overview.md) for more details about how SQLMesh works, or peruse the following resources:
-
-* For API documentation, refer to [API reference](reference/overview.md).
-* For information about integrations with SQLMesh, refer to [integrations](integrations/overview.md).
-* To get involved in our community, refer to [community](community.md).
+* For more information about how to perform tasks with SQLMesh, explore our [guides](guides/create_a_project.md).
+* For information about how SQLMesh works, explore [concepts](concepts/overview.md).
+* To connect with us, refer to [community](community.md). We'd love to hear from you!

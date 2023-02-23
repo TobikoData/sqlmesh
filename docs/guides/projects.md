@@ -1,6 +1,6 @@
-# Create a project
+# Project guide
 
-## Create a project
+## Creating a project
 
 ---
 
@@ -54,7 +54,7 @@ To create a project from the command line, follow these steps:
     - ./tests (unit tests)
     - ./macros
 
-## Edit an existing project
+## Editing an existing project
 
 To edit an existing project, open the project file you wish to edit in your preferred editor.
 
@@ -66,7 +66,9 @@ sqlmesh --path <your-project-path>
 
 For more details, refer to [CLI](../../api/cli) and [Notebook](../..api/notebook).
 
-## Import a dbt project
+## Importing a project
+
+### dbt
 
 To import a dbt project, use the `sqlmesh init` command with the `dbt` flag as follows:
 
