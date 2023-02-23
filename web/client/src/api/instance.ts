@@ -70,8 +70,6 @@ export async function fetchAPI<T = any, B extends object = any>({
           'application/vnd.apache.arrow.stream',
         )
 
-        console.log({ isArrowStream })
-
         if (isApplicationJson) return await response.json()
         if (isArrowStream) return await tableFromIPC(response)
         if (isEventStream) {
