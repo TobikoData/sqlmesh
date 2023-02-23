@@ -146,5 +146,5 @@ def test_config_containing_jinja():
 
     sqlmesh_model = model.to_sqlmesh(sources, {}, {}, vars, {})
     assert str(sqlmesh_model.query) == model.sql
-    assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz"
+    assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)

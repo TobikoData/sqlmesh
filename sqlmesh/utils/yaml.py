@@ -21,7 +21,7 @@ def load(source: str | Path, raise_if_empty: bool = True) -> t.OrderedDict:
         with open(source, "r", encoding="utf-8") as file:
             source = file.read()
 
-    contents = yaml.load(source).render()
+    contents = yaml.load(source)
     if contents is None:
         if raise_if_empty:
             error_path = f" '{path}'" if path else ""
