@@ -21,7 +21,7 @@ export default function useLocalStorage<T extends Record<string, any>>(
 
   function setValue(value: Partial<T>): void {
     try {
-      const newValue = Object.assign({}, storedValue ?? {}, value) as T
+      const newValue = Object.assign({}, storedValue, value) as T
 
       store.setItem(key, JSON.stringify(newValue))
 

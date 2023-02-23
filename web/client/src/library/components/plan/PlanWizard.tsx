@@ -89,7 +89,6 @@ export default function PlanWizard(): JSX.Element {
       [EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed],
       planState,
     ) && planAction === EnumPlanAction.Done
-  const hasContext = isNotNil(context)
   const changes = context?.changes
   const hasChanges =
     isModified(changes?.modified) ||
@@ -112,16 +111,6 @@ export default function PlanWizard(): JSX.Element {
     [backfills, plan],
   )
 
-  console.log({
-    hasChanges,
-    backfills,
-    hasContext,
-    planAction,
-    planState,
-    isPlanInProgress,
-    isRun,
-  })
-
   return (
     <ul className="w-[70%] mx-auto">
       <li className="mt-6 mb-10">
@@ -134,8 +123,9 @@ export default function PlanWizard(): JSX.Element {
           </h4>
         </div>
       </li>
-      {isRun && <PlanWizardStepOptions />}
-      {isFalse(isRun) && (
+      {isRun ? (
+        <PlanWizardStepOptions />
+      ) : (
         <PlanWizardStep
           headline="Models"
           description="Review Changes"
@@ -313,7 +303,7 @@ export default function PlanWizard(): JSX.Element {
                 {planState === EnumPlanState.Finished
                   ? 'Completed'
                   : planState === EnumPlanState.Cancelled
-                  ? 'Canceled'
+                  ? 'Cancelled'
                   : 'Failed'}
               </h3>
               <p className="text-xs text-gray-600">

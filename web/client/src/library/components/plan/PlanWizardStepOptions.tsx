@@ -159,7 +159,7 @@ function FormPlanOptions(): JSX.Element {
                     </div>
                     <div className="block my-2">
                       <InputToggle
-                        label=" Auto Apply"
+                        label="Auto Apply"
                         info="Automatically apply the plan after it is generated"
                         enabled={Boolean(planOptions.autoApply)}
                         setEnabled={(value: boolean) => {

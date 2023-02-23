@@ -24,11 +24,11 @@ import { useChannel } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import Modal from '../modal/Modal'
-import { isArrayEmpty, isStringEmptyOrNil } from '~/utils'
+import { isArrayEmpty, isNil, isStringEmptyOrNil } from '~/utils'
 import Input from '../input/Input'
 import {
   Environment,
-  getDefualtEnvironments,
+  getDefaultEnvironments,
   useStoreContext,
 } from '~/context/context'
 import { useStoreFileTree } from '~/context/fileTree'
@@ -84,24 +84,25 @@ export function IDE(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (context == null || context.environments == null || environments == null)
-      return
+    if ([context, context?.environments, environments].some(isNil)) return
 
-    const newEnviroments = structuredClone(environments)
+    const newEnvironments = structuredClone(environments)
+    const contextEnvironments = context?.environments ?? {}
 
-    Object.keys(context.environments).forEach(envName => {
-      const foundIndex = newEnviroments.findIndex(env => env.name === envName)
+    Object.keys(contextEnvironments).forEach(envName => {
+      const environment = newEnvironments.find(env => env.name === envName)
 
-      if (newEnviroments[foundIndex] == null) {
-        newEnviroments.push({ name: envName, type: 'remote' })
+      if (environment == null) {
+        newEnvironments.push({ name: envName, type: 'local' })
       } else {
-        newEnviroments[foundIndex].type = 'remote'
+        // Still holds reference to object in newEnvironments
+        environment.type = 'remote'
       }
     })
 
-    newEnviroments.sort(env => (env.type === 'remote' ? -1 : 1))
+    newEnvironments.sort(env => (env.type === 'remote' ? -1 : 1))
 
-    setEnvironments(newEnviroments)
+    setEnvironments(newEnvironments)
   }, [context])
 
   useEffect(() => {
@@ -115,25 +116,25 @@ export function IDE(): JSX.Element {
 
     if (profile?.environments == null) return
 
-    const newEnviroments = environments.filter(env => env.type === 'remote')
+    const newEnvironments = environments.filter(env => env.type === 'remote')
 
     profile.environments.forEach(profileEnv => {
-      const foundIndex = newEnviroments.findIndex(
+      const foundIndex = newEnvironments.findIndex(
         env => env.name === profileEnv.name,
       )
 
       if (foundIndex < 0) {
-        newEnviroments.push(profileEnv)
+        newEnvironments.push(profileEnv)
       }
     })
 
-    if (isArrayEmpty(newEnviroments)) {
-      newEnviroments.push(...getDefualtEnvironments())
+    if (isArrayEmpty(newEnvironments)) {
+      newEnvironments.push(...getDefaultEnvironments())
     }
 
-    newEnviroments.sort(env => (env.type === 'remote' ? -1 : 1))
+    newEnvironments.sort(env => (env.type === 'remote' ? -1 : 1))
 
-    setEnvironments(newEnviroments)
+    setEnvironments(newEnvironments)
   }, [profile])
 
   useEffect(() => {
@@ -601,7 +602,7 @@ function RunPlan({
                   )}
                   {changes?.modified?.direct.length > 0 && (
                     <span
-                      title="Models Modefied Directly"
+                      title="Models Modified Directly"
                       className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-secondary-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                     >
                       {changes.modified.direct.length}
@@ -609,7 +610,7 @@ function RunPlan({
                   )}
                   {changes?.modified?.indirect.length > 0 && (
                     <span
-                      title="Models Modefied Indirectly"
+                      title="Models Modified Indirectly"
                       className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-warning-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                     >
                       {changes.modified.indirect.length}
@@ -620,7 +621,7 @@ function RunPlan({
                       title="Models Removed"
                       className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-danged-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                     >
-                      {changes.added.length}
+                      {changes.removed.length}
                     </span>
                   )}
                 </span>

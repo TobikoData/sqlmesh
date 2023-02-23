@@ -21,7 +21,7 @@ export const PROD: Environment = {
 export const useStoreContext = create<ContextStore>((set, get) => ({
   prod: PROD,
   environment: undefined,
-  environments: getDefualtEnvironments(),
+  environments: getDefaultEnvironments(),
   setEnvironment: (environment?: string) => {
     set(() => ({ environment }))
   },
@@ -30,7 +30,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   },
 }))
 
-export function getDefualtEnvironments(): Environment[] {
+export function getDefaultEnvironments(): Environment[] {
   return [
     PROD,
     {

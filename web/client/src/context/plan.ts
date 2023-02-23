@@ -51,15 +51,15 @@ interface PlanProgress {
 }
 
 interface PlanOptions {
-  skipTests?: boolean
-  noGaps?: boolean
-  skipBackfill?: boolean
-  forwardOnly?: boolean
-  autoApply?: boolean
-  start?: string
-  end?: string
-  from?: string
-  restateModel?: string
+  skipTests: boolean
+  noGaps: boolean
+  skipBackfill: boolean
+  forwardOnly: boolean
+  autoApply: boolean
+  start: string
+  end: string
+  from: string
+  restateModel: string
 }
 
 interface PlanStore {
@@ -87,11 +87,11 @@ interface PlanStore {
     unsubscribe: () => void,
   ) => void
   planOptions: PlanOptions
-  setPlanOptions: (planOptions: PlanOptions) => void
+  setPlanOptions: (planOptions: Partial<PlanOptions>) => void
   resetPlanOptions: () => void
 }
 
-const planOptions: PlanOptions = {
+const planDefaultOptions: PlanOptions = {
   skipTests: false,
   noGaps: false,
   skipBackfill: false,
@@ -104,16 +104,16 @@ const planOptions: PlanOptions = {
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
-  planOptions,
+  planOptions: planDefaultOptions,
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
   activePlan: undefined,
   lastPlan: undefined,
-  setPlanOptions: (planOptions: PlanOptions) => {
+  setPlanOptions: (planOptions: Partial<PlanOptions>) => {
     set(s => ({ planOptions: { ...s.planOptions, ...planOptions } }))
   },
   resetPlanOptions: () => {
-    set(() => ({ planOptions }))
+    set(() => ({ planOptions: planDefaultOptions }))
   },
   setActivePlan: (activePlan?: PlanProgress) => {
     set(() => ({ activePlan }))

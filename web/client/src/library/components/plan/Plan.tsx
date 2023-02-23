@@ -33,7 +33,6 @@ export default function Plan({
   const planAction = useStorePlan(s => s.action)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
-  // const setActivePlan = useStorePlan(s => s.setActivePlan)
   const setCategory = useStorePlan(s => s.setCategory)
 
   const setWithBackfill = useStorePlan(s => s.setWithBackfill)
