@@ -136,7 +136,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
-    # Finally, check that variable scoping works as expected
+    # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {"top_waiters_limit": 10}
     expected_customer_variables = {"some_var": ["foo", "bar"], "some_other_var": 5}
 
