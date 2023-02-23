@@ -383,3 +383,9 @@ def test_fetchdf(web_sushi_context: Context) -> None:
     with pa.ipc.open_stream(response.content) as reader:
         df = reader.read_pandas()
     assert not df.empty
+
+
+def test_get_models(web_sushi_context: Context) -> None:
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    assert response.json()["models"].keys() == web_sushi_context.models.keys()

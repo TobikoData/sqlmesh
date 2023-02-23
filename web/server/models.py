@@ -110,3 +110,14 @@ class EvaluateInput(PydanticModel):
     end: TimeLike
     latest: TimeLike
     limit: t.Optional[int] = None
+
+
+class Model(PydanticModel):
+    name: str
+    path: str
+    description: t.Optional[str]
+    owner: t.Optional[str]
+
+
+class Models(PydanticModel):
+    models: t.Dict[str, Model]
