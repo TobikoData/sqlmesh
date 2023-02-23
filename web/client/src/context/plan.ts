@@ -72,8 +72,8 @@ interface PlanStore {
   setCategory: (category?: Category) => void
   activePlan?: PlanProgress
   lastPlan?: PlanProgress
-  backfill_start?: string
-  backfill_end?: string
+  backfill_start: string
+  backfill_end: string
   setBackfillDate: (type: 'start' | 'end', date: string) => void
   category?: Category
   categories: Category[]
@@ -130,11 +130,11 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setCategory: (category?: Category) => {
     set(() => ({ category }))
   },
-  backfill_start: undefined,
-  backfill_end: undefined,
+  backfill_start: '',
+  backfill_end: '',
   setBackfillDate: (type: 'start' | 'end', date: string) => {
     set(() => ({
-      [`backfill_${type}`]: date,
+      [`backfill_${type}`]: date ?? '',
     }))
   },
   category: undefined,

@@ -14,6 +14,8 @@ import {
   ContextEnvironment,
   DagApiDagGet200,
   dagApiDagGet,
+  GetEnvironmentsApiEnvironmentsGet200,
+  getEnvironmentsApiEnvironmentsGet,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -42,6 +44,14 @@ export function useApiDag(): UseQueryResult<DagApiDagGet200> {
   return useQuery({
     queryKey: ['/api/dag'],
     queryFn: dagApiDagGet,
+  })
+}
+
+export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
+  return useQuery({
+    queryKey: ['/api/environments'],
+    queryFn: getEnvironmentsApiEnvironmentsGet,
+    cacheTime: 0,
   })
 }
 

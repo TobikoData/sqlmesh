@@ -13,7 +13,7 @@ import {
   RadioGroup,
   Menu,
 } from '@headlessui/react'
-import { useApiContext, useApiPlan, useApiFiles } from '../../../api'
+import { useApiPlan, useApiFiles, useApiEnvironments } from '../../../api'
 import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
@@ -24,7 +24,7 @@ import { useChannel } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import Modal from '../modal/Modal'
-import { isArrayEmpty, isNil, isStringEmptyOrNil } from '~/utils'
+import { isArrayEmpty, isStringEmptyOrNil } from '~/utils'
 import Input from '../input/Input'
 import {
   Environment,
@@ -73,8 +73,8 @@ export function IDE(): JSX.Element {
     updateTasks,
   )
 
-  const { data: context } = useApiContext()
   const { data: project } = useApiFiles()
+  const { data: contextEnvironments } = useApiEnvironments()
   const { refetch, data: plan } = useApiPlan(environment)
 
   useEffect(() => {
@@ -84,10 +84,9 @@ export function IDE(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    if ([context, context?.environments, environments].some(isNil)) return
+    if (contextEnvironments == null || environments == null) return
 
     const newEnvironments = structuredClone(environments)
-    const contextEnvironments = context?.environments ?? {}
 
     Object.keys(contextEnvironments).forEach(envName => {
       const environment = newEnvironments.find(env => env.name === envName)
@@ -103,7 +102,7 @@ export function IDE(): JSX.Element {
     newEnvironments.sort(env => (env.type === 'remote' ? -1 : 1))
 
     setEnvironments(newEnvironments)
-  }, [context])
+  }, [contextEnvironments])
 
   useEffect(() => {
     if (environment == null) return

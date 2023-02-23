@@ -19,7 +19,6 @@ import {
   includes,
   isArrayNotEmpty,
   isFalse,
-  isNotNil,
   toDate,
   toDateFormat,
   toRatio,
