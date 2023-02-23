@@ -6,7 +6,7 @@ import {
 } from '../../../api'
 import { useEffect, MouseEvent } from 'react'
 import { PlanSidebar } from './PlanSidebar'
-import { PlanWizard } from './PlanWizard'
+import PlanWizard from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import { Divider } from '../divider/Divider'
 import {
@@ -108,6 +108,7 @@ export default function Plan({
   }
 
   async function apply<T extends { ok: boolean }>(): Promise<void> {
+    setActivePlan(undefined)
     setPlanState(EnumPlanState.Applying)
 
     const url = `/api/apply?environment=${

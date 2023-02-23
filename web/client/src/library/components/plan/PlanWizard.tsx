@@ -1,26 +1,21 @@
 import { RadioGroup } from '@headlessui/react'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useEffect } from 'react'
+import { lazy, useEffect, useMemo, Suspense } from 'react'
 import { useApiContextByEnvironment } from '../../../api'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
-import {
-  includes,
-  isArrayNotEmpty,
-  toDate,
-  toDateFormat,
-  toRatio,
-} from '../../../utils'
+import { includes, isArrayNotEmpty, toDate, toDateFormat } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Spinner from '../logo/Spinner'
-import Progress from '../progress/Progress'
 import { isModified } from './help'
 
-export function PlanWizard({ id }: { id: string }): JSX.Element {
+const Tasks = lazy(async () => await import('../plan/Tasks'))
+
+export default function PlanWizard({ id }: { id: string }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const setPlanAction = useStorePlan(s => s.setAction)
@@ -36,7 +31,6 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
   const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
-  const activePlan = useStorePlan(s => s.activePlan)
 
   const { data: context } = useApiContextByEnvironment(environment)
 
@@ -81,14 +75,31 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
     elForm.reset()
   }
 
-  const isPlanInProgress =
-    planAction === EnumPlanState.Canceling ||
-    planState === EnumPlanState.Applying
+  const isPlanInProgress = includes(
+    [EnumPlanState.Canceling, EnumPlanState.Applying],
+    planAction,
+  )
   const changes = context?.changes
   const hasChanges =
     isModified(changes?.modified) ||
     isArrayNotEmpty(changes?.added) ||
     isArrayNotEmpty(changes?.removed)
+  const tasks = useMemo(
+    () =>
+      backfills.reduce(
+        (acc, task) =>
+          Object.assign(acc, {
+            [task.model_name]: {
+              completed: 0,
+              ...(plan?.tasks[task.model_name] ?? {}),
+              total: task.batches,
+              interval: task.interval,
+            },
+          }),
+        {},
+      ),
+    [backfills, plan],
+  )
 
   return (
     <ul>
@@ -359,137 +370,76 @@ export function PlanWizard({ id }: { id: string }): JSX.Element {
                     </RadioGroup>
                   </div>
                 )}
-              {category != null && category.id !== 'no-change' && (
-                <>
-                  <ul className="mb-4">
-                    {backfills
-                      .filter(item =>
-                        category.id === 'non-breaking-change'
-                          ? changes?.modified?.indirect?.find(
-                              modelName => modelName === item.model_name,
-                            ) == null
-                          : true,
-                      )
-                      .map(snapshot => (
-                        <li
-                          key={snapshot.model_name}
-                          className="text-gray-600 font-light w-full mb-2"
+              {category != null &&
+                category.id !== 'no-change' &&
+                environment != null && (
+                  <>
+                    <Suspense fallback={<Spinner className="w-4 h-4 mr-2" />}>
+                      <Tasks
+                        environment={environment}
+                        tasks={tasks}
+                        changes={changes}
+                        updated_at={plan?.updated_at}
+                      />
+                    </Suspense>
+                    {
+                      <form className={clsx('flex ml-1 mt-1')}>
+                        <label
+                          className={clsx(
+                            'mb-3 mr-4 text-left',
+                            (isPlanInProgress ||
+                              planAction === EnumPlanAction.Done) &&
+                              'opacity-50 pointer-events-none cursor-not-allowed',
+                          )}
                         >
-                          <div className="flex justify-between items-center w-full">
-                            <div className="flex justify-end items-center whitespace-nowrap text-gray-900">
-                              <p
-                                className={clsx(
-                                  'font-bold text-xs',
-                                  changes?.modified?.direct?.find(
-                                    change =>
-                                      change.model_name === snapshot.model_name,
-                                  ) != null && 'text-secondary-500',
-                                  changes?.added?.find(
-                                    modelName =>
-                                      modelName === snapshot.model_name,
-                                  ) != null && 'text-success-500',
-                                  changes?.modified?.indirect?.find(
-                                    modelName =>
-                                      modelName === snapshot.model_name,
-                                  ) != null && 'text-warning-500',
-                                )}
-                              >
-                                <span className="inline-block pr-3 text-xs text-gray-500">{`${
-                                  snapshot.interval[0] as number
-                                } - ${snapshot.interval[1] as number}`}</span>
-                                {snapshot.model_name}
-                              </p>
-                            </div>
-                            <p className="inline-block text-xs">
-                              <small>
-                                {activePlan?.tasks?.[snapshot.model_name]
-                                  ?.completed ?? 0}{' '}
-                                / {snapshot.batches} batch
-                                {snapshot.batches > 1 ? 'es' : ''}
-                              </small>
-                              <small className="inline-block ml-2 font-bold">
-                                {Math.ceil(
-                                  toRatio(
-                                    activePlan?.tasks?.[snapshot.model_name]
-                                      ?.completed,
-                                    activePlan?.tasks?.[snapshot.model_name]
-                                      ?.total,
-                                  ),
-                                )}
-                                %
-                              </small>
-                            </p>
-                          </div>
-                          <Progress
-                            progress={Math.ceil(
-                              toRatio(
-                                activePlan?.tasks?.[snapshot.model_name]
-                                  ?.completed,
-                                activePlan?.tasks?.[snapshot.model_name]?.total,
-                              ),
-                            )}
+                          <small>Start Date</small>
+                          <input
+                            type="text"
+                            name="start_date"
+                            className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
+                            disabled={
+                              isPlanInProgress ||
+                              planAction === EnumPlanAction.Done
+                            }
+                            value={backfill_start}
+                            onChange={e => {
+                              setBackfillDate('start', e.target.value)
+                            }}
                           />
-                        </li>
-                      ))}
-                  </ul>
-                  {
-                    <form className={clsx('flex ml-1 mt-1')}>
-                      <label
-                        className={clsx(
-                          'mb-3 mr-4 text-left',
-                          (isPlanInProgress ||
-                            planAction === EnumPlanAction.Done) &&
-                            'opacity-50 pointer-events-none cursor-not-allowed',
-                        )}
-                      >
-                        <small>Start Date</small>
-                        <input
-                          type="text"
-                          name="start_date"
-                          className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
-                          disabled={
-                            isPlanInProgress ||
-                            planAction === EnumPlanAction.Done
-                          }
-                          value={backfill_start}
-                          onChange={e => {
-                            setBackfillDate('start', e.target.value)
-                          }}
-                        />
-                        <small className="text-xs text-gray-500">
-                          eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
-                        </small>
-                      </label>
-                      <label
-                        className={clsx(
-                          'mb-3 text-left',
-                          (isPlanInProgress ||
-                            planAction === EnumPlanAction.Done) &&
-                            'opacity-50 pointer-events-none cursor-not-allowed',
-                        )}
-                      >
-                        <small>End Date</small>
-                        <input
-                          type="text"
-                          name="end_date"
-                          className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
-                          disabled={
-                            isPlanInProgress ||
-                            planAction === EnumPlanAction.Done
-                          }
-                          value={backfill_end}
-                          onChange={e => {
-                            setBackfillDate('end', e.target.value)
-                          }}
-                        />
-                        <small className="text-xs text-gray-500">
-                          eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
-                        </small>
-                      </label>
-                    </form>
-                  }
-                </>
-              )}
+                          <small className="text-xs text-gray-500">
+                            eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
+                          </small>
+                        </label>
+                        <label
+                          className={clsx(
+                            'mb-3 text-left',
+                            (isPlanInProgress ||
+                              planAction === EnumPlanAction.Done) &&
+                              'opacity-50 pointer-events-none cursor-not-allowed',
+                          )}
+                        >
+                          <small>End Date</small>
+                          <input
+                            type="text"
+                            name="end_date"
+                            className="block bg-gray-100 px-2 py-1 rounded-md text-sm text-gray-700"
+                            disabled={
+                              isPlanInProgress ||
+                              planAction === EnumPlanAction.Done
+                            }
+                            value={backfill_end}
+                            onChange={e => {
+                              setBackfillDate('end', e.target.value)
+                            }}
+                          />
+                          <small className="text-xs text-gray-500">
+                            eg. &quot;1 year&quot;, &quot;2020-01-01&quot;
+                          </small>
+                        </label>
+                      </form>
+                    }
+                  </>
+                )}
             </>
           ) : (
             <div className="ml-1 text-gray-700">
