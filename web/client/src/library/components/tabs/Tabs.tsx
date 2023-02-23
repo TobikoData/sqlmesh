@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useStoreEditor } from '../../../context/editor'
 import { useStoreFileTree } from '../../../context/fileTree'
-import { isNil } from '~/utils'
+import { isNil, isTrue } from '~/utils'
 
 const TABS = ['Table', 'Query Preview', 'Terminal Output']
 
@@ -26,20 +26,20 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
     [openedFiles, activeFileId],
   )
 
-  const data: any = useMemo(
-    () => (tabTableContent == null ? [] : tabTableContent.toArray()),
+  const [headers, data]: any = useMemo(
+    () =>
+      tabTableContent == null
+        ? [[], []]
+        : [tabTableContent[0] ?? [], tabTableContent[1] ?? []],
     [tabTableContent],
   )
 
   const columns = useMemo(
     () =>
-      tabTableContent == null
-        ? []
-        : tabTableContent.schema.fields.map(field => ({
-            accessorKey: field['name'],
-            cell: (info: any) => info.getValue(),
-          })),
-    [tabTableContent],
+      headers.map((accessorKey: string) => ({
+        accessorKey,
+      })),
+    [headers],
   )
 
   const table = useReactTable({
@@ -47,6 +47,16 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
+
+  const activeTab = useMemo(
+    () =>
+      [
+        Boolean(tabTableContent),
+        Boolean(tabQueryPreviewContent),
+        Boolean(tabTerminalContent),
+      ].findIndex(isTrue),
+    [tabTableContent, tabQueryPreviewContent, tabTerminalContent],
+  )
 
   function isDisabledTabTable(tabName: string): boolean {
     return tabName === 'Table' && isNil(tabTableContent)
@@ -62,7 +72,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
 
   return (
     <div className={clsx('flex flex-col overflow-hidden', className)}>
-      <Tab.Group defaultIndex={1}>
+      <Tab.Group selectedIndex={activeTab}>
         <Tab.List className="w-full whitespace-nowrap px-2 pt-3">
           <div className="w-full overflow-hidden overflow-x-auto py-1">
             {TABS.map(tabName => (
@@ -115,7 +125,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             {table != null && (
               <div className="w-full h-full overflow-hidden overflow-y-auto">
                 <table className="w-full h-full">
-                  <thead className="sticky top-0">
+                  <thead className="sticky top-0 bg-secondary-100">
                     {table.getHeaderGroups().map(headerGroup => (
                       <tr key={headerGroup.id}>
                         {headerGroup.headers.map(header => (

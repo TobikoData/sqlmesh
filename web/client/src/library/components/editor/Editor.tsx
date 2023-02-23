@@ -21,10 +21,12 @@ import {
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
-import { isFalse, isNil, isString, isTrue } from '../../../utils'
+import { isFalse, isNil, isObjectLike, isTrue } from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
 import Input from '../input/Input'
+import { Table } from 'apache-arrow'
+import { ResponseWithDetail } from '~/api/instance'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -215,21 +217,36 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     evaluateApiEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
   }
 
-  function updateTabs(result: string | { detail: string }): void {
-    console.log(typeof result)
+  function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
     const bucket = cache[activeFile.id]
 
-    if (bucket == null) return
+    if (bucket == null || isFalse(isObjectLike(result))) return
 
-    if (isString(result)) {
-      bucket.set(EnumEditorTabs.Table, JSON.parse(result as string))
-      setTabTableContent(bucket.get(EnumEditorTabs.Table))
-    } else if (typeof result === 'object') {
-      bucket.set(EnumEditorTabs.Table, result)
-      setTabTableContent(bucket.get(EnumEditorTabs.Table))
-    } else {
-      bucket.set(EnumEditorTabs.Terminal, (result as { detail: string }).detail)
+    // Potentially a response with details is error
+    // and we need to show it in terminal
+    const isResponseWithDetail = 'detail' in (result as ResponseWithDetail)
+
+    if (isResponseWithDetail) {
+      bucket.set(EnumEditorTabs.Terminal, (result as ResponseWithDetail).detail)
       setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+
+      bucket.set(EnumEditorTabs.Table, undefined)
+      setTabTableContent(bucket.get(EnumEditorTabs.Table))
+
+      bucket.set(EnumEditorTabs.QueryPreview, undefined)
+      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+    } else {
+      bucket.set(EnumEditorTabs.Terminal, undefined)
+      setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+
+      bucket.set(
+        EnumEditorTabs.Table,
+        getTableDataFromArrowStreamResult(result as Table<any>),
+      )
+      setTabTableContent(bucket.get(EnumEditorTabs.Table))
+
+      bucket.set(EnumEditorTabs.QueryPreview, undefined)
+      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
     }
   }
 
@@ -594,5 +611,32 @@ function CodeEditor({
       extensions={extensions}
       onChange={onChange}
     />
+  )
+}
+
+type TableCellValue = number | string | null
+type TableRows = Array<Record<string, TableCellValue>>
+type TableColumns = string[]
+type ResponseTableColumns = Array<Array<[string, TableCellValue]>>
+
+function getTableDataFromArrowStreamResult(
+  result: Table<any>,
+): [TableColumns?, TableRows?] {
+  if (result == null) return []
+
+  const data: ResponseTableColumns = result.toArray() // result.toArray() returns an array of Proxies
+  const rows = Array.from(data).map(toTableRow) // using Array.from to convert the Proxies to real objects
+  const columns = result.schema.fields.map(field => field.name)
+
+  return [columns, rows]
+}
+
+function toTableRow(
+  row: Array<[string, TableCellValue]> = [],
+): Record<string, TableCellValue> {
+  // using Array.from to convert the Proxies to real objects
+  return Array.from(row).reduce(
+    (acc, [key, value]) => Object.assign(acc, { [key]: value }),
+    {},
   )
 }
