@@ -3,16 +3,15 @@ from __future__ import annotations
 import pathlib
 import typing as t
 
-from pydantic import validator
+from pydantic import BaseModel, validator
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.pydantic import PydanticModel
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
 
 
-class File(PydanticModel):
+class File(BaseModel):
     name: str
     path: str
     extension: str = ""
@@ -32,14 +31,14 @@ class File(PydanticModel):
         return v
 
 
-class Directory(PydanticModel):
+class Directory(BaseModel):
     name: str
     path: str
     directories: t.List[Directory] = []
     files: t.List[File] = []
 
 
-class Context(PydanticModel):
+class Context(BaseModel):
     concurrent_tasks: int
     engine_adapter: str
     time_column_format: str
@@ -48,7 +47,7 @@ class Context(PydanticModel):
     config: str
 
 
-class ModelsDiff(PydanticModel):
+class ModelsDiff(BaseModel):
     direct: t.List[t.Dict[str, str]]
     indirect: t.Set[str]
     metadata: t.Set[str]
@@ -84,19 +83,19 @@ class ModelsDiff(PydanticModel):
         )
 
 
-class ContextEnvironmentChanges(PydanticModel):
+class ContextEnvironmentChanges(BaseModel):
     added: t.Set[str]
     removed: t.Set[str]
     modified: ModelsDiff
 
 
-class ContextEnvironmentBackfill(PydanticModel):
+class ContextEnvironmentBackfill(BaseModel):
     model_name: str
     interval: t.Tuple[str, str]
     batches: int
 
 
-class ContextEnvironment(PydanticModel):
+class ContextEnvironment(BaseModel):
     environment: str
     start: TimeLike
     end: TimeLike
@@ -104,7 +103,7 @@ class ContextEnvironment(PydanticModel):
     backfills: t.List[ContextEnvironmentBackfill] = []
 
 
-class EvaluateInput(PydanticModel):
+class EvaluateInput(BaseModel):
     model: str
     start: TimeLike
     end: TimeLike
@@ -112,12 +111,12 @@ class EvaluateInput(PydanticModel):
     limit: t.Optional[int] = None
 
 
-class Model(PydanticModel):
+class Model(BaseModel):
     name: str
     path: str
     description: t.Optional[str]
     owner: t.Optional[str]
 
 
-class Models(PydanticModel):
+class Models(BaseModel):
     models: t.Dict[str, Model]
