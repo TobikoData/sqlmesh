@@ -1,3 +1,3 @@
 SELECT DISTINCT
-  customer_id::INT AS {{ var('customer:customer_id') }}
+  customer_id::INT AS {{ var('customers:customer_id') }}
 FROM {{ source('raw', 'orders') }}

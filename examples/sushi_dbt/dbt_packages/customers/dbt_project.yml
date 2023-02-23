@@ -28,4 +28,4 @@ models:
 vars:
   some_var: 5
   some_other_var: 5
-  'customer:customer_id': "bla"
+  'customers:customer_id': "bla"
