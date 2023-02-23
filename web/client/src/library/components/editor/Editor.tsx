@@ -626,27 +626,24 @@ type TableColumns = string[]
 type ResponseTableColumns = Array<Array<[string, TableCellValue]>>
 
 function getData(data: ResponseTableColumns = []): [TableColumns?, TableRows?] {
-  if (data == null || data[0] == null) return []
+  if (data?.[0] == null) return []
 
-  const columns = [...data[0]].map(
-    ([column]: [string, TableCellValue]) => column,
-  )
   const rows: TableRows = []
+  const columns = Array.from(data[0]).map(([column]) => column)
 
-  for (let rowIndex = 0; rowIndex < data.length && rowIndex < 100; rowIndex++) {
-    const columns = [...(data[rowIndex] ?? [])]
+  for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
+    const row = data[rowIndex]
 
-    if (columns == null) continue
+    if (row == null) continue
 
-    const row = columns.reduce(
-      (acc, [key, value]: [string, TableCellValue]) =>
-        Object.assign(acc, { [key]: value }),
+    const rowColumns = Array.from(row).reduce(
+      (acc, [key, value]) => Object.assign(acc, { [key]: value }),
       {},
     )
 
-    if (isArrayEmpty(row)) continue
+    if (isArrayEmpty(Object.keys(rowColumns))) continue
 
-    rows.push(row)
+    rows.push(rowColumns)
   }
 
   return [columns, rows]
