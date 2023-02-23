@@ -12,6 +12,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.environment import Environment
 from web.server import models
 from web.server.console import ApiConsole
 from web.server.settings import Settings, get_loaded_context, get_settings
@@ -24,6 +25,13 @@ from web.server.utils import (
 
 SSE_DELAY = 1  # second
 router = APIRouter()
+
+
+@router.get("/environments")
+def get_environments(context: Context = Depends(get_loaded_context)) -> t.Dict[str, Environment]:
+    """Get the environments"""
+
+    return {env.name: env for env in context.state_reader.get_environments()}
 
 
 @router.get(
@@ -46,7 +54,6 @@ def get_api_context(
         time_column_format=context.config.time_column_format,
         models=list(context.models),
         config=settings.config,
-        environments={env.name: env for env in context.state_reader.get_environments()},
     )
 
 
