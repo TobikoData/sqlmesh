@@ -29,5 +29,9 @@ models:
 vars:
   top_waiters_limit: 10
 
+  # The following are only used for testing purposes
+  customers:boo: ["a", "b"]
+
   customers:
-    some_var: ["foo", "bar"]  # this is only used for testing purposes
+    some_var: ["foo", "bar"]
+    'customers:bla': false

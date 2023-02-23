@@ -24,7 +24,7 @@ models:
   customers:
       +materialized: view
 
-# These are only used for testing purposes
+# The following are only used for testing purposes
 vars:
   some_var: 5
   some_other_var: 5
