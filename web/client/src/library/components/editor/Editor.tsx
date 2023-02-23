@@ -21,13 +21,7 @@ import {
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
-import {
-  isArrayEmpty,
-  isFalse,
-  isNil,
-  isObjectLike,
-  isTrue,
-} from '../../../utils'
+import { isFalse, isNil, isObjectLike, isTrue } from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
 import Input from '../input/Input'
@@ -247,7 +241,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
       bucket.set(
         EnumEditorTabs.Table,
-        getData((result as Table<any>).toArray()),
+        getTableDataFromArrowStreamResult(result as Table<any>),
       )
       setTabTableContent(bucket.get(EnumEditorTabs.Table))
 
@@ -625,26 +619,28 @@ type TableRows = Array<Record<string, TableCellValue>>
 type TableColumns = string[]
 type ResponseTableColumns = Array<Array<[string, TableCellValue]>>
 
-function getData(data: ResponseTableColumns = []): [TableColumns?, TableRows?] {
-  if (data?.[0] == null) return []
+function getTableDataFromArrowStreamResult(
+  result: Table<any>,
+): [TableColumns?, TableRows?] {
+  if (result == null) return []
 
-  const rows: TableRows = []
-  const columns = Array.from(data[0]).map(([column]) => column)
+  const data: ResponseTableColumns = result.toArray() // result.toArray() returns an array of Proxies
+  const rows = Array.from(data).map(toTableRow) // using Array.from to convert the Proxies to real objects
+  const firstRow = rows[0]
 
-  for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
-    const row = data[rowIndex]
+  if (firstRow == null) return []
 
-    if (row == null) continue
-
-    const rowColumns = Array.from(row).reduce(
-      (acc, [key, value]) => Object.assign(acc, { [key]: value }),
-      {},
-    )
-
-    if (isArrayEmpty(Object.keys(rowColumns))) continue
-
-    rows.push(rowColumns)
-  }
+  const columns = Object.keys(firstRow)
 
   return [columns, rows]
+}
+
+function toTableRow(
+  row: Array<[string, TableCellValue]> = [],
+): Record<string, TableCellValue> {
+  // using Array.from to convert the Proxies to real objects
+  return Array.from(row).reduce(
+    (acc, [key, value]) => Object.assign(acc, { [key]: value }),
+    {},
+  )
 }
