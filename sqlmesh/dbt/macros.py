@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlmesh.core.macros import ExecutableOrMacro
+from sqlmesh.core.model.definition import BUILTIN_METHODS as MODEL_BUILTIN_METHODS
 from sqlmesh.dbt.common import Dependencies
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import PydanticModel
@@ -11,20 +11,19 @@ from sqlmesh.utils.pydantic import PydanticModel
 class MacroConfig(PydanticModel):
     """Container class for macro configuration"""
 
-    macro: ExecutableOrMacro
+    macro: Executable
     dependencies: Dependencies = Dependencies()
 
 
-BUILTIN_METHODS: t.Dict[str, ExecutableOrMacro] = {
+BUILTIN_METHODS: t.Dict[str, Executable] = {
     "is_incremental": Executable(
         payload="def is_incremental(): return False",
     ),
+    **MODEL_BUILTIN_METHODS,
 }
 
 
-def builtin_methods() -> t.Dict[str, ExecutableOrMacro]:
-    """Gets all built-in DBT methods"""
-    return BUILTIN_METHODS
+BUILTIN_METHOD_NAMES: t.Set[str] = {"source", "config", "ref", "var", *BUILTIN_METHODS}
 
 
 def source_method(sources: t.Set[str], mapping: t.Dict[str, str]) -> Executable:
@@ -58,8 +57,10 @@ def ref_method(refs: t.Set[str], mapping: t.Dict[str, str]) -> Executable:
     )
 
 
-def var_method(variables: t.Dict[str, bool], mapping: t.Dict[str, t.Any]) -> Executable:
+def var_method(variables: t.Set[str], mapping: t.Dict[str, t.Any]) -> Executable:
     """Create a var method that only includes the variables specified by the caller."""
+
+    mapping = {k: f"'{v}'" if isinstance(v, str) else v for k, v in mapping.items()}
 
     def variable_map() -> str:
         vars_ = ", ".join(f"'{var}': {mapping[var]}" for var in sorted(variables) if var in mapping)
@@ -68,5 +69,13 @@ def var_method(variables: t.Dict[str, bool], mapping: t.Dict[str, t.Any]) -> Exe
     return Executable(
         payload=f"""def var(key, default=None):
     return {variable_map()}.get(key, default)
+""",
+    )
+
+
+def config_method() -> Executable:
+    return Executable(
+        payload="""def config(*args, **kwargs):
+    return ""
 """,
     )

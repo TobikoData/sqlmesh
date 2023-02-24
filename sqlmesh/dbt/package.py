@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import re
 import typing as t
 from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, Dependencies
-from sqlmesh.dbt.macros import MacroConfig
+from sqlmesh.dbt.macros import BUILTIN_METHOD_NAMES, MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroExtractor, capture_jinja
+from sqlmesh.utils.jinja import MacroExtractor, extract_call_names
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load as yaml_load
@@ -73,6 +72,8 @@ class PackageLoader:
         self._config_paths.add(project_file_path)
         project_yaml = yaml_load(project_file_path)
 
+        self._package_name = project_yaml.get("name", "")
+
         variables = project_yaml.get("vars", {})
 
         self._load_project_config(project_yaml, target_schema)
@@ -115,10 +116,12 @@ class PackageLoader:
             """Recursively loads config and nested configs in the provided yaml"""
             scoped_configs = scoped_configs or {}
 
+            config_fields = parent.all_fields()
+
             nested_config = {}
             fields = {}
             for key, value in data.items():
-                if key.startswith("+"):
+                if key.startswith("+") or key in config_fields:
                     fields[key[1:]] = value
                 else:
                     nested_config[key] = value
@@ -251,21 +254,7 @@ class PackageLoader:
                     name=name,
                     path=str(path),
                 )
-
-                dependencies = Dependencies()
-                if macro.calls:
-                    for method, args, kwargs in macro.calls:
-                        if method == "ref":
-                            dep = ".".join(args + tuple(kwargs.values()))
-                            if dep:
-                                dependencies.refs.add(dep)
-                        elif method == "source":
-                            source = ".".join(args + tuple(kwargs.values()))
-                            if source:
-                                dependencies.sources.add(dep)
-                        else:
-                            dependencies.macros.add(method)
-
+                dependencies = Dependencies(macros=set(macro.calls) - BUILTIN_METHOD_NAMES)
                 macros[name] = MacroConfig(macro=executable, dependencies=dependencies)
 
         return macros
@@ -334,37 +323,10 @@ class PackageLoader:
             update={"path": filepath, "table_name": filepath.stem}
         )
 
-        depends_on = set()
-        calls = set()
-        sources = set()
-        variables = {}
+        calls: t.Set[str] = set(extract_call_names(sql)) - BUILTIN_METHOD_NAMES
 
-        for method, args, kwargs in capture_jinja(sql).calls:
-            if method == "config":
-                if args:
-                    if isinstance(args[0], dict):
-                        model_config.replace(model_config.update_with(args[0]))
-                if kwargs:
-                    model_config.replace(model_config.update_with(kwargs))
-            elif method == "ref":
-                dep = ".".join(args + tuple(kwargs.values()))
-                if dep:
-                    depends_on.add(dep)
-            elif method == "source":
-                source = ".".join(args + tuple(kwargs.values()))
-                if source:
-                    sources.add(source)
-            elif method == "var":
-                if args:
-                    # We map the var key to True if and only if it includes a default value
-                    variables[args[0]] = len(args) > 1
-            else:
-                calls.add(method)
-
-        model_config.sql = self._remove_config_jinja(sql)
-        model_config._dependencies = Dependencies(
-            macros=calls, sources=sources, refs=depends_on, variables=variables
-        )
+        model_config.sql = sql
+        model_config._dependencies = Dependencies(macros=calls)
 
         return model_config
 
@@ -396,7 +358,3 @@ class PackageLoader:
     @classmethod
     def _config_for_scope(cls, scope: Scope, configs: t.Dict[Scope, C]) -> C:
         return configs.get(scope) or cls._config_for_scope(scope[0:-1], configs)
-
-    @classmethod
-    def _remove_config_jinja(cls, query: str) -> str:
-        return re.sub(r"{{\s*config(.|\s)*?}}", "", query).strip()
