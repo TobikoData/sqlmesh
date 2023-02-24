@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import typing as t
 from enum import Enum
 from pathlib import Path
@@ -186,6 +187,10 @@ class ModelConfig(GeneralConfig):
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
+    @property
+    def sql_no_config(self) -> str:
+        return re.sub(r"{{\s*config(.|\s)*?}}", "", self.sql).strip()
+
     def to_sqlmesh(
         self,
         sources: t.Dict[str, SourceConfig],
@@ -201,7 +206,7 @@ class ModelConfig(GeneralConfig):
 
         render_python_env = {
             **BUILTIN_METHODS,
-            **{k: v.macro for k, v in macros.items() if k in macros},
+            **{k: v.macro for k, v in macros.items()},
         }
         self._update_with_rendered_query(
             source_mapping, model_mapping, variables, render_python_env
@@ -223,7 +228,7 @@ class ModelConfig(GeneralConfig):
             for ref in dependencies.refs
         }
 
-        expressions = d.parse(self.sql)
+        expressions = d.parse(self.sql_no_config)
 
         return create_sql_model(
             self.model_name,
@@ -353,16 +358,16 @@ class ModelConfig(GeneralConfig):
             return source_mapping[full_name]
 
         def _config(*args: t.Any, **kwargs: t.Any) -> str:
-            if args:
-                if isinstance(args[0], dict):
-                    self.replace(self.update_with(args[0]))
+            if args and isinstance(args[0], dict):
+                self.replace(self.update_with(args[0]))
             if kwargs:
                 self.replace(self.update_with(kwargs))
             return ""
 
-        QueryRenderer(d.parse(self.sql)[0], "", [], python_env=python_env).render(
-            config=_config,
-            ref=_ref,
-            var=_var,
-            source=_source,
-        )
+        for expression in d.parse(self.sql):
+            QueryRenderer(expression, "", [], python_env=python_env).render(
+                config=_config,
+                ref=_ref,
+                var=_var,
+                source=_source,
+            )

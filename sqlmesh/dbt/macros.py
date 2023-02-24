@@ -23,7 +23,7 @@ BUILTIN_METHODS: t.Dict[str, Executable] = {
 }
 
 
-BUILTIN_METHOD_NAMES: t.Set[str] = {"source", "config", "ref", "var", *BUILTIN_METHODS.keys()}
+BUILTIN_METHOD_NAMES: t.Set[str] = {"source", "config", "ref", "var", *BUILTIN_METHODS}
 
 
 def source_method(sources: t.Set[str], mapping: t.Dict[str, str]) -> Executable:

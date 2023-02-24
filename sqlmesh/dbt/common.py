@@ -34,10 +34,10 @@ class Dependencies(PydanticModel):
 
     def union(self, other: Dependencies) -> Dependencies:
         dependencies = Dependencies()
-        dependencies.macros = self.macros.union(other.macros)
-        dependencies.sources = self.sources.union(other.sources)
-        dependencies.refs = self.refs.union(other.refs)
-        dependencies.variables = self.variables.union(other.variables)
+        dependencies.macros = self.macros | other.macros
+        dependencies.sources = self.sources | other.sources
+        dependencies.refs = self.refs | other.refs
+        dependencies.variables = self.variables | other.variables
 
         return dependencies
 

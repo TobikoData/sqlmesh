@@ -110,7 +110,7 @@ def call_name(node: nodes.Expr) -> str:
     return ""
 
 
-def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Generator[str, None, None]:
+def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[str]:
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
@@ -126,7 +126,7 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Generator[
                 vars_in_scope.add(arg.name)
         elif isinstance(child_node, nodes.Call):
             name = call_name(child_node)
-            if name[0] != "'" and not name.split(".")[0] in vars_in_scope:
+            if name[0] != "'" and name.split(".")[0] not in vars_in_scope:
                 yield name
         yield from find_call_names(child_node, vars_in_scope)
 
