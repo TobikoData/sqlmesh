@@ -112,7 +112,9 @@ export function toRatio(
   return (top / bottom) * multiplier
 }
 
-export function parseJSON<T>(value: string | null): T | undefined {
+export function parseJSON<T>(value: string | null): Optional<T> {
+  if (value == null) return undefined
+
   try {
     return value === 'undefined' ? undefined : JSON.parse(value ?? '')
   } catch {
