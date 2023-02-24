@@ -1,13 +1,13 @@
-import { Button } from '../button/Button'
+import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import { FolderTree } from '../folderTree/FolderTree'
-import { Fragment, useEffect, MouseEvent, useState, lazy } from 'react'
+import { Fragment, useEffect, MouseEvent, useState, lazy, useMemo } from 'react'
 import clsx from 'clsx'
-import { PlayIcon } from '@heroicons/react/24/solid'
+import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
-import { Transition, Dialog, Popover } from '@headlessui/react'
-import { useApiFiles } from '../../../api'
+import { Transition, Dialog, Popover, Menu } from '@headlessui/react'
+import { useApiPlan, useApiFiles, useApiEnvironments } from '../../../api'
 import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
@@ -16,21 +16,44 @@ import {
 } from '../../../context/plan'
 import { useChannel } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
+import {
+  includes,
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isStringEmptyOrNil,
+} from '~/utils'
+import Input from '../input/Input'
+import {
+  EnumRelativeLocation,
+  Environment,
+  EnvironmentName,
+  useStoreContext,
+} from '~/context/context'
+import Spinner from '../logo/Spinner'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
-const Spinner = lazy(async () => await import('../logo/Spinner'))
 const Tasks = lazy(async () => await import('../plan/Tasks'))
 
+export interface Profile {
+  environment: string
+  environments: Environment[]
+}
+
 export function IDE(): JSX.Element {
+  const { refetch: getEnvironmentsFromAPI, data: contextEnvironemnts } =
+    useApiEnvironments()
+
+  const environment = useStoreContext(s => s.environment)
+  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
+
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
+  const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
-  const setActivePlan = useStorePlan(s => s.setActivePlan)
   const setLastPlan = useStorePlan(s => s.setLastPlan)
-  const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
-  const setEnvironment = useStorePlan(s => s.setEnvironment)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
   const [isGraphOpen, setIsGraphOpen] = useState(false)
@@ -43,10 +66,18 @@ export function IDE(): JSX.Element {
   const { data: project } = useApiFiles()
 
   useEffect(() => {
+    void getEnvironmentsFromAPI()
+
     if (getChannel() == null) {
       subscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (contextEnvironemnts == null) return
+
+    addRemoteEnvironments(Object.keys(contextEnvironemnts))
+  }, [contextEnvironemnts])
 
   function closePlan(): void {
     setPlanAction(EnumPlanAction.Closing)
@@ -54,31 +85,20 @@ export function IDE(): JSX.Element {
 
   function cancelPlan(): void {
     if (planAction === EnumPlanAction.Applying) {
-      setPlanState(EnumPlanState.Canceling)
+      setPlanState(EnumPlanState.Cancelling)
     }
 
     if (planAction !== EnumPlanAction.None) {
-      setPlanAction(EnumPlanAction.Canceling)
+      setPlanAction(EnumPlanAction.Cancelling)
     }
 
     fetchAPI({ url: '/api/plan/cancel', method: 'post' }).catch(console.error)
 
     setPlanState(EnumPlanState.Cancelled)
-    setLastPlan(plan)
+    setLastPlan(mostRecentPlan)
 
     getChannel()?.close()
     unsubscribe()
-
-    if (planAction !== EnumPlanAction.None) {
-      startPlan()
-    }
-  }
-
-  function startPlan(): void {
-    setActivePlan(undefined)
-    setPlanState(EnumPlanState.Init)
-    setPlanAction(EnumPlanAction.Opening)
-    setEnvironment(undefined)
   }
 
   function showGraph(): void {
@@ -101,6 +121,7 @@ export function IDE(): JSX.Element {
 
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
+            className="mr-4"
             variant="alternative"
             size={EnumSize.sm}
             onClick={(e: MouseEvent) => {
@@ -111,37 +132,8 @@ export function IDE(): JSX.Element {
           >
             Graph
           </Button>
-          <Button
-            className="min-w-[6rem] justify-between"
-            disabled={
-              planAction !== EnumPlanAction.None ||
-              planState === EnumPlanState.Applying ||
-              planState === EnumPlanState.Canceling
-            }
-            variant="primary"
-            size={EnumSize.sm}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              startPlan()
-            }}
-          >
-            {planState === EnumPlanState.Applying ||
-              (planState === EnumPlanState.Canceling && (
-                <Spinner className="w-3 h-3 mr-1" />
-              ))}
-            <span className="inline-block mr-3 min-w-20">
-              {planState === EnumPlanState.Applying
-                ? 'Applying Plan...'
-                : planState === EnumPlanState.Canceling
-                ? 'Canceling Plan...'
-                : planAction !== EnumPlanAction.None
-                ? 'Setting Plan...'
-                : 'Run Plan'}
-            </span>
-            <PlayIcon className="w-[1rem] h-[1rem] text-inherit" />
-          </Button>
-          {plan != null && (
+          {environment != null && <RunPlan environment={environment} />}
+          {mostRecentPlan != null && (
             <Popover className="relative flex">
               {() => (
                 <>
@@ -160,7 +152,7 @@ export function IDE(): JSX.Element {
                         'bg-gray-100 text-gray-500',
                     )}
                   >
-                    {plan == null ? 0 : 1}
+                    {mostRecentPlan == null ? 0 : 1}
                   </Popover.Button>
                   <Transition
                     as={Fragment}
@@ -174,9 +166,9 @@ export function IDE(): JSX.Element {
                     <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
                       <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
                         <Tasks
-                          environment={plan.environment}
-                          tasks={plan.tasks}
-                          updated_at={plan.updated_at}
+                          environment={mostRecentPlan.environment}
+                          tasks={mostRecentPlan.tasks}
+                          updated_at={mostRecentPlan.updated_at}
                         />
                         <div className="my-4 px-4">
                           {planState === EnumPlanState.Applying && (
@@ -213,6 +205,7 @@ export function IDE(): JSX.Element {
       </SplitPane>
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
+
       <Transition
         appear
         show={
@@ -255,9 +248,11 @@ export function IDE(): JSX.Element {
               >
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
                   {isGraphOpen && <Graph closeGraph={closeGraph} />}
-                  {planAction !== EnumPlanAction.None &&
+                  {environment != null &&
+                    planAction !== EnumPlanAction.None &&
                     planAction !== EnumPlanAction.Closing && (
                       <Plan
+                        environment={environment}
                         onClose={closePlan}
                         onCancel={cancelPlan}
                       />
@@ -269,5 +264,277 @@ export function IDE(): JSX.Element {
         </Dialog>
       </Transition>
     </>
+  )
+}
+
+function RunPlan({
+  environment,
+}: {
+  environment: EnvironmentName
+}): JSX.Element {
+  const planState = useStorePlan(s => s.state)
+  const planAction = useStorePlan(s => s.action)
+
+  const environments = useStoreContext(s => s.environments)
+  const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
+  const setEnvironment = useStoreContext(s => s.setEnvironment)
+  const addLocalEnvironments = useStoreContext(s => s.addLocalEnvironments)
+  const removeLocalEnvironments = useStoreContext(
+    s => s.removeLocalEnvironments,
+  )
+
+  const setPlanState = useStorePlan(s => s.setState)
+  const setPlanAction = useStorePlan(s => s.setAction)
+  const setActivePlan = useStorePlan(s => s.setActivePlan)
+
+  const [customEnvironment, setCustomEnvironment] = useState<string>('')
+
+  const { refetch: refetchEnvironments } = useApiEnvironments()
+  const {
+    refetch: refetchPlan,
+    isLoading,
+    data: plan,
+  } = useApiPlan(environment)
+
+  const changes = useMemo(() => plan?.changes, [plan])
+
+  useEffect(() => {
+    if (environment != null) {
+      void refetchPlan()
+    }
+  }, [environment])
+
+  useEffect(() => {
+    if (planState === EnumPlanState.Finished) {
+      void refetchPlan()
+      void refetchEnvironments()
+    }
+  }, [planState])
+
+  function startPlan(): void {
+    setActivePlan(undefined)
+    setPlanState(EnumPlanState.Init)
+    setPlanAction(EnumPlanAction.Run)
+  }
+
+  return (
+    <div
+      className={clsx(
+        'flex items-center relative border my-1 rounded-md',
+        environment == null &&
+          'opacity-50 pointer-events-none cursor-not-allowed',
+      )}
+    >
+      <div>
+        <Button
+          className="rounded-none rounded-l-md border-r border-secondary-200 mx-0 my-0"
+          disabled={
+            isLoading ||
+            planAction !== EnumPlanAction.None ||
+            planState === EnumPlanState.Applying ||
+            planState === EnumPlanState.Cancelling
+          }
+          variant="primary"
+          size={EnumSize.sm}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            startPlan()
+          }}
+        >
+          {includes(
+            [EnumPlanState.Applying, EnumPlanState.Cancelling],
+            planState,
+          ) && <Spinner className="w-3 h-3 mr-1" />}
+          <span className="inline-block">
+            {planState === EnumPlanState.Applying
+              ? 'Applying Plan...'
+              : planState === EnumPlanState.Cancelling
+              ? 'Cancelling Plan...'
+              : planAction !== EnumPlanAction.None
+              ? 'Setting Plan...'
+              : 'Run Plan'}
+          </span>
+        </Button>
+      </div>
+      {environment != null && (
+        <div>
+          <Menu>
+            {() => (
+              <>
+                <ButtonMenu
+                  variant="primary"
+                  size={EnumSize.sm}
+                  disabled={
+                    isLoading ||
+                    planAction !== EnumPlanAction.None ||
+                    planState === EnumPlanState.Applying ||
+                    planState === EnumPlanState.Cancelling
+                  }
+                  className="flex rounded-none rounded-r-md border-l border-secondary-200 mx-0 my-0 py-[0.25rem]"
+                >
+                  <span className="block overflow-hidden truncate text-gray-900">
+                    {environment}
+                  </span>
+                  <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2 text-gray-900">
+                    <ChevronDownIcon
+                      className="h-4 w-4"
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <span className="flex ml-1">
+                    {isLoading && (
+                      <span className="flex items-center ml-2">
+                        <Spinner className="w-3 h-3 mr-1" />
+                        <span className="inline-block ">Checking...</span>
+                      </span>
+                    )}
+                    {isNil(changes) && isFalse(isLoading) && (
+                      <span
+                        title="Latest"
+                        className="block h-4 ml-1 px-2 first-child:ml-0 rounded-full bg-gray-200 text-gray-900 p-[0.125rem] text-xs leading-[0.75rem] text-center"
+                      >
+                        latest
+                      </span>
+                    )}
+                    {isArrayNotEmpty(changes?.added) && (
+                      <span
+                        title="Models Added"
+                        className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-success-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
+                      >
+                        {changes?.added.length}
+                      </span>
+                    )}
+                    {isArrayNotEmpty(changes?.modified?.direct) && (
+                      <span
+                        title="Models Modified Directly"
+                        className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-secondary-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
+                      >
+                        {changes?.modified.direct.length}
+                      </span>
+                    )}
+                    {isArrayNotEmpty(changes?.modified?.indirect) && (
+                      <span
+                        title="Models Modified Indirectly"
+                        className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-warning-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
+                      >
+                        {changes?.modified.indirect.length}
+                      </span>
+                    )}
+                    {isArrayNotEmpty(changes?.removed) && (
+                      <span
+                        title="Models Removed"
+                        className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-danged-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
+                      >
+                        {changes?.removed.length}
+                      </span>
+                    )}
+                  </span>
+                </ButtonMenu>
+                <Transition
+                  as={Fragment}
+                  leave="transition ease-in duration-100"
+                  leaveFrom="opacity-100"
+                  leaveTo="opacity-0"
+                >
+                  <div className="absolute right-0 overflow-hidden mt-2 shadow-lg bg-white rounded-md flex flex-col">
+                    <Menu.Items className="overflow-auto max-h-80  py-2 scrollbar scrollbar--vertical">
+                      {environments.map(env => (
+                        <Menu.Item key={env.name}>
+                          {({ active }) => (
+                            <div
+                              onClick={(e: MouseEvent) => {
+                                e.stopPropagation()
+
+                                setEnvironment(env.name)
+                              }}
+                              className={clsx(
+                                'flex justify-between items-center px-4 py-1 text-gray-900 cursor-pointer overflow-auto',
+                                active && 'bg-secondary-100',
+                                env.name === environment &&
+                                  'pointer-events-none cursor-default',
+                              )}
+                            >
+                              <div className="flex items-center">
+                                <CheckCircleIcon
+                                  className={clsx(
+                                    'w-5 h-5 text-secondary-500',
+                                    active && 'opacity-10',
+                                    env.name !== environment && 'opacity-0',
+                                  )}
+                                />
+                                <span
+                                  className={clsx(
+                                    'block truncate ml-2',
+                                    env.type === EnumRelativeLocation.Remote
+                                      ? 'text-secondary-500'
+                                      : 'text-gray-700',
+                                  )}
+                                >
+                                  {env.name}
+                                </span>
+                                <small className="block ml-2 text-gray-400">
+                                  ({env.type})
+                                </small>
+                              </div>
+                              {env.type === EnumRelativeLocation.Local &&
+                                env.name !== environment && (
+                                  <Button
+                                    className="my-0 mx-0"
+                                    size={EnumSize.xs}
+                                    variant="alternative"
+                                    onClick={(e: MouseEvent) => {
+                                      e.stopPropagation()
+
+                                      removeLocalEnvironments([env.name])
+                                    }}
+                                  >
+                                    -
+                                  </Button>
+                                )}
+                            </div>
+                          )}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Items>
+                    <Divider />
+                    <div className="flex w-full items-end p-2">
+                      <Input
+                        className="my-0 mx-0 mr-4 min-w-[10rem]"
+                        size={EnumSize.sm}
+                        placeholder="Environment"
+                        value={customEnvironment}
+                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          e.stopPropagation()
+
+                          setCustomEnvironment(e.target.value)
+                        }}
+                      />
+                      <Button
+                        className="my-0 mx-0"
+                        size={EnumSize.sm}
+                        disabled={
+                          isStringEmptyOrNil(customEnvironment) ||
+                          isExistingEnvironment(customEnvironment)
+                        }
+                        onClick={(e: MouseEvent) => {
+                          e.stopPropagation()
+
+                          setCustomEnvironment('')
+
+                          addLocalEnvironments([customEnvironment])
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </Transition>
+              </>
+            )}
+          </Menu>
+        </div>
+      )}
+    </div>
   )
 }

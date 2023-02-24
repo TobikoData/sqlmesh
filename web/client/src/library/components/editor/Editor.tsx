@@ -27,6 +27,7 @@ import './Editor.css'
 import Input from '../input/Input'
 import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
+import type { File } from '../../../api/client'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -80,9 +81,15 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
-    onSuccess() {
+    onSuccess(file: File) {
       setIsSaved(true)
       setEditorFileStatus(EnumEditorFileStatus.Edit)
+
+      if (file == null) return
+
+      activeFile.content = file.content ?? ''
+
+      setOpenedFiles(openedFiles)
     },
     onMutate() {
       setIsSaved(false)
@@ -284,7 +291,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           >
             <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
           </Button>
-          <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar">
+          <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
             {openedFiles.size > 0 &&
               [...openedFiles.values()].map((file, idx) => (
                 <li
@@ -330,7 +337,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
-            minSize={[320, 240]}
+            minSize={[320, activeFile.content === '' ? 0 : 240]}
             maxSize={[Infinity, 320]}
             snapOffset={0}
             expandToMin={true}
@@ -518,6 +525,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
             </div>
           </SplitPane>
         </div>
+
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <div className="flex align-center mr-4">

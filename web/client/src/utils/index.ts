@@ -14,6 +14,10 @@ export function isString(value: unknown): boolean {
   return typeof value === 'string'
 }
 
+export function isStringEmptyOrNil(value: unknown): boolean {
+  return isNil(value) || value === ''
+}
+
 export function isArrayNotEmpty(value: unknown): boolean {
   return Array.isArray(value) && value.length > 0
 }
@@ -106,4 +110,15 @@ export function toRatio(
   if (isNaN(top) || isNaN(bottom) || isNaN(multiplier)) return 0
 
   return (top / bottom) * multiplier
+}
+
+export function parseJSON<T>(value: string | null): Optional<T> {
+  if (value == null) return undefined
+
+  try {
+    return value === 'undefined' ? undefined : JSON.parse(value ?? '')
+  } catch {
+    console.log('parsing error on', { value })
+    return undefined
+  }
 }

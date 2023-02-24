@@ -9,16 +9,15 @@ export const EnumPlanAction = {
   Running: 'running',
   Apply: 'apply',
   Applying: 'applying',
-  Canceling: 'canceling',
+  Cancelling: 'cancelling',
   Resetting: 'resetting',
   Closing: 'closing',
-  Opening: 'opening',
 } as const
 
 export const EnumPlanState = {
   Init: 'init',
   Applying: 'applying',
-  Canceling: 'canceling',
+  Cancelling: 'cancelling',
   Finished: 'finished',
   Failed: 'failed',
   Cancelled: 'cancelled',
@@ -50,6 +49,18 @@ interface PlanProgress {
   updated_at: string
 }
 
+interface PlanOptions {
+  skipTests: boolean
+  noGaps: boolean
+  skipBackfill: boolean
+  forwardOnly: boolean
+  autoApply: boolean
+  start: string
+  end: string
+  from: string
+  restateModel: string
+}
+
 interface PlanStore {
   state: PlanState
   action: PlanAction
@@ -57,14 +68,12 @@ interface PlanStore {
   setLastPlan: (lastPlan?: PlanProgress) => void
   setState: (state: PlanState) => void
   setAction: (action: PlanAction) => void
-  setEnvironment: (environment?: string) => void
   setCategory: (category?: Category) => void
   activePlan?: PlanProgress
   lastPlan?: PlanProgress
-  backfill_start?: string
-  backfill_end?: string
+  backfill_start: string
+  backfill_end: string
   setBackfillDate: (type: 'start' | 'end', date: string) => void
-  environment?: string
   category?: Category
   categories: Category[]
   withBackfill: boolean
@@ -76,13 +85,35 @@ interface PlanStore {
     channel: EventSource,
     unsubscribe: () => void,
   ) => void
+  planOptions: PlanOptions
+  setPlanOptions: (planOptions: Partial<PlanOptions>) => void
+  resetPlanOptions: () => void
+}
+
+const planDefaultOptions: PlanOptions = {
+  skipTests: false,
+  noGaps: false,
+  skipBackfill: false,
+  forwardOnly: true,
+  autoApply: false,
+  start: '',
+  end: '',
+  from: '',
+  restateModel: '',
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
+  planOptions: planDefaultOptions,
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
   activePlan: undefined,
   lastPlan: undefined,
+  setPlanOptions: (planOptions: Partial<PlanOptions>) => {
+    set(s => ({ planOptions: { ...s.planOptions, ...planOptions } }))
+  },
+  resetPlanOptions: () => {
+    set(() => ({ planOptions: planDefaultOptions }))
+  },
   setActivePlan: (activePlan?: PlanProgress) => {
     set(() => ({ activePlan }))
   },
@@ -95,20 +126,16 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setAction: (action: PlanAction) => {
     set(() => ({ action }))
   },
-  setEnvironment: (environment?: string) => {
-    set(() => ({ environment }))
-  },
   setCategory: (category?: Category) => {
     set(() => ({ category }))
   },
-  backfill_start: undefined,
-  backfill_end: undefined,
+  backfill_start: '',
+  backfill_end: '',
   setBackfillDate: (type: 'start' | 'end', date: string) => {
     set(() => ({
-      [`backfill_${type}`]: date,
+      [`backfill_${type}`]: date ?? '',
     }))
   },
-  environment: undefined,
   category: undefined,
   categories: getCategories(),
   withBackfill: true,
