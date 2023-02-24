@@ -27,4 +27,13 @@ models:
     +materialized: table
 
 vars:
-  top_waiters_limit: 10
+  top_waiters:limit: 10
+  'top_waiters:revenue': "revenue"
+
+  # The following are only used for testing purposes
+  customers:boo: ["a", "b"]
+
+  customers:
+    some_var: ["foo", "bar"]
+    'customers:bla': false
+    'customers:customer_id': "customer_id"

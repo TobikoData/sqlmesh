@@ -103,7 +103,7 @@ def test_model_config(sushi_dbt_project: Project):
     assert customer_revenue_by_day_config.model_name == "sushi.customer_revenue_by_day"
 
 
-def test_variables(assert_exp_eq):
+def test_variables(assert_exp_eq, sushi_dbt_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
     model_variables = {"foo"}
@@ -135,6 +135,22 @@ def test_variables(assert_exp_eq):
     del defined_variables["foo"]
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
+
+    # Finally, check that variable scoping & overwriting (some_var) works as expected
+    expected_sushi_variables = {
+        "top_waiters:limit": 10,
+        "top_waiters:revenue": "revenue",
+        "customers:boo": ["a", "b"],
+    }
+    expected_customer_variables = {
+        "some_var": ["foo", "bar"],
+        "some_other_var": 5,
+        "customers:bla": False,
+        "customers:customer_id": "customer_id",
+    }
+
+    assert sushi_dbt_project.packages["sushi"].variables == expected_sushi_variables
+    assert sushi_dbt_project.packages["customers"].variables == expected_customer_variables
 
 
 def test_source_config(sushi_dbt_project: Project):

@@ -74,7 +74,12 @@ class PackageLoader:
 
         self._package_name = project_yaml.get("name", "")
 
-        variables = project_yaml.get("vars", {})
+        # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
+        variables = {
+            var: value
+            for var, value in project_yaml.get("vars", {}).items()
+            if not isinstance(value, dict)
+        }
 
         self._load_project_config(project_yaml, target_schema)
 
