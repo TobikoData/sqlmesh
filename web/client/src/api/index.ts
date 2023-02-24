@@ -52,6 +52,7 @@ export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironme
     queryKey: ['/api/environments'],
     queryFn: getEnvironmentsApiEnvironmentsGet,
     cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -63,9 +64,9 @@ export function useApiContext(): UseQueryResult<Context> {
   })
 }
 
-export function useApiPlan(value?: string): UseQueryResult<ContextEnvironment> {
-  const environment = value ?? ''
-
+export function useApiPlan(
+  environment: string,
+): UseQueryResult<ContextEnvironment> {
   return useQuery({
     queryKey: [`/api/plan`, environment],
     queryFn: async () => await getPlanApiPlanGet({ environment }),

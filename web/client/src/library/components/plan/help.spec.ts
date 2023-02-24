@@ -35,11 +35,11 @@ describe('getActionName', () => {
     expect(result).toBe(expected)
   })
 
-  it('should return "Canceling..." when action is EnumPlanAction.Canceling', () => {
-    const action = EnumPlanAction.Canceling
-    const options = [EnumPlanAction.Canceling]
+  it('should return "Cancelling..." when action is EnumPlanAction.Cancelling', () => {
+    const action = EnumPlanAction.Cancelling
+    const options = [EnumPlanAction.Cancelling]
     const fallback = 'Start'
-    const expected = 'Canceling...'
+    const expected = 'Cancelling...'
 
     const result = getActionName(action, options, fallback)
 

@@ -1,6 +1,6 @@
 import { Button } from '../button/Button'
-import { useApiContext, useApiPlan, useApiContextCancel } from '../../../api'
-import { useEffect, MouseEvent } from 'react'
+import { useApiPlan, useApiContextCancel } from '../../../api'
+import { useEffect, MouseEvent, useMemo } from 'react'
 import PlanWizard from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -11,19 +11,23 @@ import {
 import fetchAPI from '../../../api/instance'
 import {
   includes,
-  isArrayEmpty,
+  isArrayNotEmpty,
   isFalse,
   isStringEmptyOrNil,
+  toDate,
+  toDateFormat,
 } from '../../../utils'
 import { useChannel } from '../../../api/channels'
-import { getActionName } from './help'
+import { getActionName, isModified } from './help'
 import { Divider } from '../divider/Divider'
-import { useStoreContext } from '~/context/context'
+import { EnvironmentName, useStoreContext } from '~/context/context'
 
 export default function Plan({
+  environment,
   onClose,
   onCancel,
 }: {
+  environment: EnvironmentName
   onClose: () => void
   onCancel: () => void
 }): JSX.Element {
@@ -31,74 +35,68 @@ export default function Plan({
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
+  const backfill_start = useStorePlan(s => s.backfill_start)
+  const backfill_end = useStorePlan(s => s.backfill_end)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
-
   const setWithBackfill = useStorePlan(s => s.setWithBackfill)
   const setBackfills = useStorePlan(s => s.setBackfills)
+  const setBackfillDate = useStorePlan(s => s.setBackfillDate)
   const updateTasks = useStorePlan(s => s.updateTasks)
-  const backfill_start = useStorePlan(s => s.backfill_start)
-  const backfill_end = useStorePlan(s => s.backfill_end)
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
-  const prod = useStoreContext(s => s.prod)
-  const environment = useStoreContext(s => s.environment)
-  const setEnvironment = useStoreContext(s => s.setEnvironment)
-  const environments = useStoreContext(s => s.environments)
-  const setEnvironments = useStoreContext(s => s.setEnvironments)
-
+  const { refetch, data } = useApiPlan(environment)
   const [subscribe] = useChannel('/api/tasks', updateTasks)
-  const { refetch, data: contextPlan } = useApiPlan(environment)
-  const { data: context } = useApiContext()
 
-  useEffect(() => {
-    setPlanAction(EnumPlanAction.Run)
-  }, [])
-
-  useEffect(() => {
-    if (contextPlan == null || contextPlan.environment == null) return
-
-    setEnvironment(contextPlan.environment)
-
-    environments.forEach(env => {
-      if (env.name === contextPlan.environment) {
-        env.type = 'remote'
-      }
-    })
-
-    setEnvironments([...environments])
-  }, [contextPlan])
-
-  useEffect(() => {
-    if (environment != null) return
-
-    if (
-      includes(
-        [EnumPlanAction.None, EnumPlanAction.Opening, EnumPlanAction.Resetting],
-        planAction,
-      )
-    ) {
-      setPlanAction(EnumPlanAction.Run)
-    }
-  }, [environment])
+  const plan = useMemo(() => {
+    return [
+      data?.environment == null,
+      planAction === EnumPlanAction.Run,
+      planAction === EnumPlanAction.Done,
+    ].some(Boolean)
+      ? undefined
+      : data
+  }, [data, planAction])
+  const changes = useMemo(() => plan?.changes, [plan])
+  const hasChanges = useMemo(
+    () =>
+      [
+        isModified(changes?.modified),
+        isArrayNotEmpty(changes?.added),
+        isArrayNotEmpty(changes?.removed),
+      ].some(Boolean),
+    [changes],
+  )
 
   useEffect(() => {
     if (planState === EnumPlanState.Applying) {
       setPlanAction(EnumPlanAction.Applying)
     }
 
-    if (planState === EnumPlanState.Canceling) {
-      setPlanAction(EnumPlanAction.Canceling)
+    if (planState === EnumPlanState.Cancelling) {
+      setPlanAction(EnumPlanAction.Cancelling)
     }
 
-    if (
-      planState === EnumPlanState.Finished ||
-      planState === EnumPlanState.Failed
-    ) {
+    if (includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)) {
       setPlanAction(EnumPlanAction.Done)
     }
   }, [planState])
+
+  useEffect(() => {
+    if (plan == null) return
+
+    setBackfills(plan.backfills)
+
+    if (isArrayNotEmpty(plan.backfills) || hasChanges) {
+      setPlanAction(EnumPlanAction.Apply)
+    } else {
+      setPlanAction(EnumPlanAction.Done)
+    }
+
+    setBackfillDate('start', toDateFormat(toDate(plan.start)))
+    setBackfillDate('end', toDateFormat(toDate(plan.end)))
+  }, [plan])
 
   function cleanUp(): void {
     void useApiContextCancel(client)
@@ -116,7 +114,7 @@ export default function Plan({
 
     if (
       planState !== EnumPlanState.Applying &&
-      planState !== EnumPlanState.Canceling
+      planState !== EnumPlanState.Cancelling
     ) {
       setPlanAction(EnumPlanAction.Run)
     }
@@ -140,7 +138,7 @@ export default function Plan({
           end: backfill_end,
         },
         params: {
-          environment: environment ?? prod.name,
+          environment,
         },
       })
 
@@ -165,28 +163,30 @@ export default function Plan({
   }
 
   return (
-    <div className="flex w-full max-h-[90vh]">
-      <div className="flex flex-col overflow-hidden w-full">
-        {isArrayEmpty(context?.models) ? (
-          <div className="flex items-center justify-center w-full h-full">
-            <h2 className="text-2xl font-black text-gray-700">
-              No Models Found
-            </h2>
-          </div>
-        ) : (
-          <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
-            <PlanWizard />
-          </div>
-        )}
-        <Divider />
-        <PlanActions
-          apply={apply}
-          run={run}
-          cancel={cancel}
-          close={close}
-          reset={reset}
+    <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
+      <div className="h-full w-full py-4 px-6">
+        <h4 className="text-xl">
+          <span className="font-bold">Target Environment is</span>
+          <b className="ml-2 px-2 py-1 font-sm rounded-md bg-secondary-500 text-secondary-100">
+            {environment}
+          </b>
+        </h4>
+      </div>
+      <Divider />
+      <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
+        <PlanWizard
+          environment={environment}
+          changes={changes}
         />
       </div>
+      <Divider />
+      <PlanActions
+        apply={apply}
+        run={run}
+        cancel={cancel}
+        close={close}
+        reset={reset}
+      />
     </div>
   )
 }
@@ -217,12 +217,16 @@ function PlanActions({
     planAction === EnumPlanAction.Apply ||
     planAction === EnumPlanAction.Applying
   const isProcessing = includes(
-    [EnumPlanAction.Running, EnumPlanAction.Applying, EnumPlanAction.Canceling],
+    [
+      EnumPlanAction.Running,
+      EnumPlanAction.Applying,
+      EnumPlanAction.Cancelling,
+    ],
     planAction,
   )
 
   return (
-    <div className="flex justify-between px-4 py-2 ">
+    <div className="flex justify-between px-4 py-2">
       <div className="flex w-full items-center">
         {isRunning && (
           <>
@@ -280,9 +284,9 @@ function PlanActions({
             }}
             variant="danger"
             className="justify-self-end"
-            disabled={planAction === EnumPlanAction.Canceling}
+            disabled={planAction === EnumPlanAction.Cancelling}
           >
-            {getActionName(planAction, [EnumPlanAction.Canceling], 'Cancel')}
+            {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
           </Button>
         )}
       </div>
@@ -300,7 +304,7 @@ function PlanActions({
               [
                 EnumPlanAction.Resetting,
                 EnumPlanAction.Applying,
-                EnumPlanAction.Canceling,
+                EnumPlanAction.Cancelling,
                 EnumPlanAction.Closing,
               ],
               planAction,
@@ -327,7 +331,7 @@ function PlanActions({
             [
               EnumPlanAction.Closing,
               EnumPlanAction.Resetting,
-              EnumPlanAction.Canceling,
+              EnumPlanAction.Cancelling,
             ],
             planAction,
           )}

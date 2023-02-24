@@ -9,16 +9,15 @@ export const EnumPlanAction = {
   Running: 'running',
   Apply: 'apply',
   Applying: 'applying',
-  Canceling: 'canceling',
+  Cancelling: 'cancelling',
   Resetting: 'resetting',
   Closing: 'closing',
-  Opening: 'opening',
 } as const
 
 export const EnumPlanState = {
   Init: 'init',
   Applying: 'applying',
-  Canceling: 'canceling',
+  Cancelling: 'cancelling',
   Finished: 'finished',
   Failed: 'failed',
   Cancelled: 'cancelled',

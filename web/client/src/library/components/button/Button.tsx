@@ -104,6 +104,7 @@ export function ButtonMenu({
   shape = 'rounded',
   size = EnumSize.md,
   children = [],
+  disabled = false,
   className,
 }: PropsButton): JSX.Element {
   return (
@@ -112,11 +113,14 @@ export function ButtonMenu({
         'whitespace-nowrap flex m-1 items-center justify-center',
         'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
         'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
-        VARIANT.get(variant),
         SHAPE.get(shape),
         SIZE.get(size),
+        disabled
+          ? 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed'
+          : VARIANT.get(variant),
         className,
       )}
+      disabled={disabled}
     >
       {children}
     </Menu.Button>

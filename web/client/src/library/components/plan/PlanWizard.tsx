@@ -5,9 +5,9 @@ import {
   PlusCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { lazy, useEffect, useMemo, Suspense } from 'react'
-import { useStoreContext } from '~/context/context'
-import { useApiPlan } from '../../../api'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
+import { ContextEnvironmentChanges } from '~/api/client'
+import { EnvironmentName } from '~/context/context'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -28,68 +28,36 @@ import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
 
-export default function PlanWizard(): JSX.Element {
+export default function PlanWizard({
+  environment,
+  changes,
+}: {
+  environment: EnvironmentName
+  changes?: ContextEnvironmentChanges
+}): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-  const setPlanAction = useStorePlan(s => s.setAction)
   const backfills = useStorePlan(s => s.backfills)
-  const setBackfills = useStorePlan(s => s.setBackfills)
-  const setCategory = useStorePlan(s => s.setCategory)
+
   const category = useStorePlan(s => s.category)
   const categories = useStorePlan(s => s.categories)
-  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
-  const setBackfillDate = useStorePlan(s => s.setBackfillDate)
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
   const plan = useStorePlan(s => s.lastPlan ?? s.activePlan)
+  const setCategory = useStorePlan(s => s.setCategory)
+  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
+  const setBackfillDate = useStorePlan(s => s.setBackfillDate)
 
-  const environment = useStoreContext(s => s.environment)
-  const setEnvironment = useStoreContext(s => s.setEnvironment)
+  const hasChanges = useMemo(
+    () =>
+      [
+        isModified(changes?.modified),
+        isArrayNotEmpty(changes?.added),
+        isArrayNotEmpty(changes?.removed),
+      ].some(Boolean),
+    [changes],
+  )
 
-  const { data: context } = useApiPlan(environment)
-
-  useEffect(() => {
-    if (context?.environment == null) return
-
-    setBackfills(context.backfills ?? [])
-    setEnvironment(context.environment)
-
-    if (isArrayNotEmpty(context.backfills)) {
-      setCategory(categories[0])
-      setPlanAction(EnumPlanAction.Apply)
-    } else if (
-      isModified(context.changes?.modified) ||
-      isArrayNotEmpty(context.changes?.added) ||
-      isArrayNotEmpty(context.changes?.removed)
-    ) {
-      setPlanAction(EnumPlanAction.Apply)
-    } else {
-      setPlanAction(EnumPlanAction.Done)
-    }
-
-    setBackfillDate('start', toDateFormat(toDate(context.start)))
-    setBackfillDate('end', toDateFormat(toDate(context.end)))
-  }, [context])
-
-  useEffect(() => {
-    setWithBackfill(isArrayNotEmpty(backfills) && category?.id !== 'no-change')
-  }, [backfills, category])
-
-  const isPlanInProgress =
-    planAction === EnumPlanState.Canceling ||
-    planState === EnumPlanState.Applying
-  const isRun =
-    planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running
-  const isDone =
-    includes(
-      [EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed],
-      planState,
-    ) && planAction === EnumPlanAction.Done
-  const changes = context?.changes
-  const hasChanges =
-    isModified(changes?.modified) ||
-    isArrayNotEmpty(changes?.added) ||
-    isArrayNotEmpty(changes?.removed)
   const tasks = useMemo(
     () =>
       backfills.reduce(
@@ -106,19 +74,32 @@ export default function PlanWizard(): JSX.Element {
       ),
     [backfills, plan],
   )
+  useEffect(() => {
+    if (isArrayNotEmpty(backfills)) {
+      setCategory(categories[0])
+    }
+  }, [backfills])
+
+  useEffect(() => {
+    setWithBackfill(isArrayNotEmpty(backfills) && category?.id !== 'no-change')
+  }, [backfills, category])
+
+  const isPlanInProgress = includes(
+    [EnumPlanState.Cancelling, EnumPlanState.Applying],
+    planState,
+  )
+  const isRun = includes(
+    [EnumPlanAction.Running, EnumPlanAction.Run],
+    planAction,
+  )
+  const isDone =
+    includes(
+      [EnumPlanState.Cancelled, EnumPlanState.Finished, EnumPlanState.Failed],
+      planState,
+    ) && planAction === EnumPlanAction.Done
 
   return (
-    <ul className="w-[70%] mx-auto">
-      <li className="mt-6 mb-10">
-        <div className="h-full w-full p-4 bg-secondary-100 rounded-xl">
-          <h4 className="text-xl  text-center">
-            <span className="font-bold">Target Environment is</span>
-            <b className="ml-2 px-2 py-1 font-sm rounded-md bg-secondary-500 text-secondary-100">
-              {environment}
-            </b>
-          </h4>
-        </div>
-      </li>
+    <ul className="w-full mx-auto md:w-[75%] lg:w-[50%]">
       {isRun ? (
         <PlanWizardStepOptions />
       ) : (
@@ -286,7 +267,7 @@ export default function PlanWizard(): JSX.Element {
           description="Progress"
           disabled={environment == null}
         >
-          {isDone && (
+          {isDone ? (
             <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
               <h3
                 className={clsx(
@@ -306,8 +287,7 @@ export default function PlanWizard(): JSX.Element {
                 {toDateFormat(toDate(plan?.updated_at), 'yyyy-mm-dd hh-mm-ss')}
               </p>
             </div>
-          )}
-          {isArrayNotEmpty(backfills) ? (
+          ) : isArrayNotEmpty(backfills) ? (
             <>
               {isModified(changes?.modified) &&
                 planState !== EnumPlanState.Applying && (
@@ -414,6 +394,11 @@ export default function PlanWizard(): JSX.Element {
                   </>
                 )}
             </>
+          ) : planState === EnumPlanState.Applying ? (
+            <span className="flex items-center ml-2">
+              <Spinner className="w-3 h-3 mr-1" />
+              <span className="inline-block ">Applying...</span>
+            </span>
           ) : (
             <div className="ml-1 text-gray-700">
               <Divider className="h-1 w-full mb-4" />
