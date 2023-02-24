@@ -251,9 +251,9 @@ export function IDE(): JSX.Element {
                     <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
                       <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
                         <Tasks
-                          environment={plan.environment}
-                          tasks={plan.tasks}
-                          updated_at={plan.updated_at}
+                          environment={mostRecentPlan.environment}
+                          tasks={mostRecentPlan.tasks}
+                          updated_at={mostRecentPlan.updated_at}
                         />
                         <div className="my-4 px-4">
                           {planState === EnumPlanState.Applying && (

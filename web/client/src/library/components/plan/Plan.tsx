@@ -1,7 +1,7 @@
 import { Button } from '../button/Button'
 import { useApiContext, useApiPlan, useApiContextCancel } from '../../../api'
 import { useEffect, MouseEvent } from 'react'
-import { PlanWizard } from './PlanWizard'
+import PlanWizard from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   EnumPlanState,

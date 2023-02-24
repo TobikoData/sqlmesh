@@ -6,8 +6,6 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { lazy, useEffect, useMemo, Suspense } from 'react'
-import { useApiContextByEnvironment } from '../../../api'
-import { useEffect } from 'react'
 import { useStoreContext } from '~/context/context'
 import { useApiPlan } from '../../../api'
 import {
@@ -21,7 +19,6 @@ import {
   isFalse,
   toDate,
   toDateFormat,
-  toRatio,
 } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -389,32 +386,33 @@ export default function PlanWizard(): JSX.Element {
                       />
                     </Suspense>
                     {
-      
-                    <form className={clsx('flex ml-1 mt-1')}>
-                      <Input
-                        label="Start Date"
-                        disabled={
-                          isPlanInProgress || planAction === EnumPlanAction.Done
-                        }
-                        value={backfill_start}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setBackfillDate('start', e.target.value)
-                        }}
-                      />
-                      <Input
-                        label="End Date"
-                        disabled={
-                          isPlanInProgress || planAction === EnumPlanAction.Done
-                        }
-                        value={backfill_end}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setBackfillDate('end', e.target.value)
-                        }}
-                      />
-                    </form>
-                  }
-                </>
-              )}
+                      <form className={clsx('flex ml-1 mt-1')}>
+                        <Input
+                          label="Start Date"
+                          disabled={
+                            isPlanInProgress ||
+                            planAction === EnumPlanAction.Done
+                          }
+                          value={backfill_start}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setBackfillDate('start', e.target.value)
+                          }}
+                        />
+                        <Input
+                          label="End Date"
+                          disabled={
+                            isPlanInProgress ||
+                            planAction === EnumPlanAction.Done
+                          }
+                          value={backfill_end}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setBackfillDate('end', e.target.value)
+                          }}
+                        />
+                      </form>
+                    }
+                  </>
+                )}
             </>
           ) : (
             <div className="ml-1 text-gray-700">
