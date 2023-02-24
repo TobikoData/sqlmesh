@@ -337,7 +337,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
-            minSize={[320, 240]}
+            minSize={[320, activeFile.content === '' ? 0 : 240]}
             maxSize={[Infinity, 320]}
             snapOffset={0}
             expandToMin={true}
@@ -525,6 +525,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
             </div>
           </SplitPane>
         </div>
+
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <div className="flex align-center mr-4">
