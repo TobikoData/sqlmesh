@@ -108,7 +108,7 @@ class EvaluateInput(BaseModel):
     start: TimeLike
     end: TimeLike
     latest: TimeLike
-    limit: t.Optional[int] = None
+    limit: int = 1000
 
 
 class Model(BaseModel):
@@ -120,3 +120,17 @@ class Model(BaseModel):
 
 class Models(BaseModel):
     models: t.Dict[str, Model]
+
+
+class RenderInput(BaseModel):
+    model: str
+    start: t.Optional[TimeLike] = None
+    end: t.Optional[TimeLike] = None
+    latest: t.Optional[TimeLike] = None
+    expand: t.Union[bool, t.Iterable[str]] = False
+    pretty: bool = True
+    dialect: t.Optional[str] = None
+
+
+class Query(BaseModel):
+    sql: str

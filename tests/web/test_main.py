@@ -389,3 +389,15 @@ def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
     assert response.status_code == 200
     assert response.json()["models"].keys() == web_sushi_context.models.keys()
+
+
+def test_render(web_sushi_context: Context) -> None:
+    response = client.post("/api/render", json={"model": "sushi.items"})
+    assert response.status_code == 200
+    assert response.json()["sql"]
+
+
+def test_render_invalid_model(web_sushi_context: Context) -> None:
+    response = client.post("/api/render", json={"model": "foo.bar"})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Model not found."}
