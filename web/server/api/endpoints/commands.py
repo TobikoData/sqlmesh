@@ -159,3 +159,25 @@ async def dag(
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
+
+
+@router.post("/render")
+async def render(
+    options: models.RenderInput,
+    context: Context = Depends(get_loaded_context),
+) -> models.Query:
+    """Renders a model's query, optionally expanding referenced models"""
+    snapshot = context.snapshots.get(options.model)
+
+    if not snapshot:
+        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
+
+    rendered = context.render(
+        snapshot,
+        start=options.start,
+        end=options.end,
+        latest=options.latest,
+        expand=options.expand,
+    )
+    dialect = options.dialect or context.dialect
+    return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))
