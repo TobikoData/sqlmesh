@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import typing as t
 from enum import Enum
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
@@ -24,12 +26,21 @@ from sqlmesh.dbt.column import (
     yaml_to_columns,
 )
 from sqlmesh.dbt.common import Dependencies, GeneralConfig
-from sqlmesh.dbt.macros import MacroConfig, ref_method, source_method, var_method
+from sqlmesh.dbt.macros import (
+    BUILTIN_METHODS,
+    MacroConfig,
+    config_method,
+    ref_method,
+    source_method,
+    var_method,
+)
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
-from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.conversions import ensure_bool
+from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import ENVIRONMENT
+from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 
 class Materialization(str, Enum):
@@ -96,6 +107,9 @@ class ModelConfig(GeneralConfig):
     unique_key: t.Optional[t.List[str]] = None
     columns: t.Dict[str, ColumnConfig] = {}
 
+    # redshift
+    bind: t.Optional[bool] = None
+
     @validator(
         "pre_hook",
         "post_hook",
@@ -138,47 +152,6 @@ class ModelConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(
-        self,
-        sources: t.Dict[str, SourceConfig],
-        models: t.Dict[str, ModelConfig],
-        seeds: t.Dict[str, SeedConfig],
-        variables: t.Dict[str, t.Any],
-        macros: UniqueKeyDict[str, MacroConfig],
-    ) -> Model:
-        """Converts the dbt model into a SQLMesh model."""
-        source_mapping = {config.config_name: config.source_name for config in sources.values()}
-        model_mapping = {name: config.model_name for name, config in models.items()}
-        model_mapping.update({name: config.seed_name for name, config in seeds.items()})
-
-        dependencies = self._all_dependencies(source_mapping, models, seeds, variables, macros)
-
-        python_env = {
-            "source": source_method(dependencies.sources, source_mapping),
-            "ref": ref_method(dependencies.refs, model_mapping),
-            "var": var_method(dependencies.variables, variables),
-            **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
-        }
-
-        depends_on = {
-            seeds[ref].seed_name if ref in seeds else models[ref].model_name
-            for ref in dependencies.refs
-        }
-
-        expressions = d.parse(self.sql)
-
-        return create_sql_model(
-            self.model_name,
-            expressions[-1],
-            kind=self.model_kind,
-            statements=expressions[0:-1],
-            columns=column_types_to_sqlmesh(self.columns) or None,
-            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
-            python_env=python_env,
-            depends_on=depends_on,
-            start=self.start,
-        )
-
     @property
     def model_name(self) -> str:
         """
@@ -216,17 +189,72 @@ class ModelConfig(GeneralConfig):
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
+    @property
+    def sql_no_config(self) -> str:
+        return re.sub(r"{{\s*config(.|\s)*?}}", "", self.sql).strip()
+
+    def to_sqlmesh(
+        self,
+        sources: t.Dict[str, SourceConfig],
+        models: t.Dict[str, ModelConfig],
+        seeds: t.Dict[str, SeedConfig],
+        variables: t.Dict[str, t.Any],
+        macros: t.Dict[str, MacroConfig],
+    ) -> Model:
+        """Converts the dbt model into a SQLMesh model."""
+        source_mapping = {config.config_name: config.source_name for config in sources.values()}
+        model_mapping = {name: config.model_name for name, config in models.items()}
+        model_mapping.update({name: config.seed_name for name, config in seeds.items()})
+
+        render_python_env = {
+            **BUILTIN_METHODS,
+            **{k: v.macro for k, v in macros.items()},
+        }
+        self._update_with_rendered_query(
+            source_mapping, model_mapping, variables, render_python_env
+        )
+
+        dependencies = self._all_dependencies(source_mapping, models, seeds, variables, macros)
+
+        python_env = {
+            **BUILTIN_METHODS,
+            "source": source_method(dependencies.sources, source_mapping),
+            "ref": ref_method(dependencies.refs, model_mapping),
+            "var": var_method(dependencies.variables, variables),
+            "config": config_method(),
+            **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
+        }
+
+        depends_on = {
+            seeds[ref].seed_name if ref in seeds else models[ref].model_name
+            for ref in dependencies.refs
+        }
+
+        expressions = d.parse(self.sql_no_config)
+
+        return create_sql_model(
+            self.model_name,
+            expressions[-1],
+            kind=self.model_kind,
+            statements=expressions[0:-1],
+            columns=column_types_to_sqlmesh(self.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
+            python_env=python_env,
+            depends_on=depends_on,
+            start=self.start,
+        )
+
     def _all_dependencies(
         self,
         source_mapping: t.Dict[str, str],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        macros: UniqueKeyDict[str, MacroConfig],
+        macros: t.Dict[str, MacroConfig],
     ) -> Dependencies:
         """Recursively gather all the dependencies for this model, including any from ephemeral parents and macros"""
-        dependencies: Dependencies = self.__class__._macro_dependencies(
-            self, source_mapping, models, seeds, variables, macros
+        dependencies: Dependencies = self._macro_dependencies(
+            source_mapping, models, seeds, variables, macros
         )
 
         for source in self._dependencies.sources:
@@ -235,11 +263,8 @@ class ModelConfig(GeneralConfig):
 
             dependencies.sources.add(source)
 
-        for var, has_default_value in self._dependencies.variables.items():
-            if var not in variables and not has_default_value:
-                raise ConfigError(f"Variable {var} for model {self.table_name} not found.")
-
-            dependencies.variables[var] = has_default_value
+        for var in self._dependencies.variables:
+            dependencies.variables.add(var)
 
         for dependency in self._dependencies.refs:
             """Add seed/model as a dependency"""
@@ -261,22 +286,20 @@ class ModelConfig(GeneralConfig):
 
         return dependencies
 
-    @classmethod
     def _macro_dependencies(
-        cls,
-        model: ModelConfig,
+        self,
         source_mapping: t.Dict[str, str],
         models: t.Dict[str, ModelConfig],
         seeds: t.Dict[str, SeedConfig],
         variables: t.Dict[str, t.Any],
-        macros: UniqueKeyDict[str, MacroConfig],
+        macros: t.Dict[str, MacroConfig],
     ) -> Dependencies:
         dependencies = Dependencies()
 
         def add_dependency(macro: str) -> None:
             """Add macro and everything it recursively uses as dependencies"""
             if macro not in macros:
-                raise ConfigError(f"Macro {call} for model {model.table_name} not found.")
+                raise ConfigError(f"Macro '{macro}' for model '{self.table_name}' not found.")
 
             dependencies.macros.add(macro)
 
@@ -284,26 +307,72 @@ class ModelConfig(GeneralConfig):
 
             for source in macros_dependencies.sources:
                 if source not in source_mapping:
-                    raise ConfigError(f"Source {source} for macro {macro} not found.")
+                    raise ConfigError(f"Source '{source}' for macro '{macro}' not found.")
                 dependencies.sources.add(source)
 
             for ref in macros_dependencies.refs:
                 if ref not in models and ref not in seeds:
-                    raise ConfigError(f"Source {source} for macro {macro} not found.")
+                    raise ConfigError(f"Source '{source}' for macro '{macro}' not found.")
                 dependencies.refs.add(ref)
 
-            for var, has_default_value in macros_dependencies.variables.items():
-                if var not in variables:
-                    raise ConfigError(f"Variable {var} for macro {macro} not found.")
-                dependencies.variables[var] = has_default_value
+            for var in macros_dependencies.variables:
+                dependencies.variables.add(var)
 
             for macro_call in macros_dependencies.macros:
                 if macro_call not in macros:
-                    raise ConfigError(f"Macro {macro_call} used by macro {macro} not found.")
+                    raise ConfigError(f"Macro '{macro_call}' used by macro '{macro}' not found.")
 
                 add_dependency(macro_call)
 
-        for call in model._dependencies.macros:
+        for call in self._dependencies.macros:
             add_dependency(call)
 
         return dependencies
+
+    def _update_with_rendered_query(
+        self,
+        source_mapping: t.Dict[str, str],
+        model_mapping: t.Dict[str, str],
+        variables: t.Dict[str, t.Any],
+        python_env: t.Dict[str, Executable],
+    ) -> None:
+        def _ref(package_name: str, model_name: t.Optional[str] = None) -> str:
+            if package_name not in model_mapping:
+                raise ConfigError(
+                    f"Model '{package_name}' was not found for model '{self.table_name}'."
+                )
+            self._dependencies.refs.add(package_name)
+            return model_mapping[package_name]
+
+        def _var(name: str, default: t.Optional[str] = None) -> t.Any:
+            if default is None and name not in variables:
+                raise ConfigError(f"Variable '{name}' was not found for model '{self.table_name}'.")
+            self._dependencies.variables.add(name)
+            return variables.get(name, default)
+
+        def _source(source_name: str, table_name: str) -> str:
+            full_name = ".".join([source_name, table_name])
+            if full_name not in source_mapping:
+                raise ConfigError(
+                    f"Source '{full_name}' was not found for model '{self.table_name}'."
+                )
+            self._dependencies.sources.add(full_name)
+            return source_mapping[full_name]
+
+        def _config(*args: t.Any, **kwargs: t.Any) -> str:
+            if args and isinstance(args[0], dict):
+                self.replace(self.update_with(args[0]))
+            if kwargs:
+                self.replace(self.update_with(kwargs))
+            return ""
+
+        env = prepare_env(python_env)
+
+        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(
+            config=_config,
+            ref=_ref,
+            var=_var,
+            source=_source,
+            **env,
+            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+        )

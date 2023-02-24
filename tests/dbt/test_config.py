@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.dbt.common import Dependencies
+from sqlmesh.dbt.macros import BUILTIN_METHODS
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import (
@@ -77,6 +78,17 @@ def test_model_config(sushi_dbt_project: Project):
         "customer_revenue_by_day"
     ]
 
+    customer_revenue_by_day_config._update_with_rendered_query(
+        source_mapping={
+            "raw.order_items": "raw.order_items",
+            "raw.items": "raw.items",
+            "raw.orders": "raw.orders",
+        },
+        model_mapping={},
+        variables={},
+        python_env=BUILTIN_METHODS,
+    )
+
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
         "incremental_strategy": "delete+insert",
@@ -94,7 +106,7 @@ def test_model_config(sushi_dbt_project: Project):
 def test_variables(assert_exp_eq):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
-    model_variables = {"foo": False}
+    model_variables = {"foo"}
 
     model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
     model_config._dependencies = Dependencies(variables=model_variables)
@@ -107,7 +119,7 @@ def test_variables(assert_exp_eq):
         "macros": {},
     }
 
-    with pytest.raises(ConfigError, match=r"Variable foo for model test not found."):
+    with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
         model_config.to_sqlmesh(**kwargs)
 
     # Case 2: using a defined variable without a default value
@@ -115,7 +127,6 @@ def test_variables(assert_exp_eq):
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
-    model_config._dependencies.variables["foo"] = True
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
