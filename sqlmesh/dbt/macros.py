@@ -63,7 +63,9 @@ def var_method(variables: t.Set[str], mapping: t.Dict[str, t.Any]) -> Executable
     mapping = {k: f"'{v}'" if isinstance(v, str) else v for k, v in mapping.items()}
 
     def variable_map() -> str:
-        vars_ = ", ".join(f"'{var}': {mapping[var]}" for var in sorted(variables) if var in mapping)
+        vars_ = ", ".join(
+            f"'{var}': {format_var(mapping[var])}" for var in sorted(variables) if var in mapping
+        )
         return f"{{{vars_}}}"
 
     return Executable(
