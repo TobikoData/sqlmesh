@@ -9,6 +9,7 @@ from sqlmesh.core.model import (
     ModelKind,
     ModelKindName,
 )
+from sqlmesh.dbt.builtin import builtin_jinja
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -131,7 +132,7 @@ def test_config_containing_jinja():
     )
 
     vars = {"schema": "foo", "size": "5"}
-    rendered = model.render_non_sql_jinja(model.jinja_methods(vars))
+    rendered = model.render_non_sql_jinja(builtin_jinja(vars))
     assert rendered.pre_hook == model.pre_hook
     assert rendered.sql == model.sql
     assert rendered.target_schema != model.target_schema

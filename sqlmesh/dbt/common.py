@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from os import getenv
 
 from pydantic import validator
 from sqlglot.helper import ensure_list
@@ -122,13 +121,6 @@ class GeneralConfig(BaseConfig):
         """
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
-
-    def jinja_methods(self, variables: t.Dict[str, t.Any]) -> t.Dict[str, t.Callable]:
-        methods: t.Dict[str, t.Callable] = {}
-        methods["env_var"] = lambda name, default=None: getenv(name, default)
-        methods["var"] = lambda name, default=None: variables.get(name, default)
-
-        return methods
 
     def render_non_sql_jinja(self: T, methods: t.Dict[str, t.Callable]) -> T:
         def render_value(val: t.Any) -> t.Any:

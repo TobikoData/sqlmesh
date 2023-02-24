@@ -19,6 +19,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
+from sqlmesh.dbt.builtin import builtin_jinja, generate_var
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -39,6 +40,7 @@ from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.metaprogramming import build_env, serialize_env
 from sqlmesh.utils.jinja import ENVIRONMENT
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
@@ -171,14 +173,23 @@ class ModelConfig(GeneralConfig):
         model_mapping = {name: config.model_name for name, config in models.items()}
         model_mapping.update({name: config.seed_name for name, config in seeds.items()})
 
-        rendered = self.render_non_sql_jinja(self.jinja_methods(variables))
+        builtin_methods = builtin_jinja(variables)
+        rendered = self.render_non_sql_jinja(builtin_methods)
 
         dependencies = rendered._all_dependencies(source_mapping, models, seeds, variables, macros)
+
+        builtin_methods["var"] = generate_var(
+            {name: var for name, var in variables.items() if name in dependencies.variables}
+        )
+
+        builtin_env: t.Dict[str, t.Any] = {}
+        for name, method in builtin_methods.items():
+            build_env(method, env=builtin_env, name=name, path=Path(c.SQLMESH))
 
         python_env = {
             "source": source_method(dependencies.sources, source_mapping),
             "ref": ref_method(dependencies.refs, model_mapping),
-            "var": var_method(dependencies.variables, variables),
+            **serialize_env(builtin_env, Path(c.SQLMESH)),
             **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
         }
 
