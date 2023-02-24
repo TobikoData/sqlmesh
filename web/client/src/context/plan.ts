@@ -34,11 +34,14 @@ interface Category {
 }
 
 interface PlanTaskStatus {
-  completed: number
   total: number
+  completed: number
+  start?: number
+  end?: number
+  interval?: [string, string]
 }
 
-type PlanTasks = Record<string, PlanTaskStatus>
+export type PlanTasks = Record<string, PlanTaskStatus>
 
 interface PlanProgress {
   ok: boolean

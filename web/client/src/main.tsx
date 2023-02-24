@@ -16,10 +16,33 @@ const client = new QueryClient({
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(getRootNode()).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>
   </React.StrictMode>,
 )
+
+function getRootNode(): HTMLElement {
+  const id = 'root'
+
+  let elRoot = document.getElementById(id)
+
+  if (elRoot != null) return elRoot
+
+  const elBody = document.body
+  const firstChild = elBody.children[0]
+
+  elRoot = document.createElement('div')
+  elRoot.id = id
+  elRoot.className = 'h-full w-full flex flex-col justify-start'
+
+  if (firstChild instanceof HTMLElement) {
+    elBody.insertBefore(elRoot, firstChild)
+  } else {
+    elBody.appendChild(elRoot)
+  }
+
+  return elRoot
+}
