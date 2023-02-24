@@ -315,12 +315,11 @@ export default function PlanWizard({
                                   ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
                                   : ''
                               }
-                ${
-                  checked
-                    ? 'bg-secondary-500 bg-opacity-75 text-white'
-                    : 'bg-secondary-100'
-                }
-            relative flex cursor-pointer rounded-md px-3 py-2 focus:outline-none mb-2`
+                              ${
+                                checked
+                                  ? 'bg-secondary-500 bg-opacity-75 text-white'
+                                  : 'bg-secondary-100'
+                              } elative flex cursor-pointer rounded-md px-3 py-2 focus:outline-none mb-2`
                             }
                           >
                             {({ checked }) => (
@@ -373,39 +372,47 @@ export default function PlanWizard({
                         updated_at={mostRecentPlan?.updated_at}
                       />
                     </Suspense>
-                    <form className={clsx('flex ml-1 mt-1')}>
-                      <Input
-                        label="Start Date"
-                        disabled={
-                          isPlanInProgress || planAction === EnumPlanAction.Done
-                        }
-                        value={backfill_start}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setBackfillDate('start', e.target.value)
-                        }}
-                      />
-                      <Input
-                        label="End Date"
-                        disabled={
-                          isPlanInProgress || planAction === EnumPlanAction.Done
-                        }
-                        value={backfill_end}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setBackfillDate('end', e.target.value)
-                        }}
-                      />
+                    <form>
+                      <fieldset className="flex w-full">
+                        <Input
+                          className="w-full"
+                          label="Start Date"
+                          disabled={
+                            isPlanInProgress ||
+                            planAction === EnumPlanAction.Done
+                          }
+                          value={backfill_start}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setBackfillDate('start', e.target.value)
+                          }}
+                        />
+                        <Input
+                          className="w-full"
+                          label="End Date"
+                          disabled={
+                            isPlanInProgress ||
+                            planAction === EnumPlanAction.Done
+                          }
+                          value={backfill_end}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            setBackfillDate('end', e.target.value)
+                          }}
+                        />
+                      </fieldset>
                     </form>
                   </>
                 )}
               </>
             )}
 
-            {hasChanges && isFalse(isPlanInProgress) && (
-              <div className="ml-1 text-gray-700">
-                <Divider className="h-1 w-full mb-4" />
-                <h3>Explanation why we dont need to Backfill</h3>
-              </div>
-            )}
+            {hasChanges &&
+              isFalse(isPlanInProgress) &&
+              isFalse(hasBackfills) && (
+                <div className="ml-1 text-gray-700">
+                  <Divider className="h-1 w-full mb-4" />
+                  <h3>Explanation why we dont need to Backfill</h3>
+                </div>
+              )}
           </PlanWizardStep>
         </>
       )}
