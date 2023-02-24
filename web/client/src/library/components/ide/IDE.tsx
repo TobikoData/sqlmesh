@@ -437,100 +437,98 @@ function RunPlan({
                   leaveFrom="opacity-100"
                   leaveTo="opacity-0"
                 >
-                  <Menu.Items className="absolute mt-3 right-0 max-h-60 overflow-auto rounded-md bg-white py-1 text-base shadow-lg">
-                    {environments.map(env => (
-                      <Menu.Item key={env.name}>
-                        {({ active }) => (
-                          <div
-                            onClick={(e: MouseEvent) => {
-                              e.stopPropagation()
+                  <div className="absolute right-0 overflow-hidden mt-2 shadow-lg bg-white rounded-md flex flex-col">
+                    <Menu.Items className="overflow-auto max-h-80  py-2 scrollbar scrollbar--vertical">
+                      {environments.map(env => (
+                        <Menu.Item key={env.name}>
+                          {({ active }) => (
+                            <div
+                              onClick={(e: MouseEvent) => {
+                                e.stopPropagation()
 
-                              setEnvironment(env.name)
-                            }}
-                            className={clsx(
-                              'flex justify-between items-center px-4 py-1 text-gray-900 cursor-pointer',
-                              active && 'bg-secondary-100',
-                              env.name === environment &&
-                                'pointer-events-none cursor-default',
-                            )}
-                          >
-                            <div className="flex items-center">
-                              <CheckCircleIcon
-                                className={clsx(
-                                  'w-5 h-5 text-secondary-500',
-                                  active && 'opacity-10',
-                                  env.name !== environment && 'opacity-0',
-                                )}
-                              />
-                              <span
-                                className={clsx(
-                                  'block truncate ml-2',
-                                  env.type === EnumRelativeLocation.Remote
-                                    ? 'text-secondary-500'
-                                    : 'text-gray-700',
-                                )}
-                              >
-                                {env.name}
-                              </span>
-                              <small className="block ml-2 text-gray-400">
-                                ({env.type})
-                              </small>
-                            </div>
-                            {env.type === EnumRelativeLocation.Local &&
-                              env.name !== environment && (
-                                <Button
-                                  className="my-0 mx-0"
-                                  size={EnumSize.xs}
-                                  variant="alternative"
-                                  onClick={(e: MouseEvent) => {
-                                    e.stopPropagation()
-
-                                    removeLocalEnvironments([env.name])
-                                  }}
-                                >
-                                  -
-                                </Button>
+                                setEnvironment(env.name)
+                              }}
+                              className={clsx(
+                                'flex justify-between items-center px-4 py-1 text-gray-900 cursor-pointer overflow-auto',
+                                active && 'bg-secondary-100',
+                                env.name === environment &&
+                                  'pointer-events-none cursor-default',
                               )}
-                          </div>
-                        )}
-                      </Menu.Item>
-                    ))}
-                    <Menu.Item
-                      as="div"
-                      disabled={true}
-                    >
-                      <div className="flex w-full items-end px-2 py-2">
-                        <Input
-                          className="my-0 mx-0 mr-4 min-w-[10rem]"
-                          size={EnumSize.sm}
-                          placeholder="Environment"
-                          value={customEnvironment}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            e.stopPropagation()
+                            >
+                              <div className="flex items-center">
+                                <CheckCircleIcon
+                                  className={clsx(
+                                    'w-5 h-5 text-secondary-500',
+                                    active && 'opacity-10',
+                                    env.name !== environment && 'opacity-0',
+                                  )}
+                                />
+                                <span
+                                  className={clsx(
+                                    'block truncate ml-2',
+                                    env.type === EnumRelativeLocation.Remote
+                                      ? 'text-secondary-500'
+                                      : 'text-gray-700',
+                                  )}
+                                >
+                                  {env.name}
+                                </span>
+                                <small className="block ml-2 text-gray-400">
+                                  ({env.type})
+                                </small>
+                              </div>
+                              {env.type === EnumRelativeLocation.Local &&
+                                env.name !== environment && (
+                                  <Button
+                                    className="my-0 mx-0"
+                                    size={EnumSize.xs}
+                                    variant="alternative"
+                                    onClick={(e: MouseEvent) => {
+                                      e.stopPropagation()
 
-                            setCustomEnvironment(e.target.value)
-                          }}
-                        />
-                        <Button
-                          className="my-0 mx-0"
-                          size={EnumSize.sm}
-                          disabled={
-                            isStringEmptyOrNil(customEnvironment) ||
-                            isExistingEnvironment(customEnvironment)
-                          }
-                          onClick={(e: MouseEvent) => {
-                            e.stopPropagation()
+                                      removeLocalEnvironments([env.name])
+                                    }}
+                                  >
+                                    -
+                                  </Button>
+                                )}
+                            </div>
+                          )}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Items>
+                    <Divider />
+                    <div className="flex w-full items-end p-2">
+                      <Input
+                        className="my-0 mx-0 mr-4 min-w-[10rem]"
+                        size={EnumSize.sm}
+                        placeholder="Environment"
+                        value={customEnvironment}
+                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          e.stopPropagation()
 
-                            setCustomEnvironment('')
+                          setCustomEnvironment(e.target.value)
+                        }}
+                      />
+                      <Button
+                        className="my-0 mx-0"
+                        size={EnumSize.sm}
+                        disabled={
+                          isStringEmptyOrNil(customEnvironment) ||
+                          isExistingEnvironment(customEnvironment)
+                        }
+                        onClick={(e: MouseEvent) => {
+                          e.stopPropagation()
 
-                            addLocalEnvironments([customEnvironment])
-                          }}
-                        >
-                          Add
-                        </Button>
-                      </div>
-                    </Menu.Item>
-                  </Menu.Items>
+                          setCustomEnvironment('')
+
+                          addLocalEnvironments([customEnvironment])
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
                 </Transition>
               </>
             )}

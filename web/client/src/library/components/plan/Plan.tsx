@@ -173,7 +173,7 @@ export default function Plan({
         </h4>
       </div>
       <Divider />
-      <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4">
+      <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
         <PlanWizard
           environment={environment}
           changes={changes}
