@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
@@ -18,7 +19,6 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
-from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -37,8 +37,10 @@ from sqlmesh.dbt.macros import (
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.conversions import ensure_bool
+from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.jinja import ENVIRONMENT
+from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 
 class Materialization(str, Enum):
@@ -364,10 +366,13 @@ class ModelConfig(GeneralConfig):
                 self.replace(self.update_with(kwargs))
             return ""
 
-        for expression in d.parse(self.sql):
-            QueryRenderer(expression, "", [], python_env=python_env).render(
-                config=_config,
-                ref=_ref,
-                var=_var,
-                source=_source,
-            )
+        env = prepare_env(python_env)
+
+        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(
+            config=_config,
+            ref=_ref,
+            var=_var,
+            source=_source,
+            **env,
+            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+        )
