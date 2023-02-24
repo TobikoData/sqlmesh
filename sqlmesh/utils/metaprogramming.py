@@ -55,7 +55,9 @@ def _code_globals(code: types.CodeType) -> t.Dict[str, None]:
 
 
 def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
-    """Finds all global references in a function and nested functions.
+    """Finds all global references and closures in a function and nested functions.
+
+    This function treats closures as global variables, which could cause problems in the future.
 
     Args:
         func: The function to introspect
@@ -66,10 +68,16 @@ def func_globals(func: t.Callable) -> t.Dict[str, t.Any]:
     variables = {}
 
     if hasattr(func, "__code__"):
-        for var in list(_code_globals(func.__code__)) + decorators(func):
+        code = func.__code__
+
+        for var in list(_code_globals(code)) + decorators(func):
             if var in func.__globals__:
                 ref = func.__globals__[var]
                 variables[var] = ref
+
+        if func.__closure__:
+            for var, value in zip(code.co_freevars, func.__closure__):
+                variables[var] = value.cell_contents
 
     return variables
 

@@ -123,6 +123,19 @@ def test_func_globals() -> None:
         "to_table": to_table,
     }
 
+    def closure_test() -> t.Callable:
+        y = 1
+
+        def closure() -> int:
+            return main_func(y)
+
+        return closure
+
+    assert func_globals(closure_test()) == {
+        "main_func": main_func,
+        "y": 1,
+    }
+
 
 def test_normalize_source() -> None:
     assert (
