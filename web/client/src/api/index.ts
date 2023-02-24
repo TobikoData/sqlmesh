@@ -14,6 +14,8 @@ import {
   ContextEnvironment,
   DagApiDagGet200,
   dagApiDagGet,
+  GetEnvironmentsApiEnvironmentsGet200,
+  getEnvironmentsApiEnvironmentsGet,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -45,6 +47,15 @@ export function useApiDag(): UseQueryResult<DagApiDagGet200> {
   })
 }
 
+export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
+  return useQuery({
+    queryKey: ['/api/environments'],
+    queryFn: getEnvironmentsApiEnvironmentsGet,
+    cacheTime: 0,
+    enabled: false,
+  })
+}
+
 export function useApiContext(): UseQueryResult<Context> {
   return useQuery({
     queryKey: ['/api/context'],
@@ -53,11 +64,9 @@ export function useApiContext(): UseQueryResult<Context> {
   })
 }
 
-export function useApiContextByEnvironment(
-  value?: string,
+export function useApiPlan(
+  environment: string,
 ): UseQueryResult<ContextEnvironment> {
-  const environment = value ?? ''
-
   return useQuery({
     queryKey: [`/api/plan`, environment],
     queryFn: async () => await getPlanApiPlanGet({ environment }),
@@ -69,7 +78,7 @@ export function useApiContextByEnvironment(
 export function useMutationApiSaveFile<T extends object>(
   client: QueryClient,
   callbacks: {
-    onSuccess?: () => void
+    onSuccess?: (file: File) => void
     onMutate?: () => void
   },
 ): UseMutationResult<File, unknown, { path: string; body: T }, void> {
@@ -84,13 +93,9 @@ export function useMutationApiSaveFile<T extends object>(
         callbacks.onMutate()
       }
     },
-    async onSuccess({ path }) {
-      await client.invalidateQueries({
-        queryKey: [`/api/files`, path],
-      })
-
+    async onSuccess({ path, ...args }) {
       if (callbacks.onSuccess != null) {
-        callbacks.onSuccess()
+        callbacks.onSuccess({ path, ...args })
       }
     },
   })

@@ -20,8 +20,8 @@ export function getActionName(
     case EnumPlanAction.Applying:
       name = 'Applying...'
       break
-    case EnumPlanAction.Canceling:
-      name = 'Canceling...'
+    case EnumPlanAction.Cancelling:
+      name = 'Cancelling...'
       break
     case EnumPlanAction.Resetting:
       name = 'Resetting...'

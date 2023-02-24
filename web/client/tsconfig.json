@@ -31,5 +31,5 @@
     "./postcss.config.js",
     "./tailwind.config.js"
   ],
-  "exclude": ["node_modules", "src/api/client.ts"]
+  "exclude": ["node_modules"]
 }

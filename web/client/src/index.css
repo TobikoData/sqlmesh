@@ -64,8 +64,12 @@ html {
   font-weight: 900;
 }
 
-.scrollbar::-webkit-scrollbar {
+.scrollbar--horizontal::-webkit-scrollbar {
   height: 0.2rem;
+}
+
+.scrollbar--vertical::-webkit-scrollbar {
+  width: 0.2rem;
 }
 
 .scrollbar::-webkit-scrollbar-track {
