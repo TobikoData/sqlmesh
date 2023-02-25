@@ -131,7 +131,7 @@ export default function Plan({
 
     try {
       const data: T = await fetchAPI<T, { start?: string; end?: string }>({
-        url: '/api/apply',
+        url: '/api/commands/apply',
         method: 'post',
         data: {
           start: backfill_start,

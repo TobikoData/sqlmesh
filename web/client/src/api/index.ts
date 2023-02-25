@@ -12,8 +12,8 @@ import {
   getPlanApiPlanGet,
   getApiContextApiContextGet,
   ContextEnvironment,
-  DagApiDagGet200,
-  dagApiDagGet,
+  DagApiCommandsDagGet200,
+  dagApiCommandsDagGet,
   GetEnvironmentsApiEnvironmentsGet200,
   getEnvironmentsApiEnvironmentsGet,
 } from './client'
@@ -40,10 +40,10 @@ export function useApiFiles(): UseQueryResult<Directory> {
   })
 }
 
-export function useApiDag(): UseQueryResult<DagApiDagGet200> {
+export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
   return useQuery({
     queryKey: ['/api/dag'],
-    queryFn: dagApiDagGet,
+    queryFn: dagApiCommandsDagGet,
   })
 }
 
