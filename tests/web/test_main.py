@@ -336,7 +336,7 @@ def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
 
 
 def test_apply() -> None:
-    response = client.post("/api/apply?environment=dev", params={"environment": "dev"})
+    response = client.post("/api/commands/apply?environment=dev", params={"environment": "dev"})
     assert response.status_code == 200
 
 
@@ -362,7 +362,7 @@ def test_cancel_no_task() -> None:
 
 def test_evaluate(web_sushi_context: Context) -> None:
     response = client.post(
-        "/api/evaluate",
+        "/api/commands/evaluate",
         json={
             "model": "sushi.top_waiters",
             "start": "2022-01-01",
@@ -378,7 +378,7 @@ def test_evaluate(web_sushi_context: Context) -> None:
 
 
 def test_fetchdf(web_sushi_context: Context) -> None:
-    response = client.post("/api/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"})
+    response = client.post("/api/commands/fetchdf", json={"sql": "SELECT * from sushi.top_waiters"})
     assert response.status_code == 200
     with pa.ipc.open_stream(response.content) as reader:
         df = reader.read_pandas()
@@ -392,12 +392,12 @@ def test_get_models(web_sushi_context: Context) -> None:
 
 
 def test_render(web_sushi_context: Context) -> None:
-    response = client.post("/api/render", json={"model": "sushi.items"})
+    response = client.post("/api/commands/render", json={"model": "sushi.items"})
     assert response.status_code == 200
     assert response.json()["sql"]
 
 
 def test_render_invalid_model(web_sushi_context: Context) -> None:
-    response = client.post("/api/render", json={"model": "foo.bar"})
+    response = client.post("/api/commands/render", json={"model": "foo.bar"})
     assert response.status_code == 422
     assert response.json() == {"detail": "Model not found."}

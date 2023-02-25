@@ -16,8 +16,8 @@ import { ModelFile } from '../../../models'
 import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
 import {
-  evaluateApiEvaluatePost,
-  fetchdfApiFetchdfPost,
+  evaluateApiCommandsEvaluatePost,
+  fetchdfApiCommandsFetchdfPost,
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
@@ -205,7 +205,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
       bucket.set(EnumEditorTabs.QueryPreview, activeFile.content)
       setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
 
-      fetchdfApiFetchdfPost({
+      fetchdfApiCommandsFetchdfPost({
         sql: activeFile.content,
       })
         .then(updateTabs)
@@ -221,7 +221,9 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     bucket.set(EnumEditorTabs.Terminal, undefined)
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    evaluateApiEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
+    evaluateApiCommandsEvaluatePost(formEvaluate)
+      .then(updateTabs)
+      .catch(console.log)
   }
 
   function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
