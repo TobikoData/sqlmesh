@@ -308,7 +308,7 @@ function RunPlan({
 
   useEffect(() => {
     if (environment != null) {
-      void refetchPlan()
+      // void refetchPlan()
     }
   }, [environment, openedFiles])
 
