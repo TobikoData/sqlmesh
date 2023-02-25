@@ -21,7 +21,13 @@ import {
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
-import { isFalse, isNil, isObjectLike, isTrue } from '../../../utils'
+import {
+  isFalse,
+  isNil,
+  isObjectLike,
+  isStringEmptyOrNil,
+  isTrue,
+} from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
 import Input from '../input/Input'
@@ -58,6 +64,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
+
   const setTabTableContent = useStoreEditor(s => s.setTabTableContent)
   const setTabQueryPreviewContent = useStoreEditor(
     s => s.setTabQueryPreviewContent,
@@ -263,12 +270,14 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
   // TODO: remove once we have a better way to determine if a file is a model
   const isModel = activeFile.path.includes('models/')
+  const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
   const shouldEvaluate = isModel && Object.values(formEvaluate).every(Boolean)
+  const sizesActions = isStringEmptyOrNil(activeFile.content)
+    ? [100, 0]
+    : [80, 20]
   const sizesMain = [tabTableContent, tabTerminalContent].some(Boolean)
     ? [75, 25]
     : [100, 0]
-
-  const sizesActions = activeFile.content === '' ? [100, 0] : [80, 20]
 
   return (
     <SplitPane
@@ -468,59 +477,61 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                 </div>
 
                 <Divider />
-                <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
-                  {isFalse(activeFile.isLocal) && isModel && (
-                    <div className="flex w-full justify-between">
-                      <div className="flex">
-                        <Button
-                          size={EnumSize.sm}
-                          variant="alternative"
-                          disabled={true}
-                        >
-                          Validate
-                        </Button>
-                        <Button
-                          size={EnumSize.sm}
-                          variant="alternative"
-                          disabled={true}
-                        >
-                          Format
-                        </Button>
+                {hasContentActiveFile && (
+                  <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
+                    {isFalse(activeFile.isLocal) && isModel && (
+                      <div className="flex w-full justify-between">
+                        <div className="flex">
+                          <Button
+                            size={EnumSize.sm}
+                            variant="alternative"
+                            disabled={true}
+                          >
+                            Validate
+                          </Button>
+                          <Button
+                            size={EnumSize.sm}
+                            variant="alternative"
+                            disabled={true}
+                          >
+                            Format
+                          </Button>
+                        </div>
+                        {isTrue(isModel) && (
+                          <Button
+                            size={EnumSize.sm}
+                            variant="secondary"
+                            disabled={isFalse(shouldEvaluate)}
+                            onClick={e => {
+                              e.stopPropagation()
+
+                              evaluateModel()
+                            }}
+                          >
+                            Evaluate
+                          </Button>
+                        )}
                       </div>
-                      {isTrue(isModel) && (
-                        <Button
-                          size={EnumSize.sm}
-                          variant="secondary"
-                          disabled={isFalse(shouldEvaluate)}
-                          onClick={e => {
-                            e.stopPropagation()
-
-                            evaluateModel()
-                          }}
-                        >
-                          Evaluate
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  {isFalse(isModel) &&
-                    activeFile.extension === '.sql' &&
-                    activeFile.content !== '' && (
-                      <>
-                        <Button
-                          size={EnumSize.sm}
-                          variant="alternative"
-                          onClick={e => {
-                            e.stopPropagation()
-
-                            sendQuery()
-                          }}
-                        >
-                          Run Query
-                        </Button>
-                      </>
                     )}
-                </div>
+                    {isFalse(isModel) &&
+                      activeFile.extension === '.sql' &&
+                      activeFile.content !== '' && (
+                        <>
+                          <Button
+                            size={EnumSize.sm}
+                            variant="alternative"
+                            onClick={e => {
+                              e.stopPropagation()
+
+                              sendQuery()
+                            }}
+                          >
+                            Run Query
+                          </Button>
+                        </>
+                      )}
+                  </div>
+                )}
               </div>
             </div>
           </SplitPane>

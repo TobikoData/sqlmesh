@@ -18,6 +18,7 @@ import { useChannel } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import {
   includes,
+  isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
   isNil,
@@ -31,6 +32,7 @@ import {
   useStoreContext,
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
+import { useStoreFileTree } from '~/context/fileTree'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -74,7 +76,11 @@ export function IDE(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (contextEnvironemnts == null) return
+    if (
+      contextEnvironemnts == null ||
+      isArrayEmpty(Object.keys(contextEnvironemnts))
+    )
+      return
 
     addRemoteEnvironments(Object.keys(contextEnvironemnts))
   }, [contextEnvironemnts])
@@ -287,6 +293,8 @@ function RunPlan({
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
+  const openedFiles = useStoreFileTree(s => s.openedFiles)
+
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 
   const { refetch: refetchEnvironments } = useApiEnvironments()
@@ -302,7 +310,7 @@ function RunPlan({
     if (environment != null) {
       void refetchPlan()
     }
-  }, [environment])
+  }, [environment, openedFiles])
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
@@ -496,38 +504,39 @@ function RunPlan({
                           )}
                         </Menu.Item>
                       ))}
+                      <Divider />
+                      <div className="flex w-full items-end px-2 pt-2">
+                        <Input
+                          className="my-0 mx-0 mr-4 min-w-[10rem]"
+                          size={EnumSize.sm}
+                          placeholder="Environment"
+                          value={customEnvironment}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            setCustomEnvironment(e.target.value)
+                          }}
+                        />
+                        <Button
+                          className="my-0 mx-0"
+                          size={EnumSize.sm}
+                          disabled={
+                            isStringEmptyOrNil(customEnvironment) ||
+                            isExistingEnvironment(customEnvironment)
+                          }
+                          onClick={(e: MouseEvent) => {
+                            e.stopPropagation()
+
+                            setCustomEnvironment('')
+
+                            addLocalEnvironments([customEnvironment])
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
                     </Menu.Items>
                     <Divider />
-                    <div className="flex w-full items-end p-2">
-                      <Input
-                        className="my-0 mx-0 mr-4 min-w-[10rem]"
-                        size={EnumSize.sm}
-                        placeholder="Environment"
-                        value={customEnvironment}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          e.stopPropagation()
-
-                          setCustomEnvironment(e.target.value)
-                        }}
-                      />
-                      <Button
-                        className="my-0 mx-0"
-                        size={EnumSize.sm}
-                        disabled={
-                          isStringEmptyOrNil(customEnvironment) ||
-                          isExistingEnvironment(customEnvironment)
-                        }
-                        onClick={(e: MouseEvent) => {
-                          e.stopPropagation()
-
-                          setCustomEnvironment('')
-
-                          addLocalEnvironments([customEnvironment])
-                        }}
-                      >
-                        Add
-                      </Button>
-                    </div>
                   </div>
                 </Transition>
               </>
