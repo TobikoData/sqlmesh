@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import {
@@ -21,12 +21,14 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const activeFileId = useStoreFileTree(s => s.activeFileId)
 
+  const [activeTabIndex, setActiveTabIndex] = useState(-1)
+
   const activeFile = useMemo(
     () => openedFiles.get(activeFileId),
     [openedFiles, activeFileId],
   )
 
-  const [headers, data]: any = useMemo(
+  const [headers, data] = useMemo(
     () =>
       tabTableContent == null
         ? [[], []]
@@ -42,12 +44,6 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
     [headers],
   )
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  })
-
   const activeTab = useMemo(
     () =>
       [
@@ -57,6 +53,16 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
       ].findIndex(isTrue),
     [tabTableContent, tabQueryPreviewContent, tabTerminalContent],
   )
+
+  useEffect(() => {
+    setActiveTabIndex(-1)
+  }, [tabTableContent, tabQueryPreviewContent, tabTerminalContent])
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   function isDisabledTabTable(tabName: string): boolean {
     return tabName === 'Table' && isNil(tabTableContent)
@@ -72,7 +78,10 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
 
   return (
     <div className={clsx('flex flex-col overflow-hidden', className)}>
-      <Tab.Group>
+      <Tab.Group
+        onChange={setActiveTabIndex}
+        selectedIndex={activeTabIndex < 0 ? activeTab : activeTabIndex}
+      >
         <Tab.List className="w-full whitespace-nowrap px-2 pt-3">
           <div className="w-full overflow-hidden overflow-x-auto py-1">
             {TABS.map(tabName => (
