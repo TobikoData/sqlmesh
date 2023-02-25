@@ -8,7 +8,6 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
-from sqlmesh.dbt.builtin import builtin_jinja
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -88,16 +87,14 @@ class SeedConfig(GeneralConfig):
         },
     }
 
-    def to_sqlmesh(self, variables: t.Dict[str, t.Any]) -> Model:
+    def to_sqlmesh(self) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
-        rendered = self.render_non_sql_jinja(builtin_jinja(variables))
-
         return create_seed_model(
-            rendered.seed_name,
-            SeedKind(path=rendered.path.absolute()),
-            path=rendered.path,
-            columns=column_types_to_sqlmesh(rendered.columns) or None,
-            column_descriptions_=column_descriptions_to_sqlmesh(rendered.columns) or None,
+            self.seed_name,
+            SeedKind(path=self.path.absolute()),
+            path=self.path,
+            columns=column_types_to_sqlmesh(self.columns) or None,
+            column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
         )
 
     @property

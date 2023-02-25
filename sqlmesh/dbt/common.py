@@ -1,19 +1,122 @@
 from __future__ import annotations
 
 import typing as t
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from pydantic import validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.model.definition import BUILTIN_METHODS as SQLMESH_PYTHON_BUILTIN
+from sqlmesh.dbt.builtin import (
+    BUILTIN_JINJA,
+    generate_ref,
+    generate_source,
+    generate_var,
+)
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import render_jinja
+from sqlmesh.utils.metaprogramming import build_env, serialize_env
 from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="BaseConfig")
 
 
 PROJECT_FILENAME = "dbt_project.yml"
+
+
+@dataclass
+class DbtContext:
+    """Context for DBT environment"""
+
+    project_root: Path = Path()
+    target_name: t.Optional[str] = None
+    project_name: t.Optional[str] = None
+    project_schema: t.Optional[str] = None
+    _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
+    _variables: t.Dict[str, t.Any] = field(default_factory=dict)
+    _target: t.Optional[TargetConfig] = None
+    _sources: t.Dict[str, str] = field(default_factory=dict)
+    _refs: t.Dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self._builtins:
+            self._builtins = BUILTIN_JINJA
+
+        self.sources = self._sources
+        self.refs = self._refs
+        self.variables = self._variables
+
+    @property
+    def target(self) -> TargetConfig:
+        if not self._target:
+            raise ConfigError(f"Target not set for {self.project_name}")
+        return self._target
+
+    @target.setter
+    def target(self, value: TargetConfig) -> None:
+        self._target = value
+        # TODO create target jinja
+
+    @property
+    def variables(self) -> t.Dict[str, t.Any]:
+        return self._variables
+
+    @variables.setter
+    def variables(self, value: t.Dict[str, t.Any]) -> None:
+        self._variables = value
+        self._builtins["var"] = generate_var(self._variables)
+
+    @property
+    def refs(self) -> t.Dict[str, str]:
+        return self._refs
+
+    @refs.setter
+    def refs(self, value: t.Dict[str, str]) -> None:
+        self._refs = value
+        self._builtins["ref"] = generate_ref(self._refs)
+
+    @property
+    def sources(self) -> t.Dict[str, str]:
+        return self._sources
+
+    @sources.setter
+    def sources(self, value: t.Dict[str, str]) -> None:
+        self._sources = value
+        self._builtins["source"] = generate_source(self._sources)
+
+    @property
+    def builtin_jinja(self) -> t.Dict[str, t.Any]:
+        return self._builtins
+
+    @property
+    def builtin_python_env(self) -> t.Dict[str, t.Any]:
+        env: t.Dict[str, t.Any] = {}
+        for name, method in self.builtin_jinja.items():
+            build_env(method, env=env, name=name, path=Path(c.SQLMESH))
+
+        return {**serialize_env(env, Path(c.SQLMESH)), **SQLMESH_PYTHON_BUILTIN}
+
+    def render(self, source: str) -> str:
+        return render_jinja(source, self._builtins)
+
+    def load_yaml(self, source: str | Path) -> t.OrderedDict:
+        return load(source, render_jinja=False)
+
+    def copy(self) -> DbtContext:
+        context = DbtContext()
+        for field_name in self.__dataclass_fields__:
+            val = getattr(self, field_name)
+            if isinstance(val, (set, list, dict)):
+                val = val.copy()
+            setattr(context, field_name, val)
+
+        return context
 
 
 class SqlStr(str):

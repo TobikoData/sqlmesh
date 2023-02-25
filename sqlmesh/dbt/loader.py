@@ -9,19 +9,19 @@ from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model
+from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import Package
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
-from sqlmesh.dbt.seed import SeedConfig
-from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils import UniqueKeyDict
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
     project_root = project_root or Path()
-    profile = Profile.load(project_root)
+    context = DbtContext(project_root=project_root)
+    profile = Profile.load(context)
 
     return Config(
         default_connection=profile.default_target,
@@ -48,31 +48,43 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
-        config = Project.load(self._context.path, self._context.connection)
-        for path in config.project_files:
+        project = Project.load(
+            DbtContext(project_root=self._context.path, target_name=self._context.connection)
+        )
+        for path in project.project_files:
             self._track_file(path)
 
-        all_sources: UniqueKeyDict[str, SourceConfig] = UniqueKeyDict("sources")
-        all_seeds: UniqueKeyDict[str, SeedConfig] = UniqueKeyDict("seeds")
+        context = project.context.copy()
         all_models: UniqueKeyDict[str, ModelConfig] = UniqueKeyDict("models")
-        all_variables: UniqueKeyDict[str, t.Any] = UniqueKeyDict("variables")
+        sources: UniqueKeyDict[str, str] = UniqueKeyDict("sources")
+        refs: UniqueKeyDict[str, str] = UniqueKeyDict("refs")
+        variables: UniqueKeyDict[str, t.Any] = UniqueKeyDict("variables")
 
-        for package in config.packages.values():
-            all_sources.update(package.sources)
-            all_seeds.update(package.seeds)
+        for package in project.packages.values():
             all_models.update(package.models)
-            all_variables.update(package.variables)
+            sources.update(
+                {config.config_name: config.source_name for config in package.sources.values()}
+            )
+            refs.update({name: config.model_name for name, config in package.models.items()})
+            refs.update({name: config.seed_name for name, config in package.seeds.items()})
+            variables.update(package.variables)
 
-        for name, package in config.packages.items():
-            all_macros = self._macros_for_package(name, config.packages)
+        context.sources = sources
+        context.refs = refs
+        context.variables = variables
+
+        for name, package in project.packages.items():
+            all_macros = self._macros_for_package(name, project.packages)
 
             for model in package.models.values():
-                models[model.model_name] = model.to_sqlmesh(
-                    all_sources, all_models, all_seeds, all_variables, all_macros
+                rendered_model = model.render_non_sql_jinja(context.builtin_jinja)
+                models[rendered_model.model_name] = rendered_model.to_sqlmesh(
+                    context, all_models, all_macros
                 )
 
             for seed in package.seeds.values():
-                models[seed.seed_name] = seed.to_sqlmesh(all_variables)
+                rendered_seed = seed.render_non_sql_jinja(context.builtin_jinja)
+                models[rendered_seed.seed_name] = rendered_seed.to_sqlmesh()
 
         return models
 

@@ -109,6 +109,7 @@ def call_name(node: nodes.Expr) -> str:
         return call_name(node.node)
     return ""
 
+
 def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> str:
     return ENVIRONMENT.from_string(query).render(methods)
 
