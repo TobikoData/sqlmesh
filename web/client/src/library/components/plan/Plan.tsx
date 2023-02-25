@@ -8,7 +8,6 @@ import {
   EnumPlanAction,
   useStorePlan,
 } from '../../../context/plan'
-import fetchAPI from '../../../api/instance'
 import {
   includes,
   isArrayNotEmpty,
@@ -21,6 +20,7 @@ import { useChannel } from '../../../api/channels'
 import { getActionName, isModified } from './help'
 import { Divider } from '../divider/Divider'
 import { EnvironmentName, useStoreContext } from '~/context/context'
+import { applyApiCommandsApplyPost } from '~/api/client'
 
 export default function Plan({
   environment,
@@ -35,8 +35,6 @@ export default function Plan({
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-  const backfill_start = useStorePlan(s => s.backfill_start)
-  const backfill_end = useStorePlan(s => s.backfill_end)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
@@ -50,13 +48,13 @@ export default function Plan({
   const [subscribe] = useChannel('/api/tasks', updateTasks)
 
   const plan = useMemo(() => {
-    return [
+    const isFreshPlan = [
       data?.environment == null,
       planAction === EnumPlanAction.Run,
       planAction === EnumPlanAction.Done,
     ].some(Boolean)
-      ? undefined
-      : data
+
+    return isFreshPlan ? undefined : data
   }, [data, planAction])
   const changes = useMemo(() => plan?.changes, [plan])
   const hasChanges = useMemo(
@@ -126,28 +124,22 @@ export default function Plan({
     reset()
   }
 
-  async function apply<T extends { ok: boolean }>(): Promise<void> {
+  async function apply(): Promise<void> {
     setPlanState(EnumPlanState.Applying)
 
-    try {
-      const data: T = await fetchAPI<T, { start?: string; end?: string }>({
-        url: '/api/commands/apply',
-        method: 'post',
-        data: {
-          start: backfill_start,
-          end: backfill_end,
-        },
-        params: {
-          environment,
-        },
+    applyApiCommandsApplyPost({
+      environment,
+    })
+      .then(data => {
+        if (data.ok) {
+          subscribe()
+        }
       })
+      .catch(error => {
+        console.error(error)
 
-      if (data.ok) {
-        subscribe()
-      }
-    } catch (error) {
-      reset()
-    }
+        reset()
+      })
   }
 
   function close(): void {

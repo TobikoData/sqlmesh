@@ -87,7 +87,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   })
 
   const { data: fileData } = useApiFileByPath(activeFile.path)
-  const mutationSaveFile = useMutationApiSaveFile<{ content: string }>(client, {
+  const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
       setEditorFileStatus(EnumEditorFileStatus.Edit)

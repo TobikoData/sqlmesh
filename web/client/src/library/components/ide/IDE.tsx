@@ -44,7 +44,7 @@ export interface Profile {
 }
 
 export function IDE(): JSX.Element {
-  const { refetch: getEnvironmentsFromAPI, data: contextEnvironemnts } =
+  const { refetch: refetchEnvironments, data: contextEnvironemnts } =
     useApiEnvironments()
 
   const environment = useStoreContext(s => s.environment)
@@ -68,7 +68,7 @@ export function IDE(): JSX.Element {
   const { data: project } = useApiFiles()
 
   useEffect(() => {
-    void getEnvironmentsFromAPI()
+    void refetchEnvironments()
 
     if (getChannel() == null) {
       subscribe()
@@ -308,7 +308,7 @@ function RunPlan({
 
   useEffect(() => {
     if (environment != null) {
-      void refetchPlan()
+      // void refetchPlan()
     }
   }, [environment, openedFiles])
 
