@@ -2,8 +2,8 @@
 ## Testing changes to models
 To run unit tests for your models, run the `sqlmesh test` command as follows:
 
-```
-bash$ sqlmesh test
+```bash
+$ sqlmesh test
 .
 ----------------------------------------------------------------------
 Ran 1 test in 0.042s
@@ -43,8 +43,8 @@ As another example, running the `sqlmesh test tests/test_order*` command would r
 ## Auditing changes to models
 To audit your models, run the `sqlmesh audit` command as follows:
 
-```
-bash$ sqlmesh audit
+```bash
+$ sqlmesh audit
 Found 1 audit(s).
 assert_positive_order_ids PASS.
 
