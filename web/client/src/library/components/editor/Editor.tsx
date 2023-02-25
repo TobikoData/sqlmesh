@@ -18,6 +18,7 @@ import { useStoreEditor } from '../../../context/editor'
 import {
   evaluateApiCommandsEvaluatePost,
   fetchdfApiCommandsFetchdfPost,
+  renderApiCommandsRenderPost,
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
@@ -27,6 +28,8 @@ import {
   isObjectLike,
   isStringEmptyOrNil,
   isTrue,
+  toDate,
+  toDateFormat,
 } from '../../../utils'
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
@@ -55,6 +58,8 @@ interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
+const DAY = 24 * 60 * 60 * 1000
+
 export function Editor({ className }: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
@@ -80,9 +85,9 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   const [isSaved, setIsSaved] = useState(true)
   const [formEvaluate, setFormEvaluate] = useState({
     model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
-    start: '',
-    end: '',
-    latest: '',
+    start: toDateFormat(toDate(Date.now() - DAY)),
+    end: toDateFormat(new Date()),
+    latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
 
@@ -228,9 +233,14 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     bucket.set(EnumEditorTabs.Terminal, undefined)
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    evaluateApiCommandsEvaluatePost(formEvaluate)
-      .then(updateTabs)
+    renderApiCommandsRenderPost(formEvaluate)
+      .then(({ sql }) => {
+        bucket.set(EnumEditorTabs.QueryPreview, sql)
+        setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+      })
       .catch(console.log)
+
+      evaluateApiCommandsEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
   }
 
   function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
@@ -248,9 +258,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
 
       bucket.set(EnumEditorTabs.Table, undefined)
       setTabTableContent(bucket.get(EnumEditorTabs.Table))
-
-      bucket.set(EnumEditorTabs.QueryPreview, undefined)
-      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
     } else {
       bucket.set(EnumEditorTabs.Terminal, undefined)
       setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
@@ -260,9 +267,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
         getTableDataFromArrowStreamResult(result as Table<any>),
       )
       setTabTableContent(bucket.get(EnumEditorTabs.Table))
-
-      bucket.set(EnumEditorTabs.QueryPreview, undefined)
-      setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
     }
   }
 
@@ -372,7 +376,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               </div>
               <Divider />
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
-                <div className="flex w-full h-full py-1 px-3 justify-center overflow-hidden overflow-y-auto">
+                <div className="flex w-full h-full py-1 px-3 justify-center overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
                   {isTrue(isModel) && (
                     <form className="my-3">
                       <fieldset className="flex items-center my-3 px-3 text-sm font-bold">
@@ -577,7 +581,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           </div>
         </div>
       </div>
-      <Tabs className="overflow-auto" />
+      <Tabs className="overflow-auto scrollbar scrollbar--vertical" />
     </SplitPane>
   )
 }
@@ -593,7 +597,7 @@ function Indicator({
 }): JSX.Element {
   return (
     <small className="font-bold text-xs whitespace-nowrap">
-      {text}:{' '}
+      {text}:&nbsp;
       {value == null ? (
         <span
           className={clsx(

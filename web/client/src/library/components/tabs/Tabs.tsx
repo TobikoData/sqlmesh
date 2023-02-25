@@ -72,7 +72,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
 
   return (
     <div className={clsx('flex flex-col overflow-hidden', className)}>
-      <Tab.Group selectedIndex={activeTab}>
+      <Tab.Group>
         <Tab.List className="w-full whitespace-nowrap px-2 pt-3">
           <div className="w-full overflow-hidden overflow-x-auto py-1">
             {TABS.map(tabName => (
@@ -189,7 +189,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            <pre className="w-full h-full  p-4 bg-secondary-100 rounded-lg">
+            <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg overflow-auto scrollbar scrollbar--vertical">
               {tabQueryPreviewContent}
             </pre>
           </Tab.Panel>
@@ -198,7 +198,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg text-danger-500 overflow-auto text-xs">
+            <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg text-danger-500 overflow-auto text-xs  scrollbar scrollbar--vertical">
               {tabTerminalContent}
             </pre>
           </Tab.Panel>
