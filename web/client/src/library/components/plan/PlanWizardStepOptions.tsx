@@ -5,12 +5,17 @@ import { useStorePlan } from '~/context/plan'
 import Input from '../input/Input'
 import Toggle from '../toggle/Toggle'
 
-export default function PlanWizardStepOptions(): JSX.Element {
+interface PropsPlanWizardStepOptions
+  extends React.HTMLAttributes<HTMLElement> {}
+
+export default function PlanWizardStepOptions({
+  className,
+}: PropsPlanWizardStepOptions): JSX.Element {
   const planOptions = useStorePlan(s => s.planOptions)
   const setPlanOptions = useStorePlan(s => s.setPlanOptions)
 
   return (
-    <li className="mt-6 mb-2 mb-6">
+    <li className={clsx('mt-6 mb-2 mb-6', className)}>
       <form className="w-full h-full">
         <fieldset className={clsx('mb-10 mt-6')}>
           <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-gray-900">

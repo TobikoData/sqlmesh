@@ -43,6 +43,7 @@ export default function PlanWizard({
   const categories = useStorePlan(s => s.categories)
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
+  const activePlan = useStorePlan(s => s.activePlan)
   const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setCategory = useStorePlan(s => s.setCategory)
   const setWithBackfill = useStorePlan(s => s.setWithBackfill)
@@ -65,15 +66,16 @@ export default function PlanWizard({
           Object.assign(acc, {
             [task.model_name]: {
               completed: 0,
-              ...(mostRecentPlan?.tasks[task.model_name] ?? {}),
+              ...(activePlan?.tasks[task.model_name] ?? {}),
               total: task.batches,
               interval: task.interval,
             },
           }),
         {},
       ),
-    [backfills, mostRecentPlan],
+    [backfills, activePlan],
   )
+
   useEffect(() => {
     if (isArrayNotEmpty(backfills)) {
       setCategory(categories[0])
@@ -96,9 +98,9 @@ export default function PlanWizard({
   const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
 
   return (
-    <ul className="w-full mx-auto md:w-[75%] lg:w-[50%]">
+    <ul className="w-full mx-auto">
       {isRun ? (
-        <PlanWizardStepOptions />
+        <PlanWizardStepOptions className="w-full mx-auto md:w-[75%] lg:w-[60%]" />
       ) : (
         <>
           <PlanWizardStep
@@ -108,46 +110,49 @@ export default function PlanWizard({
           >
             {hasChanges ? (
               <>
-                <div className="flex">
-                  {isArrayNotEmpty(changes?.added) && (
-                    <div className="ml-4 mb-8">
-                      <h4 className="text-success-500 mb-2">Added Models</h4>
-                      <ul className="ml-2">
-                        {changes?.added.map((modelName: string) => (
-                          <li
-                            key={modelName}
-                            className="text-success-500 font-sm h-[1.5rem]"
-                          >
-                            <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">
-                              {modelName}
-                            </small>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {isArrayNotEmpty(changes?.removed?.length) && (
-                    <div className="ml-4 mb-8">
-                      <h4 className="text-danger-500 mb-2">Removed Models</h4>
-                      <ul className="ml-2">
-                        {changes?.added.map((modelName: string) => (
-                          <li
-                            key={modelName}
-                            className="text-danger-500 font-sm h-[1.5rem]"
-                          >
-                            <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">
-                              {modelName}
-                            </small>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-                {isModified(changes?.modified) && (
+                {(isArrayNotEmpty(changes?.added) ||
+                  isArrayNotEmpty(changes?.removed)) && (
                   <div className="flex">
+                    {isArrayNotEmpty(changes?.added) && (
+                      <div className="ml-4 mb-8">
+                        <h4 className="text-success-500 mb-2">Added Models</h4>
+                        <ul className="ml-2">
+                          {changes?.added.map((modelName: string) => (
+                            <li
+                              key={modelName}
+                              className="text-success-500 font-sm h-[1.5rem]"
+                            >
+                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">
+                                {modelName}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {isArrayNotEmpty(changes?.removed?.length) && (
+                      <div className="ml-4 mb-8">
+                        <h4 className="text-danger-500 mb-2">Removed Models</h4>
+                        <ul className="ml-2">
+                          {changes?.added.map((modelName: string) => (
+                            <li
+                              key={modelName}
+                              className="text-danger-500 font-sm h-[1.5rem]"
+                            >
+                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">
+                                {modelName}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isModified(changes?.modified) && (
+                  <div className="flex w-full">
                     {isArrayNotEmpty(changes?.modified.direct) && (
-                      <div className="w-full ml-1">
+                      <div className="flex flex-col w-full ml-1">
                         <h4 className="text-secondary-500 mb-2">
                           Modified Directly
                         </h4>
@@ -248,12 +253,14 @@ export default function PlanWizard({
                 )}
               </>
             ) : planAction === EnumPlanAction.Running ? (
-              <span className="flex items-center">
-                <Spinner className="w-4 h-4 mr-2" />
-                <small>Checking ...</small>
+              <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
+                <span className="flex items-center">
+                  <Spinner className="w-4 h-4 mr-2" />
+                  <small>Checking ...</small>
+                </span>
               </span>
             ) : (
-              <div className="ml-1 text-gray-700">
+              <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                 <h3>No Changes</h3>
               </div>
             )}
@@ -264,7 +271,7 @@ export default function PlanWizard({
             disabled={environment == null}
           >
             {isDone && isFalse(hasBackfills) && (
-              <div className="mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between  rounded-lg">
+              <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                 <h3
                   className={clsx(
                     'font-bold text-lg text-success-500',
@@ -289,9 +296,11 @@ export default function PlanWizard({
             {planState === EnumPlanState.Applying &&
               isFalse(isDone) &&
               isFalse(hasBackfills) && (
-                <span className="flex items-center ml-2">
-                  <Spinner className="w-3 h-3 mr-1" />
-                  <span className="inline-block ">Applying...</span>
+                <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
+                  <span className="flex items-center">
+                    <Spinner className="w-3 h-3 mr-1" />
+                    <span className="inline-block">Applying...</span>
+                  </span>
                 </span>
               )}
 
@@ -299,7 +308,7 @@ export default function PlanWizard({
               <>
                 {isModified(changes?.modified) &&
                   planState !== EnumPlanState.Applying && (
-                    <div className="mb-4">
+                    <div className="mb-10 lg:px-4 ">
                       <RadioGroup
                         className="rounded-lg w-full"
                         value={category}
@@ -408,8 +417,7 @@ export default function PlanWizard({
             {hasChanges &&
               isFalse(isPlanInProgress) &&
               isFalse(hasBackfills) && (
-                <div className="ml-1 text-gray-700">
-                  <Divider className="h-1 w-full mb-4" />
+                <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                   <h3>Explanation why we dont need to Backfill</h3>
                 </div>
               )}
@@ -432,16 +440,16 @@ function PlanWizardStep({
   disabled = false,
 }: PropsPlanWizardStep): JSX.Element {
   return (
-    <li className="mb-2 flex items-center w-full">
-      <div className="flex items-start w-full">
+    <li className="mb-2 flex items-center w-full p-4">
+      <div className="flex flex-col items-start w-full lg:flex-row">
         <PlanWizardStepHeader
-          className="min-w-[25%] text-right pr-12"
+          className="min-w-[25%] pr-12 lg:text-right"
           headline={headline}
           disabled={disabled}
         >
           {description}
         </PlanWizardStepHeader>
-        <div className="w-full pt-1">{!disabled && children}</div>
+        <div className="w-full">{!disabled && children}</div>
       </div>
     </li>
   )
