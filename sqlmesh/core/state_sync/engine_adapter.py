@@ -179,6 +179,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
         }
 
+    def reset(self) -> None:
+        """Resets the state store to the state when it was first initialized."""
+        self.engine_adapter.drop_table(self.snapshots_table)
+        self.engine_adapter.drop_table(self.environments_table)
+        self.init_schema()
+
     def _update_environment(self, environment: Environment) -> None:
         self.engine_adapter.delete_from(
             self.environments_table,
