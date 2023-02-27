@@ -240,7 +240,9 @@ export function Editor({ className }: PropsEditor): JSX.Element {
       })
       .catch(console.log)
 
-      evaluateApiCommandsEvaluatePost(formEvaluate).then(updateTabs).catch(console.log)
+    evaluateApiCommandsEvaluatePost(formEvaluate)
+      .then(updateTabs)
+      .catch(console.log)
   }
 
   function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
