@@ -7,6 +7,7 @@
     )
 }}
 
+{{ log_value(5) }}
 SELECT
   o.waiter_id::INT AS waiter_id, /* Waiter id */
   SUM(oi.quantity * i.price)::DOUBLE AS revenue, /* Revenue from orders taken by this waiter */

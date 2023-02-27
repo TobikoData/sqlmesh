@@ -155,6 +155,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
+            logging=True,
             **kwargs,
         )
 

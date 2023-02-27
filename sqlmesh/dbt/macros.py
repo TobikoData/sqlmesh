@@ -16,9 +16,8 @@ class MacroConfig(PydanticModel):
 
 
 BUILTIN_METHODS: t.Dict[str, Executable] = {
-    "is_incremental": Executable(
-        payload="def is_incremental(): return False",
-    ),
+    "is_incremental": Executable(payload="def is_incremental(): return False"),
+    "log": Executable(payload=f"""def log(msg, info=False): print(msg); return ''"""),
     **MODEL_BUILTIN_METHODS,
 }
 
@@ -74,8 +73,4 @@ def var_method(variables: t.Set[str], mapping: t.Dict[str, t.Any]) -> Executable
 
 
 def config_method() -> Executable:
-    return Executable(
-        payload="""def config(*args, **kwargs):
-    return ""
-""",
-    )
+    return Executable(payload="def config(*args, **kwargs): return ''")
