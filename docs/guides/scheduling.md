@@ -1,6 +1,6 @@
 # Scheduling guide
 
-SQLMesh currently supports two ways of scheduling model evaluation:
+SQLMesh currently offers two ways of scheduling model evaluation:
 
 * Using the [built-in scheduler](#built-in-scheduler)
 * By [integrating with Airflow](#integrating-with-airflow)
@@ -11,9 +11,9 @@ It is important to note, however, that the built-in scheduler has not been desig
 
 ## Built-in scheduler
 
-SQLMesh comes with the built-in scheduler implementation which can be used to schedule model evaluation without requiring any additional tools or dependencies.
+SQLMesh comes with a built-in scheduler implementation which can be used to schedule model evaluation without requiring any additional tools or dependencies.
 
-In order to perform model evaluation using the built-in scheduler simply run the following command:
+In order to perform model evaluation using the built-in scheduler, simply run the following command:
 ```bash
 sqlmesh run
 ```
@@ -28,7 +28,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
        sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the evaluation is complete. It's a responsibility of a user to run this command periodically using either a cron job, a CI / CD tool like Jenkins or similar means.
+**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the evaluation is complete. It's the responsibility of a user to run this command periodically using either a cron job, a CI / CD tool like Jenkins or similar means.
 
 
 ## Integrating with Airflow
