@@ -1,14 +1,41 @@
 # Scheduling guide
 
-## The built-in scheduler
+SQLMesh currently supports two ways of scheduling model evaluation:
 
-TODO
+* Using the [built-in scheduler](#built-in-scheduler)
+* By [integrating with Airflow](#integrating-with-airflow)
+
+The built-in scheduler is appropriate for trying out SQLMesh, as well as for smaller data teams with relatively few models.
+
+It is important to note, however, that the built-in scheduler has not been designed for scale. As your organization and data model grow, it's strongly recommended to switch over to using the Airflow open-source workflow orchestrator to prevent scheduling from becoming a performance bottleneck.
+
+## Built-in scheduler
+
+SQLMesh comes with the built-in scheduler implementation which can be used to schedule model evaluation without requiring any additional tools or dependencies.
+
+In order to perform model evaluation using the built-in scheduler simply run the following command:
+```bash
+sqlmesh run
+```
+
+The command above will automatically detect missing intervals for all models in the current project and subsequently evaluate them:
+```bash
+$ sqlmesh run
+
+All model batches have been executed successfully
+
+sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+       sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+```
+
+**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the evaluation is complete. It's a responsibility of a user to run this command periodically using either a cron job, a CI / CD tool like Jenkins or similar means.
+
 
 ## Integrating with Airflow
 
 ### Configuring the Airflow cluster
 
-SQLMesh integrates with an open source Airflow instance, as well as Google Cloud Composer.
+SQLMesh natively integrates with the open source workflow orchestrator [Apache Airflow](https://airflow.apache.org/), as well as its hosted cloud variant - Google Cloud Composer.
 
 To integrate with [Airflow](../integrations/airflow.md), ensure that you meet the [prerequisites](/prerequisites), then perform the following:
 
@@ -29,8 +56,8 @@ To integrate with [Airflow](../integrations/airflow.md), ensure that you meet th
         for dag in sqlmesh_airflow.dags:
             globals()[dag.dag_id] = dag
 
-    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`. 
-    
+    The example above uses `spark` as the engine of choice. Other engines can be configured instead by providing a corresponding string as an argument to the `SQLMeshAirflow` constructor. Supported strings are `"spark"`, `"databricks"`, `"snowflake"`, `"bigquery"` and `"redshift"`.
+
     **Note:** An Airflow Connection must be configured for each engine accordingly. Refer to [Engine support](../integrations/airflow.md#engine-support) for more details.
 
 After setup is completed, the following DAGs should become available in the Airflow UI when filtered by the `sqlmesh` tag:
@@ -49,7 +76,7 @@ On the client side, you must configure the connection to your Airflow cluster in
 
 Alternatively, the configuration above can be generated automatically as part of the project initialization using the `airflow` template:
 ```bash
-$ sqlmesh init -t airflow
+sqlmesh init -t airflow
 ```
 
 For Airflow configuration types specific to Google Cloud Composer, configure the file as follows:
