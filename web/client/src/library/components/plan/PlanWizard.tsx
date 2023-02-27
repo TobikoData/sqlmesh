@@ -130,7 +130,7 @@ export default function PlanWizard({
                         </ul>
                       </div>
                     )}
-                    {isArrayNotEmpty(changes?.removed?.length) && (
+                    {isArrayNotEmpty(changes?.removed) && (
                       <div className="ml-4 mb-8">
                         <h4 className="text-danger-500 mb-2">Removed Models</h4>
                         <ul className="ml-2">
