@@ -95,38 +95,7 @@ MODEL (
 ```
 
 ## Macros
-Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol.
-
-- @start_date
-```sql
--- The inclusive start interval of an execution casted to a DATETIME SQL object.
-@start_date = CAST("2020-01-01 00:00:00.0" AS DATETIME)
-```
-- @end_date
-```sql
--- The inclusive end interval of an execution casted to a DATETIME SQL object.
-@end_date = CAST("2020-01-01 23:59:59.999000" AS DATETIME)
-```
-- @latest_date
-```sql
--- The latest datetime or current run date of an execution. Used when you only care about the latest data.
-@latest_date = CAST("2020-01-01 00:00:00.0" AS DATETIME)
-```
-- @start_ds
-```sql
--- The inclusive start date string.
-@start_ds = '2020-01-01'
-```
-- @end_ds
-```sql
--- The inclusive end date string.
-@end_ds = '2020-01-01'
-```
-- @latest_ds
-```sql
--- The date string of the run date.
-@end_ds = '2020-01-01'
-```
+Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../../concepts/macros.md).
 
 ## Statements
 Models can have additional statements that run before the main query. This can be useful for loading things such as  [UDFs](https://en.wikipedia.org/wiki/User-defined_function). In general, statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior.
@@ -144,30 +113,7 @@ FROM y
 ```
 
 ## Time column
-Models that are loaded incrementally require a time column to partition data. A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake.
-
-```sql linenums="1"
--- Orders are partitioned by the ds column
-MODEL (
-  name sushi.orders,
-  dialect duckdb,
-  kind INCREMENTAL_BY_TIME_RANGE (
-    time_column (ds, '%Y-%m-%d')
-  )
-);
-
-SELECT
-  id::INT AS id, -- Primary key
-  customer_id::INT AS customer_id, -- Id of customer who made the order
-  waiter_id::INT AS waiter_id, -- Id of waiter who took the order
-  start_ts::TEXT AS start_ts, -- Start timestamp
-  end_ts::TEXT AS end_ts, -- End timestamp
-  ds::TEXT AS ds -- Date of order
-FROM raw.orders
-WHERE
-  ds BETWEEN @start_ds AND @end_ds
-```
-When SQLMesh incrementally inserts data for a partition, it will overwrite any existing data in that partition. For engines that support partitions, it will use an `INSERT OVERWRITE` query. For engines that do not, it will first delete the data in the partition before inserting.
+Models that are loaded incrementally require a time column to partition data. A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake. For more information, refer to [time column](../../concepts/models/model_kinds.md#time-column).
 
 ### Format string configuration
 The format string tells SQLMesh how your dates are formatted in order to compare start and end dates correctly. You can configure a project-wide default format in your project configuration. A time column format string declared in a model will override the project-wide default. If the model uses a different dialect than the rest of your project, the format string will be automatically transpiled to the model dialect with SQLGlot. SQLMesh will use
