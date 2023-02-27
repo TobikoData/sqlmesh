@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { Profile } from '~/library/components/ide/IDE'
-import { isArrayEmpty, isFalse } from '~/utils'
+import { isFalse } from '~/utils'
 
 export const EnumRelativeLocation = {
   Local: 'local',
@@ -31,11 +31,6 @@ interface ContextStore {
   removeLocalEnvironments: (environments: EnvironmentName[]) => void
   addRemoteEnvironments: (environments: EnvironmentName[]) => void
   isExistingEnvironment: (environment: EnvironmentName) => boolean
-}
-
-export const PROD: Environment = {
-  name: EnumDefaultEnvironment.Prod,
-  type: EnumRelativeLocation.Local,
 }
 
 const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
@@ -139,33 +134,31 @@ function getOnlyLocalEnvironments(
 }
 
 function getDefaultEnvironments(): Environment[] {
-  const environments = getProfile()?.environments ?? []
-  const defaultEnvironments = [
-    PROD,
-    {
-      name: EnumDefaultEnvironment.Dev,
-      type: EnumRelativeLocation.Local,
-    },
-    {
-      name: EnumDefaultEnvironment.Stage,
-      type: EnumRelativeLocation.Local,
-    },
-  ]
-  if (isArrayEmpty(environments)) return defaultEnvironments
-  if (environments.length > defaultEnvironments.length) return environments
+  const profile = getProfile()
+  const environments = new Set<string>()
 
-  const output = structuredClone(environments)
-
-  while (output.length < 3 && defaultEnvironments.length > 0) {
-    const item = defaultEnvironments.shift()
-    const isExist = output.some(({ name }) => name === item?.name)
-
-    if (item != null && isFalse(isExist)) {
-      output.push(item)
-    }
+  if (profile?.environment != null) {
+    environments.add(profile.environment)
   }
 
-  sortEnvoirnments(output)
+  if (profile?.environments != null) {
+    profile.environments.forEach(({ name }) => environments.add(name))
+  }
+
+  ;[
+    EnumDefaultEnvironment.Prod,
+    EnumDefaultEnvironment.Dev,
+    EnumDefaultEnvironment.Stage,
+  ].forEach(name => environments.add(name))
+
+  const output: Environment[] = []
+
+  environments.forEach(name => {
+    output.push({
+      name,
+      type: EnumRelativeLocation.Local,
+    })
+  })
 
   return output
 }

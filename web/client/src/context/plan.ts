@@ -32,7 +32,7 @@ interface Category {
   description: string
 }
 
-interface PlanTaskStatus {
+export interface PlanTaskStatus {
   total: number
   completed: number
   start?: number
