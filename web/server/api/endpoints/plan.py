@@ -20,6 +20,8 @@ def get_plan(
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
+    context.refresh()
+
     plan = context.plan(environment=environment, no_prompts=True)
     payload = models.ContextEnvironment(
         environment=plan.environment.name,

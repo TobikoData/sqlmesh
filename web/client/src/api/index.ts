@@ -5,7 +5,6 @@ import {
   UseQueryResult,
   UseMutationResult,
 } from '@tanstack/react-query'
-import { saveFileByPath } from './endpoints'
 import {
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
@@ -16,6 +15,8 @@ import {
   dagApiCommandsDagGet,
   GetEnvironmentsApiEnvironmentsGet200,
   getEnvironmentsApiEnvironmentsGet,
+  writeFileApiFilesPathPost,
+  BodyWriteFileApiFilesPathPost,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -37,13 +38,6 @@ export function useApiFiles(): UseQueryResult<Directory> {
     queryKey: ['/api/files'],
     queryFn: getFilesApiFilesGet,
     cacheTime: 0,
-  })
-}
-
-export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
-  return useQuery({
-    queryKey: ['/api/dag'],
-    queryFn: dagApiCommandsDagGet,
   })
 }
 
@@ -75,15 +69,21 @@ export function useApiPlan(
   })
 }
 
-export function useMutationApiSaveFile<T extends object>(
+export function useMutationApiSaveFile(
   client: QueryClient,
   callbacks: {
     onSuccess?: (file: File) => void
     onMutate?: () => void
   },
-): UseMutationResult<File, unknown, { path: string; body: T }, void> {
+): UseMutationResult<
+  File,
+  unknown,
+  { path: string; body: BodyWriteFileApiFilesPathPost },
+  void
+> {
   return useMutation({
-    mutationFn: saveFileByPath<T>,
+    mutationFn: async ({ path, body }) =>
+      await writeFileApiFilesPathPost(path, body),
     async onMutate({ path }) {
       await client.cancelQueries({
         queryKey: [`/api/files`, path],
@@ -103,4 +103,11 @@ export function useMutationApiSaveFile<T extends object>(
 
 export async function useApiContextCancel(client: QueryClient): Promise<void> {
   await client.cancelQueries({ queryKey: [`/api/context`] })
+}
+
+export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
+  return useQuery({
+    queryKey: ['/api/commands/dag'],
+    queryFn: dagApiCommandsDagGet,
+  })
 }
