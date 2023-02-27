@@ -12,6 +12,8 @@ import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
+  PlanTasks,
+  PlanTaskStatus,
 } from '../../../context/plan'
 import {
   includes,
@@ -59,21 +61,34 @@ export default function PlanWizard({
     [changes],
   )
 
-  const tasks = useMemo(
+  const tasks: PlanTasks = useMemo(
     () =>
-      backfills.reduce(
-        (acc, task) =>
-          Object.assign(acc, {
-            [task.model_name]: {
-              completed: 0,
-              ...(activePlan?.tasks[task.model_name] ?? {}),
-              total: task.batches,
-              interval: task.interval,
-            },
-          }),
-        {},
-      ),
-    [backfills, activePlan],
+      backfills.reduce((acc: PlanTasks, task) => {
+        const interval = task.interval as [string, string]
+        const backfillTask: PlanTaskStatus = {
+          completed: 0,
+          ...activePlan?.tasks[task.model_name],
+          total: task.batches,
+          interval,
+        }
+
+        if (category?.id === 'breaking-change') {
+          acc[task.model_name] = backfillTask
+        } else if (category?.id === 'non-breaking-change') {
+          const isDirectChange = Boolean(
+            changes?.modified.direct.some(
+              ({ model_name }) => model_name === task.model_name,
+            ),
+          )
+
+          if (isDirectChange) {
+            acc[task.model_name] = backfillTask
+          }
+        }
+
+        return acc
+      }, {}),
+    [backfills, changes, category, activePlan],
   )
 
   useEffect(() => {

@@ -101,7 +101,7 @@ export default function Plan({
 
     setCategory(undefined)
     setWithBackfill(false)
-    setBackfills()
+    setBackfills(undefined)
     resetPlanOptions()
   }
 
