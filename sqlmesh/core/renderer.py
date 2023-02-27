@@ -117,7 +117,7 @@ class QueryRenderer:
                 env = prepare_env(self._python_env)
 
                 if not kwargs.get("logging"):
-                    env["log"] = lambda msg, info=False: None
+                    env["log"] = lambda msg, info=False: ""
 
                 try:
                     parsed_query = parse_one(

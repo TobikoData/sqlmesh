@@ -17,7 +17,7 @@ class MacroConfig(PydanticModel):
 
 BUILTIN_METHODS: t.Dict[str, Executable] = {
     "is_incremental": Executable(payload="def is_incremental(): return False"),
-    "log": Executable(payload=f"def log(msg, info=False): print(msg)"),
+    "log": Executable(payload=f"""def log(msg, info=False): print(msg); return ''"""),
     **MODEL_BUILTIN_METHODS,
 }
 
