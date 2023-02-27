@@ -85,26 +85,17 @@ export function IDE(): JSX.Element {
     addRemoteEnvironments(Object.keys(contextEnvironemnts))
   }, [contextEnvironemnts])
 
-  function closePlan(): void {
-    setPlanAction(EnumPlanAction.Closing)
-  }
-
   function cancelPlan(): void {
-    if (planAction === EnumPlanAction.Applying) {
-      setPlanState(EnumPlanState.Cancelling)
-    }
+    setPlanState(EnumPlanState.Cancelling)
 
-    if (planAction !== EnumPlanAction.None) {
-      setPlanAction(EnumPlanAction.Cancelling)
-    }
-
-    fetchAPI({ url: '/api/plan/cancel', method: 'post' }).catch(console.error)
-
-    setPlanState(EnumPlanState.Cancelled)
-    setLastPlan(mostRecentPlan)
-
-    getChannel()?.close()
-    unsubscribe()
+    fetchAPI({ url: '/api/plan/cancel', method: 'post' })
+      .catch(console.error)
+      .finally(() => {
+        setPlanState(EnumPlanState.Cancelled)
+        setLastPlan(mostRecentPlan)
+        getChannel()?.close()
+        unsubscribe()
+      })
   }
 
   function showGraph(): void {
@@ -255,11 +246,9 @@ export function IDE(): JSX.Element {
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
                   {isGraphOpen && <Graph closeGraph={closeGraph} />}
                   {environment != null &&
-                    planAction !== EnumPlanAction.None &&
-                    planAction !== EnumPlanAction.Closing && (
+                    planAction !== EnumPlanAction.None && (
                       <Plan
                         environment={environment}
-                        onClose={closePlan}
                         onCancel={cancelPlan}
                       />
                     )}

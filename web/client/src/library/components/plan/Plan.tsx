@@ -1,6 +1,5 @@
-import { Button } from '../button/Button'
 import { useApiPlan, useApiContextCancel } from '../../../api'
-import { useEffect, MouseEvent, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PlanWizard from './PlanWizard'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -12,96 +11,94 @@ import {
   includes,
   isArrayNotEmpty,
   isFalse,
-  isStringEmptyOrNil,
   toDate,
   toDateFormat,
 } from '../../../utils'
 import { useChannel } from '../../../api/channels'
-import { getActionName, isModified } from './help'
+import { isModified } from './help'
 import { Divider } from '../divider/Divider'
-import { EnvironmentName, useStoreContext } from '~/context/context'
-import { applyApiCommandsApplyPost } from '~/api/client'
+import { EnvironmentName } from '~/context/context'
+import {
+  applyApiCommandsApplyPost,
+  ContextEnvironment,
+  ContextEnvironmentBackfill,
+  ContextEnvironmentChanges,
+} from '~/api/client'
+import PlanHeader from './PlanHeader'
+import PlanActions from './PlanActions'
 
 export default function Plan({
   environment,
-  onClose,
   onCancel,
 }: {
   environment: EnvironmentName
-  onClose: () => void
   onCancel: () => void
 }): JSX.Element {
   const client = useQueryClient()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
+  const category = useStorePlan(s => s.category)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
-  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
-  const setBackfills = useStorePlan(s => s.setBackfills)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
   const updateTasks = useStorePlan(s => s.updateTasks)
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
-  const { refetch, data } = useApiPlan(environment)
+  const [plan, setPlan] = useState<ContextEnvironment>()
+
   const [subscribe] = useChannel('/api/tasks', updateTasks)
 
-  const plan = useMemo(() => {
-    const isFreshPlan = [
-      data?.environment == null,
-      planAction === EnumPlanAction.Run,
-      planAction === EnumPlanAction.Done,
+  const { refetch } = useApiPlan(environment)
+
+  const [changes, hasChanges, backfills, hasBackfill] = useMemo((): [
+    ContextEnvironmentChanges | undefined,
+    boolean,
+    ContextEnvironmentBackfill[] | undefined,
+    boolean,
+  ] => {
+    const hasChanges = [
+      isModified(plan?.changes?.modified),
+      isArrayNotEmpty(plan?.changes?.added),
+      isArrayNotEmpty(plan?.changes?.removed),
     ].some(Boolean)
 
-    return isFreshPlan ? undefined : data
-  }, [data, planAction])
-  const changes = useMemo(() => plan?.changes, [plan])
-  const hasChanges = useMemo(
-    () =>
-      [
-        isModified(changes?.modified),
-        isArrayNotEmpty(changes?.added),
-        isArrayNotEmpty(changes?.removed),
-      ].some(Boolean),
-    [changes],
-  )
+    return [
+      plan?.changes,
+      hasChanges,
+      plan?.backfills,
+      isArrayNotEmpty(plan?.backfills),
+    ]
+  }, [plan])
 
   useEffect(() => {
-    if (planState === EnumPlanState.Applying) {
-      setPlanAction(EnumPlanAction.Applying)
-    }
-
-    if (planState === EnumPlanState.Cancelling) {
-      setPlanAction(EnumPlanAction.Cancelling)
-    }
-
     if (includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)) {
-      setPlanAction(EnumPlanAction.Done)
+      setPlan(undefined)
     }
   }, [planState])
 
   useEffect(() => {
-    if (plan == null) return
+    if (
+      planAction === EnumPlanAction.Run ||
+      planAction === EnumPlanAction.Closing
+    )
+      return
 
-    setBackfills(plan.backfills)
-
-    if (isArrayNotEmpty(plan.backfills) || hasChanges) {
+    if (hasChanges || hasBackfill) {
       setPlanAction(EnumPlanAction.Apply)
-    } else {
-      setPlanAction(EnumPlanAction.Done)
     }
 
-    setBackfillDate('start', toDateFormat(toDate(plan.start)))
-    setBackfillDate('end', toDateFormat(toDate(plan.end)))
-  }, [plan])
+    if (isFalse(hasChanges) && isFalse(hasBackfill)) {
+      setPlanAction(EnumPlanAction.Done)
+    }
+  }, [hasChanges, hasBackfill, plan])
 
   function cleanUp(): void {
     void useApiContextCancel(client)
 
+    setPlan(undefined)
     setCategory(undefined)
-    setWithBackfill(false)
-    setBackfills(undefined)
     resetPlanOptions()
   }
 
@@ -110,21 +107,19 @@ export default function Plan({
 
     cleanUp()
 
-    if (
-      planState !== EnumPlanState.Applying &&
-      planState !== EnumPlanState.Cancelling
-    ) {
-      setPlanAction(EnumPlanAction.Run)
-    }
+    setPlanAction(EnumPlanAction.Run)
   }
 
   function cancel(): void {
+    setPlanAction(EnumPlanAction.Cancelling)
+
     onCancel()
 
     reset()
   }
 
-  async function apply(): Promise<void> {
+  function apply(): void {
+    setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
     applyApiCommandsApplyPost({
@@ -143,198 +138,51 @@ export default function Plan({
   }
 
   function close(): void {
-    cleanUp()
+    setPlanAction(EnumPlanAction.Closing)
 
-    onClose()
+    cleanUp()
   }
 
   function run(): void {
     setPlanAction(EnumPlanAction.Running)
+    setPlan(undefined)
 
-    void refetch()
+    refetch()
+      .then(({ data }) => {
+        setPlan(data)
+
+        if (data != null) {
+          setBackfillDate('start', toDateFormat(toDate(data.start)))
+          setBackfillDate('end', toDateFormat(toDate(data.end)))
+        }
+      })
+      .catch(console.error)
   }
 
   return (
     <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
-      <div className="h-full w-full py-4 px-6">
-        <h4 className="text-xl">
-          <span className="font-bold">Target Environment is</span>
-          <b className="ml-2 px-2 py-1 font-sm rounded-md bg-secondary-500 text-secondary-100">
-            {environment}
-          </b>
-        </h4>
-      </div>
+      <PlanHeader environment={environment} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
         <PlanWizard
           environment={environment}
           changes={changes}
+          hasChanges={hasChanges}
+          backfills={backfills}
+          hasBackfill={hasBackfill}
         />
       </div>
       <Divider />
       <PlanActions
+        environment={environment}
+        planAction={planAction}
+        shouldApplyWithBackfill={hasBackfill && category?.id !== 'no-change'}
         apply={apply}
         run={run}
         cancel={cancel}
         close={close}
         reset={reset}
       />
-    </div>
-  )
-}
-
-interface PropsPlanActions {
-  apply: () => Promise<void>
-  run: () => void
-  cancel: () => void
-  close: () => void
-  reset: () => void
-}
-
-function PlanActions({
-  run,
-  apply,
-  cancel,
-  close,
-  reset,
-}: PropsPlanActions): JSX.Element {
-  const withBackfill = useStorePlan(s => s.withBackfill)
-  const planAction = useStorePlan(s => s.action)
-
-  const environment = useStoreContext(s => s.environment)
-
-  const isRunning =
-    planAction === EnumPlanAction.Run || planAction === EnumPlanAction.Running
-  const isApplying =
-    planAction === EnumPlanAction.Apply ||
-    planAction === EnumPlanAction.Applying
-  const isProcessing = includes(
-    [
-      EnumPlanAction.Running,
-      EnumPlanAction.Applying,
-      EnumPlanAction.Cancelling,
-    ],
-    planAction,
-  )
-
-  return (
-    <div className="flex justify-between px-4 py-2">
-      <div className="flex w-full items-center">
-        {isRunning && (
-          <>
-            <Button
-              type="submit"
-              disabled={
-                planAction === EnumPlanAction.Running ||
-                isStringEmptyOrNil(environment)
-              }
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
-
-                run()
-              }}
-            >
-              {getActionName(planAction, [
-                EnumPlanAction.Running,
-                EnumPlanAction.Run,
-              ])}
-            </Button>
-            {planAction === EnumPlanAction.Run && (
-              <p className="ml-2 text-gray-600">
-                <small>Plan for</small>
-                <b className="text-secondary-500 font-bold mx-1">
-                  {environment}
-                </b>
-                <small>Environment</small>
-              </p>
-            )}
-          </>
-        )}
-
-        {isApplying && (
-          <Button
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              void apply()
-            }}
-            disabled={planAction === EnumPlanAction.Applying}
-          >
-            {getActionName(
-              planAction,
-              [EnumPlanAction.Applying],
-              withBackfill ? 'Apply And Backfill' : 'Apply',
-            )}
-          </Button>
-        )}
-        {isProcessing && (
-          <Button
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              cancel()
-            }}
-            variant="danger"
-            className="justify-self-end"
-            disabled={planAction === EnumPlanAction.Cancelling}
-          >
-            {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
-          </Button>
-        )}
-      </div>
-      <div className="flex items-center">
-        {isFalse(isProcessing) && isFalse(isRunning) && (
-          <Button
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              reset()
-            }}
-            variant="alternative"
-            className="justify-self-end"
-            disabled={includes(
-              [
-                EnumPlanAction.Resetting,
-                EnumPlanAction.Applying,
-                EnumPlanAction.Cancelling,
-                EnumPlanAction.Closing,
-              ],
-              planAction,
-            )}
-          >
-            {getActionName(
-              planAction,
-              [EnumPlanAction.Resetting],
-              'Start Over',
-            )}
-          </Button>
-        )}
-        <Button
-          onClick={(e: MouseEvent) => {
-            e.preventDefault()
-
-            close()
-          }}
-          variant={
-            planAction === EnumPlanAction.Done ? 'secondary' : 'alternative'
-          }
-          className="justify-self-end"
-          disabled={includes(
-            [
-              EnumPlanAction.Closing,
-              EnumPlanAction.Resetting,
-              EnumPlanAction.Cancelling,
-            ],
-            planAction,
-          )}
-        >
-          {getActionName(
-            planAction,
-            [EnumPlanAction.Closing, EnumPlanAction.Done],
-            'Close',
-          )}
-        </Button>
-      </div>
     </div>
   )
 }

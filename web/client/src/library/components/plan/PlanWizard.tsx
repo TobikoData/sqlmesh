@@ -5,8 +5,11 @@ import {
   PlusCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { lazy, Suspense, useEffect, useMemo } from 'react'
-import { ContextEnvironmentChanges } from '~/api/client'
+import { lazy, Suspense, useMemo } from 'react'
+import {
+  ContextEnvironmentBackfill,
+  ContextEnvironmentChanges,
+} from '~/api/client'
 import { EnvironmentName } from '~/context/context'
 import {
   EnumPlanState,
@@ -33,13 +36,18 @@ const Tasks = lazy(async () => await import('../plan/Tasks'))
 export default function PlanWizard({
   environment,
   changes,
+  hasChanges,
+  hasBackfill,
+  backfills = [],
 }: {
   environment: EnvironmentName
+  hasChanges: boolean
   changes?: ContextEnvironmentChanges
+  backfills?: ContextEnvironmentBackfill[]
+  hasBackfill: boolean
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-  const backfills = useStorePlan(s => s.backfills)
 
   const category = useStorePlan(s => s.category)
   const categories = useStorePlan(s => s.categories)
@@ -48,73 +56,54 @@ export default function PlanWizard({
   const activePlan = useStorePlan(s => s.activePlan)
   const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setCategory = useStorePlan(s => s.setCategory)
-  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
 
-  const hasChanges = useMemo(
-    () =>
-      [
-        isModified(changes?.modified),
-        isArrayNotEmpty(changes?.added),
-        isArrayNotEmpty(changes?.removed),
-      ].some(Boolean),
-    [changes],
-  )
-
   const tasks: PlanTasks = useMemo(
-    () =>
-      backfills.reduce((acc: PlanTasks, task) => {
-        const interval = task.interval as [string, string]
-        const backfillTask: PlanTaskStatus = {
-          completed: 0,
-          ...activePlan?.tasks[task.model_name],
-          total: task.batches,
-          interval,
-        }
+    (): PlanTasks =>
+      hasBackfill
+        ? backfills.reduce((acc: PlanTasks, task) => {
+            const interval = task.interval as [string, string]
+            const backfillTask: PlanTaskStatus = {
+              completed: 0,
+              ...activePlan?.tasks[task.model_name],
+              total: task.batches,
+              interval,
+            }
 
-        if (category?.id === 'breaking-change') {
-          acc[task.model_name] = backfillTask
-        } else if (category?.id === 'non-breaking-change') {
-          const isDirectChange = Boolean(
-            changes?.modified.direct.some(
-              ({ model_name }) => model_name === task.model_name,
-            ),
-          )
+            if (category?.id === 'breaking-change') {
+              acc[task.model_name] = backfillTask
+            } else if (category?.id === 'non-breaking-change') {
+              const isDirectChange = Boolean(
+                changes?.modified.direct.some(
+                  ({ model_name }) => model_name === task.model_name,
+                ),
+              )
 
-          if (isDirectChange) {
-            acc[task.model_name] = backfillTask
-          }
-        }
+              if (isDirectChange) {
+                acc[task.model_name] = backfillTask
+              }
+            }
 
-        return acc
-      }, {}),
-    [backfills, changes, category, activePlan],
+            return acc
+          }, {})
+        : mostRecentPlan?.tasks ?? {},
+    [backfills, changes, category, mostRecentPlan, activePlan],
   )
 
-  useEffect(() => {
-    if (isArrayNotEmpty(backfills)) {
-      setCategory(categories[0])
-    }
-  }, [backfills])
-
-  useEffect(() => {
-    setWithBackfill(isArrayNotEmpty(backfills) && category?.id !== 'no-change')
-  }, [backfills, category])
-
-  const hasBackfills = isArrayNotEmpty(backfills)
+  const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
   const isPlanInProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
   )
-  const isRun = includes(
-    [EnumPlanAction.Running, EnumPlanAction.Run],
-    planAction,
-  )
-  const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
+  const shouldDisplayTaskProgress =
+    Object.keys(tasks).length > 0 &&
+    planAction !== EnumPlanAction.Running &&
+    planAction !== EnumPlanAction.Closing &&
+    (hasBackfill || isDone)
 
   return (
     <ul className="w-full mx-auto">
-      {isRun ? (
+      {planAction === EnumPlanAction.Run ? (
         <PlanWizardStepOptions className="w-full mx-auto md:w-[75%] lg:w-[60%]" />
       ) : (
         <>
@@ -271,7 +260,7 @@ export default function PlanWizard({
               <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                 <span className="flex items-center">
                   <Spinner className="w-4 h-4 mr-2" />
-                  <small>Checking ...</small>
+                  <small>Checking Models...</small>
                 </span>
               </span>
             ) : (
@@ -285,7 +274,7 @@ export default function PlanWizard({
             description="Progress"
             disabled={environment == null}
           >
-            {isDone && isFalse(hasBackfills) && (
+            {isDone && isFalse(hasBackfill) && (
               <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                 <h3
                   className={clsx(
@@ -308,9 +297,17 @@ export default function PlanWizard({
                 </p>
               </div>
             )}
+            {planAction === EnumPlanAction.Running && (
+              <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
+                <span className="flex items-center">
+                  <Spinner className="w-4 h-4 mr-2" />
+                  <small>Collecting Backfills...</small>
+                </span>
+              </span>
+            )}
             {planState === EnumPlanState.Applying &&
               isFalse(isDone) &&
-              isFalse(hasBackfills) && (
+              isFalse(hasBackfill) && (
                 <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                   <span className="flex items-center">
                     <Spinner className="w-3 h-3 mr-1" />
@@ -319,7 +316,7 @@ export default function PlanWizard({
                 </span>
               )}
 
-            {hasBackfills && (
+            {shouldDisplayTaskProgress && (
               <>
                 {isModified(changes?.modified) &&
                   planState !== EnumPlanState.Applying && (
@@ -431,7 +428,7 @@ export default function PlanWizard({
 
             {hasChanges &&
               isFalse(isPlanInProgress) &&
-              isFalse(hasBackfills) && (
+              isFalse(hasBackfill) && (
                 <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
                   <h3>Explanation why we dont need to Backfill</h3>
                 </div>

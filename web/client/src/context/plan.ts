@@ -102,6 +102,8 @@ const planDefaultOptions: PlanOptions = {
   restateModel: '',
 }
 
+const categories = getCategories()
+
 export const useStorePlan = create<PlanStore>((set, get) => ({
   planOptions: planDefaultOptions,
   state: EnumPlanState.Init,
@@ -127,7 +129,7 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
     set(() => ({ action }))
   },
   setCategory: (category?: Category) => {
-    set(() => ({ category }))
+    set(() => ({ category: category ?? categories[0] }))
   },
   backfill_start: '',
   backfill_end: '',
@@ -136,8 +138,8 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
       [`backfill_${type}`]: date ?? '',
     }))
   },
-  category: undefined,
-  categories: getCategories(),
+  category: categories[0],
+  categories,
   withBackfill: true,
   setWithBackfill: (withBackfill: boolean) => {
     set(() => ({ withBackfill }))
