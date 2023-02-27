@@ -116,6 +116,9 @@ class QueryRenderer:
             if isinstance(query, d.Jinja):
                 env = prepare_env(self._python_env)
 
+                if not kwargs.get("logging"):
+                    env["log"] = lambda msg, info=False: None
+
                 try:
                     parsed_query = parse_one(
                         ENVIRONMENT.from_string(

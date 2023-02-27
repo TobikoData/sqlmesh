@@ -155,7 +155,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            **kwargs,
+            **{**kwargs, "logging": True},
         )
 
         with self.adapter.transaction(

@@ -367,6 +367,7 @@ class ModelConfig(GeneralConfig):
             return ""
 
         env = prepare_env(python_env)
+        env["log"] = lambda msg, info=False: None
 
         ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(
             config=_config,
