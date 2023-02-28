@@ -27,7 +27,7 @@ from sqlmesh.core.engine_adapter._typing import (
     PySparkSession,
     Query,
 )
-from sqlmesh.core.engine_adapter.shared import TransactionType
+from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
@@ -729,6 +729,15 @@ class EngineAdapter:
             **kwargs,
         }
         return e.sql(**sql_gen_kwargs)  # type: ignore
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
+
+        raise NotImplementedError()
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
