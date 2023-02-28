@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import traceback
 import typing as t
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import BaseSettings
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 
@@ -41,9 +43,14 @@ def _get_loaded_context(path: str, config: str) -> Context:
 
 async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
     loop = asyncio.get_running_loop()
-    async with get_context_lock:
-        return await loop.run_in_executor(
-            None, _get_loaded_context, settings.project_path, settings.config
+    try:
+        async with get_context_lock:
+            return await loop.run_in_executor(
+                None, _get_loaded_context, settings.project_path, settings.config
+            )
+    except Exception:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
 
 
