@@ -133,6 +133,9 @@ class BaseSparkEngineAdapter(EngineAdapter):
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
         target = nullsafe_join(".", catalog_name, schema_name)
         query = parse_one(f"SHOW TABLE EXTENDED IN {target} LIKE '*'", read="spark")
         df = self.fetchdf(query)

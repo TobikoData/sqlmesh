@@ -24,6 +24,9 @@ class DatabricksAPIEngineAdapter(BaseSparkEngineAdapter):
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
         tables = [x.asDict() for x in self.cursor.tables(catalog_name, schema_name)]
         if any(not row["TABLE_TYPE"] for row in tables):
             if catalog_name:

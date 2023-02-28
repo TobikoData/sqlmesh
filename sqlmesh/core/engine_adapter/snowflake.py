@@ -49,6 +49,9 @@ class SnowflakeEngineAdapter(EngineAdapter):
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = parse_one(f"show terse objects in {target}", read="snowflake")
         df = self.fetchdf(sql)

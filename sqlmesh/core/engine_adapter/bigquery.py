@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-from google.cloud.bigquery import DatasetReference
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -112,6 +111,11 @@ class BigQueryEngineAdapter(EngineAdapter):
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
+        from google.cloud.bigquery import DatasetReference
+
         dataset_ref = DatasetReference(
             project=catalog_name or self.client.project, dataset_id=schema_name
         )
