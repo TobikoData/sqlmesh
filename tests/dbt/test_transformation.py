@@ -133,6 +133,9 @@ def test_config_containing_jinja():
 
     context = DbtContext()
     context.variables = {"schema": "foo", "size": "5"}
+    model._dependencies.sources = set(["package.table"])
+    context.sources = {"package.table": "raw.baz"}
+
     rendered = model.render_config(context)
     assert rendered.pre_hook == model.pre_hook
     assert rendered.sql == model.sql
@@ -140,9 +143,6 @@ def test_config_containing_jinja():
     assert rendered.target_schema == "foo"
     assert rendered.columns["zipcode"] != model.columns["zipcode"]
     assert rendered.columns["zipcode"].data_type == "varchar(5)"
-
-    model._dependencies.sources = set(["package.table"])
-    context.sources = {"package.table": "raw.baz"}
 
     sqlmesh_model = rendered.to_sqlmesh(context, {}, {})
     assert str(sqlmesh_model.query) == model.sql
