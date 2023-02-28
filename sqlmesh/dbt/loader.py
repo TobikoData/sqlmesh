@@ -75,15 +75,16 @@ class DbtLoader(Loader):
 
         for name, package in project.packages.items():
             all_macros = self._macros_for_package(name, project.packages)
+            context.macros = {k: v.macro for k, v in all_macros.items()}
 
             for model in package.models.values():
-                rendered_model = model.render_non_sql_jinja(context.builtin_jinja)
+                rendered_model = model.render_config(context)
                 models[rendered_model.model_name] = rendered_model.to_sqlmesh(
                     context, all_models, all_macros
                 )
 
             for seed in package.seeds.values():
-                rendered_seed = seed.render_non_sql_jinja(context.builtin_jinja)
+                rendered_seed = seed.render_config(context)
                 models[rendered_seed.seed_name] = rendered_seed.to_sqlmesh()
 
         return models

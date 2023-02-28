@@ -11,6 +11,7 @@ from sqlmesh.dbt.common import (
     DbtContext,
     Dependencies,
     SqlStr,
+    load_yaml,
 )
 from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
@@ -75,7 +76,7 @@ class PackageLoader:
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {self._context.project_root}")
 
         self._config_paths.add(project_file_path)
-        project_yaml = self._context.load_yaml(project_file_path)
+        project_yaml = load_yaml(project_file_path)
 
         self._package_name = self._context.render(project_yaml.get("name", ""))
 
@@ -186,7 +187,7 @@ class PackageLoader:
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
-                properties_yaml = self._context.load_yaml(path)
+                properties_yaml = load_yaml(path)
 
                 self._load_config_section_from_properties(
                     properties_yaml, "models", scope, self.project_config.model_config
@@ -230,7 +231,7 @@ class PackageLoader:
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
-                properties_yaml = self._context.load_yaml(path)
+                properties_yaml = load_yaml(path)
 
                 self._load_config_section_from_properties(
                     properties_yaml, "seeds", scope, self.project_config.seed_config

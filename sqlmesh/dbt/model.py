@@ -31,7 +31,7 @@ from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import ENVIRONMENT
-from sqlmesh.utils.metaprogramming import Executable, prepare_env
+from sqlmesh.utils.metaprogramming import prepare_env
 
 
 class Materialization(str, Enum):
@@ -190,6 +190,9 @@ class ModelConfig(GeneralConfig):
     def sql_no_config(self) -> str:
         return re.sub(r"{{\s*config(.|\s)*?}}", "", self.sql).strip()
 
+    def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
+        return super().render_config(context)._render_sql_dependencies(context)
+
     def to_sqlmesh(
         self,
         context: DbtContext,
@@ -197,18 +200,12 @@ class ModelConfig(GeneralConfig):
         macros: t.Dict[str, MacroConfig],
     ) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        render_python_env = {
-            **context.builtin_python_env,
-            **{k: v.macro for k, v in macros.items()},
-        }
-
-        self._update_with_rendered_query(context, render_python_env)
         dependencies = self._all_dependencies(context, models, macros)
         model_context = self._context_for_dependencies(context, dependencies)
 
         python_env = {
             **model_context.builtin_python_env,
-            **{k: v.macro for k, v in macros.items() if k in dependencies.macros},
+            **{k: v for k, v in context.macros.items() if k in dependencies.macros},
         }
 
         depends_on = {model_context.refs[ref] for ref in dependencies.refs}
@@ -300,40 +297,48 @@ class ModelConfig(GeneralConfig):
 
         return dependencies
 
-    def _update_with_rendered_query(
+    def _render_sql_dependencies(
         self,
         context: DbtContext,
-        python_env: t.Dict[str, Executable],
-    ) -> None:
+    ) -> ModelConfig:
+        rendered = self.copy()
+
         def _ref(package_name: str, model_name: t.Optional[str] = None) -> str:
             if package_name not in context.refs:
                 raise ConfigError(
                     f"Model '{package_name}' was not found for model '{self.table_name}'."
                 )
-            self._dependencies.refs.add(package_name)
+            rendered._dependencies.refs.add(package_name)
             return context.refs[package_name]
 
         def _var(name: str, default: t.Optional[str] = None) -> t.Any:
             if default is None and name not in context.variables:
-                raise ConfigError(f"Variable '{name}' was not found for model '{self.table_name}'.")
-            self._dependencies.variables.add(name)
+                raise ConfigError(
+                    f"Variable '{name}' was not found for model '{rendered.table_name}'."
+                )
+            rendered._dependencies.variables.add(name)
             return context.variables.get(name, default)
 
         def _source(source_name: str, table_name: str) -> str:
             full_name = ".".join([source_name, table_name])
             if full_name not in context.sources:
                 raise ConfigError(
-                    f"Source '{full_name}' was not found for model '{self.table_name}'."
+                    f"Source '{full_name}' was not found for model '{rendered.table_name}'."
                 )
-            self._dependencies.sources.add(full_name)
+            rendered._dependencies.sources.add(full_name)
             return context.sources[full_name]
 
         def _config(*args: t.Any, **kwargs: t.Any) -> str:
             if args and isinstance(args[0], dict):
-                self.replace(self.update_with(args[0]))
+                rendered.replace(rendered.update_with(args[0]))
             if kwargs:
-                self.replace(self.update_with(kwargs))
+                rendered.replace(rendered.update_with(kwargs))
             return ""
+
+        python_env = {
+            **context.builtin_python_env,
+            **context.macros,
+        }
 
         env = prepare_env(python_env)
         env["log"] = lambda msg, info=False: ""
@@ -350,7 +355,11 @@ class ModelConfig(GeneralConfig):
             }
         )
 
-        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(jinja_methods)
+        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], rendered.sql))).render(
+            jinja_methods
+        )
+
+        return rendered
 
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies

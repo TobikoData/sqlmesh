@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext
+from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
@@ -45,7 +45,7 @@ class Project:
         project_file_path = Path(context.project_root, PROJECT_FILENAME)
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
-        project_yaml = context.load_yaml(project_file_path)
+        project_yaml = load_yaml(project_file_path)
 
         variables = project_yaml.get("vars", {})
         context.variables = {
@@ -74,7 +74,7 @@ class Project:
             context.render(project_yaml.get("packages-install-path", "dbt_packages")),
         )
         for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
-            name = context.render(context.load_yaml(path).get("name", ""))
+            name = context.render(load_yaml(path).get("name", ""))
             if not name:
                 raise ConfigError(f"{path} must include package name")
 

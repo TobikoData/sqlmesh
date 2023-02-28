@@ -85,7 +85,7 @@ def test_model_config(sushi_dbt_project: Project):
     }
     context.refs = {}
     context.variables = {}
-    customer_revenue_by_day_config._update_with_rendered_query(context, context.builtin_python_env)
+    rendered = customer_revenue_by_day_config.render_config(context)
 
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
@@ -93,12 +93,10 @@ def test_model_config(sushi_dbt_project: Project):
         "cluster_by": ["ds"],
         "target_schema": "sushi",
     }
-    actual_config = {
-        k: getattr(customer_revenue_by_day_config, k) for k, v in expected_config.items()
-    }
+    actual_config = {k: getattr(rendered, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert customer_revenue_by_day_config.model_name == "sushi.customer_revenue_by_day"
+    assert rendered.model_name == "sushi.customer_revenue_by_day"
 
 
 def test_variables(assert_exp_eq, sushi_dbt_project):
@@ -119,6 +117,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
     }
 
     with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
+        model_config = model_config.render_config(context)
         model_config.to_sqlmesh(**kwargs)
 
     # Case 2: using a defined variable without a default value

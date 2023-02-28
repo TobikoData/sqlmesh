@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from pydantic import validator
@@ -20,14 +20,18 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import render_jinja
-from sqlmesh.utils.metaprogramming import build_env, serialize_env
+from sqlmesh.utils.metaprogramming import Executable, build_env, serialize_env
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
-T = t.TypeVar("T", bound="BaseConfig")
+T = t.TypeVar("T", bound="GeneralConfig")
 
 
 PROJECT_FILENAME = "dbt_project.yml"
+
+
+def load_yaml(source: str | Path) -> t.OrderedDict:
+    return load(source, render_jinja=False)
 
 
 @dataclass
@@ -38,6 +42,7 @@ class DbtContext:
     target_name: t.Optional[str] = None
     project_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
+    macros: t.Dict[str, Executable] = field(default_factory=dict)
     _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _target: t.Optional[TargetConfig] = None
@@ -46,7 +51,7 @@ class DbtContext:
 
     def __post_init__(self) -> None:
         if not self._builtins:
-            self._builtins = BUILTIN_JINJA
+            self._builtins = BUILTIN_JINJA.copy()
 
         self.sources = self._sources
         self.refs = self._refs
@@ -105,18 +110,8 @@ class DbtContext:
     def render(self, source: str) -> str:
         return render_jinja(source, self._builtins)
 
-    def load_yaml(self, source: str | Path) -> t.OrderedDict:
-        return load(source, render_jinja=False)
-
     def copy(self) -> DbtContext:
-        context = DbtContext()
-        for field_name in self.__dataclass_fields__:
-            val = getattr(self, field_name)
-            if isinstance(val, (set, list, dict)):
-                val = val.copy()
-            setattr(context, field_name, val)
-
-        return context
+        return replace(self)
 
 
 class SqlStr(str):
@@ -225,14 +220,17 @@ class GeneralConfig(BaseConfig):
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
 
-    def render_non_sql_jinja(self: T, methods: t.Dict[str, t.Callable]) -> T:
+    def render_config(self: T, context: DbtContext) -> T:
+        return self._render_non_sql_jinja(context.builtin_jinja)
+
+    def _render_non_sql_jinja(self: T, methods: t.Dict[str, t.Callable]) -> T:
         def render_value(val: t.Any) -> t.Any:
             if type(val) is SqlStr:
                 return val
             elif type(val) is str:
                 return render_jinja(val, methods)
             elif isinstance(val, GeneralConfig):
-                return val.render_non_sql_jinja(methods)
+                return val._render_non_sql_jinja(methods)
             elif isinstance(val, (list, set)):
                 return type(val)(render_value(collection_val) for collection_val in val)
             elif isinstance(val, dict):

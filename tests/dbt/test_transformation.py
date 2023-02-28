@@ -133,7 +133,7 @@ def test_config_containing_jinja():
 
     context = DbtContext()
     context.variables = {"schema": "foo", "size": "5"}
-    rendered = model.render_non_sql_jinja(context.builtin_jinja)
+    rendered = model.render_config(context)
     assert rendered.pre_hook == model.pre_hook
     assert rendered.sql == model.sql
     assert rendered.target_schema != model.target_schema

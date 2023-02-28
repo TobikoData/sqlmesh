@@ -4,7 +4,7 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.core.config.connection import ConnectionConfig
-from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext
+from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 
@@ -48,7 +48,7 @@ class Profile:
             if not project_file.exists():
                 raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
 
-            context.project_name = context.render(context.load_yaml(project_file).get("name", ""))
+            context.project_name = context.render(load_yaml(project_file).get("name", ""))
             if not context.project_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
 
@@ -78,7 +78,7 @@ class Profile:
     ) -> t.Tuple[t.Dict[str, TargetConfig], str]:
         with open(path, "r", encoding="utf-8") as file:
             source = file.read()
-        contents = context.load_yaml(context.render(source))
+        contents = load_yaml(context.render(source))
 
         project_data = contents.get(context.project_name)
         if not project_data:
