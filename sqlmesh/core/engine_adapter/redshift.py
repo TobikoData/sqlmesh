@@ -142,7 +142,7 @@ class RedshiftEngineAdapter(EngineAdapter):
                 self._insert_append_query(target_table, expression, columns_to_types)
 
     def _short_hash(self) -> str:
-        return str(uuid.uuid4())[:8]
+        return uuid.uuid4().hex[:8]
 
     def table_exists(self, table_name: TableName) -> bool:
         """
