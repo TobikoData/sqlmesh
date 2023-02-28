@@ -37,7 +37,7 @@ def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) ->
 
 
 def random_id() -> str:
-    return str(uuid.uuid4()).replace("-", "_")
+    return uuid.uuid4().hex
 
 
 class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
