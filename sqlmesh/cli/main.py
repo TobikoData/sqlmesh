@@ -227,19 +227,16 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
 
 
 @cli.command("run")
+@click.argument("environment", required=False)
 @opt.start_time
 @opt.end_time
-@click.option(
-    "--global-state",
-    is_flag=True,
-    help="If set, loads the DAG from the persisted state, otherwise loads from the current local state.",
-)
+@click.option("--skip-janitor", is_flag=True, help="Skip the jantitor task.")
 @click.pass_context
 @error_handler
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluates the DAG of models using the built-in scheduler."""
     context = ctx.obj
-    context.run(**kwargs)
+    context.run(environment, **kwargs)
 
 
 @cli.command("dag")

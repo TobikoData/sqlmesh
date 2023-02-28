@@ -154,15 +154,28 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             contains_json=True,
         )
 
-    def delete_expired_environments(self) -> None:
+    def delete_expired_environments(self) -> t.List[Environment]:
         now_ts = now_timestamp()
+        filter_expr = exp.LTE(
+            this=exp.to_column("expiration_ts"),
+            expression=exp.Literal.number(now_ts),
+        )
+
+        rows = self.engine_adapter.fetchall(
+            self._environments_query(
+                where=filter_expr,
+                lock_for_update=True,
+            ),
+            ignore_unsupported_errors=True,
+        )
+        environments = [self._environment_from_row(r) for r in rows]
+
         self.engine_adapter.delete_from(
             self.environments_table,
-            where=exp.LTE(
-                this=exp.to_column("expiration_ts"),
-                expression=exp.Literal.number(now_ts),
-            ),
+            where=filter_expr,
         )
+
+        return environments
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.engine_adapter.delete_from(
