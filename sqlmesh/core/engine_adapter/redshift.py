@@ -197,7 +197,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=row.type
+                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=row.type  # type: ignore
             )
             for row in df.itertuples()
         ]

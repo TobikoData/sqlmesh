@@ -57,10 +57,10 @@ class SnowflakeEngineAdapter(EngineAdapter):
         df = self.fetchdf(sql)
         return [
             DataObject(
-                catalog=row.database_name,
-                schema=row.schema_name,
-                name=row.name,
-                type=DataObjectType.from_str(row.kind),
+                catalog=row.database_name,  # type: ignore
+                schema=row.schema_name,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.kind),  # type: ignore
             )
             for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
         ]

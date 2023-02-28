@@ -32,7 +32,7 @@ class DatabricksAPIEngineAdapter(BaseSparkEngineAdapter):
             if catalog_name:
                 self.execute(f"USE CATALOG {catalog_name}")
             view_names = [
-                row.viewName for row in self.fetchdf(f"SHOW VIEWS FROM {schema_name}").itertuples()
+                row.viewName for row in self.fetchdf(f"SHOW VIEWS FROM {schema_name}").itertuples()  # type: ignore
             ]
             for table in tables:
                 if not table["TABLE_TYPE"]:

@@ -51,10 +51,10 @@ class DuckDBEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.database,
-                schema=row.schema,
-                name=row.name,
-                type=DataObjectType.from_str(row.type),
+                catalog=row.database,  # type: ignore
+                schema=row.schema,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
             )
             for row in df.itertuples()
         ]

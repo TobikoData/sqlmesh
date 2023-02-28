@@ -143,9 +143,9 @@ class BaseSparkEngineAdapter(EngineAdapter):
             DataObject(
                 catalog=catalog_name,
                 schema=schema_name,
-                name=row.tableName,
+                name=row.tableName,  # type: ignore
                 type=DataObjectType.from_str(
-                    "VIEW" if "Type: VIEW" in row.information else "TABLE"
+                    "VIEW" if "Type: VIEW" in row.information else "TABLE"  # type: ignore
                 ),
             )
             for row in df.itertuples()
