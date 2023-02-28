@@ -56,6 +56,8 @@ class DbtContext:
         self.sources = self._sources
         self.refs = self._refs
         self.variables = self._variables
+        if self._target:
+            self.target = self._target
 
     @property
     def target(self) -> TargetConfig:
@@ -66,7 +68,9 @@ class DbtContext:
     @target.setter
     def target(self, value: TargetConfig) -> None:
         self._target = value
-        # TODO create target jinja
+        if not self.project_name:
+            raise ConfigError(f"Must assign project_name before assigning target")
+        self._builtins["target"] = self._target.target_jinja(self.project_name)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:
@@ -105,7 +109,9 @@ class DbtContext:
         methods = self.builtin_jinja.copy()
         methods["log"] = log
         for name, method in methods.items():
-            build_env(method, env=env, name=name, path=Path(__file__).parent)
+            # temporary until Iaroslav has the jinja templates working
+            if name not in ("target"):
+                build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
 
