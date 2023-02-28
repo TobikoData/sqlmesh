@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-import contextlib
 import typing as t
 
+from google.cloud.bigquery import DatasetReference
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import TransactionType
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    TransactionType,
+)
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from google.cloud.bigquery.client import Client as BigQueryClient
+    from google.cloud.bigquery.client import Connection as BigQueryConnection
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
@@ -22,40 +27,25 @@ class BigQueryEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
 
-    def __init__(
-        self,
-        connection_factory: t.Callable[[], t.Any],
-        multithreaded: bool = False,
-    ):
-        super().__init__(connection_factory, multithreaded=multithreaded)
-        self._session_id = None
-
     @property
     def client(self) -> BigQueryClient:
         return self.cursor.connection._client
 
-    @contextlib.contextmanager
-    def transaction(
-        self, transaction_type: TransactionType = TransactionType.DML
-    ) -> t.Generator[None, None, None]:
-        """A transaction context manager."""
-        if self._session_id or transaction_type.is_ddl:
-            yield
-            return
+    @property
+    def connection(self) -> BigQueryConnection:
+        return self.cursor.connection
 
-        self.execute(exp.Transaction())
-        job = self.cursor._query_job
-        self._session_id = job.session_info.session_id
+    def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
+        """Create a schema from a name or qualified table name."""
+        from google.cloud.bigquery.dbapi.exceptions import DatabaseError
+
         try:
-            yield
-        except Exception as e:
-            self.execute(exp.Rollback())
-            self._session_id = None
+            super().create_schema(schema_name, ignore_if_exists=ignore_if_exists)
+        except DatabaseError as e:
+            for arg in e.args:
+                if ignore_if_exists and "Already Exists: " in arg.message:
+                    return
             raise e
-        else:
-            self.execute(exp.Commit())
-        finally:
-            self._session_id = None
 
     def columns(self, table_name: TableName) -> t.Dict[str, str]:
         """Fetches column names and types for the target table."""
@@ -104,34 +94,34 @@ class BigQueryEngineAdapter(EngineAdapter):
         self.execute(query)
         return self.cursor._query_job.to_dataframe()
 
-    def execute(
+    def create_state_table(
         self,
-        sql: t.Union[str, exp.Expression],
-        ignore_unsupported_errors: bool = False,
-        **kwargs: t.Any,
+        table_name: str,
+        columns_to_types: t.Dict[str, exp.DataType],
+        primary_key: t.Optional[t.Tuple[str, ...]] = None,
     ) -> None:
-        from google.cloud import bigquery  # type: ignore
-
-        create_session = isinstance(sql, exp.Transaction) and self._session_id is None
-        job_config = None
-        if create_session:
-            job_config = bigquery.QueryJobConfig(create_session=create_session)
-        elif self._session_id:
-            job_config = bigquery.QueryJobConfig(
-                create_session=False,
-                connection_properties=[
-                    bigquery.query.ConnectionProperty(key="session_id", value=self._session_id)
-                ],
-            )
-        super().execute(
-            sql,
-            ignore_unsupported_errors=ignore_unsupported_errors,
-            **{**kwargs, "job_config": job_config},
+        self.create_table(
+            table_name,
+            columns_to_types,
+            partitioned_by=primary_key,
         )
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
-        if transaction_type.is_dml:
-            return True
-        elif transaction_type.is_ddl:
-            return False
-        raise ValueError(f"Unknown transaction type: {transaction_type}")
+        return False
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        dataset_ref = DatasetReference(
+            project=catalog_name or self.client.project, dataset_id=schema_name
+        )
+        all_tables = self.client.list_tables(dataset_ref)
+        return [
+            DataObject(
+                catalog=table.project,
+                schema=table.dataset_id,
+                name=table.table_id,
+                type=DataObjectType.from_str(table.table_type),
+            )
+            for table in all_tables
+        ]

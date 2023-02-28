@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import typing as t
 
+import pandas as pd
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.utils import nullsafe_join
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -16,8 +19,20 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+        from snowflake.connector.errors import NotSupportedError
+
         self.execute(query)
-        df = self.cursor.fetch_pandas_all()
+
+        try:
+            df = self.cursor.fetch_pandas_all()
+        except NotSupportedError:
+            # Sometimes Snowflake will not return results as an Arrow result and the fetch from
+            # pandas will fail (Ex: `SHOW TERSE OBJECTS IN SCHEMA`). Therefore we manually convert
+            # the result into a DataFrame when this happens.
+            rows = self.cursor.fetchall()
+            columns = self.cursor._result_set.batches[0].column_names
+            df = pd.DataFrame([dict(zip(columns, row)) for row in rows])
+
         # Snowflake returns uppercase column names if the columns are not quoted (so case-insensitive)
         # so replace the column names returned by Snowflake with the column names in the expression
         # if the expression was a select expression
@@ -30,3 +45,19 @@ class SnowflakeEngineAdapter(EngineAdapter):
         if isinstance(query, exp.Subqueryable):
             df.columns = query.named_selects
         return df
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        target = nullsafe_join(".", catalog_name, schema_name)
+        sql = parse_one(f"show terse objects in {target}", read="snowflake")
+        df = self.fetchdf(sql)
+        return [
+            DataObject(
+                catalog=row.database_name,
+                schema=row.schema_name,
+                name=row.name,
+                type=DataObjectType.from_str(row.kind),
+            )
+            for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
+        ]

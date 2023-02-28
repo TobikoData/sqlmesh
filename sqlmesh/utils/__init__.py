@@ -138,3 +138,7 @@ def double_escape(s: str) -> str:
     Replace backslashes with another backslash.
     """
     return s.replace("\\", "\\\\")
+
+
+def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
+    return join_char.join(filter(None, args))

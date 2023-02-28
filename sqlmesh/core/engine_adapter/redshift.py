@@ -9,6 +9,7 @@ from sqlglot import exp
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
 from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -169,3 +170,31 @@ class RedshiftEngineAdapter(EngineAdapter):
         result = self.cursor.fetchone()
 
         return result[0] == 1 if result is not None else False
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        query = f"""
+            SELECT
+                '{catalog_name if catalog_name else ''}' AS catalog_name,
+                tablename as name,
+                schemaname as schema_name,
+                'TABLE' as type
+            FROM pg_tables
+            WHERE schemaname ilike '{schema_name}'
+            UNION ALL
+            SELECT
+                '{catalog_name if catalog_name else ''}' AS catalog_name,
+                viewname as name,
+                schemaname as schema_name,
+                'VIEW' as type
+            FROM pg_views
+            WHERE schemaname ilike '{schema_name}'
+        """
+        df = self.fetchdf(query)
+        return [
+            DataObject(
+                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=row.type
+            )
+            for row in df.itertuples()
+        ]
