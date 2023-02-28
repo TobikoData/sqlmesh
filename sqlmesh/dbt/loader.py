@@ -10,9 +10,6 @@ from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.common import DbtContext
-from sqlmesh.dbt.macros import MacroConfig
-from sqlmesh.dbt.model import ModelConfig
-from sqlmesh.dbt.package import Package
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.utils import UniqueKeyDict
@@ -55,13 +52,17 @@ class DbtLoader(Loader):
             self._track_file(path)
 
         context = project.context.copy()
-        all_models: UniqueKeyDict[str, ModelConfig] = UniqueKeyDict("models")
         sources: UniqueKeyDict[str, str] = UniqueKeyDict("sources")
         refs: UniqueKeyDict[str, str] = UniqueKeyDict("refs")
         variables: UniqueKeyDict[str, t.Any] = UniqueKeyDict("variables")
 
-        for package in project.packages.values():
-            all_models.update(package.models)
+        for package_name, package in project.packages.items():
+            context.models.update(package.models)
+            context.jinja_macros.add_macros(
+                package.macros,
+                package=package_name if package_name != context.project_name else None,
+            )
+
             sources.update(
                 {config.config_name: config.source_name for config in package.sources.values()}
             )
@@ -74,38 +75,15 @@ class DbtLoader(Loader):
         context.variables = variables
 
         for name, package in project.packages.items():
-            all_macros = self._macros_for_package(name, project.packages)
-            context.macros = {k: v.macro for k, v in all_macros.items()}
-
             for model in package.models.values():
                 rendered_model = model.render_config(context)
-                models[rendered_model.model_name] = rendered_model.to_sqlmesh(
-                    context, all_models, all_macros
-                )
+                models[rendered_model.model_name] = rendered_model.to_sqlmesh(context)
 
             for seed in package.seeds.values():
                 rendered_seed = seed.render_config(context)
                 models[rendered_seed.seed_name] = rendered_seed.to_sqlmesh()
 
         return models
-
-    def _macros_for_package(
-        self, name: str, packages: t.Dict[str, Package]
-    ) -> UniqueKeyDict[str, MacroConfig]:
-        """
-        Macros are namespaced by the package they reside in. Do not include
-        the namespace for the macros in the package being processed
-        """
-        macros: UniqueKeyDict[str, MacroConfig] = UniqueKeyDict("macros")
-        for package_name, package in packages.items():
-            if package_name == name:
-                macros.update(package.macros)
-                continue
-
-            for macro_name, macro in package.macros.items():
-                macros[f"{package_name}.{macro_name}"] = macro
-
-        return macros
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")

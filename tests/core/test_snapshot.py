@@ -93,6 +93,10 @@ def test_json(snapshot: Snapshot):
             "pre": [],
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
+            "jinja_macros": {
+                "packages": {},
+                "root_macros": {},
+            },
             "source_type": "sql",
         },
         "audits": [],

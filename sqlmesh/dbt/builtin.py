@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import os
 import typing as t
-from os import getenv
+
+from sqlmesh.utils.errors import ConfigError
 
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
-    return getenv(name, default)
+    if name not in os.environ:
+        raise ConfigError(f"Missing environment variable '{name}'")
+    return os.environ[name]
 
 
 def is_incremental() -> bool:
@@ -68,4 +72,5 @@ BUILTIN_JINJA = {
     "is_incremental": is_incremental,
     "log": no_log,
     "config": config,
+    "sqlmesh": True,
 }

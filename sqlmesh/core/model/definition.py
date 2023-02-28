@@ -31,6 +31,7 @@ from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import (
     Executable,
     ExecutableKind,
@@ -534,6 +535,7 @@ class SqlModel(_Model):
     """
 
     query: t.Union[exp.Subqueryable, d.Jinja]
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -658,6 +660,7 @@ class SqlModel(_Model):
                 self.dialect,
                 self.macro_definitions,
                 path=self._path,
+                jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
                 time_column=self.time_column,
                 time_converter=self.convert_to_time_column,

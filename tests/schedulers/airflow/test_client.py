@@ -88,6 +88,10 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "partitioned_by": ["a"],
                     "query": "SELECT a, ds FROM tbl",
                     "storage_format": "parquet",
+                    "jinja_macros": {
+                        "packages": {},
+                        "root_macros": {},
+                    },
                     "source_type": "sql",
                 },
                 "audits": [],

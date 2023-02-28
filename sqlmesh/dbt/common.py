@@ -20,10 +20,13 @@ from sqlmesh.dbt.builtin import (
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import render_jinja
-from sqlmesh.utils.metaprogramming import Executable, build_env, serialize_env
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
+from sqlmesh.utils.metaprogramming import build_env, serialize_env
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
+
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.model import ModelConfig
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
@@ -43,7 +46,8 @@ class DbtContext:
     target_name: t.Optional[str] = None
     project_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
-    macros: t.Dict[str, Executable] = field(default_factory=dict)
+    models: t.Dict[str, ModelConfig] = field(default_factory=dict)
+    jinja_macros: JinjaMacroRegistry = field(default_factory=JinjaMacroRegistry)
     _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _target: t.Optional[TargetConfig] = None
@@ -133,14 +137,14 @@ class Dependencies(PydanticModel):
     DBT dependencies for a model, macro, etc.
 
     Args:
-        macros: The names of macros used
+        macros: The references to macros
         sources: The "source_name.table_name" for source tables used
         refs: The table_name for models used
         variables: The names of variables used, mapped to a flag that indicates whether their
             definition is optional or not.
     """
 
-    macros: t.Set[str] = set()
+    macros: t.Set[MacroReference] = set()
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
     variables: t.Set[str] = set()

@@ -21,7 +21,7 @@ from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, raise_config_error
-from sqlmesh.utils.jinja import ENVIRONMENT
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
@@ -43,6 +43,7 @@ class QueryRenderer:
         dialect: str,
         macro_definitions: t.List[d.MacroDef],
         path: Path = Path(),
+        jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         time_column: t.Optional[TimeColumn] = None,
         time_converter: t.Optional[t.Callable[[TimeLike], exp.Expression]] = None,
@@ -52,6 +53,7 @@ class QueryRenderer:
         self._dialect = dialect
         self._macro_definitions = macro_definitions
         self._path = path
+        self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
@@ -115,15 +117,12 @@ class QueryRenderer:
 
             if isinstance(query, d.Jinja):
                 env = prepare_env(self._python_env)
-
                 if not kwargs.get("logging"):
                     env["log"] = lambda msg, info=False: ""
 
                 try:
                     parsed_query = parse_one(
-                        ENVIRONMENT.from_string(
-                            "\n".join((*env[c.JINJA_MACROS], query.name))
-                        ).render(**env, **render_kwargs),
+                        self._jinja_macro_registry.render(query.name, **env, **render_kwargs),
                         read=self._dialect,
                     )
                     if not parsed_query:

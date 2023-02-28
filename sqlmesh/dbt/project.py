@@ -64,14 +64,13 @@ class Project:
         )
 
         packages = {}
-        loader = PackageLoader()
+        root_loader = PackageLoader(context, ProjectConfig())
 
-        packages[context.project_name] = loader.load(context, ProjectConfig())
-        project_config = loader.project_config
+        packages[context.project_name] = root_loader.load()
+        project_config = root_loader.project_config
 
         packages_dir = Path(
-            context.project_root,
-            context.render(project_yaml.get("packages-install-path", "dbt_packages")),
+            context.render(project_yaml.get("packages-install-path", "dbt_packages"))
         )
         for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
             name = context.render(load_yaml(path).get("name", ""))
@@ -81,9 +80,9 @@ class Project:
             package_context = context.copy()
             package_context.project_root = path.parent
             package_context.variables = {}
-            packages[name] = loader.load(
+            packages[name] = PackageLoader(
                 package_context, cls._overrides_for_package(name, project_config)
-            )
+            ).load()
 
         for name, package in packages.items():
             package_vars = variables.get(name)

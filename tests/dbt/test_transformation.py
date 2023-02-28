@@ -88,7 +88,7 @@ def test_model_columns():
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
     context = DbtContext()
-    sqlmesh_model = model.to_sqlmesh(context, {}, {})
+    sqlmesh_model = model.to_sqlmesh(context)
     assert sqlmesh_model.columns_to_types == expected_column_types
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
 
@@ -152,7 +152,7 @@ def test_config_containing_jinja():
     assert rendered.columns["zipcode"] != model.columns["zipcode"]
     assert rendered.columns["zipcode"].data_type == "varchar(5)"
 
-    sqlmesh_model = rendered.to_sqlmesh(context, {}, {})
+    sqlmesh_model = rendered.to_sqlmesh(context)
     assert str(sqlmesh_model.query) == model.sql
     assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
