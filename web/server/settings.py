@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import typing as t
 from functools import lru_cache
 from pathlib import Path
 
@@ -5,6 +10,9 @@ from fastapi import Depends
 from pydantic import BaseSettings
 
 from sqlmesh.core.context import Context
+
+logger = logging.getLogger(__name__)
+get_context_lock = asyncio.Lock()
 
 
 class Settings(BaseSettings):
@@ -18,20 +26,31 @@ def get_settings() -> Settings:
 
 
 @lru_cache()
-def _get_context(path: str) -> Context:
-    return Context(path=path, load=False)
+def _get_context(path: str, config: str) -> Context:
+    from web.server.main import api_console
+
+    return Context(path=path, config=config, console=api_console, load=False)
 
 
 @lru_cache()
 def _get_loaded_context(path: str, config: str) -> Context:
-    from web.server.main import api_console
-
-    return Context(path=path, config=config, console=api_console)
-
-
-def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
-    return _get_loaded_context(settings.project_path, settings.config)
+    context = _get_context(path, config)
+    context.load()
+    return context
 
 
-def get_context(settings: Settings = Depends(get_settings)) -> Context:
-    return _get_context(settings.project_path)
+async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
+    loop = asyncio.get_running_loop()
+    async with get_context_lock:
+        return await loop.run_in_executor(
+            None, _get_loaded_context, settings.project_path, settings.config
+        )
+
+
+async def get_context(settings: Settings = Depends(get_settings)) -> t.Optional[Context]:
+    try:
+        async with get_context_lock:
+            return _get_context(settings.project_path, settings.config)
+    except Exception:
+        logger.exception("Error creating a context")
+    return None
