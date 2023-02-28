@@ -72,6 +72,9 @@ class Project:
         packages_dir = Path(
             context.render(project_yaml.get("packages-install-path", "dbt_packages"))
         )
+        if not packages_dir.is_absolute():
+            packages_dir = Path(context.project_root, packages_dir)
+
         for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
             name = context.render(load_yaml(path).get("name", ""))
             if not name:

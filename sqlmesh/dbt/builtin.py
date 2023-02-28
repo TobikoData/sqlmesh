@@ -10,9 +10,9 @@ from sqlmesh.dbt.target import TargetConfig
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
-    if name not in os.environ:
+    if name not in os.environ and default is None:
         raise ConfigError(f"Missing environment variable '{name}'")
-    return os.environ[name]
+    return os.environ.get(name, default)
 
 
 def is_incremental() -> bool:

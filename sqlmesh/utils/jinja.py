@@ -270,7 +270,7 @@ class JinjaMacroRegistry(PydanticModel):
             if ref.package != package and ref.package in self.packages
         }
 
-        package_globals = {**kwargs}
+        package_globals = kwargs.copy()
 
         for upstream_package in upstream_packages:
             parsed_package = self._parse_package(upstream_package)
@@ -293,7 +293,7 @@ class JinjaMacroRegistry(PydanticModel):
             )
             package_globals[package] = self_package.module
 
-            package_body = "\n".join([macro.body for macro in macros.values()])
+            package_body = "\n".join(macro.body for macro in macros.values())
         else:
             package_body = no_self_ref_macro_body
 
