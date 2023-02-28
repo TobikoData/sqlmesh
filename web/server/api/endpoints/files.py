@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.settings import Settings, get_context, get_settings
@@ -17,9 +18,11 @@ router = APIRouter()
 
 @router.get("", response_model=models.Directory)
 def get_files(
-    context: Context = Depends(get_context),
+    context: t.Optional[Context] = Depends(get_context),
+    settings: Settings = Depends(get_settings),
 ) -> models.Directory:
     """Get all project files."""
+    ignore_patterns = context.ignore_patterns if context else c.IGNORE_PATTERNS
 
     def walk_path(
         path: str | Path,
@@ -33,11 +36,11 @@ def get_files(
                 if (
                     entry.name == "__pycache__"
                     or entry.name.startswith(".")
-                    or any(entry_path.match(pattern) for pattern in context.ignore_patterns)
+                    or any(entry_path.match(pattern) for pattern in ignore_patterns)
                 ):
                     continue
 
-                relative_path = os.path.relpath(entry.path, context.path)
+                relative_path = os.path.relpath(entry.path, settings.project_path)
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
@@ -52,9 +55,9 @@ def get_files(
                     files.append(models.File(name=entry.name, path=relative_path))
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
-    directories, files = walk_path(context.path)
+    directories, files = walk_path(settings.project_path)
     return models.Directory(
-        name=os.path.basename(context.path),
+        name=os.path.basename(settings.project_path),
         path="",
         directories=directories,
         files=files,
