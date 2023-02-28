@@ -179,20 +179,20 @@ class RedshiftEngineAdapter(EngineAdapter):
         """
         query = f"""
             SELECT
-                '{catalog_name if catalog_name else ''}' AS catalog_name,
-                tablename as name,
-                schemaname as schema_name,
-                'TABLE' as type
+                '{catalog_name or ''}' AS catalog_name,
+                tablename AS name,
+                schemaname AS schema_name,
+                'TABLE' AS type
             FROM pg_tables
             WHERE schemaname ilike '{schema_name}'
             UNION ALL
             SELECT
-                '{catalog_name if catalog_name else ''}' AS catalog_name,
-                viewname as name,
-                schemaname as schema_name,
-                'VIEW' as type
+                '{catalog_name or ''}' AS catalog_name,
+                viewname AS name,
+                schemaname AS schema_name,
+                'VIEW' AS type
             FROM pg_views
-            WHERE schemaname ilike '{schema_name}'
+            WHERE schemaname ILIKE '{schema_name}'
         """
         df = self.fetchdf(query)
         return [

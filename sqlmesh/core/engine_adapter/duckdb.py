@@ -37,7 +37,7 @@ class DuckDBEngineAdapter(EngineAdapter):
         """
         query = f"""
             SELECT
-              '{ catalog_name if catalog_name else ''}' as database,
+              '{ catalog_name or ''}' as catalog,
               table_name as name,
               table_schema as schema,
               CASE table_type
@@ -51,7 +51,7 @@ class DuckDBEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.database,  # type: ignore
+                catalog=row.catalog,  # type: ignore
                 schema=row.schema,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore

@@ -30,10 +30,9 @@ class DataObjectType(str, Enum):
         s = s.lower()
         if s == "table":
             return DataObjectType.TABLE
-        elif s == "view":
+        if s == "view":
             return DataObjectType.VIEW
-        else:
-            return DataObjectType.UNKNOWN
+        return DataObjectType.UNKNOWN
 
 
 class DataObject(PydanticModel):

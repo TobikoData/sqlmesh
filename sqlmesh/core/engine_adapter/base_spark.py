@@ -137,7 +137,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         target = nullsafe_join(".", catalog_name, schema_name)
-        query = parse_one(f"SHOW TABLE EXTENDED IN {target} LIKE '*'", read="spark")
+        query = f"SHOW TABLE EXTENDED IN {target} LIKE '*'"
         df = self.fetchdf(query)
         return [
             DataObject(

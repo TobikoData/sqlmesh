@@ -53,7 +53,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         target = nullsafe_join(".", catalog_name, schema_name)
-        sql = parse_one(f"show terse objects in {target}", read="snowflake")
+        sql = f"SHOW TERSE OBJECTS IN {target}"
         df = self.fetchdf(sql)
         return [
             DataObject(
