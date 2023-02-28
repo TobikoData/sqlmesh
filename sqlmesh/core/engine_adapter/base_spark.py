@@ -7,7 +7,12 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import TransactionType
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    TransactionType,
+)
+from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -124,3 +129,24 @@ class BaseSparkEngineAdapter(EngineAdapter):
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
+        target = nullsafe_join(".", catalog_name, schema_name)
+        query = f"SHOW TABLE EXTENDED IN {target} LIKE '*'"
+        df = self.fetchdf(query)
+        return [
+            DataObject(
+                catalog=catalog_name,
+                schema=schema_name,
+                name=row.tableName,  # type: ignore
+                type=DataObjectType.from_str(
+                    "VIEW" if "Type: VIEW" in row.information else "TABLE"  # type: ignore
+                ),
+            )
+            for row in df.itertuples()
+        ]
