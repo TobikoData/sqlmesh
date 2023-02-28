@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.common import Dependencies
-from sqlmesh.dbt.macros import BUILTIN_METHODS
+from sqlmesh.dbt.common import DbtContext, Dependencies
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import (
@@ -20,7 +19,7 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 @pytest.fixture
 def sushi_dbt_project() -> Project:
-    return Project.load(Path("examples/sushi_dbt"))
+    return Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
 
 
 @pytest.mark.parametrize(
@@ -78,16 +77,15 @@ def test_model_config(sushi_dbt_project: Project):
         "customer_revenue_by_day"
     ]
 
-    customer_revenue_by_day_config._update_with_rendered_query(
-        source_mapping={
-            "raw.order_items": "raw.order_items",
-            "raw.items": "raw.items",
-            "raw.orders": "raw.orders",
-        },
-        model_mapping={},
-        variables={},
-        python_env=BUILTIN_METHODS,
-    )
+    context = sushi_dbt_project.context
+    context.sources = {
+        "raw.order_items": "raw.order_items",
+        "raw.items": "raw.items",
+        "raw.orders": "raw.orders",
+    }
+    context.refs = {}
+    context.variables = {}
+    rendered = customer_revenue_by_day_config.render_config(context)
 
     expected_config = {
         "materialized": Materialization.INCREMENTAL,
@@ -95,12 +93,10 @@ def test_model_config(sushi_dbt_project: Project):
         "cluster_by": ["ds"],
         "target_schema": "sushi",
     }
-    actual_config = {
-        k: getattr(customer_revenue_by_day_config, k) for k, v in expected_config.items()
-    }
+    actual_config = {k: getattr(rendered, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert customer_revenue_by_day_config.model_name == "sushi.customer_revenue_by_day"
+    assert rendered.model_name == "sushi.customer_revenue_by_day"
 
 
 def test_variables(assert_exp_eq, sushi_dbt_project):
@@ -111,19 +107,22 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
     model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
     model_config._dependencies = Dependencies(variables=model_variables)
 
+    context = sushi_dbt_project.context
+    context.variables = defined_variables
+
     kwargs = {
-        "sources": {},
+        "context": context,
         "models": {},
-        "seeds": {},
-        "variables": defined_variables,
         "macros": {},
     }
 
     with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
+        model_config = model_config.render_config(context)
         model_config.to_sqlmesh(**kwargs)
 
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
+    context.variables = defined_variables
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
@@ -133,6 +132,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
+    context.variables = defined_variables
 
     assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
@@ -179,7 +179,7 @@ def test_seed_config(sushi_dbt_project: Project):
     raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
-        "path": Path(sushi_dbt_project.project_root, "seeds/waiter_names.csv"),
+        "path": Path(sushi_dbt_project.context.project_root, "seeds/waiter_names.csv"),
         "target_schema": "sushi",
     }
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}

@@ -4,10 +4,9 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.core.config.connection import ConnectionConfig
-from sqlmesh.dbt.common import PROJECT_FILENAME
+from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import load as yaml_load
 
 
 class Profile:
@@ -34,39 +33,30 @@ class Profile:
         self.default_target = default_target
 
     @classmethod
-    def load(
-        cls,
-        project_root: t.Optional[Path] = None,
-        project_name: t.Optional[str] = None,
-    ) -> Profile:
+    def load(cls, context: DbtContext) -> Profile:
         """
         Loads the profile for the specified project
 
         Args:
-            project_root: Path to the root of the DBT project. If not specified,
-                          the current directory is used.
-            project_name: Name of the DBT project from the project yaml file. If not
-                          specified, the name is read from the project yaml file.
+            context: DBT context for this profile
 
         Returns:
             The Profile for the specified project
         """
-        project_root = project_root or Path()
-
-        if not project_name:
-            project_file = Path(project_root, PROJECT_FILENAME)
+        if not context.project_name:
+            project_file = Path(context.project_root, PROJECT_FILENAME)
             if not project_file.exists():
-                raise ConfigError(f"Could not find {PROJECT_FILENAME} in {project_root}")
+                raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
 
-            project_name = yaml_load(project_file).get("name")
-            if not project_name:
+            context.project_name = context.render(load_yaml(project_file).get("name", ""))
+            if not context.project_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
 
-        profile_filepath = cls._find_profile(project_root)
+        profile_filepath = cls._find_profile(context.project_root)
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found.")
 
-        targets, default_target = cls._read_profile(profile_filepath, project_name)
+        targets, default_target = cls._read_profile(profile_filepath, context)
         return Profile(profile_filepath, targets, default_target)
 
     @classmethod
@@ -83,22 +73,26 @@ class Profile:
         return None
 
     @classmethod
-    def _read_profile(cls, path: Path, project: str) -> t.Tuple[t.Dict[str, TargetConfig], str]:
-        contents = yaml_load(path)
+    def _read_profile(
+        cls, path: Path, context: DbtContext
+    ) -> t.Tuple[t.Dict[str, TargetConfig], str]:
+        with open(path, "r", encoding="utf-8") as file:
+            source = file.read()
+        contents = load_yaml(context.render(source))
 
-        project_data = contents.get(project)
+        project_data = contents.get(context.project_name)
         if not project_data:
-            raise ConfigError(f"Project '{project}' does not exist in profiles.")
+            raise ConfigError(f"Project '{context.project_name}' does not exist in profiles.")
 
         outputs = project_data.get("outputs")
         if not outputs:
-            raise ConfigError(f"No outputs exist in profiles for Project '{project}'.")
+            raise ConfigError(f"No outputs exist in profiles for Project '{context.project_name}'.")
 
         targets = {name: TargetConfig.load(output) for name, output in outputs.items()}
-        default_target = project_data.get("target")
+        default_target = context.render(project_data.get("target"))
         if default_target not in targets:
             raise ConfigError(
-                f"Default target '#{default_target}' not specified in profiles for Project '{project}'."
+                f"Default target '#{default_target}' not specified in profiles for Project '{context.project_name}'."
             )
 
         return (targets, default_target)

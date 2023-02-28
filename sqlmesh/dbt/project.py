@@ -3,11 +3,10 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import PROJECT_FILENAME
+from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import load as yaml_load
 
 
 class Project:
@@ -15,78 +14,84 @@ class Project:
 
     def __init__(
         self,
-        project_root: Path,
-        project_name: str,
+        context: DbtContext,
         profile: Profile,
         packages: t.Dict[str, Package],
     ):
         """
         Args:
-            project_root: Path to the root directory of the DBT project
-            project_name: The name of the DBT project within the project file yaml
+            context: DBT context for the project
             profile: The profile associated with the project
             packages: The packages in this project. The project should be included
                       with the project name as the key
         """
-        self.project_root = project_root
-        self.project_name = project_name
+        self.context = context
         self.profile = profile
         self.packages = packages
 
     @classmethod
-    def load(
-        cls, project_root: t.Optional[Path] = None, target_name: t.Optional[str] = None
-    ) -> Project:
+    def load(cls, context: DbtContext) -> Project:
         """
         Loads the configuration for the specified DBT project
 
         Args:
-            project_root: Path to the root directory of the DBT project.
-                          Defaults to the current directory if not specified.
-            target_name: Name of the profile to use. Defaults to the project's default target name.
+            context: DBT context for this project
 
         Returns:
             Project instance for the specified DBT project
         """
-        project_root = project_root or Path()
-        project_file_path = Path(project_root, PROJECT_FILENAME)
-        if not project_file_path.exists():
-            raise ConfigError(f"Could not find {PROJECT_FILENAME} in {project_root}")
-        project_yaml = yaml_load(project_file_path)
+        context = context.copy()
 
-        project_name = project_yaml.get("name")
-        if not project_name:
+        project_file_path = Path(context.project_root, PROJECT_FILENAME)
+        if not project_file_path.exists():
+            raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
+        project_yaml = load_yaml(project_file_path)
+
+        variables = project_yaml.get("vars", {})
+        context.variables = {
+            name: var for name, var in variables.items() if not isinstance(var, t.Dict)
+        }
+
+        context.project_name = context.render(project_yaml.get("name", ""))
+        if not context.project_name:
             raise ConfigError(f"{project_file_path.stem} must include project name.")
 
-        profile = Profile.load(project_root, project_name)
-        target = (
-            profile.targets[target_name] if target_name else profile.targets[profile.default_target]
+        profile = Profile.load(context)
+        context.target = (
+            profile.targets[context.target_name]
+            if context.target_name
+            else profile.targets[profile.default_target]
         )
 
         packages = {}
         loader = PackageLoader()
 
-        packages[project_name] = loader.load(project_root, target.schema_, ProjectConfig())
+        packages[context.project_name] = loader.load(context, ProjectConfig())
         project_config = loader.project_config
 
-        packages_dir = Path(project_root, "dbt_packages")
+        packages_dir = Path(
+            context.project_root,
+            context.render(project_yaml.get("packages-install-path", "dbt_packages")),
+        )
         for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
-            name = yaml_load(path).get("name")
+            name = context.render(load_yaml(path).get("name", ""))
             if not name:
                 raise ConfigError(f"{path} must include package name")
 
+            package_context = context.copy()
+            package_context.project_root = path.parent
+            package_context.variables = {}
             packages[name] = loader.load(
-                path.parent, target.schema_, cls._overrides_for_package(name, project_config)
+                package_context, cls._overrides_for_package(name, project_config)
             )
 
-        variables = project_yaml.get("vars", {})
         for name, package in packages.items():
             package_vars = variables.get(name)
 
             if isinstance(package_vars, dict):
                 package.variables.update(package_vars)
 
-        return Project(project_root, project_name, profile, packages)
+        return Project(context, profile, packages)
 
     @classmethod
     def _overrides_for_package(cls, name: str, config: ProjectConfig) -> ProjectConfig:

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
 
@@ -22,7 +23,7 @@ def init_raw_schema(conn: EngineAdapter) -> None:
     _add_csv_file(conn, "raw.order_items", f"{DATA_DIR}/order_items.csv")
 
 
-profile = Profile.load(Path(__file__).parent)
+profile = Profile.load(DbtContext(project_root=Path(__file__).parent))
 connection_config = profile.to_sqlmesh()[profile.default_target]
 if not isinstance(connection_config, DuckDBConnectionConfig):
     raise ConfigError(
