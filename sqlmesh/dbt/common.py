@@ -14,6 +14,7 @@ from sqlmesh.dbt.builtin import (
     generate_ref,
     generate_source,
     generate_var,
+    log,
 )
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
@@ -101,7 +102,9 @@ class DbtContext:
     @property
     def builtin_python_env(self) -> t.Dict[str, t.Any]:
         env: t.Dict[str, t.Any] = {}
-        for name, method in self.builtin_jinja.items():
+        methods = self.builtin_jinja.copy()
+        methods["log"] = log
+        for name, method in methods.items():
             build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}

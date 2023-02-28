@@ -336,7 +336,6 @@ class ModelConfig(GeneralConfig):
         }
 
         env = prepare_env(python_env)
-        env["log"] = lambda msg, info=False: ""
 
         jinja_methods = {**context.builtin_jinja, **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS)}
 

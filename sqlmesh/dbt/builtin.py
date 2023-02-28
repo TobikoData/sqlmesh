@@ -17,6 +17,10 @@ def log(msg: str, info: bool = False) -> str:
     return ""
 
 
+def no_log(msg: str, info: bool = False) -> str:
+    return ""
+
+
 def config(*args: t.Any, **kwargs: t.Any) -> str:
     return ""
 
@@ -53,6 +57,6 @@ def generate_source(sources: t.Dict[str, str]) -> t.Callable:
 BUILTIN_JINJA = {
     "env_var": env_var,
     "is_incremental": is_incremental,
-    "log": log,
+    "log": no_log,
     "config": config,
 }
