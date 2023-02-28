@@ -281,19 +281,22 @@ class Context(BaseContext):
 
         return model
 
-    def scheduler(self, global_state: bool = False) -> Scheduler:
+    def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
         """Returns the built-in scheduler.
 
         Args:
-            global_state: Whether to initialize the scheduler from the persisted state
-                or from the currently loaded local state. Default: False.
+            environment: The target environment to source model snapshots from, or None
+                if snapshots should be sourced from the currently loaded local state.
 
         Returns:
             The built-in scheduler instance.
         """
         snapshots: t.Iterable[Snapshot]
-        if global_state:
-            snapshots = self.state_sync.get_snapshots(None).values()
+        if environment is not None:
+            stored_environment = self.state_sync.get_environment(environment)
+            if stored_environment is None:
+                raise ConfigError(f"Environment '{environment}' was not found.")
+            snapshots = self.state_sync.get_snapshots(stored_environment.snapshots).values()
         else:
             snapshots = self.snapshots.values()
 
@@ -385,21 +388,26 @@ class Context(BaseContext):
 
     def run(
         self,
+        environment: t.Optional[str] = None,
+        *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        global_state: bool = False,
+        skip_janitor: bool = False,
     ) -> None:
         """Run the entire dag through the scheduler.
 
         Args:
+            environment: The target environment to source model snapshots from. Default: prod.
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
-            global_state: If set to True runs against the persisted state,
-                otherwise uses the currently loaded local state. Default: False.
+            skip_janitor: Whether to skip the jantitor task.
         """
-        return self.scheduler(global_state).run(start, end, latest)
+        self.scheduler(environment=environment or c.PROD).run(start, end, latest)
+
+        if not skip_janitor:
+            self._run_janitor()
 
     def get_model(self, name: str) -> t.Optional[Model]:
         """Returns a model with the given name or None if a model with such name doesn't exist."""
@@ -865,3 +873,11 @@ class Context(BaseContext):
         self.dag.graph[model.name] = set()
 
         self.dag.add(model.name, model.depends_on)
+
+    def _run_janitor(self) -> None:
+        expired_environments = self.state_sync.delete_expired_environments()
+        for expired_environment in expired_environments:
+            self.snapshot_evaluator.demote(expired_environment.snapshots, expired_environment.name)
+
+        expired_snapshots = self.state_sync.delete_expired_snapshots()
+        self.snapshot_evaluator.cleanup(expired_snapshots)

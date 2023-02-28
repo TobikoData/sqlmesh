@@ -268,10 +268,13 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def delete_expired_environments(self) -> None:
+    def delete_expired_environments(self) -> t.List[Environment]:
         """Removes expired environments.
 
         Expired environments are environments that have exceeded their time-to-live value.
+
+        Returns:
+            The list of removed environments.
         """
 
     @abc.abstractmethod

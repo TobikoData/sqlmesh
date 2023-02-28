@@ -462,7 +462,8 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_a.name) == env_a
     assert state_sync.get_environment(env_b.name) == env_b
 
-    state_sync.delete_expired_environments()
+    deleted_environments = state_sync.delete_expired_environments()
+    assert deleted_environments == [env_a]
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
