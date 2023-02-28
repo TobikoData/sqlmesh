@@ -35,7 +35,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
 
 ### Configuring the Airflow cluster
 
-SQLMesh natively integrates with the open source workflow orchestrator [Apache Airflow](https://airflow.apache.org/), as well as its hosted cloud variant - Google Cloud Composer.
+SQLMesh natively integrates with the popular open source workflow orchestrator [Apache Airflow](https://airflow.apache.org/) and this applies to both self-hosted and managed Airflow offerings (e.g. Google Cloud Composer, Amazon MWAA, Astronomer).
 
 To integrate with [Airflow](../integrations/airflow.md), ensure that you meet the [prerequisites](/prerequisites), then perform the following:
 
@@ -84,6 +84,8 @@ For Airflow configuration types specific to Google Cloud Composer, configure the
         scheduler:
             type: cloud_composer
             airflow_url: https:/XXXXXXXX.composer.googleusercontent.com/
+
+**Note:** Guidelines for integrating with managed offerings other than Google Cloud Composer will be added later.
 
 ### Running the `plan` command
 
