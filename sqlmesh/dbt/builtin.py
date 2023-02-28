@@ -12,9 +12,9 @@ def is_incremental() -> bool:
     return False
 
 
-def log(msg: str, info: bool=False) -> str:
+def log(msg: str, info: bool = False) -> str:
     print(msg)
-    return ''
+    return ""
 
 
 def config(*args: t.Any, **kwargs: t.Any) -> str:
