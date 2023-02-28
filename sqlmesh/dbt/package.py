@@ -5,8 +5,15 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, Dependencies
-from sqlmesh.dbt.macros import BUILTIN_METHOD_NAMES, MacroConfig
+from sqlmesh.dbt.common import (
+    PROJECT_FILENAME,
+    BaseConfig,
+    DbtContext,
+    Dependencies,
+    SqlStr,
+    load_yaml,
+)
+from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
@@ -15,7 +22,6 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroExtractor, extract_call_names
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 from sqlmesh.utils.pydantic import PydanticModel
-from sqlmesh.utils.yaml import load as yaml_load
 
 if t.TYPE_CHECKING:
     C = t.TypeVar("C", bound=BaseConfig)
@@ -48,7 +54,7 @@ class Package(PydanticModel):
 class PackageLoader:
     """Loader for DBT packages"""
 
-    def load(self, path: Path, target_schema: str, overrides: ProjectConfig) -> Package:
+    def load(self, context: DbtContext, overrides: ProjectConfig) -> Package:
         """
         Loads the specified package.
 
@@ -62,37 +68,42 @@ class PackageLoader:
         """
         self.reset()
 
-        self._root = path
+        self._context = context.copy()
         self._overrides = overrides
 
-        project_file_path = Path(path, PROJECT_FILENAME)
+        project_file_path = Path(self._context.project_root, PROJECT_FILENAME)
         if not project_file_path.exists():
-            raise ConfigError(f"Could not find {PROJECT_FILENAME} in {path}")
+            raise ConfigError(f"Could not find {PROJECT_FILENAME} in {self._context.project_root}")
 
         self._config_paths.add(project_file_path)
-        project_yaml = yaml_load(project_file_path)
+        project_yaml = load_yaml(project_file_path)
 
-        self._package_name = project_yaml.get("name", "")
+        self._package_name = self._context.render(project_yaml.get("name", ""))
 
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
-        variables = {
+        self._context.variables = {
             var: value
             for var, value in project_yaml.get("vars", {}).items()
             if not isinstance(value, dict)
         }
 
-        self._load_project_config(project_yaml, target_schema)
+        self._load_project_config(project_yaml)
 
         models_dirs = [
-            Path(self._root, dir) for dir in project_yaml.get("model-paths") or ["models"]
+            Path(self._context.project_root, self._context.render(dir))
+            for dir in project_yaml.get("model-paths") or ["models"]
         ]
         models, sources = self._load_models(models_dirs)
 
-        seeds_dirs = [Path(self._root, dir) for dir in project_yaml.get("seed-paths") or ["seeds"]]
+        seeds_dirs = [
+            Path(self._context.project_root, self._context.render(dir))
+            for dir in project_yaml.get("seed-paths") or ["seeds"]
+        ]
         seeds = self._load_seeds(seeds_dirs)
 
         macros_dirs = [
-            Path(self._root, dir) for dir in project_yaml.get("macro-paths") or ["macros"]
+            Path(self._context.project_root, self._context.render(dir))
+            for dir in project_yaml.get("macro-paths") or ["macros"]
         ]
         macros = self._load_macros(macros_dirs)
 
@@ -100,18 +111,18 @@ class PackageLoader:
             models=models,
             sources=sources,
             seeds=seeds,
-            variables=variables,
+            variables=self._context.variables,
             macros=macros,
             files=self._config_paths,
         )
 
     def reset(self) -> None:
-        self._root = Path()
+        self._context = DbtContext()
         self._overrides = ProjectConfig()
         self._config_paths: t.Set[Path] = set()
         self.project_config = ProjectConfig()
 
-    def _load_project_config(self, yaml: t.Dict[str, t.Any], schema: str) -> None:
+    def _load_project_config(self, yaml: t.Dict[str, t.Any]) -> None:
         def load_config(
             data: t.Dict[str, t.Any],
             parent: C,
@@ -145,12 +156,12 @@ class PackageLoader:
         )
         self.project_config.seed_config = load_config(
             yaml.get("seeds", {}),
-            SeedConfig(target_schema=schema),
+            SeedConfig(target_schema=self._context.target.schema_),
             scope,
         )
         self.project_config.model_config = load_config(
             yaml.get("models", {}),
-            ModelConfig(target_schema=schema),
+            ModelConfig(target_schema=self._context.target.schema_),
             scope,
         )
 
@@ -176,7 +187,7 @@ class PackageLoader:
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
-                properties_yaml = yaml_load(path)
+                properties_yaml = load_yaml(path)
 
                 self._load_config_section_from_properties(
                     properties_yaml, "models", scope, self.project_config.model_config
@@ -220,7 +231,7 @@ class PackageLoader:
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
-                properties_yaml = yaml_load(path)
+                properties_yaml = load_yaml(path)
 
                 self._load_config_section_from_properties(
                     properties_yaml, "seeds", scope, self.project_config.seed_config
@@ -259,7 +270,9 @@ class PackageLoader:
                     name=name,
                     path=str(path),
                 )
-                dependencies = Dependencies(macros=set(macro.calls) - BUILTIN_METHOD_NAMES)
+                dependencies = Dependencies(
+                    macros=set(macro.calls) - self._context.builtin_python_env.keys()
+                )
                 macros[name] = MacroConfig(macro=executable, dependencies=dependencies)
 
         return macros
@@ -328,9 +341,9 @@ class PackageLoader:
             update={"path": filepath, "table_name": filepath.stem}
         )
 
-        calls: t.Set[str] = set(extract_call_names(sql)) - BUILTIN_METHOD_NAMES
+        calls: t.Set[str] = set(extract_call_names(sql)) - self._context.builtin_python_env.keys()
 
-        model_config.sql = sql
+        model_config.sql = SqlStr(sql)
         model_config._dependencies = Dependencies(macros=calls)
 
         return model_config
