@@ -255,9 +255,9 @@ class SQLMeshMagics(Magics):
     @argument("--end", "-e", type=str, help="End date to evaluate.")
     @argument("--skip-janitor", action="store_true", help="Skip the jantitor task.")
     @line_magic
-    def run(self, line: str) -> None:
+    def run_dag(self, line: str) -> None:
         """Evaluate the DAG of models using the built-in scheduler."""
-        args = parse_argstring(self.run, line)
+        args = parse_argstring(self.run_dag, line)
 
         # Since the magics share a context we want to clear out any state before generating a new plan
         console = self._context.console
