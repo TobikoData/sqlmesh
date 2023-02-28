@@ -1,5 +1,5 @@
 # Overview
-In this quick start guide, you'll get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine. 
+In this quick start guide, you'll get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 Before beginning, ensure that you meet all the [prerequisites](prerequisites.md) for using SQLMesh.
 
@@ -8,18 +8,12 @@ Create a project directory and navigate to it, as in the following example:
 
 ```bash
 mkdir sqlmesh-example
+```
+```bash
 cd sqlmesh-example
 ```
 
-It is recommended, but not required, that you use a virtual environment:
-
-```bash
-python -m venv .env
-source .env/bin/active
-pip install sqlmesh
-```
-
-When using a virtual environment, you must ensure it's activated first: you should see `(.env)` in your command line. If you don't, run `source .env/bin/activate` from your project directory to activate the environment.
+When using a virtual environment, you must ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](installation.md).
 
 Create a SQLMesh scaffold by using the following command:
 
@@ -42,7 +36,7 @@ This will create the directories and files that you can use to organize your SQL
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
-This example project structure is a two-model pipeline, where `sqlmesh_example.example_full_model` depends on `sqlmesh_example.example_incremental_model`. 
+This example project structure is a two-model pipeline, where `sqlmesh_example.example_full_model` depends on `sqlmesh_example.example_incremental_model`.
 
 To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Enter `y`:
 
@@ -108,7 +102,7 @@ index e1407e6..8154da2 100644
 ```
 
 ## 4. Plan and apply updates
-Once this change is made, we can preview it using the `sqlmesh plan` command to understand the impact it had. 
+Once this change is made, we can preview it using the `sqlmesh plan` command to understand the impact it had.
 
 Run `sqlmesh plan dev` and hit `Enter` to leave the backfill start and end dates empty:
 

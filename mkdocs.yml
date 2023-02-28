@@ -5,8 +5,9 @@ nav:
     - "SQLMesh advantages": why_sqlmesh.md
   - Get started:
     - Quick start:
-      - quick_start.md
       - prerequisites.md
+      - installation.md
+      - quick_start.md
   - Guides:
     - guides/projects.md
     - guides/models.md
