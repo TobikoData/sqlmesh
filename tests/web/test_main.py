@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sqlmesh.core.context import Context
-from web.server.main import app
+from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
 client = TestClient(app)
@@ -26,6 +26,17 @@ config = Config()
 
     app.dependency_overrides[get_settings] = get_settings_override
     return tmp_path
+
+
+@pytest.fixture
+def project_context(project_tmp_path: Path) -> Context:
+    context = Context(path=str(project_tmp_path), console=api_console)
+
+    def get_loaded_context_override() -> Context:
+        return context
+
+    app.dependency_overrides[get_loaded_context] = get_loaded_context_override
+    return context
 
 
 @pytest.fixture
@@ -401,3 +412,19 @@ def test_render_invalid_model(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/render", json={"model": "foo.bar"})
     assert response.status_code == 422
     assert response.json() == {"detail": "Model not found."}
+
+
+def test_get_environments(project_context: Context) -> None:
+    response = client.get("/api/environments")
+    assert response.status_code == 200
+    assert response.json() == {
+        "prod": {
+            "name": "prod",
+            "snapshots": [],
+            "start_at": 0,
+            "end_at": None,
+            "plan_id": "",
+            "previous_plan_id": None,
+            "expiration_ts": None,
+        }
+    }
