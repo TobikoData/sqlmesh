@@ -89,6 +89,8 @@ export function toDateFormat(
     return `${year}-${toFormatted(month)}-${toFormatted(day)} ${toFormatted(
       hour,
     )}:${toFormatted(minute)}:${toFormatted(second)}`
+  if (format === 'mm/dd/yyyy')
+    return `${toFormatted(day)}/${toFormatted(month)}/${year}`
 
   return date.toDateString()
 
