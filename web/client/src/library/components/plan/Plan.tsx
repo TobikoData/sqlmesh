@@ -72,27 +72,30 @@ export default function Plan({
     ]
   }, [plan])
 
-  useEffect(() => {
-    if (includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)) {
-      setPlan(undefined)
-    }
-  }, [planState])
-
-  useEffect(() => {
-    if (
-      planAction === EnumPlanAction.Run ||
-      planAction === EnumPlanAction.Closing
+  const [isDone, hasChangesOrBackfill] = useMemo(() => {
+    const hasPlan = plan != null
+    const hasChangesOrBackfill = hasChanges || hasBackfill
+    const isPlanFinishedOrFailed = includes(
+      [EnumPlanState.Finished, EnumPlanState.Failed],
+      planState,
     )
-      return
 
-    if (hasChanges || hasBackfill) {
+    return [
+      (hasPlan && isFalse(hasChangesOrBackfill)) || isPlanFinishedOrFailed,
+      hasChangesOrBackfill,
+    ]
+  }, [plan, hasChanges, hasBackfill, planState])
+
+  useEffect(() => {
+    if (hasChangesOrBackfill) {
       setPlanAction(EnumPlanAction.Apply)
     }
 
-    if (isFalse(hasChanges) && isFalse(hasBackfill)) {
+    if (isDone) {
       setPlanAction(EnumPlanAction.Done)
+      cleanUp()
     }
-  }, [hasChanges, hasBackfill, plan])
+  }, [plan, hasChangesOrBackfill, isDone])
 
   function cleanUp(): void {
     void useApiContextCancel(client)
@@ -151,10 +154,10 @@ export default function Plan({
       .then(({ data }) => {
         setPlan(data)
 
-        if (data != null) {
-          setBackfillDate('start', toDateFormat(toDate(data.start)))
-          setBackfillDate('end', toDateFormat(toDate(data.end)))
-        }
+        if (data == null) return
+
+        setBackfillDate('start', toDateFormat(toDate(data.start), 'mm/dd/yyyy'))
+        setBackfillDate('end', toDateFormat(toDate(data.end), 'mm/dd/yyyy'))
       })
       .catch(console.error)
   }

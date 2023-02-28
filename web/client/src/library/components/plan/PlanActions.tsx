@@ -1,6 +1,7 @@
 import { MouseEvent } from 'react'
 import { EnvironmentName } from '~/context/context'
 import { PlanAction, EnumPlanAction } from '~/context/plan'
+import useActiveFocus from '~/hooks/useActiveFocus'
 import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
 import { getActionName } from './help'
@@ -26,6 +27,8 @@ export default function PlanActions({
   close,
   reset,
 }: PropsPlanActions): JSX.Element {
+  const setFocus = useActiveFocus<HTMLButtonElement>()
+
   const isRun = planAction === EnumPlanAction.Run
   const isDone = planAction === EnumPlanAction.Done
   const isCanceling = planAction === EnumPlanAction.Cancelling
@@ -70,9 +73,10 @@ export default function PlanActions({
         {(isRun || isRunning) && (
           <>
             <Button
-              type="submit"
               disabled={isRunning}
               onClick={handleRun}
+              autoFocus
+              ref={setFocus}
             >
               {getActionName(planAction, [
                 EnumPlanAction.Running,
@@ -95,6 +99,7 @@ export default function PlanActions({
           <Button
             onClick={handleApply}
             disabled={isApplying}
+            ref={setFocus}
           >
             {getActionName(
               planAction,
@@ -150,6 +155,7 @@ export default function PlanActions({
             ],
             planAction,
           )}
+          ref={isDone || isApplying ? setFocus : undefined}
         >
           {getActionName(
             planAction,

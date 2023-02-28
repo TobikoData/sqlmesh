@@ -111,7 +111,7 @@ export function IDE(): JSX.Element {
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold">
-            <span className="inline-block text-secondary-500">/</span>{' '}
+            <span className="inline-block text-secondary-500">/</span>
             {project?.name}
           </h3>
         </div>
@@ -166,6 +166,7 @@ export function IDE(): JSX.Element {
                           environment={mostRecentPlan.environment}
                           tasks={mostRecentPlan.tasks}
                           updated_at={mostRecentPlan.updated_at}
+                          headline="Most Recent Environemnt"
                         />
                         <div className="my-4 px-4">
                           {planState === EnumPlanState.Applying && (

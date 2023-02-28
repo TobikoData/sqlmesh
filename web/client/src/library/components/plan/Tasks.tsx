@@ -3,13 +3,18 @@ import { useMemo } from 'react'
 import { ContextEnvironmentChanges } from '~/api/client'
 import { PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
+import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 
 interface PropsTasks {
   environment: string
   tasks: PlanTasks
+  headline?: string
   updated_at?: string
   changes?: ContextEnvironmentChanges
+  showBatches?: boolean
+  showProgress?: boolean
+  showLogicalUpdate?: boolean
 }
 
 export default function Tasks({
@@ -17,6 +22,10 @@ export default function Tasks({
   tasks,
   updated_at,
   changes,
+  headline = 'Target Environment',
+  showBatches = true,
+  showProgress = true,
+  showLogicalUpdate = false,
 }: PropsTasks): JSX.Element {
   const { models, taskCompleted, taskTotal } = useMemo(() => {
     const models = Object.entries(tasks)
@@ -58,7 +67,7 @@ export default function Tasks({
         <div className="flex justify-between items-baseline">
           <span className="flex items-center">
             <span className="block whitespace-nowrap text-sm font-medium text-gray-900">
-              Target Environment
+              {headline}
             </span>
             <small className="inline-block ml-1 px-2 text-secondary-500 text-xs font-bold bg-secondary-100 rounded-md">
               {environment}
@@ -76,7 +85,13 @@ export default function Tasks({
         </div>
         <Progress progress={toRatio(taskCompleted, taskTotal)} />
         {updated_at != null && (
-          <div className="flex justify-end mt-2">
+          <div className="flex justify-between mt-1">
+            <small className="text-xs">
+              <b>Update Type:</b>
+              <span className="inline-block ml-1 text-gray-500">
+                {showLogicalUpdate ? 'Logical' : 'Backfill'}
+              </span>
+            </small>
             <small className="text-xs">
               <b>Last Update:</b>
               <span className="inline-block ml-1 text-gray-500">
@@ -103,12 +118,12 @@ export default function Tasks({
                   <span
                     className={clsx(
                       'font-bold',
-                      changesAdded.includes(model_name) && 'text-success-500',
-                      changesRemoved.includes(model_name) && 'text-danger-500',
+                      changesAdded.includes(model_name) && 'text-success-700',
+                      changesRemoved.includes(model_name) && 'text-danger-700',
                       changesModifiedDirect.includes(model_name) &&
                         'text-secondary-500',
                       changesModifiedIndirect.includes(model_name) &&
-                        'text-warning-500',
+                        'text-warning-700',
                       changesModifiedMetadata.includes(model_name) &&
                         'text-gray-900',
                     )}
@@ -117,23 +132,46 @@ export default function Tasks({
                   </span>
                 </span>
                 <span className="flex items-center">
-                  <span className="block whitespace-nowrap text-gray-500">
-                    {task.completed} of {task.total} batch
-                    {task.total > 1 ? 'es' : ''}
-                  </span>
-                  <span className="inline-block mx-2 text-gray-500">|</span>
-                  <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
-                    {task.end == null || task.start == null
-                      ? `${Math.ceil(toRatio(task.completed, task.total))}%`
-                      : `${Math.floor(
-                          (task.end - task.start) / 60000,
-                        )}:${String(
-                          Math.ceil(((task.end - task.start) / 1000) % 60),
-                        ).padStart(2, '0')}`}
-                  </span>
+                  {showBatches && (
+                    <>
+                      <span className="block whitespace-nowrap text-gray-500">
+                        {task.completed} of {task.total} batch
+                        {task.total > 1 ? 'es' : ''}
+                      </span>
+                      <span className="inline-block mx-2 text-gray-500">|</span>
+                    </>
+                  )}
+                  {showProgress && (
+                    <>
+                      {task.end == null || task.start == null ? (
+                        <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
+                          {Math.ceil(toRatio(task.completed, task.total))}%
+                        </span>
+                      ) : (
+                        <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
+                          {`${Math.floor(
+                            (task.end - task.start) / 60000,
+                          )}:${String(
+                            Math.ceil(((task.end - task.start) / 1000) % 60),
+                          ).padStart(2, '0')}`}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {showLogicalUpdate && (
+                    <>
+                      <span className="inline-block whitespace-nowrap font-bold text-gray-500 ml-2">
+                        Updated
+                      </span>
+                    </>
+                  )}
                 </span>
               </small>
-              <Progress progress={toRatio(task.completed, task.total)} />
+              {showProgress ? (
+                <Progress progress={toRatio(task.completed, task.total)} />
+              ) : (
+                <Divider className="my-1 border-gray-200 opacity-50" />
+              )}
             </li>
           ))}
         </ul>

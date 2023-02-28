@@ -20,7 +20,7 @@ export default function Progress({
       )}
     >
       <div
-        className={`transition-[width] h-full bg-success-500 rounded-lg`}
+        className={`transition-[width] h-full bg-success-600 rounded-lg`}
         style={{
           width: `${progress}%`,
           transitionDelay: `${delay}ms`,
