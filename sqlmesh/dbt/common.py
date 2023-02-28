@@ -7,7 +7,6 @@ from pathlib import Path
 from pydantic import validator
 from sqlglot.helper import ensure_list
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.model.definition import BUILTIN_METHODS as SQLMESH_PYTHON_BUILTIN
 from sqlmesh.dbt.builtin import (
@@ -103,9 +102,9 @@ class DbtContext:
     def builtin_python_env(self) -> t.Dict[str, t.Any]:
         env: t.Dict[str, t.Any] = {}
         for name, method in self.builtin_jinja.items():
-            build_env(method, env=env, name=name, path=Path(c.SQLMESH))
+            build_env(method, env=env, name=name, path=Path(__file__).parent)
 
-        return {**serialize_env(env, Path(c.SQLMESH)), **SQLMESH_PYTHON_BUILTIN}
+        return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
 
     def render(self, source: str) -> str:
         return render_jinja(source, self._builtins)
@@ -221,30 +220,32 @@ class GeneralConfig(BaseConfig):
             setattr(self, field, getattr(other, field))
 
     def render_config(self: T, context: DbtContext) -> T:
-        return self._render_non_sql_jinja(context.builtin_jinja)
+        methods = context.builtin_jinja
 
-    def _render_non_sql_jinja(self: T, methods: t.Dict[str, t.Callable]) -> T:
         def render_value(val: t.Any) -> t.Any:
-            if type(val) is SqlStr:
-                return val
-            elif type(val) is str:
-                return render_jinja(val, methods)
+            if type(val) is not SqlStr and type(val) is str:
+                val = render_jinja(val, methods)
             elif isinstance(val, GeneralConfig):
-                return val._render_non_sql_jinja(methods)
-            elif isinstance(val, (list, set)):
-                return type(val)(render_value(collection_val) for collection_val in val)
+                for name in val.__fields__:
+                    setattr(val, name, render_value(getattr(val, name)))
+            elif isinstance(val, list):
+                for i in range(len(val)):
+                    val[i] = render_value(val[i])
+            elif isinstance(val, set):
+                for set_val in val:
+                    val.remove(set_val)
+                    val.add(render_value(set_val))
             elif isinstance(val, dict):
-                return {
-                    entry_name: render_value(entry_val) for entry_name, entry_val in val.items()
-                }
+                for k in val:
+                    val[k] = render_value(val[k])
 
             return val
 
-        config = self.copy()
-        for name in config.__fields__:
-            setattr(config, name, render_value(getattr(config, name)))
+        rendered = self.copy(deep=True)
+        for name in rendered.__fields__:
+            setattr(rendered, name, render_value(getattr(rendered, name)))
 
-        return config
+        return rendered
 
 
 def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:

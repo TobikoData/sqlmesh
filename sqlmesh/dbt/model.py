@@ -191,7 +191,9 @@ class ModelConfig(GeneralConfig):
         return re.sub(r"{{\s*config(.|\s)*?}}", "", self.sql).strip()
 
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
-        return super().render_config(context)._render_sql_dependencies(context)
+        rendered = super().render_config(context)
+        rendered._capture_sql_dependencies(context)
+        return rendered
 
     def to_sqlmesh(
         self,
@@ -297,42 +299,35 @@ class ModelConfig(GeneralConfig):
 
         return dependencies
 
-    def _render_sql_dependencies(
-        self,
-        context: DbtContext,
-    ) -> ModelConfig:
-        rendered = self.copy()
-
+    def _capture_sql_dependencies(self, context: DbtContext) -> None:
         def _ref(package_name: str, model_name: t.Optional[str] = None) -> str:
             if package_name not in context.refs:
                 raise ConfigError(
                     f"Model '{package_name}' was not found for model '{self.table_name}'."
                 )
-            rendered._dependencies.refs.add(package_name)
+            self._dependencies.refs.add(package_name)
             return context.refs[package_name]
 
         def _var(name: str, default: t.Optional[str] = None) -> t.Any:
             if default is None and name not in context.variables:
-                raise ConfigError(
-                    f"Variable '{name}' was not found for model '{rendered.table_name}'."
-                )
-            rendered._dependencies.variables.add(name)
+                raise ConfigError(f"Variable '{name}' was not found for model '{self.table_name}'.")
+            self._dependencies.variables.add(name)
             return context.variables.get(name, default)
 
         def _source(source_name: str, table_name: str) -> str:
             full_name = ".".join([source_name, table_name])
             if full_name not in context.sources:
                 raise ConfigError(
-                    f"Source '{full_name}' was not found for model '{rendered.table_name}'."
+                    f"Source '{full_name}' was not found for model '{self.table_name}'."
                 )
-            rendered._dependencies.sources.add(full_name)
+            self._dependencies.sources.add(full_name)
             return context.sources[full_name]
 
         def _config(*args: t.Any, **kwargs: t.Any) -> str:
             if args and isinstance(args[0], dict):
-                rendered.replace(rendered.update_with(args[0]))
+                self.replace(self.update_with(args[0]))
             if kwargs:
-                rendered.replace(rendered.update_with(kwargs))
+                self.replace(self.update_with(kwargs))
             return ""
 
         python_env = {
@@ -343,9 +338,9 @@ class ModelConfig(GeneralConfig):
         env = prepare_env(python_env)
         env["log"] = lambda msg, info=False: ""
 
-        jinja_methods = {**env, **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS)}
+        jinja_methods = {**context.builtin_jinja, **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS)}
 
-        # Overwrite conflicting jinja methods with the dependency capture version
+        # Overwrite jinja methods with the dependency capture version
         jinja_methods.update(
             {
                 "config": _config,
@@ -355,11 +350,7 @@ class ModelConfig(GeneralConfig):
             }
         )
 
-        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], rendered.sql))).render(
-            jinja_methods
-        )
-
-        return rendered
+        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(jinja_methods)
 
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies
