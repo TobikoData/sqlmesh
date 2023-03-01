@@ -261,7 +261,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1369811948",
+        data_hash="2005971257",
         metadata_hash="3589467163",
     )
 
@@ -303,7 +303,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="4279557213",
+        data_hash="439693179",
         metadata_hash="2750000337",
     )
 

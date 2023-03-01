@@ -13,7 +13,6 @@ from pathlib import Path
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.hooks import HookRegistry, hook
@@ -23,8 +22,6 @@ from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -121,25 +118,6 @@ class Loader(abc.ABC):
         self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
 
-    def _add_jinja_macros(self, registry: MacroRegistry, paths: t.Iterable[Path]) -> MacroRegistry:
-        registry = t.cast(MacroRegistry, registry.copy())
-
-        for path in paths:
-            with open(path, mode="r", encoding="utf8") as file:
-                for name, macro in MacroExtractor().extract(file.read()).items():
-                    registry[name] = Executable(
-                        payload=f"""{c.JINJA_MACROS}.append('''{macro.definition}''')""",
-                        kind=ExecutableKind.STATEMENT,
-                        name=name,
-                        path=str(path),
-                    )
-                    self._on_jinja_macro_added(name, macro)
-
-        return registry
-
-    def _on_jinja_macro_added(self, name: str, macro: MacroInfo) -> None:
-        """Callback invoked when adding a new jinja macro to the macro registry"""
-
     def _track_file(self, path: Path) -> None:
         """Project file to track for modifications"""
         self._path_mtimes[path] = path.stat().st_mtime
@@ -162,9 +140,6 @@ class SqlMeshLoader(Loader):
 
         hooks = hook.get_registry()
         macros = macro.get_registry()
-        macros = self._add_jinja_macros(
-            macros, self._context.glob_path(self._context.hook_directory_path, ".sql")
-        )
 
         hook.set_registry(standard_hooks)
         macro.set_registry(standard_macros)
