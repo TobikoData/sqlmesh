@@ -94,7 +94,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         Extracts the `VALUES` expression from the SELECT statement and also removes the alias.
         """
         for expression in pandas_to_sql(df, columns_to_types, batch_size, alias):
-            values_expression = expression.find(exp.Values)
+            values_expression = t.cast(exp.Select, expression.find(exp.Values))
             values_expression.parent = None
             values_expression.set("alias", None)
             yield values_expression
