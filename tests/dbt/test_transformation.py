@@ -182,17 +182,10 @@ def test_adapter(sushi_dbt_project: Project):
         table_name="ignored.ignore", query_or_columns_to_types={"col": exp.DataType.build("int")}
     )
     assert (
-        context.render(
-            "{{ adapter.get_relation(database=target.database, schema='foo', identifier='bar') }}"
-        )
+        context.render("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
         == '"foo"."bar"'
     )
     assert context.render(
-        "{%- set relation = adapter.get_relation(database=target.database, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
+        "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
-    assert (
-        context.render(
-            "{{ adapter.list_relations(database=target.database, schema='foo')|length }}"
-        )
-        == "2"
-    )
+    assert context.render("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
