@@ -220,6 +220,6 @@ class TargetJinja:
 
     def __getattr__(self, name: str) -> t.Any:
         value = self._fields.get(name)
-        if not value:
+        if value is None:
             raise AttributeError(f"{self.__class__.__name__}.{name} not found")
         return value
