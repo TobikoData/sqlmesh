@@ -41,6 +41,32 @@ macro_b_b
     ]
 
 
+def test_macro_registry_render_different_vars():
+    package_a = "{% macro macro_a_a() %}{{ external() }}{% endmacro %}"
+
+    local_macros = "{% macro local_macro() %}{{ package_a.macro_a_a() }}{% endmacro %}"
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(local_macros))
+    registry.add_macros(extractor.extract(package_a), package="package_a")
+
+    rendered = (
+        registry.build_environment(external=lambda: "test_a")
+        .from_string("{{ local_macro() }}")
+        .render()
+    )
+    assert rendered == "test_a"
+
+    rendered = (
+        registry.build_environment(external=lambda: "test_b")
+        .from_string("{{ local_macro() }}")
+        .render()
+    )
+    assert rendered == "test_b"
+
+
 def test_macro_registry_trim():
     package_a = """
 {% macro macro_a_a() %}macro_a_a{% endmacro %}
