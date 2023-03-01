@@ -26,12 +26,9 @@ from sqlmesh.dbt.column import (
     yaml_to_columns,
 )
 from sqlmesh.dbt.common import DbtContext, Dependencies, GeneralConfig, SqlStr
-from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import ENVIRONMENT
-from sqlmesh.utils.metaprogramming import prepare_env
 
 
 class Materialization(str, Enum):
@@ -192,26 +189,24 @@ class ModelConfig(GeneralConfig):
 
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
-        rendered._capture_sql_dependencies(context)
+        rendered._capture_dependencies_from_rendered_sql(context)
+
+        rendered_dependencies = rendered._dependencies
+        for dependency in rendered_dependencies.refs:
+            model = context.models.get(dependency)
+            if model and model.materialized == Materialization.EPHEMERAL:
+                rendered._dependencies = rendered._dependencies.union(
+                    model.render_config(context)._dependencies
+                )
+                rendered._dependencies.refs.discard(dependency)
+
         return rendered
 
-    def to_sqlmesh(
-        self,
-        context: DbtContext,
-        models: t.Dict[str, ModelConfig],
-        macros: t.Dict[str, MacroConfig],
-    ) -> Model:
+    def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        dependencies = self._all_dependencies(context, models, macros)
+        dependencies = self._dependencies
         model_context = self._context_for_dependencies(context, dependencies)
-
-        python_env = {
-            **model_context.builtin_python_env,
-            **{k: v for k, v in context.macros.items() if k in dependencies.macros},
-        }
-
         depends_on = {model_context.refs[ref] for ref in dependencies.refs}
-
         expressions = d.parse(self.sql_no_config)
 
         return create_sql_model(
@@ -221,85 +216,13 @@ class ModelConfig(GeneralConfig):
             statements=expressions[0:-1],
             columns=column_types_to_sqlmesh(self.columns) or None,
             column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
-            python_env=python_env,
+            python_env=model_context.builtin_python_env,
+            jinja_macros=model_context.jinja_macros.trim(dependencies.macros),
             depends_on=depends_on,
             start=self.start,
         )
 
-    def _all_dependencies(
-        self,
-        context: DbtContext,
-        models: t.Dict[str, ModelConfig],
-        macros: t.Dict[str, MacroConfig],
-    ) -> Dependencies:
-        """Recursively gather all the dependencies for this model, including any from ephemeral parents and macros"""
-        dependencies: Dependencies = self._macro_dependencies(context, macros)
-
-        for source in self._dependencies.sources:
-            if source not in context.sources:
-                raise ConfigError(f"Source {source} for model {self.table_name} not found.")
-
-            dependencies.sources.add(source)
-
-        for var in self._dependencies.variables:
-            dependencies.variables.add(var)
-
-        for dependency in self._dependencies.refs:
-            """Add seed/model as a dependency"""
-            if dependency not in context.refs:
-                raise ConfigError(f"Ref {dependency} for Model {self.table_name} not found.")
-
-            dependencies.refs.add(dependency)
-
-            model = models.get(dependency)
-            if model and model.materialized == Materialization.EPHEMERAL:
-                parent_dependencies = model._all_dependencies(context, models, macros)
-                dependencies = dependencies.union(parent_dependencies)
-
-        return dependencies
-
-    def _macro_dependencies(
-        self,
-        context: DbtContext,
-        macros: t.Dict[str, MacroConfig],
-    ) -> Dependencies:
-        dependencies = Dependencies()
-
-        def add_dependency(macro: str) -> None:
-            """Add macro and everything it recursively uses as dependencies"""
-            if macro not in macros:
-                raise ConfigError(f"Macro '{macro}' for model '{self.table_name}' not found.")
-
-            dependencies.macros.add(macro)
-
-            macros_dependencies = macros[macro].dependencies
-
-            for source in macros_dependencies.sources:
-                if source not in context.sources:
-                    raise ConfigError(f"Source '{source}' for macro '{macro}' not found.")
-                dependencies.sources.add(source)
-
-            for ref in macros_dependencies.refs:
-                if ref not in context.refs:
-                    raise ConfigError(f"Source '{source}' for macro '{macro}' not found.")
-                dependencies.refs.add(ref)
-
-            for var in macros_dependencies.variables:
-                # TODO we should be checking if the dependency is optional
-                dependencies.variables.add(var)
-
-            for macro_call in macros_dependencies.macros:
-                if macro_call not in macros:
-                    raise ConfigError(f"Macro '{macro_call}' used by macro '{macro}' not found.")
-
-                add_dependency(macro_call)
-
-        for call in self._dependencies.macros:
-            add_dependency(call)
-
-        return dependencies
-
-    def _capture_sql_dependencies(self, context: DbtContext) -> None:
+    def _capture_dependencies_from_rendered_sql(self, context: DbtContext) -> None:
         def _ref(package_name: str, model_name: t.Optional[str] = None) -> str:
             if package_name not in context.refs:
                 raise ConfigError(
@@ -330,26 +253,17 @@ class ModelConfig(GeneralConfig):
                 self.replace(self.update_with(kwargs))
             return ""
 
-        python_env = {
-            **context.builtin_python_env,
-            **context.macros,
+        jinja_globals: t.Dict[str, t.Any] = {
+            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+            **context.builtin_jinja,
+            "config": _config,
+            "ref": _ref,
+            "var": _var,
+            "source": _source,
         }
 
-        env = prepare_env(python_env)
-
-        jinja_methods = {**context.builtin_jinja, **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS)}
-
-        # Overwrite jinja methods with the dependency capture version
-        jinja_methods.update(
-            {
-                "config": _config,
-                "ref": _ref,
-                "var": _var,
-                "source": _source,
-            }
-        )
-
-        ENVIRONMENT.from_string("\n".join((*env[c.JINJA_MACROS], self.sql))).render(jinja_methods)
+        registry = context.jinja_macros
+        registry.build_environment(**jinja_globals).from_string(self.sql).render()
 
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies

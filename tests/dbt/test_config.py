@@ -110,11 +110,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
     context = sushi_dbt_project.context
     context.variables = defined_variables
 
-    kwargs = {
-        "context": context,
-        "models": {},
-        "macros": {},
-    }
+    kwargs = {"context": context}
 
     with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
         model_config = model_config.render_config(context)
