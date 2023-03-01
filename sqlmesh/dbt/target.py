@@ -19,17 +19,22 @@ class TargetConfig(abc.ABC, PydanticModel):
     Configuration for DBT profile target
 
     Args:
+        name: The name of this target
         type: The type of the data warehouse
         schema_: The target schema for this project
         threads: The number of threads to run on
     """
 
+    # sqlmesh
+    name: str = ""
+
+    # dbt
     type: str
     schema_: str = Field(alias="schema")
     threads: int = 1
 
     @classmethod
-    def load(cls, data: t.Dict[str, t.Any]) -> TargetConfig:
+    def load(cls, name: str, data: t.Dict[str, t.Any]) -> TargetConfig:
         """
         Loads the configuration from the yaml provided for a profile target
 
@@ -41,21 +46,26 @@ class TargetConfig(abc.ABC, PydanticModel):
         """
         db_type = data["type"]
         if db_type == "databricks":
-            return DatabricksConfig(**data)
+            return DatabricksConfig(name=name, **data)
         elif db_type == "duckdb":
-            return DuckDbConfig(**data)
+            return DuckDbConfig(name=name, **data)
         elif db_type == "postgres":
-            return PostgresConfig(**data)
+            return PostgresConfig(name=name, **data)
         elif db_type == "redshift":
-            return RedshiftConfig(**data)
+            return RedshiftConfig(name=name, **data)
         elif db_type == "snowflake":
-            return SnowflakeConfig(**data)
+            return SnowflakeConfig(name=name, **data)
 
         raise ConfigError(f"{db_type} not supported.")
 
     def to_sqlmesh(self) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
+
+    def target_jinja(self, profile_name: str) -> TargetJinja:
+        fields = self.dict().copy()
+        fields["profile_name"] = profile_name
+        return TargetJinja(fields)
 
 
 class DuckDbConfig(TargetConfig):
@@ -202,3 +212,13 @@ class DatabricksConfig(TargetConfig):
 
     def to_sqlmesh(self) -> ConnectionConfig:
         raise NotImplementedError
+
+
+class TargetJinja:
+    def __init__(self, fields: t.Dict[str, t.Any]):
+        self._fields = fields
+
+    def __getattr__(self, name: str) -> t.Any:
+        if name not in self._fields:
+            raise AttributeError(f"{self.__class__.__name__}.{name} not found")
+        return self._fields.get(name)

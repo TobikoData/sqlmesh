@@ -88,7 +88,7 @@ class Profile:
         if not outputs:
             raise ConfigError(f"No outputs exist in profiles for Project '{context.project_name}'.")
 
-        targets = {name: TargetConfig.load(output) for name, output in outputs.items()}
+        targets = {name: TargetConfig.load(name, output) for name, output in outputs.items()}
         default_target = context.render(project_data.get("target"))
         if default_target not in targets:
             raise ConfigError(

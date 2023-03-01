@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.model import (
@@ -16,8 +17,14 @@ from sqlmesh.dbt.column import (
 )
 from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.utils.errors import ConfigError
+
+
+@pytest.fixture()
+def sushi_dbt_project(mocker: MockerFixture) -> Project:
+    return Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
 
 
 def test_model_name():
@@ -148,3 +155,12 @@ def test_config_containing_jinja():
     assert str(sqlmesh_model.query) == model.sql
     assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
+
+
+def test_target_jinja(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ target.name }}") == "in_memory"
+    assert context.render("{{ target.schema }}") == "sushi"
+    assert context.render("{{ target.type }}") == "duckdb"
+    assert context.render("{{ target.profile_name }}") == "sushi"
