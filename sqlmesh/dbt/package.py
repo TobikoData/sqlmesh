@@ -3,8 +3,6 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.core import constants as c
-from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.dbt.common import (
     PROJECT_FILENAME,
     BaseConfig,
@@ -13,14 +11,11 @@ from sqlmesh.dbt.common import (
     SqlStr,
     load_yaml,
 )
-from sqlmesh.dbt.macros import MacroConfig
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
-from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroExtractor, extract_call_names
-from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
+from sqlmesh.utils.jinja import MacroExtractor, MacroInfo, extract_macro_references
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -47,30 +42,26 @@ class Package(PydanticModel):
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
     variables: t.Dict[str, t.Any]
-    macros: t.Dict[str, MacroConfig]
+    macros: t.Dict[str, MacroInfo]
     files: t.Set[Path]
 
 
 class PackageLoader:
     """Loader for DBT packages"""
 
-    def load(self, context: DbtContext, overrides: ProjectConfig) -> Package:
+    def __init__(self, context: DbtContext, overrides: ProjectConfig):
+        self._context = context.copy()
+        self._overrides = overrides
+        self._config_paths: t.Set[Path] = set()
+        self.project_config = ProjectConfig()
+
+    def load(self) -> Package:
         """
         Loads the specified package.
-
-        Args:
-            path: Path to the package
-            target_schema: Schema for the profile target
-            overrides: Project-level configuration overrides which take precedence over package configuration
 
         Returns:
             Package containing the configuration found within this package
         """
-        self.reset()
-
-        self._context = context.copy()
-        self._overrides = overrides
-
         project_file_path = Path(self._context.project_root, PROJECT_FILENAME)
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {self._context.project_root}")
@@ -115,12 +106,6 @@ class PackageLoader:
             macros=macros,
             files=self._config_paths,
         )
-
-    def reset(self) -> None:
-        self._context = DbtContext()
-        self._overrides = ProjectConfig()
-        self._config_paths: t.Set[Path] = set()
-        self.project_config = ProjectConfig()
 
     def _load_project_config(self, yaml: t.Dict[str, t.Any]) -> None:
         def load_config(
@@ -249,8 +234,8 @@ class PackageLoader:
 
         return seeds
 
-    def _load_macros(self, macros_dirs: t.List[Path]) -> UniqueKeyDict[str, MacroConfig]:
-        macros: UniqueKeyDict[str, MacroConfig] = UniqueKeyDict("macros")
+    def _load_macros(self, macros_dirs: t.List[Path]) -> t.Dict[str, MacroInfo]:
+        macros: t.Dict[str, MacroInfo] = {}
 
         for root in macros_dirs:
             for path in root.glob("**/*.sql"):
@@ -258,24 +243,10 @@ class PackageLoader:
 
         return macros
 
-    def _load_macro_file(self, path: Path) -> UniqueKeyDict[str, MacroConfig]:
-        macros: UniqueKeyDict[str, MacroConfig] = UniqueKeyDict("macros")
-
+    def _load_macro_file(self, path: Path) -> t.Dict[str, MacroInfo]:
         self._config_paths.add(path)
         with open(path, mode="r", encoding="utf8") as file:
-            for name, macro in MacroExtractor().extract(file.read()).items():
-                executable: ExecutableOrMacro = Executable(
-                    payload=f"""{c.JINJA_MACROS}.append('''{macro.macro}''')""",
-                    kind=ExecutableKind.STATEMENT,
-                    name=name,
-                    path=str(path),
-                )
-                dependencies = Dependencies(
-                    macros=set(macro.calls) - self._context.builtin_python_env.keys()
-                )
-                macros[name] = MacroConfig(macro=executable, dependencies=dependencies)
-
-        return macros
+            return MacroExtractor().extract(file.read())
 
     def _load_config_section_from_properties(
         self,
@@ -341,10 +312,8 @@ class PackageLoader:
             update={"path": filepath, "table_name": filepath.stem}
         )
 
-        calls: t.Set[str] = set(extract_call_names(sql)) - self._context.builtin_python_env.keys()
-
         model_config.sql = SqlStr(sql)
-        model_config._dependencies = Dependencies(macros=calls)
+        model_config._dependencies = Dependencies(macros=extract_macro_references(sql))
 
         return model_config
 

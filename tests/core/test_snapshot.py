@@ -93,6 +93,10 @@ def test_json(snapshot: Snapshot):
             "pre": [],
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
+            "jinja_macros": {
+                "packages": {},
+                "root_macros": {},
+            },
             "source_type": "sql",
         },
         "audits": [],
@@ -257,7 +261,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2278368927",
+        data_hash="1369811948",
         metadata_hash="3589467163",
     )
 
@@ -299,7 +303,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="941582290",
+        data_hash="4279557213",
         metadata_hash="2750000337",
     )
 

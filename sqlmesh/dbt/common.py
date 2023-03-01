@@ -20,10 +20,16 @@ from sqlmesh.dbt.builtin import (
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import render_jinja
-from sqlmesh.utils.metaprogramming import Executable, build_env, serialize_env
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
+from sqlmesh.utils.metaprogramming import build_env, serialize_env
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
+
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.adapter import Adapter
+    from sqlmesh.dbt.model import ModelConfig
+    from sqlmesh.dbt.seed import SeedConfig
+    from sqlmesh.dbt.source import SourceConfig
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
@@ -43,22 +49,54 @@ class DbtContext:
     target_name: t.Optional[str] = None
     project_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
-    macros: t.Dict[str, Executable] = field(default_factory=dict)
-    _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
-    _variables: t.Dict[str, t.Any] = field(default_factory=dict)
+    jinja_macros: JinjaMacroRegistry = field(default_factory=JinjaMacroRegistry)
+    sources: t.Dict[str, str] = field(default_factory=dict)
+    variables: t.Dict[str, t.Any] = field(default_factory=dict)
+    refs: t.Dict[str, str] = field(default_factory=dict)
+
+    _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
+    _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
+
     _target: t.Optional[TargetConfig] = None
-    _sources: t.Dict[str, str] = field(default_factory=dict)
-    _refs: t.Dict[str, str] = field(default_factory=dict)
+    _adapter: t.Optional[Adapter] = None
+    _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self._builtins:
             self._builtins = BUILTIN_JINJA.copy()
 
-        self.sources = self._sources
-        self.refs = self._refs
-        self.variables = self._variables
-        if self._target:
-            self.target = self._target
+    @property
+    def models(self) -> t.Dict[str, ModelConfig]:
+        return self._models
+
+    @models.setter
+    def models(self, models: t.Dict[str, ModelConfig]) -> None:
+        for model_name in self._models:
+            self.refs.pop(model_name, None)
+        self._models = {}
+        self.add_models(models)
+
+    def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
+        self._models.update(models)
+        self.refs.update({name: config.model_name for name, config in models.items()})
+
+    @property
+    def seeds(self) -> t.Dict[str, SeedConfig]:
+        return self._seeds
+
+    @seeds.setter
+    def seeds(self, seeds: t.Dict[str, SeedConfig]) -> None:
+        for seed_name in self._seeds:
+            self.refs.pop(seed_name, None)
+        self._seeds = {}
+        self.add_seeds(seeds)
+
+    def add_seeds(self, seeds: t.Dict[str, SeedConfig]) -> None:
+        self._seeds.update(seeds)
+        self.refs.update({name: config.seed_name for name, config in seeds.items()})
+
+    def add_source_configs(self, sources: t.Dict[str, SourceConfig]) -> None:
+        self.sources.update({config.config_name: config.source_name for config in sources.values()})
 
     @property
     def target(self) -> TargetConfig:
@@ -69,41 +107,28 @@ class DbtContext:
     @target.setter
     def target(self, value: TargetConfig) -> None:
         self._target = value
-        if not self.project_name:
-            raise ConfigError(f"Must assign project_name before assigning target")
-        self._builtins["target"] = self._target.target_jinja(self.project_name)
-        self._builtins["adapter"] = generate_adapter(self._target)
-
-    @property
-    def variables(self) -> t.Dict[str, t.Any]:
-        return self._variables
-
-    @variables.setter
-    def variables(self, value: t.Dict[str, t.Any]) -> None:
-        self._variables = value
-        self._builtins["var"] = generate_var(self._variables)
-
-    @property
-    def refs(self) -> t.Dict[str, str]:
-        return self._refs
-
-    @refs.setter
-    def refs(self, value: t.Dict[str, str]) -> None:
-        self._refs = value
-        self._builtins["ref"] = generate_ref(self._refs)
-
-    @property
-    def sources(self) -> t.Dict[str, str]:
-        return self._sources
-
-    @sources.setter
-    def sources(self, value: t.Dict[str, str]) -> None:
-        self._sources = value
-        self._builtins["source"] = generate_source(self._sources)
+        self._adapter = generate_adapter(self._target)
 
     @property
     def builtin_jinja(self) -> t.Dict[str, t.Any]:
-        return self._builtins
+        builtins: t.Dict[str, t.Any] = {
+            **self._builtins,
+            "var": generate_var(self.variables),
+            "ref": generate_ref(self.refs),
+            "source": generate_source(self.sources),
+        }
+
+        if self._target is not None:
+            if not self.project_name:
+                raise ConfigError(
+                    "Project name must be set in the context in order to use a target."
+                )
+            builtins["target"] = self._target.target_jinja(self.project_name)
+
+            if self._adapter is not None:
+                builtins["adapter"] = self._adapter
+
+        return builtins
 
     @property
     def builtin_python_env(self) -> t.Dict[str, t.Any]:
@@ -118,7 +143,7 @@ class DbtContext:
         return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
 
     def render(self, source: str) -> str:
-        return render_jinja(source, self._builtins)
+        return render_jinja(source, self.builtin_jinja)
 
     def copy(self) -> DbtContext:
         return replace(self)
@@ -133,14 +158,14 @@ class Dependencies(PydanticModel):
     DBT dependencies for a model, macro, etc.
 
     Args:
-        macros: The names of macros used
+        macros: The references to macros
         sources: The "source_name.table_name" for source tables used
         refs: The table_name for models used
         variables: The names of variables used, mapped to a flag that indicates whether their
             definition is optional or not.
     """
 
-    macros: t.Set[str] = set()
+    macros: t.Set[MacroReference] = set()
     sources: t.Set[str] = set()
     refs: t.Set[str] = set()
     variables: t.Set[str] = set()
