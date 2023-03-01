@@ -3,7 +3,7 @@ import { Disclosure } from '@headlessui/react'
 import { PlusCircleIcon, MinusCircleIcon } from '@heroicons/react/24/solid'
 import { useStorePlan } from '~/context/plan'
 import Input from '../input/Input'
-import Toggle from '../toggle/Toggle'
+import InputToggle from '../input/InputToggle'
 
 interface PropsPlanWizardStepOptions
   extends React.HTMLAttributes<HTMLElement> {}
@@ -166,21 +166,5 @@ export default function PlanWizardStepOptions({
         </fieldset>
       </form>
     </li>
-  )
-}
-
-function InputToggle({ label, info, setEnabled, enabled }: any): JSX.Element {
-  return (
-    <div className="flex justify-between">
-      <label className="block mb-1 px-3 text-sm font-bold">
-        {label}
-        <small className="block text-xs text-gray-500">{info}</small>
-      </label>
-      <Toggle
-        className="mt-2"
-        enabled={enabled}
-        setEnabled={setEnabled}
-      />
-    </div>
   )
 }

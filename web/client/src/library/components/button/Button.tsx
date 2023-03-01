@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { EnumSize } from '../../../types/enum'
 import { Menu } from '@headlessui/react'
+import { ForwardedRef, forwardRef } from 'react'
 
 export type ButtonVariant =
   | 'primary'
@@ -9,6 +10,7 @@ export type ButtonVariant =
   | 'danger'
   | 'warning'
   | 'alternative'
+
 export type ButtonSize = Subset<
   Size,
   | typeof EnumSize.xs
@@ -67,18 +69,28 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg`],
 ])
 
-export function Button({
-  disabled = false,
-  variant = 'secondary',
-  shape = 'rounded',
-  size = EnumSize.md,
-  children = [],
-  form,
-  onClick,
-  className,
-}: PropsButton): JSX.Element {
+export const Button = forwardRef(function Button(
+  {
+    type = 'button',
+    disabled = false,
+    variant = 'secondary',
+    shape = 'rounded',
+    size = EnumSize.md,
+    children = [],
+    form,
+    className,
+    autoFocus,
+    tabIndex,
+    onClick,
+  }: PropsButton,
+  ref: ForwardedRef<HTMLButtonElement>,
+): JSX.Element {
   return (
     <button
+      ref={ref}
+      type={type}
+      autoFocus={autoFocus}
+      tabIndex={tabIndex}
       form={form}
       disabled={disabled}
       className={clsx(
@@ -97,18 +109,22 @@ export function Button({
       {children}
     </button>
   )
-}
+})
 
-export function ButtonMenu({
-  variant = 'secondary',
-  shape = 'rounded',
-  size = EnumSize.md,
-  children = [],
-  disabled = false,
-  className,
-}: PropsButton): JSX.Element {
+export const ButtonMenu = forwardRef(function ButtonMenu(
+  {
+    variant = 'secondary',
+    shape = 'rounded',
+    size = EnumSize.md,
+    children = [],
+    disabled = false,
+    className,
+  }: PropsButton,
+  ref: ForwardedRef<HTMLButtonElement>,
+): JSX.Element {
   return (
     <Menu.Button
+      ref={ref}
       className={clsx(
         'whitespace-nowrap flex m-1 items-center justify-center',
         'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
@@ -125,4 +141,4 @@ export function ButtonMenu({
       {children}
     </Menu.Button>
   )
-}
+})
