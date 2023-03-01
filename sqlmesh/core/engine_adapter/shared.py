@@ -49,7 +49,7 @@ class DataObjectType(str, Enum):
 
 
 class DataObject(PydanticModel):
-    catalog: t.Optional[str]
+    catalog: t.Optional[str] = None
     schema_name: str = Field(alias="schema")
     name: str
     type: DataObjectType

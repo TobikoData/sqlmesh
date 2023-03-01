@@ -177,10 +177,10 @@ class RedshiftEngineAdapter(EngineAdapter):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        catalog_name = catalog_name or ""
+        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
         query = f"""
             SELECT
-                CASE WHEN '{catalog_name}' = '' THEN NULL ELSE '{catalog_name}' END AS catalog_name,
+                {catalog_name} AS catalog_name,
                 tablename AS name,
                 schemaname AS schema_name,
                 'TABLE' AS type
@@ -188,7 +188,7 @@ class RedshiftEngineAdapter(EngineAdapter):
             WHERE schemaname ILIKE '{schema_name}'
             UNION ALL
             SELECT
-                CASE WHEN '{catalog_name}' = '' THEN NULL ELSE '{catalog_name}' END AS catalog_name,
+                {catalog_name} AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'VIEW' AS type

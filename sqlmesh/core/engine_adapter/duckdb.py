@@ -36,10 +36,10 @@ class DuckDBEngineAdapter(EngineAdapter):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        catalog_name = catalog_name or ""
+        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
         query = f"""
             SELECT
-              CASE WHEN '{catalog_name}' = '' THEN NULL ELSE '{catalog_name}' END as catalog,
+              {catalog_name} as catalog,
               table_name as name,
               table_schema as schema,
               CASE table_type
