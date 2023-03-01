@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import typing as t
 
 import pandas as pd
@@ -35,9 +36,10 @@ class DuckDBEngineAdapter(EngineAdapter):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        catalog_name = catalog_name or ""
         query = f"""
             SELECT
-              '{ catalog_name or ''}' as catalog,
+              CASE WHEN '{catalog_name}' = '' THEN NULL ELSE '{catalog_name}' END as catalog,
               table_name as name,
               table_schema as schema,
               CASE table_type
@@ -51,7 +53,7 @@ class DuckDBEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog,  # type: ignore
+                catalog=None if math.isnan(row.catalog) else row.catalog,  # type: ignore
                 schema=row.schema,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore

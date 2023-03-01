@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
@@ -164,3 +165,34 @@ def test_target_jinja(sushi_dbt_project: Project):
     assert context.render("{{ target.schema }}") == "sushi"
     assert context.render("{{ target.type }}") == "duckdb"
     assert context.render("{{ target.profile_name }}") == "sushi"
+
+
+def test_adapter(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+    engine_adapter = context._builtins["adapter"].engine_adapter
+    engine_adapter.create_schema("foo")
+    engine_adapter.create_schema("ignored")
+    engine_adapter.create_table(
+        table_name="foo.bar", query_or_columns_to_types={"baz": exp.DataType.build("int")}
+    )
+    engine_adapter.create_table(
+        table_name="foo.another", query_or_columns_to_types={"col": exp.DataType.build("int")}
+    )
+    engine_adapter.create_table(
+        table_name="ignored.ignore", query_or_columns_to_types={"col": exp.DataType.build("int")}
+    )
+    assert (
+        context.render(
+            "{{ adapter.get_relation(database=target.database, schema='foo', identifier='bar') }}"
+        )
+        == '"foo"."bar"'
+    )
+    assert context.render(
+        "{%- set relation = adapter.get_relation(database=target.database, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
+    ) == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
+    assert (
+        context.render(
+            "{{ adapter.list_relations(database=target.database, schema='foo')|length }}"
+        )
+        == "2"
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing as t
 from enum import Enum
 
 from pydantic import Field
@@ -25,6 +26,18 @@ class DataObjectType(str, Enum):
     TABLE = "table"
     VIEW = "view"
 
+    @property
+    def is_unknown(self) -> bool:
+        return self == DataObjectType.UNKNOWN
+
+    @property
+    def is_table(self) -> bool:
+        return self == DataObjectType.TABLE
+
+    @property
+    def is_view(self) -> bool:
+        return self == DataObjectType.VIEW
+
     @classmethod
     def from_str(cls, s: str) -> DataObjectType:
         s = s.lower()
@@ -36,7 +49,7 @@ class DataObjectType(str, Enum):
 
 
 class DataObject(PydanticModel):
-    catalog: str
+    catalog: t.Optional[str]
     schema_name: str = Field(alias="schema")
     name: str
     type: DataObjectType

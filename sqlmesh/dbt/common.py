@@ -11,6 +11,7 @@ from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.model.definition import BUILTIN_METHODS as SQLMESH_PYTHON_BUILTIN
 from sqlmesh.dbt.builtin import (
     BUILTIN_JINJA,
+    generate_adapter,
     generate_ref,
     generate_source,
     generate_var,
@@ -71,6 +72,7 @@ class DbtContext:
         if not self.project_name:
             raise ConfigError(f"Must assign project_name before assigning target")
         self._builtins["target"] = self._target.target_jinja(self.project_name)
+        self._builtins["adapter"] = generate_adapter(self._target)
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:
@@ -110,7 +112,7 @@ class DbtContext:
         methods["log"] = log
         for name, method in methods.items():
             # temporary until Iaroslav has the jinja templates working
-            if name not in ["target"]:
+            if name not in ["target", "adapter"]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
