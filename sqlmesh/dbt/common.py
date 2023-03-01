@@ -110,7 +110,7 @@ class DbtContext:
         methods["log"] = log
         for name, method in methods.items():
             # temporary until Iaroslav has the jinja templates working
-            if name not in ("target"):
+            if name not in ["target"]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
