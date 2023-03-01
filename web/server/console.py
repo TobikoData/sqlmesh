@@ -61,3 +61,7 @@ class ApiConsole(TerminalConsole):
         self.queue.put_nowait(
             Event(data=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}")
         )
+
+    def log_success(self, msg: str) -> None:
+        self.queue.put_nowait(msg)
+        self.stop_snapshot_progress()
