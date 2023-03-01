@@ -5,6 +5,7 @@ from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+from dbt.exceptions import CompilationException
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -190,3 +191,13 @@ def test_adapter(sushi_dbt_project: Project):
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
     assert context.render("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
+
+
+def test_exceptions_jinja(capsys, sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render('{{ exceptions.warn("Warning") }}') == ""
+    assert "Warning" in capsys.readouterr().out
+
+    with pytest.raises(CompilationException, match="Error"):
+        context.render('{{ exceptions.raise_compiler_error("Error") }}')
