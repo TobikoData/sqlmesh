@@ -177,17 +177,18 @@ class RedshiftEngineAdapter(EngineAdapter):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
         query = f"""
             SELECT
-                '{catalog_name or ''}' AS catalog_name,
+                {catalog_name} AS catalog_name,
                 tablename AS name,
                 schemaname AS schema_name,
                 'TABLE' AS type
             FROM pg_tables
-            WHERE schemaname ilike '{schema_name}'
+            WHERE schemaname ILIKE '{schema_name}'
             UNION ALL
             SELECT
-                '{catalog_name or ''}' AS catalog_name,
+                {catalog_name} AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'VIEW' AS type
@@ -197,7 +198,7 @@ class RedshiftEngineAdapter(EngineAdapter):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=row.type  # type: ignore
+                catalog=None if math.isnan(row.catalog_name) else row.catalog_name, schema=row.schema_name, name=row.name, type=row.type  # type: ignore
             )
             for row in df.itertuples()
         ]

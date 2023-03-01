@@ -45,6 +45,7 @@ setup(
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
             "black==22.6.0",
+            "dbt-core",
             "Faker",
             "google-auth",
             "isort==5.10.1",
@@ -84,6 +85,9 @@ setup(
         ],
         "redshift": [
             "redshift_connector",
+        ],
+        "dbt": [
+            "dbt-core",
         ],
     },
     classifiers=[
