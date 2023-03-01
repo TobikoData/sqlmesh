@@ -35,7 +35,7 @@ class MacroReference(PydanticModel, frozen=True):
 class MacroInfo(PydanticModel):
     """Class to hold macro and its calls"""
 
-    body: str
+    definition: str
     depends_on: t.List[MacroReference]
 
 
@@ -80,7 +80,8 @@ class MacroExtractor(Parser):
 
                 macro_str = self._find_sql(macro_start, self._next)
                 macros[name] = MacroInfo(
-                    body=macro_str, depends_on=list(extract_macro_references(macro_str))
+                    definition=macro_str,
+                    depends_on=list(extract_macro_references(macro_str)),
                 )
 
             self._advance()
@@ -170,6 +171,7 @@ class JinjaMacroRegistry(PydanticModel):
     packages: t.Dict[str, t.Dict[str, MacroInfo]] = {}
     root_macros: t.Dict[str, MacroInfo] = {}
 
+    _parser_cache: t.Dict[t.Optional[str], Template] = {}
     __environment: t.Optional[Environment] = None
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
@@ -203,9 +205,9 @@ class JinjaMacroRegistry(PydanticModel):
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
-        parsed_root = self._parse_package(None, **kwargs).module
+        parsed_root = self._parse_package(None).make_module(vars=kwargs)
         parsed_packages = {
-            name: self._parse_package(name, **kwargs).module for name in self.packages
+            name: self._parse_package(name).make_module(vars=kwargs) for name in self.packages
         }
 
         env = environment()
@@ -265,7 +267,10 @@ class JinjaMacroRegistry(PydanticModel):
 
         return JinjaMacroRegistry(packages=packages, root_macros=root_macros)
 
-    def _parse_package(self, package: t.Optional[str], **kwargs: t.Any) -> Template:
+    def _parse_package(self, package: t.Optional[str]) -> Template:
+        if package in self._parser_cache:
+            return self._parser_cache[package]
+
         macros = self.packages[package] if package is not None else self.root_macros
 
         upstream_packages = {
@@ -275,34 +280,36 @@ class JinjaMacroRegistry(PydanticModel):
             if ref.package != package and ref.package in self.packages
         }
 
-        package_globals = kwargs.copy()
+        package_globals = {}
 
         for upstream_package in upstream_packages:
             parsed_package = self._parse_package(upstream_package)
             if parsed_package is not None:
                 package_globals[upstream_package] = parsed_package.module
 
-        no_self_ref_macro_bodies = [
-            macro.body
+        no_self_ref_macro_definitions = [
+            macro.definition
             for macro in macros.values()
             if all(ref.package is None or ref.package != package for ref in macro.depends_on)
         ]
-        no_self_ref_macro_body = "\n".join(no_self_ref_macro_bodies)
+        no_self_ref_macro_definition = "\n".join(no_self_ref_macro_definitions)
 
-        if package is not None and len(no_self_ref_macro_bodies) != len(macros):
+        if package is not None and len(no_self_ref_macro_definitions) != len(macros):
             # Macros with references to self-package have been found.
             # Parse the package without such macros first in order to add
             # the self-package as a module during the final parsing.
             self_package = self._environment.from_string(
-                no_self_ref_macro_body, globals=package_globals
+                no_self_ref_macro_definition, globals=package_globals
             )
             package_globals[package] = self_package.module
 
-            package_body = "\n".join(macro.body for macro in macros.values())
+            package_body = "\n".join(macro.definition for macro in macros.values())
         else:
-            package_body = no_self_ref_macro_body
+            package_body = no_self_ref_macro_definition
 
-        return self._environment.from_string(package_body, globals=package_globals)
+        template = self._environment.from_string(package_body, globals=package_globals)
+        self._parser_cache[package] = template
+        return template
 
     @property
     def _environment(self) -> Environment:

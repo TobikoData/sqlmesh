@@ -715,11 +715,11 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
 
     if isinstance(model, SqlModel):
         for macro in model.jinja_macros.root_macros.values():
-            data.append(macro.body)
+            data.append(macro.definition)
 
         for package in model.jinja_macros.packages.values():
             for macro in package.values():
-                data.append(macro.body)
+                data.append(macro.definition)
 
     if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
         data.append(model.kind.time_column.column)

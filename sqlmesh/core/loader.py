@@ -128,7 +128,7 @@ class Loader(abc.ABC):
             with open(path, mode="r", encoding="utf8") as file:
                 for name, macro in MacroExtractor().extract(file.read()).items():
                     registry[name] = Executable(
-                        payload=f"""{c.JINJA_MACROS}.append('''{macro.body}''')""",
+                        payload=f"""{c.JINJA_MACROS}.append('''{macro.definition}''')""",
                         kind=ExecutableKind.STATEMENT,
                         name=name,
                         path=str(path),

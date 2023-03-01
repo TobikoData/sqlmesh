@@ -262,7 +262,7 @@ class ModelConfig(GeneralConfig):
             "source": _source,
         }
 
-        registry = context.jinja_macros.trim(self._dependencies.macros)
+        registry = context.jinja_macros
         registry.build_environment(**jinja_globals).from_string(self.sql).render()
 
     def _context_for_dependencies(
