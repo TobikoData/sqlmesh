@@ -18,6 +18,7 @@ class ExceptionsJinja:
         print(msg)
         return ""
 
+
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
 
