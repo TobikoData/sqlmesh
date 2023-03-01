@@ -3,18 +3,18 @@ from __future__ import annotations
 import os
 import typing as t
 
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationError
+
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
-
 
 
 class ExceptionsJinja:
     """Implements the dbt "exceptions" jinja namespace."""
 
     def raise_compiler_error(self, msg: str) -> None:
-        raise CompilationException(msg)
+        raise CompilationError(msg)
 
     def warn(self, msg: str) -> str:
         print(msg)

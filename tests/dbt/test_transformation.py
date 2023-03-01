@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 from dbt.adapters.base.column import Column
+from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
-from dbt.exceptions import CompilationException
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -199,5 +199,5 @@ def test_exceptions_jinja(capsys, sushi_dbt_project: Project):
     assert context.render('{{ exceptions.warn("Warning") }}') == ""
     assert "Warning" in capsys.readouterr().out
 
-    with pytest.raises(CompilationException, match="Error"):
+    with pytest.raises(CompilationError, match="Error"):
         context.render('{{ exceptions.raise_compiler_error("Error") }}')
