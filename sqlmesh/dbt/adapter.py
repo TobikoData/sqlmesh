@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlglot.helper import seq_get
+
 from sqlmesh.core.engine_adapter import EngineAdapter
 
 if t.TYPE_CHECKING:
@@ -32,9 +34,7 @@ class Adapter:
             for r in relations_list
             if r.identifier == identifier and r.schema == schema and r.database == database
         ]
-        if len(matching_relations) >= 1:
-            return matching_relations[0]
-        return None
+        return seq_get(matching_relations, 0)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
         """
