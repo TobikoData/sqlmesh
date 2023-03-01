@@ -163,10 +163,6 @@ class DbtContext:
 
         return serialize_env(env, Path(__file__).parent)
 
-    @property
-    def adapter(self) -> Adapter:
-        return self._builtins["adapter"]
-
     def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
         from dbt.clients import agate_helper
 
@@ -215,7 +211,8 @@ class DbtContext:
             raise NotImplementedError(
                 "SQLMesh's dbt integration only supports SQL statements at this time."
             )
-        res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
+        assert self._adapter is not None
+        res, table = self._adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
         if name:
             self.store_result(name, res, table)
         return ""
