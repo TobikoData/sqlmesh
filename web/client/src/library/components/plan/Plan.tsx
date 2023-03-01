@@ -6,6 +6,7 @@ import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
+  EnumCategoryType,
 } from '../../../context/plan'
 import {
   includes,
@@ -179,7 +180,9 @@ export default function Plan({
       <PlanActions
         environment={environment}
         planAction={planAction}
-        shouldApplyWithBackfill={hasBackfill && category?.id !== 'no-change'}
+        shouldApplyWithBackfill={
+          hasBackfill && category?.id !== EnumCategoryType.NoChange
+        }
         apply={apply}
         run={run}
         cancel={cancel}

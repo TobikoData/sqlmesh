@@ -1,11 +1,18 @@
 import Toggle from '../toggle/Toggle'
 
+interface PropsInputToggle {
+  label: string
+  info: string
+  enabled: boolean
+  setEnabled: (enabled: boolean) => void
+}
+
 export default function InputToggle({
   label,
   info,
-  setEnabled,
   enabled,
-}: any): JSX.Element {
+  setEnabled,
+}: PropsInputToggle): JSX.Element {
   return (
     <div className="flex justify-between">
       <label className="block mb-1 px-3 text-sm font-bold">

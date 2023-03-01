@@ -8,7 +8,6 @@ import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover, Menu } from '@headlessui/react'
 import { useApiPlan, useApiFiles, useApiEnvironments } from '../../../api'
-import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -33,6 +32,7 @@ import {
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
 import { useStoreFileTree } from '~/context/fileTree'
+import { cancelPlanApiPlanCancelPost } from '~/api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -88,7 +88,7 @@ export function IDE(): JSX.Element {
   function cancelPlan(): void {
     setPlanState(EnumPlanState.Cancelling)
 
-    fetchAPI({ url: '/api/plan/cancel', method: 'post' })
+    cancelPlanApiPlanCancelPost()
       .catch(console.error)
       .finally(() => {
         setPlanState(EnumPlanState.Cancelled)
@@ -166,7 +166,7 @@ export function IDE(): JSX.Element {
                           environment={mostRecentPlan.environment}
                           tasks={mostRecentPlan.tasks}
                           updated_at={mostRecentPlan.updated_at}
-                          headline="Most Recent Environemnt"
+                          headline="Most Recent Environment"
                         />
                         <div className="my-4 px-4">
                           {planState === EnumPlanState.Applying && (

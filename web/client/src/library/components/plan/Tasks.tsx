@@ -5,6 +5,7 @@ import { PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
+import pluralize from 'pluralize'
 
 interface PropsTasks {
   environment: string
@@ -135,8 +136,8 @@ export default function Tasks({
                   {showBatches && (
                     <>
                       <span className="block whitespace-nowrap text-gray-500">
-                        {task.completed} of {task.total} batch
-                        {task.total > 1 ? 'es' : ''}
+                        {task.completed} of {task.total}&nbsp;
+                        {pluralize('batch', task.total)}
                       </span>
                       <span className="inline-block mx-2 text-gray-500">|</span>
                     </>
