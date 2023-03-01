@@ -8,7 +8,6 @@ import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover, Menu } from '@headlessui/react'
 import { useApiPlan, useApiFiles, useApiEnvironments } from '../../../api'
-import fetchAPI from '../../../api/instance'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -33,6 +32,7 @@ import {
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
 import { useStoreFileTree } from '~/context/fileTree'
+import { cancelPlanApiPlanCancelPost } from '~/api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -85,26 +85,17 @@ export function IDE(): JSX.Element {
     addRemoteEnvironments(Object.keys(contextEnvironemnts))
   }, [contextEnvironemnts])
 
-  function closePlan(): void {
-    setPlanAction(EnumPlanAction.Closing)
-  }
-
   function cancelPlan(): void {
-    if (planAction === EnumPlanAction.Applying) {
-      setPlanState(EnumPlanState.Cancelling)
-    }
+    setPlanState(EnumPlanState.Cancelling)
 
-    if (planAction !== EnumPlanAction.None) {
-      setPlanAction(EnumPlanAction.Cancelling)
-    }
-
-    fetchAPI({ url: '/api/plan/cancel', method: 'post' }).catch(console.error)
-
-    setPlanState(EnumPlanState.Cancelled)
-    setLastPlan(mostRecentPlan)
-
-    getChannel()?.close()
-    unsubscribe()
+    cancelPlanApiPlanCancelPost()
+      .catch(console.error)
+      .finally(() => {
+        setPlanState(EnumPlanState.Cancelled)
+        setLastPlan(mostRecentPlan)
+        getChannel()?.close()
+        unsubscribe()
+      })
   }
 
   function showGraph(): void {
@@ -120,7 +111,7 @@ export function IDE(): JSX.Element {
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold">
-            <span className="inline-block text-secondary-500">/</span>{' '}
+            <span className="inline-block text-secondary-500">/</span>
             {project?.name}
           </h3>
         </div>
@@ -175,6 +166,7 @@ export function IDE(): JSX.Element {
                           environment={mostRecentPlan.environment}
                           tasks={mostRecentPlan.tasks}
                           updated_at={mostRecentPlan.updated_at}
+                          headline="Most Recent Environment"
                         />
                         <div className="my-4 px-4">
                           {planState === EnumPlanState.Applying && (
@@ -255,11 +247,9 @@ export function IDE(): JSX.Element {
                 <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
                   {isGraphOpen && <Graph closeGraph={closeGraph} />}
                   {environment != null &&
-                    planAction !== EnumPlanAction.None &&
-                    planAction !== EnumPlanAction.Closing && (
+                    planAction !== EnumPlanAction.None && (
                       <Plan
                         environment={environment}
-                        onClose={closePlan}
                         onCancel={cancelPlan}
                       />
                     )}

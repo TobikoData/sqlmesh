@@ -90,7 +90,7 @@ export function toDateFormat(
       hour,
     )}:${toFormatted(minute)}:${toFormatted(second)}`
   if (format === 'mm/dd/yyyy')
-    return `${toFormatted(day)}/${toFormatted(month)}/${year}`
+    return `${toFormatted(month)}/${toFormatted(day)}/${year}`
 
   return date.toDateString()
 

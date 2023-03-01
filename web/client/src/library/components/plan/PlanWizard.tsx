@@ -5,8 +5,12 @@ import {
   PlusCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { lazy, Suspense, useEffect, useMemo } from 'react'
-import { ContextEnvironmentChanges } from '~/api/client'
+import { lazy, Suspense, useMemo } from 'react'
+import {
+  ContextEnvironmentBackfill,
+  ContextEnvironmentChanges,
+  ModelsDiffDirectItem,
+} from '~/api/client'
 import { EnvironmentName } from '~/context/context'
 import {
   EnumPlanState,
@@ -14,6 +18,7 @@ import {
   useStorePlan,
   PlanTasks,
   PlanTaskStatus,
+  EnumCategoryType,
 } from '../../../context/plan'
 import {
   includes,
@@ -33,13 +38,18 @@ const Tasks = lazy(async () => await import('../plan/Tasks'))
 export default function PlanWizard({
   environment,
   changes,
+  hasChanges,
+  hasBackfill,
+  backfills = [],
 }: {
   environment: EnvironmentName
+  hasChanges: boolean
   changes?: ContextEnvironmentChanges
+  backfills?: ContextEnvironmentBackfill[]
+  hasBackfill: boolean
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-  const backfills = useStorePlan(s => s.backfills)
 
   const category = useStorePlan(s => s.category)
   const categories = useStorePlan(s => s.categories)
@@ -48,73 +58,58 @@ export default function PlanWizard({
   const activePlan = useStorePlan(s => s.activePlan)
   const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setCategory = useStorePlan(s => s.setCategory)
-  const setWithBackfill = useStorePlan(s => s.setWithBackfill)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
 
-  const hasChanges = useMemo(
-    () =>
-      [
-        isModified(changes?.modified),
-        isArrayNotEmpty(changes?.added),
-        isArrayNotEmpty(changes?.removed),
-      ].some(Boolean),
-    [changes],
-  )
-
   const tasks: PlanTasks = useMemo(
-    () =>
-      backfills.reduce((acc: PlanTasks, task) => {
-        const interval = task.interval as [string, string]
-        const backfillTask: PlanTaskStatus = {
-          completed: 0,
-          ...activePlan?.tasks[task.model_name],
-          total: task.batches,
-          interval,
-        }
+    (): PlanTasks =>
+      hasBackfill
+        ? backfills.reduce((acc: PlanTasks, task) => {
+            const taskModelName = task.model_name
+            const taskInterval = task.interval as [string, string]
+            const taskBackfill: PlanTaskStatus = {
+              completed: 0,
+              ...activePlan?.tasks[taskModelName],
+              total: task.batches,
+              interval: taskInterval,
+            }
 
-        if (category?.id === 'breaking-change') {
-          acc[task.model_name] = backfillTask
-        } else if (category?.id === 'non-breaking-change') {
-          const isDirectChange = Boolean(
-            changes?.modified.direct.some(
-              ({ model_name }) => model_name === task.model_name,
-            ),
-          )
+            if (category?.id === EnumCategoryType.BreakingChange) {
+              acc[taskModelName] = taskBackfill
+            }
 
-          if (isDirectChange) {
-            acc[task.model_name] = backfillTask
-          }
-        }
+            if (category?.id === EnumCategoryType.NonBreakingChange) {
+              const directChanges = changes?.modified.direct
+              const isTaskDirectChange =
+                directChanges == null
+                  ? false
+                  : directChanges.some(
+                      ({ model_name }) => model_name === taskModelName,
+                    )
 
-        return acc
-      }, {}),
-    [backfills, changes, category, activePlan],
+              if (isTaskDirectChange) {
+                acc[taskModelName] = taskBackfill
+              }
+            }
+
+            return acc
+          }, {})
+        : mostRecentPlan?.tasks ?? {},
+    [backfills, changes, category, mostRecentPlan, activePlan],
   )
 
-  useEffect(() => {
-    if (isArrayNotEmpty(backfills)) {
-      setCategory(categories[0])
-    }
-  }, [backfills])
-
-  useEffect(() => {
-    setWithBackfill(isArrayNotEmpty(backfills) && category?.id !== 'no-change')
-  }, [backfills, category])
-
-  const hasBackfills = isArrayNotEmpty(backfills)
+  const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
   const isPlanInProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
   )
-  const isRun = includes(
-    [EnumPlanAction.Running, EnumPlanAction.Run],
-    planAction,
-  )
-  const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
+  const shouldDisplayTaskProgress =
+    (hasBackfill || isDone) &&
+    planAction !== EnumPlanAction.Running &&
+    planAction !== EnumPlanAction.Closing
 
   return (
     <ul className="w-full mx-auto">
-      {isRun ? (
+      {planAction === EnumPlanAction.Run ? (
         <PlanWizardStepOptions className="w-full mx-auto md:w-[75%] lg:w-[60%]" />
       ) : (
         <>
@@ -129,155 +124,75 @@ export default function PlanWizard({
                   isArrayNotEmpty(changes?.removed)) && (
                   <div className="flex">
                     {isArrayNotEmpty(changes?.added) && (
-                      <div className="ml-4 mb-8">
-                        <h4 className="text-success-500 mb-2">Added Models</h4>
-                        <ul className="ml-2">
-                          {changes?.added.map((modelName: string) => (
-                            <li
-                              key={modelName}
-                              className="text-success-500 font-sm h-[1.5rem]"
-                            >
-                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-success-500">
-                                {modelName}
-                              </small>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <PlanWizardStepChanges
+                        className="w-full"
+                        headline="Added Models"
+                        type="add"
+                      >
+                        <PlanWizardStepChangesDefault
+                          type="add"
+                          changes={changes?.added}
+                        />
+                      </PlanWizardStepChanges>
                     )}
                     {isArrayNotEmpty(changes?.removed) && (
-                      <div className="ml-4 mb-8">
-                        <h4 className="text-danger-500 mb-2">Removed Models</h4>
-                        <ul className="ml-2">
-                          {changes?.added.map((modelName: string) => (
-                            <li
-                              key={modelName}
-                              className="text-danger-500 font-sm h-[1.5rem]"
-                            >
-                              <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-danger-500">
-                                {modelName}
-                              </small>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <PlanWizardStepChanges
+                        className="w-full"
+                        headline="Removed Models"
+                        type="remove"
+                      >
+                        <PlanWizardStepChangesDefault
+                          type="remove"
+                          changes={changes?.removed}
+                        />
+                      </PlanWizardStepChanges>
                     )}
                   </div>
                 )}
                 {isModified(changes?.modified) && (
-                  <div className="flex w-full">
+                  <div className="flex">
                     {isArrayNotEmpty(changes?.modified.direct) && (
-                      <div className="flex flex-col w-full ml-1">
-                        <h4 className="text-secondary-500 mb-2">
-                          Modified Directly
-                        </h4>
-                        <ul className="ml-1 mr-3">
-                          {changes?.modified.direct.map(change => (
-                            <li
-                              key={change.model_name}
-                              className="text-secondary-500"
-                            >
-                              <Disclosure>
-                                {({ open }) => (
-                                  <>
-                                    <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-                                      <small className="inline-block text-sm">
-                                        {change.model_name}
-                                      </small>
-                                      <Divider className="mx-4" />
-                                      {(() => {
-                                        const Tag = open
-                                          ? MinusCircleIcon
-                                          : PlusCircleIcon
-
-                                        return (
-                                          <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-500" />
-                                        )
-                                      })()}
-                                    </Disclosure.Button>
-                                    <Disclosure.Panel className="text-sm text-gray-500">
-                                      <pre className="my-4 bg-secondary-100 rounded-lg p-4">
-                                        {change.diff
-                                          ?.split('\n')
-                                          .map((s, idx) => (
-                                            <p
-                                              key={idx}
-                                              className={clsx(
-                                                s.startsWith('+') &&
-                                                  'text-success-500',
-                                                s.startsWith('-') &&
-                                                  'text-danger-500',
-                                                s.startsWith('@@') &&
-                                                  'text-secondary-500 my-5',
-                                              )}
-                                            >
-                                              {s}
-                                            </p>
-                                          ))}
-                                      </pre>
-                                    </Disclosure.Panel>
-                                  </>
-                                )}
-                              </Disclosure>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <PlanWizardStepChanges
+                        className="w-full"
+                        headline="Modified Directly"
+                        type="direct"
+                      >
+                        <PlanWizardStepChangesDirect
+                          changes={changes?.modified.direct}
+                        />
+                      </PlanWizardStepChanges>
                     )}
                     {isArrayNotEmpty(changes?.modified.indirect) && (
-                      <div className="ml-1">
-                        <h4 className="text-warning-500 mb-2">
-                          Modified Indirectly
-                        </h4>
-                        <ul className="ml-1">
-                          {changes?.modified?.indirect.map(
-                            (modelName: string) => (
-                              <li
-                                key={modelName}
-                                className="flex text-warning-500"
-                              >
-                                <small className="inline-block text-sm leading-4">
-                                  {modelName}
-                                </small>
-                              </li>
-                            ),
-                          )}
-                        </ul>
-                      </div>
+                      <PlanWizardStepChanges
+                        headline="Modified Indirectly"
+                        type="indirect"
+                      >
+                        <PlanWizardStepChangesDefault
+                          type="indirect"
+                          changes={changes?.modified.indirect}
+                        />
+                      </PlanWizardStepChanges>
                     )}
                     {isArrayNotEmpty(changes?.modified.metadata) && (
-                      <div className="ml-1">
-                        <small>Modified Metadata</small>
-                        <ul className="ml-1">
-                          {changes?.modified?.metadata.map(
-                            (modelName: string) => (
-                              <li
-                                key={modelName}
-                                className="text-gray-500 font-sm h-[1.5rem]"
-                              >
-                                <small className="inline-block h-[1.25rem] px-1 pl-4 border-l border-gray-500">
-                                  {modelName}
-                                </small>
-                              </li>
-                            ),
-                          )}
-                        </ul>
-                      </div>
+                      <PlanWizardStepChanges
+                        headline="Modified Metadata"
+                        type="metadata"
+                      >
+                        <PlanWizardStepChangesDefault
+                          type="metadata"
+                          changes={changes?.modified.metadata}
+                        />
+                      </PlanWizardStepChanges>
                     )}
                   </div>
                 )}
               </>
             ) : planAction === EnumPlanAction.Running ? (
-              <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
-                <span className="flex items-center">
-                  <Spinner className="w-4 h-4 mr-2" />
-                  <small>Checking ...</small>
-                </span>
-              </span>
+              <PlanWizardStepMessage hasSpinner>
+                Checking Models...
+              </PlanWizardStepMessage>
             ) : (
-              <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
-                <h3>No Changes</h3>
-              </div>
+              <PlanWizardStepMessage>No Changes</PlanWizardStepMessage>
             )}
           </PlanWizardStep>
           <PlanWizardStep
@@ -285,41 +200,44 @@ export default function PlanWizard({
             description="Progress"
             disabled={environment == null}
           >
-            {isDone && isFalse(hasBackfills) && (
-              <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
-                <h3
-                  className={clsx(
-                    'font-bold text-lg text-success-500',
-                    planState === EnumPlanState.Cancelled && 'text-gray-700',
-                    planState === EnumPlanState.Failed && 'text-danger-500',
-                  )}
-                >
-                  {planState === EnumPlanState.Failed
-                    ? 'Failed'
-                    : planState === EnumPlanState.Cancelled
-                    ? 'Cancelled'
-                    : 'Completed'}
-                </h3>
-                <p className="text-xs text-gray-600">
-                  {toDateFormat(
-                    toDate(mostRecentPlan?.updated_at),
-                    'yyyy-mm-dd hh-mm-ss',
-                  )}
-                </p>
-              </div>
+            {isDone && isFalse(hasBackfill) && (
+              <PlanWizardStepMessage className="">
+                <div className="flex justify-between items-center w-full">
+                  <h3
+                    className={clsx(
+                      'font-bold text-lg text-success-700',
+                      planState === EnumPlanState.Cancelled && 'text-gray-700',
+                      planState === EnumPlanState.Failed && 'text-danger-700',
+                    )}
+                  >
+                    {planState === EnumPlanState.Failed
+                      ? 'Failed'
+                      : planState === EnumPlanState.Cancelled
+                      ? 'Cancelled'
+                      : 'Completed'}
+                  </h3>
+                  <p className="text-xs text-gray-600">
+                    {toDateFormat(
+                      toDate(mostRecentPlan?.updated_at),
+                      'yyyy-mm-dd hh-mm-ss',
+                    )}
+                  </p>
+                </div>
+              </PlanWizardStepMessage>
+            )}
+            {planAction === EnumPlanAction.Running && (
+              <PlanWizardStepMessage hasSpinner>
+                Collecting Backfills...
+              </PlanWizardStepMessage>
             )}
             {planState === EnumPlanState.Applying &&
               isFalse(isDone) &&
-              isFalse(hasBackfills) && (
-                <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
-                  <span className="flex items-center">
-                    <Spinner className="w-3 h-3 mr-1" />
-                    <span className="inline-block">Applying...</span>
-                  </span>
-                </span>
+              isFalse(hasBackfill) && (
+                <PlanWizardStepMessage hasSpinner>
+                  Applying...
+                </PlanWizardStepMessage>
               )}
-
-            {hasBackfills && (
+            {shouldDisplayTaskProgress && (
               <>
                 {isModified(changes?.modified) &&
                   planState !== EnumPlanState.Applying && (
@@ -386,55 +304,71 @@ export default function PlanWizard({
                       </RadioGroup>
                     </div>
                   )}
-                {category?.id !== 'no-change' && environment != null && (
-                  <>
-                    <Suspense fallback={<Spinner className="w-4 h-4 mr-2" />}>
-                      <Tasks
-                        environment={environment}
-                        tasks={tasks}
-                        changes={changes}
-                        updated_at={mostRecentPlan?.updated_at}
-                      />
-                    </Suspense>
-                    <form>
-                      <fieldset className="flex w-full">
-                        <Input
-                          className="w-full"
-                          label="Start Date"
-                          disabled={
-                            isPlanInProgress ||
-                            planAction === EnumPlanAction.Done
-                          }
-                          value={backfill_start}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            setBackfillDate('start', e.target.value)
-                          }}
+                {category?.id !== EnumCategoryType.NoChange &&
+                  environment != null && (
+                    <>
+                      <Suspense fallback={<Spinner className="w-4 h-4 mr-2" />}>
+                        <Tasks
+                          environment={environment}
+                          tasks={tasks}
+                          changes={changes}
+                          updated_at={mostRecentPlan?.updated_at}
                         />
-                        <Input
-                          className="w-full"
-                          label="End Date"
-                          disabled={
-                            isPlanInProgress ||
-                            planAction === EnumPlanAction.Done
-                          }
-                          value={backfill_end}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            setBackfillDate('end', e.target.value)
-                          }}
-                        />
-                      </fieldset>
-                    </form>
-                  </>
-                )}
+                      </Suspense>
+                      <form>
+                        <fieldset className="flex w-full">
+                          <Input
+                            className="w-full"
+                            label="Start Date"
+                            disabled={
+                              isPlanInProgress ||
+                              planAction === EnumPlanAction.Done
+                            }
+                            value={backfill_start}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              setBackfillDate('start', e.target.value)
+                            }}
+                          />
+                          <Input
+                            className="w-full"
+                            label="End Date"
+                            disabled={
+                              isPlanInProgress ||
+                              planAction === EnumPlanAction.Done
+                            }
+                            value={backfill_end}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              setBackfillDate('end', e.target.value)
+                            }}
+                          />
+                        </fieldset>
+                      </form>
+                    </>
+                  )}
               </>
             )}
-
             {hasChanges &&
               isFalse(isPlanInProgress) &&
-              isFalse(hasBackfills) && (
-                <div className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex items-center justify-between rounded-lg">
-                  <h3>Explanation why we dont need to Backfill</h3>
-                </div>
+              isFalse(hasBackfill) && (
+                <PlanWizardStepMessage>
+                  <div>
+                    <h3 className="font-bold">
+                      Logical Update will be applied
+                    </h3>
+                    <small className="text-sm">
+                      All changes and their downstream dependencies can be fully
+                      previewed before they get promoted. If during plan
+                      creation no data gaps have been detected and only
+                      references to new model versions need to be updated, then
+                      such update is referred to as logical. Logical updates
+                      impose no additional runtime overhead or cost.
+                    </small>
+                  </div>
+                </PlanWizardStepMessage>
               )}
           </PlanWizardStep>
         </>
@@ -442,10 +376,166 @@ export default function PlanWizard({
     </ul>
   )
 }
-interface PropsPlanWizardStep extends React.ButtonHTMLAttributes<HTMLElement> {
+
+type PlanChangeType = 'add' | 'remove' | 'direct' | 'indirect' | 'metadata'
+
+interface PropsPlanWizardStep extends React.HTMLAttributes<HTMLElement> {
   headline: number | string
   description: string
   disabled?: boolean
+}
+
+interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
+  hasSpinner?: boolean
+}
+
+interface PropsPlanWizardStepChanges extends React.HTMLAttributes<HTMLElement> {
+  headline: string
+  type: PlanChangeType
+}
+
+interface PropsPlanWizardStepHeader
+  extends React.ButtonHTMLAttributes<HTMLElement> {
+  headline: number | string
+  disabled?: boolean
+}
+
+function PlanWizardStepChanges({
+  children,
+  headline,
+  type,
+  className,
+}: PropsPlanWizardStepChanges): JSX.Element {
+  return (
+    <div
+      className={clsx(
+        'flex flex-col rounded-md p-4 mx-2',
+        type === 'add' && 'bg-success-100',
+        type === 'remove' && 'bg-danger-100',
+        type === 'direct' && 'bg-secondary-100',
+        type === 'indirect' && 'bg-warning-100',
+        type === 'metadata' && 'bg-gray-100',
+        className,
+      )}
+    >
+      <h4
+        className={clsx(
+          `mb-2 font-bold`,
+          type === 'add' && 'text-success-700',
+          type === 'remove' && 'text-danger-700',
+          type === 'direct' && 'text-secondary-500',
+          type === 'indirect' && 'text-warning-700',
+          type === 'metadata' && 'text-gray-900',
+        )}
+      >
+        {headline}
+      </h4>
+      <ul>{children}</ul>
+    </div>
+  )
+}
+
+function PlanWizardStepChangesDefault({
+  changes = [],
+  type,
+}: {
+  type: PlanChangeType
+  changes?: string[]
+}): JSX.Element {
+  return (
+    <>
+      {changes.map(change => (
+        <li
+          key={change}
+          className={clsx(
+            'px-1',
+            type === 'add' && 'text-success-700',
+            type === 'remove' && 'text-danger-700',
+            type === 'direct' && 'text-secondary-500',
+            type === 'indirect' && 'text-warning-700',
+            type === 'metadata' && 'text-gray-900',
+          )}
+        >
+          <small>{change}</small>
+        </li>
+      ))}
+    </>
+  )
+}
+
+function PlanWizardStepChangesDirect({
+  changes = [],
+}: {
+  changes?: ModelsDiffDirectItem[]
+}): JSX.Element {
+  return (
+    <>
+      {changes.map(change => (
+        <li
+          key={change.model_name}
+          className="text-secondary-500"
+        >
+          <PlanWizardStepChangeDiff change={change} />
+        </li>
+      ))}
+    </>
+  )
+}
+
+function PlanWizardStepChangeDiff({
+  change,
+}: {
+  change: ModelsDiffDirectItem
+}): JSX.Element {
+  return (
+    <Disclosure>
+      {({ open }) => (
+        <>
+          <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
+            <small className="inline-block text-sm">{change.model_name}</small>
+            <Divider className="mx-4" />
+            {(() => {
+              const Tag = open ? MinusCircleIcon : PlusCircleIcon
+
+              return (
+                <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-200" />
+              )
+            })()}
+          </Disclosure.Button>
+          <Disclosure.Panel className="text-sm text-secondary-100">
+            <pre className="my-4 bg-secondary-900 rounded-lg p-4">
+              {change.diff?.split('\n').map((line: string, idx: number) => (
+                <p
+                  key={`${line}-${idx}`}
+                  className={clsx(
+                    line.startsWith('+') && 'text-success-500',
+                    line.startsWith('-') && 'text-danger-500',
+                    line.startsWith('@@') && 'text-secondary-300 my-5',
+                  )}
+                >
+                  {line}
+                </p>
+              ))}
+            </pre>
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
+  )
+}
+
+function PlanWizardStepMessage({
+  hasSpinner = false,
+  children,
+}: PropsPlanWizardStepMessage): JSX.Element {
+  return (
+    <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex w-full rounded-lg">
+      <span className="flex items-center w-full">
+        {hasSpinner && <Spinner className="w-4 h-4 mr-2" />}
+        {children}
+      </span>
+    </span>
+  )
 }
 
 function PlanWizardStep({
@@ -468,12 +558,6 @@ function PlanWizardStep({
       </div>
     </li>
   )
-}
-
-interface PropsPlanWizardStepHeader
-  extends React.ButtonHTMLAttributes<HTMLElement> {
-  headline: number | string
-  disabled?: boolean
 }
 
 function PlanWizardStepHeader({

@@ -23,11 +23,18 @@ export const EnumPlanState = {
   Cancelled: 'cancelled',
 } as const
 
-export type PlanState = typeof EnumPlanState[keyof typeof EnumPlanState]
-export type PlanAction = typeof EnumPlanAction[keyof typeof EnumPlanAction]
+export const EnumCategoryType = {
+  BreakingChange: 'breaking-change',
+  NonBreakingChange: 'non-breaking-change',
+  NoChange: 'no-change',
+} as const
+
+export type PlanState = KeyOf<typeof EnumPlanState>
+export type PlanAction = KeyOf<typeof EnumPlanAction>
+export type CategoryType = KeyOf<typeof EnumCategoryType>
 
 interface Category {
-  id: string
+  id: CategoryType
   name: string
   description: string
 }
@@ -91,16 +98,18 @@ interface PlanStore {
 }
 
 const planDefaultOptions: PlanOptions = {
-  skipTests: false,
+  skipTests: true,
   noGaps: false,
   skipBackfill: false,
-  forwardOnly: true,
+  forwardOnly: false,
   autoApply: false,
   start: '',
   end: '',
   from: '',
   restateModel: '',
 }
+
+const categories = getCategories()
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
   planOptions: planDefaultOptions,
@@ -127,7 +136,7 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
     set(() => ({ action }))
   },
   setCategory: (category?: Category) => {
-    set(() => ({ category }))
+    set(() => ({ category: category ?? categories[0] }))
   },
   backfill_start: '',
   backfill_end: '',
@@ -136,8 +145,8 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
       [`backfill_${type}`]: date ?? '',
     }))
   },
-  category: undefined,
-  categories: getCategories(),
+  category: categories[0],
+  categories,
   withBackfill: true,
   setWithBackfill: (withBackfill: boolean) => {
     set(() => ({ withBackfill }))
@@ -214,17 +223,17 @@ function isAllTasksCompleted(tasks: PlanTasks = {}): boolean {
 function getCategories(): Category[] {
   return [
     {
-      id: 'breaking-change',
+      id: EnumCategoryType.BreakingChange,
       name: 'Breaking Change',
       description: 'This is a breaking change',
     },
     {
-      id: 'non-breaking-change',
+      id: EnumCategoryType.NonBreakingChange,
       name: 'Non-Breaking Change',
       description: 'This is a non-breaking change',
     },
     {
-      id: 'no-change',
+      id: EnumCategoryType.NoChange,
       name: 'No Change',
       description: 'This is a no change',
     },
