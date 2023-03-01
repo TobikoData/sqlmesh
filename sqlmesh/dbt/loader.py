@@ -52,27 +52,16 @@ class DbtLoader(Loader):
             self._track_file(path)
 
         context = project.context.copy()
-        sources: UniqueKeyDict[str, str] = UniqueKeyDict("sources")
-        refs: UniqueKeyDict[str, str] = UniqueKeyDict("refs")
-        variables: UniqueKeyDict[str, t.Any] = UniqueKeyDict("variables")
 
         for package_name, package in project.packages.items():
-            context.models.update(package.models)
+            context.variables.update(package.variables)
+            context.add_models(package.models)
+            context.add_seeds(package.seeds)
+            context.add_source_configs(package.sources)
             context.jinja_macros.add_macros(
                 package.macros,
                 package=package_name if package_name != context.project_name else None,
             )
-
-            sources.update(
-                {config.config_name: config.source_name for config in package.sources.values()}
-            )
-            refs.update({name: config.model_name for name, config in package.models.items()})
-            refs.update({name: config.seed_name for name, config in package.seeds.items()})
-            variables.update(package.variables)
-
-        context.sources = sources
-        context.refs = refs
-        context.variables = variables
 
         for name, package in project.packages.items():
             for model in package.models.values():

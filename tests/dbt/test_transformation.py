@@ -169,7 +169,8 @@ def test_target_jinja(sushi_dbt_project: Project):
 
 def test_adapter(sushi_dbt_project: Project):
     context = sushi_dbt_project.context
-    engine_adapter = context._builtins["adapter"].engine_adapter
+    assert context._adapter
+    engine_adapter = context._adapter.engine_adapter
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("ignored")
     engine_adapter.create_table(

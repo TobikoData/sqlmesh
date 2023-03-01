@@ -3,10 +3,9 @@ from __future__ import annotations
 import os
 import typing as t
 
-from sqlmesh.utils.errors import ConfigError
-
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.utils.errors import ConfigError
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
