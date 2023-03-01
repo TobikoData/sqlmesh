@@ -60,23 +60,14 @@ class MacroExtractor(Parser):
         macros: t.Dict[str, MacroInfo] = {}
 
         while self._curr:
-            if self._at_block_start():
-                if self._prev and self._prev.token_type == TokenType.L_BRACE:
-                    self._advance()
+            if self._curr.token_type == TokenType.BLOCK_START:
                 macro_start = self._curr
             elif self._tag == "MACRO" and self._next:
                 name = self._next.text
-                while self._curr and not self._at_block_end():
+                while self._curr and self._curr.token_type != TokenType.BLOCK_END:
                     self._advance()
-                else:
-                    if self._prev and self._prev.token_type == TokenType.R_BRACE:
-                        self._advance()
 
                 while self._curr and self._tag != "ENDMACRO":
-                    if self._at_block_start():
-                        if self._prev and self._prev.token_type == TokenType.L_BRACE:
-                            self._advance()
-
                     self._advance()
 
                 macro_str = self._find_sql(macro_start, self._next)
@@ -89,30 +80,11 @@ class MacroExtractor(Parser):
 
         return macros
 
-    def _at_block_start(self) -> bool:
-        return self._curr.token_type == TokenType.BLOCK_START or self._match_pair(
-            TokenType.L_BRACE, TokenType.L_BRACE, advance=False
-        )
-
-    def _at_block_end(self) -> bool:
-        return self._curr.token_type == TokenType.BLOCK_END or self._match_pair(
-            TokenType.R_BRACE, TokenType.R_BRACE, advance=False
-        )
-
     def _advance(self, times: int = 1) -> None:
         super()._advance(times)
         self._tag = (
             self._curr.text.upper()
-            if self._curr
-            and self._prev
-            and (
-                self._prev.token_type == TokenType.BLOCK_START
-                or (
-                    self._index > 1
-                    and self._tokens[self._index - 1].token_type == TokenType.L_BRACE
-                    and self._tokens[self._index - 2].token_type == TokenType.L_BRACE
-                )
-            )
+            if self._curr and self._prev and self._prev.token_type == TokenType.BLOCK_START
             else ""
         )
 
