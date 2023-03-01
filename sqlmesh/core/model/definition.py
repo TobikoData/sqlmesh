@@ -34,7 +34,6 @@ from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import (
     Executable,
-    ExecutableKind,
     build_env,
     prepare_env,
     print_exception,
@@ -185,7 +184,6 @@ class _Model(ModelMeta, frozen=True):
                 expressions=[
                     v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
                     for k, v in self.sorted_python_env
-                    if k not in BUILTIN_METHODS
                 ]
             )
             if python_env.expressions:
@@ -427,10 +425,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:
-        return {
-            **BUILTIN_METHODS,
-            **(self.python_env_ or {}),
-        }
+        return self.python_env_ or {}
 
     @property
     def contains_star_query(self) -> bool:
@@ -1255,10 +1250,6 @@ def _is_udtf(expr: exp.Expression) -> bool:
         and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
     )
 
-
-BUILTIN_METHODS = {
-    c.JINJA_MACROS: Executable(kind=ExecutableKind.VALUE, payload="[]"),
-}
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),

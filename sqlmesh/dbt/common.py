@@ -8,7 +8,6 @@ from pydantic import validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
-from sqlmesh.core.model.definition import BUILTIN_METHODS as SQLMESH_PYTHON_BUILTIN
 from sqlmesh.dbt.builtin import (
     BUILTIN_JINJA,
     generate_adapter,
@@ -140,7 +139,7 @@ class DbtContext:
             if name not in ["target", "adapter"]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
-        return {**serialize_env(env, Path(__file__).parent), **SQLMESH_PYTHON_BUILTIN}
+        return serialize_env(env, Path(__file__).parent)
 
     def render(self, source: str) -> str:
         return render_jinja(source, self.builtin_jinja)
