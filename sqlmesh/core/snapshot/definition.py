@@ -10,7 +10,7 @@ from pydantic import validator
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.model import Model, SeedModel, kind, parse_model_name
+from sqlmesh.core.model import Model, SeedModel, SqlModel, kind, parse_model_name
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
@@ -712,6 +712,14 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         *(expression.sql(identify=True, comments=False) for expression in model.expressions or []),
         model.stamp,
     ]
+
+    if isinstance(model, SqlModel):
+        for macro in model.jinja_macros.root_macros.values():
+            data.append(macro.body)
+
+        for package in model.jinja_macros.packages.values():
+            for macro in package.values():
+                data.append(macro.body)
 
     if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
         data.append(model.kind.time_column.column)

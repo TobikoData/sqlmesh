@@ -25,7 +25,11 @@ macro_b_b
     registry.add_macros(extractor.extract(package_a), package="package_a")
     registry.add_macros(extractor.extract(package_b), package="package_b")
 
-    rendered = registry.render("{{ local_macro() }}{{ package_a.macro_a_a() }}")
+    rendered = (
+        registry.build_environment()
+        .from_string("{{ local_macro() }}{{ package_a.macro_a_a() }}")
+        .render()
+    )
     rendered = [r for r in rendered.split("\n") if r]
 
     assert rendered == [
@@ -82,5 +86,9 @@ def test_macro_registry_trim():
     assert set(trimmed_registry.packages["package_b"]) == {"macro_b_a", "macro_b_b"}
     assert set(trimmed_registry.root_macros) == {"local_macro_a"}
 
-    rendered = trimmed_registry.render("{{ local_macro_a() }} {{ package_a.macro_a_b() }}")
+    rendered = (
+        trimmed_registry.build_environment()
+        .from_string("{{ local_macro_a() }} {{ package_a.macro_a_b() }}")
+        .render()
+    )
     assert rendered == "macro_a_a macro_a_b"

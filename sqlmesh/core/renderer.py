@@ -122,7 +122,9 @@ class QueryRenderer:
 
                 try:
                     parsed_query = parse_one(
-                        self._jinja_macro_registry.render(query.name, **env, **render_kwargs),
+                        self._jinja_macro_registry.build_environment(**env, **render_kwargs)
+                        .from_string(query.name)
+                        .render(),
                         read=self._dialect,
                     )
                     if not parsed_query:

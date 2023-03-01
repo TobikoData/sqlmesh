@@ -1258,7 +1258,6 @@ def _is_udtf(expr: exp.Expression) -> bool:
 
 BUILTIN_METHODS = {
     c.JINJA_MACROS: Executable(kind=ExecutableKind.VALUE, payload="[]"),
-    c.SQLMESH: Executable(kind=ExecutableKind.VALUE, payload="True"),
 }
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {

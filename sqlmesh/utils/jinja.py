@@ -201,21 +201,26 @@ class JinjaMacroRegistry(PydanticModel):
             return self.packages.get(reference.package, {}).get(reference.name)
         return self.root_macros.get(reference.name)
 
-    def render(self, jinja: str, **kwargs: t.Any) -> str:
+    def build_environment(self, **kwargs: t.Any) -> Environment:
+        """Builds a new Jinja environment based on this registry."""
         parsed_root = self._parse_package(None, **kwargs).module
         parsed_packages = {
             name: self._parse_package(name, **kwargs).module for name in self.packages
         }
 
-        return self._environment.from_string(jinja).render(
-            **parsed_packages,
-            **{
-                name: getattr(parsed_root, name)
-                for name in dir(parsed_root)
-                if not name.startswith("_")
-            },
-            **kwargs,
+        env = environment()
+        env.globals.update(
+            {
+                **parsed_packages,
+                **{
+                    name: getattr(parsed_root, name)
+                    for name in dir(parsed_root)
+                    if not name.startswith("_")
+                },
+                **kwargs,
+            }
         )
+        return env
 
     def trim(self, dependencies: t.Iterable[MacroReference]) -> JinjaMacroRegistry:
         """Trims the registry by keeping only macros with given references and their transitive dependencies.
