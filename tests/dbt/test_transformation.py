@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import agate
 import pytest
 from dbt.exceptions import CompilationError
 from sqlglot import exp, parse_one
+from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -20,6 +22,11 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.utils.errors import ConfigError
+
+
+@pytest.fixture()
+def sushi_dbt_project(mocker: MockerFixture) -> Project:
+    return Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
 
 
 def test_model_name():
@@ -159,6 +166,20 @@ def test_target_jinja(sushi_dbt_project: Project):
     assert context.render("{{ target.schema }}") == "sushi"
     assert context.render("{{ target.type }}") == "duckdb"
     assert context.render("{{ target.profile_name }}") == "sushi"
+
+
+def test_statement(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+    assert context.render(
+        "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}"
+    ) == str(agate.Table([[1]], column_names=["1"], column_types=[agate.Number()]))
+
+
+def test_run_query(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+    assert context.render("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
+        agate.Table([[1], [2]], column_names=["1"], column_types=[agate.Number()])
+    )
 
 
 def test_exceptions_jinja(capsys, sushi_dbt_project: Project):

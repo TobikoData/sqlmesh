@@ -4,6 +4,7 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import jinja2
 from pydantic import validator
 from sqlglot.helper import ensure_list
 
@@ -18,6 +19,7 @@ from sqlmesh.dbt.builtin import (
     log,
 )
 from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
@@ -26,6 +28,9 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
+    import agate
+
+    from sqlmesh.dbt.adapter import Adapter
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -60,10 +65,15 @@ class DbtContext:
 
     _target: t.Optional[TargetConfig] = None
     _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
+    _sql_results: t.Dict[str, AttributeDict] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self._builtins:
             self._builtins = BUILTIN_JINJA.copy()
+        self._builtins["store_result"] = self.store_result
+        self._builtins["load_result"] = self.load_result
+        self._builtins["run_query"] = self.run_query
+        self._builtins["statement"] = self.statement
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
@@ -139,10 +149,76 @@ class DbtContext:
         methods["log"] = log
         for name, method in methods.items():
             # temporary until Iaroslav has the jinja templates working
-            if name not in ("target", "adapter", "exceptions", "api"):
+            if name not in [
+                "target",
+                "adapter",
+                "store_result",
+                "load_result",
+                "run_query",
+                "statement",
+                "exceptions",
+                "api"
+            ]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)
+
+    @property
+    def adapter(self) -> Adapter:
+        return self._builtins["adapter"]
+
+    def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
+        from dbt.clients import agate_helper
+
+        if agate_table is None:
+            agate_table = agate_helper.empty_table()
+
+        self._sql_results[name] = AttrDict(
+            {
+                "response": response,
+                "data": agate_helper.as_matrix(agate_table),
+                "table": agate_table,
+            }
+        )
+        return ""
+
+    def load_result(self, name: str) -> t.Optional[AttrDict]:
+        return self._sql_results.get(name)
+
+    def run_query(self, sql: str) -> agate.Table:
+        self.statement("run_query_statement", fetch_result=True, auto_begin=False, caller=sql)
+        resp = self.load_result("run_query_statement")
+        assert resp is not None
+        return resp["table"]
+
+    def statement(
+        self,
+        name: t.Optional[str],
+        fetch_result: bool = False,
+        auto_begin: bool = True,
+        language: str = "sql",
+        caller: t.Optional[jinja2.runtime.Macro | str] = None,
+    ) -> str:
+        """
+        Executes the SQL that is defined within the context of the caller. Therefore caller really isn't optional
+        but we make it optional and at the end because we need to match the signature of the jinja2 macro.
+
+        Name is the name that we store the results to which can be retrieved with `load_result`. If name is not
+        provided then the SQL is executed but the results are not stored.
+        """
+        if not caller:
+            raise RuntimeError(
+                "Statement relies on a caller to be set that is the target SQL to be run"
+            )
+        sql = caller if isinstance(caller, str) else caller()
+        if language != "sql":
+            raise NotImplementedError(
+                "SQLMesh's dbt integration only supports SQL statements at this time."
+            )
+        res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
+        if name:
+            self.store_result(name, res, table)
+        return ""
 
     def render(self, source: str) -> str:
         return render_jinja(source, self.builtin_jinja)
