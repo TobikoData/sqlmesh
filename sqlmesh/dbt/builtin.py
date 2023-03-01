@@ -3,9 +3,22 @@ from __future__ import annotations
 import os
 import typing as t
 
+from dbt.exceptions import CompilationError
+
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+
+
+class ExceptionsJinja:
+    """Implements the dbt "exceptions" jinja namespace."""
+
+    def raise_compiler_error(self, msg: str) -> None:
+        raise CompilationError(msg)
+
+    def warn(self, msg: str) -> str:
+        print(msg)
+        return ""
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
@@ -72,4 +85,5 @@ BUILTIN_JINJA = {
     "log": no_log,
     "config": config,
     "sqlmesh": True,
+    "exceptions": ExceptionsJinja(),
 }
