@@ -18,6 +18,9 @@ class ExceptionsJinja:
         print(msg)
         return ""
 
+from sqlmesh.dbt.adapter import Adapter
+from sqlmesh.dbt.target import TargetConfig
+
 
 class Api:
     def __init__(self) -> None:
