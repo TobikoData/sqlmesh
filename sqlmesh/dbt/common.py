@@ -12,6 +12,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.builtin import (
     BUILTIN_JINJA,
+    SQLExecution,
     generate_ref,
     generate_source,
     generate_var,
@@ -26,6 +27,9 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
+    pass
+
+    from sqlmesh.dbt.adapter import Adapter
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -126,9 +130,13 @@ class DbtContext:
             builtins["target"] = self._target.target_jinja(self.project_name)
 
             if self.engine_adapter is not None:
-                builtins["adapter"] = Adapter(
-                    self.engine_adapter, self.jinja_macros, jinja_globals=builtins
-                )
+                adapter = Adapter(self.engine_adapter, self.jinja_macros, jinja_globals=builtins)
+                builtins["adapter"] = adapter
+                sql_execution = SQLExecution(adapter)
+                builtins["store_result"] = sql_execution.store_result
+                builtins["load_result"] = sql_execution.load_result
+                builtins["run_query"] = sql_execution.run_query
+                builtins["statement"] = sql_execution.statement
 
         return builtins
 
@@ -139,7 +147,16 @@ class DbtContext:
         methods["log"] = log
         for name, method in methods.items():
             # temporary until Iaroslav has the jinja templates working
-            if name not in ("target", "adapter", "exceptions", "api"):
+            if name not in [
+                "target",
+                "adapter",
+                "store_result",
+                "load_result",
+                "run_query",
+                "statement",
+                "exceptions",
+                "api",
+            ]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)

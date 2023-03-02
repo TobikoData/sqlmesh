@@ -3,6 +3,11 @@ from __future__ import annotations
 import os
 import typing as t
 
+import agate
+import jinja2
+
+from sqlmesh.dbt.adapter import Adapter
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -78,6 +83,66 @@ def generate_source(sources: t.Dict[str, str]) -> t.Callable:
         return DBT_SOURCE_MAPPING.get(f"{package}.{name}")
 
     return source
+
+
+class SQLExecution:
+    def __init__(self, adapter: Adapter):
+        self.adapter = adapter
+        self._results: t.Dict[str, AttributeDict] = {}
+
+    def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
+        from dbt.clients import agate_helper
+
+        if agate_table is None:
+            agate_table = agate_helper.empty_table()
+
+        self._results[name] = AttributeDict(
+            {
+                "response": response,
+                "data": agate_helper.as_matrix(agate_table),
+                "table": agate_table,
+            }
+        )
+        return ""
+
+    def load_result(self, name: str) -> t.Optional[AttributeDict]:
+        return self._results.get(name)
+
+    def run_query(self, sql: str) -> agate.Table:
+        self.statement("run_query_statement", fetch_result=True, auto_begin=False, caller=sql)
+        resp = self.load_result("run_query_statement")
+        assert resp is not None
+        return resp["table"]
+
+    def statement(
+        self,
+        name: t.Optional[str],
+        fetch_result: bool = False,
+        auto_begin: bool = True,
+        language: str = "sql",
+        caller: t.Optional[jinja2.runtime.Macro | str] = None,
+    ) -> str:
+        """
+        Executes the SQL that is defined within the context of the caller. Therefore caller really isn't optional
+        but we make it optional and at the end because we need to match the signature of the jinja2 macro.
+
+        Name is the name that we store the results to which can be retrieved with `load_result`. If name is not
+        provided then the SQL is executed but the results are not stored.
+        """
+        if not caller:
+            raise RuntimeError(
+                "Statement relies on a caller to be set that is the target SQL to be run"
+            )
+        sql = caller if isinstance(caller, str) else caller()
+        if language != "sql":
+            raise NotImplementedError(
+                "SQLMesh's dbt integration only supports SQL statements at this time."
+            )
+        assert self.adapter is not None
+        res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
+        if name:
+            self.store_result(name, res, table)
+        return ""
 
 
 BUILTIN_JINJA = {

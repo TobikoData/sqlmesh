@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import typing as t
 
+import pandas as pd
 from sqlglot.helper import seq_get
 
-from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
 if t.TYPE_CHECKING:
+    import agate
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
+    from dbt.adapters.base.impl import AdapterResponse
 
 
 class Adapter:
@@ -113,3 +116,32 @@ class Adapter:
                 return macro_callable
 
         raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
+
+    def execute(
+        self, sql: str, auto_begin: bool = False, fetch: bool = False
+    ) -> t.Tuple[AdapterResponse, agate.Table]:
+        """
+        Executes the given SQL statement and returns the results as a pandas dataframe
+        """
+        from dbt.adapters.base.impl import AdapterResponse
+        from dbt.clients.agate_helper import empty_table
+
+        from sqlmesh.dbt.util import pandas_to_agate
+
+        # mypy bug: https://github.com/python/mypy/issues/10740
+        exec_func: t.Callable[[str], None | pd.DataFrame] = (
+            self.engine_adapter.fetchdf if fetch else self.engine_adapter.execute  # type: ignore
+        )
+
+        if auto_begin:
+            # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
+            with self.engine_adapter.transaction(TransactionType.DML):
+                resp = exec_func(sql)
+        else:
+            resp = exec_func(sql)
+
+        # TODO: Properly fill in adapter response
+        if fetch:
+            assert isinstance(resp, pd.DataFrame)
+            return AdapterResponse("Success"), pandas_to_agate(resp)
+        return AdapterResponse("Success"), empty_table()
