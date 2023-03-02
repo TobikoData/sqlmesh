@@ -2,6 +2,7 @@ from pathlib import Path
 
 import agate
 import pytest
+from dbt.adapters.base.column import Column
 from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
