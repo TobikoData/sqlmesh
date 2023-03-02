@@ -19,6 +19,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
+from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -29,6 +30,7 @@ from sqlmesh.dbt.common import DbtContext, Dependencies, GeneralConfig, SqlStr
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import MacroReference
 
 
 class Materialization(str, Enum):
@@ -253,6 +255,22 @@ class ModelConfig(GeneralConfig):
                 self.replace(self.update_with(kwargs))
             return ""
 
+        outer_self = self
+
+        class TrackingAdapter(Adapter):
+            def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
+                macros = (
+                    context.jinja_macros.packages.get(package, {})
+                    if package is not None
+                    else context.jinja_macros.root_macros
+                )
+                for target_name in macros:
+                    if target_name.endswith(f"__{name}"):
+                        outer_self._dependencies.macros.add(
+                            MacroReference(package=package, name=target_name)
+                        )
+                return super().dispatch(name, package=package)
+
         jinja_globals: t.Dict[str, t.Any] = {
             **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
             **context.builtin_jinja,
@@ -261,6 +279,11 @@ class ModelConfig(GeneralConfig):
             "var": _var,
             "source": _source,
         }
+
+        if context.engine_adapter is not None:
+            jinja_globals["adapter"] = TrackingAdapter(
+                context.engine_adapter, context.jinja_macros, jinja_globals=jinja_globals
+            )
 
         registry = context.jinja_macros
         registry.build_environment(**jinja_globals).from_string(self.sql).render()

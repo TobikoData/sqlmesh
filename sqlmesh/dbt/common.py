@@ -8,9 +8,10 @@ from pydantic import validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.builtin import (
     BUILTIN_JINJA,
-    generate_adapter,
     generate_ref,
     generate_source,
     generate_var,
@@ -25,7 +26,6 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
-    from sqlmesh.dbt.adapter import Adapter
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -53,11 +53,12 @@ class DbtContext:
     variables: t.Dict[str, t.Any] = field(default_factory=dict)
     refs: t.Dict[str, str] = field(default_factory=dict)
 
+    engine_adapter: t.Optional[EngineAdapter] = None
+
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
-    _adapter: t.Optional[Adapter] = None
     _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -106,7 +107,7 @@ class DbtContext:
     @target.setter
     def target(self, value: TargetConfig) -> None:
         self._target = value
-        self._adapter = generate_adapter(self._target)
+        self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
 
     @property
     def builtin_jinja(self) -> t.Dict[str, t.Any]:
@@ -124,8 +125,10 @@ class DbtContext:
                 )
             builtins["target"] = self._target.target_jinja(self.project_name)
 
-            if self._adapter is not None:
-                builtins["adapter"] = self._adapter
+            if self.engine_adapter is not None:
+                builtins["adapter"] = Adapter(
+                    self.engine_adapter, self.jinja_macros, jinja_globals=builtins
+                )
 
         return builtins
 
