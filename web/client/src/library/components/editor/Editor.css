@@ -44,3 +44,25 @@
   background: var(--color-brand);
   border-radius: 1rem;
 }
+
+.cm-line.cm-activeLine {
+  background-color: var(--color-secondary-100);
+}
+
+.cm-line.cm-activeLine > span::selection,
+.cm-line.cm-activeLine::selection {
+  background-color: var(--color-secondary-200) !important;
+}
+
+.sqlmesh-model {
+  color: var(--color-alternative-500) !important;
+  background: var(--color-alternative-100) !important;
+  box-shadow: inset 0 -2px 0 0 var(--color-alternative-300) !important;
+  display: inline-block;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.sqlmesh-model:hover {
+  opacity: 0.8;
+}

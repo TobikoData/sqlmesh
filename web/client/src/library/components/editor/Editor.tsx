@@ -17,6 +17,7 @@ import {
   useApiFileByPath,
   useApiPlanRun,
   apiCancelPlanRun,
+  useApiModels,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -52,6 +53,7 @@ import type { File } from '../../../api/client'
 import { type ModelEnvironment } from '~/models/environment'
 import { dracula, tomorrow } from 'thememirror'
 import { EnumColorScheme, useColorScheme } from '~/context/theme'
+import CodeEditor from './CodeEditor'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -119,6 +121,11 @@ export default function Editor({
   const { data: fileData, refetch: getFileContent } = useApiFileByPath(
     activeFile.path,
   )
+
+  const [ast, setAst] = useState<any[]>()
+
+  const { data: dataModels } = useApiModels()
+
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
@@ -405,9 +412,9 @@ export default function Editor({
           >
             <div className="flex flex-col h-full">
               <CodeEditor
-                extension={activeFile.extension}
-                value={activeFile.content}
                 onChange={debouncedChange}
+                models={dataModels?.models}
+                file={activeFile}
               />
               {isFalse(isStringEmptyOrNil(ast)) && (
                 <>
@@ -644,37 +651,6 @@ function Indicator({
         <span className="font-normal">{value}</span>
       )}
     </small>
-  )
-}
-
-function CodeEditor({
-  value,
-  onChange,
-  extension,
-}: {
-  value: string
-  extension: string
-  onChange: (value: string) => void
-}): JSX.Element {
-  const { mode } = useColorScheme()
-  const theme = mode === EnumColorScheme.Dark ? dracula : tomorrow
-
-  const extensions = [
-    extension === '.sql' && sql(),
-    extension === '.py' && python(),
-    extension === '.yaml' && StreamLanguage.define(yaml),
-    theme,
-  ].filter(Boolean) as Extension[]
-
-  return (
-    <CodeMirror
-      value={value}
-      height="100%"
-      width="100%"
-      className="w-full h-full font-mono text-sm "
-      extensions={extensions}
-      onChange={onChange}
-    />
   )
 }
 

@@ -24,6 +24,8 @@ import {
   applyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
+  getModelsApiModelsGet,
+  Models,
 } from './client'
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
@@ -41,6 +43,14 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
       path !== '' &&
       (await getFileApiFilesPathGet(path, { signal })),
     enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiModels(): UseQueryResult<Models> {
+  return useQuery({
+    queryKey: ['/api/models'],
+    queryFn: getModelsApiModelsGet,
     cacheTime: 0,
   })
 }
