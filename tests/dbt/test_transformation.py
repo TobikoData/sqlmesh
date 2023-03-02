@@ -182,7 +182,7 @@ def test_run_query(sushi_dbt_project: Project):
     )
 
 
-def test_exceptions_jinja(capsys, sushi_dbt_project: Project):
+def test_exceptions(capsys, sushi_dbt_project: Project):
     context = sushi_dbt_project.context
 
     assert context.render('{{ exceptions.warn("Warning") }}') == ""
@@ -190,6 +190,28 @@ def test_exceptions_jinja(capsys, sushi_dbt_project: Project):
 
     with pytest.raises(CompilationError, match="Error"):
         context.render('{{ exceptions.raise_compiler_error("Error") }}')
+
+
+def test_modules(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    # datetime
+    assert context.render("{{ modules.datetime.date(2022, 12, 25) }}") == "2022-12-25"
+
+    # pytz
+    try:
+        assert "UTC" in context.render("{{ modules.pytz.all_timezones }}")
+    except AttributeError as error:
+        assert "object has no attribute 'pytz'" in str(error)
+
+    # re
+    assert context.render("{{ modules.re.search('(?<=abc)def', 'abcdef').group(0) }}") == "def"
+
+    # itertools
+    itertools_jinja = (
+        "{% for num in modules.itertools.accumulate([5]) %}" "{{ num }}" "{% endfor %}"
+    )
+    assert context.render(itertools_jinja) == "5"
 
 
 def test_relation(sushi_dbt_project: Project):
