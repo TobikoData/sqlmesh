@@ -13,14 +13,12 @@ from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.builtin import (
     BUILTIN_JINJA,
     SQLExecution,
-    generate_adapter,
     generate_ref,
     generate_source,
     generate_var,
     log,
 )
 from sqlmesh.dbt.target import TargetConfig
-from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
@@ -29,7 +27,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
-    import agate
+    pass
 
     from sqlmesh.dbt.adapter import Adapter
     from sqlmesh.dbt.model import ModelConfig
@@ -114,11 +112,6 @@ class DbtContext:
     def target(self, value: TargetConfig) -> None:
         self._target = value
         self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
-        sql_execution = SQLExecution(self._adapter)
-        self._builtins["store_result"] = sql_execution.store_result
-        self._builtins["load_result"] = sql_execution.load_result
-        self._builtins["run_query"] = sql_execution.run_query
-        self._builtins["statement"] = sql_execution.statement
 
     @property
     def builtin_jinja(self) -> t.Dict[str, t.Any]:
@@ -137,9 +130,13 @@ class DbtContext:
             builtins["target"] = self._target.target_jinja(self.project_name)
 
             if self.engine_adapter is not None:
-                builtins["adapter"] = Adapter(
-                    self.engine_adapter, self.jinja_macros, jinja_globals=builtins
-                )
+                adapter = Adapter(self.engine_adapter, self.jinja_macros, jinja_globals=builtins)
+                builtins["adapter"] = adapter
+                sql_execution = SQLExecution(adapter)
+                builtins["store_result"] = sql_execution.store_result
+                builtins["load_result"] = sql_execution.load_result
+                builtins["run_query"] = sql_execution.run_query
+                builtins["statement"] = sql_execution.statement
 
         return builtins
 

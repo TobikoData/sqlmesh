@@ -3,8 +3,8 @@ from pathlib import Path
 import agate
 import pytest
 from dbt.exceptions import CompilationError
-from sqlglot import exp, parse_one
 from pytest_mock.plugin import MockerFixture
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
