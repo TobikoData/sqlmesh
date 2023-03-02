@@ -203,6 +203,16 @@ def test_relation(sushi_dbt_project: Project):
     assert context.render(jinja) == "sushi waiters"
 
 
+def test_column(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    jinja = (
+        "{% set col = api.Column('foo', 'integer') %}" "{{ col.is_integer() }} {{ col.is_string()}}"
+    )
+
+    assert context.render(jinja) == "True False"
+
+
 def test_quote(sushi_dbt_project: Project):
 
     context = sushi_dbt_project.context

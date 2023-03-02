@@ -148,4 +148,4 @@ class Adapter:
         return AdapterResponse("Success"), empty_table()
 
     def quote(self, identifier: str) -> str:
-        return exp.to_column(identifier).sql(dialect=self.engine_adapter.DIALECT, identify=True)
+        return exp.to_column(identifier).sql(dialect=self.engine_adapter.dialect, identify=True)
