@@ -37,10 +37,14 @@ class Modules:
         import itertools
         import re
 
-        import pytz
+        try:
+            import pytz
+
+            self.pytz = pytz
+        except ImportError:
+            pass
 
         self.datetime = datetime
-        self.pytz = pytz
         self.re = re
         self.itertools = itertools
 

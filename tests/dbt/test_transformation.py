@@ -2,7 +2,6 @@ from pathlib import Path
 
 import agate
 import pytest
-from dbt.adapters.base.column import Column
 from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
@@ -200,7 +199,10 @@ def test_modules(sushi_dbt_project: Project):
     assert context.render("{{ modules.datetime.date(2022, 12, 25) }}") == "2022-12-25"
 
     # pytz
-    assert "UTC" in context.render("{{ modules.pytz.all_timezones }}")
+    try:
+        assert "UTC" in context.render("{{ modules.pytz.all_timezones }}")
+    except AttributeError as error:
+        assert "object has no attribute 'pytz'" in str(error)
 
     # re
     assert context.render("{{ modules.re.search('(?<=abc)def', 'abcdef').group(0) }}") == "def"
