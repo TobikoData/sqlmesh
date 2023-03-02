@@ -146,7 +146,7 @@ def _get_snapshot_dag(
 def _create_model(name: str) -> Model:
     return SqlModel(
         name=name,
-        kind=IncrementalByTimeRangeKind(),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
         description="Dummy table",
         owner="jen",
         cron="@daily",

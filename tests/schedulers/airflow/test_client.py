@@ -19,7 +19,7 @@ def snapshot() -> Snapshot:
     snapshot = Snapshot.from_model(
         SqlModel(
             name="test_model",
-            kind=IncrementalByTimeRangeKind(),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
             storage_format="parquet",
             partitioned_by=["a"],
             query=parse_one("SELECT a, ds FROM tbl"),

@@ -30,7 +30,7 @@ from sqlmesh.utils.date import to_datetime, to_timestamp
 def parent_model():
     return SqlModel(
         name="parent.tbl",
-        kind=IncrementalByTimeRangeKind(),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
         dialect="spark",
         query=parse_one("SELECT 1, ds"),
     )
@@ -40,7 +40,7 @@ def parent_model():
 def model():
     return SqlModel(
         name="name",
-        kind=IncrementalByTimeRangeKind(),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
         owner="owner",
         dialect="spark",
         cron="1 0 * * *",

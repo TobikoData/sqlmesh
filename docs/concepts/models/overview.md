@@ -59,7 +59,7 @@ The `MODEL` statement takes various properties, which are used for both metadata
 - Name is ***required***, and must be ***unique***.
 
 ### kind
-- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `view`, which means a view is created and your query is run each time that view is accessed. 
+- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `view`, which means a view is created and your query is run each time that view is accessed.
 
 ### dialect
 - Dialect defines the SQL dialect of the file. By default, this uses the dialect of the SQLMesh `sqlmesh.core.config`.
@@ -114,10 +114,6 @@ FROM y
 
 ## Time column
 Models that are loaded incrementally require a time column to partition data. A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake. For more information, refer to [time column](../../concepts/models/model_kinds.md#time-column).
-
-### Format string configuration
-The format string tells SQLMesh how your dates are formatted in order to compare start and end dates correctly. You can configure a project-wide default format in your project configuration. A time column format string declared in a model will override the project-wide default. If the model uses a different dialect than the rest of your project, the format string will be automatically transpiled to the model dialect with SQLGlot. SQLMesh will use
-`%Y-%m-%d` as the default if no default time column format is configured.
 
 ## Advanced usage
 The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer.

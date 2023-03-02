@@ -218,7 +218,7 @@ def test_partition_key_is_missing_in_query():
 def test_json_serde():
     model = SqlModel(
         name="test_model",
-        kind=IncrementalByTimeRangeKind(),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
         owner="test_owner",
         dialect="spark",
         cron="@daily",
