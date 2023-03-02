@@ -103,7 +103,7 @@ class TimeColumn(PydanticModel):
 
 class IncrementalByTimeRangeKind(ModelKind):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_TIME_RANGE, const=True)
-    time_column: TimeColumn = TimeColumn(column="ds")
+    time_column: TimeColumn
 
     @validator("time_column", pre=True)
     def _parse_time_column(cls, v: t.Any) -> TimeColumn:
