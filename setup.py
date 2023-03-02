@@ -62,6 +62,7 @@ setup(
             "pytest-asyncio",
             "pytest-mock",
             "pyspark",
+            "pytz",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",
@@ -89,7 +90,6 @@ setup(
         ],
         "dbt": [
             "dbt-core",
-            "pytz",
         ],
     },
     classifiers=[
