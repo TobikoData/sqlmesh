@@ -233,3 +233,11 @@ def test_column(sushi_dbt_project: Project):
     )
 
     assert context.render(jinja) == "True False"
+
+
+def test_quote(sushi_dbt_project: Project):
+
+    context = sushi_dbt_project.context
+
+    jinja = "{{ adapter.quote('foo') }} {{ adapter.quote('bar') }}"
+    assert context.render(jinja) == '"foo" "bar"'
