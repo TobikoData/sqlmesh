@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
+from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
@@ -145,3 +146,6 @@ class Adapter:
             assert isinstance(resp, pd.DataFrame)
             return AdapterResponse("Success"), pandas_to_agate(resp)
         return AdapterResponse("Success"), empty_table()
+
+    def quote(self, identifier: str) -> str:
+        return exp.to_column(identifier).sql(dialect=self.engine_adapter.dialect, identify=True)
