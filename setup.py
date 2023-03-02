@@ -88,6 +88,7 @@ setup(
         ],
         "dbt": [
             "dbt-core",
+            "pytz",
         ],
     },
     classifiers=[

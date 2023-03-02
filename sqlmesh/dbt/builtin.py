@@ -11,9 +11,7 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
 
-class ExceptionsJinja:
-    """Implements the dbt "exceptions" jinja namespace."""
-
+class Exceptions:
     def raise_compiler_error(self, msg: str) -> None:
         from dbt.exceptions import CompilationError
 
@@ -31,6 +29,20 @@ class Api:
 
         self.Relation = BaseRelation
         self.Column = Column
+
+
+class Modules:
+    def __init__(self) -> None:
+        import datetime
+        import itertools
+        import re
+
+        import pytz
+
+        self.datetime = datetime
+        self.pytz = pytz
+        self.re = re
+        self.itertools = itertools
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
@@ -146,11 +158,12 @@ class SQLExecution:
 
 
 BUILTIN_JINJA = {
+    "api": Api(),
+    "config": config,
     "env_var": env_var,
+    "exceptions": Exceptions(),
     "is_incremental": is_incremental,
     "log": no_log,
-    "config": config,
+    "modules": Modules(),
     "sqlmesh": True,
-    "exceptions": ExceptionsJinja(),
-    "api": Api(),
 }
