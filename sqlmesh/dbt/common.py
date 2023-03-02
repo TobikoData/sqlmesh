@@ -39,7 +39,17 @@ T = t.TypeVar("T", bound="GeneralConfig")
 
 PROJECT_FILENAME = "dbt_project.yml"
 
-NAMESPACES = {"adapter", "api", "exceptions", "modules", "target"}
+JINJA_ONLY = {
+    "adapter",
+    "api",
+    "exceptions",
+    "load_result",
+    "modules",
+    "run_query",
+    "statement",
+    "store_result",
+    "target",
+}
 
 
 def load_yaml(source: str | Path) -> t.OrderedDict:
@@ -148,22 +158,8 @@ class DbtContext:
         methods = self.builtin_jinja.copy()
         methods["log"] = log
         for name, method in methods.items():
-<<<<<<< HEAD
-            # temporary until Iaroslav has the jinja templates working
-            if name not in [
-                "target",
-                "adapter",
-                "store_result",
-                "load_result",
-                "run_query",
-                "statement",
-                "exceptions",
-                "api",
-            ]:
-=======
-            # NAMESPACES is used temporarily until Iaroslav has the jinja templates working
-            if name not in NAMESPACES:
->>>>>>> cc94748 ([DBT] Add support for the 'modules' jinja namespace)
+            # JINJA_ONLY is used temporarily until Iaroslav has the jinja templates working
+            if name not in JINJA_ONLY:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)
