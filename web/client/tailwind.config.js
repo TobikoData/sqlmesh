@@ -36,7 +36,10 @@ module.exports = {
         900: 'hsl(264, 100%, 8%)',
       },
       alternative: {
-        500: 'hsl(210, 100%, 50%)',
+        100: 'var(--color-alternative-100)',
+        200: 'var(--color-alternative-200)',
+        300: 'var(--color-alternative-300)',
+        500: 'var(--color-alternative-500)',
       },
       success: {
         100: 'hsl(149, 100%, 98%)',

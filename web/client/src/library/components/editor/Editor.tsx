@@ -1,16 +1,9 @@
 import { useEffect, useMemo, useState, MouseEvent } from 'react'
 import clsx from 'clsx'
-import CodeMirror from '@uiw/react-codemirror'
-import { sql } from '@codemirror/lang-sql'
-import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
-  useApiPlan,
-  useApiPlanCancel,
+  useApiModels,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -43,6 +36,7 @@ import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
 import { EnvironmentName } from '~/context/context'
+import CodeEditor from './CodeEditor'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -97,6 +91,9 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     limit: 1000,
   })
   const { refetch: refetchPlan, isLoading } = useApiPlan(environment)
+
+  const { data: dataModels } = useApiModels()
+
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
@@ -352,9 +349,9 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
           >
             <div className="flex h-full xxxx">
               <CodeEditor
-                extension={activeFile.extension}
-                value={activeFile.content}
                 onChange={debouncedChange}
+                models={dataModels?.models}
+                file={activeFile}
               />
             </div>
             <div className="flex flex-col h-full">
@@ -600,33 +597,6 @@ function Indicator({
         <span className="font-normal text-gray-600">{value}</span>
       )}
     </small>
-  )
-}
-
-function CodeEditor({
-  value,
-  onChange,
-  extension,
-}: {
-  value: string
-  extension: string
-  onChange: (value: string) => void
-}): JSX.Element {
-  const extensions = [
-    extension === '.sql' && sql(),
-    extension === '.py' && python(),
-    extension === '.yaml' && StreamLanguage.define(yaml),
-  ].filter(Boolean) as Extension[]
-
-  return (
-    <CodeMirror
-      value={value}
-      height="100%"
-      width="100%"
-      className="w-full h-full overflow-auto"
-      extensions={extensions}
-      onChange={onChange}
-    />
   )
 }
 

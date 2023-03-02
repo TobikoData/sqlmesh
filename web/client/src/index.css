@@ -14,7 +14,13 @@
     --color-gray-600: hsl(0, 0%, 32%);
 
     --color-secondary-100: hsl(264, 100%, 98%);
+    --color-secondary-200: hsl(264, 100%, 92%);
     --color-secondary-500: hsl(264, 100%, 60%);
+
+    --color-alternative-100: hsl(210, 100%, 98%);
+    --color-alternative-200: hsl(210, 100%, 96%);
+    --color-alternative-300: hsl(210, 100%, 80%);
+    --color-alternative-500: hsl(210, 100%, 50%);
   }
 }
 

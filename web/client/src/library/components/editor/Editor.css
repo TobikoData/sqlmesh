@@ -3,16 +3,36 @@
   border-color: var(--color-secondary-100) !important;
   color: var(--color-secondary-500) !important;
   padding-left: 0.25rem !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .cm-activeLineGutter {
   background-color: var(--color-secondary-100) !important;
 }
 
-.cm-activeLine {
-  background-color: var(--color-gray-100) !important;
-}
-
 .cm-line {
   color: var(--color-gray-600) !important;
+}
+
+.cm-line.cm-activeLine {
+  background-color: var(--color-secondary-100);
+}
+
+.cm-line.cm-activeLine > span::selection,
+.cm-line.cm-activeLine::selection {
+  background-color: var(--color-secondary-200) !important;
+}
+
+.sqlmesh-model {
+  color: var(--color-alternative-500) !important;
+  background: var(--color-alternative-100) !important;
+  box-shadow: inset 0 -2px 0 0 var(--color-alternative-300) !important;
+  display: inline-block;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.sqlmesh-model:hover {
+  opacity: 0.8;
 }

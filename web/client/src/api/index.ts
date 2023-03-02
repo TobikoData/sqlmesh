@@ -17,6 +17,8 @@ import {
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
   BodyWriteFileApiFilesPathPost,
+  getModelsApiModelsGet,
+  Models,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -29,6 +31,14 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
       ? async () => await getFileApiFilesPathGet(path)
       : undefined,
     enabled: shouldEnable,
+    cacheTime: 0,
+  })
+}
+
+export function useApiModels(): UseQueryResult<Models> {
+  return useQuery({
+    queryKey: ['/api/models'],
+    queryFn: getModelsApiModelsGet,
     cacheTime: 0,
   })
 }
