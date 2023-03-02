@@ -17,7 +17,9 @@ from sqlmesh.utils.errors import SQLMeshError
 def snapshot(make_snapshot, random_name) -> Snapshot:
     return make_snapshot(
         create_sql_model(
-            random_name(), parse_one("SELECT 1, ds"), kind=IncrementalByTimeRangeKind()
+            random_name(),
+            parse_one("SELECT 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
         ),
         version="1",
     )

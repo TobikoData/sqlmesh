@@ -16,7 +16,9 @@ Below is an example of a definition that takes advantage of the model's incremen
 ```sql linenums="1"
 MODEL (
   name db.events,
-  kind INCREMENTAL_BY_TIME_RANGE
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column ds
+  )
 );
 
 SELECT
@@ -28,7 +30,7 @@ WHERE
 ```
 
 ### Time column
-SQLMesh needs to know which column in the model's output represents a timestamp or date associated with each record. This column is used to determine which records will be overridden during data [restatement](../plans.md#restatement-plans), as well as a partition key for engines that support partitioning (such as Apache Spark). By default, the `ds` column name is used, but it can be overridden in the model definition:
+SQLMesh needs to know which column in the model's output represents a timestamp or date associated with each record. This column is used to determine which records will be overridden during data [restatement](../plans.md#restatement-plans), as well as a partition key for engines that support partitioning (such as Apache Spark).
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,

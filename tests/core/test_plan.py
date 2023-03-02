@@ -53,7 +53,11 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
 def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 1, ds"), kind=IncrementalByTimeRangeKind())
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
     )
 
     expected_start = "2022-01-01"
@@ -198,7 +202,11 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
-        SqlModel(name="a", query=parse_one("select 1, ds"), kind=IncrementalByTimeRangeKind())
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
     )
 
     dag = DAG[str]({"a": set()})

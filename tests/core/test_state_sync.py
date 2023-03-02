@@ -394,7 +394,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     model = SqlModel(
         name="a",
         query=parse_one("select 1, ds"),
-        kind=IncrementalByTimeRangeKind(),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
         cron="@daily",
     )
 

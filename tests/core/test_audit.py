@@ -9,7 +9,9 @@ from sqlmesh.utils.errors import AuditConfigError
 @pytest.fixture
 def model() -> Model:
     return create_sql_model(
-        "db.test_model", parse_one("SELECT a, b, ds"), kind=IncrementalByTimeRangeKind()
+        "db.test_model",
+        parse_one("SELECT a, b, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
     )
 
 
