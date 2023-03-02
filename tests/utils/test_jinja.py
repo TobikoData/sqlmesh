@@ -41,6 +41,24 @@ macro_b_b
     ]
 
 
+def test_macro_registry_render_nested_self_package_references():
+    package_a = """
+{% macro macro_a_a() %}macro_a_a{% endmacro %}
+
+{% macro macro_a_b() %}{{ package_a.macro_a_a() }}{% endmacro %}
+
+{% macro macro_a_c() %}{{ package_a.macro_a_b() }}{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(package_a), package="package_a")
+
+    rendered = registry.build_environment().from_string("{{ package_a.macro_a_c() }}").render()
+    assert rendered == "macro_a_a"
+
+
 def test_macro_registry_render_different_vars():
     package_a = "{% macro macro_a_a() %}{{ external() }}{% endmacro %}"
 
