@@ -62,10 +62,12 @@ setup(
             "pytest-asyncio",
             "pytest-mock",
             "pyspark",
+            "pytz",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
+            "types-pytz",
             "types-requests==2.28.8",
         ],
         "web": [
