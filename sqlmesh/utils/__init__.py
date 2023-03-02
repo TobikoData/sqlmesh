@@ -55,6 +55,10 @@ class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
         super().__setitem__(k, v)
 
 
+class AttributeDict(dict, t.Mapping[KEY, VALUE]):
+    __getattr__ = dict.__getitem__
+
+
 class registry_decorator:
     """A decorator that registers itself."""
 
