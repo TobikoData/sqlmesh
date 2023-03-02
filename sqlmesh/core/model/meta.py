@@ -83,7 +83,7 @@ class ModelMeta(PydanticModel):
                         f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
                 kwargs[arg.left.name] = arg.right
-            return (func, kwargs)
+            return (func.lower(), kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [extract(i) for i in v.expressions]
