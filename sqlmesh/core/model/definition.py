@@ -302,7 +302,7 @@ class _Model(ModelMeta, frozen=True):
         for audit_name, _ in self.audits:
             if audit_name in audits:
                 referenced_audits.append(audits[audit_name])
-            elif audit_name not in BUILT_IN_AUDITS:
+            elif audit_name.lower() not in BUILT_IN_AUDITS:
                 raise_config_error(
                     f"Unknown audit '{audit_name}' referenced in model '{self.name}'",
                     self._path,

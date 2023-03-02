@@ -8,7 +8,7 @@ from sqlmesh.core.audit.definition import Audit, AuditResult
 
 def _discover_audits(modules: t.Iterable[ModuleType]) -> t.Dict[str, Audit]:
     return {
-        audit.name: audit
+        audit.name.lower(): audit
         for module in modules
         for _, audit in inspect.getmembers(module, lambda v: isinstance(v, Audit))
     }
