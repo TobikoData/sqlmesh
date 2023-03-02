@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 import typing as t
 
-from sqlmesh.dbt.adapter import Adapter
-from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -80,12 +78,6 @@ def generate_source(sources: t.Dict[str, str]) -> t.Callable:
         return DBT_SOURCE_MAPPING.get(f"{package}.{name}")
 
     return source
-
-
-def generate_adapter(target: TargetConfig) -> Adapter:
-    sqlmesh_config = target.to_sqlmesh()
-    engine_adapter = sqlmesh_config.create_engine_adapter()
-    return Adapter(engine_adapter=engine_adapter)
 
 
 BUILTIN_JINJA = {

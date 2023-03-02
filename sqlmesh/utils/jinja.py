@@ -165,6 +165,7 @@ class JinjaMacroRegistry(PydanticModel):
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:
         """Builds a Python callable for a macro with the given reference.
+
         Args:
             reference: The macro reference.
         Returns:
@@ -297,7 +298,7 @@ class JinjaMacroRegistry(PydanticModel):
         return self.__environment
 
     def _trim_macros(self, names: t.Set[str], package: t.Optional[str]) -> JinjaMacroRegistry:
-        macros = self.packages[package] if package is not None else self.root_macros
+        macros = self.packages.get(package, {}) if package is not None else self.root_macros
         trimmed_macros = {}
 
         dependencies: t.Dict[t.Optional[str], t.Set[str]] = defaultdict(set)

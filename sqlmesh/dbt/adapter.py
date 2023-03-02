@@ -5,6 +5,8 @@ import typing as t
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.adapters.base import BaseRelation
@@ -12,10 +14,17 @@ if t.TYPE_CHECKING:
 
 
 class Adapter:
-    def __init__(self, engine_adapter: EngineAdapter):
+    def __init__(
+        self,
+        engine_adapter: EngineAdapter,
+        jinja_macros: JinjaMacroRegistry,
+        jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
+    ):
         from dbt.adapters.base.relation import Policy
 
         self.engine_adapter = engine_adapter
+        self.jinja_macros = jinja_macros
+        self.jinja_globals = jinja_globals or {}
         # All engines quote by default except Snowflake
         quote_param = engine_adapter.DIALECT != "snowflake"
         self.quote_policy = Policy(
@@ -83,3 +92,24 @@ class Adapter:
             Column.from_description(name=name, raw_data_type=dtype)
             for name, dtype in self.engine_adapter.columns(table_name=relation.render()).items()
         ]
+
+    def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
+        """
+        Returns a dialect-specific version of a macro with the given name.
+        """
+        dialect_name = f"{self.engine_adapter.dialect}__{name}"
+        default_name = f"default__{name}"
+
+        references_to_try = [
+            MacroReference(package=package, name=dialect_name),
+            MacroReference(package=package, name=default_name),
+        ]
+
+        for reference in references_to_try:
+            macro_callable = self.jinja_macros.build_macro(
+                reference, **{**self.jinja_globals, "adapter": self}
+            )
+            if macro_callable is not None:
+                return macro_callable
+
+        raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
