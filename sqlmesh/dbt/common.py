@@ -158,7 +158,7 @@ class DbtContext:
                 "run_query",
                 "statement",
                 "exceptions",
-                "api"
+                "api",
             ]:
                 build_env(method, env=env, name=name, path=Path(__file__).parent)
 

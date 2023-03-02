@@ -5,7 +5,6 @@ import typing as t
 
 import agate
 import jinja2
-from dbt.exceptions import CompilationError
 
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.target import TargetConfig
