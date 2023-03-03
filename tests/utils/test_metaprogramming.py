@@ -177,6 +177,7 @@ def test_serialize_env() -> None:
     assert env == {
         "MAIN": Executable(
             name="main_func",
+            alias="MAIN",
             path="test_metaprogramming.py",
             payload="""def main_func(y):
     sqlglot.parse_one('1')
@@ -199,6 +200,7 @@ def test_serialize_env() -> None:
         ),
         "DataClass": Executable(
             kind=ExecutableKind.DEFINITION,
+            name="DataClass",
             path="test_metaprogramming.py",
             payload="""@dataclass
 class DataClass:
@@ -206,6 +208,7 @@ class DataClass:
         ),
         "MyClass": Executable(
             kind=ExecutableKind.DEFINITION,
+            name="MyClass",
             path="test_metaprogramming.py",
             payload="""class MyClass:
 
@@ -226,10 +229,12 @@ class DataClass:
         "pd": Executable(payload="import pandas as pd", kind=ExecutableKind.IMPORT),
         "sqlglot": Executable(kind=ExecutableKind.IMPORT, payload="import sqlglot"),
         "my_lambda": Executable(
+            name="my_lambda",
             path="test_metaprogramming.py",
             payload=f"my_lambda = lambda : print('z')",
         ),
         "other_func": Executable(
+            name="other_func",
             path="test_metaprogramming.py",
             payload="""def other_func(a):
     import sqlglot
