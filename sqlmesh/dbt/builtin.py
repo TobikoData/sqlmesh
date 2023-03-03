@@ -175,6 +175,6 @@ BUILTIN_JINJA = {
     "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
-    "sqlmesh": True,
     "return": return_val,
+    "sqlmesh": True,
 }
