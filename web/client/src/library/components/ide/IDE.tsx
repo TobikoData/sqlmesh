@@ -1,7 +1,7 @@
 import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
-import { FolderTree } from '../folderTree/FolderTree'
+import FolderTree from '../folderTree/FolderTree'
 import { Fragment, useEffect, MouseEvent, useState, lazy, useMemo } from 'react'
 import clsx from 'clsx'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
