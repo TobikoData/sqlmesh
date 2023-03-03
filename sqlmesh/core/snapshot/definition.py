@@ -10,7 +10,14 @@ from pydantic import validator
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.model import Model, SeedModel, SqlModel, kind, parse_model_name
+from sqlmesh.core.model import (
+    Model,
+    PythonModel,
+    SeedModel,
+    SqlModel,
+    kind,
+    parse_model_name,
+)
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
@@ -702,7 +709,6 @@ def fingerprint_from_model(
 
 def _model_data_hash(model: Model, physical_schema: str) -> str:
     data = [
-        model.render_query().sql(identify=True, comments=False) if not model.is_seed else None,
         str(model.sorted_python_env),
         model.kind.name,
         model.cron,
@@ -714,24 +720,33 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
     ]
 
     if isinstance(model, SqlModel):
-        for macro in model.jinja_macros.root_macros.values():
+        data.append(model.query.sql(identify=True, comments=False))
+
+        for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
+            data.append(macro_name)
             data.append(macro.definition)
 
         for package in model.jinja_macros.packages.values():
-            for macro in package.values():
+            for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
+                data.append(macro_name)
                 data.append(macro.definition)
-
-    if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
-        data.append(model.kind.time_column.column)
-        data.append(model.kind.time_column.format)
-    elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
-        data.extend(model.kind.unique_key)
+    elif isinstance(model, PythonModel):
+        data.append(model.entrypoint)
+        for column_name, column_type in model.columns_to_types.items():
+            data.append(column_name)
+            data.append(str(column_type))
     elif isinstance(model, SeedModel):
         data.append(str(model.kind.batch_size))
         data.append(model.seed.content)
         for column_name, column_type in (model.columns_to_types_ or {}).items():
             data.append(column_name)
             data.append(column_type.sql())
+
+    if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
+        data.append(model.kind.time_column.column)
+        data.append(model.kind.time_column.format)
+    elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
+        data.extend(model.kind.unique_key)
 
     return _hash(data)
 
