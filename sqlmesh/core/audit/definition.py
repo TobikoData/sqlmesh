@@ -34,8 +34,8 @@ class AuditMeta(PydanticModel):
     @validator("name", "dialect", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         if isinstance(v, exp.Expression):
-            return v.name
-        return str(v) if v is not None else None
+            return v.name.lower()
+        return str(v).lower() if v is not None else None
 
     @validator("skip", "blocking", pre=True)
     def _bool_validator(cls, v: t.Any) -> bool:

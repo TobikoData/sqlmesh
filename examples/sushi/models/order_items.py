@@ -28,7 +28,7 @@ ITEMS = "sushi.items"
     },
     audits=[
         (
-            "not_null",
+            "NOT_NULL",
             {"columns": [to_column(c) for c in ("id", "order_id", "item_id", "quantity")]},
         ),
         ("assert_order_items_quantity_exceeds_threshold", {"quantity": 0}),

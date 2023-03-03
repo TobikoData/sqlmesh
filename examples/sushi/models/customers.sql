@@ -3,7 +3,7 @@ MODEL (
   kind FULL,
   owner jen,
   cron '@daily',
-  pre noop(x=1),
+  pre NOOP(x=1),
   post (noop(), noop(y=['a', 2])),
 );
 
