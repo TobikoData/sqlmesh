@@ -7,7 +7,6 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
-from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
@@ -24,6 +23,7 @@ from sqlmesh.core.snapshot import (
     fingerprint_from_model,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 
 
 @pytest.fixture
@@ -257,18 +257,16 @@ each_macro = lambda: "test"
 
 
 def test_fingerprint(model: Model, parent_model: Model):
-    macro.get_registry()
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2005971257",
+        data_hash="3042895307",
         metadata_hash="3589467163",
     )
 
     assert fingerprint == original_fingerprint
     assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
 
-    parent_fingerprint = fingerprint_from_model(parent_model, models={})
     with_parent_fingerprint = fingerprint_from_model(model, models={"parent.tbl": parent_model})
     assert with_parent_fingerprint != fingerprint
     assert int(with_parent_fingerprint.parent_data_hash) > 0
@@ -303,7 +301,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="439693179",
+        data_hash="2542007450",
         metadata_hash="2750000337",
     )
 
@@ -322,6 +320,33 @@ def test_fingerprint_seed_model():
     updated_actual_fingerprint = fingerprint_from_model(updated_model, models={})
     assert updated_actual_fingerprint.data_hash != expected_fingerprint.data_hash
     assert updated_actual_fingerprint.metadata_hash == expected_fingerprint.metadata_hash
+
+
+def test_fingerprint_jinja_macros(model: Model):
+    model = SqlModel(
+        **{
+            **model.dict(),
+            "jinja_macros": JinjaMacroRegistry(
+                root_macros={"test_macro": MacroInfo(definition="macro_content_a", depends_on=[])}
+            ),
+        }
+    )
+    fingerprint = fingerprint_from_model(model, models={})
+
+    original_fingerprint = SnapshotFingerprint(
+        data_hash="2778873847",
+        metadata_hash="3589467163",
+    )
+
+    fingerprint = fingerprint_from_model(model, models={})
+    assert fingerprint == original_fingerprint
+
+    model.jinja_macros.root_macros["test_macro"] = MacroInfo(
+        definition="macro_content_b", depends_on=[]
+    )
+    updated_fingerprint = fingerprint_from_model(model, models={})
+    assert updated_fingerprint.data_hash != original_fingerprint.data_hash
+    assert updated_fingerprint.metadata_hash == original_fingerprint.metadata_hash
 
 
 def test_stamp(model: Model):
