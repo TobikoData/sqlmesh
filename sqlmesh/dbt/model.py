@@ -32,6 +32,10 @@ from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
 
+if t.TYPE_CHECKING:
+    from dbt.adapters.base import BaseRelation
+    from dbt.adapters.base.column import Column
+
 
 class Materialization(str, Enum):
     """DBT model materializations"""
@@ -191,7 +195,7 @@ class ModelConfig(GeneralConfig):
 
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
-        rendered._capture_dependencies_from_rendered_sql(context)
+        rendered = ModelSqlRenderer(context, rendered).enriched_config
 
         rendered_dependencies = rendered._dependencies
         for dependency in rendered_dependencies.refs:
@@ -224,70 +228,6 @@ class ModelConfig(GeneralConfig):
             start=self.start,
         )
 
-    def _capture_dependencies_from_rendered_sql(self, context: DbtContext) -> None:
-        def _ref(package_name: str, model_name: t.Optional[str] = None) -> str:
-            if package_name not in context.refs:
-                raise ConfigError(
-                    f"Model '{package_name}' was not found for model '{self.table_name}'."
-                )
-            self._dependencies.refs.add(package_name)
-            return context.refs[package_name]
-
-        def _var(name: str, default: t.Optional[str] = None) -> t.Any:
-            if default is None and name not in context.variables:
-                raise ConfigError(f"Variable '{name}' was not found for model '{self.table_name}'.")
-            self._dependencies.variables.add(name)
-            return context.variables.get(name, default)
-
-        def _source(source_name: str, table_name: str) -> str:
-            full_name = ".".join([source_name, table_name])
-            if full_name not in context.sources:
-                raise ConfigError(
-                    f"Source '{full_name}' was not found for model '{self.table_name}'."
-                )
-            self._dependencies.sources.add(full_name)
-            return context.sources[full_name]
-
-        def _config(*args: t.Any, **kwargs: t.Any) -> str:
-            if args and isinstance(args[0], dict):
-                self.replace(self.update_with(args[0]))
-            if kwargs:
-                self.replace(self.update_with(kwargs))
-            return ""
-
-        outer_self = self
-
-        class TrackingAdapter(Adapter):
-            def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
-                macros = (
-                    context.jinja_macros.packages.get(package, {})
-                    if package is not None
-                    else context.jinja_macros.root_macros
-                )
-                for target_name in macros:
-                    if target_name.endswith(f"__{name}"):
-                        outer_self._dependencies.macros.add(
-                            MacroReference(package=package, name=target_name)
-                        )
-                return super().dispatch(name, package=package)
-
-        jinja_globals: t.Dict[str, t.Any] = {
-            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
-            **context.builtin_jinja,
-            "config": _config,
-            "ref": _ref,
-            "var": _var,
-            "source": _source,
-        }
-
-        if context.engine_adapter is not None:
-            jinja_globals["adapter"] = TrackingAdapter(
-                context.engine_adapter, context.jinja_macros, jinja_globals=jinja_globals
-            )
-
-        registry = context.jinja_macros
-        registry.build_environment(**jinja_globals).from_string(self.sql).render()
-
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies
     ) -> DbtContext:
@@ -306,3 +246,113 @@ class ModelConfig(GeneralConfig):
         }
 
         return model_context
+
+
+class ModelSqlRenderer:
+    def __init__(self, context: DbtContext, config: ModelConfig):
+        self.context = context
+        self.config = config
+
+        self._captured_dependencies: Dependencies = Dependencies()
+        self._rendered_sql: t.Optional[str] = None
+        self._enriched_config: ModelConfig = config.copy()
+
+        self._jinja_globals: t.Dict[str, t.Any] = {
+            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+            **context.builtin_jinja,
+            "execute": False,
+            "config": self._config,
+            "ref": self._ref,
+            "var": self._var,
+            "source": self._source,
+            "store_result": lambda *args, **kwargs: "",
+            "load_result": lambda *args, **kwargs: None,
+            "run_query": lambda *args, **kwargs: None,
+            "statement": lambda *args, **kwargs: "",
+        }
+
+        if context.engine_adapter is not None:
+            self._jinja_globals["adapter"] = ModelSqlRenderer.TrackingAdapter(
+                self,
+                context.engine_adapter,
+                context.jinja_macros,
+                jinja_globals=self._jinja_globals,
+            )
+
+    @property
+    def enriched_config(self) -> ModelConfig:
+        if self._rendered_sql is None:
+            self.render()
+            self._enriched_config._dependencies = self._enriched_config._dependencies.union(
+                self._captured_dependencies
+            )
+        return self._enriched_config
+
+    def render(self) -> str:
+        if self._rendered_sql is None:
+            registry = self.context.jinja_macros
+            self._rendered_sql = (
+                registry.build_environment(**self._jinja_globals)
+                .from_string(self.config.sql)
+                .render()
+            )
+        return self._rendered_sql
+
+    def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> str:
+        if package_name not in self.context.refs:
+            raise ConfigError(
+                f"Model '{package_name}' was not found for model '{self.config.table_name}'."
+            )
+        self._captured_dependencies.refs.add(package_name)
+        return self.context.refs[package_name]
+
+    def _var(self, name: str, default: t.Optional[str] = None) -> t.Any:
+        if default is None and name not in self.context.variables:
+            raise ConfigError(
+                f"Variable '{name}' was not found for model '{self.config.table_name}'."
+            )
+        self._captured_dependencies.variables.add(name)
+        return self.context.variables.get(name, default)
+
+    def _source(self, source_name: str, table_name: str) -> str:
+        full_name = ".".join([source_name, table_name])
+        if full_name not in self.context.sources:
+            raise ConfigError(
+                f"Source '{full_name}' was not found for model '{self.config.table_name}'."
+            )
+        self._captured_dependencies.sources.add(full_name)
+        return self.context.sources[full_name]
+
+    def _config(self, *args: t.Any, **kwargs: t.Any) -> str:
+        if args and isinstance(args[0], dict):
+            self._enriched_config = self._enriched_config.update_with(args[0])
+        if kwargs:
+            self._enriched_config = self._enriched_config.update_with(kwargs)
+        return ""
+
+    class TrackingAdapter(Adapter):
+        def __init__(self, outer_self: ModelSqlRenderer, *args: t.Any, **kwargs: t.Any):
+            super().__init__(*args, **kwargs)
+            self.outer_self = outer_self
+            self.context = outer_self.context
+
+        def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
+            macros = (
+                self.context.jinja_macros.packages.get(package, {})
+                if package is not None
+                else self.context.jinja_macros.root_macros
+            )
+            for target_name in macros:
+                if target_name.endswith(f"__{name}"):
+                    self.outer_self._captured_dependencies.macros.add(
+                        MacroReference(package=package, name=target_name)
+                    )
+            return super().dispatch(name, package=package)
+
+        def get_relation(
+            self, database: str, schema: str, identifier: str
+        ) -> t.Optional[BaseRelation]:
+            return None
+
+        def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
+            return []

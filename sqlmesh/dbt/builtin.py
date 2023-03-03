@@ -166,6 +166,7 @@ BUILTIN_JINJA = {
     "config": config,
     "env_var": env_var,
     "exceptions": Exceptions(),
+    "execute": True,
     "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
