@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor, MacroReference
+from sqlmesh.utils.jinja import (
+    JinjaMacroRegistry,
+    MacroExtractor,
+    MacroReference,
+    MacroReturnVal,
+)
 
 
 def test_macro_registry_render():
@@ -136,3 +141,22 @@ def test_macro_registry_trim():
         .render()
     )
     assert rendered == "macro_a_a macro_a_b"
+
+
+def test_macro_return():
+    macros = "{% macro test_return() %}{{ macro_return([1, 2, 3]) }}{% endmacro %}"
+
+    def macro_return(val):
+        raise MacroReturnVal(val)
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(macros))
+
+    rendered = (
+        registry.build_environment(macro_return=macro_return)
+        .from_string("{{ test_return() }}")
+        .render()
+    )
+    assert rendered == "[1, 2, 3]"

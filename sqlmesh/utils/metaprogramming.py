@@ -302,6 +302,7 @@ class Executable(PydanticModel):
     kind: ExecutableKind = ExecutableKind.DEFINITION
     name: t.Optional[str] = None
     path: t.Optional[str] = None
+    alias: t.Optional[str] = None
 
     @property
     def is_definition(self) -> bool:
@@ -339,10 +340,11 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
 
             if _is_relative_to(file_path, path):
                 serialized[k] = Executable(
-                    name=name if name != k else None,
+                    name=name,
                     payload=normalize_source(v),
                     kind=ExecutableKind.DEFINITION,
                     path=str(file_path.relative_to(path.absolute())),
+                    alias=k if name != k else None,
                 )
             else:
                 serialized[k] = Executable(
@@ -391,6 +393,8 @@ def prepare_env(
             env[name] = ast.literal_eval(executable.payload)
         else:
             exec(executable.payload, env)
+            if executable.alias and executable.name:
+                env[executable.alias] = env[executable.name]
     return env
 
 
