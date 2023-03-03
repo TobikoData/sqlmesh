@@ -1,4 +1,4 @@
-import { useState, FormEvent, MouseEvent } from 'react'
+import { useState, FormEvent, MouseEvent, useEffect } from 'react'
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -8,6 +8,7 @@ import {
   DocumentPlusIcon,
   FolderPlusIcon,
   XCircleIcon,
+  ArrowsUpDownIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import {
@@ -32,17 +33,28 @@ export default function Directory({
   directory,
   setConfirmation,
 }: PropsDirectory): JSX.Element {
-  const activeFileId = useStoreFileTree(s => s.activeFileId)
+  const activeFile = useStoreFileTree(s => s.activeFile)
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
   const [isLoading, setIsLoading] = useState(false)
-  const [isOpen, setOpen] = useState(false)
   const [newName, setNewName] = useState<string>()
+  const [isOpen, setIsOpen] = useState<boolean>(directory.isOpen)
 
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
+
+  useEffect(() => {
+    // Update compoent every time ModelDirectory's state isOpen is changing
+    directory.syncStateOpen = setIsOpen
+  }, [])
+
+  useEffect(() => {
+    if (isFalse(isOpen) && directory.hasFile(activeFile)) {
+      directory.open()
+    }
+  }, [activeFile])
 
   function createDirectory(e: MouseEvent): void {
     e.stopPropagation()
@@ -66,7 +78,7 @@ export default function Directory({
 
         directory.addDirectory(new ModelDirectory(created, directory))
 
-        setOpen(true)
+        directory.open()
       })
       .catch(error => {
         // TODO: Show error notification
@@ -97,7 +109,7 @@ export default function Directory({
 
         directory.addFile(new ModelFile(created, directory))
 
-        setOpen(true)
+        directory.open()
       })
       .catch(error => {
         // TODO: Show error notification
@@ -128,7 +140,7 @@ export default function Directory({
           const files = getAllFilesInDirectory(directory)
 
           files.forEach(file => {
-            openedFiles.delete(file.id)
+            openedFiles.delete(file)
           })
         }
 
@@ -168,31 +180,12 @@ export default function Directory({
 
     const currentName = directory.name
     const currentPath = directory.path
-    const files = getAllFilesInDirectory(directory)
-    const openedFilesFromDirectory = new Map<ID, ModelFile>()
-    let fileThatShouldBeSelectedAfterDirectoryRename: ModelFile | undefined
-
-    files.forEach(file => {
-      if (openedFiles.has(file.id)) {
-        openedFilesFromDirectory.set(file.id, file)
-      }
-
-      if (activeFileId === file.id) {
-        fileThatShouldBeSelectedAfterDirectoryRename = file
-      }
-    })
 
     directory.rename(newName.trim())
 
     void writeDirectoryApiDirectoriesPathPost(currentPath, {
       new_path: directory.path,
     })
-      .then(() => {
-        openedFilesFromDirectory.forEach((file, id) => {
-          openedFiles.delete(id)
-          openedFiles.set(file.id, file)
-        })
-      })
       .catch(error => {
         console.log(error)
 
@@ -202,28 +195,38 @@ export default function Directory({
         setNewName(undefined)
         setIsLoading(false)
 
-        setOpenedFiles(openedFiles)
-
-        if (fileThatShouldBeSelectedAfterDirectoryRename != null) {
-          selectFile(fileThatShouldBeSelectedAfterDirectoryRename)
+        if (directory.hasFile(activeFile)) {
+          selectFile(activeFile)
         }
       })
   }
 
   function renameWithConfirmation(): void {
-    setConfirmation({
-      headline: 'Renaming Directory',
-      description: `Are you sure you want to rename the directory "${directory.name}"?`,
-      yesText: 'Yes, Rename',
-      noText: 'No, Cancel',
-      action: rename,
-    })
+    if (directory.name === newName) {
+      setNewName(undefined)
+    } else {
+      setConfirmation({
+        headline: 'Renaming Directory',
+        description: `Are you sure you want to rename the directory "${directory.name}"?`,
+        yesText: 'Yes, Rename',
+        noText: 'No, Cancel',
+        action: rename,
+        cancel: () => {
+          setNewName(undefined)
+        },
+      })
+    }
   }
 
   return (
     <>
       {directory.withParent && (
-        <span className="w-full overflow-hidden hover:bg-secondary-100 group flex justify-between items-center rounded-md">
+        <span
+          className={clsx(
+            'w-full  overflow-hidden hover:bg-secondary-100 group flex justify-between items-center rounded-md',
+            isFalse(isStringEmptyOrNil(newName)) && 'bg-warning-100',
+          )}
+        >
           <div
             className={clsx(
               'mr-1 flex items-center',
@@ -234,7 +237,7 @@ export default function Directory({
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
-              setOpen(!isOpen)
+              directory.toggle()
             }}
           >
             {(directory.withDirectories || directory.withFiles) && (
@@ -248,7 +251,7 @@ export default function Directory({
               className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
             />
           </div>
-          <span className="w-full h-[1.5rem] overflow-hidden flex items-center justify-between pr-1">
+          <span className="w-full overflow-hidden flex items-center justify-between pr-1 py-[0.125rem]">
             {isStringEmptyOrNil(newName) ? (
               <span className="w-full flex text-base overflow-hidden items-center cursor-default">
                 <span
@@ -256,7 +259,7 @@ export default function Directory({
                   onClick={(e: MouseEvent) => {
                     e.stopPropagation()
 
-                    setOpen(!isOpen)
+                    directory.toggle()
                   }}
                   onDoubleClick={(e: MouseEvent) => {
                     e.stopPropagation()
@@ -267,6 +270,22 @@ export default function Directory({
                   {directory.name}
                 </span>
                 <span className="hidden w-full group-hover:flex items-center justify-end">
+                  <ArrowsUpDownIcon
+                    onClick={(e: MouseEvent) => {
+                      e.stopPropagation()
+
+                      if (directory.isCollapsed) {
+                        directory.expand()
+                      } else {
+                        directory.collapse()
+                      }
+                    }}
+                    className={clsx(
+                      `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
+                      directory.isCollapsed && 'text-gray-500',
+                      directory.isExpanded && 'text-secondary-500',
+                    )}
+                  />
                   <DocumentPlusIcon
                     onClick={createFile}
                     className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
@@ -286,7 +305,7 @@ export default function Directory({
                 </span>
               </span>
             ) : (
-              <div className="flex overflow-hidden items-center">
+              <div className="flex w-full items-center">
                 <input
                   type="text"
                   className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
@@ -315,12 +334,7 @@ export default function Directory({
         </span>
       )}
       {(isOpen || !directory.withParent) && directory.withDirectories && (
-        <ul
-          className={clsx(
-            'mr-1 overflow-hidden',
-            directory.withParent ? 'pl-3' : 'mt-1',
-          )}
-        >
+        <ul className={clsx(directory.withParent ? 'pl-3' : 'mt-1')}>
           {directory.directories.map(dir => (
             <li
               key={dir.id}
@@ -335,12 +349,7 @@ export default function Directory({
         </ul>
       )}
       {(isOpen || !directory.withParent) && directory.withFiles && (
-        <ul
-          className={clsx(
-            'mr-1 block ',
-            directory.withParent ? 'pl-3' : 'mt-1',
-          )}
-        >
+        <ul className={clsx(directory.withParent ? 'pl-3' : 'mt-1')}>
           {directory.files.map(file => (
             <li
               key={file.id}
