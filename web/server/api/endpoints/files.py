@@ -87,6 +87,9 @@ async def write_file(
     context: Context = Depends(get_context),
 ) -> models.File:
     """Create, update, or rename a file."""
+
+    ensure_file(settings.project_path / path)
+
     path_or_new_path = path
     if new_path:
         path_or_new_path = validate_path(new_path, context)
@@ -120,3 +123,10 @@ async def delete_file(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except IsADirectoryError:
         raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="File is a directory")
+
+
+def ensure_file(path: Path) -> None:
+    """Ensure the file exists."""
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("")
