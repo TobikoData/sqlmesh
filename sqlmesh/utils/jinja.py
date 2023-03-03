@@ -40,6 +40,23 @@ class MacroInfo(PydanticModel):
     depends_on: t.List[MacroReference]
 
 
+class MacroReturnVal(Exception):
+    def __init__(self, val: t.Any):
+        self.value = val
+
+
+def macro_return(macro: t.Callable) -> t.Callable:
+    """Decorator to pass data back to the caller"""
+
+    def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+        try:
+            return macro(*args, **kwargs)
+        except MacroReturnVal as ret:
+            return ret.value
+
+    return wrapper
+
+
 class MacroExtractor(Parser):
     def extract(self, jinja: str, dialect: str = "") -> t.Dict[str, MacroInfo]:
         """Extract a dictionary of macro definitions from a jinja string.
@@ -280,7 +297,7 @@ class JinjaMacroRegistry(PydanticModel):
         macro_vars.update(package_macros)
 
         template = self._parse_macro(name, package)
-        macro_callable = getattr(template.make_module(vars=macro_vars), name)
+        macro_callable = macro_return(getattr(template.make_module(vars=macro_vars), name))
         callable_cache[cache_key] = macro_callable
         return macro_callable
 

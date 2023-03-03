@@ -177,6 +177,7 @@ def test_serialize_env() -> None:
     assert env == {
         "MAIN": Executable(
             name="main_func",
+            alias="MAIN",
             path="test_metaprogramming.py",
             payload="""def main_func(y):
     sqlglot.parse_one('1')

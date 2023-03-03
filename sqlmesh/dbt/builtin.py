@@ -9,6 +9,7 @@ import jinja2
 from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import MacroReturnVal
 
 
 class Exceptions:
@@ -101,6 +102,10 @@ def generate_source(sources: t.Dict[str, str]) -> t.Callable:
     return source
 
 
+def return_val(val: t.Any) -> None:
+    raise MacroReturnVal(val)
+
+
 class SQLExecution:
     def __init__(self, adapter: Adapter):
         self.adapter = adapter
@@ -171,4 +176,5 @@ BUILTIN_JINJA = {
     "log": no_log,
     "modules": Modules(),
     "sqlmesh": True,
+    "return": return_val,
 }
