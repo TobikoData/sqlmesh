@@ -80,7 +80,7 @@ def get_file(
 
 @router.post("/{path:path}", response_model=models.File)
 async def write_file(
-    content: t.Optional[str] = Body(None, embed=True),
+    content: str = Body("", embed=True),
     new_path: t.Optional[str] = Body(None, embed=True),
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
@@ -91,16 +91,10 @@ async def write_file(
     if new_path:
         path_or_new_path = validate_path(new_path, context)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
-
-    if content:
-        with open(settings.project_path / path_or_new_path, "w", encoding="utf-8") as f:
-            f.write(content)
     else:
-        try:
-            with open(settings.project_path / path_or_new_path) as f:
-                content = f.read()
-        except FileNotFoundError:
-            raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+        (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
+
+    content = (settings.project_path / path_or_new_path).read_text()
     return models.File(
         name=os.path.basename(path_or_new_path), path=path_or_new_path, content=content
     )

@@ -5,11 +5,16 @@ import { ModelFile } from './file'
 interface InitialDirectory extends InitialArtifact, Directory {
   files: File[]
   directories: Directory[]
+  syncStateOpen?: <T>(state: T) => void
 }
 
 export class ModelDirectory extends ModelArtifact<InitialDirectory> {
+  private _isOpen = false
+
   directories: ModelDirectory[]
   files: ModelFile[]
+
+  syncStateOpen?: (state: boolean) => void
 
   constructor(initial?: Directory | ModelDirectory, parent?: ModelDirectory) {
     super(
@@ -56,6 +61,70 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
 
   get isNotEmpty(): boolean {
     return this.withFiles || this.withDirectories
+  }
+
+  get allDirectories(): ModelDirectory[] {
+    return this.directories.concat(
+      this.directories.map(d => d.allDirectories).flat(),
+    )
+  }
+
+  get allFiles(): ModelFile[] {
+    return this.files.concat(
+      this.allDirectories.map(directory => directory.files).flat(),
+    )
+  }
+
+  get allArtifacts(): ModelArtifact[] {
+    return ([] as ModelArtifact[])
+      .concat(this.allFiles)
+      .concat(this.allDirectories)
+  }
+
+  get isOpen(): boolean {
+    return this._isOpen
+  }
+
+  get isExpanded(): boolean {
+    return this.isOpen && this.allDirectories.every(d => d.isExpanded)
+  }
+
+  get isCollapsed(): boolean {
+    return !this.isOpen && this.allDirectories.every(d => d.isCollapsed)
+  }
+
+  open(): void {
+    this._isOpen = true
+
+    this.syncStateOpen?.(this.isOpen)
+  }
+
+  close(): void {
+    this._isOpen = false
+
+    this.syncStateOpen?.(this.isOpen)
+  }
+
+  toggle(): void {
+    this.isOpen ? this.close() : this.open()
+  }
+
+  expand(): void {
+    this.open()
+    this.directories.forEach(directory => {
+      directory.expand()
+    })
+  }
+
+  collapse(): void {
+    this.close()
+    this.directories.forEach(directory => {
+      directory.collapse()
+    })
+  }
+
+  hasFile(file: ModelFile): boolean {
+    return this.allFiles.some(f => f.id === file.id)
   }
 
   addFile(file: ModelFile): void {
