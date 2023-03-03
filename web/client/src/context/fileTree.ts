@@ -1,11 +1,11 @@
 import { create } from 'zustand'
+import { isFalse } from '~/utils'
 import { ModelFile } from '../models'
 
 interface FileTreeStore {
-  openedFiles: Map<ID, ModelFile>
-  activeFileId: ID
-  setActiveFileId: (activeFileId: ID) => void
-  setOpenedFiles: (files: Map<ID, ModelFile>) => void
+  activeFile: ModelFile
+  openedFiles: Set<ModelFile>
+  setOpenedFiles: (files: Set<ModelFile>) => void
   selectFile: (file: ModelFile) => void
   getNextOpenedFile: () => ModelFile
 }
@@ -13,24 +13,24 @@ interface FileTreeStore {
 const initialFile = new ModelFile()
 
 export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
-  openedFiles: new Map([[initialFile.id, initialFile]]),
-  activeFileId: initialFile.id,
-  setActiveFileId: (activeFileId: ID) => {
-    set(() => ({ activeFileId }))
+  activeFile: initialFile,
+  openedFiles: new Set([initialFile]),
+  setOpenedFiles(files: Set<ModelFile>) {
+    set(() => ({ openedFiles: new Set(files) }))
   },
-  setOpenedFiles: (files: Map<ID, ModelFile>) => {
-    set(() => ({ openedFiles: new Map(files) }))
-  },
-  getNextOpenedFile: () => {
+  getNextOpenedFile() {
     return get().openedFiles.values().next().value
   },
-  selectFile: (file: ModelFile) => {
-    if (file == null) return
-
+  selectFile(file: ModelFile) {
     const s = get()
 
-    s.openedFiles.set(file.id, file)
+    if (isFalse(s.openedFiles.has(file))) {
+      s.openedFiles.add(file)
+    }
 
-    s.setActiveFileId(file.id)
+    set(() => ({
+      activeFileId: file.id,
+      activeFile: file,
+    }))
   },
 }))

@@ -6,7 +6,12 @@ import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { Extension } from '@codemirror/state'
-import { useMutationApiSaveFile, useApiFileByPath } from '../../../api'
+import {
+  useMutationApiSaveFile,
+  useApiFileByPath,
+  useApiPlan,
+  useApiPlanCancel,
+} from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
 import { Divider } from '../divider/Divider'
@@ -37,6 +42,7 @@ import Input from '../input/Input'
 import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
+import { EnvironmentName } from '~/context/context'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -54,18 +60,19 @@ export const EnumEditorTabs = {
 export type EditorTabs = KeyOf<typeof EnumEditorTabs>
 export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
-interface PropsEditor extends React.HTMLAttributes<HTMLElement> {}
+interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
+  environment: EnvironmentName
+}
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
 const DAY = 24 * 60 * 60 * 1000
 
-export function Editor({ className }: PropsEditor): JSX.Element {
+export function Editor({ className, environment }: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
-  const activeFileId = useStoreFileTree(s => s.activeFileId)
+  const activeFile = useStoreFileTree(s => s.activeFile)
   const openedFiles = useStoreFileTree(s => s.openedFiles)
-  const setActiveFileId = useStoreFileTree(s => s.setActiveFileId)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const getNextOpenedFile = useStoreFileTree(s => s.getNextOpenedFile)
@@ -81,7 +88,6 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(
     EnumEditorFileStatus.Edit,
   )
-  const [activeFile, setActiveFile] = useState<ModelFile>(getNextOpenedFile())
   const [isSaved, setIsSaved] = useState(true)
   const [formEvaluate, setFormEvaluate] = useState({
     model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
@@ -90,7 +96,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-
+  const { refetch: refetchPlan, isLoading } = useApiPlan(environment)
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
@@ -125,33 +131,22 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   )
 
   useEffect(() => {
+    if (activeFile.isSQLMeshModel) {
+      if (isLoading) {
+        void useApiPlanCancel(client, environment)
+      }
+
+      void refetchPlan()
+    }
+  }, [activeFile.content])
+
+  useEffect(() => {
     if (fileData == null) return
 
     activeFile.content = fileData.content ?? ''
 
     setOpenedFiles(openedFiles)
   }, [fileData])
-
-  useEffect(() => {
-    const activeOpenedFile = openedFiles.get(activeFileId)
-
-    if (activeOpenedFile == null) {
-      setActiveFileId(getNextOpenedFile().id)
-      return
-    }
-
-    setActiveFile(activeOpenedFile)
-  }, [activeFileId])
-
-  useEffect(() => {
-    if (openedFiles.size < 1) {
-      const file = new ModelFile()
-
-      selectFile(file)
-    } else {
-      !openedFiles.has(activeFileId) && setActiveFileId(getNextOpenedFile().id)
-    }
-  }, [openedFiles])
 
   useEffect(() => {
     if (isNil(cache[activeFile.id])) {
@@ -175,21 +170,17 @@ export function Editor({ className }: PropsEditor): JSX.Element {
   function closeEditorTab(file: ModelFile): void {
     delete cache[file.id]
 
-    openedFiles.delete(file.id)
+    openedFiles.delete(file)
 
-    if (activeFileId === file.id) {
-      setActiveFileId(getNextOpenedFile().id)
+    if (activeFile === file) {
+      selectFile(getNextOpenedFile())
     } else {
       setOpenedFiles(openedFiles)
     }
   }
 
   function addNewFileAndSelect(): void {
-    const file = new ModelFile()
-
-    openedFiles.set(file.id, file)
-
-    setActiveFileId(file.id)
+    selectFile(new ModelFile())
   }
 
   function onChange(value: string): void {
@@ -319,13 +310,13 @@ export function Editor({ className }: PropsEditor): JSX.Element {
                   onClick={(e: MouseEvent) => {
                     e.stopPropagation()
 
-                    setActiveFileId(file.id)
+                    selectFile(file)
                   }}
                 >
                   <span
                     className={clsx(
                       'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
-                      file.id === activeFileId
+                      file === activeFile
                         ? 'bg-secondary-100'
                         : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
                     )}
@@ -350,7 +341,7 @@ export function Editor({ className }: PropsEditor): JSX.Element {
           </ul>
         </div>
         <Divider />
-        <div className="flex h-full flex-col overflow-hidden">
+        <div className="flex h-full flex-col">
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
@@ -359,15 +350,14 @@ export function Editor({ className }: PropsEditor): JSX.Element {
             snapOffset={0}
             expandToMin={true}
           >
-            <div className="flex h-full">
+            <div className="flex h-full xxxx">
               <CodeEditor
                 extension={activeFile.extension}
                 value={activeFile.content}
                 onChange={debouncedChange}
               />
             </div>
-
-            <div className="flex flex-col h-full overflow-hidden">
+            <div className="flex flex-col h-full">
               <div className="px-4 py-2 w-full">
                 <p className="inline-block font-bold text-xs text-secondary-500 border-b-2 border-secondary-500 mr-3">
                   Actions
@@ -378,12 +368,12 @@ export function Editor({ className }: PropsEditor): JSX.Element {
               </div>
               <Divider />
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
-                <div className="flex w-full h-full py-1 px-3 justify-center overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
+                <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
                   {isTrue(isModel) && (
                     <form className="my-3">
-                      <fieldset className="flex items-center my-3 px-3 text-sm font-bold">
+                      <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
                         <h3 className="whitespace-nowrap ml-2">Model Name</h3>
-                        <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-sm rounded">
+                        <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-xs rounded">
                           {formEvaluate.model}
                         </p>
                       </fieldset>

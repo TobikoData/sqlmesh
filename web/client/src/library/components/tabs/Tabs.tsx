@@ -18,15 +18,9 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   const tabTableContent = useStoreEditor(s => s.tabTableContent)
   const tabQueryPreviewContent = useStoreEditor(s => s.tabQueryPreviewContent)
   const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
-  const openedFiles = useStoreFileTree(s => s.openedFiles)
-  const activeFileId = useStoreFileTree(s => s.activeFileId)
+  const activeFile = useStoreFileTree(s => s.activeFile)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
-
-  const activeFile = useMemo(
-    () => openedFiles.get(activeFileId),
-    [openedFiles, activeFileId],
-  )
 
   const [headers, data] = useMemo(
     () =>

@@ -25,7 +25,7 @@ export default function File({
   file,
   setConfirmation,
 }: PropsFile): JSX.Element {
-  const activeFileId = useStoreFileTree(s => s.activeFileId)
+  const activeFile = useStoreFileTree(s => s.activeFile)
   const openedFiles = useStoreFileTree(s => s.openedFiles)
   const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
   const selectFile = useStoreFileTree(s => s.selectFile)
@@ -41,7 +41,7 @@ export default function File({
     deleteFileApiFilesPathDelete(file.path)
       .then(response => {
         if ((response as unknown as { ok: boolean }).ok) {
-          openedFiles.delete(file.id)
+          openedFiles.delete(file)
 
           file.parent?.removeFile(file)
 
@@ -80,10 +80,6 @@ export default function File({
 
     setIsLoading(true)
 
-    const shouldSelectAfterRename = activeFileId === file.id
-
-    openedFiles.delete(file.id)
-
     const currentName = file.name
     const currentPath = file.path
 
@@ -92,15 +88,6 @@ export default function File({
     void writeFileApiFilesPathPost(currentPath, {
       new_path: file.path,
     })
-      .then(() => {
-        if (shouldSelectAfterRename) {
-          selectFile(file)
-        } else {
-          openedFiles.set(file.id, file)
-
-          setOpenedFiles(openedFiles)
-        }
-      })
       .catch(error => {
         console.log(error)
 
@@ -109,6 +96,7 @@ export default function File({
       .finally(() => {
         setNewName(undefined)
         setIsLoading(false)
+        setOpenedFiles(openedFiles)
       })
   }
 
@@ -116,7 +104,7 @@ export default function File({
     <span
       className={clsx(
         'text-base whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex justify-between rounded-md',
-        file.id === activeFileId ? 'text-secondary-500' : 'text-gray-800',
+        file === activeFile ? 'text-secondary-500' : 'text-gray-800',
         file.is_supported && 'group hover:bg-secondary-100',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-warning-100',
       )}
@@ -127,7 +115,7 @@ export default function File({
         )}
       >
         <div className="flex items-center">
-          {openedFiles?.has(file.id) ? (
+          {openedFiles.has(file) ? (
             <DocumentIcon
               className={`inline-block ${CSS_ICON_SIZE} mr-2 text-secondary-500`}
             />
@@ -143,9 +131,7 @@ export default function File({
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                file.is_supported &&
-                  file.id !== activeFileId &&
-                  selectFile(file)
+                file.is_supported && file !== activeFile && selectFile(file)
               }}
               onDoubleClick={(e: MouseEvent) => {
                 e.stopPropagation()
