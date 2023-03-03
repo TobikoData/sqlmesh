@@ -335,17 +335,16 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
     for k, v in env.items():
         if callable(v):
             name = v.__name__
-            is_lambda = name == "<lambda>"
-            name = k if is_lambda else name
+            name = k if name == "<lambda>" else name
             file_path = Path(inspect.getfile(v))
 
             if _is_relative_to(file_path, path):
                 serialized[k] = Executable(
-                    name=name if name != k else None,
+                    name=name,
                     payload=normalize_source(v),
                     kind=ExecutableKind.DEFINITION,
                     path=str(file_path.relative_to(path.absolute())),
-                    alias=k if name != k and not is_lambda else None,
+                    alias=k if name != k else None,
                 )
             else:
                 serialized[k] = Executable(
