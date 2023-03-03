@@ -152,6 +152,7 @@ class QueryRenderer:
                     self._query_cache[cache_key],
                     schema=self._schema,
                     rules=RENDER_OPTIMIZER_RULES,
+                    remove_unused_selections=False,
                 )
             except (SchemaError, OptimizeError):
                 pass
