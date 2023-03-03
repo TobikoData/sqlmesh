@@ -42,4 +42,11 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   get isChanged(): boolean {
     return this.content !== this.initial.content
   }
+
+  get isSQLMeshModel(): boolean {
+    return (
+      ['.sql', '.py'].includes(this.extension) &&
+      this.path.startsWith('models/')
+    )
+  }
 }

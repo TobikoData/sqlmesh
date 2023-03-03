@@ -1,7 +1,7 @@
 import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
-import { FolderTree } from '../folderTree/FolderTree'
+import FolderTree from '../folderTree/FolderTree'
 import { Fragment, useEffect, MouseEvent, useState, lazy, useMemo } from 'react'
 import clsx from 'clsx'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
@@ -31,7 +31,6 @@ import {
   useStoreContext,
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
-import { useStoreFileTree } from '~/context/fileTree'
 import { cancelPlanApiPlanCancelPost } from '~/api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
@@ -196,10 +195,13 @@ export function IDE(): JSX.Element {
       <Divider />
       <SplitPane
         sizes={[20, 80]}
+        minSize={[160]}
+        maxSize={[320]}
+        snapOffset={0}
         className="flex w-full h-full overflow-hidden"
       >
         <FolderTree project={project} />
-        <Editor />
+        {environment != null && <Editor environment={environment} />}
       </SplitPane>
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
@@ -283,8 +285,6 @@ function RunPlan({
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const openedFiles = useStoreFileTree(s => s.openedFiles)
-
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 
   const { refetch: refetchEnvironments } = useApiEnvironments()
@@ -297,10 +297,8 @@ function RunPlan({
   const changes = useMemo(() => plan?.changes, [plan])
 
   useEffect(() => {
-    if (environment != null) {
-      void refetchPlan()
-    }
-  }, [environment, openedFiles])
+    void refetchPlan()
+  }, [environment])
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {

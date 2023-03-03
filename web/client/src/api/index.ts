@@ -62,7 +62,7 @@ export function useApiPlan(
   environment: string,
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
-    queryKey: [`/api/plan`, environment],
+    queryKey: ['/api/plan', environment],
     queryFn: async () => await getPlanApiPlanGet({ environment }),
     enabled: false,
     cacheTime: 0,
@@ -102,7 +102,14 @@ export function useMutationApiSaveFile(
 }
 
 export async function useApiContextCancel(client: QueryClient): Promise<void> {
-  await client.cancelQueries({ queryKey: [`/api/context`] })
+  await client.cancelQueries({ queryKey: ['/api/context'] })
+}
+
+export async function useApiPlanCancel(
+  client: QueryClient,
+  environment: string,
+): Promise<void> {
+  await client.cancelQueries({ queryKey: ['/api/plan', environment] })
 }
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
