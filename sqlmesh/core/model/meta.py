@@ -75,7 +75,7 @@ class ModelMeta(PydanticModel):
                 func = v.sql_name()
                 args = list(v.args.values())
             else:
-                return v.name, {}
+                return v.name.lower(), {}
 
             for arg in args:
                 if not isinstance(arg, exp.EQ):
@@ -94,7 +94,7 @@ class ModelMeta(PydanticModel):
         if isinstance(v, list):
             return [
                 (
-                    entry[0],
+                    entry[0].lower(),
                     {
                         key: parse_one(value) if isinstance(value, str) else value
                         for key, value in entry[1].items()
