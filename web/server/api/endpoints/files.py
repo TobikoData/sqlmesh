@@ -87,7 +87,6 @@ async def write_file(
     context: Context = Depends(get_context),
 ) -> models.File:
     """Create, update, or rename a file."""
-
     ensure_file(settings.project_path / path)
 
     path_or_new_path = path
