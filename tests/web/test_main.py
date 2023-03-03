@@ -186,7 +186,7 @@ def test_rename_and_update_file(project_tmp_path: Path) -> None:
     assert (project_tmp_path / "baz.txt").read_text() == "hello world"
 
 
-def test_rename_file_not_found(project_tmp_path: Path) -> None:
+def test_rename_file_not_found() -> None:
     response = client.post("/api/files/foo.txt", json={"new_path": "baz.txt"})
     assert response.status_code == 404
 
@@ -220,9 +220,16 @@ def test_rename_file_to_existing_directory(project_tmp_path: Path) -> None:
     assert foo_file.exists()
 
 
-def test_write_file_empty_body(project_tmp_path: Path) -> None:
+def test_write_file_empty_body() -> None:
     response = client.post("/api/files/foo.txt", json={})
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json() == {
+        "name": "foo.txt",
+        "path": "foo.txt",
+        "extension": ".txt",
+        "is_supported": False,
+        "content": "",
+    }
 
 
 def test_delete_file(project_tmp_path: Path) -> None:
