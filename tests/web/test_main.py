@@ -167,7 +167,7 @@ def test_rename_file(project_tmp_path: Path) -> None:
     assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
-def test_rename_and_update_file(project_tmp_path: Path) -> None:
+def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
     txt_file = project_tmp_path / "foo.txt"
     txt_file.write_text("bar")
 
@@ -180,10 +180,10 @@ def test_rename_and_update_file(project_tmp_path: Path) -> None:
         "path": "baz.txt",
         "extension": ".txt",
         "is_supported": False,
-        "content": "hello world",
+        "content": "bar",
     }
     assert not txt_file.exists()
-    assert (project_tmp_path / "baz.txt").read_text() == "hello world"
+    assert (project_tmp_path / "baz.txt").read_text() == "bar"
 
 
 def test_rename_file_not_found() -> None:

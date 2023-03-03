@@ -99,7 +99,7 @@ export default function Directory({
     const extension = '.py'
     const name = toUniqueName('new_file', extension)
 
-    writeFileApiFilesPathPost(`${directory.path}/${name}`, {})
+    writeFileApiFilesPathPost(`${directory.path}/${name}`, { content: '' })
       .then(created => {
         if (isFalse((created as any).ok)) {
           console.warn([`File: ${directory.path}`, (created as any).detail])
