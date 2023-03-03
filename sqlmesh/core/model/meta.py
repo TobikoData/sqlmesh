@@ -75,7 +75,7 @@ class ModelMeta(PydanticModel):
                 func = v.sql_name()
                 args = list(v.args.values())
             else:
-                return v.name, {}
+                return v.name.lower(), {}
 
             for arg in args:
                 if not isinstance(arg, exp.EQ):
@@ -83,7 +83,7 @@ class ModelMeta(PydanticModel):
                         f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
                 kwargs[arg.left.name] = arg.right
-            return (func, kwargs)
+            return (func.lower(), kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [extract(i) for i in v.expressions]
@@ -94,7 +94,7 @@ class ModelMeta(PydanticModel):
         if isinstance(v, list):
             return [
                 (
-                    entry[0],
+                    entry[0].lower(),
                     {
                         key: parse_one(value) if isinstance(value, str) else value
                         for key, value in entry[1].items()

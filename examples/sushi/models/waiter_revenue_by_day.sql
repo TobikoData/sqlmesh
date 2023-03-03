@@ -8,7 +8,7 @@ MODEL (
   cron '@daily',
   batch_size 10,
   audits (
-    number_of_rows(threshold=0)
+    NUMBER_OF_ROWS(threshold=0)
   )
 );
 
