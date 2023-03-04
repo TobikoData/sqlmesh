@@ -603,11 +603,12 @@ class SqlModel(_Model):
         return self._column_descriptions
 
     def validate_definition(self) -> None:
+        if not isinstance(self.query, exp.Subqueryable):
+            # Validation for queries with Jinja macros is currently not supported.
+            return
+
         name_counts: t.Dict[str, int] = {}
         query = self._query_renderer.render()
-
-        if not isinstance(query, exp.Subqueryable):
-            raise_config_error("Missing SELECT query in the model definition", self._path)
 
         if not query.expressions:
             raise_config_error("Query missing select statements", self._path)
