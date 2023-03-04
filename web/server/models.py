@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import pathlib
 import typing as t
 
@@ -11,12 +12,20 @@ from sqlmesh.utils.date import TimeLike
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
 
 
+class FileType(str, enum.Enum):
+    """An enumeration of possible file types."""
+
+    audit = "audit"
+    model = "model"
+
+
 class File(BaseModel):
     name: str
     path: str
     extension: str = ""
     is_supported: bool = False
     content: t.Optional[str]
+    type: t.Optional[FileType]
 
     @validator("extension", always=True)
     def default_extension(cls, v: str, values: t.Dict[str, t.Any]) -> str:
