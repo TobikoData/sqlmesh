@@ -64,6 +64,22 @@ def test_macro_registry_render_nested_self_package_references():
     assert rendered == "macro_a_a"
 
 
+def test_macro_registry_render_private_macros():
+    package_a = """
+{% macro _macro_a_a(flag) %}{% if not flag %}macro_a_a{% else %}{{ _macro_a_a(False) }}{% endif %}{% endmacro %}
+
+{% macro macro_a_b() %}{{ package_a._macro_a_a(True) }}{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(package_a), package="package_a")
+
+    rendered = registry.build_environment().from_string("{{ package_a.macro_a_b() }}").render()
+    assert rendered == "macro_a_a"
+
+
 def test_macro_registry_render_different_vars():
     package_a = "{% macro macro_a_a() %}{{ external() }}{% endmacro %}"
 
