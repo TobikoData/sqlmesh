@@ -5,6 +5,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
+from sqlmesh.core.model.meta import IntervalUnit
 
 
 def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
@@ -83,4 +84,60 @@ def test_replace_query_pandas(mocker: MockerFixture):
     ]
     assert sql_calls == [
         "CREATE OR REPLACE TABLE `test_table` AS SELECT CAST(`a` AS INT64) AS `a`, CAST(`b` AS INT64) AS `b` FROM UNNEST([STRUCT(CAST(1 AS INT64) AS `a`, CAST(4 AS INT64) AS `b`), STRUCT(2 AS `a`, 5 AS `b`), STRUCT(3 AS `a`, 6 AS `b`)])"
+    ]
+
+
+def test_create_table_date_partition(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        partitioned_by=["ds"],
+        partition_interval_unit=IntervalUnit.DAY,
+    )
+
+    sql_calls = [
+        # Python 3.7 support
+        call[0][0].sql(dialect="bigquery", identify=True)
+        if isinstance(call[0], tuple)
+        else call[0].sql(dialect="bigquery", identify=True)
+        for call in execute_mock.call_args_list
+    ]
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY DATE(`ds`)"
+    ]
+
+
+def test_create_table_time_partition(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        partitioned_by=["ds"],
+        partition_interval_unit=IntervalUnit.HOUR,
+    )
+
+    sql_calls = [
+        # Python 3.7 support
+        call[0][0].sql(dialect="bigquery", identify=True)
+        if isinstance(call[0], tuple)
+        else call[0].sql(dialect="bigquery", identify=True)
+        for call in execute_mock.call_args_list
+    ]
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY DATETIME_TRUNC(`ds`, HOUR)"
     ]

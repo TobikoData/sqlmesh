@@ -10,6 +10,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     TransactionType,
 )
+from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -92,6 +93,36 @@ class BigQueryEngineAdapter(EngineAdapter):
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)
         return self.cursor._query_job.to_dataframe()
+
+    def _create_table_properties(
+        self,
+        storage_format: t.Optional[str] = None,
+        partitioned_by: t.Optional[t.List[str]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
+    ) -> t.Optional[exp.Properties]:
+        if not partitioned_by:
+            return None
+        if partition_interval_unit is None:
+            raise SQLMeshError("partition_interval_unit is required when partitioning a table")
+        if partition_interval_unit == IntervalUnit.MINUTE:
+            raise SQLMeshError("BigQuery does not support partitioning by minute")
+        if len(partitioned_by) > 1:
+            raise SQLMeshError("BigQuery only supports partitioning by a single column")
+        partition_col = partitioned_by[0]
+        expressions: t.List[exp.Expression] = [exp.to_column(partition_col)]
+        if partition_interval_unit == IntervalUnit.HOUR:
+            date_func = "DATETIME_TRUNC"
+            expressions.append(exp.Var(this=IntervalUnit.HOUR.value.upper()))
+        else:
+            date_func = "DATE"
+
+        partition_columns_property = exp.PartitionedByProperty(
+            this=exp.Anonymous(
+                this=date_func,
+                expressions=expressions,
+            )
+        )
+        return exp.Properties(expressions=[partition_columns_property])
 
     def create_state_table(
         self,

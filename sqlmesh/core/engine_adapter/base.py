@@ -37,6 +37,7 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.model.meta import IntervalUnit
 
 logger = logging.getLogger(__name__)
 
@@ -710,6 +711,7 @@ class EngineAdapter:
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[str]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
     ) -> t.Optional[exp.Properties]:
         return None
 
