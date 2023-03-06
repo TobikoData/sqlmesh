@@ -43,6 +43,7 @@ JINJA_ONLY = {
     "adapter",
     "api",
     "exceptions",
+    "flags",
     "load_result",
     "modules",
     "run_query",

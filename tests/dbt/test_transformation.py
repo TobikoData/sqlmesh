@@ -214,6 +214,14 @@ def test_modules(sushi_dbt_project: Project):
     assert context.render(itertools_jinja) == "5"
 
 
+def test_flags(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ flags.FULL_REFRESH }}") == "None"
+    assert context.render("{{ flags.STORE_FAILURES }}") == "None"
+    assert context.render("{{ flags.WHICH }}") == "None"
+
+
 def test_relation(sushi_dbt_project: Project):
     context = sushi_dbt_project.context
 
