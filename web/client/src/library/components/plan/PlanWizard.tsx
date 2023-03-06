@@ -30,7 +30,7 @@ import {
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
-import { isModified } from './help'
+import { getBackfillStepHealine, isModified } from './help'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
@@ -97,23 +97,30 @@ export default function PlanWizard({
     [backfills, changes, category, mostRecentPlan, activePlan],
   )
 
-  const isDone = planAction === EnumPlanAction.Done
-  const hasMostRecentPlan = mostRecentPlan != null
-  const hasActivePlan = activePlan != null
-  const hasNoChange = isFalse(
-    [isDone, hasMostRecentPlan, hasActivePlan, hasChanges, hasBackfill].every(
-      Boolean,
-    ),
-  )
-  const isPlanInProgress = includes(
+  const isProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
   )
-  const showTaskProgress =
-    (hasBackfill || isDone) && planAction !== EnumPlanAction.Running
-  const showDetails =
-    isFalse(hasNoChange) && planAction !== EnumPlanAction.Running
-  const showTimestamp = isDone || isPlanInProgress
+  const isDone = planAction === EnumPlanAction.Done
+  const hasMostRecentPlan = mostRecentPlan != null
+  const hasActivePlan = activePlan != null
+  const hasNoChange = [
+    hasMostRecentPlan,
+    hasActivePlan,
+    hasChanges,
+    hasBackfill,
+  ].every(isFalse)
+  const showTaskProgress = (isDone && hasMostRecentPlan) || hasBackfill
+  const showDetails = isFalse(hasNoChange) || showTaskProgress
+  const showTimestamp = isDone || isProgress
+  const backfillStepHeadline = getBackfillStepHealine({
+    planAction,
+    planState,
+    hasBackfill,
+    hasChanges,
+    hasNoChange,
+    mostRecentPlan,
+  })
 
   return (
     <ul className="w-full mx-auto">
@@ -206,11 +213,21 @@ export default function PlanWizard({
             headline="Backfill"
             description="Progress"
           >
-            <Disclosure defaultOpen={planState === EnumPlanState.Finished}>
+            <Disclosure
+              key={backfillStepHeadline}
+              defaultOpen={
+                hasBackfill ||
+                (planState === EnumPlanState.Finished && hasMostRecentPlan)
+              }
+            >
               {({ open }) => (
                 <>
                   <PlanWizardStepMessage
-                    hasSpinner={planAction === EnumPlanAction.Running}
+                    hasSpinner={
+                      isFalse(open) &&
+                      (planAction === EnumPlanAction.Running ||
+                        planAction === EnumPlanAction.Applying)
+                    }
                   >
                     <div className="flex justify-between items-center w-full">
                       <div className="flex items-center">
@@ -224,21 +241,9 @@ export default function PlanWizard({
                               'text-success-700',
                           )}
                         >
-                          {planAction === EnumPlanAction.Running &&
-                            'Collecting Backfills...'}
-                          {planState === EnumPlanState.Failed && 'Failed'}
-                          {planState === EnumPlanState.Cancelled && 'Cancelled'}
-                          {planState === EnumPlanState.Finished && 'Completed'}
-                          {hasMostRecentPlan &&
-                            (mostRecentPlan.type === 'logical'
-                              ? 'Most Recent Logical Update'
-                              : 'Most Recent Backfill')}
-                          {hasChanges &&
-                            isFalse(hasBackfill) &&
-                            'Logical Update will be applied'}
-                          {hasNoChange && 'No Changes'}
+                          {backfillStepHeadline}
                         </h3>
-                        {showTimestamp && (
+                        {isFalse(open) && showTimestamp && (
                           <p className="text-xs text-gray-600 ml-2">
                             {toDateFormat(
                               toDate(mostRecentPlan?.updated_at),
@@ -247,29 +252,22 @@ export default function PlanWizard({
                           </p>
                         )}
                       </div>
-                      {/* {showDetails && ( */}
-                      <div className="flex items-center">
-                        <p className="mr-2 text-sm">Details</p>
-                        <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                          {open ? (
-                            <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
-                          ) : (
-                            <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
-                          )}
-                        </Disclosure.Button>
-                      </div>
-                      {/* )} */}
+                      {showDetails && (
+                        <div className="flex items-center">
+                          <p className="mr-2 text-sm">Details</p>
+                          <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                            {open ? (
+                              <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
+                            ) : (
+                              <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
+                            )}
+                          </Disclosure.Button>
+                        </div>
+                      )}
                     </div>
                   </PlanWizardStepMessage>
 
                   <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
-                    {planState === EnumPlanState.Applying &&
-                      isFalse(isDone) &&
-                      isFalse(hasBackfill) && (
-                        <PlanWizardStepMessage hasSpinner>
-                          Applying...
-                        </PlanWizardStepMessage>
-                      )}
                     {showTaskProgress && (
                       <>
                         {isModified(changes?.modified) &&
@@ -364,7 +362,7 @@ export default function PlanWizard({
                                     className="w-full"
                                     label="Start Date"
                                     disabled={
-                                      isPlanInProgress ||
+                                      isProgress ||
                                       planAction === EnumPlanAction.Done
                                     }
                                     value={backfill_start}
@@ -378,7 +376,7 @@ export default function PlanWizard({
                                     className="w-full"
                                     label="End Date"
                                     disabled={
-                                      isPlanInProgress ||
+                                      isProgress ||
                                       planAction === EnumPlanAction.Done
                                     }
                                     value={backfill_end}
