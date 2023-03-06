@@ -32,6 +32,14 @@ class Api:
         self.Column = Column
 
 
+class Flags:
+    def __init__(self) -> None:
+        # Temporary placeholder values for now (these are generally passed from the CLI)
+        self.FULL_REFRESH = None
+        self.STORE_FAILURES = None
+        self.WHICH = None
+
+
 class Modules:
     def __init__(self) -> None:
         import datetime
@@ -172,6 +180,7 @@ BUILTIN_JINJA = {
     "env_var": env_var,
     "exceptions": Exceptions(),
     "execute": True,
+    "flags": Flags(),
     "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
