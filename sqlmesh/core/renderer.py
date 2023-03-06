@@ -5,12 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlglot import exp, parse_one
-from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
+from sqlglot.errors import SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
 from sqlglot.optimizer.pushdown_projections import pushdown_projections
-from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.optimizer.qualify_columns import qualify_columns, validate_qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import MappingSchema
@@ -148,14 +148,17 @@ class QueryRenderer:
                 raise_config_error(f"Failed to resolve macro for query. {ex}", self._path)
 
             try:
+                rules = list(RENDER_OPTIMIZER_RULES)
+
+                if self._schema:
+                    rules.append(validate_qualify_columns)
+
                 self._query_cache[cache_key] = optimize(
                     self._query_cache[cache_key],
                     schema=self._schema,
-                    rules=RENDER_OPTIMIZER_RULES,
+                    rules=t.cast(t.Sequence[t.Callable], rules),
                     remove_unused_selections=False,
                 )
-            except (SchemaError, OptimizeError):
-                pass
             except SqlglotError as ex:
                 raise_config_error(f"Invalid model query. {ex}", self._path)
 
@@ -209,11 +212,10 @@ class QueryRenderer:
 
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
+        self._query_cache.clear()
 
-        if self.contains_star_query:
-            # We need to re-render in order to expand the star projection
-            self._query_cache.clear()
-            self.render()
+        # Expands possible star projections & checks if referenced columns exist upstream via "optimize".
+        self.render()
 
     def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""

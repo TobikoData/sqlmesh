@@ -3,13 +3,13 @@ from datetime import date
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import exp
 
 import sqlmesh.core.constants
 from sqlmesh.core.config import Config, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import SqlModel, load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
@@ -231,8 +231,12 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
         )
     )
 
-    sushi_context.upsert_model("sushi.customers", query=parse_one("select 1"))
+    customers = sushi_context.models["sushi.customers"]
+    assert isinstance(customers, SqlModel) and isinstance(customers.query, exp.Select)
+
+    sushi_context.upsert_model("sushi.customers", query=customers.query.select("1"))
     sushi_context.diff("test")
+
     assert mock_console.show_model_difference_summary.called
 
 
