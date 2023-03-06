@@ -10,7 +10,7 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server import models
-from web.server.settings import Settings, get_context, get_settings
+from web.server.settings import Settings, get_context, get_path_mapping, get_settings
 from web.server.utils import replace_file, validate_path
 
 router = APIRouter()
@@ -20,13 +20,14 @@ router = APIRouter()
 def get_files(
     context: t.Optional[Context] = Depends(get_context),
     settings: Settings = Depends(get_settings),
+    path_mapping: t.Dict[str, t.Any] = Depends(get_path_mapping),
 ) -> models.Directory:
     """Get all project files."""
     ignore_patterns = context.ignore_patterns if context else c.IGNORE_PATTERNS
 
     def walk_path(
         path: str | Path,
-    ) -> t.Tuple[t.List[models.Directory], t.List[models.File]]:
+    ) -> tuple[list[models.Directory], list[models.File]]:
         directories = []
         files = []
 
@@ -52,7 +53,13 @@ def get_files(
                         )
                     )
                 else:
-                    files.append(models.File(name=entry.name, path=relative_path))
+                    files.append(
+                        models.File(
+                            name=entry.name,
+                            path=relative_path,
+                            type=path_mapping.get(relative_path),
+                        )
+                    )
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
     directories, files = walk_path(settings.project_path)
@@ -68,6 +75,7 @@ def get_files(
 def get_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
+    path_mapping: t.Dict[str, t.Any] = Depends(get_path_mapping),
 ) -> models.File:
     """Get a file, including its contents."""
     try:
@@ -75,7 +83,9 @@ def get_file(
             content = f.read()
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-    return models.File(name=os.path.basename(path), path=path, content=content)
+    return models.File(
+        name=os.path.basename(path), path=path, content=content, type=path_mapping.get(path)
+    )
 
 
 @router.post("/{path:path}", response_model=models.File)
