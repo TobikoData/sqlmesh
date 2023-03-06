@@ -71,6 +71,7 @@ def test_get_files(project_tmp_path: Path) -> None:
                         "extension": ".sql",
                         "is_supported": True,
                         "content": None,
+                        "type": "model",
                     }
                 ],
             }
@@ -82,6 +83,7 @@ def test_get_files(project_tmp_path: Path) -> None:
                 "extension": ".py",
                 "is_supported": True,
                 "content": None,
+                "type": None,
             }
         ],
     }
@@ -99,6 +101,7 @@ def test_get_file(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "bar",
+        "type": None,
     }
 
 
@@ -130,6 +133,7 @@ def test_write_file(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "bar",
+        "type": None,
     }
     assert (project_tmp_path / "foo.txt").read_text() == "bar"
 
@@ -146,6 +150,7 @@ def test_update_file(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "baz",
+        "type": None,
     }
     assert (project_tmp_path / "foo.txt").read_text() == "baz"
 
@@ -162,6 +167,7 @@ def test_rename_file(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "bar",
+        "type": None,
     }
     assert not txt_file.exists()
     assert (project_tmp_path / "baz.txt").read_text() == "bar"
@@ -181,6 +187,7 @@ def test_rename_file_and_keep_content(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "bar",
+        "type": None,
     }
     assert not txt_file.exists()
     assert (project_tmp_path / "baz.txt").read_text() == "bar"
@@ -205,6 +212,7 @@ def test_rename_file_already_exists(project_tmp_path: Path) -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "foo",
+        "type": None,
     }
     assert not foo_file.exists()
 
@@ -229,6 +237,7 @@ def test_write_file_empty_body() -> None:
         "extension": ".txt",
         "is_supported": False,
         "content": "",
+        "type": None,
     }
 
 
