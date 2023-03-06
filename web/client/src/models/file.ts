@@ -49,4 +49,8 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       this.path.startsWith('models/')
     )
   }
+
+  get isSQLMeshSeed(): boolean {
+    return ['.csv'].includes(this.extension) && this.path.startsWith('seeds/')
+  }
 }

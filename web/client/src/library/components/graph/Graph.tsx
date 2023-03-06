@@ -18,7 +18,6 @@ import { isFalse, isNil } from '../../../utils'
 export default function Graph({ closeGraph }: any): JSX.Element {
   const { data } = useApiDag()
   const [graph, setGraph] = useState<{ nodes: any[]; edges: any[] }>()
-  const [algorithm, setAlgorithm] = useState('layered')
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -35,17 +34,15 @@ export default function Graph({ closeGraph }: any): JSX.Element {
     }
 
     async function load(): Promise<void> {
-      console.log('start')
-
       setGraph(undefined)
 
-      const graph = await getNodesAndEdges({ data, algorithm })
+      const graph = await getNodesAndEdges({ data })
 
       if (isFalse(active)) return
 
       setGraph(graph)
     }
-  }, [data, algorithm])
+  }, [data])
 
   useEffect(() => {
     if (graph == null) return
@@ -69,20 +66,6 @@ export default function Graph({ closeGraph }: any): JSX.Element {
           position="top-right"
           className="flex"
         >
-          <select
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              e.stopPropagation()
-
-              setAlgorithm(e.target.value)
-            }}
-            value={algorithm}
-          >
-            <option value="layered">Layered</option>
-            <option value="stress">Stress</option>
-            <option value="mrtree">Mr. Tree</option>
-            <option value="radial">Radial</option>
-            <option value="force">Force</option>
-          </select>
           <Button
             size="sm"
             variant="alternative"
@@ -110,20 +93,20 @@ export default function Graph({ closeGraph }: any): JSX.Element {
 function ModelNode({ data, sourcePosition, targetPosition }: any): JSX.Element {
   return (
     <div className="bg-secondary-100 border-2 border-secondary-500 px-3 py-1 rounded-full text-xs font-semibold text-secondary-500">
-      {targetPosition === Position.Left && (
+      {targetPosition === Position.Right && (
         <Handle
           type="target"
-          position={Position.Left}
+          position={Position.Right}
           isConnectable={false}
           className="bg-secondary-500 w-2 h-2 rounded-full"
         />
       )}
       <div>{data.label}</div>
-      {sourcePosition === Position.Right && (
+      {sourcePosition === Position.Left && (
         <Handle
           type="source"
-          position={Position.Right}
-          className="bg-secondary-500 w-2 h-2 rounded-full"
+          position={Position.Left}
+          className="bg-secondary-500 w-0 h-0"
           isConnectable={false}
         />
       )}
