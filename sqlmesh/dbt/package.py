@@ -300,7 +300,7 @@ class PackageLoader:
                     table_config = table_config.update_with(config_fields)
 
                 table_config.config_name = f"{source_name}.{table_name}"
-                configs[table_name] = table_config
+                configs[table_config.config_name] = table_config
 
         return configs
 
