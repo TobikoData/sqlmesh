@@ -1,3 +1,5 @@
+import typing as t
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -16,18 +18,26 @@ router = APIRouter()
 )
 def get_plan(
     environment: str,
+    request: Request,
     context: Context = Depends(get_loaded_context),
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
     context.refresh()
 
+    console: t.Any = context.console
+
     plan = context.plan(environment=environment, no_prompts=True)
     payload = models.ContextEnvironment(
-        environment=plan.environment.name,
-        start=plan.start,
-        end=plan.end,
+        environment=plan.environment.name, start=plan.start, end=plan.end
     )
+
+    if (
+        len(dict(console.previous)) > 0
+        and hasattr(request.app.state, "task")
+        and request.app.state.task._environment == environment
+    ):
+        payload.previous = dict(console.previous)
 
     if plan.context_diff.has_differences:
         batches = context.scheduler().batches()
@@ -58,7 +68,6 @@ def get_plan(
 async def cancel_plan(
     request: Request,
     response: Response,
-    context: Context = Depends(get_loaded_context),
 ) -> None:
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():

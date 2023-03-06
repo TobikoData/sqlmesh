@@ -110,6 +110,7 @@ class ContextEnvironment(BaseModel):
     end: TimeLike
     changes: t.Optional[ContextEnvironmentChanges]
     backfills: t.List[ContextEnvironmentBackfill] = []
+    previous: t.Optional[t.Dict[str, t.Any]] = None
 
 
 class EvaluateInput(BaseModel):
