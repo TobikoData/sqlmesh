@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import typing as t
 
+import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.dialect import pandas_to_sql
+from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
@@ -60,15 +63,40 @@ class BigQueryEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         """
-        BigQuery does not support multiple transactions with deletes against the same table. Short term
-        we are going to make this delete/insert non-transactional. Long term I want to try out writing to a staging
-        table and then using API calls like copy partitions/write_truncate to see if we can implement atomic
-        insert/overwrite.
+        Bigquery does not directly support `INSERT OVERWRITE` but it does support `MERGE` with a `False`
+        condition and delete that mimics an `INSERT OVERWRITE`. Based on documentation this should have the
+        same runtime performance as `INSERT OVERWRITE`.
         """
-        if where is None:
-            raise SQLMeshError("Where condition is required when doing a BigQuery insert overwrite")
-        self.delete_from(table_name, where=where)
-        self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
+        table = exp.to_table(table_name)
+        query: t.Union[Query, exp.Select]
+        if isinstance(query_or_df, DF_TYPES):
+            if not isinstance(query_or_df, pd.DataFrame):
+                raise SQLMeshError("BigQuery only supports pandas DataFrames")
+            if columns_to_types is None:
+                raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
+            query = next(
+                pandas_to_sql(
+                    query_or_df,
+                    alias=table.alias_or_name,
+                    columns_to_types=columns_to_types,
+                )
+            )
+        else:
+            query = t.cast(Query, query_or_df)
+        on = exp.FALSE
+        when_not_matched_by_source = exp.When(
+            matched=False,
+            source=True,
+            condition=where,
+            then=exp.Delete(),
+        )
+        when_not_matched_by_target = exp.When(matched=False, source=False, then=exp.Insert())
+        self._merge(
+            target_table=table,
+            source_table=query,
+            on=on,
+            match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+        )
 
     def table_exists(self, table_name: TableName) -> bool:
         from google.cloud.exceptions import NotFound

@@ -580,6 +580,24 @@ class EngineAdapter:
             }
         self.execute(exp.update(table_name, properties, where=where))
 
+    def _merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        on: exp.Expression,
+        match_expressions: t.List[exp.When],
+    ) -> None:
+        this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
+        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
+        self.execute(
+            exp.Merge(
+                this=this,
+                using=using,
+                on=on,
+                expressions=match_expressions,
+            )
+        )
+
     def merge(
         self,
         target_table: TableName,
@@ -587,8 +605,6 @@ class EngineAdapter:
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
     ) -> None:
-        this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
-        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
             *(
                 exp.EQ(
@@ -617,16 +633,11 @@ class EngineAdapter:
                 ),
             ),
         )
-        self.execute(
-            exp.Merge(
-                this=this,
-                using=using,
-                on=on,
-                expressions=[
-                    when_matched,
-                    when_not_matched,
-                ],
-            )
+        return self._merge(
+            target_table=target_table,
+            source_table=source_table,
+            on=on,
+            match_expressions=[when_matched, when_not_matched],
         )
 
     def rename_table(
