@@ -148,10 +148,10 @@ class QueryRenderer:
                 raise_config_error(f"Failed to resolve macro for query. {ex}", self._path)
 
             try:
-                rules = list(RENDER_OPTIMIZER_RULES)
+                rules = RENDER_OPTIMIZER_RULES
 
                 if self._schema:
-                    rules.append(validate_qualify_columns)
+                    rules = (*rules, validate_qualify_columns)  # type: ignore
 
                 self._query_cache[cache_key] = optimize(
                     self._query_cache[cache_key],
