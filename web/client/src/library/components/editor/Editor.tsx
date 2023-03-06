@@ -131,7 +131,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
   )
 
   useEffect(() => {
-    if (activeFile.isSQLMeshModel) {
+    if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
       if (isLoading) {
         void useApiPlanCancel(client, environment)
       }
