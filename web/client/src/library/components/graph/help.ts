@@ -1,4 +1,5 @@
 import ELK from 'elkjs/lib/elk-api'
+import { MarkerType } from 'reactflow'
 import { isArrayNotEmpty } from '../../../utils'
 
 interface GraphNodeData {
@@ -32,6 +33,12 @@ interface GraphEdge {
     strokeWidth: number
     stroke: string
   }
+  markerStart: {
+    type: MarkerType
+    color: string
+    width: number
+    height: number
+  }
 }
 
 interface GraphOptions {
@@ -45,11 +52,12 @@ const elk = new ELK({
   workerUrl: '/node_modules/elkjs/lib/elk-worker.min.js',
 })
 
+const ALGORITHM_LAYERED = 'layered'
+
 export async function getNodesAndEdges({
   data,
   nodeWidth = 172,
   nodeHeight = 32,
-  algorithm = 'layered',
 }: GraphOptions): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
   if (data == null) return await Promise.resolve({ nodes: [], edges: [] })
 
@@ -63,7 +71,7 @@ export async function getNodesAndEdges({
 
   const graph = {
     id: 'root',
-    layoutOptions: { algorithm },
+    layoutOptions: { algorithm: ALGORITHM_LAYERED },
     children: Object.values(nodesMap).map(node => ({
       id: node.id,
       width: nodeWidth,
@@ -85,16 +93,16 @@ export async function getNodesAndEdges({
     if (output == null) return
 
     if (isArrayNotEmpty(data[node.id])) {
-      output.sourcePosition = 'right'
+      output.sourcePosition = 'left'
     }
 
     if (targets.has(node.id)) {
-      output.targetPosition = 'left'
+      output.targetPosition = 'right'
     }
 
     output.position = {
-      x: node.x ?? 0,
-      y: node.y ?? 0,
+      x: node.x == null ? 0 : -node.x,
+      y: node.y == null ? 0 : -node.y,
     }
 
     nodes.push(output)
@@ -133,7 +141,13 @@ function toGraphEdge(source: string, target: string): GraphEdge {
     target,
     style: {
       strokeWidth: 2,
-      stroke: 'hsl(260, 100%, 80%)',
+      stroke: 'hsl(260, 100%, 80%)', //
+    },
+    markerStart: {
+      color: '#8533FF',
+      type: MarkerType.ArrowClosed,
+      width: 12,
+      height: 12,
     },
   }
 }
