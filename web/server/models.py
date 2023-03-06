@@ -8,7 +8,7 @@ from pydantic import BaseModel, validator
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.utils.date import TimeLike
 
-SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml"}
+SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
 
 class File(BaseModel):
