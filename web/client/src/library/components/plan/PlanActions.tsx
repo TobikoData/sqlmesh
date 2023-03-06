@@ -10,6 +10,7 @@ interface PropsPlanActions {
   environment: EnvironmentName
   planAction: PlanAction
   shouldApplyWithBackfill: boolean
+  disabled: boolean
   apply: () => void
   run: () => void
   cancel: () => void
@@ -21,6 +22,7 @@ export default function PlanActions({
   environment,
   planAction,
   shouldApplyWithBackfill,
+  disabled,
   run,
   apply,
   cancel,
@@ -73,7 +75,7 @@ export default function PlanActions({
         {(isRun || isRunning) && (
           <>
             <Button
-              disabled={isRunning}
+              disabled={isRunning || disabled}
               onClick={handleRun}
               autoFocus
               ref={setFocus}
@@ -98,7 +100,7 @@ export default function PlanActions({
         {(isApply || isApplying) && (
           <Button
             onClick={handleApply}
-            disabled={isApplying}
+            disabled={isApplying || disabled}
             ref={setFocus}
           >
             {getActionName(
@@ -114,27 +116,28 @@ export default function PlanActions({
             onClick={handleCancel}
             variant="danger"
             className="justify-self-end"
-            disabled={isCanceling}
+            disabled={isCanceling || disabled}
           >
             {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
           </Button>
         )}
       </div>
       <div className="flex items-center">
-        {isFalse(isProcessing) && isFalse(isRun) && (
+        {isFalse(isProcessing) && isFalse(isRun) && isFalse(disabled) && (
           <Button
             onClick={handleReset}
             variant="alternative"
-            disabled={includes(
-              [
-                EnumPlanAction.Resetting,
-                EnumPlanAction.Running,
-                EnumPlanAction.Applying,
-                EnumPlanAction.Cancelling,
-                EnumPlanAction.Closing,
-              ],
-              planAction,
-            )}
+            disabled={
+              includes(
+                [
+                  EnumPlanAction.Resetting,
+                  EnumPlanAction.Running,
+                  EnumPlanAction.Applying,
+                  EnumPlanAction.Cancelling,
+                ],
+                planAction,
+              ) || disabled
+            }
           >
             {getActionName(
               planAction,
@@ -146,22 +149,19 @@ export default function PlanActions({
         <Button
           onClick={handleClose}
           variant={isDone ? 'secondary' : 'alternative'}
-          disabled={includes(
-            [
-              EnumPlanAction.Running,
-              EnumPlanAction.Closing,
-              EnumPlanAction.Resetting,
-              EnumPlanAction.Cancelling,
-            ],
-            planAction,
-          )}
+          disabled={
+            includes(
+              [
+                EnumPlanAction.Running,
+                EnumPlanAction.Resetting,
+                EnumPlanAction.Cancelling,
+              ],
+              planAction,
+            ) || disabled
+          }
           ref={isDone || isApplying ? setFocus : undefined}
         >
-          {getActionName(
-            planAction,
-            [EnumPlanAction.Closing, EnumPlanAction.Done],
-            'Close',
-          )}
+          {getActionName(planAction, [EnumPlanAction.Done], 'Close')}
         </Button>
       </div>
     </div>

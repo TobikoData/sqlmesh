@@ -15,7 +15,6 @@ import {
   toDate,
   toDateFormat,
 } from '../../../utils'
-import { useChannel } from '../../../api/channels'
 import { isModified } from './help'
 import { Divider } from '../divider/Divider'
 import { EnvironmentName } from '~/context/context'
@@ -31,9 +30,13 @@ import PlanActions from './PlanActions'
 export default function Plan({
   environment,
   onCancel,
+  onClose,
+  disabled,
 }: {
   environment: EnvironmentName
   onCancel: () => void
+  onClose: () => void
+  disabled: boolean
 }): JSX.Element {
   const client = useQueryClient()
 
@@ -44,12 +47,9 @@ export default function Plan({
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
-  const updateTasks = useStorePlan(s => s.updateTasks)
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
   const [plan, setPlan] = useState<ContextEnvironment>()
-
-  const [subscribe] = useChannel('/api/tasks', updateTasks)
 
   const { refetch } = useApiPlan(environment)
 
@@ -128,23 +128,15 @@ export default function Plan({
 
     applyApiCommandsApplyPost({
       environment,
-    })
-      .then(data => {
-        if (data.ok) {
-          subscribe()
-        }
-      })
-      .catch(error => {
-        console.error(error)
+    }).catch(error => {
+      console.error(error)
 
-        reset()
-      })
+      reset()
+    })
   }
 
   function close(): void {
-    setPlanAction(EnumPlanAction.Closing)
-
-    cleanUp()
+    onClose()
   }
 
   function run(): void {
@@ -188,6 +180,7 @@ export default function Plan({
         cancel={cancel}
         close={close}
         reset={reset}
+        disabled={disabled}
       />
     </div>
   )
