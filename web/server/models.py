@@ -16,7 +16,10 @@ class FileType(str, enum.Enum):
     """An enumeration of possible file types."""
 
     audit = "audit"
+    hooks = "hooks"
+    macros = "macros"
     model = "model"
+    tests = "tests"
 
 
 class File(BaseModel):
