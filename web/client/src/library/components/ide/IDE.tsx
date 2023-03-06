@@ -2,7 +2,7 @@ import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
-import { Fragment, useEffect, MouseEvent, useState, lazy, useMemo } from 'react'
+import { Fragment, useEffect, MouseEvent, useState, lazy } from 'react'
 import clsx from 'clsx'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
@@ -12,15 +12,16 @@ import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
+  PlanProgress,
+  PlanState,
 } from '../../../context/plan'
-import { useChannel } from '../../../api/channels'
+import { useChannelEvents } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import {
   includes,
   isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
-  isNil,
   isStringEmptyOrNil,
 } from '~/utils'
 import Input from '../input/Input'
@@ -32,6 +33,7 @@ import {
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
 import { cancelPlanApiPlanCancelPost } from '~/api/client'
+import Modal from '../modal/Modal'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -50,28 +52,24 @@ export function IDE(): JSX.Element {
   const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const planState = useStorePlan(s => s.state)
-  const planAction = useStorePlan(s => s.action)
-  const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
+  const activePlan = useStorePlan(s => s.activePlan)
+  const mostRecentPlan = useStorePlan(s => s.mostRecentPlan)
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
-  const setLastPlan = useStorePlan(s => s.setLastPlan)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
   const [isGraphOpen, setIsGraphOpen] = useState(false)
+  const [isPlanOpen, setIsPlanOpen] = useState(false)
+  const [isClosingModal, setIsClosingModal] = useState(false)
 
-  const [subscribe, getChannel, unsubscribe] = useChannel(
-    '/api/tasks',
-    updateTasks,
-  )
+  const [subscribe] = useChannelEvents(updateTasks)
 
   const { data: project } = useApiFiles()
 
   useEffect(() => {
     void refetchEnvironments()
 
-    if (getChannel() == null) {
-      subscribe()
-    }
+    subscribe('tasks')
   }, [])
 
   useEffect(() => {
@@ -91,9 +89,6 @@ export function IDE(): JSX.Element {
       .catch(console.error)
       .finally(() => {
         setPlanState(EnumPlanState.Cancelled)
-        setLastPlan(mostRecentPlan)
-        getChannel()?.close()
-        unsubscribe()
       })
   }
 
@@ -104,6 +99,17 @@ export function IDE(): JSX.Element {
   function closeGraph(): void {
     setIsGraphOpen(false)
   }
+
+  function showRunPlan(): void {
+    setIsPlanOpen(true)
+  }
+
+  function closeRunPlan(): void {
+    setIsClosingModal(true)
+    setIsPlanOpen(false)
+  }
+
+  const plan = activePlan ?? mostRecentPlan
 
   return (
     <>
@@ -128,67 +134,19 @@ export function IDE(): JSX.Element {
           >
             Graph
           </Button>
-          {environment != null && <RunPlan environment={environment} />}
-          {mostRecentPlan != null && (
-            <Popover className="relative flex">
-              {() => (
-                <>
-                  <Popover.Button
-                    className={clsx(
-                      'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
-                      planState === EnumPlanState.Finished &&
-                        'bg-success-500 text-white',
-                      planState === EnumPlanState.Failed &&
-                        'bg-danger-500 text-white',
-                      planState === EnumPlanState.Applying &&
-                        'bg-secondary-500 text-white',
-                      planState !== EnumPlanState.Finished &&
-                        planState !== EnumPlanState.Failed &&
-                        planState !== EnumPlanState.Applying &&
-                        'bg-gray-100 text-gray-500',
-                    )}
-                  >
-                    {mostRecentPlan == null ? 0 : 1}
-                  </Popover.Button>
-                  <Transition
-                    as={Fragment}
-                    enter="transition ease-out duration-200"
-                    enterFrom="opacity-0 translate-y-1"
-                    enterTo="opacity-100 translate-y-0"
-                    leave="transition ease-in duration-150"
-                    leaveFrom="opacity-100 translate-y-0"
-                    leaveTo="opacity-0 translate-y-1"
-                  >
-                    <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
-                      <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
-                        <Tasks
-                          environment={mostRecentPlan.environment}
-                          tasks={mostRecentPlan.tasks}
-                          updated_at={mostRecentPlan.updated_at}
-                          headline="Most Recent Environment"
-                        />
-                        <div className="my-4 px-4">
-                          {planState === EnumPlanState.Applying && (
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              className="mx-0"
-                              onClick={(e: MouseEvent) => {
-                                e.stopPropagation()
-
-                                cancelPlan()
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </Popover.Panel>
-                  </Transition>
-                </>
-              )}
-            </Popover>
+          {environment != null && (
+            <RunPlan
+              environment={environment}
+              showRunPlan={showRunPlan}
+            />
+          )}
+          {environment != null && plan != null && (
+            <ActiveOrMostRecentPlan
+              environment={environment}
+              plan={plan}
+              planState={planState}
+              cancelPlan={cancelPlan}
+            />
           )}
         </div>
       </div>
@@ -205,69 +163,113 @@ export function IDE(): JSX.Element {
       </SplitPane>
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
-
-      <Transition
-        appear
-        show={
-          (planAction !== EnumPlanAction.None &&
-            planAction !== EnumPlanAction.Closing) ||
-          isGraphOpen
-        }
-        as={Fragment}
+      <Modal show={isGraphOpen}>
+        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
+          <Graph closeGraph={closeGraph} />
+        </Dialog.Panel>
+      </Modal>
+      <Modal
+        show={isPlanOpen}
         afterLeave={() => {
           setPlanAction(EnumPlanAction.None)
+          setIsClosingModal(false)
         }}
       >
-        <Dialog
-          as="div"
-          className="relative z-[100]"
-          onClose={() => undefined}
-        >
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-                  {isGraphOpen && <Graph closeGraph={closeGraph} />}
-                  {environment != null &&
-                    planAction !== EnumPlanAction.None && (
-                      <Plan
-                        environment={environment}
-                        onCancel={cancelPlan}
-                      />
-                    )}
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
+        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
+          {environment != null && (
+            <Plan
+              environment={environment}
+              onCancel={cancelPlan}
+              onClose={closeRunPlan}
+              disabled={isClosingModal}
+            />
+          )}
+        </Dialog.Panel>
+      </Modal>
     </>
   )
 }
 
+function ActiveOrMostRecentPlan({
+  environment,
+  plan,
+  planState,
+  cancelPlan,
+}: {
+  environment: EnvironmentName
+  plan: PlanProgress
+  planState: PlanState
+  cancelPlan: () => void
+}): JSX.Element {
+  return (
+    <Popover className="relative flex">
+      {() => (
+        <>
+          <Popover.Button
+            className={clsx(
+              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
+              planState === EnumPlanState.Finished &&
+                'bg-success-500 text-white',
+              planState === EnumPlanState.Failed && 'bg-danger-500 text-white',
+              planState === EnumPlanState.Applying &&
+                'bg-secondary-500 text-white',
+              planState !== EnumPlanState.Finished &&
+                planState !== EnumPlanState.Failed &&
+                planState !== EnumPlanState.Applying &&
+                'bg-gray-100 text-gray-500',
+            )}
+          >
+            {plan == null ? 0 : 1}
+          </Popover.Button>
+          <Transition
+            as={Fragment}
+            enter="transition ease-out duration-200"
+            enterFrom="opacity-0 translate-y-1"
+            enterTo="opacity-100 translate-y-0"
+            leave="transition ease-in duration-150"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-1"
+          >
+            <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
+              <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
+                <Tasks
+                  environment={environment}
+                  tasks={plan.tasks}
+                  updated_at={plan.updated_at}
+                  headline="Most Recent Plan"
+                  showBatches={plan.type !== 'logical'}
+                  showLogicalUpdate={plan.type === 'logical'}
+                />
+                <div className="my-4 px-4">
+                  {planState === EnumPlanState.Applying && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      className="mx-0"
+                      onClick={(e: MouseEvent) => {
+                        e.stopPropagation()
+
+                        cancelPlan()
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Popover.Panel>
+          </Transition>
+        </>
+      )}
+    </Popover>
+  )
+}
+
 function RunPlan({
+  showRunPlan,
   environment,
 }: {
+  showRunPlan: () => void
   environment: EnvironmentName
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
@@ -284,6 +286,7 @@ function RunPlan({
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
+  const setMostRecentPlan = useStorePlan(s => s.setMostRecentPlan)
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 
@@ -294,7 +297,20 @@ function RunPlan({
     data: plan,
   } = useApiPlan(environment)
 
-  const changes = useMemo(() => plan?.changes, [plan])
+  useEffect(() => {
+    const mostRecentPlan =
+      (plan as any)?.previous == null
+        ? undefined
+        : {
+            environment,
+            tasks: (plan as any).previous.tasks,
+            updated_at: (plan as any).previous.end,
+            ok: true,
+            type: (plan as any).previous.type,
+          }
+
+    setMostRecentPlan(mostRecentPlan)
+  }, [plan])
 
   useEffect(() => {
     void refetchPlan()
@@ -311,6 +327,7 @@ function RunPlan({
     setActivePlan(undefined)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanAction.Run)
+    showRunPlan()
   }
 
   return (
@@ -385,7 +402,7 @@ function RunPlan({
                         <span className="inline-block ">Checking...</span>
                       </span>
                     )}
-                    {isNil(changes) && isFalse(isLoading) && (
+                    {plan?.changes != null && isFalse(isLoading) && (
                       <span
                         title="Latest"
                         className="block h-4 ml-1 px-2 first-child:ml-0 rounded-full bg-gray-200 text-gray-900 p-[0.125rem] text-xs leading-[0.75rem] text-center"
@@ -393,36 +410,36 @@ function RunPlan({
                         latest
                       </span>
                     )}
-                    {isArrayNotEmpty(changes?.added) && (
+                    {isArrayNotEmpty(plan?.changes?.added) && (
                       <span
                         title="Models Added"
                         className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-success-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                       >
-                        {changes?.added.length}
+                        {plan?.changes?.added.length}
                       </span>
                     )}
-                    {isArrayNotEmpty(changes?.modified?.direct) && (
+                    {isArrayNotEmpty(plan?.changes?.modified?.direct) && (
                       <span
                         title="Models Modified Directly"
                         className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-secondary-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                       >
-                        {changes?.modified.direct.length}
+                        {plan?.changes?.modified.direct.length}
                       </span>
                     )}
-                    {isArrayNotEmpty(changes?.modified?.indirect) && (
+                    {isArrayNotEmpty(plan?.changes?.modified?.indirect) && (
                       <span
                         title="Models Modified Indirectly"
                         className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-warning-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                       >
-                        {changes?.modified.indirect.length}
+                        {plan?.changes?.modified.indirect.length}
                       </span>
                     )}
-                    {isArrayNotEmpty(changes?.removed) && (
+                    {isArrayNotEmpty(plan?.changes?.removed) && (
                       <span
                         title="Models Removed"
                         className="block w-6 h-4 ml-1 first-child:ml-0 rounded-full bg-danged-500 p-[0.125rem] text-xs font-black leading-[0.75rem] text-white text-center"
                       >
-                        {changes?.removed.length}
+                        {plan?.changes?.removed.length}
                       </span>
                     )}
                   </span>

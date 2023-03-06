@@ -3,18 +3,22 @@ import { Fragment } from 'react'
 
 interface PropsModal extends React.HTMLAttributes<HTMLElement> {
   show: boolean
-  onClose: () => void
+  onClose?: () => void
+  afterLeave?: () => void
 }
 
 export default function Modal({
   show,
   children,
+  afterLeave,
   onClose = () => undefined,
 }: PropsModal): JSX.Element {
   return (
     <Transition
       appear
       show={show}
+      as={Fragment}
+      afterLeave={afterLeave}
     >
       <Dialog
         as="div"

@@ -1,64 +1,97 @@
 import { isNil } from '../utils'
 
+const SSE_CHANNEL = getEventSource('/api/events')
+
 type ChannelCallback = (
   data: any,
-  channel: EventSource,
-  unsubscribe: () => void,
+  // channel: EventSource,
+  // unsubscribe: () => void,
 ) => void
 
-const channels = new Map<string, EventSource>()
+// const channels = new Map<string, EventSource>()
 
-export function useChannel(
-  topic: string,
-  callback: ChannelCallback,
-): [() => void, () => EventSource | undefined, () => boolean] {
+export function useChannelEvents(callback: ChannelCallback): [
+  (topic: string) => void,
+  // () => EventSource | undefined,
+  // () => boolean
+] {
   return [
-    () => subscribe(topic, callback),
-    () => channels.get(topic),
-    () => channels.delete(topic),
+    (topic: string) => subscribe(topic, callback),
+    // () => channels.get(topic),
+    // () => channels.delete(topic),
   ]
 }
 
 function subscribe(
   topic: string,
   callback: ChannelCallback,
-): EventSource | undefined {
+): Optional<() => void> {
   if (isNil(topic)) return
 
-  cleanUpChannel(topic, callback)
+  // cleanUpChannel(topic, callback)
 
-  channels.set(topic, getEventSource(topic))
+  // channels.set(topic, callback)
 
-  const channel = channels.get(topic)
+  // const channel = channels.get(topic)
 
-  channel?.addEventListener('message', handleChannelMessage(topic, callback))
+  // channel?.addEventListener('message', handleChannelMessage(topic, callback))
+  SSE_CHANNEL.addEventListener(topic, handleChannelTasks(topic, callback))
 
-  return channel
+  return () => {
+    SSE_CHANNEL.removeEventListener(topic, handleChannelTasks(topic, callback))
+  }
 }
 
-function cleanUpChannel(topic: string, callback: ChannelCallback): void {
-  const channel = channels.get(topic)
+// function cleanUpChannel(topic: string, callback: ChannelCallback): void {
+//   const channel = channels.get(topic)
 
-  channel?.close()
-  channel?.removeEventListener('message', handleChannelMessage(topic, callback))
+//   channel?.close()
+//   // channel?.removeEventListener('message', handleChannelMessage(topic, callback))
+//   channel?.removeEventListener(topic, handleChannelTasks(topic, callback))
 
-  channels.delete(topic)
-}
+//   channels.delete(topic)
+// }
 
-function handleChannelMessage(
+function handleChannelTasks(
   topic: string,
   callback: ChannelCallback,
 ): (e: MessageEvent) => void {
   return (event: MessageEvent) => {
     if (isNil(topic) || isNil(callback) || isNil(event.data)) return
 
-    const channel = channels.get(topic)
+    // const channel = channels.get(topic)
 
-    if (channel == null) return
+    // if (channel == null) return
 
-    callback(JSON.parse(event.data), channel, () => channels.delete(topic))
+    try {
+      console.log(JSON.parse(event.data))
+      callback(JSON.parse(event.data))
+    } catch (error) {
+      console.warn(error)
+    }
   }
 }
+
+// function handleChannelMessage(
+//   topic: string,
+//   callback: ChannelCallback,
+// ): (e: MessageEvent) => void {
+//   return (event: MessageEvent) => {
+//     if (isNil(topic) || isNil(callback) || isNil(event.data)) return
+
+//     const channel = channels.get(topic)
+
+//     if (channel == null) return
+
+//     const data = {
+//       ok: true,
+//       updated_at: new Date().toISOString(),
+//       message: event.data,
+//     }
+
+//     callback(data, channel, () => channels.delete(topic))
+//   }
+// }
 
 function getEventSource(topic: string): EventSource {
   return new EventSource(topic)
