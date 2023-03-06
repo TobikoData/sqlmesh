@@ -33,6 +33,12 @@
   font-weight: bold;
 }
 
+.cm-tooltip {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
 .sqlmesh-model:hover {
   opacity: 0.8;
 }
