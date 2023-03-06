@@ -10,6 +10,7 @@ from sqlmesh.core.config import (
     DuckDBConnectionConfig,
     SnowflakeConnectionConfig,
 )
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -32,6 +33,7 @@ class TargetConfig(abc.ABC, PydanticModel):
     type: str
     schema_: str = Field(alias="schema")
     threads: int = 1
+    profile_name: t.Optional[str] = None
 
     @classmethod
     def load(cls, name: str, data: t.Dict[str, t.Any]) -> TargetConfig:
@@ -62,10 +64,10 @@ class TargetConfig(abc.ABC, PydanticModel):
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
 
-    def target_jinja(self, profile_name: str) -> TargetJinja:
+    def target_jinja(self, profile_name: str) -> AttributeDict:
         fields = self.dict().copy()
         fields["profile_name"] = profile_name
-        return TargetJinja(fields)
+        return AttributeDict(fields)
 
 
 class DuckDbConfig(TargetConfig):
@@ -212,13 +214,3 @@ class DatabricksConfig(TargetConfig):
 
     def to_sqlmesh(self) -> ConnectionConfig:
         raise NotImplementedError
-
-
-class TargetJinja:
-    def __init__(self, fields: t.Dict[str, t.Any]):
-        self._fields = fields
-
-    def __getattr__(self, name: str) -> t.Any:
-        if name not in self._fields:
-            raise AttributeError(f"{self.__class__.__name__}.{name} not found")
-        return self._fields.get(name)

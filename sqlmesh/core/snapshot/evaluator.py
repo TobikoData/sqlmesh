@@ -156,6 +156,7 @@ class SnapshotEvaluator:
             end=end,
             latest=latest,
             logging=True,
+            engine_adapter=self.adapter,
             **kwargs,
         )
 
@@ -315,6 +316,7 @@ class SnapshotEvaluator:
                 latest=latest,
                 snapshots=snapshots,
                 is_dev=is_dev,
+                engine_adapter=self.adapter,
                 **audit_args,
                 **kwargs,
             )

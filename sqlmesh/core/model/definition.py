@@ -43,6 +43,7 @@ from sqlmesh.utils.metaprogramming import (
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
     from sqlmesh.core.context import ExecutionContext
+    from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
 
@@ -118,6 +119,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
@@ -141,6 +143,7 @@ class _Model(ModelMeta, frozen=True):
             latest=latest,
             snapshots=context.snapshots,
             is_dev=context.is_dev,
+            engine_adapter=engine_adapter,
             **kwargs,
         )
 
@@ -204,6 +207,7 @@ class _Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -547,6 +551,7 @@ class SqlModel(_Model):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
         return self._query_renderer.render(
@@ -557,6 +562,7 @@ class SqlModel(_Model):
             snapshots=snapshots,
             expand=expand,
             is_dev=is_dev,
+            engine_adapter=engine_adapter,
             **kwargs,
         )
 
@@ -603,12 +609,11 @@ class SqlModel(_Model):
         return self._column_descriptions
 
     def validate_definition(self) -> None:
-        if not isinstance(self.query, exp.Subqueryable):
-            # Validation for queries with Jinja macros is currently not supported.
-            return
-
         name_counts: t.Dict[str, int] = {}
         query = self._query_renderer.render()
+
+        if not isinstance(query, exp.Subqueryable):
+            raise_config_error("Missing SELECT query in the model definition", self._path)
 
         if not query.expressions:
             raise_config_error("Query missing select statements", self._path)
@@ -686,6 +691,7 @@ class SeedModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         yield from self.seed.read(batch_size=self.kind.batch_size)
@@ -769,6 +775,7 @@ class PythonModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[DF, None, None]:
         env = prepare_env(self.python_env)
