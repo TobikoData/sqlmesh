@@ -76,8 +76,14 @@ interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
 const DAY = 24 * 60 * 60 * 1000
+const worker = new Worker('./src/library/components/editor/worker.ts', {
+  type: 'module',
+})
 
-export function Editor({ className, environment }: PropsEditor): JSX.Element {
+export default function Editor({
+  className,
+  environment,
+}: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
   const activeFile = useStoreFileTree(s => s.activeFile)
@@ -148,6 +154,23 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
   )
 
   useEffect(() => {
+    worker.onmessage = (e: MessageEvent) => {
+      if (e.data.topic === 'init') {
+        console.log('Message received from worker on Init', e.data)
+      }
+
+      if (e.data.topic === 'transpile') {
+        console.log('Message received from worker on Transpile', e.data)
+      }
+
+      if (e.data.topic === 'parse') {
+        console.log('Message received from worker on Parse', e.data)
+        setAst(e.data.payload)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
       void debouncedPlanRun()
     }
@@ -155,7 +178,16 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     return () => {
       apiCancelPlanRun(client)
     }
-  }, [activeFile.content])
+
+    setAst(undefined)
+
+    if (isStringEmptyOrNil(activeFile.content)) return
+
+    worker.postMessage({
+      topic: 'parse',
+      payload: activeFile.content,
+    })
+  }, [activeFile.content, worker])
 
   useEffect(() => {
     if (fileData == null) return
@@ -371,12 +403,20 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
             snapOffset={0}
             expandToMin={true}
           >
-            <div className="flex h-full">
+            <div className="flex flex-col h-full">
               <CodeEditor
                 extension={activeFile.extension}
                 value={activeFile.content}
                 onChange={debouncedChange}
               />
+              {isFalse(isStringEmptyOrNil(ast)) && (
+                <>
+                  <Divider className="border-4" />
+                  <pre className="w-full min-h-[50%] max-h-[50%] overflow-auto">
+                    <code>{JSON.stringify(ast, null, 2)}</code>
+                  </pre>
+                </>
+              )}
             </div>
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">

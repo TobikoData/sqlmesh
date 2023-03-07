@@ -1,6 +1,6 @@
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import { Editor } from '../editor/Editor'
+import Editor from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
 import { EnumSize, EnumVariant } from '../../../types/enum'
