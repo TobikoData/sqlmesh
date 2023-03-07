@@ -52,7 +52,6 @@ export default function Plan({
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
   const [plan, setPlan] = useState<ContextEnvironment>()
-  const [updateType, setUpdateType] = useState<'backfill' | 'logical'>()
   const [mostRecentPlan, setMostRecentPlan] = useState<PlanProgress>()
 
   const { refetch } = useApiPlan(environment)
@@ -113,7 +112,6 @@ export default function Plan({
     setPlan(undefined)
     setMostRecentPlan(undefined)
     setCategory(undefined)
-    setUpdateType(undefined)
     resetPlanOptions()
   }
 
@@ -142,8 +140,6 @@ export default function Plan({
       environment,
     })
       .then((data: any) => {
-        setUpdateType(data.type)
-
         if (data.type === 'logical') {
           setPlanState(EnumPlanState.Finished)
         }
@@ -191,7 +187,6 @@ export default function Plan({
           hasChanges={hasChanges}
           backfills={backfills}
           hasBackfill={hasBackfill}
-          updateType={updateType}
           mostRecentPlan={mostRecentPlan}
         />
       </div>

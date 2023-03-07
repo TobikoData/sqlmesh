@@ -4,7 +4,7 @@ import {
   PlanAction,
   PlanState,
 } from '../../../context/plan'
-import { isArrayNotEmpty, isFalse } from '../../../utils'
+import { isArrayNotEmpty } from '../../../utils'
 
 export function getActionName(
   action: PlanAction,
@@ -55,25 +55,23 @@ export function getBackfillStepHealine({
   hasBackfill,
   hasLogicalUpdate,
   hasNoChange,
-  isBackfilled,
-  isLogicalUpdated,
 }: {
   planAction: PlanAction
   planState: PlanState
   hasBackfill: boolean
   hasLogicalUpdate: boolean
   hasNoChange: boolean
-  isBackfilled: boolean
-  isLogicalUpdated: boolean
 }): string {
   if (planAction === EnumPlanAction.Running) return 'Collecting Backfill...'
-  if (planState === EnumPlanState.Applying && isFalse(hasBackfill))
+  if (planState === EnumPlanState.Applying && hasBackfill)
+    return 'Backfilling...'
+  if (planState === EnumPlanState.Applying && hasLogicalUpdate)
     return 'Applying...'
   if (planState === EnumPlanState.Failed) return 'Failed'
   if (planState === EnumPlanState.Cancelled) return 'Cancelled'
-  if (planState === EnumPlanState.Finished && isBackfilled)
+  if (planState === EnumPlanState.Finished && hasBackfill)
     return 'Completed Backfill'
-  if (planState === EnumPlanState.Finished && isLogicalUpdated)
+  if (planState === EnumPlanState.Finished && hasLogicalUpdate)
     return 'Completed Logical Update'
   if (hasBackfill) return 'Needs Backfill'
   if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
