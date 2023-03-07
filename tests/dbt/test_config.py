@@ -99,6 +99,42 @@ def test_model_config(sushi_dbt_project: Project):
     assert rendered.model_name == "sushi.customer_revenue_by_day"
 
 
+def test_model_config_sql_no_config():
+    assert (
+        ModelConfig(
+            sql="""{{
+  config(
+    materialized='table',
+    incremental_strategy='delete+"insert'
+  )
+}}
+query"""
+        ).sql_no_config.strip()
+        == "query"
+    )
+
+    assert (
+        ModelConfig(
+            sql="""{{
+  config(
+    materialized='"table"',
+    incremental_strategy='delete+insert',
+    post_hook=" '{{ macro_call(this) }}' "
+  )
+}}
+query"""
+        ).sql_no_config.strip()
+        == "query"
+    )
+
+    assert (
+        ModelConfig(
+            sql="""before {{config(materialized='table', post_hook=" {{ macro_call(this) }} ")}} after"""
+        ).sql_no_config
+        == "before  after"
+    )
+
+
 def test_variables(assert_exp_eq, sushi_dbt_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
