@@ -240,6 +240,17 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     assert mock_console.show_model_difference_summary.called
 
 
+def test_invalid_column_reference():
+    context = Context(path="examples/sushi")
+
+    # Referencing column "x" which doesn't exist upstream
+    with pytest.raises(ConfigError) as ex:
+        bad = parse("MODEL(name bad, kind FULL); SELECT x::INT AS x FROM sushi.customers AS c")
+        context.upsert_model(load_model(bad))
+
+    assert "Invalid model query" in str(ex)
+
+
 def test_evaluate_limit():
     context = Context(config=Config())
 
