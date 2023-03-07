@@ -30,7 +30,7 @@ import {
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
-import { getBackfillStepHealine, isModified } from './help'
+import { getBackfillStepHeadline, isModified } from './help'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
@@ -129,7 +129,7 @@ export default function PlanWizard({
   const showDetails =
     isFalse(hasNoChange) &&
     (hasBackfill || (hasLogicalUpdate && isFalse(isFinished)))
-  const backfillStepHeadline = getBackfillStepHealine({
+  const backfillStepHeadline = getBackfillStepHeadline({
     planAction,
     planState,
     hasBackfill,

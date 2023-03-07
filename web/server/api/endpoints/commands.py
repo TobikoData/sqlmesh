@@ -21,30 +21,29 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post("/apply")
+@router.post("/apply", response_model=models.Apply)
 async def apply(
     environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-) -> t.Any:
+) -> models.Apply:
     """Apply a plan"""
 
-    plan = plan = context.plan(environment=environment, no_prompts=True)
+    plan = context.plan(environment=environment, no_prompts=True)
     apply = functools.partial(context.apply, plan)
 
-    if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        if plan.requires_backfill:
-            task = asyncio.create_task(run_in_executor(apply))
-            request.app.state.task = task
-        else:
-            apply()
-
-    else:
+    if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
 
-    return {"ok": True, "type": "backfill" if plan.requires_backfill else "logical"}
+    if plan.requires_backfill:
+        task = asyncio.create_task(run_in_executor(apply))
+        request.app.state.task = task
+    else:
+        apply()
+
+    return models.Apply(type="backfill" if plan.requires_backfill else "logical")
 
 
 @router.post("/evaluate")
@@ -97,7 +96,7 @@ async def dag(
         )
 
 
-@router.post("/render")
+@router.post("/render", response_model=models.Query)
 async def render(
     options: models.RenderInput,
     context: Context = Depends(get_loaded_context),

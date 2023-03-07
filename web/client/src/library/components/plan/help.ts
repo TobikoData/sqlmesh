@@ -49,7 +49,7 @@ export function isModified<T extends object>(modified?: T): boolean {
   return Object.values(modified ?? {}).some(isArrayNotEmpty)
 }
 
-export function getBackfillStepHealine({
+export function getBackfillStepHeadline({
   planAction,
   planState,
   hasBackfill,
