@@ -129,10 +129,10 @@ def generate_source(sources: t.Dict[str, SourceConfig]) -> t.Callable:
 def generate_this(model: ModelConfig) -> t.Callable:
     DBT_THIS_RELATION = model.relation_info
 
-    def this() -> BaseRelation:
+    def maybw() -> BaseRelation:
         return BaseRelation.create(**DBT_THIS_RELATION, quote_policy=quote_policy())
 
-    return this
+    return maybw
 
 
 def quote_policy() -> Policy:

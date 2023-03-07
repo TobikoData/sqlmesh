@@ -145,10 +145,15 @@ class DbtContext:
     def copy(self) -> DbtContext:
         return replace(self)
 
-    @property
-    def builtin_python_env(self) -> t.Dict[str, t.Any]:
+    def create_python_env(
+        self, methods: t.Optional[t.Dict[str, t.Callable]] = None
+    ) -> t.Dict[str, t.Any]:
         env: t.Dict[str, t.Any] = {}
         for name, method in self._builtin_jinja_overrides.items():
+            build_env(method, env=env, name=name, path=Path(__file__).parent)
+
+        methods = methods or {}
+        for name, method in methods.items():
             build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)
@@ -165,7 +170,7 @@ class DbtContext:
     def _builtin_jinja_overrides(self) -> t.Dict[str, t.Any]:
         return {
             "var": generate_var(self.variables),
-            "ref": generate_ref(self.refs),
+            "ref": generate_ref({**self.models, **self.seeds}),
             "source": generate_source(self.sources),
         }
 

@@ -238,7 +238,7 @@ class ModelConfig(GeneralConfig):
             statements=expressions[0:-1],
             columns=column_types_to_sqlmesh(self.columns) or None,
             column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
-            python_env=model_context.builtin_python_env,
+            python_env=model_context.create_python_env({"this": generate_this(self)}),
             jinja_macros=model_context.jinja_macros.trim(dependencies.macros),
             depends_on=depends_on,
             start=self.start,
