@@ -587,7 +587,7 @@ class EngineAdapter:
         on: exp.Expression,
         match_expressions: t.List[exp.When],
     ) -> None:
-        this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
+        this = exp.alias_(exp.to_table(target_table), alias=TARGET_ALIAS, table=True)
         using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         self.execute(
             exp.Merge(

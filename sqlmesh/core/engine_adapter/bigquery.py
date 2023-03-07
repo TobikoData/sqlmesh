@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import random
 import typing as t
-from datetime import datetime, timedelta
+import uuid
 
 import pandas as pd
-import pytz
 from sqlglot import exp
 from sqlglot.transforms import remove_precision_parameterized_types
 
@@ -17,6 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
     TransactionType,
 )
 from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -76,15 +75,13 @@ class BigQueryEngineAdapter(EngineAdapter):
             col_name: remove_precision_parameterized_types(col_type)
             for col_name, col_type in columns_to_types.items()
         }
-        temp_table_name = (
-            f"{self.client.project}.{table.db}.__temp_{table.this}_{random.randint(10000, 99999)}"
-        )
+        temp_table_name = f"{self.client.project}.{table.db}.__temp_{table.this}_{uuid.uuid4().hex}"
         schema = [
             bigquery.SchemaField(col_name, col_type.sql(dialect=self.dialect))
             for col_name, col_type in precisionless_col_to_types.items()
         ]
         bq_table = bigquery.Table(table_ref=temp_table_name, schema=schema)
-        bq_table.expires = datetime.now(pytz.utc) + timedelta(hours=3)
+        bq_table.expires = to_datetime("in 3 hours")
         self.client.create_table(bq_table)
         result = self.client.load_table_from_dataframe(df, bq_table).result()
         if result.errors:
@@ -124,18 +121,13 @@ class BigQueryEngineAdapter(EngineAdapter):
             )
             if result.errors:
                 raise SQLMeshError(result.errors)
-            query = (
-                exp.Select().from_(exp.to_table(temp_table_name)).select(*columns_to_types.keys())
-            )
+            query = exp.select(*columns_to_types).from_(exp.to_table(temp_table_name))
         else:
             query = t.cast(Query, query_or_df)
-        columns_raw = (
-            columns_to_types.keys()
-            if columns_to_types
-            else [col.alias_or_name for col in query.expressions]
-        )
-        columns = [exp.to_column(col) for col in columns_raw]
-        on = exp.FALSE
+        columns = [
+            exp.to_column(col)
+            for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
+        ]
         when_not_matched_by_source = exp.When(
             matched=False,
             source=True,
@@ -153,7 +145,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self._merge(
             target_table=table,
             source_table=query,
-            on=on,
+            on=exp.false(),
             match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
         )
         if is_pandas:
@@ -199,14 +191,13 @@ class BigQueryEngineAdapter(EngineAdapter):
         if len(partitioned_by) > 1:
             raise SQLMeshError("BigQuery only supports partitioning by a single column")
         partition_col = exp.to_column(partitioned_by[0])
-        this: t.Union[exp.Anonymous, exp.Column]
+        this: t.Union[exp.Func, exp.Column]
         if partition_interval_unit == IntervalUnit.HOUR:
-            this = exp.Anonymous(
-                this="TIMESTAMP_TRUNC",
-                expressions=[
-                    partition_col,
-                    exp.Var(this=IntervalUnit.HOUR.value.upper()),
-                ],
+            this = exp.func(
+                "TIMESTAMP_TRUNC",
+                partition_col,
+                exp.var(IntervalUnit.HOUR.value.upper()),
+                dialect=self.dialect,
             )
         else:
             this = partition_col
