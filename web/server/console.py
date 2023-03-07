@@ -58,7 +58,6 @@ class ApiConsole(TerminalConsole):
 
     def stop_snapshot_progress(self) -> None:
         """Stop the load progress"""
-        self.previous_task_status = self.current_task_status.copy()
         self.current_task_status = {}
 
     def log_test_results(
