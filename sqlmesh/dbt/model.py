@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.adapter import ParsetimeAdapter
-from sqlmesh.dbt.builtin import create_builtins
+from sqlmesh.dbt.builtin import create_builtins, generate_this
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -301,6 +301,7 @@ class ModelSqlRenderer:
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
+                "this": generate_this(self.config),
             },
             engine_adapter=None,
         )
