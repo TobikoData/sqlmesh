@@ -29,13 +29,13 @@ async def apply(
 ) -> models.Apply:
     """Apply a plan"""
 
-    plan = context.plan(environment=environment, no_prompts=True)
-    apply = functools.partial(context.apply, plan)
-
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
+
+    plan = context.plan(environment=environment, no_prompts=True)
+    apply = functools.partial(context.apply, plan)
 
     if plan.requires_backfill:
         task = asyncio.create_task(run_in_executor(apply))
