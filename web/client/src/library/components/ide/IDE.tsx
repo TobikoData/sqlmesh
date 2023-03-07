@@ -148,16 +148,20 @@ export function IDE(): JSX.Element {
         </div>
       </div>
       <Divider />
-      <SplitPane
-        sizes={[20, 80]}
-        minSize={[160]}
-        maxSize={[320]}
-        snapOffset={0}
-        className="flex w-full h-full overflow-hidden"
-      >
-        <FolderTree project={project} />
-        {environment != null && <Editor environment={environment} />}
-      </SplitPane>
+      {environment != null ? (
+        <SplitPane
+          sizes={[20, 80]}
+          minSize={[160]}
+          maxSize={[320]}
+          snapOffset={0}
+          className="flex w-full h-full overflow-hidden"
+        >
+          <FolderTree project={project} />
+          <Editor environment={environment} />
+        </SplitPane>
+      ) : (
+        <div className="flex w-full h-full bg-secondary-900"></div>
+      )}
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
       <Modal show={isGraphOpen}>
