@@ -810,6 +810,7 @@ class PythonModel(_Model):
                             )
                         )
                     else:
+                        assert self.time_column.format, "Time column format is required."
                         df = filter_df_by_timelike(
                             df, self.time_column.column, self.time_column.format, start, end
                         )

@@ -75,7 +75,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             col_name: remove_precision_parameterized_types(col_type)
             for col_name, col_type in columns_to_types.items()
         }
-        temp_table_name = f"{self.client.project}.{table.db}.__temp_{table.this}_{uuid.uuid4().hex}"
+        temp_table_name = f"{self.client.project}.{table.db}.__temp_{table.name}_{uuid.uuid4().hex}"
         schema = [
             bigquery.SchemaField(col_name, col_type.sql(dialect=self.dialect))
             for col_name, col_type in precisionless_col_to_types.items()
