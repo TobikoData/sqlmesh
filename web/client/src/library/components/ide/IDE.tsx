@@ -1,6 +1,6 @@
 import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import { Editor } from '../editor/Editor'
+import Editor from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { Fragment, useEffect, MouseEvent, useState, lazy } from 'react'
 import clsx from 'clsx'
