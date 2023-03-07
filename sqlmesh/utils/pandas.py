@@ -22,7 +22,7 @@ def filter_df_by_timelike(
     if len(df_time) == 0:
         return df
     elif isinstance(df_time[0], (datetime, date)):
-        df_time = df_time.apply(lambda x: x.strftime(col_format))
+        df_time = df_time.apply(lambda x: x.strftime(col_format))  # type: ignore
     elif not pd.api.types.is_string_dtype(df_time.dtype):  # type: ignore
         df_time = df_time.dt.strftime(col_format)
     return df[df_time.between(start_format, end_format)]
