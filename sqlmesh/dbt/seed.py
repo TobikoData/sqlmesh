@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+from dbt.contracts.relation import RelationType
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
@@ -98,6 +99,29 @@ class SeedConfig(GeneralConfig):
         )
 
     @property
+    def relation_info(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            "schema": self.table_schema,
+            "identifier": self.table_name,
+            "type": RelationType.Table.value,
+        }
+
+    @property
+    def table_schema(self) -> str:
+        """
+        Get the full schema name
+        """
+        return "_".join(part for part in (self.target_schema, self.schema_) if part)
+
+    @property
+    def table_name(self) -> str:
+        """
+        Get the table name
+        """
+        return self.alias or self.path.stem
+
+    @property
     def seed_name(self) -> str:
         """
         Get the sqlmesh seed name
@@ -105,5 +129,6 @@ class SeedConfig(GeneralConfig):
         Returns:
             The sqlmesh seed name
         """
-        schema = "_".join(part for part in (self.target_schema, self.schema_) if part)
-        return ".".join(part for part in (schema, self.alias or self.path.stem) if part)
+        return ".".join(
+            part for part in (self.database, self.table_schema, self.table_name) if part
+        )

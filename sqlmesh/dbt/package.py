@@ -309,7 +309,7 @@ class PackageLoader:
             sql = file.read()
 
         model_config = self._config_for_scope(scope, self.project_config.model_config).copy(
-            update={"path": filepath, "table_name": filepath.stem}
+            update={"path": filepath}
         )
 
         model_config.sql = SqlStr(sql)

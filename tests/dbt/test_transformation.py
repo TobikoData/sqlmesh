@@ -21,6 +21,7 @@ from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -30,10 +31,12 @@ def sushi_dbt_project(mocker: MockerFixture) -> Project:
 
 
 def test_model_name():
-    assert ModelConfig(target_schema="foo", table_name="bar").model_name == "foo.bar"
-    assert ModelConfig(target_schema="foo", table_name="bar", alias="baz").model_name == "foo.baz"
+    assert ModelConfig(target_schema="foo", path="models/bar.sql").model_name == "foo.bar"
     assert (
-        ModelConfig(target_schema="foo", table_name="bar", schema_="baz").model_name
+        ModelConfig(target_schema="foo", path="models/bar.sql", alias="baz").model_name == "foo.baz"
+    )
+    assert (
+        ModelConfig(target_schema="foo", path="models/bar.sql", schema_="baz").model_name
         == "foo_baz.bar"
     )
 
@@ -143,7 +146,7 @@ def test_config_containing_jinja():
     context = DbtContext()
     context.variables = {"schema": "foo", "size": "5"}
     model._dependencies.sources = set(["package.table"])
-    context.sources = {"package.table": "raw.baz"}
+    context.sources = {"package.table": SourceConfig(schema_="raw", name="baz")}
 
     rendered = model.render_config(context)
     assert rendered.pre_hook == model.pre_hook
@@ -155,6 +158,8 @@ def test_config_containing_jinja():
 
     sqlmesh_model = rendered.to_sqlmesh(context)
     assert str(sqlmesh_model.query) == model.sql
+    for source in context.sources.values():
+        print(source.relation_info)
     assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
 
