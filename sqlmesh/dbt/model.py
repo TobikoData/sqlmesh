@@ -188,7 +188,18 @@ class ModelConfig(GeneralConfig):
 
     @property
     def sql_no_config(self) -> str:
-        return re.sub(r"{{\s*config(.|\s)*?}}", "", self.sql).strip()
+        matches = re.findall(r"{{\s*config\(", self.sql)
+        if matches:
+            config_macro_start = self.sql.index(matches[0])
+            cursor = config_macro_start
+            is_quoted = False
+            while cursor < len(self.sql):
+                if self.sql[cursor] == '"':
+                    is_quoted = not is_quoted
+                if self.sql[cursor : cursor + 2] == "}}" and not is_quoted:
+                    return "".join([self.sql[:config_macro_start], self.sql[cursor + 2 :]])
+                cursor += 1
+        return self.sql
 
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
