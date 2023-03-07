@@ -122,6 +122,22 @@ def test_model_validation(query, error):
     assert error in str(ex.value)
 
 
+def test_model_validation_union_query():
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            kind FULL,
+        );
+
+        SELECT 1, 2 UNION SELECT dup, dup
+        """
+    )
+
+    with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'dup'") as ex:
+        load_model(expressions)
+
+
 def test_partitioned_by():
     expressions = parse(
         """
