@@ -94,6 +94,7 @@ def test_json(snapshot: Snapshot):
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
             "jinja_macros": {
+                "global_objs": {},
                 "packages": {},
                 "root_macros": {},
             },

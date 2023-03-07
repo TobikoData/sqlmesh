@@ -19,7 +19,8 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
-from sqlmesh.dbt.adapter import Adapter
+from sqlmesh.dbt.adapter import ParsetimeAdapter
+from sqlmesh.dbt.builtin import create_builtins
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -31,10 +32,6 @@ from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
-
-if t.TYPE_CHECKING:
-    from dbt.adapters.base import BaseRelation
-    from dbt.adapters.base.column import Column
 
 
 class Materialization(str, Enum):
@@ -215,6 +212,9 @@ class ModelConfig(GeneralConfig):
         depends_on = {model_context.refs[ref] for ref in dependencies.refs}
         expressions = d.parse(self.sql_no_config)
 
+        if not expressions:
+            raise ConfigError(f"Model '{self.table_name}' must have a query.")
+
         return create_sql_model(
             self.model_name,
             expressions[-1],
@@ -226,6 +226,7 @@ class ModelConfig(GeneralConfig):
             jinja_macros=model_context.jinja_macros.trim(dependencies.macros),
             depends_on=depends_on,
             start=self.start,
+            path=self.path,
         )
 
     def _context_for_dependencies(
@@ -257,27 +258,25 @@ class ModelSqlRenderer:
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: ModelConfig = config.copy()
 
-        self._jinja_globals: t.Dict[str, t.Any] = {
-            **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
-            **context.builtin_jinja,
-            "execute": False,
-            "config": self._config,
-            "ref": self._ref,
-            "var": self._var,
-            "source": self._source,
-            "store_result": lambda *args, **kwargs: "",
-            "load_result": lambda *args, **kwargs: None,
-            "run_query": lambda *args, **kwargs: None,
-            "statement": lambda *args, **kwargs: "",
-        }
+        self._jinja_globals = create_builtins(
+            jinja_macros=context.jinja_macros,
+            jinja_globals={
+                **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+                "config": self._config,
+                "ref": self._ref,
+                "var": self._var,
+                "source": self._source,
+            },
+            engine_adapter=None,
+        )
 
-        if context.engine_adapter is not None:
-            self._jinja_globals["adapter"] = ModelSqlRenderer.TrackingAdapter(
-                self,
-                context.engine_adapter,
-                context.jinja_macros,
-                jinja_globals=self._jinja_globals,
-            )
+        # Set the adapter separately since it requires jinja globals to passed into it.
+        self._jinja_globals["adapter"] = ModelSqlRenderer.TrackingAdapter(
+            self,
+            context.jinja_macros,
+            jinja_globals=self._jinja_globals,
+            dialect=context.engine_adapter.dialect if context.engine_adapter else "",
+        )
 
     @property
     def enriched_config(self) -> ModelConfig:
@@ -330,7 +329,7 @@ class ModelSqlRenderer:
             self._enriched_config = self._enriched_config.update_with(kwargs)
         return ""
 
-    class TrackingAdapter(Adapter):
+    class TrackingAdapter(ParsetimeAdapter):
         def __init__(self, outer_self: ModelSqlRenderer, *args: t.Any, **kwargs: t.Any):
             super().__init__(*args, **kwargs)
             self.outer_self = outer_self
@@ -348,11 +347,3 @@ class ModelSqlRenderer:
                         MacroReference(package=package, name=target_name)
                     )
             return super().dispatch(name, package=package)
-
-        def get_relation(
-            self, database: str, schema: str, identifier: str
-        ) -> t.Optional[BaseRelation]:
-            return None
-
-        def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-            return []

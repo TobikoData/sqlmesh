@@ -89,6 +89,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "query": "SELECT a, ds FROM tbl",
                     "storage_format": "parquet",
                     "jinja_macros": {
+                        "global_objs": {},
                         "packages": {},
                         "root_macros": {},
                     },

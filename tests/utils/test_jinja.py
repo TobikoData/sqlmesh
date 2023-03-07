@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.jinja import (
     JinjaMacroRegistry,
     MacroExtractor,
@@ -176,3 +177,10 @@ def test_macro_return():
         .render()
     )
     assert rendered == "[1, 2, 3]"
+
+
+def test_global_objs():
+    original_registry = JinjaMacroRegistry(global_objs={"target": AttributeDict({"test": "value"})})
+
+    deserialized_registry = JinjaMacroRegistry.parse_raw(original_registry.json())
+    assert deserialized_registry.global_objs["target"].test == "value"
