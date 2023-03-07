@@ -18,6 +18,7 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.model.meta import IntervalUnit
 
 
 class BaseSparkEngineAdapter(EngineAdapter):
@@ -108,6 +109,7 @@ class BaseSparkEngineAdapter(EngineAdapter):
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[str]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
     ) -> t.Optional[exp.Properties]:
         format_property = None
         partition_columns_property = None
