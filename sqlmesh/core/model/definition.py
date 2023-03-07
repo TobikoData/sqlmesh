@@ -39,6 +39,7 @@ from sqlmesh.utils.metaprogramming import (
     print_exception,
     serialize_env,
 )
+from sqlmesh.utils.pandas import filter_df_by_timelike
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
@@ -353,10 +354,12 @@ class _Model(ModelMeta, frozen=True):
 
         if self.time_column.format:
             # Transpile the time column format into the generic dialect
-            self.time_column.format = format_time(
+            formatted_time = format_time(
                 self.time_column.format,
                 d.Dialect.get_or_raise(self.dialect).time_mapping,
             )
+            assert formatted_time is not None
+            self.time_column.format = formatted_time
         else:
             self.time_column.format = default_time_format
 
@@ -807,15 +810,10 @@ class PythonModel(_Model):
                             )
                         )
                     else:
-                        if self.time_column.format:
-                            start_format: TimeLike = start.strftime(self.time_column.format)
-                            end_format: TimeLike = end.strftime(self.time_column.format)
-                        else:
-                            start_format = start
-                            end_format = end
-
-                        df_time = df[self.time_column.column]
-                        df = df[(df_time >= start_format) & (df_time <= end_format)]
+                        assert self.time_column.format, "Time column format is required."
+                        df = filter_df_by_timelike(
+                            df, self.time_column.column, self.time_column.format, start, end
+                        )
                 yield df
         except Exception as e:
             print_exception(e, self.python_env)

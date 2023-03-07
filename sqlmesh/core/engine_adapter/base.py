@@ -37,6 +37,7 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.model.meta import IntervalUnit
 
 logger = logging.getLogger(__name__)
 
@@ -579,6 +580,24 @@ class EngineAdapter:
             }
         self.execute(exp.update(table_name, properties, where=where))
 
+    def _merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        on: exp.Expression,
+        match_expressions: t.List[exp.When],
+    ) -> None:
+        this = exp.alias_(exp.to_table(target_table), alias=TARGET_ALIAS, table=True)
+        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
+        self.execute(
+            exp.Merge(
+                this=this,
+                using=using,
+                on=on,
+                expressions=match_expressions,
+            )
+        )
+
     def merge(
         self,
         target_table: TableName,
@@ -586,8 +605,6 @@ class EngineAdapter:
         column_names: t.Iterable[str],
         unique_key: t.Iterable[str],
     ) -> None:
-        this = exp.alias_(exp.to_table(target_table), TARGET_ALIAS)
-        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
         on = exp.and_(
             *(
                 exp.EQ(
@@ -598,7 +615,8 @@ class EngineAdapter:
             )
         )
         when_matched = exp.When(
-            this="MATCHED",
+            matched=True,
+            source=False,
             then=exp.update(
                 None,
                 properties={
@@ -608,7 +626,8 @@ class EngineAdapter:
             ),
         )
         when_not_matched = exp.When(
-            this=exp.Not(this="MATCHED"),
+            matched=False,
+            source=False,
             then=exp.Insert(
                 this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
                 expression=exp.Tuple(
@@ -616,16 +635,11 @@ class EngineAdapter:
                 ),
             ),
         )
-        self.execute(
-            exp.Merge(
-                this=this,
-                using=using,
-                on=on,
-                expressions=[
-                    when_matched,
-                    when_not_matched,
-                ],
-            )
+        return self._merge(
+            target_table=target_table,
+            source_table=source_table,
+            on=on,
+            match_expressions=[when_matched, when_not_matched],
         )
 
     def rename_table(
@@ -710,6 +724,7 @@ class EngineAdapter:
         self,
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[str]] = None,
+        partition_interval_unit: t.Optional[IntervalUnit] = None,
     ) -> t.Optional[exp.Properties]:
         return None
 

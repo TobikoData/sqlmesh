@@ -382,6 +382,7 @@ class SnapshotEvaluator:
                 else snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
                 storage_format=snapshot.model.storage_format,
                 partitioned_by=snapshot.model.partitioned_by,
+                partition_interval_unit=snapshot.model.interval_unit(),
             )
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
