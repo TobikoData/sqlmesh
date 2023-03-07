@@ -362,7 +362,12 @@ def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
     assert not new_dir.exists()
 
 
-def test_apply() -> None:
+def test_apply(project_tmp_path: Path) -> None:
+    models_dir = project_tmp_path / "models"
+    models_dir.mkdir()
+    sql_file = models_dir / "foo.sql"
+    sql_file.write_text("MODEL (name foo); SELECT 1;")
+
     response = client.post("/api/commands/apply?environment=dev", params={"environment": "dev"})
     assert response.status_code == 200
 
