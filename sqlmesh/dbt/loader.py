@@ -57,7 +57,7 @@ class DbtLoader(Loader):
             context.variables.update(package.variables)
             context.add_models(package.models)
             context.add_seeds(package.seeds)
-            context.add_source_configs(package.sources)
+            context.add_sources(package.sources)
             context.jinja_macros.add_macros(
                 package.macros,
                 package=package_name if package_name != context.project_name else None,

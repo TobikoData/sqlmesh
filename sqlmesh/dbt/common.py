@@ -64,14 +64,14 @@ class DbtContext:
     jinja_macros: JinjaMacroRegistry = field(
         default_factory=lambda: JinjaMacroRegistry(create_builtins_module="sqlmesh.dbt")
     )
-    sources: t.Dict[str, str] = field(default_factory=dict)
     variables: t.Dict[str, t.Any] = field(default_factory=dict)
-    refs: t.Dict[str, str] = field(default_factory=dict)
 
     engine_adapter: t.Optional[EngineAdapter] = None
 
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
+    _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
+    _refs: t.Dict[str, str] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
 
@@ -81,14 +81,13 @@ class DbtContext:
 
     @models.setter
     def models(self, models: t.Dict[str, ModelConfig]) -> None:
-        for model_name in self._models:
-            self.refs.pop(model_name, None)
         self._models = {}
+        self._refs = {}
         self.add_models(models)
 
     def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
+        self._refs = {}
         self._models.update(models)
-        self.refs.update({name: config.model_name for name, config in models.items()})
 
     @property
     def seeds(self) -> t.Dict[str, SeedConfig]:
@@ -96,17 +95,32 @@ class DbtContext:
 
     @seeds.setter
     def seeds(self, seeds: t.Dict[str, SeedConfig]) -> None:
-        for seed_name in self._seeds:
-            self.refs.pop(seed_name, None)
         self._seeds = {}
+        self._refs = {}
         self.add_seeds(seeds)
 
     def add_seeds(self, seeds: t.Dict[str, SeedConfig]) -> None:
+        self._refs = {}
         self._seeds.update(seeds)
-        self.refs.update({name: config.seed_name for name, config in seeds.items()})
 
-    def add_source_configs(self, sources: t.Dict[str, SourceConfig]) -> None:
-        self.sources.update({config.config_name: config.source_name for config in sources.values()})
+    @property
+    def sources(self) -> t.Dict[str, SourceConfig]:
+        return self._sources
+
+    @sources.setter
+    def sources(self, sources: t.Dict[str, SourceConfig]) -> None:
+        self._sources = {}
+        self.add_sources(sources)
+
+    def add_sources(self, sources: t.Dict[str, SourceConfig]) -> None:
+        self._sources.update(sources)
+
+    @property
+    def refs(self) -> t.Dict[str, str]:
+        if not self._refs:
+            self._refs = {k: v.seed_name for k, v in self._seeds.items()}
+            self._refs.update({k: v.model_name for k, v in self._models.items()})
+        return self._refs
 
     @property
     def target(self) -> TargetConfig:
@@ -131,10 +145,15 @@ class DbtContext:
     def copy(self) -> DbtContext:
         return replace(self)
 
-    @property
-    def builtin_python_env(self) -> t.Dict[str, t.Any]:
+    def create_python_env(
+        self, methods: t.Optional[t.Dict[str, t.Callable]] = None
+    ) -> t.Dict[str, t.Any]:
         env: t.Dict[str, t.Any] = {}
         for name, method in self._builtin_jinja_overrides.items():
+            build_env(method, env=env, name=name, path=Path(__file__).parent)
+
+        methods = methods or {}
+        for name, method in methods.items():
             build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)
@@ -151,7 +170,7 @@ class DbtContext:
     def _builtin_jinja_overrides(self) -> t.Dict[str, t.Any]:
         return {
             "var": generate_var(self.variables),
-            "ref": generate_ref(self.refs),
+            "ref": generate_ref({**self.models, **self.seeds}),
             "source": generate_source(self.sources),
         }
 
