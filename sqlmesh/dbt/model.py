@@ -332,13 +332,17 @@ class ModelSqlRenderer:
             )
         return self._rendered_sql
 
-    def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> str:
-        if package_name not in self.context.refs:
+    def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> BaseRelation:
+        if package_name in self.context.models:
+            relation = BaseRelation.create(**self.context.models[package_name].relation_info)
+        elif package_name in self.context.seeds:
+            relation = BaseRelation.create(**self.context.seeds[package_name].relation_info)
+        else:
             raise ConfigError(
                 f"Model '{package_name}' was not found for model '{self.config.table_name}'."
             )
         self._captured_dependencies.refs.add(package_name)
-        return self.context.refs[package_name]
+        return relation
 
     def _var(self, name: str, default: t.Optional[str] = None) -> t.Any:
         if default is None and name not in self.context.variables:
@@ -348,14 +352,14 @@ class ModelSqlRenderer:
         self._captured_dependencies.variables.add(name)
         return self.context.variables.get(name, default)
 
-    def _source(self, source_name: str, table_name: str) -> str:
+    def _source(self, source_name: str, table_name: str) -> BaseRelation:
         full_name = ".".join([source_name, table_name])
         if full_name not in self.context.sources:
             raise ConfigError(
                 f"Source '{full_name}' was not found for model '{self.config.table_name}'."
             )
         self._captured_dependencies.sources.add(full_name)
-        return self.context.sources[full_name].source_name
+        return BaseRelation.create(**self.context.sources[full_name].relation_info)
 
     def _config(self, *args: t.Any, **kwargs: t.Any) -> str:
         if args and isinstance(args[0], dict):
