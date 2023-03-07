@@ -283,7 +283,6 @@ function RunPlan({
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
-  const setMostRecentPlan = useStorePlan(s => s.setMostRecentPlan)
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 

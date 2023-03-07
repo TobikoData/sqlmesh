@@ -151,8 +151,8 @@ export default function Plan({
       .catch(error => {
         console.error(error)
 
-      reset()
-    })
+        reset()
+      })
   }
 
   function close(): void {
