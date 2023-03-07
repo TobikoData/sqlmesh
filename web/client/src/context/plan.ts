@@ -15,6 +15,7 @@ export const EnumPlanAction = {
 
 export const EnumPlanState = {
   Init: 'init',
+  Running: 'running',
   Applying: 'applying',
   Cancelling: 'cancelling',
   Finished: 'finished',
@@ -76,12 +77,10 @@ interface PlanStore {
   state: PlanState
   action: PlanAction
   setActivePlan: (activePlan?: PlanProgress) => void
-  setMostRecentPlan: (mostRecentPlan?: PlanProgress) => void
   setState: (state: PlanState) => void
   setAction: (action: PlanAction) => void
   setCategory: (category?: Category) => void
   activePlan?: PlanProgress
-  mostRecentPlan?: PlanProgress
   backfill_start: string
   backfill_end: string
   setBackfillDate: (type: 'start' | 'end', date: string) => void
@@ -116,7 +115,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
   activePlan: undefined,
-  mostRecentPlan: undefined,
   setPlanOptions: (planOptions: Partial<PlanOptions>) => {
     set(s => ({ planOptions: { ...s.planOptions, ...planOptions } }))
   },
@@ -125,9 +123,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   },
   setActivePlan: (activePlan?: PlanProgress) => {
     set(() => ({ activePlan }))
-  },
-  setMostRecentPlan: (mostRecentPlan?: PlanProgress) => {
-    set(() => ({ mostRecentPlan }))
   },
   setState: (state: PlanState) => {
     set(() => ({ state }))
@@ -173,17 +168,17 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
 
     s.setActivePlan(plan)
 
-    if (isFalse(data.ok)) {
-      s.setState(EnumPlanState.Failed)
-      s.setActivePlan(undefined)
-      s.setMostRecentPlan(plan)
-    } else if (isAllTasksCompleted(data.tasks)) {
-      s.setState(EnumPlanState.Finished)
-      s.setActivePlan(undefined)
-      s.setMostRecentPlan(plan)
-    } else {
-      s.setState(EnumPlanState.Applying)
-    }
+    setTimeout(() => {
+      if (isFalse(data.ok)) {
+        s.setState(EnumPlanState.Failed)
+        s.setActivePlan(undefined)
+      } else if (isAllTasksCompleted(data.tasks)) {
+        s.setState(EnumPlanState.Finished)
+        s.setActivePlan(undefined)
+      } else {
+        s.setState(EnumPlanState.Applying)
+      }
+    }, 300)
   },
 }))
 

@@ -2,7 +2,6 @@ import {
   EnumPlanAction,
   EnumPlanState,
   PlanAction,
-  PlanProgress,
   PlanState,
 } from '../../../context/plan'
 import { isArrayNotEmpty, isFalse } from '../../../utils'
@@ -54,37 +53,31 @@ export function getBackfillStepHealine({
   planAction,
   planState,
   hasBackfill,
-  hasChanges,
+  hasLogicalUpdate,
   hasNoChange,
-  mostRecentPlan,
+  isBackfilled,
+  isLogicalUpdated,
 }: {
   planAction: PlanAction
   planState: PlanState
   hasBackfill: boolean
-  hasChanges: boolean
+  hasLogicalUpdate: boolean
   hasNoChange: boolean
-  mostRecentPlan?: PlanProgress
+  isBackfilled: boolean
+  isLogicalUpdated: boolean
 }): string {
-  const isMostRecentPlanLogical =
-    mostRecentPlan != null && mostRecentPlan.type === 'logical'
-  const isMostRecentPlanBackfill =
-    mostRecentPlan != null && mostRecentPlan.type === 'backfill'
-
-  if (hasNoChange) return 'No Changes'
-  if (hasBackfill) return 'Needs Backfill'
-  if (hasChanges && isFalse(hasBackfill))
-    return 'Logical Update Will Be Applied'
   if (planAction === EnumPlanAction.Running) return 'Collecting Backfill...'
   if (planState === EnumPlanState.Applying && isFalse(hasBackfill))
     return 'Applying...'
   if (planState === EnumPlanState.Failed) return 'Failed'
   if (planState === EnumPlanState.Cancelled) return 'Cancelled'
-  if (planState === EnumPlanState.Finished && isMostRecentPlanBackfill)
+  if (planState === EnumPlanState.Finished && isBackfilled)
     return 'Completed Backfill'
-  if (planState === EnumPlanState.Finished && isMostRecentPlanLogical)
+  if (planState === EnumPlanState.Finished && isLogicalUpdated)
     return 'Completed Logical Update'
-  if (isMostRecentPlanBackfill) return 'Most Recent Backfill'
-  if (isMostRecentPlanLogical) return 'Most Recent Logical Update'
+  if (hasBackfill) return 'Needs Backfill'
+  if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
+  if (hasNoChange) return 'No Changes'
 
   return 'Updating...'
 }

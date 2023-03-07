@@ -19,18 +19,19 @@ import {
   PlanTasks,
   PlanTaskStatus,
   EnumCategoryType,
+  PlanProgress,
 } from '../../../context/plan'
 import {
   includes,
   isArrayNotEmpty,
   isFalse,
-  toDate,
-  toDateFormat,
+  isNotNil,
+  isObjectNotEmpty,
 } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
-import { getBackfillStepHealine, isModified } from './help'
+import { isModified } from './help'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
@@ -38,15 +39,19 @@ const Tasks = lazy(async () => await import('../plan/Tasks'))
 export default function PlanWizard({
   environment,
   changes,
+  updateType,
   hasChanges,
   hasBackfill,
+  mostRecentPlan,
   backfills = [],
 }: {
   environment: EnvironmentName
   hasChanges: boolean
+  hasBackfill: boolean
+  mostRecentPlan?: PlanProgress
   changes?: ContextEnvironmentChanges
   backfills?: ContextEnvironmentBackfill[]
-  hasBackfill: boolean
+  updateType?: 'backfill' | 'logical'
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -55,20 +60,18 @@ export default function PlanWizard({
   const categories = useStorePlan(s => s.categories)
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
-  const activePlan = useStorePlan(s => s.activePlan)
-  const mostRecentPlan = useStorePlan(s => s.mostRecentPlan)
   const setCategory = useStorePlan(s => s.setCategory)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
 
   const tasks: PlanTasks = useMemo(
     (): PlanTasks =>
-      hasBackfill
-        ? backfills.reduce((acc: PlanTasks, task) => {
+      mostRecentPlan?.tasks != null
+        ? mostRecentPlan?.tasks
+        : backfills.reduce((acc: PlanTasks, task) => {
             const taskModelName = task.model_name
             const taskInterval = task.interval as [string, string]
             const taskBackfill: PlanTaskStatus = {
               completed: 0,
-              ...activePlan?.tasks[taskModelName],
               total: task.batches,
               interval: taskInterval,
             }
@@ -92,34 +95,36 @@ export default function PlanWizard({
             }
 
             return acc
-          }, {})
-        : mostRecentPlan?.tasks ?? {},
-    [backfills, changes, category, mostRecentPlan, activePlan],
+          }, {}),
+    [backfills, changes, category, mostRecentPlan],
   )
 
+  const hasLogicalUpdate = hasChanges && isFalse(hasBackfill)
   const isProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
   )
-  const isDone = planAction === EnumPlanAction.Done
-  const hasMostRecentPlan = mostRecentPlan != null
-  const hasActivePlan = activePlan != null
+  const isApplied = isNotNil(updateType)
+  const isBackfilled = hasBackfill && updateType === 'backfill'
+  const isLogicalUpdated = hasLogicalUpdate && updateType === 'logical'
   const hasNoChange = [
-    hasMostRecentPlan,
-    hasActivePlan,
     hasChanges,
     hasBackfill,
+    isApplied,
+    isObjectNotEmpty(tasks),
   ].every(isFalse)
-  const showTaskProgress = (isDone && hasMostRecentPlan) || hasBackfill
-  const showDetails = isFalse(hasNoChange) || showTaskProgress
-  const showTimestamp = isDone || isProgress
+  const showTaskProgress = hasBackfill || isBackfilled || isLogicalUpdated
+  const showDetails =
+    isFalse(hasNoChange) &&
+    (hasBackfill || isBackfilled || (isLogicalUpdated && isFalse(isApplied)))
   const backfillStepHeadline = getBackfillStepHealine({
     planAction,
     planState,
     hasBackfill,
-    hasChanges,
+    hasLogicalUpdate,
     hasNoChange,
-    mostRecentPlan,
+    isBackfilled,
+    isLogicalUpdated,
   })
 
   return (
@@ -131,6 +136,7 @@ export default function PlanWizard({
           <PlanWizardStep
             headline="Models"
             description="Review Changes"
+            disabled={environment == null}
           >
             {hasChanges ? (
               <>
@@ -212,13 +218,11 @@ export default function PlanWizard({
           <PlanWizardStep
             headline="Backfill"
             description="Progress"
+            disabled={environment == null}
           >
             <Disclosure
               key={backfillStepHeadline}
-              defaultOpen={
-                hasBackfill ||
-                (planState === EnumPlanState.Finished && hasMostRecentPlan)
-              }
+              defaultOpen={hasBackfill || isBackfilled}
             >
               {({ open }) => (
                 <>
@@ -243,14 +247,6 @@ export default function PlanWizard({
                         >
                           {backfillStepHeadline}
                         </h3>
-                        {isFalse(open) && showTimestamp && (
-                          <p className="text-xs text-gray-600 ml-2">
-                            {toDateFormat(
-                              toDate(mostRecentPlan?.updated_at),
-                              'yyyy-mm-dd hh-mm-ss',
-                            )}
-                          </p>
-                        )}
                       </div>
                       {showDetails && (
                         <div className="flex items-center">
@@ -271,7 +267,7 @@ export default function PlanWizard({
                     {showTaskProgress && (
                       <>
                         {isModified(changes?.modified) &&
-                          planState !== EnumPlanState.Applying && (
+                          isFalse(isApplied) && (
                             <div className="mb-10 lg:px-4 ">
                               <RadioGroup
                                 className="rounded-lg w-full"
@@ -337,25 +333,21 @@ export default function PlanWizard({
                               </RadioGroup>
                             </div>
                           )}
-                        {category?.id !== EnumCategoryType.NoChange &&
-                          environment != null && (
-                            <>
-                              <Suspense
-                                fallback={<Spinner className="w-4 h-4 mr-2" />}
-                              >
-                                <Tasks
-                                  environment={environment}
-                                  tasks={tasks}
-                                  changes={changes}
-                                  updated_at={mostRecentPlan?.updated_at}
-                                  showBatches={
-                                    mostRecentPlan?.type !== 'logical'
-                                  }
-                                  showLogicalUpdate={
-                                    mostRecentPlan?.type === 'logical'
-                                  }
-                                />
-                              </Suspense>
+                        {category?.id !== EnumCategoryType.NoChange && (
+                          <>
+                            <Suspense
+                              fallback={<Spinner className="w-4 h-4 mr-2" />}
+                            >
+                              <Tasks
+                                environment={environment}
+                                tasks={tasks}
+                                changes={changes}
+                                updated_at={mostRecentPlan?.updated_at}
+                                showBatches={isBackfilled}
+                                showLogicalUpdate={isLogicalUpdated}
+                              />
+                            </Suspense>
+                            {isFalse(isApplied) && (
                               <form>
                                 <fieldset className="flex w-full">
                                   <Input
@@ -388,8 +380,9 @@ export default function PlanWizard({
                                   />
                                 </fieldset>
                               </form>
-                            </>
-                          )}
+                            )}
+                          </>
+                        )}
                       </>
                     )}
                     {hasChanges && isFalse(hasBackfill) && (

@@ -53,7 +53,6 @@ export function IDE(): JSX.Element {
 
   const planState = useStorePlan(s => s.state)
   const activePlan = useStorePlan(s => s.activePlan)
-  const mostRecentPlan = useStorePlan(s => s.mostRecentPlan)
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const updateTasks = useStorePlan(s => s.updateTasks)
@@ -109,8 +108,6 @@ export function IDE(): JSX.Element {
     setIsPlanOpen(false)
   }
 
-  const plan = activePlan ?? mostRecentPlan
-
   return (
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
@@ -140,10 +137,10 @@ export function IDE(): JSX.Element {
               showRunPlan={showRunPlan}
             />
           )}
-          {environment != null && plan != null && (
-            <ActiveOrMostRecentPlan
+          {environment != null && activePlan != null && (
+            <ActivePlan
               environment={environment}
-              plan={plan}
+              plan={activePlan}
               planState={planState}
               cancelPlan={cancelPlan}
             />
@@ -190,7 +187,7 @@ export function IDE(): JSX.Element {
   )
 }
 
-function ActiveOrMostRecentPlan({
+function ActivePlan({
   environment,
   plan,
   planState,
@@ -298,21 +295,6 @@ function RunPlan({
   } = useApiPlan(environment)
 
   useEffect(() => {
-    const mostRecentPlan =
-      (plan as any)?.previous == null
-        ? undefined
-        : {
-            environment,
-            tasks: (plan as any).previous.tasks,
-            updated_at: (plan as any).previous.end,
-            ok: true,
-            type: (plan as any).previous.type,
-          }
-
-    setMostRecentPlan(mostRecentPlan)
-  }, [plan])
-
-  useEffect(() => {
     void refetchPlan()
   }, [environment])
 
@@ -360,7 +342,9 @@ function RunPlan({
             planState,
           ) && <Spinner className="w-3 h-3 mr-1" />}
           <span className="inline-block">
-            {planState === EnumPlanState.Applying
+            {planState === EnumPlanState.Running
+              ? 'Running Plan...'
+              : planState === EnumPlanState.Applying
               ? 'Applying Plan...'
               : planState === EnumPlanState.Cancelling
               ? 'Cancelling Plan...'
@@ -402,7 +386,7 @@ function RunPlan({
                         <span className="inline-block ">Checking...</span>
                       </span>
                     )}
-                    {plan?.changes != null && isFalse(isLoading) && (
+                    {plan?.changes == null && isFalse(isLoading) && (
                       <span
                         title="Latest"
                         className="block h-4 ml-1 px-2 first-child:ml-0 rounded-full bg-gray-200 text-gray-900 p-[0.125rem] text-xs leading-[0.75rem] text-center"

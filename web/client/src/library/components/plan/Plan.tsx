@@ -7,6 +7,7 @@ import {
   EnumPlanAction,
   useStorePlan,
   EnumCategoryType,
+  PlanProgress,
 } from '../../../context/plan'
 import {
   includes,
@@ -43,6 +44,7 @@ export default function Plan({
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const category = useStorePlan(s => s.category)
+  const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
@@ -50,6 +52,8 @@ export default function Plan({
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
   const [plan, setPlan] = useState<ContextEnvironment>()
+  const [updateType, setUpdateType] = useState<'backfill' | 'logical'>()
+  const [mostRecentPlan, setMostRecentPlan] = useState<PlanProgress>()
 
   const { refetch } = useApiPlan(environment)
 
@@ -94,15 +98,22 @@ export default function Plan({
 
     if (isDone) {
       setPlanAction(EnumPlanAction.Done)
-      cleanUp()
     }
   }, [plan, hasChangesOrBackfill, isDone])
+
+  useEffect(() => {
+    if (activePlan != null) {
+      setMostRecentPlan(activePlan)
+    }
+  }, [activePlan])
 
   function cleanUp(): void {
     void useApiContextCancel(client)
 
     setPlan(undefined)
+    setMostRecentPlan(undefined)
     setCategory(undefined)
+    setUpdateType(undefined)
     resetPlanOptions()
   }
 
@@ -110,6 +121,7 @@ export default function Plan({
     setPlanAction(EnumPlanAction.Resetting)
 
     cleanUp()
+    setPlanState(EnumPlanState.Init)
 
     setPlanAction(EnumPlanAction.Run)
   }
@@ -128,8 +140,16 @@ export default function Plan({
 
     applyApiCommandsApplyPost({
       environment,
-    }).catch(error => {
-      console.error(error)
+    })
+      .then((data: any) => {
+        setUpdateType(data.type)
+
+        if (data.type === 'logical') {
+          setPlanState(EnumPlanState.Finished)
+        }
+      })
+      .catch(error => {
+        console.error(error)
 
       reset()
     })
@@ -141,9 +161,10 @@ export default function Plan({
 
   function run(): void {
     setPlanAction(EnumPlanAction.Running)
+    setPlanState(EnumPlanState.Running)
     setPlan(undefined)
 
-    refetch()
+    void refetch()
       .then(({ data }) => {
         setPlan(data)
 
@@ -153,6 +174,10 @@ export default function Plan({
         setBackfillDate('end', toDateFormat(toDate(data.end), 'mm/dd/yyyy'))
       })
       .catch(console.error)
+      .finally(() => {
+        setPlanAction(EnumPlanAction.Run)
+        setPlanState(EnumPlanState.Init)
+      })
   }
 
   return (
@@ -166,6 +191,8 @@ export default function Plan({
           hasChanges={hasChanges}
           backfills={backfills}
           hasBackfill={hasBackfill}
+          updateType={updateType}
+          mostRecentPlan={mostRecentPlan}
         />
       </div>
       <Divider />
