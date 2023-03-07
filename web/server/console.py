@@ -32,7 +32,6 @@ class ApiConsole(TerminalConsole):
     def __init__(self) -> None:
         super().__init__()
         self.current_task_status: t.Dict[str, t.Dict[str, int]] = {}
-        self.previous_task_status: t.Dict[str, t.Dict[str, int]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
         self.previous: TaskReport = TaskReport()
 
@@ -78,7 +77,6 @@ class ApiConsole(TerminalConsole):
 
     def stop_snapshot_progress(self) -> None:
         """Stop the load progress"""
-        self.previous_task_status = self.current_task_status.copy()
         self.current_task_status = {}
         self.previous.completed = sum(
             [task["completed"] for task in self.previous_task_status.values()]

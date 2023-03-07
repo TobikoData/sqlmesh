@@ -1,5 +1,3 @@
-import typing as t
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -23,51 +21,48 @@ def get_plan(
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
-    context.refresh()
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
+        context.refresh()
 
-    console: t.Any = context.console
-
-    plan = context.plan(environment=environment, no_prompts=True)
-    payload = models.ContextEnvironment(
-        environment=plan.environment.name, start=plan.start, end=plan.end
-    )
-
-    if (
-        len(dict(console.previous)) > 0
-        and hasattr(request.app.state, "task")
-        and request.app.state.task._environment == environment
-    ):
-        payload.previous = dict(console.previous)
-
-    if plan.context_diff.has_differences:
-        batches = context.scheduler().batches()
-        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-
-        payload.backfills = [
-            models.ContextEnvironmentBackfill(
-                model_name=interval.snapshot_name,
-                interval=[
-                    [to_ds(t) for t in make_inclusive(start, end)]
-                    for start, end in interval.merged_intervals
-                ][0],
-                batches=tasks[interval.snapshot_name],
-            )
-            for interval in plan.missing_intervals
-        ]
-
-        payload.changes = models.ContextEnvironmentChanges(
-            removed=plan.context_diff.removed,
-            added=plan.context_diff.added,
-            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
+        plan = context.plan(environment=environment, no_prompts=True)
+        payload = models.ContextEnvironment(
+            environment=plan.environment.name, start=plan.start, end=plan.end
         )
 
-    return payload
+        if plan.context_diff.has_differences:
+            batches = context.scheduler().batches()
+            tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+
+            payload.backfills = [
+                models.ContextEnvironmentBackfill(
+                    model_name=interval.snapshot_name,
+                    interval=[
+                        [to_ds(t) for t in make_inclusive(start, end)]
+                        for start, end in interval.merged_intervals
+                    ][0],
+                    batches=tasks[interval.snapshot_name],
+                )
+                for interval in plan.missing_intervals
+            ]
+
+            payload.changes = models.ContextEnvironmentChanges(
+                removed=plan.context_diff.removed,
+                added=plan.context_diff.added,
+                modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
+            )
+
+        return payload
+    else:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
+        )
 
 
 @router.post("/cancel")
 async def cancel_plan(
     request: Request,
     response: Response,
+    context: Context = Depends(get_loaded_context),
 ) -> None:
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import json
 import traceback
 import typing as t
 
@@ -11,11 +10,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import now_timestamp
 from web.server import models
-from web.server.console import TaskReport, TaskUpdateType
 from web.server.settings import get_loaded_context
-from web.server.sse import Event
 from web.server.utils import (
     ArrowStreamingResponse,
     df_to_pyarrow_bytes,
@@ -33,40 +29,22 @@ async def apply(
 ) -> t.Any:
     """Apply a plan"""
 
-    console: t.Any = context.console
-
     plan = plan = context.plan(environment=environment, no_prompts=True)
     apply = functools.partial(context.apply, plan)
 
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
-        task = asyncio.create_task(run_in_executor(apply))
-        setattr(task, "_environment", environment)
-        request.app.state.task = task
+        if plan.requires_backfill:
+            task = asyncio.create_task(run_in_executor(apply))
+            request.app.state.task = task
+        else:
+            apply()
+
     else:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
 
-    if not plan.requires_backfill:
-        print("No backfill required")
-        task_logical: t.Dict[str, int] = {"start": 0, "end": 1000, "completed": 1, "total": 1}
-        console.previous = TaskReport(
-            start=now_timestamp(),
-            type=TaskUpdateType.logical,
-            end=now_timestamp() + 1000,
-            tasks={name: task_logical for name in console.previous.tasks.keys()},
-            completed=1,
-            total=1,
-            is_completed=True,
-        )
-        console.queue.put_nowait(
-            Event(
-                event="tasks",
-                data=json.dumps(dict(console.previous)),
-            )
-        )
-
-    return {"ok": True}
+    return {"ok": True, "type": "backfill" if plan.requires_backfill else "logical"}
 
 
 @router.post("/evaluate")
