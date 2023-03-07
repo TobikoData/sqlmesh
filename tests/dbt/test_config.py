@@ -105,7 +105,7 @@ def test_model_config_sql_no_config():
             sql="""{{
   config(
     materialized='table',
-    incremental_strategy='delete+insert'
+    incremental_strategy='delete+"insert'
   )
 }}
 query"""
@@ -117,9 +117,9 @@ query"""
         ModelConfig(
             sql="""{{
   config(
-    materialized='table',
+    materialized='"table"',
     incremental_strategy='delete+insert',
-    post_hook=" {{ macro_call(this) }} "
+    post_hook=" '{{ macro_call(this) }}' "
   )
 }}
 query"""

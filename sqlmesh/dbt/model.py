@@ -192,11 +192,14 @@ class ModelConfig(GeneralConfig):
         if matches:
             config_macro_start = self.sql.index(matches[0])
             cursor = config_macro_start
-            is_quoted = False
+            quote = None
             while cursor < len(self.sql):
-                if self.sql[cursor] == '"':
-                    is_quoted = not is_quoted
-                if self.sql[cursor : cursor + 2] == "}}" and not is_quoted:
+                if self.sql[cursor] in ('"', "'"):
+                    if quote is None:
+                        quote = self.sql[cursor]
+                    elif quote == self.sql[cursor]:
+                        quote = None
+                if self.sql[cursor : cursor + 2] == "}}" and quote is None:
                     return "".join([self.sql[:config_macro_start], self.sql[cursor + 2 :]])
                 cursor += 1
         return self.sql
