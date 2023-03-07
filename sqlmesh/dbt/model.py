@@ -5,6 +5,8 @@ import typing as t
 from enum import Enum
 from pathlib import Path
 
+from dbt.adapters.base import BaseRelation
+from dbt.contracts.relation import RelationType
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
@@ -20,7 +22,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.adapter import ParsetimeAdapter
-from sqlmesh.dbt.builtin import create_builtins
+from sqlmesh.dbt.builtin import create_builtins, generate_this
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -56,7 +58,6 @@ class ModelConfig(GeneralConfig):
         target_schema: The schema for the profile target
         sql: The model sql
         time_column: The name of the time column
-        table_name: Table name as stored in the database instead of the model filename
         start: The earliest date that the model will be backfileld for
         alias: Relation identifier for this model instead of the model filename
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
@@ -78,7 +79,7 @@ class ModelConfig(GeneralConfig):
     target_schema: str = ""
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
-    table_name: t.Optional[str] = None
+    filename: t.Optional[str] = None
     _dependencies: Dependencies = Dependencies()
     _variables: t.Dict[str, bool] = {}
 
@@ -150,6 +151,20 @@ class ModelConfig(GeneralConfig):
     }
 
     @property
+    def table_schema(self) -> str:
+        """
+        Get the full schema name
+        """
+        return "_".join(part for part in (self.target_schema, self.schema_) if part)
+
+    @property
+    def table_name(self) -> str:
+        """
+        Get the table name
+        """
+        return self.alias or self.path.stem
+
+    @property
     def model_name(self) -> str:
         """
         Get the sqlmesh model name
@@ -157,8 +172,9 @@ class ModelConfig(GeneralConfig):
         Returns:
             The sqlmesh model name
         """
-        schema = "_".join(part for part in (self.target_schema, self.schema_) if part)
-        return ".".join(part for part in (schema, self.alias or self.table_name) if part)
+        return ".".join(
+            part for part in (self.database, self.table_schema, self.table_name) if part
+        )
 
     @property
     def model_kind(self) -> ModelKind:
@@ -236,12 +252,28 @@ class ModelConfig(GeneralConfig):
             statements=expressions[0:-1],
             columns=column_types_to_sqlmesh(self.columns) or None,
             column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
-            python_env=model_context.builtin_python_env,
+            python_env=model_context.create_python_env({"this": generate_this(self)}),
             jinja_macros=model_context.jinja_macros.trim(dependencies.macros),
             depends_on=depends_on,
             start=self.start,
             path=self.path,
         )
+
+    @property
+    def relation_info(self) -> t.Dict[str, t.Any]:
+        if self.materialized == Materialization.VIEW:
+            relation_type = RelationType.View
+        elif self.materialized == Materialization.EPHEMERAL:
+            relation_type = RelationType.CTE
+        else:
+            relation_type = RelationType.Table
+
+        return {
+            "database": self.database,
+            "schema": self.table_schema,
+            "identifier": self.table_name,
+            "type": relation_type.value,
+        }
 
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies
@@ -251,8 +283,11 @@ class ModelConfig(GeneralConfig):
         model_context.sources = {
             name: value for name, value in context.sources.items() if name in dependencies.sources
         }
-        model_context.refs = {
-            name: value for name, value in context.refs.items() if name in dependencies.refs
+        model_context.seeds = {
+            name: value for name, value in context.seeds.items() if name in dependencies.refs
+        }
+        model_context.models = {
+            name: value for name, value in context.models.items() if name in dependencies.refs
         }
         model_context.variables = {
             name: value
@@ -280,6 +315,7 @@ class ModelSqlRenderer:
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
+                "this": generate_this(self.config),
             },
             engine_adapter=None,
         )
@@ -311,13 +347,17 @@ class ModelSqlRenderer:
             )
         return self._rendered_sql
 
-    def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> str:
-        if package_name not in self.context.refs:
+    def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> BaseRelation:
+        if package_name in self.context.models:
+            relation = BaseRelation.create(**self.context.models[package_name].relation_info)
+        elif package_name in self.context.seeds:
+            relation = BaseRelation.create(**self.context.seeds[package_name].relation_info)
+        else:
             raise ConfigError(
                 f"Model '{package_name}' was not found for model '{self.config.table_name}'."
             )
         self._captured_dependencies.refs.add(package_name)
-        return self.context.refs[package_name]
+        return relation
 
     def _var(self, name: str, default: t.Optional[str] = None) -> t.Any:
         if default is None and name not in self.context.variables:
@@ -327,14 +367,14 @@ class ModelSqlRenderer:
         self._captured_dependencies.variables.add(name)
         return self.context.variables.get(name, default)
 
-    def _source(self, source_name: str, table_name: str) -> str:
+    def _source(self, source_name: str, table_name: str) -> BaseRelation:
         full_name = ".".join([source_name, table_name])
         if full_name not in self.context.sources:
             raise ConfigError(
                 f"Source '{full_name}' was not found for model '{self.config.table_name}'."
             )
         self._captured_dependencies.sources.add(full_name)
-        return self.context.sources[full_name]
+        return BaseRelation.create(**self.context.sources[full_name].relation_info)
 
     def _config(self, *args: t.Any, **kwargs: t.Any) -> str:
         if args and isinstance(args[0], dict):

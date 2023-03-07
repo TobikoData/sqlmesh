@@ -6,6 +6,7 @@ import pytest
 from sqlmesh.dbt.common import DbtContext, Dependencies
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
+from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
     DatabricksConfig,
     PostgresConfig,
@@ -79,11 +80,10 @@ def test_model_config(sushi_dbt_project: Project):
 
     context = sushi_dbt_project.context
     context.sources = {
-        "raw.order_items": "raw.order_items",
-        "raw.items": "raw.items",
-        "raw.orders": "raw.orders",
+        "raw.order_items": SourceConfig(target_schema="raw", name="order_items"),
+        "raw.items": SourceConfig(target_schema="raw", name="items"),
+        "raw.orders": SourceConfig(target_schema="raw", name="orders"),
     }
-    context.refs = {}
     context.variables = {}
     rendered = customer_revenue_by_day_config.render_config(context)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+from dbt.contracts.relation import RelationType
 from pydantic import Field, validator
 
 from sqlmesh.core.config.base import UpdateStrategy
@@ -57,5 +58,18 @@ class SourceConfig(GeneralConfig):
     }
 
     @property
+    def table_name(self) -> t.Optional[str]:
+        return self.identifier or self.name
+
+    @property
     def source_name(self) -> str:
-        return ".".join(part for part in (self.schema_, self.identifier or self.name) if part)
+        return ".".join(part for part in (self.schema_, self.table_name) if part)
+
+    @property
+    def relation_info(self) -> t.Dict[str, t.Any]:
+        return {
+            "database": self.database,
+            "schema": self.schema_,
+            "identifier": self.table_name,
+            "type": RelationType.External.value,
+        }
