@@ -269,6 +269,8 @@ class ModelSqlRenderer:
             },
             engine_adapter=None,
         )
+
+        # Set the adapter separately since it requires jinja globals to passed into it.
         self._jinja_globals["adapter"] = ModelSqlRenderer.TrackingAdapter(
             self,
             context.jinja_macros,
