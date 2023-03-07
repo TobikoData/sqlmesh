@@ -5,12 +5,19 @@ import typing as t
 
 import agate
 import jinja2
+from dbt.adapters.base import BaseRelation
+from dbt.contracts.relation import Policy
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
+
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.model import ModelConfig
+    from sqlmesh.dbt.seed import SeedConfig
+    from sqlmesh.dbt.source import SourceConfig
 
 
 class Exceptions:
@@ -91,24 +98,45 @@ def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     return var
 
 
-def generate_ref(refs: t.Dict[str, str]) -> t.Callable:
-    DBT_REF_MAPPING = refs.copy()
+def generate_ref(refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]]) -> t.Callable:
+    DBT_REF_MAPPING = {k: v.relation_info for k, v in refs.items()}
 
     # TODO suport package name
-    def ref(package: str, name: t.Optional[str] = None) -> t.Optional[str]:
+    def ref(package: str, name: t.Optional[str] = None) -> t.Optional[BaseRelation]:
         name = name or package
-        return DBT_REF_MAPPING.get(name)
+        relation_info = DBT_REF_MAPPING.get(name)
+        if relation_info is None:
+            return relation_info
+
+        return BaseRelation.create(**relation_info, quote_policy=quote_policy())
 
     return ref
 
 
-def generate_source(sources: t.Dict[str, str]) -> t.Callable:
-    DBT_SOURCE_MAPPING = sources.copy()
+def generate_source(sources: t.Dict[str, SourceConfig]) -> t.Callable:
+    DBT_SOURCE_MAPPING = {k: v.relation_info for k, v in sources.items()}
 
-    def source(package: str, name: str) -> t.Optional[str]:
-        return DBT_SOURCE_MAPPING.get(f"{package}.{name}")
+    def source(package: str, name: str) -> t.Optional[BaseRelation]:
+        relation_info = DBT_SOURCE_MAPPING.get(f"{package}.{name}")
+        if relation_info is None:
+            return relation_info
+
+        return BaseRelation.create(**relation_info, quote_policy=quote_policy())
 
     return source
+
+
+def generate_this(model: ModelConfig) -> t.Callable:
+    DBT_THIS_RELATION = model.relation_info
+
+    def maybw() -> BaseRelation:
+        return BaseRelation.create(**DBT_THIS_RELATION, quote_policy=quote_policy())
+
+    return maybw
+
+
+def quote_policy() -> Policy:
+    return Policy(database=False, schema=False, identifier=False)
 
 
 def return_val(val: t.Any) -> None:
