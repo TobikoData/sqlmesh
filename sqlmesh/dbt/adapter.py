@@ -46,7 +46,7 @@ class Adapter(abc.ABC):
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
-        """Executes the given SQL statement and returns the results as a pandas dataframe."""
+        """Executes the given SQL statement and returns the results as an agate table."""
 
     @abc.abstractmethod
     def quote(self, identifier: str) -> str:
