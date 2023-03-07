@@ -6,6 +6,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.utils import AttributeDict
 
 
 def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
@@ -37,7 +38,7 @@ def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM `tbl`) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT",
+        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM `tbl`) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
     ]
 
 
@@ -45,10 +46,15 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
-
     adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    load_pandas_to_temp_table_mock = mocker.Mock()
+    load_pandas_to_temp_table_mock.return_value = (AttributeDict({"errors": None}), "temp_table")
+    adapter._BigQueryEngineAdapter__load_pandas_to_temp_table = load_pandas_to_temp_table_mock
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+    drop_table_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.drop_table"
     )
     df = pd.DataFrame({"a": [1, 2, 3], "ds": ["2020-01-01", "2020-01-02", "2020-01-03"]})
     adapter.insert_overwrite_by_time_partition(
@@ -71,8 +77,9 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT CAST(`a` AS INT64) AS `a`, CAST(`ds` AS STRING) AS `ds` FROM UNNEST([STRUCT(CAST(1 AS INT64) AS `a`, CAST('2020-01-01' AS STRING) AS `ds`), STRUCT(2 AS `a`, '2020-01-02' AS `ds`), STRUCT(3 AS `a`, '2020-01-03' AS `ds`)])) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT",
+        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM `temp_table`) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
     ]
+    drop_table_mock.assert_called_once_with("temp_table")
 
 
 def test_replace_query(mocker: MockerFixture):
@@ -144,7 +151,7 @@ def test_create_table_date_partition(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY DATE(`ds`)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY `ds`"
     ]
 
 
@@ -172,38 +179,5 @@ def test_create_table_time_partition(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY DATETIME_TRUNC(`ds`, HOUR)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY TIMESTAMP_TRUNC(`ds`, HOUR)"
     ]
-
-
-#
-# def test_insert_overwrite(mocker: MockerFixture):
-#     connection_mock = mocker.NonCallableMock()
-#     cursor_mock = mocker.Mock()
-#     connection_mock.cursor.return_value = cursor_mock
-#
-#     adapter = BigQueryEngineAdapter(lambda: connection_mock)
-#     execute_mock = mocker.patch(
-#         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
-#     )
-#     adapter.insert_overwrite_by_time_partition(
-#         "test_table",
-#         parse_one("SELECT cola, colb FROM tbl WHERE ds between @start_ds and @end_ds"),
-#         start="2020-01-01",
-#         end="2020-01-02",
-#
-#         {"a": "int", "b": "int"},
-#         partitioned_by=["ds"],
-#         partition_interval_unit=IntervalUnit.HOUR,
-#     )
-#
-#     sql_calls = [
-#         # Python 3.7 support
-#         call[0][0].sql(dialect="bigquery", identify=True)
-#         if isinstance(call[0], tuple)
-#         else call[0].sql(dialect="bigquery", identify=True)
-#         for call in execute_mock.call_args_list
-#     ]
-#     assert sql_calls == [
-#         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY DATETIME_TRUNC(`ds`, HOUR)"
-#     ]

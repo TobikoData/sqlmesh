@@ -7,6 +7,7 @@ from pydantic import Field, validator
 from sqlglot import exp
 from sqlglot.time import format_time
 
+from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -71,7 +72,7 @@ class ModelKind(PydanticModel):
 
 class TimeColumn(PydanticModel):
     column: str
-    format: t.Optional[str] = None
+    format: str = c.DEFAULT_TIME_COLUMN_FORMAT
 
     @property
     def expression(self) -> exp.Column | exp.Tuple:

@@ -615,7 +615,8 @@ class EngineAdapter:
             )
         )
         when_matched = exp.When(
-            this="MATCHED",
+            matched=True,
+            source=False,
             then=exp.update(
                 None,
                 properties={
@@ -625,7 +626,8 @@ class EngineAdapter:
             ),
         )
         when_not_matched = exp.When(
-            this=exp.Not(this="MATCHED"),
+            matched=False,
+            source=False,
             then=exp.Insert(
                 this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
                 expression=exp.Tuple(

@@ -17,6 +17,7 @@ from sqlmesh.core.model import (
     SqlModel,
     load_model,
 )
+from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -125,6 +126,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         query_or_columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
+        partition_interval_unit=IntervalUnit.DAY,
     )
 
 
