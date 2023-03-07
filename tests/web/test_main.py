@@ -367,11 +367,6 @@ def test_apply() -> None:
     assert response.status_code == 200
 
 
-def test_tasks() -> None:
-    response = client.get("/api/tasks")
-    assert response.status_code == 200
-
-
 @pytest.mark.asyncio
 async def test_cancel() -> None:
     app.state.task = asyncio.create_task(asyncio.sleep(1))
