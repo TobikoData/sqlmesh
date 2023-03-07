@@ -234,6 +234,7 @@ def create_builtins(
             {
                 "execute": True,
                 "adapter": adapter,
+                "load_relation": lambda r: adapter.get_relation(r.database, r.schema, r.identifier),
                 "store_result": sql_execution.store_result,
                 "load_result": sql_execution.load_result,
                 "run_query": sql_execution.run_query,
@@ -246,6 +247,7 @@ def create_builtins(
             {
                 "execute": False,
                 "adapter": ParsetimeAdapter(jinja_macros, jinja_globals=builtins),
+                "load_relation": lambda *args, **kwargs: None,
                 "store_result": lambda *args, **kwargs: "",
                 "load_result": lambda *args, **kwargs: None,
                 "run_query": lambda *args, **kwargs: None,
