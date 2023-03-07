@@ -18,7 +18,17 @@ if t.TYPE_CHECKING:
     from dbt.adapters.base.impl import AdapterResponse
 
 
-class Adapter(abc.ABC):
+class BaseAdapter(abc.ABC):
+    def __init__(
+        self,
+        jinja_macros: JinjaMacroRegistry,
+        jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
+        dialect: str = "",
+    ):
+        self.jinja_macros = jinja_macros
+        self.jinja_globals = jinja_globals or {}
+        self.dialect = dialect
+
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
         """Returns a single relation that matches the provided path."""
@@ -39,10 +49,6 @@ class Adapter(abc.ABC):
         """Returns the columns for a given table grained relation."""
 
     @abc.abstractmethod
-    def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
-        """Returns a dialect-specific version of a macro with the given name."""
-
-    @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
@@ -52,31 +58,8 @@ class Adapter(abc.ABC):
     def quote(self, identifier: str) -> str:
         """Returns a quoted identifeir."""
 
-
-class ParsetimeAdapter(Adapter):
-    def __init__(
-        self,
-        jinja_macros: JinjaMacroRegistry,
-        jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        dialect: str = "",
-    ):
-        self.jinja_macros = jinja_macros
-        self.jinja_globals = jinja_globals or {}
-        self.dialect = dialect
-
-    def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
-        return None
-
-    def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        return []
-
-    def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        return []
-
-    def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-        return []
-
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
+        """Returns a dialect-specific version of a macro with the given name."""
         dialect_name = f"{self.dialect}__{name}"
         default_name = f"default__{name}"
 
@@ -94,6 +77,20 @@ class ParsetimeAdapter(Adapter):
 
         raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
 
+
+class ParsetimeAdapter(BaseAdapter):
+    def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
+        return None
+
+    def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
+        return []
+
+    def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
+        return []
+
+    def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
+        return []
+
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
@@ -103,7 +100,7 @@ class ParsetimeAdapter(Adapter):
         return identifier
 
 
-class RuntimeAdapter(ParsetimeAdapter):
+class RuntimeAdapter(BaseAdapter):
     def __init__(
         self,
         engine_adapter: EngineAdapter,
