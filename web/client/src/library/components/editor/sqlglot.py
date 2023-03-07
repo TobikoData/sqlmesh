@@ -4,7 +4,7 @@ import sqlglot
 
 
 def parseToJSON(sql: str) -> str:
-    return json.dumps(sqlglot.parse(sql))
+    return json.dumps([exp.dump() if exp else {} for exp in sqlglot.parse(sql)])
 
 
 [sqlglot.transpile, parseToJSON]
