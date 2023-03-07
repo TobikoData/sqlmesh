@@ -6,10 +6,11 @@ import typing as t
 import agate
 import jinja2
 
-from sqlmesh.dbt.adapter import Adapter
+from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroReturnVal
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
 
 
 class Exceptions:
@@ -115,7 +116,7 @@ def return_val(val: t.Any) -> None:
 
 
 class SQLExecution:
-    def __init__(self, adapter: Adapter):
+    def __init__(self, adapter: RuntimeAdapter):
         self.adapter = adapter
         self._results: t.Dict[str, AttributeDict] = {}
 
@@ -179,7 +180,6 @@ BUILTIN_JINJA = {
     "config": config,
     "env_var": env_var,
     "exceptions": Exceptions(),
-    "execute": True,
     "flags": Flags(),
     "is_incremental": is_incremental,
     "log": no_log,
@@ -187,3 +187,43 @@ BUILTIN_JINJA = {
     "return": return_val,
     "sqlmesh": True,
 }
+
+
+def create_builtins(
+    jinja_macros: JinjaMacroRegistry,
+    jinja_globals: t.Dict[str, t.Any],
+    engine_adapter: t.Optional[EngineAdapter],
+) -> t.Dict[str, t.Any]:
+    builtins = {
+        **BUILTIN_JINJA,
+        **jinja_globals,
+    }
+
+    if engine_adapter is not None:
+        adapter = RuntimeAdapter(engine_adapter, jinja_macros, jinja_globals=builtins)
+        sql_execution = SQLExecution(adapter)
+        builtins.update(
+            {
+                "execute": True,
+                "adapter": adapter,
+                "store_result": sql_execution.store_result,
+                "load_result": sql_execution.load_result,
+                "run_query": sql_execution.run_query,
+                "statement": sql_execution.statement,
+                "log": log,
+            }
+        )
+    else:
+        builtins.update(
+            {
+                "execute": False,
+                "adapter": ParsetimeAdapter(jinja_macros, jinja_globals=builtins),
+                "store_result": lambda *args, **kwargs: "",
+                "load_result": lambda *args, **kwargs: None,
+                "run_query": lambda *args, **kwargs: None,
+                "statement": lambda *args, **kwargs: "",
+                "log": no_log,
+            }
+        )
+
+    return {**builtins, **jinja_globals}

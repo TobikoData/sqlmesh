@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib
 import typing as t
 from collections import defaultdict
 
 from jinja2 import Environment, Template, nodes
+from pydantic import validator
 from sqlglot import Dialect, Parser, TokenType
 
 from sqlmesh.utils import AttributeDict
@@ -158,11 +160,29 @@ def extract_macro_references(jinja_str: str) -> t.Set[MacroReference]:
 
 
 class JinjaMacroRegistry(PydanticModel):
+    """Registry for Jinja macros.
+
+    Args:
+        packages: The mapping from package name to a collection of macro definitions.
+        root_macros: The collection of top-level macro definitions.
+        global_objs: The global objects.
+        create_builtins_module: The name of a module which defines the `create_builtins` factory
+            function that will be used to construct builtin variables and functions.
+    """
+
     packages: t.Dict[str, t.Dict[str, MacroInfo]] = {}
     root_macros: t.Dict[str, MacroInfo] = {}
+    global_objs: t.Dict[str, AttributeDict] = {}
+    create_builtins_module: t.Optional[str] = None
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
+
+    @validator("global_objs", pre=True)
+    def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
+        if isinstance(value, t.Dict):
+            return {k: AttributeDict(v) for k, v in value.items()}
+        return value
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
@@ -195,15 +215,18 @@ class JinjaMacroRegistry(PydanticModel):
         if reference.package is None and reference.name not in self.root_macros:
             return None
 
-        return self._make_callable(reference.name, reference.package, {}, kwargs)
+        global_vars = self._create_builtins(kwargs)
+        return self._make_callable(reference.name, reference.package, {}, global_vars)
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
 
+        global_vars = self._create_builtins(kwargs)
+
         callable_cache: t.Dict[t.Tuple[t.Optional[str], str], t.Callable] = {}
 
         root_macros = {
-            name: self._make_callable(name, None, callable_cache, kwargs)
+            name: self._make_callable(name, None, callable_cache, global_vars)
             for name, macro in self.root_macros.items()
             if not _is_private_macro(name)
         }
@@ -213,7 +236,7 @@ class JinjaMacroRegistry(PydanticModel):
             for macro_name, macro in macros.items():
                 if not _is_private_macro(macro_name):
                     package_macros[package_name][macro_name] = self._make_callable(
-                        macro_name, package_name, callable_cache, kwargs
+                        macro_name, package_name, callable_cache, global_vars
                     )
 
         env = environment()
@@ -221,7 +244,7 @@ class JinjaMacroRegistry(PydanticModel):
             {
                 **root_macros,
                 **package_macros,
-                **kwargs,
+                **global_vars,
             }
         )
         return env
@@ -239,7 +262,9 @@ class JinjaMacroRegistry(PydanticModel):
         for dep in dependencies:
             dependencies_by_package[dep.package].add(dep.name)
 
-        result = JinjaMacroRegistry()
+        result = JinjaMacroRegistry(
+            global_objs=self.global_objs, create_builtins_module=self.create_builtins_module
+        )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
 
@@ -267,7 +292,17 @@ class JinjaMacroRegistry(PydanticModel):
                 **other.packages.get(package, {}),
             }
 
-        return JinjaMacroRegistry(packages=packages, root_macros=root_macros)
+        global_objs = {
+            **self.global_objs,
+            **other.global_objs,
+        }
+
+        return JinjaMacroRegistry(
+            packages=packages,
+            root_macros=root_macros,
+            global_objs=global_objs,
+            create_builtins_module=self.create_builtins_module or other.create_builtins_module,
+        )
 
     def _make_callable(
         self,
@@ -369,6 +404,16 @@ class JinjaMacroRegistry(PydanticModel):
                 node.node.name = _non_private_name(name)
 
         return template
+
+    def _create_builtins(self, global_vars: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        """Creates Jinja builtins using a factory function defined in the provided module."""
+        engine_adapter = global_vars.pop("engine_adapter", None)
+        global_vars = {**self.global_objs, **global_vars}
+        if self.create_builtins_module is not None:
+            module = importlib.import_module(self.create_builtins_module)
+            return module.create_builtins(self, global_vars, engine_adapter)
+        else:
+            return global_vars
 
 
 def _is_private_macro(name: str) -> bool:

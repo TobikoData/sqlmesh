@@ -9,14 +9,11 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.dbt.adapter import Adapter
 from sqlmesh.dbt.builtin import (
-    BUILTIN_JINJA,
-    SQLExecution,
+    create_builtins,
     generate_ref,
     generate_source,
     generate_var,
-    log,
 )
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
@@ -29,7 +26,6 @@ from sqlmesh.utils.yaml import load
 if t.TYPE_CHECKING:
     pass
 
-    from sqlmesh.dbt.adapter import Adapter
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -65,7 +61,9 @@ class DbtContext:
     target_name: t.Optional[str] = None
     project_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
-    jinja_macros: JinjaMacroRegistry = field(default_factory=JinjaMacroRegistry)
+    jinja_macros: JinjaMacroRegistry = field(
+        default_factory=lambda: JinjaMacroRegistry(create_builtins_module="sqlmesh.dbt")
+    )
     sources: t.Dict[str, str] = field(default_factory=dict)
     variables: t.Dict[str, t.Any] = field(default_factory=dict)
     refs: t.Dict[str, str] = field(default_factory=dict)
@@ -76,11 +74,6 @@ class DbtContext:
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
-    _builtins: t.Dict[str, t.Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if not self._builtins:
-            self._builtins = BUILTIN_JINJA.copy()
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
@@ -123,53 +116,44 @@ class DbtContext:
 
     @target.setter
     def target(self, value: TargetConfig) -> None:
+        if not self.project_name:
+            raise ConfigError("Project name must be set in the context in order to use a target.")
+
         self._target = value
         self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
+        self.jinja_macros.global_objs["target"] = value.target_jinja(self.project_name)
 
-    @property
-    def builtin_jinja(self) -> t.Dict[str, t.Any]:
-        builtins: t.Dict[str, t.Any] = {
-            **self._builtins,
-            "var": generate_var(self.variables),
-            "ref": generate_ref(self.refs),
-            "source": generate_source(self.sources),
-        }
+    def render(self, source: str) -> str:
+        return (
+            self.jinja_macros.build_environment(**self.builtin_jinja).from_string(source).render()
+        )
 
-        if self._target is not None:
-            if not self.project_name:
-                raise ConfigError(
-                    "Project name must be set in the context in order to use a target."
-                )
-            builtins["target"] = self._target.target_jinja(self.project_name)
-
-            if self.engine_adapter is not None:
-                adapter = Adapter(self.engine_adapter, self.jinja_macros, jinja_globals=builtins)
-                builtins["adapter"] = adapter
-                sql_execution = SQLExecution(adapter)
-                builtins["store_result"] = sql_execution.store_result
-                builtins["load_result"] = sql_execution.load_result
-                builtins["run_query"] = sql_execution.run_query
-                builtins["statement"] = sql_execution.statement
-
-        return builtins
+    def copy(self) -> DbtContext:
+        return replace(self)
 
     @property
     def builtin_python_env(self) -> t.Dict[str, t.Any]:
         env: t.Dict[str, t.Any] = {}
-        methods = self.builtin_jinja.copy()
-        methods["log"] = log
-        for name, method in methods.items():
-            # JINJA_ONLY is used temporarily until Iaroslav has the jinja templates working
-            if name not in JINJA_ONLY:
-                build_env(method, env=env, name=name, path=Path(__file__).parent)
+        for name, method in self._builtin_jinja_overrides.items():
+            build_env(method, env=env, name=name, path=Path(__file__).parent)
 
         return serialize_env(env, Path(__file__).parent)
 
-    def render(self, source: str) -> str:
-        return render_jinja(source, self.builtin_jinja)
+    @property
+    def builtin_jinja(self) -> t.Dict[str, t.Any]:
+        return create_builtins(
+            jinja_macros=self.jinja_macros,
+            jinja_globals=self._builtin_jinja_overrides,
+            engine_adapter=self.engine_adapter,
+        )
 
-    def copy(self) -> DbtContext:
-        return replace(self)
+    @property
+    def _builtin_jinja_overrides(self) -> t.Dict[str, t.Any]:
+        return {
+            "var": generate_var(self.variables),
+            "ref": generate_ref(self.refs),
+            "source": generate_source(self.sources),
+        }
 
 
 class SqlStr(str):
