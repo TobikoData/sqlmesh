@@ -19,18 +19,18 @@ import {
   PlanTasks,
   PlanTaskStatus,
   EnumCategoryType,
+  PlanProgress,
 } from '../../../context/plan'
 import {
   includes,
   isArrayNotEmpty,
   isFalse,
-  toDate,
-  toDateFormat,
+  isObjectNotEmpty,
 } from '../../../utils'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
-import { isModified } from './help'
+import { getBackfillStepHeadline, isModified } from './help'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 
 const Tasks = lazy(async () => await import('../plan/Tasks'))
@@ -40,13 +40,15 @@ export default function PlanWizard({
   changes,
   hasChanges,
   hasBackfill,
+  mostRecentPlan,
   backfills = [],
 }: {
   environment: EnvironmentName
   hasChanges: boolean
+  hasBackfill: boolean
+  mostRecentPlan?: PlanProgress
   changes?: ContextEnvironmentChanges
   backfills?: ContextEnvironmentBackfill[]
-  hasBackfill: boolean
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -55,20 +57,39 @@ export default function PlanWizard({
   const categories = useStorePlan(s => s.categories)
   const backfill_start = useStorePlan(s => s.backfill_start)
   const backfill_end = useStorePlan(s => s.backfill_end)
-  const activePlan = useStorePlan(s => s.activePlan)
-  const mostRecentPlan = useStorePlan(s => s.lastPlan ?? s.activePlan)
   const setCategory = useStorePlan(s => s.setCategory)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
 
   const tasks: PlanTasks = useMemo(
     (): PlanTasks =>
-      hasBackfill
-        ? backfills.reduce((acc: PlanTasks, task) => {
+      mostRecentPlan?.tasks != null
+        ? Object.entries(mostRecentPlan.tasks).reduce(
+            (acc: PlanTasks, [taskModelName, task]) => {
+              if (category?.id === EnumCategoryType.NonBreakingChange) {
+                const directChanges = changes?.modified.direct
+                const isTaskDirectChange =
+                  directChanges == null
+                    ? false
+                    : directChanges.some(
+                        ({ model_name }) => model_name === taskModelName,
+                      )
+
+                if (isTaskDirectChange) {
+                  acc[taskModelName] = task
+                }
+              } else {
+                acc[taskModelName] = task
+              }
+
+              return acc
+            },
+            {},
+          )
+        : backfills.reduce((acc: PlanTasks, task) => {
             const taskModelName = task.model_name
             const taskInterval = task.interval as [string, string]
             const taskBackfill: PlanTaskStatus = {
               completed: 0,
-              ...activePlan?.tasks[taskModelName],
               total: task.batches,
               interval: taskInterval,
             }
@@ -92,20 +113,29 @@ export default function PlanWizard({
             }
 
             return acc
-          }, {})
-        : mostRecentPlan?.tasks ?? {},
-    [backfills, changes, category, mostRecentPlan, activePlan],
+          }, {}),
+    [backfills, changes, category, mostRecentPlan],
   )
 
-  const isDone = mostRecentPlan != null && planAction === EnumPlanAction.Done
-  const isPlanInProgress = includes(
+  const hasLogicalUpdate = hasChanges && isFalse(hasBackfill)
+  const isProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
   )
-  const shouldDisplayTaskProgress =
-    (hasBackfill || isDone) &&
-    planAction !== EnumPlanAction.Running &&
-    planAction !== EnumPlanAction.Closing
+  const isFinished = planState === EnumPlanState.Finished
+  const hasNoChange = [hasChanges, hasBackfill, isObjectNotEmpty(tasks)].every(
+    isFalse,
+  )
+  const showDetails =
+    isFalse(hasNoChange) &&
+    (hasBackfill || (hasLogicalUpdate && isFalse(isFinished)))
+  const backfillStepHeadline = getBackfillStepHeadline({
+    planAction,
+    planState,
+    hasBackfill,
+    hasLogicalUpdate,
+    hasNoChange,
+  })
 
   return (
     <ul className="w-full mx-auto">
@@ -200,176 +230,190 @@ export default function PlanWizard({
             description="Progress"
             disabled={environment == null}
           >
-            {isDone && isFalse(hasBackfill) && (
-              <PlanWizardStepMessage className="">
-                <div className="flex justify-between items-center w-full">
-                  <h3
-                    className={clsx(
-                      'font-bold text-lg text-success-700',
-                      planState === EnumPlanState.Cancelled && 'text-gray-700',
-                      planState === EnumPlanState.Failed && 'text-danger-700',
-                    )}
+            <Disclosure
+              key={backfillStepHeadline}
+              defaultOpen={hasBackfill}
+            >
+              {({ open }) => (
+                <>
+                  <PlanWizardStepMessage
+                    hasSpinner={
+                      isFalse(open) &&
+                      (planAction === EnumPlanAction.Running ||
+                        planAction === EnumPlanAction.Applying)
+                    }
                   >
-                    {planState === EnumPlanState.Failed
-                      ? 'Failed'
-                      : planState === EnumPlanState.Cancelled
-                      ? 'Cancelled'
-                      : 'Completed'}
-                  </h3>
-                  <p className="text-xs text-gray-600">
-                    {toDateFormat(
-                      toDate(mostRecentPlan?.updated_at),
-                      'yyyy-mm-dd hh-mm-ss',
-                    )}
-                  </p>
-                </div>
-              </PlanWizardStepMessage>
-            )}
-            {planAction === EnumPlanAction.Running && (
-              <PlanWizardStepMessage hasSpinner>
-                Collecting Backfills...
-              </PlanWizardStepMessage>
-            )}
-            {planState === EnumPlanState.Applying &&
-              isFalse(isDone) &&
-              isFalse(hasBackfill) && (
-                <PlanWizardStepMessage hasSpinner>
-                  Applying...
-                </PlanWizardStepMessage>
-              )}
-            {shouldDisplayTaskProgress && (
-              <>
-                {isModified(changes?.modified) &&
-                  planState !== EnumPlanState.Applying && (
-                    <div className="mb-10 lg:px-4 ">
-                      <RadioGroup
-                        className="rounded-lg w-full"
-                        value={category}
-                        onChange={setCategory}
-                      >
-                        {categories.map(category => (
-                          <RadioGroup.Option
-                            key={category.name}
-                            value={category}
-                            className={({ active, checked }) =>
-                              `${
-                                active
-                                  ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
-                                  : ''
-                              }
-                              ${
-                                checked
-                                  ? 'bg-secondary-500 bg-opacity-75 text-white'
-                                  : 'bg-secondary-100'
-                              } elative flex cursor-pointer rounded-md px-3 py-2 focus:outline-none mb-2`
-                            }
-                          >
-                            {({ checked }) => (
-                              <>
-                                <div className="flex w-full items-center justify-between">
-                                  <div className="flex items-center">
-                                    <div className="text-sm">
-                                      <RadioGroup.Label
-                                        as="p"
-                                        className={`font-medium  ${
-                                          checked
-                                            ? 'text-white'
-                                            : 'text-gray-900'
-                                        }`}
-                                      >
-                                        {category.name}
-                                      </RadioGroup.Label>
-                                      <RadioGroup.Description
-                                        as="span"
-                                        className={`inline ${
-                                          checked
-                                            ? 'text-sky-100'
-                                            : 'text-gray-500'
-                                        } text-xs`}
-                                      >
-                                        <span>{category.description}</span>
-                                      </RadioGroup.Description>
-                                    </div>
-                                  </div>
-                                  {checked && (
-                                    <div className="shrink-0 text-white">
-                                      <CheckCircleIcon className="h-6 w-6" />
-                                    </div>
-                                  )}
-                                </div>
-                              </>
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex items-center">
+                        <h3
+                          className={clsx(
+                            planState === EnumPlanState.Cancelled &&
+                              'text-gray-700',
+                            planState === EnumPlanState.Failed &&
+                              'text-danger-700',
+                            planState === EnumPlanState.Finished &&
+                              'text-success-700',
+                          )}
+                        >
+                          {backfillStepHeadline}
+                        </h3>
+                      </div>
+                      {showDetails && (
+                        <div className="flex items-center">
+                          <p className="mr-2 text-sm">Details</p>
+                          <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                            {open ? (
+                              <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
+                            ) : (
+                              <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
                             )}
-                          </RadioGroup.Option>
-                        ))}
-                      </RadioGroup>
+                          </Disclosure.Button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                {category?.id !== EnumCategoryType.NoChange &&
-                  environment != null && (
-                    <>
-                      <Suspense fallback={<Spinner className="w-4 h-4 mr-2" />}>
-                        <Tasks
-                          environment={environment}
-                          tasks={tasks}
-                          changes={changes}
-                          updated_at={mostRecentPlan?.updated_at}
-                        />
-                      </Suspense>
-                      <form>
-                        <fieldset className="flex w-full">
-                          <Input
-                            className="w-full"
-                            label="Start Date"
-                            disabled={
-                              isPlanInProgress ||
-                              planAction === EnumPlanAction.Done
-                            }
-                            value={backfill_start}
-                            onInput={(
-                              e: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
-                              setBackfillDate('start', e.target.value)
-                            }}
-                          />
-                          <Input
-                            className="w-full"
-                            label="End Date"
-                            disabled={
-                              isPlanInProgress ||
-                              planAction === EnumPlanAction.Done
-                            }
-                            value={backfill_end}
-                            onInput={(
-                              e: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
-                              setBackfillDate('end', e.target.value)
-                            }}
-                          />
-                        </fieldset>
-                      </form>
-                    </>
-                  )}
-              </>
-            )}
-            {hasChanges &&
-              isFalse(isPlanInProgress) &&
-              isFalse(hasBackfill) && (
-                <PlanWizardStepMessage>
-                  <div>
-                    <h3 className="font-bold">
-                      Logical Update will be applied
-                    </h3>
-                    <small className="text-sm">
-                      All changes and their downstream dependencies can be fully
-                      previewed before they get promoted. If during plan
-                      creation no data gaps have been detected and only
-                      references to new model versions need to be updated, then
-                      such update is referred to as logical. Logical updates
-                      impose no additional runtime overhead or cost.
-                    </small>
-                  </div>
-                </PlanWizardStepMessage>
+                  </PlanWizardStepMessage>
+
+                  <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
+                    {hasBackfill && (
+                      <>
+                        {isModified(changes?.modified) && (
+                          <div className="mb-10 lg:px-4 ">
+                            <RadioGroup
+                              className={clsx(
+                                'flex flex-col',
+                                isFinished
+                                  ? 'opacity-50 cursor-not-allowed'
+                                  : 'cursor-pointer',
+                              )}
+                              value={category}
+                              onChange={setCategory}
+                              disabled={isFinished}
+                            >
+                              {categories.map(category => (
+                                <RadioGroup.Option
+                                  key={category.name}
+                                  value={category}
+                                  className={({ active, checked }) =>
+                                    `${
+                                      active
+                                        ? 'ring-2 ring-secodary-500 ring-opacity-60 ring-offset ring-offset-sky-300'
+                                        : ''
+                                    }
+                                      ${
+                                        checked
+                                          ? 'bg-secondary-500 bg-opacity-75 text-white'
+                                          : 'bg-secondary-100'
+                                      } elative flex  rounded-md px-3 py-2 focus:outline-none mb-2`
+                                  }
+                                >
+                                  {({ checked }) => (
+                                    <>
+                                      <div className="flex w-full items-center justify-between">
+                                        <div className="flex items-center">
+                                          <div className="text-sm">
+                                            <RadioGroup.Label
+                                              as="p"
+                                              className={`font-medium  ${
+                                                checked
+                                                  ? 'text-white'
+                                                  : 'text-gray-900'
+                                              }`}
+                                            >
+                                              {category.name}
+                                            </RadioGroup.Label>
+                                            <RadioGroup.Description
+                                              as="span"
+                                              className={`inline ${
+                                                checked
+                                                  ? 'text-sky-100'
+                                                  : 'text-gray-500'
+                                              } text-xs`}
+                                            >
+                                              <span>
+                                                {category.description}
+                                              </span>
+                                            </RadioGroup.Description>
+                                          </div>
+                                        </div>
+                                        {checked && (
+                                          <div className="shrink-0 text-white">
+                                            <CheckCircleIcon className="h-6 w-6" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </RadioGroup.Option>
+                              ))}
+                            </RadioGroup>
+                          </div>
+                        )}
+                        {category?.id !== EnumCategoryType.NoChange && (
+                          <>
+                            <Suspense
+                              fallback={<Spinner className="w-4 h-4 mr-2" />}
+                            >
+                              <Tasks
+                                environment={environment}
+                                tasks={tasks}
+                                changes={changes}
+                                updated_at={mostRecentPlan?.updated_at}
+                                showBatches={hasBackfill}
+                                showLogicalUpdate={hasLogicalUpdate}
+                              />
+                            </Suspense>
+                            <form>
+                              <fieldset className="flex w-full">
+                                <Input
+                                  className="w-full"
+                                  label="Start Date"
+                                  disabled={
+                                    isProgress ||
+                                    planAction === EnumPlanAction.Done
+                                  }
+                                  value={backfill_start}
+                                  onInput={(
+                                    e: React.ChangeEvent<HTMLInputElement>,
+                                  ) => {
+                                    setBackfillDate('start', e.target.value)
+                                  }}
+                                />
+                                <Input
+                                  className="w-full"
+                                  label="End Date"
+                                  disabled={
+                                    isProgress ||
+                                    planAction === EnumPlanAction.Done
+                                  }
+                                  value={backfill_end}
+                                  onInput={(
+                                    e: React.ChangeEvent<HTMLInputElement>,
+                                  ) => {
+                                    setBackfillDate('end', e.target.value)
+                                  }}
+                                />
+                              </fieldset>
+                            </form>
+                          </>
+                        )}
+                      </>
+                    )}
+                    {hasChanges && isFalse(hasBackfill) && (
+                      <div>
+                        <small className="text-sm">
+                          All changes and their downstream dependencies can be
+                          fully previewed before they get promoted. If during
+                          plan creation no data gaps have been detected and only
+                          references to new model versions need to be updated,
+                          then such update is referred to as logical. Logical
+                          updates impose no additional runtime overhead or cost.
+                        </small>
+                      </div>
+                    )}
+                  </Disclosure.Panel>
+                </>
               )}
+            </Disclosure>
           </PlanWizardStep>
         </>
       )}

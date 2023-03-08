@@ -8,8 +8,8 @@ export interface PropsProgress extends React.HTMLAttributes<HTMLElement> {
 
 export default function Progress({
   progress = 0,
-  delay = 150,
-  duration = 500,
+  delay = 0,
+  duration = 0,
   className,
 }: PropsProgress): JSX.Element {
   return (
