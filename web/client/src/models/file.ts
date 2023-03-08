@@ -2,7 +2,7 @@ import type { File } from '../api/client'
 import { ModelDirectory } from './directory'
 import { InitialArtifact, ModelArtifact } from './artifact'
 
-interface InitialFile extends InitialArtifact, File {
+export interface InitialFile extends InitialArtifact, File {
   content: string
   extension: string
   is_supported: boolean

@@ -27,7 +27,6 @@ import {
 import Input from '../input/Input'
 import {
   EnumRelativeLocation,
-  Environment,
   EnvironmentName,
   useStoreContext,
 } from '~/context/context'
@@ -38,11 +37,6 @@ import Modal from '../modal/Modal'
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
 const Tasks = lazy(async () => await import('../plan/Tasks'))
-
-export interface Profile {
-  environment: string
-  environments: Environment[]
-}
 
 export function IDE(): JSX.Element {
   const { refetch: refetchEnvironments, data: contextEnvironemnts } =
