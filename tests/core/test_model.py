@@ -122,7 +122,7 @@ def test_model_validation(query, error):
     assert error in str(ex.value)
 
 
-def test_model_validation_union_query():
+def test_model_union_query():
     expressions = parse(
         """
         MODEL (
@@ -130,11 +130,26 @@ def test_model_validation_union_query():
             kind FULL,
         );
 
-        SELECT 1, 2 UNION SELECT dup, dup
+        SELECT a, b UNION SELECT c, c
         """
     )
 
-    with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'dup'") as ex:
+    load_model(expressions)
+
+
+def test_model_valiadtion_union_query():
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            kind FULL,
+        );
+
+        SELECT a, a UNION SELECT c, c
+        """
+    )
+
+    with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'") as ex:
         load_model(expressions)
 
 

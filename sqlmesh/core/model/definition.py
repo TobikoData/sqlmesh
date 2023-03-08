@@ -617,25 +617,27 @@ class SqlModel(_Model):
         if not isinstance(query, exp.Subqueryable):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
-        for projection_list in _get_projection_lists(query):
-            if not projection_list:
-                raise_config_error("Query missing select statements", self._path)
+        projection_list = (
+            query.expressions if not isinstance(query, exp.Union) else query.this.expressions
+        )
+        if not projection_list:
+            raise_config_error("Query missing select statements", self._path)
 
-            name_counts: t.Dict[str, int] = {}
-            for expression in projection_list:
-                alias = expression.alias_or_name
-                if alias == "*":
-                    continue
-                if not alias:
-                    raise_config_error(
-                        f"Outer projection '{expression}' must have inferrable names or explicit aliases.",
-                        self._path,
-                    )
-                name_counts[alias] = name_counts.get(alias, 0) + 1
+        name_counts: t.Dict[str, int] = {}
+        for expression in projection_list:
+            alias = expression.alias_or_name
+            if alias == "*":
+                continue
+            if not alias:
+                raise_config_error(
+                    f"Outer projection '{expression}' must have inferrable names or explicit aliases.",
+                    self._path,
+                )
+            name_counts[alias] = name_counts.get(alias, 0) + 1
 
-            for name, count in name_counts.items():
-                if count > 1:
-                    raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
+        for name, count in name_counts.items():
+            if count > 1:
+                raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
 
         super().validate_definition()
 
@@ -1253,17 +1255,6 @@ def _is_udtf(expr: exp.Expression) -> bool:
     return isinstance(expr, (exp.Explode, exp.Posexplode, exp.Unnest)) or (
         isinstance(expr, exp.Anonymous)
         and expr.this.upper() in ("EXPLODE_OUTER", "POSEXPLODE_OUTER", "UNNEST")
-    )
-
-
-def _get_projection_lists(query: exp.Expression) -> t.List[t.List[exp.Expression]]:
-    return (
-        [query.expressions]
-        if not isinstance(query, exp.Union)
-        else [
-            *_get_projection_lists(query.this),
-            *_get_projection_lists(query.expression),
-        ]
     )
 
 
