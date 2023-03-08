@@ -207,8 +207,11 @@ def create_builtins(
     jinja_globals = jinja_globals.copy()
 
     this = jinja_globals.pop("this", None)
-    if this is not None and not isinstance(this, BaseRelation):
-        builtins["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
+    if this is not None:
+        if not isinstance(this, BaseRelation):
+            builtins["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
+        else:
+            builtins["this"] = this
 
     sources = jinja_globals.pop("sources", None)
     if sources is not None:
