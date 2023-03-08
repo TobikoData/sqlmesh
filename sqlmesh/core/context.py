@@ -862,25 +862,6 @@ class Context(BaseContext):
         ]
         return load_config_from_paths(*lookup_paths, config_name=config)
 
-    def glob_path(self, path: Path, file_extension: str) -> t.Generator[Path, None, None]:
-        """
-        Globs the provided path for the file extension but also removes any filepaths that match an ignore
-        pattern either set in constants or provided in config
-
-        Args:
-            path: The filepath to glob
-            file_extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
-
-        Returns:
-            Matched paths that are not ignored
-        """
-        for filepath in path.glob(f"**/*{file_extension}"):
-            for ignore_pattern in self.ignore_patterns:
-                if filepath.match(ignore_pattern):
-                    break
-            else:
-                yield filepath
-
     def _add_model_to_dag(self, model: Model) -> None:
         self.dag.graph[model.name] = set()
 
