@@ -21,7 +21,7 @@ from sqlmesh.utils.errors import SQLMeshError
 if t.TYPE_CHECKING:
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.client import Connection as BigQueryConnection
-    from google.cloud.bigquery.query import _QueryResults as BigQueryQueryResults
+    from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
@@ -63,7 +63,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         table: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Dict[str, exp.DataType],
-    ) -> t.Tuple[BigQueryQueryResults, str]:
+    ) -> t.Tuple[BigQueryQueryResult, str]:
         """
         Loads a pandas dataframe into a temporary table in BigQuery. Returns the result of the load and the name of the
         temporary table. The temporary table will be deleted after 3 hours.
