@@ -21,7 +21,7 @@ from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
