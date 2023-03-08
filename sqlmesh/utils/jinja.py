@@ -263,7 +263,7 @@ class JinjaMacroRegistry(PydanticModel):
             dependencies_by_package[dep.package].add(dep.name)
 
         result = JinjaMacroRegistry(
-            global_objs=self.global_objs, create_builtins_module=self.create_builtins_module
+            global_objs=self.global_objs.copy(), create_builtins_module=self.create_builtins_module
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
