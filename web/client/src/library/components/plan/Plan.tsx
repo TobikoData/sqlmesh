@@ -91,7 +91,9 @@ export default function Plan({
   }, [plan, hasChanges, hasBackfill, planState])
 
   useEffect(() => {
-    cleanUp()
+    return () => {
+      cleanUp()
+    }
   }, [])
 
   useEffect(() => {
