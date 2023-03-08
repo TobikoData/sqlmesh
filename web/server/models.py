@@ -19,6 +19,13 @@ class FileType(str, enum.Enum):
     model = "model"
 
 
+class ApplyType(str, enum.Enum):
+    """An enumeration of possible apply types."""
+
+    logical = "logical"
+    backfill = "backfill"
+
+
 class File(BaseModel):
     name: str
     path: str
@@ -143,3 +150,7 @@ class RenderInput(BaseModel):
 
 class Query(BaseModel):
     sql: str
+
+
+class Apply(BaseModel):
+    type: ApplyType

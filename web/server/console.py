@@ -14,7 +14,6 @@ class ApiConsole(TerminalConsole):
     def __init__(self) -> None:
         super().__init__()
         self.current_task_status: t.Dict[str, t.Dict[str, int]] = {}
-        self.previous_task_status: t.Dict[str, t.Dict[str, int]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
     def _make_event(self, data: str | dict[str, t.Any], event: str | None = None) -> Event:
@@ -59,7 +58,6 @@ class ApiConsole(TerminalConsole):
 
     def stop_snapshot_progress(self) -> None:
         """Stop the load progress"""
-        self.previous_task_status = self.current_task_status.copy()
         self.current_task_status = {}
 
     def log_test_results(

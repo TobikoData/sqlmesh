@@ -1,4 +1,9 @@
-import { EnumPlanAction, PlanAction } from '../../../context/plan'
+import {
+  EnumPlanAction,
+  EnumPlanState,
+  PlanAction,
+  PlanState,
+} from '../../../context/plan'
 import { isArrayNotEmpty } from '../../../utils'
 
 export function getActionName(
@@ -26,9 +31,6 @@ export function getActionName(
     case EnumPlanAction.Resetting:
       name = 'Resetting...'
       break
-    case EnumPlanAction.Closing:
-      name = 'Closing...'
-      break
     case EnumPlanAction.Run:
       name = 'Run'
       break
@@ -45,4 +47,35 @@ export function getActionName(
 
 export function isModified<T extends object>(modified?: T): boolean {
   return Object.values(modified ?? {}).some(isArrayNotEmpty)
+}
+
+export function getBackfillStepHeadline({
+  planAction,
+  planState,
+  hasBackfill,
+  hasLogicalUpdate,
+  hasNoChange,
+}: {
+  planAction: PlanAction
+  planState: PlanState
+  hasBackfill: boolean
+  hasLogicalUpdate: boolean
+  hasNoChange: boolean
+}): string {
+  if (planAction === EnumPlanAction.Running) return 'Collecting Backfill...'
+  if (planState === EnumPlanState.Applying && hasBackfill)
+    return 'Backfilling...'
+  if (planState === EnumPlanState.Applying && hasLogicalUpdate)
+    return 'Applying...'
+  if (planState === EnumPlanState.Failed) return 'Failed'
+  if (planState === EnumPlanState.Cancelled) return 'Cancelled'
+  if (planState === EnumPlanState.Finished && hasBackfill)
+    return 'Completed Backfill'
+  if (planState === EnumPlanState.Finished && hasLogicalUpdate)
+    return 'Completed Logical Update'
+  if (hasBackfill) return 'Needs Backfill'
+  if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
+  if (hasNoChange) return 'No Changes'
+
+  return 'Updating...'
 }

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ContextEnvironmentBackfill } from '../api/client'
-import { isObject, isObjectEmpty } from '../utils'
+import { isFalse, isNil, isObject } from '../utils'
 
 export const EnumPlanAction = {
   None: 'none',
@@ -11,11 +11,11 @@ export const EnumPlanAction = {
   Applying: 'applying',
   Cancelling: 'cancelling',
   Resetting: 'resetting',
-  Closing: 'closing',
 } as const
 
 export const EnumPlanState = {
   Init: 'init',
+  Running: 'running',
   Applying: 'applying',
   Cancelling: 'cancelling',
   Finished: 'finished',
@@ -49,11 +49,16 @@ export interface PlanTaskStatus {
 
 export type PlanTasks = Record<string, PlanTaskStatus>
 
-interface PlanProgress {
+export interface PlanProgress {
   ok: boolean
-  environment: string
   tasks: PlanTasks
   updated_at: string
+  start?: number
+  end?: number
+  total?: number
+  completed?: number
+  is_completed?: boolean
+  type?: 'logical' | 'backfill'
 }
 
 interface PlanOptions {
@@ -72,12 +77,10 @@ interface PlanStore {
   state: PlanState
   action: PlanAction
   setActivePlan: (activePlan?: PlanProgress) => void
-  setLastPlan: (lastPlan?: PlanProgress) => void
   setState: (state: PlanState) => void
   setAction: (action: PlanAction) => void
   setCategory: (category?: Category) => void
   activePlan?: PlanProgress
-  lastPlan?: PlanProgress
   backfill_start: string
   backfill_end: string
   setBackfillDate: (type: 'start' | 'end', date: string) => void
@@ -87,11 +90,7 @@ interface PlanStore {
   setWithBackfill: (withBackfill: boolean) => void
   backfills: ContextEnvironmentBackfill[]
   setBackfills: (backfills?: ContextEnvironmentBackfill[]) => void
-  updateTasks: (
-    data: PlanProgress,
-    channel: EventSource,
-    unsubscribe: () => void,
-  ) => void
+  updateTasks: (data: PlanProgress) => void
   planOptions: PlanOptions
   setPlanOptions: (planOptions: Partial<PlanOptions>) => void
   resetPlanOptions: () => void
@@ -116,7 +115,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   state: EnumPlanState.Init,
   action: EnumPlanAction.None,
   activePlan: undefined,
-  lastPlan: undefined,
   setPlanOptions: (planOptions: Partial<PlanOptions>) => {
     set(s => ({ planOptions: { ...s.planOptions, ...planOptions } }))
   },
@@ -125,9 +123,6 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   },
   setActivePlan: (activePlan?: PlanProgress) => {
     set(() => ({ activePlan }))
-  },
-  setLastPlan: (lastPlan?: PlanProgress) => {
-    set(() => ({ lastPlan }))
   },
   setState: (state: PlanState) => {
     set(() => ({ state }))
@@ -155,64 +150,35 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setBackfills: (backfills?: ContextEnvironmentBackfill[]) => {
     set(() => (backfills == null ? { backfills: [] } : { backfills }))
   },
-  updateTasks: (
-    data: PlanProgress,
-    channel: EventSource,
-    unsubscribe: () => void,
-  ) => {
+  updateTasks: (data: PlanProgress) => {
     const s = get()
 
-    if (channel == null) return
-
-    if (data.environment == null || !isObject(data.tasks)) {
+    if (isNil(data)) return
+    if (isFalse(isObject(data.tasks))) {
       s.setState(EnumPlanState.Init)
-
-      channel.close()
-      unsubscribe()
 
       return
     }
 
     const plan: PlanProgress = {
       ok: data.ok,
-      environment: data.environment,
       tasks: data.tasks,
       updated_at: data.updated_at ?? new Date().toISOString(),
     }
 
     s.setActivePlan(plan)
 
-    if (!data.ok) {
-      s.setState(EnumPlanState.Failed)
-      s.setLastPlan(plan)
-
-      channel.close()
-      unsubscribe()
-
-      return
-    }
-
-    const isAllCompleted =
-      isObjectEmpty(data.tasks) || isAllTasksCompleted(data.tasks)
-
-    if (isAllCompleted) {
-      s.setState(EnumPlanState.Finished)
-
-      if (isObjectEmpty(s.activePlan?.tasks)) {
-        s.setLastPlan(undefined)
-      } else {
-        s.setLastPlan(plan)
-      }
-
-      if (isObjectEmpty(data.tasks)) {
+    setTimeout(() => {
+      if (isFalse(data.ok)) {
+        s.setState(EnumPlanState.Failed)
         s.setActivePlan(undefined)
+      } else if (isAllTasksCompleted(data.tasks)) {
+        s.setState(EnumPlanState.Finished)
+        s.setActivePlan(undefined)
+      } else {
+        s.setState(EnumPlanState.Applying)
       }
-
-      channel?.close()
-      unsubscribe()
-    } else {
-      s.setState(EnumPlanState.Applying)
-    }
+    }, 300)
   },
 }))
 

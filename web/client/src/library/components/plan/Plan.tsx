@@ -7,6 +7,7 @@ import {
   EnumPlanAction,
   useStorePlan,
   EnumCategoryType,
+  PlanProgress,
 } from '../../../context/plan'
 import {
   includes,
@@ -15,7 +16,6 @@ import {
   toDate,
   toDateFormat,
 } from '../../../utils'
-import { useChannel } from '../../../api/channels'
 import { isModified } from './help'
 import { Divider } from '../divider/Divider'
 import { EnvironmentName } from '~/context/context'
@@ -31,25 +31,28 @@ import PlanActions from './PlanActions'
 export default function Plan({
   environment,
   onCancel,
+  onClose,
+  disabled,
 }: {
   environment: EnvironmentName
   onCancel: () => void
+  onClose: () => void
+  disabled: boolean
 }): JSX.Element {
   const client = useQueryClient()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const category = useStorePlan(s => s.category)
+  const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
   const setCategory = useStorePlan(s => s.setCategory)
   const setBackfillDate = useStorePlan(s => s.setBackfillDate)
-  const updateTasks = useStorePlan(s => s.updateTasks)
   const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
   const [plan, setPlan] = useState<ContextEnvironment>()
-
-  const [subscribe] = useChannel('/api/tasks', updateTasks)
+  const [mostRecentPlan, setMostRecentPlan] = useState<PlanProgress>()
 
   const { refetch } = useApiPlan(environment)
 
@@ -94,14 +97,20 @@ export default function Plan({
 
     if (isDone) {
       setPlanAction(EnumPlanAction.Done)
-      cleanUp()
     }
   }, [plan, hasChangesOrBackfill, isDone])
+
+  useEffect(() => {
+    if (activePlan != null) {
+      setMostRecentPlan(activePlan)
+    }
+  }, [activePlan])
 
   function cleanUp(): void {
     void useApiContextCancel(client)
 
     setPlan(undefined)
+    setMostRecentPlan(undefined)
     setCategory(undefined)
     resetPlanOptions()
   }
@@ -110,6 +119,7 @@ export default function Plan({
     setPlanAction(EnumPlanAction.Resetting)
 
     cleanUp()
+    setPlanState(EnumPlanState.Init)
 
     setPlanAction(EnumPlanAction.Run)
   }
@@ -129,9 +139,9 @@ export default function Plan({
     applyApiCommandsApplyPost({
       environment,
     })
-      .then(data => {
-        if (data.ok) {
-          subscribe()
+      .then((data: any) => {
+        if (data.type === 'logical') {
+          setPlanState(EnumPlanState.Finished)
         }
       })
       .catch(error => {
@@ -142,16 +152,15 @@ export default function Plan({
   }
 
   function close(): void {
-    setPlanAction(EnumPlanAction.Closing)
-
-    cleanUp()
+    onClose()
   }
 
   function run(): void {
     setPlanAction(EnumPlanAction.Running)
+    setPlanState(EnumPlanState.Running)
     setPlan(undefined)
 
-    refetch()
+    void refetch()
       .then(({ data }) => {
         setPlan(data)
 
@@ -161,6 +170,10 @@ export default function Plan({
         setBackfillDate('end', toDateFormat(toDate(data.end), 'mm/dd/yyyy'))
       })
       .catch(console.error)
+      .finally(() => {
+        setPlanAction(EnumPlanAction.Run)
+        setPlanState(EnumPlanState.Init)
+      })
   }
 
   return (
@@ -174,6 +187,7 @@ export default function Plan({
           hasChanges={hasChanges}
           backfills={backfills}
           hasBackfill={hasBackfill}
+          mostRecentPlan={mostRecentPlan}
         />
       </div>
       <Divider />
@@ -188,6 +202,7 @@ export default function Plan({
         cancel={cancel}
         close={close}
         reset={reset}
+        disabled={disabled}
       />
     </div>
   )

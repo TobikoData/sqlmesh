@@ -92,9 +92,10 @@ function ModalSetPlan(): JSX.Element {
               Select Environment
             </h2>
             <p>
-              Plan a migration of the current context&apos;s models with the
-              given environment
+              Base environment to start with. We recomend start with{' '}
+              <span className="text-secondary-500 font-bold">prod</span>.
             </p>
+            <p>You can always change it later.</p>
             <div className="flex flex-col w-full mt-3 py-1">
               <RadioGroup
                 className="rounded-lg w-full flex flex-wrap"

@@ -30,6 +30,10 @@ export function isObjectEmpty(value: unknown): boolean {
   return isObject(value) && isArrayEmpty(Object.keys(value as object))
 }
 
+export function isObjectNotEmpty(value: unknown): boolean {
+  return isObject(value) && isArrayNotEmpty(Object.keys(value as object))
+}
+
 export function isObject(value: unknown): boolean {
   return (
     typeof value === 'object' && value !== null && value.constructor === Object
