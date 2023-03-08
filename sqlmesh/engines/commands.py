@@ -1,6 +1,7 @@
 import typing as t
 from enum import Enum
 
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -43,6 +44,7 @@ class DemoteCommandPayload(PydanticModel):
 
 
 class CleanupCommandPayload(PydanticModel):
+    environments: t.List[Environment]
     snapshots: t.List[SnapshotTableInfo]
 
 
@@ -107,6 +109,8 @@ def cleanup(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
+    for environment in command_payload.environments:
+        evaluator.demote(environment.snapshots, environment.name)
     evaluator.cleanup(command_payload.snapshots)
 
 
