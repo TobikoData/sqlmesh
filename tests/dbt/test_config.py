@@ -140,7 +140,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
     defined_variables = {}
     model_variables = {"foo"}
 
-    model_config = ModelConfig(table_name="test", sql="SELECT {{ var('foo') }}")
+    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
     model_config._dependencies = Dependencies(variables=model_variables)
 
     context = sushi_dbt_project.context
@@ -324,4 +324,12 @@ def test_databricks_config():
         "dbt-databricks",
         "outputs",
         "dev",
+    )
+
+
+def test_this(assert_exp_eq, sushi_dbt_project: Project):
+    model_config = ModelConfig(alias="test", sql="SELECT 1 AS one FROM {{ this.identifier }}")
+    context = sushi_dbt_project.context
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
     )

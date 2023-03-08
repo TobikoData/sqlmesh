@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.adapter import ParsetimeAdapter
-from sqlmesh.dbt.builtin import create_builtins, generate_this
+from sqlmesh.dbt.builtin import create_builtins
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -30,6 +30,7 @@ from sqlmesh.dbt.column import (
     yaml_to_columns,
 )
 from sqlmesh.dbt.common import DbtContext, Dependencies, GeneralConfig, SqlStr
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
@@ -245,22 +246,30 @@ class ModelConfig(GeneralConfig):
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
 
+        jinja_macros = model_context.jinja_macros.trim(dependencies.macros)
+        jinja_macros.global_objs.update(
+            {
+                "this": self.relation_info,
+                **model_context.jinja_globals,
+            }
+        )
+
         return create_sql_model(
             self.model_name,
             expressions[-1],
             kind=self.model_kind,
+            dialect=model_context.dialect,
             statements=expressions[0:-1],
             columns=column_types_to_sqlmesh(self.columns) or None,
             column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
-            python_env=model_context.create_python_env({"this": generate_this(self)}),
-            jinja_macros=model_context.jinja_macros.trim(dependencies.macros),
+            jinja_macros=jinja_macros,
             depends_on=depends_on,
             start=self.start,
             path=self.path,
         )
 
     @property
-    def relation_info(self) -> t.Dict[str, t.Any]:
+    def relation_info(self) -> AttributeDict[str, t.Any]:
         if self.materialized == Materialization.VIEW:
             relation_type = RelationType.View
         elif self.materialized == Materialization.EPHEMERAL:
@@ -268,12 +277,14 @@ class ModelConfig(GeneralConfig):
         else:
             relation_type = RelationType.Table
 
-        return {
-            "database": self.database,
-            "schema": self.table_schema,
-            "identifier": self.table_name,
-            "type": relation_type.value,
-        }
+        return AttributeDict(
+            {
+                "database": self.database,
+                "schema": self.table_schema,
+                "identifier": self.table_name,
+                "type": relation_type.value,
+            }
+        )
 
     def _context_for_dependencies(
         self, context: DbtContext, dependencies: Dependencies
@@ -310,12 +321,13 @@ class ModelSqlRenderer:
         self._jinja_globals = create_builtins(
             jinja_macros=context.jinja_macros,
             jinja_globals={
+                **context.jinja_globals,
                 **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
                 "config": self._config,
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
-                "this": generate_this(self.config),
+                "this": self.config.relation_info,
             },
             engine_adapter=None,
         )
