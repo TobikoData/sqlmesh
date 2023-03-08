@@ -37,8 +37,8 @@ def update_model_schemas(dialect: str, dag: DAG[str], models: UniqueKeyDict[str,
             continue
 
         if model.contains_star_query and any(dep not in models for dep in model.depends_on):
-            raise SQLMeshError(
-                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+            raise ConfigError(
+                f"Can't expand SELECT * expression for model '{name}'. Projections for models that use external sources must be specified explicitly at '{model._path}'"
             )
 
         model.update_schema(schema)
