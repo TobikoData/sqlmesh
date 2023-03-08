@@ -7,6 +7,7 @@ import type { Confirmation } from '../modal/ModalConfirmation'
 import { Button } from '../button/Button'
 import { isNotNil } from '~/utils'
 import Directory from './Directory'
+import { useStoreFileTree } from '~/context/fileTree'
 
 /* TODO:
   - add ability to create file or directory on top level
@@ -25,13 +26,20 @@ export default function FolderTree({
   project,
   className,
 }: PropsFolderTree): JSX.Element {
+  const setFiles = useStoreFileTree(s => s.setFiles)
+
   const directory = useMemo(() => new ModelDirectory(project), [project])
+
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
   const [showConfirmation, setShowConfirmation] = useState(false)
 
   useEffect(() => {
     setShowConfirmation(isNotNil(confirmation))
   }, [confirmation])
+
+  useEffect(() => {
+    setFiles(directory.allFiles)
+  }, [directory])
 
   return (
     <div
