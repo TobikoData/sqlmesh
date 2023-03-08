@@ -612,28 +612,32 @@ class SqlModel(_Model):
         return self._column_descriptions
 
     def validate_definition(self) -> None:
-        name_counts: t.Dict[str, int] = {}
         query = self._query_renderer.render()
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
-        if not query.expressions:
+        projection_list = (
+            query.expressions if not isinstance(query, exp.Union) else query.this.expressions
+        )
+        if not projection_list:
             raise_config_error("Query missing select statements", self._path)
 
-        for expression in query.expressions:
+        name_counts: t.Dict[str, int] = {}
+        for expression in projection_list:
             alias = expression.alias_or_name
-            name_counts[alias] = name_counts.get(alias, 0) + 1
-
+            if alias == "*":
+                continue
             if not alias:
                 raise_config_error(
-                    f"Outer projection `{expression}` must have inferrable names or explicit aliases.",
+                    f"Outer projection '{expression}' must have inferrable names or explicit aliases.",
                     self._path,
                 )
+            name_counts[alias] = name_counts.get(alias, 0) + 1
 
         for name, count in name_counts.items():
             if count > 1:
-                raise_config_error(f"Found duplicate outer select name `{name}`", self._path)
+                raise_config_error(f"Found duplicate outer select name '{name}'", self._path)
 
         super().validate_definition()
 
@@ -977,9 +981,6 @@ def create_sql_model(
             "A query is required and must be a SELECT or UNION statement.",
             path,
         )
-
-    if not query.expressions:
-        raise_config_error("Query missing select statements", path)
 
     if not python_env:
         python_env = _python_env(

@@ -105,9 +105,6 @@ class Audit(AuditMeta, frozen=True):
             _raise_config_error("Missing SELECT query in the audit definition", path)
             raise
 
-        if not query.expressions:
-            _raise_config_error("Query missing select statements", path)
-
         try:
             audit = cls(
                 query=query,
