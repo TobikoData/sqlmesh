@@ -91,6 +91,10 @@ export default function Plan({
   }, [plan, hasChanges, hasBackfill, planState])
 
   useEffect(() => {
+    cleanUp()
+  }, [])
+
+  useEffect(() => {
     if (hasChangesOrBackfill) {
       setPlanAction(EnumPlanAction.Apply)
     }
