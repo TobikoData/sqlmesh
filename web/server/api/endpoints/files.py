@@ -11,7 +11,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server import models
 from web.server.settings import Settings, get_context, get_path_mapping, get_settings
-from web.server.utils import replace_file, validate_path
+from web.server.utils import is_relative_to, replace_file, validate_path
 
 router = APIRouter()
 
@@ -20,10 +20,19 @@ router = APIRouter()
 def get_files(
     context: t.Optional[Context] = Depends(get_context),
     settings: Settings = Depends(get_settings),
-    path_mapping: t.Dict[str, t.Any] = Depends(get_path_mapping),
+    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.Directory:
     """Get all project files."""
-    ignore_patterns = context.ignore_patterns if context else c.IGNORE_PATTERNS
+    if context:
+        ignore_patterns = context.ignore_patterns
+        hook_directory_path = context.hook_directory_path.relative_to(context.path)
+        macro_directory_path = context.macro_directory_path.relative_to(context.path)
+        test_directory_path = context.test_directory_path.relative_to(context.path)
+    else:
+        ignore_patterns = c.IGNORE_PATTERNS
+        hook_directory_path = Path("hooks")
+        macro_directory_path = Path("macros")
+        test_directory_path = Path("tests")
 
     def walk_path(
         path: str | Path,
@@ -41,23 +50,32 @@ def get_files(
                 ):
                     continue
 
-                relative_path = os.path.relpath(entry.path, settings.project_path)
+                relative_path = entry_path.relative_to(settings.project_path)
                 if entry.is_dir(follow_symlinks=False):
                     _directories, _files = walk_path(entry.path)
                     directories.append(
                         models.Directory(
                             name=entry.name,
-                            path=relative_path,
+                            path=str(relative_path),
                             directories=_directories,
                             files=_files,
                         )
                     )
                 else:
+                    file_type = None
+                    if is_relative_to(relative_path, hook_directory_path):
+                        file_type = models.FileType.hooks
+                    elif is_relative_to(relative_path, macro_directory_path):
+                        file_type = models.FileType.macros
+                    elif is_relative_to(relative_path, test_directory_path):
+                        file_type = models.FileType.tests
+                    else:
+                        file_type = path_mapping.get(relative_path)
                     files.append(
                         models.File(
                             name=entry.name,
-                            path=relative_path,
-                            type=path_mapping.get(relative_path),
+                            path=str(relative_path),
+                            type=file_type,
                         )
                     )
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
