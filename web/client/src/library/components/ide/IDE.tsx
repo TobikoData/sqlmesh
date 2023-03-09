@@ -27,22 +27,30 @@ import {
 import Input from '../input/Input'
 import {
   EnumRelativeLocation,
+  EnvironmentShort,
   EnvironmentName,
   useStoreContext,
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
 import { cancelPlanApiPlanCancelPost } from '~/api/client'
 import Modal from '../modal/Modal'
+import PlanProvider from '../plan/context'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
-const Tasks = lazy(async () => await import('../plan/Tasks'))
+const Tasks = lazy(async () => await import('../tasksProgress/TasksProgress'))
+
+export interface Profile {
+  environment: string
+  environments: EnvironmentShort[]
+}
 
 export function IDE(): JSX.Element {
   const { refetch: refetchEnvironments, data: contextEnvironemnts } =
     useApiEnvironments()
 
   const environment = useStoreContext(s => s.environment)
+  const isInitial = useStoreContext(s => s.isInitial)
   const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const planState = useStorePlan(s => s.state)
@@ -72,7 +80,7 @@ export function IDE(): JSX.Element {
     )
       return
 
-    addRemoteEnvironments(Object.keys(contextEnvironemnts))
+    addRemoteEnvironments(Object.values(contextEnvironemnts))
   }, [contextEnvironemnts])
 
   function cancelPlan(): void {
@@ -172,12 +180,15 @@ export function IDE(): JSX.Element {
       >
         <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
           {environment != null && (
-            <Plan
-              environment={environment}
-              onCancel={cancelPlan}
-              onClose={closeRunPlan}
-              disabled={isClosingModal}
-            />
+            <PlanProvider>
+              <Plan
+                environment={environment}
+                isInitial={isInitial}
+                onCancel={cancelPlan}
+                onClose={closeRunPlan}
+                disabled={isClosingModal}
+              />
+            </PlanProvider>
           )}
         </Dialog.Panel>
       </Modal>
@@ -269,6 +280,9 @@ function RunPlan({
 }): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
+  const setPlanState = useStorePlan(s => s.setState)
+  const setPlanAction = useStorePlan(s => s.setAction)
+  const setActivePlan = useStorePlan(s => s.setActivePlan)
 
   const environments = useStoreContext(s => s.environments)
   const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
@@ -277,10 +291,6 @@ function RunPlan({
   const removeLocalEnvironments = useStoreContext(
     s => s.removeLocalEnvironments,
   )
-
-  const setPlanState = useStorePlan(s => s.setState)
-  const setPlanAction = useStorePlan(s => s.setAction)
-  const setActivePlan = useStorePlan(s => s.setActivePlan)
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 

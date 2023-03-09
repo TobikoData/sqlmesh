@@ -52,28 +52,28 @@ export function isModified<T extends object>(modified?: T): boolean {
 export function getBackfillStepHeadline({
   planAction,
   planState,
-  hasBackfill,
+  hasBackfills,
   hasLogicalUpdate,
   hasNoChange,
 }: {
   planAction: PlanAction
   planState: PlanState
-  hasBackfill: boolean
+  hasBackfills: boolean
   hasLogicalUpdate: boolean
   hasNoChange: boolean
 }): string {
   if (planAction === EnumPlanAction.Running) return 'Collecting Backfill...'
-  if (planState === EnumPlanState.Applying && hasBackfill)
+  if (planState === EnumPlanState.Applying && hasBackfills)
     return 'Backfilling...'
   if (planState === EnumPlanState.Applying && hasLogicalUpdate)
     return 'Applying...'
   if (planState === EnumPlanState.Failed) return 'Failed'
   if (planState === EnumPlanState.Cancelled) return 'Cancelled'
-  if (planState === EnumPlanState.Finished && hasBackfill)
+  if (planState === EnumPlanState.Finished && hasBackfills)
     return 'Completed Backfill'
   if (planState === EnumPlanState.Finished && hasLogicalUpdate)
     return 'Completed Logical Update'
-  if (hasBackfill) return 'Needs Backfill'
+  if (hasBackfills) return 'Needs Backfill'
   if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
   if (hasNoChange) return 'No Changes'
 

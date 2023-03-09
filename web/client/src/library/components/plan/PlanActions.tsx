@@ -4,13 +4,13 @@ import { PlanAction, EnumPlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
+import { EnumCategoryType, usePlan } from './context'
 import { getActionName } from './help'
 
 interface PropsPlanActions {
-  environment: EnvironmentName
   planAction: PlanAction
-  shouldApplyWithBackfill: boolean
   disabled: boolean
+  environment: EnvironmentName
   apply: () => void
   run: () => void
   cancel: () => void
@@ -19,16 +19,17 @@ interface PropsPlanActions {
 }
 
 export default function PlanActions({
-  environment,
   planAction,
-  shouldApplyWithBackfill,
   disabled,
+  environment,
   run,
   apply,
   cancel,
   close,
   reset,
 }: PropsPlanActions): JSX.Element {
+  const { hasBackfills, category } = usePlan()
+
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
   const isRun = planAction === EnumPlanAction.Run
@@ -68,6 +69,9 @@ export default function PlanActions({
 
     run()
   }
+
+  const shouldApplyWithBackfill =
+    hasBackfills && category?.id !== EnumCategoryType.NoChange
 
   return (
     <div className="flex justify-between px-4 py-2">

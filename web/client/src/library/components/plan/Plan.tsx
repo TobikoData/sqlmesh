@@ -1,94 +1,72 @@
-import { useApiPlan, useApiContextCancel } from '../../../api'
-import { useEffect, useMemo, useState } from 'react'
-import PlanWizard from './PlanWizard'
-import { useQueryClient } from '@tanstack/react-query'
-import {
-  EnumPlanState,
-  EnumPlanAction,
-  useStorePlan,
-  EnumCategoryType,
-  PlanProgress,
-} from '../../../context/plan'
-import {
-  includes,
-  isArrayNotEmpty,
-  isFalse,
-  toDate,
-  toDateFormat,
-} from '../../../utils'
-import { isModified } from './help'
-import { Divider } from '../divider/Divider'
+import { useEffect } from 'react'
+import { includes, isFalse } from '~/utils'
+import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
+import { Divider } from '~/library/components/divider/Divider'
 import { EnvironmentName } from '~/context/context'
+import { useApiPlan } from '~/api'
 import {
+  Apply,
   applyApiCommandsApplyPost,
-  ContextEnvironment,
-  ContextEnvironmentBackfill,
-  ContextEnvironmentChanges,
+  ApplyApiCommandsApplyPostParams,
+  ApplyType,
 } from '~/api/client'
+import PlanWizard from './PlanWizard'
 import PlanHeader from './PlanHeader'
 import PlanActions from './PlanActions'
+import PlanWizardStepOptions from './PlanWizardStepOptions'
+import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
+import PlanBackfillDates from './PlanBackfillDates'
 
-export default function Plan({
+function Plan({
   environment,
+  isInitial,
   onCancel,
   onClose,
   disabled,
 }: {
   environment: EnvironmentName
+  isInitial: boolean
   onCancel: () => void
   onClose: () => void
   disabled: boolean
 }): JSX.Element {
-  const client = useQueryClient()
+  const dispatch = usePlanDispatch()
+  const {
+    start,
+    end,
+    skip_tests,
+    no_gaps,
+    skip_backfill,
+    forward_only,
+    auto_apply,
+    from,
+    no_auto_categorization,
+    restate_models,
+    hasChanges,
+    hasBackfills,
+    category,
+    is_initial,
+  } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-  const category = useStorePlan(s => s.category)
   const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
-  const setCategory = useStorePlan(s => s.setCategory)
-  const setBackfillDate = useStorePlan(s => s.setBackfillDate)
-  const resetPlanOptions = useStorePlan(s => s.resetPlanOptions)
 
-  const [plan, setPlan] = useState<ContextEnvironment>()
-  const [mostRecentPlan, setMostRecentPlan] = useState<PlanProgress>()
-
-  const { refetch } = useApiPlan(environment)
-
-  const [changes, hasChanges, backfills, hasBackfill] = useMemo((): [
-    ContextEnvironmentChanges | undefined,
-    boolean,
-    ContextEnvironmentBackfill[] | undefined,
-    boolean,
-  ] => {
-    const hasChanges = [
-      isModified(plan?.changes?.modified),
-      isArrayNotEmpty(plan?.changes?.added),
-      isArrayNotEmpty(plan?.changes?.removed),
-    ].some(Boolean)
-
-    return [
-      plan?.changes,
-      hasChanges,
-      plan?.backfills,
-      isArrayNotEmpty(plan?.backfills),
-    ]
-  }, [plan])
-
-  const [isDone, hasChangesOrBackfill] = useMemo(() => {
-    const hasPlan = plan != null
-    const hasChangesOrBackfill = hasChanges || hasBackfill
-    const isPlanFinishedOrFailed = includes(
-      [EnumPlanState.Finished, EnumPlanState.Failed],
-      planState,
-    )
-
-    return [
-      (hasPlan && isFalse(hasChangesOrBackfill)) || isPlanFinishedOrFailed,
-      hasChangesOrBackfill,
-    ]
-  }, [plan, hasChanges, hasBackfill, planState])
+  const { refetch } = useApiPlan(
+    environment,
+    start,
+    end,
+    no_gaps,
+    skip_backfill,
+    forward_only,
+    auto_apply,
+    from,
+    no_auto_categorization,
+    skip_tests,
+    restate_models,
+  )
 
   useEffect(() => {
     return () => {
@@ -97,28 +75,61 @@ export default function Plan({
   }, [])
 
   useEffect(() => {
-    if (hasChangesOrBackfill) {
-      setPlanAction(EnumPlanAction.Apply)
-    }
-
-    if (isDone) {
-      setPlanAction(EnumPlanAction.Done)
-    }
-  }, [plan, hasChangesOrBackfill, isDone])
+    dispatch({
+      type: EnumPlanActions.External,
+      is_initial: isInitial,
+    })
+  }, [isInitial])
 
   useEffect(() => {
-    if (activePlan != null) {
-      setMostRecentPlan(activePlan)
+    if (
+      includes(
+        [
+          EnumPlanState.Running,
+          EnumPlanState.Applying,
+          EnumPlanAction.Cancelling,
+        ],
+        planState,
+      )
+    )
+      return
+
+    if (start == null && end == null) {
+      setPlanAction(EnumPlanAction.Run)
+    } else if (
+      isFalse(hasChanges || hasBackfills) ||
+      includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)
+    ) {
+      setPlanAction(EnumPlanAction.Done)
+    } else {
+      setPlanAction(EnumPlanAction.Apply)
     }
+  }, [planState, start, end, hasChanges, hasBackfills])
+
+  useEffect(() => {
+    if (activePlan == null) return
+
+    dispatch({
+      type: EnumPlanActions.BackfillProgress,
+      activeBackfill: activePlan,
+    })
   }, [activePlan])
 
   function cleanUp(): void {
-    void useApiContextCancel(client)
-
-    setPlan(undefined)
-    setMostRecentPlan(undefined)
-    setCategory(undefined)
-    resetPlanOptions()
+    dispatch([
+      {
+        type: EnumPlanActions.ResetBackfills,
+      },
+      {
+        type: EnumPlanActions.ResetChanges,
+      },
+      {
+        type: EnumPlanActions.ResetDates,
+      },
+      {
+        type: EnumPlanActions.ResetAdditionalOptions,
+      },
+    ])
   }
 
   function reset(): void {
@@ -142,11 +153,21 @@ export default function Plan({
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
-    applyApiCommandsApplyPost({
+    const payload: ApplyApiCommandsApplyPostParams = {
       environment,
-    })
-      .then((data: any) => {
-        if (data.type === 'logical') {
+    }
+
+    if (hasBackfills && isFalse(is_initial)) {
+      payload.start = start
+    }
+
+    if (hasChanges && isFalse(is_initial)) {
+      payload.category = category.value
+    }
+
+    applyApiCommandsApplyPost(payload)
+      .then((data: Apply) => {
+        if (data.type === ApplyType.logical) {
           setPlanState(EnumPlanState.Finished)
         }
       })
@@ -164,16 +185,24 @@ export default function Plan({
   function run(): void {
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
-    setPlan(undefined)
 
     void refetch()
       .then(({ data }) => {
-        setPlan(data)
-
-        if (data == null) return
-
-        setBackfillDate('start', toDateFormat(toDate(data.start), 'mm/dd/yyyy'))
-        setBackfillDate('end', toDateFormat(toDate(data.end), 'mm/dd/yyyy'))
+        dispatch([
+          {
+            type: EnumPlanActions.Backfills,
+            backfills: data?.backfills,
+          },
+          {
+            type: EnumPlanActions.Changes,
+            ...data?.changes,
+          },
+          {
+            type: EnumPlanActions.Dates,
+            start: data?.start,
+            end: data?.end,
+          },
+        ])
       })
       .catch(console.error)
       .finally(() => {
@@ -184,32 +213,30 @@ export default function Plan({
 
   return (
     <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
-      <PlanHeader environment={environment} />
+      <Plan.Header environment={environment} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <PlanWizard
-          environment={environment}
-          changes={changes}
-          hasChanges={hasChanges}
-          backfills={backfills}
-          hasBackfill={hasBackfill}
-          mostRecentPlan={mostRecentPlan}
-        />
+        <Plan.Wizard environment={environment} />
       </div>
       <Divider />
-      <PlanActions
+      <Plan.Actions
+        disabled={disabled}
         environment={environment}
         planAction={planAction}
-        shouldApplyWithBackfill={
-          hasBackfill && category?.id !== EnumCategoryType.NoChange
-        }
         apply={apply}
         run={run}
         cancel={cancel}
         close={close}
         reset={reset}
-        disabled={disabled}
       />
     </div>
   )
 }
+
+Plan.Actions = PlanActions
+Plan.Header = PlanHeader
+Plan.Wizard = PlanWizard
+Plan.StepOptions = PlanWizardStepOptions
+Plan.BackfillDates = PlanBackfillDates
+
+export default Plan
