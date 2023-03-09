@@ -10,6 +10,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.utils.date import TimeLike
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -26,6 +28,9 @@ async def apply(
     environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
+    category: t.Optional[SnapshotChangeCategory] = None,
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
 ) -> models.Apply:
     """Apply a plan"""
 
@@ -34,7 +39,7 @@ async def apply(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
 
-    plan = context.plan(environment=environment, no_prompts=True)
+    plan = context.plan(environment=environment, no_prompts=True, start=start, end=end)
     apply = functools.partial(context.apply, plan)
 
     if plan.requires_backfill:
