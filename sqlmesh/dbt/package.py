@@ -7,7 +7,6 @@ from sqlmesh.dbt.common import (
     PROJECT_FILENAME,
     BaseConfig,
     DbtContext,
-    Dependencies,
     SqlStr,
     load_yaml,
 )
@@ -15,7 +14,7 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroExtractor, MacroInfo, extract_macro_references
+from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -311,9 +310,7 @@ class PackageLoader:
         model_config = self._config_for_scope(scope, self.project_config.model_config).copy(
             update={"path": filepath}
         )
-
         model_config.sql = SqlStr(sql)
-        model_config._dependencies = Dependencies(macros=extract_macro_references(sql))
 
         return model_config
 

@@ -14,7 +14,7 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
+from sqlmesh.utils.jinja import JinjaMacroRegistry, render_jinja
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
@@ -168,34 +168,13 @@ class SqlStr(str):
     pass
 
 
-class Dependencies(PydanticModel):
-    """
-    DBT dependencies for a model, macro, etc.
-
-    Args:
-        macros: The references to macros
-        sources: The "source_name.table_name" for source tables used
-        refs: The table_name for models used
-        variables: The names of variables used, mapped to a flag that indicates whether their
-            definition is optional or not.
-    """
-
-    macros: t.Set[MacroReference] = set()
-    sources: t.Set[str] = set()
-    refs: t.Set[str] = set()
-    variables: t.Set[str] = set()
-
-    def union(self, other: Dependencies) -> Dependencies:
-        dependencies = Dependencies()
-        dependencies.macros = self.macros | other.macros
-        dependencies.sources = self.sources | other.sources
-        dependencies.refs = self.refs | other.refs
-        dependencies.variables = self.variables | other.variables
-
-        return dependencies
+class DbtConfig(PydanticModel):
+    class Config:
+        extra = "allow"
+        allow_mutation = True
 
 
-class GeneralConfig(BaseConfig):
+class GeneralConfig(DbtConfig, BaseConfig):
     """
     General DBT configuration properties for models, sources, seeds, columns, etc.
 
@@ -218,10 +197,6 @@ class GeneralConfig(BaseConfig):
     persist_docs: t.Dict[str, t.Any] = {}
     tags: t.List[str] = []
     meta: t.Dict[str, t.Any] = {}
-
-    class Config:
-        extra = "allow"
-        allow_mutation = True
 
     @validator("enabled", pre=True)
     def _validate_bool(cls, v: str) -> bool:
