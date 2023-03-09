@@ -12,13 +12,13 @@ interface PropsTasks {
   tasks: PlanTasks
   headline?: string
   updated_at?: string
-  changes?: ContextEnvironmentChanges
+  changes?: Partial<ContextEnvironmentChanges>
   showBatches?: boolean
   showProgress?: boolean
   showLogicalUpdate?: boolean
 }
 
-export default function Tasks({
+export default function TasksProgress({
   environment,
   tasks,
   updated_at,
