@@ -1,5 +1,4 @@
 import abc
-import json
 import typing as t
 
 from airflow.exceptions import AirflowSkipException
@@ -208,7 +207,7 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
         )
 
 
-class SnapshotTableCleanupTarget(BaseTarget[commands.CleanupCommandPayload], PydanticModel):
+class SnapshotCleanupTarget(BaseTarget[commands.CleanupCommandPayload], PydanticModel):
     """The target which contains attributes necessary to perform table cleanup of expired snapshots"""
 
     command_type: commands.CommandType = commands.CommandType.CLEANUP
@@ -225,23 +224,19 @@ class SnapshotTableCleanupTarget(BaseTarget[commands.CleanupCommandPayload], Pyd
         **kwargs: t.Any,
     ) -> None:
         _delete_xcom(
-            common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,
+            common.SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY,
             common.JANITOR_TASK_ID,
             context,
             session,
         )
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.CleanupCommandPayload]:
-        snapshots = self._get_snapshots(context)
-        if not snapshots:
+        command = commands.CleanupCommandPayload.parse_raw(
+            context["ti"].xcom_pull(key=common.SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY)
+        )
+        if not command.snapshots and not command.environments:
             return None
-        return commands.CleanupCommandPayload(snapshots=snapshots)
-
-    def _get_snapshots(self, context: Context) -> t.List[SnapshotTableInfo]:
-        return [
-            SnapshotTableInfo.parse_obj(s)
-            for s in json.loads(context["ti"].xcom_pull(key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY))
-        ]
+        return command
 
 
 class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload], PydanticModel):

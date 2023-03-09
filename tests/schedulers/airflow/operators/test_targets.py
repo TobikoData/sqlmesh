@@ -1,4 +1,3 @@
-import json
 import typing as t
 
 import pytest
@@ -7,7 +6,9 @@ from airflow.utils.context import Context
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
 
@@ -64,55 +65,67 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
 
 
 @pytest.mark.airflow
-def test_table_cleanup_target_execute(
-    mocker: MockerFixture, make_snapshot: t.Callable, model: Model
-):
+def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
     snapshot = make_snapshot(model)
     snapshot.version = "test_version"
 
+    environment = Environment(
+        name="test_env", snapshots=[snapshot.table_info], start_at="", plan_id="test_plan_id"
+    )
+
+    command = commands.CleanupCommandPayload(
+        environments=[environment], snapshots=[snapshot.table_info]
+    )
+
     task_instance_mock = mocker.Mock()
-    task_instance_mock.xcom_pull.return_value = json.dumps([snapshot.table_info.dict()])
+    task_instance_mock.xcom_pull.return_value = command.json()
 
     context = Context(ti=task_instance_mock)  # type: ignore
 
+    evaluator_demote_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.demote")
     evaluator_cleanup_mock = mocker.patch(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
     delete_xcom_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets._delete_xcom")
 
-    target = targets.SnapshotTableCleanupTarget()
+    target = targets.SnapshotCleanupTarget()
 
     target.execute(context, lambda: mocker.Mock(), "spark")
 
+    evaluator_demote_mock.assert_called_once_with([snapshot.table_info], "test_env")
     evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
 
-    task_instance_mock.xcom_pull.assert_called_once_with(key="snapshot_table_cleanup_task")
+    task_instance_mock.xcom_pull.assert_called_once_with(key="snapshot_cleanup_command")
 
     delete_xcom_mock.assert_called_once()
 
 
 @pytest.mark.airflow
-def test_table_cleanup_target_skip_execution(
+def test_cleanup_target_skip_execution(
     mocker: MockerFixture, make_snapshot: t.Callable, model: Model
 ):
     snapshot = make_snapshot(model)
     snapshot.version = "test_version"
 
     task_instance_mock = mocker.Mock()
-    task_instance_mock.xcom_pull.return_value = "[]"
+    task_instance_mock.xcom_pull.return_value = commands.CleanupCommandPayload(
+        snapshots=[], environments=[]
+    ).json()
 
     context = Context(ti=task_instance_mock)  # type: ignore
 
+    evaluator_demote_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.demote")
     evaluator_cleanup_mock = mocker.patch(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
 
     delete_xcom_mock = mocker.patch("sqlmesh.schedulers.airflow.operators.targets._delete_xcom")
 
-    target = targets.SnapshotTableCleanupTarget()
+    target = targets.SnapshotCleanupTarget()
     with pytest.raises(AirflowSkipException):
         target.execute(context, lambda: mocker.Mock(), "spark")
 
+    evaluator_demote_mock.assert_not_called()
     evaluator_cleanup_mock.assert_not_called()
     delete_xcom_mock.assert_called_once()
