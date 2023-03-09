@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.common import DbtContext, Dependencies
-from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.model import Dependencies, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (

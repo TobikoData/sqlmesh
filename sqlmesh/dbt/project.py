@@ -75,7 +75,7 @@ class Project:
         if not packages_dir.is_absolute():
             packages_dir = Path(context.project_root, packages_dir)
 
-        for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
+        for path in packages_dir.glob(f"*/{PROJECT_FILENAME}"):
             name = context.render(load_yaml(path).get("name", ""))
             if not name:
                 raise ConfigError(f"{path} must include package name")
