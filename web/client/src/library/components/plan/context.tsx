@@ -18,7 +18,6 @@ import { isModified } from './help'
 
 export const EnumPlanActions = {
   ResetAdditionalOptions: 'reset-additional-options',
-  ResetDates: 'reset-dates',
   ResetBackfills: 'reset-backfills',
   ResetChanges: 'reset-changes',
   Dates: 'dates',
@@ -82,7 +81,7 @@ interface PlanBackfills {
   hasBackfills: boolean
   backfills: ContextEnvironmentBackfill[]
   activeBackfill?: PlanProgress
-  category: Category
+  change_category: Category
 }
 
 interface PlanDetails
@@ -93,7 +92,7 @@ interface PlanDetails
   end?: ContextEnvironmentEnd
   categories: Category[]
   logicalUpdateDescription: string
-  is_initial: boolean
+  isInitialPlanRun: boolean
 }
 
 type PlanAction = { type: PlanActions } & Partial<PlanDetails>
@@ -112,7 +111,7 @@ const initial = {
   from: undefined,
   restate_models: undefined,
 
-  category: defaultCategory,
+  change_category: defaultCategory,
   categories,
 
   hasChanges: false,
@@ -136,7 +135,7 @@ const initial = {
   activeBackfill: undefined,
   hasBackfills: false,
   backfills: [],
-  is_initial: false,
+  isInitialPlanRun: false,
 }
 
 export const PlanContext = createContext<PlanDetails>(initial)
@@ -201,24 +200,13 @@ function reducer(
         newState as Partial<PlanAdditionalOptions>,
       )
     }
-    case EnumPlanActions.ResetDates: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'start' | 'end'>>(
-        {},
-        plan,
-        {
-          start: undefined,
-          end: undefined,
-        },
-      )
-    }
-
     case EnumPlanActions.ResetBackfills: {
       return Object.assign<{}, PlanDetails, PlanBackfills>({}, plan, {
         hasLogicalUpdate: false,
         activeBackfill: undefined,
         hasBackfills: false,
         backfills: [],
-        category: defaultCategory,
+        change_category: defaultCategory,
       })
     }
     case EnumPlanActions.ResetChanges: {
@@ -249,13 +237,13 @@ function reducer(
       )
     }
     case EnumPlanActions.External: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'is_initial'>>(
+      return Object.assign<
         {},
-        plan,
-        {
-          is_initial: newState.is_initial ?? false,
-        },
-      )
+        PlanDetails,
+        Pick<PlanDetails, 'isInitialPlanRun'>
+      >({}, plan, {
+        isInitialPlanRun: newState.isInitialPlanRun ?? false,
+      })
     }
     case EnumPlanActions.DateStart: {
       return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'start'>>(
@@ -276,13 +264,13 @@ function reducer(
       )
     }
     case EnumPlanActions.Category: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'category'>>(
+      return Object.assign<
         {},
-        plan,
-        {
-          category: newState.category ?? defaultCategory,
-        },
-      )
+        PlanDetails,
+        Pick<PlanDetails, 'change_category'>
+      >({}, plan, {
+        change_category: newState.change_category ?? defaultCategory,
+      })
     }
     case EnumPlanActions.BackfillProgress: {
       return Object.assign<

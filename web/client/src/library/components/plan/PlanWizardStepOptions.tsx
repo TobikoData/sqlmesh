@@ -22,13 +22,14 @@ export default function PlanWizardStepOptions({
     from,
     no_auto_categorization,
     restate_models,
+    isInitialPlanRun,
   } = usePlan()
 
   return (
     <li className={clsx('mt-6 mb-2 mb-6', className)}>
       <form className="w-full h-full">
         <fieldset className={clsx('mb-10 mt-6')}>
-          <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-gray-900">
+          <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-gray-900 px-4">
             Set Dates
           </h2>
           <div className="mt-3">
@@ -39,7 +40,7 @@ export default function PlanWizardStepOptions({
           <Disclosure>
             {({ open }) => (
               <>
-                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm">
+                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 hover:bg-secondary-100">
                   <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-gray-900">
                     Additional Options
                   </h2>
@@ -79,6 +80,7 @@ export default function PlanWizardStepOptions({
               environment, only the current model versions will
               be affected"
                         placeholder="project.model1, project.model2"
+                        disabled={isInitialPlanRun}
                         value={restate_models ?? ''}
                         onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                           e.stopPropagation()
@@ -114,6 +116,7 @@ export default function PlanWizardStepOptions({
                   comparing to existing snapshots for matching
                   models in the target environment"
                           enabled={Boolean(no_gaps)}
+                          disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
                               type: EnumPlanActions.AdditionalOptions,
@@ -127,6 +130,7 @@ export default function PlanWizardStepOptions({
                           label="Skip Backfill"
                           info="Skip the backfill step"
                           enabled={Boolean(skip_backfill)}
+                          disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
                               type: EnumPlanActions.AdditionalOptions,
@@ -142,6 +146,7 @@ export default function PlanWizardStepOptions({
                           label="Forward Only"
                           info="Create a plan for forward-only changes"
                           enabled={Boolean(forward_only)}
+                          disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
                               type: EnumPlanActions.AdditionalOptions,
@@ -168,6 +173,7 @@ export default function PlanWizardStepOptions({
                           label="No Auto Categorization"
                           info="Set category manually"
                           enabled={Boolean(no_auto_categorization)}
+                          disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
                               type: EnumPlanActions.AdditionalOptions,

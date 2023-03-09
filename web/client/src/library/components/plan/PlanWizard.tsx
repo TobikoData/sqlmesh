@@ -47,12 +47,14 @@ export default function PlanWizard({
     hasChanges,
     hasBackfills,
     activeBackfill,
-    category,
+    change_category,
     categories,
     modified,
     added,
     removed,
     logicalUpdateDescription,
+    forward_only,
+    skip_backfill,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
@@ -62,7 +64,7 @@ export default function PlanWizard({
     (tasks: PlanTasks): PlanTasks => {
       return Object.entries(tasks).reduce(
         (acc: PlanTasks, [taskModelName, task]) => {
-          if (category.id === EnumCategoryType.NonBreakingChange) {
+          if (change_category.id === EnumCategoryType.NonBreakingChange) {
             const directChanges = modified?.direct
             const isTaskDirectChange =
               directChanges == null
@@ -83,7 +85,7 @@ export default function PlanWizard({
         {},
       )
     },
-    [category, modified],
+    [change_category, modified],
   )
 
   const filterBackfillsTasks = useCallback(
@@ -97,11 +99,11 @@ export default function PlanWizard({
           interval: taskInterval,
         }
 
-        if (category.id === EnumCategoryType.BreakingChange) {
+        if (change_category.id === EnumCategoryType.BreakingChange) {
           acc[taskModelName] = taskBackfill
         }
 
-        if (category.id === EnumCategoryType.NonBreakingChange) {
+        if (change_category.id === EnumCategoryType.NonBreakingChange) {
           const directChanges = modified?.direct
           const isTaskDirectChange =
             directChanges == null
@@ -118,7 +120,7 @@ export default function PlanWizard({
         return acc
       }, {})
     },
-    [category, modified],
+    [change_category, modified],
   )
 
   const tasks: PlanTasks = useMemo(
@@ -126,7 +128,7 @@ export default function PlanWizard({
       activeBackfill?.tasks != null
         ? filterActiveBackfillsTasks(activeBackfill.tasks)
         : filterBackfillsTasks(backfills),
-    [backfills, modified, category, activeBackfill],
+    [backfills, modified, change_category, activeBackfill],
   )
 
   const hasLogicalUpdate = hasChanges && isFalse(hasBackfills)
@@ -140,13 +142,15 @@ export default function PlanWizard({
   )
   const showDetails =
     isFalse(hasNoChange) &&
-    (hasBackfills || (hasLogicalUpdate && isFalse(isFinished)))
+    (hasBackfills || (hasLogicalUpdate && isFalse(isFinished))) &&
+    isFalse(skip_backfill)
   const backfillStepHeadline = getBackfillStepHeadline({
     planAction,
     planState,
     hasBackfills,
     hasLogicalUpdate,
     hasNoChange,
+    skip_backfill,
   })
 
   return (
@@ -285,9 +289,9 @@ export default function PlanWizard({
                   </PlanWizardStepMessage>
 
                   <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
-                    {hasBackfills && (
+                    {hasBackfills && isFalse(skip_backfill) && (
                       <>
-                        {isModified(modified) && (
+                        {isModified(modified) && isFalse(forward_only) && (
                           <div className="mb-10 lg:px-4 ">
                             <RadioGroup
                               className={clsx(
@@ -296,11 +300,11 @@ export default function PlanWizard({
                                   ? 'opacity-50 cursor-not-allowed'
                                   : 'cursor-pointer',
                               )}
-                              value={category}
+                              value={change_category}
                               onChange={(c: Category) => {
                                 dispatch({
                                   type: EnumPlanActions.Category,
-                                  category: c,
+                                  change_category: c,
                                 })
                               }}
                               disabled={isFinished}
@@ -364,7 +368,7 @@ export default function PlanWizard({
                             </RadioGroup>
                           </div>
                         )}
-                        {category?.id !== EnumCategoryType.NoChange && (
+                        {change_category?.id !== EnumCategoryType.NoChange && (
                           <>
                             <Suspense
                               fallback={<Spinner className="w-4 h-4 mr-2" />}

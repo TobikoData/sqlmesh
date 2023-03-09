@@ -23,6 +23,7 @@ import {
   isArrayNotEmpty,
   isFalse,
   isStringEmptyOrNil,
+  isTrue,
 } from '~/utils'
 import Input from '../input/Input'
 import {
@@ -50,7 +51,9 @@ export function IDE(): JSX.Element {
     useApiEnvironments()
 
   const environment = useStoreContext(s => s.environment)
-  const isInitial = useStoreContext(s => s.isInitial)
+  const environments = useStoreContext(s => s.environments)
+  const initialStartDate = useStoreContext(s => s.initialStartDate)
+  const initialEndDate = useStoreContext(s => s.initialEndDate)
   const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const planState = useStorePlan(s => s.state)
@@ -109,6 +112,10 @@ export function IDE(): JSX.Element {
     setIsClosingModal(true)
     setIsPlanOpen(false)
   }
+
+  const activeEnvironemnt = environments.find(e => e.name === environment)
+
+  console.log({ activeEnvironemnt })
 
   return (
     <>
@@ -183,10 +190,15 @@ export function IDE(): JSX.Element {
             <PlanProvider>
               <Plan
                 environment={environment}
-                isInitial={isInitial}
+                isInitialPlanRun={
+                  activeEnvironemnt?.isInitial == null ||
+                  isTrue(activeEnvironemnt?.isInitial)
+                }
+                disabled={isClosingModal}
+                initialStartDate={initialStartDate}
+                initialEndDate={initialEndDate}
                 onCancel={cancelPlan}
                 onClose={closeRunPlan}
-                disabled={isClosingModal}
               />
             </PlanProvider>
           )}
@@ -283,6 +295,7 @@ function RunPlan({
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
+  const setInitialDates = useStoreContext(s => s.setInitialDates)
 
   const environments = useStoreContext(s => s.environments)
   const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
@@ -311,6 +324,10 @@ function RunPlan({
       void refetchEnvironments()
     }
   }, [planState])
+
+  useEffect(() => {
+    setInitialDates(plan?.start, plan?.end)
+  }, [plan])
 
   function startPlan(): void {
     setActivePlan(undefined)

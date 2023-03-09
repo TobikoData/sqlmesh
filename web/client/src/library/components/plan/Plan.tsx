@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { includes, isFalse } from '~/utils'
+import { useEffect, useMemo, useState } from 'react'
+import { includes, isFalse, toDate, toDateFormat } from '~/utils'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { EnvironmentName } from '~/context/context'
@@ -9,6 +9,8 @@ import {
   applyApiCommandsApplyPost,
   ApplyApiCommandsApplyPostParams,
   ApplyType,
+  ContextEnvironmentEnd,
+  ContextEnvironmentStart,
 } from '~/api/client'
 import PlanWizard from './PlanWizard'
 import PlanHeader from './PlanHeader'
@@ -19,13 +21,17 @@ import PlanBackfillDates from './PlanBackfillDates'
 
 function Plan({
   environment,
-  isInitial,
+  isInitialPlanRun,
+  initialStartDate,
+  initialEndDate,
   onCancel,
   onClose,
   disabled,
 }: {
   environment: EnvironmentName
-  isInitial: boolean
+  isInitialPlanRun: boolean
+  initialStartDate?: ContextEnvironmentStart
+  initialEndDate?: ContextEnvironmentEnd
   onCancel: () => void
   onClose: () => void
   disabled: boolean
@@ -44,8 +50,7 @@ function Plan({
     restate_models,
     hasChanges,
     hasBackfills,
-    category,
-    is_initial,
+    change_category,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
@@ -54,6 +59,8 @@ function Plan({
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
 
+  const [isPlanRan, seIsPlanRan] = useState(false)
+
   const { refetch } = useApiPlan(
     environment,
     start,
@@ -61,12 +68,28 @@ function Plan({
     no_gaps,
     skip_backfill,
     forward_only,
-    auto_apply,
     from,
     no_auto_categorization,
     skip_tests,
     restate_models,
   )
+
+  const [startDate, endDate] = useMemo(() => {
+    const ONE_DAY = 1000 * 60 * 60 * 24
+    const end = isInitialPlanRun
+      ? initialEndDate
+      : toDateFormat(new Date(), 'mm/dd/yyyy')
+    const dateinitialEndDate = toDate(end)
+    const oneDayOffinitialEndDate =
+      dateinitialEndDate == null
+        ? undefined
+        : new Date(dateinitialEndDate.getTime() - ONE_DAY)
+    const start = isInitialPlanRun
+      ? initialStartDate
+      : toDateFormat(oneDayOffinitialEndDate, 'mm/dd/yyyy')
+
+    return [start, end]
+  }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
   useEffect(() => {
     return () => {
@@ -75,11 +98,30 @@ function Plan({
   }, [])
 
   useEffect(() => {
-    dispatch({
-      type: EnumPlanActions.External,
-      is_initial: isInitial,
-    })
-  }, [isInitial])
+    dispatch([
+      {
+        type: EnumPlanActions.External,
+        isInitialPlanRun,
+      },
+      {
+        type: EnumPlanActions.Dates,
+        start: startDate,
+        end: endDate,
+      },
+    ])
+
+    if (isInitialPlanRun) {
+      dispatch([
+        {
+          type: EnumPlanActions.AdditionalOptions,
+          skip_backfill: false,
+          forward_only: false,
+          no_auto_categorization: false,
+          no_gaps: false,
+        },
+      ])
+    }
+  }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
   useEffect(() => {
     if (
@@ -94,7 +136,7 @@ function Plan({
     )
       return
 
-    if (start == null && end == null) {
+    if (isFalse(isPlanRan)) {
       setPlanAction(EnumPlanAction.Run)
     } else if (
       isFalse(hasChanges || hasBackfills) ||
@@ -104,7 +146,7 @@ function Plan({
     } else {
       setPlanAction(EnumPlanAction.Apply)
     }
-  }, [planState, start, end, hasChanges, hasBackfills])
+  }, [planState, isPlanRan, hasChanges, hasBackfills])
 
   useEffect(() => {
     if (activePlan == null) return
@@ -116,6 +158,8 @@ function Plan({
   }, [activePlan])
 
   function cleanUp(): void {
+    seIsPlanRan(false)
+
     dispatch([
       {
         type: EnumPlanActions.ResetBackfills,
@@ -124,7 +168,9 @@ function Plan({
         type: EnumPlanActions.ResetChanges,
       },
       {
-        type: EnumPlanActions.ResetDates,
+        type: EnumPlanActions.Dates,
+        start: startDate,
+        end: endDate,
       },
       {
         type: EnumPlanActions.ResetAdditionalOptions,
@@ -155,14 +201,22 @@ function Plan({
 
     const payload: ApplyApiCommandsApplyPostParams = {
       environment,
+      skip_backfill,
+      skip_tests,
+      no_gaps,
+      forward_only,
+      no_auto_categorization,
+      restate_models,
+      from_: from,
     }
 
-    if (hasBackfills && isFalse(is_initial)) {
+    if (hasBackfills && isFalse(isInitialPlanRun)) {
       payload.start = start
+      payload.end = end
     }
 
-    if (hasChanges && isFalse(is_initial)) {
-      payload.category = category.value
+    if (hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)) {
+      payload.change_category = change_category.value
     }
 
     applyApiCommandsApplyPost(payload)
@@ -206,8 +260,16 @@ function Plan({
       })
       .catch(console.error)
       .finally(() => {
-        setPlanAction(EnumPlanAction.Run)
+        seIsPlanRan(true)
         setPlanState(EnumPlanState.Init)
+
+        if (auto_apply) {
+          setPlanAction(EnumPlanAction.Apply)
+
+          apply()
+        } else {
+          setPlanAction(EnumPlanAction.Run)
+        }
       })
   }
 

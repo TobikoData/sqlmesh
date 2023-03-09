@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import { Environment } from '~/api/client'
+import {
+  ContextEnvironmentEnd,
+  ContextEnvironmentStart,
+  Environment,
+} from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
 
@@ -32,12 +36,17 @@ export interface EnvironmentShort {
 interface ContextStore {
   environment?: EnvironmentName
   environments: EnvironmentShort[]
-  isInitial: boolean
+  initialStartDate?: ContextEnvironmentStart
+  initialEndDate?: ContextEnvironmentEnd
   setEnvironment: (environment: EnvironmentName) => void
   addLocalEnvironments: (environments: EnvironmentName[]) => void
   removeLocalEnvironments: (environments: EnvironmentName[]) => void
   addRemoteEnvironments: (environments: Environment[]) => void
   isExistingEnvironment: (environment: EnvironmentName) => boolean
+  setInitialDates: (
+    initialStartDate?: ContextEnvironmentStart,
+    initialEndDate?: ContextEnvironmentEnd,
+  ) => void
 }
 
 const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
@@ -45,7 +54,17 @@ const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
 export const useStoreContext = create<ContextStore>((set, get) => ({
   environment: getProfile()?.environment,
   environments: getDefaultEnvironments(),
-  isInitial: false,
+  initialStartDate: undefined,
+  initialEndDate: undefined,
+  setInitialDates(
+    initialStartDate?: ContextEnvironmentStart,
+    initialEndDate?: ContextEnvironmentEnd,
+  ) {
+    set({
+      initialStartDate,
+      initialEndDate,
+    })
+  },
   isExistingEnvironment(environment: EnvironmentName) {
     const { environments } = get()
 
@@ -77,7 +96,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           environments.push({
             name,
             type: EnumRelativeLocation.Local,
-            isInitial: false,
+            isInitial: true,
           })
         }
       })
@@ -131,9 +150,6 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       return {
         environments,
-        isInitial: environments
-          .filter(({ type }) => type === EnumRelativeLocation.Remote)
-          .every(({ isInitial }) => isInitial),
       }
     })
   },
@@ -173,7 +189,7 @@ function getDefaultEnvironments(): EnvironmentShort[] {
     output.push({
       name,
       type: EnumRelativeLocation.Local,
-      isInitial: false,
+      isInitial: true,
     })
   })
 
