@@ -31,6 +31,10 @@ class ContextDiff(PydanticModel):
 
     environment: str
     """The environment to diff."""
+    is_new_environment: bool
+    """Whether the target environment is new."""
+    init_from: str
+    """The name of the environment the target environment will be initialized from if new."""
     added: t.Set[str]
     """New models."""
     removed: t.Set[str]
@@ -49,6 +53,7 @@ class ContextDiff(PydanticModel):
         cls,
         environment: str | Environment,
         snapshots: t.Dict[str, Snapshot],
+        init_from: str,
         state_reader: StateReader,
     ) -> ContextDiff:
         """Create a ContextDiff object.
@@ -56,6 +61,8 @@ class ContextDiff(PydanticModel):
         Args:
             environment: The remote environment to diff.
             snapshots: The snapshots of the current environment.
+            init_from: The environment to initialize the target environment from if it
+                doesn't exist.
             state_reader: StateReader to access the remote environment to diff.
 
         Returns:
@@ -67,6 +74,12 @@ class ContextDiff(PydanticModel):
         else:
             env = environment
             environment = env.name.lower()
+
+        if env is None:
+            env = state_reader.get_environment(init_from.lower())
+            is_new_environment = True
+        else:
+            is_new_environment = False
 
         existing_info = {info.name: info for info in (env.snapshots if env else [])}
         existing_models = set(existing_info)
@@ -130,16 +143,22 @@ class ContextDiff(PydanticModel):
 
         return ContextDiff(
             environment=environment,
+            is_new_environment=is_new_environment,
+            init_from=init_from,
             added=added,
             removed=removed,
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
-            previous_plan_id=env.plan_id if env else None,
+            previous_plan_id=env.plan_id if env and not is_new_environment else None,
         )
 
     @property
-    def has_differences(self) -> bool:
+    def has_changes(self) -> bool:
+        return self.has_snapshot_changes or self.is_new_environment
+
+    @property
+    def has_snapshot_changes(self) -> bool:
         return bool(self.added or self.removed or self.modified_snapshots)
 
     def directly_modified(self, model_name: str) -> bool:
