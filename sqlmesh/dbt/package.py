@@ -3,13 +3,9 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from pydantic import Field, validator
-from sqlglot.helper import ensure_list
-
 from sqlmesh.dbt.common import (
     PROJECT_FILENAME,
     BaseConfig,
-    DbtConfig,
     DbtContext,
     SqlStr,
     load_yaml,
@@ -36,41 +32,6 @@ class ProjectConfig(PydanticModel):
     source_config: ScopedSources = {(): SourceConfig()}
     seed_config: ScopedSeeds = {(): SeedConfig()}
     model_config: ScopedModels = {(): ModelConfig()}
-
-
-class PackageConfig(DbtConfig):
-    """
-    DBT package configuration
-
-    Args:
-        subdirectory: Relative path to dbt_project.yml directory if not root
-        warn_unpinned: Warn if package is not pinned to version or revision
-        git: git package url
-        revision: git package tag, branch, or commit hash
-        package: Name of the dbt Hub package
-        version: Version or range of versions of the dbt Hub package
-        install_prerelease: Allow pre-release version to be installed from dbt Hub
-        local: Location of a local package
-    """
-
-    subdirectory: t.Optional[str] = None
-    warn_unpinned: bool = Field(False, alias="warn-unpinned")
-
-    # git packages
-    git: t.Optional[str] = None
-    revision: t.Optional[str] = None
-
-    # dbt Hub packages
-    package: t.Optional[str] = None
-    version: t.List = []
-    install_prerelease: bool = Field(False, alias="install-prerelease")
-
-    # local package
-    local: t.Optional[str] = None
-
-    @validator("version", pre=True)
-    def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
-        return ensure_list(v)
 
 
 class Package(PydanticModel):
