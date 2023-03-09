@@ -1,7 +1,7 @@
 import json
 
 import sqlglot
-from sqlglot.dialects.dialect import DialectType as DialectType
+from sqlglot.dialects.dialect import DialectType
 
 
 def parse_to_json(sql: str, read: DialectType = None) -> str:
