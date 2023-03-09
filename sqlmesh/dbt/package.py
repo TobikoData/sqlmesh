@@ -72,22 +72,6 @@ class PackageConfig(DbtConfig):
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
 
-    @property
-    def name(self) -> t.Optional[str]:
-        if self.git:
-            return Path(self.git).stem
-        elif self.package:
-            return Path(self.package).stem
-        elif self.local:
-            return Path(self.local).stem
-
-        return None
-
-    @property
-    def location(self) -> Path:
-        name = self.name or ""
-        return Path(name, self.subdirectory) if self.subdirectory else Path(name)
-
 
 class Package(PydanticModel):
     """Class to contain package configuration"""
