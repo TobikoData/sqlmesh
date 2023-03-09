@@ -176,7 +176,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "--create-from",
         type=str,
-        help="The environment to create the target environment from if it doesn't exist.",
+        help="The environment to create the target environment from if it doesn't exist. Default: prod.",
     )
     @argument(
         "--skip-tests",

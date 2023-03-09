@@ -178,7 +178,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @click.option(
     "--create-from",
     type=str,
-    help="The environment to create the target environment from if it doesn't exist.",
+    help="The environment to create the target environment from if it doesn't exist. Default: prod.",
 )
 @click.option(
     "--skip-tests",
