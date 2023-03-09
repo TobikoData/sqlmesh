@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import typing as t
 from datetime import datetime, timedelta
@@ -11,6 +10,7 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
+from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
@@ -111,7 +111,7 @@ class SQLMeshAirflow:
 
         table_cleanup_task_op = self._engine_operator(
             **self._ddl_engine_operator_args,
-            target=targets.SnapshotTableCleanupTarget(),
+            target=targets.SnapshotCleanupTarget(),
             task_id="snapshot_table_cleanup_task",
             dag=dag,
         )
@@ -143,12 +143,14 @@ def _janitor_task(
     session: Session = util.PROVIDED_SESSION,
 ) -> None:
     with util.scoped_state_sync() as state_sync:
-        state_sync.delete_expired_environments()
-
+        expired_environments = state_sync.delete_expired_environments()
         expired_snapshots = state_sync.delete_expired_snapshots()
         ti.xcom_push(
-            key=common.SNAPSHOT_TABLE_CLEANUP_XCOM_KEY,
-            value=json.dumps([s.table_info.dict() for s in expired_snapshots]),
+            key=common.SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY,
+            value=commands.CleanupCommandPayload(
+                environments=expired_environments,
+                snapshots=[s.table_info for s in expired_snapshots],
+            ).json(),
             session=session,
         )
 

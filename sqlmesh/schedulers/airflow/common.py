@@ -25,7 +25,7 @@ SQLMESH_AIRFLOW_TAG = "sqlmesh"
 SNAPSHOT_AIRFLOW_TAG = "sqlmesh_snapshot"
 PLAN_AIRFLOW_TAG = "sqlmesh_plan"
 
-SNAPSHOT_TABLE_CLEANUP_XCOM_KEY = "snapshot_table_cleanup_task"
+SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY = "snapshot_cleanup_command"
 
 PLAN_DAG_SPEC_KEY_PREFIX = "sqlmesh__plan_dag_spec"
 SNAPSHOT_PAYLOAD_KEY_PREFIX = "sqlmesh__snapshot_payload"
