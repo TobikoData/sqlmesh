@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { Profile } from '~/library/components/ide/IDE'
 import { isFalse } from '~/utils'
 
 export const EnumRelativeLocation = {
@@ -13,6 +12,11 @@ export const EnumDefaultEnvironment = {
   Dev: 'dev',
   Stage: 'stage',
 } as const
+
+export interface Profile {
+  environment: string
+  environments: Environment[]
+}
 
 export type RelativeLocation = KeyOf<typeof EnumRelativeLocation>
 export type DefaultEnvironment = KeyOf<typeof EnumDefaultEnvironment>

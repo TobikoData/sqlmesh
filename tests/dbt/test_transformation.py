@@ -12,7 +12,6 @@ from sqlmesh.core.model import (
     ModelKind,
     ModelKindName,
 )
-from sqlmesh.dbt.builtin import generate_this
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -24,7 +23,6 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import render_jinja
 
 
 @pytest.fixture()
@@ -253,11 +251,3 @@ def test_quote(sushi_dbt_project: Project):
 
     jinja = "{{ adapter.quote('foo') }} {{ adapter.quote('bar') }}"
     assert context.render(jinja) == '"foo" "bar"'
-
-
-def test_this():
-    config = ModelConfig(target_schema="foo", alias="baz")
-
-    this_method = generate_this(config)
-    assert render_jinja("{{ this.identifier }}", {"this": this_method()}) == "baz"
-    assert render_jinja("{{ this.schema }}", {"this": this_method()}) == "foo"

@@ -9,17 +9,12 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.dbt.builtin import (
-    create_builtins,
-    generate_ref,
-    generate_source,
-    generate_var,
-)
+from sqlmesh.dbt.builtin import create_builtins
 from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference, render_jinja
-from sqlmesh.utils.metaprogramming import build_env, serialize_env
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
@@ -74,6 +69,10 @@ class DbtContext:
     _refs: t.Dict[str, str] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
+
+    @property
+    def dialect(self) -> str:
+        return self.engine_adapter.dialect if self.engine_adapter is not None else ""
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
@@ -135,7 +134,6 @@ class DbtContext:
 
         self._target = value
         self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
-        self.jinja_macros.global_objs["target"] = value.target_jinja(self.project_name)
 
     def render(self, source: str) -> str:
         return (
@@ -145,34 +143,25 @@ class DbtContext:
     def copy(self) -> DbtContext:
         return replace(self)
 
-    def create_python_env(
-        self, methods: t.Optional[t.Dict[str, t.Callable]] = None
-    ) -> t.Dict[str, t.Any]:
-        env: t.Dict[str, t.Any] = {}
-        for name, method in self._builtin_jinja_overrides.items():
-            build_env(method, env=env, name=name, path=Path(__file__).parent)
-
-        methods = methods or {}
-        for name, method in methods.items():
-            build_env(method, env=env, name=name, path=Path(__file__).parent)
-
-        return serialize_env(env, Path(__file__).parent)
-
     @property
     def builtin_jinja(self) -> t.Dict[str, t.Any]:
         return create_builtins(
             jinja_macros=self.jinja_macros,
-            jinja_globals=self._builtin_jinja_overrides,
+            jinja_globals=self.jinja_globals,
             engine_adapter=self.engine_adapter,
         )
 
     @property
-    def _builtin_jinja_overrides(self) -> t.Dict[str, t.Any]:
-        return {
-            "var": generate_var(self.variables),
-            "ref": generate_ref({**self.models, **self.seeds}),
-            "source": generate_source(self.sources),
+    def jinja_globals(self) -> t.Dict[str, AttributeDict]:
+        refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = {**self.models, **self.seeds}
+        output: t.Dict[str, AttributeDict] = {
+            "vars": AttributeDict(self.variables),
+            "refs": AttributeDict({k: v.relation_info for k, v in refs.items()}),
+            "sources": AttributeDict({k: v.relation_info for k, v in self.sources.items()}),
         }
+        if self._target is not None and self.project_name is not None:
+            output["target"] = self._target.target_jinja(self.project_name)
+        return output
 
 
 class SqlStr(str):

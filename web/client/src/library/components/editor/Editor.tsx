@@ -341,7 +341,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
           </ul>
         </div>
         <Divider />
-        <div className="flex h-full flex-col">
+        <div className="flex flex-col h-full overflow-hidden">
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
@@ -534,7 +534,6 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
             </div>
           </SplitPane>
         </div>
-
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <div className="flex align-center mr-4">

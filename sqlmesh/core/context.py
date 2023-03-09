@@ -430,7 +430,24 @@ class Context(BaseContext):
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
-        """Generates and returns snapshots based on models registered in this context."""
+        """Generates and returns snapshots based on models registered in this context.
+
+        If one of the snapshots has been previosly stored in the persisted state, the stored
+        instance will be returned.
+        """
+        local_snapshots = self.local_snapshots
+
+        stored_snapshots = self.state_reader.get_snapshots(
+            [s.snapshot_id for s in local_snapshots.values()]
+        )
+
+        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in local_snapshots.items()}
+
+    @property
+    def local_snapshots(self) -> t.Dict[str, Snapshot]:
+        """Generates and returns snapshots based on models registered in this context without reconciling them
+        with the persisted state.
+        """
         local_snapshots = {}
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
         for model in self._models.values():
@@ -443,25 +460,7 @@ class Context(BaseContext):
                 cache=fingerprint_cache,
             )
             local_snapshots[model.name] = snapshot
-
-        stored_snapshots = self.state_reader.get_snapshots(
-            [s.snapshot_id for s in local_snapshots.values()]
-        )
-
-        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in local_snapshots.items()}
-
-    @property
-    def _model_tables(self) -> t.Dict[str, str]:
-        """Mapping of model name to physical table name.
-
-        If a snapshot has not been versioned yet, its view name will be returned.
-        """
-        return {
-            name: snapshot.table_name()
-            if snapshot.version
-            else snapshot.qualified_view_name.for_environment(c.PROD)
-            for name, snapshot in self.snapshots.items()
-        }
+        return local_snapshots
 
     def render(
         self,
@@ -562,19 +561,6 @@ class Context(BaseContext):
                 file.seek(0)
                 file.write(format_model_expressions(expressions, model.dialect))
                 file.truncate()
-
-    def _run_plan_tests(
-        self, skip_tests: bool = False
-    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
-        if self._test_engine_adapter and not skip_tests:
-            result, test_output = self.run_tests()
-            self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
-            if not result.wasSuccessful():
-                raise PlanError(
-                    "Cannot generate plan due to failing test(s). Fix test(s) and run again"
-                )
-            return result, test_output
-        return None, None
 
     def plan(
         self,
@@ -828,6 +814,32 @@ class Context(BaseContext):
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
 
+    def _run_plan_tests(
+        self, skip_tests: bool = False
+    ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+        if self._test_engine_adapter and not skip_tests:
+            result, test_output = self.run_tests()
+            self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
+            if not result.wasSuccessful():
+                raise PlanError(
+                    "Cannot generate plan due to failing test(s). Fix test(s) and run again"
+                )
+            return result, test_output
+        return None, None
+
+    @property
+    def _model_tables(self) -> t.Dict[str, str]:
+        """Mapping of model name to physical table name.
+
+        If a snapshot has not been versioned yet, its view name will be returned.
+        """
+        return {
+            name: snapshot.table_name()
+            if snapshot.version
+            else snapshot.qualified_view_name.for_environment(c.PROD)
+            for name, snapshot in self.snapshots.items()
+        }
+
     def _context_diff(
         self,
         environment: str | Environment,
@@ -849,25 +861,6 @@ class Context(BaseContext):
             self.path / "config.yaml",
         ]
         return load_config_from_paths(*lookup_paths, config_name=config)
-
-    def glob_path(self, path: Path, file_extension: str) -> t.Generator[Path, None, None]:
-        """
-        Globs the provided path for the file extension but also removes any filepaths that match an ignore
-        pattern either set in constants or provided in config
-
-        Args:
-            path: The filepath to glob
-            file_extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
-
-        Returns:
-            Matched paths that are not ignored
-        """
-        for filepath in path.glob(f"**/*{file_extension}"):
-            for ignore_pattern in self.ignore_patterns:
-                if filepath.match(ignore_pattern):
-                    break
-            else:
-                yield filepath
 
     def _add_model_to_dag(self, model: Model) -> None:
         self.dag.graph[model.name] = set()

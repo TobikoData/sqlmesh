@@ -21,7 +21,7 @@ from sqlmesh.core.model import Model, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
@@ -37,8 +37,8 @@ def update_model_schemas(dialect: str, dag: DAG[str], models: UniqueKeyDict[str,
             continue
 
         if model.contains_star_query and any(dep not in models for dep in model.depends_on):
-            raise SQLMeshError(
-                f"Can't expand SELECT * expression for model {name}. Projections for models that use external sources must be specified explicitly"
+            raise ConfigError(
+                f"Can't expand SELECT * expression for model '{name}'. Projections for models that use external sources must be specified explicitly at '{model._path}'"
             )
 
         model.update_schema(schema)
@@ -132,9 +132,9 @@ class SqlMeshLoader(Loader):
         standard_hooks = hook.get_registry()
         standard_macros = macro.get_registry()
 
-        for path in tuple(
-            self._context.glob_path(self._context.macro_directory_path, ".py")
-        ) + tuple(self._context.glob_path(self._context.hook_directory_path, ".py")):
+        for path in tuple(self._glob_path(self._context.macro_directory_path, ".py")) + tuple(
+            self._glob_path(self._context.hook_directory_path, ".py")
+        ):
             if self._import_python_file(path.relative_to(self._context.path)):
                 self._track_file(path)
 
@@ -161,7 +161,7 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
-        for path in self._context.glob_path(self._context.models_directory_path, ".sql"):
+        for path in self._glob_path(self._context.models_directory_path, ".sql"):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 try:
@@ -193,7 +193,7 @@ class SqlMeshLoader(Loader):
         registry.clear()
         registered: t.Set[str] = set()
 
-        for path in self._context.glob_path(self._context.models_directory_path, ".py"):
+        for path in self._glob_path(self._context.models_directory_path, ".py"):
             self._track_file(path)
             self._import_python_file(path.relative_to(self._context.path))
             new = registry.keys() - registered
@@ -212,7 +212,7 @@ class SqlMeshLoader(Loader):
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
-        for path in self._context.glob_path(self._context.audits_directory_path, ".sql"):
+        for path in self._glob_path(self._context.audits_directory_path, ".sql"):
             self._track_file(path)
             with open(path, "r", encoding="utf-8") as file:
                 expressions = parse(file.read(), default_dialect=self._context.dialect)
@@ -233,3 +233,22 @@ class SqlMeshLoader(Loader):
             sys.modules.pop(".".join(parts[0 : i + 1]), None)
 
         return importlib.import_module(module_name)
+
+    def _glob_path(self, path: Path, file_extension: str) -> t.Generator[Path, None, None]:
+        """
+        Globs the provided path for the file extension but also removes any filepaths that match an ignore
+        pattern either set in constants or provided in config
+
+        Args:
+            path: The filepath to glob
+            file_extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
+
+        Returns:
+            Matched paths that are not ignored
+        """
+        for filepath in path.glob(f"**/*{file_extension}"):
+            for ignore_pattern in self._context.ignore_patterns:
+                if filepath.match(ignore_pattern):
+                    break
+            else:
+                yield filepath

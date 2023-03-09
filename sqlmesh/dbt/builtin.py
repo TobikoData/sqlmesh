@@ -14,11 +14,6 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
 
-if t.TYPE_CHECKING:
-    from sqlmesh.dbt.model import ModelConfig
-    from sqlmesh.dbt.seed import SeedConfig
-    from sqlmesh.dbt.source import SourceConfig
-
 
 class Exceptions:
     def raise_compiler_error(self, msg: str) -> None:
@@ -90,21 +85,18 @@ def config(*args: t.Any, **kwargs: t.Any) -> str:
 
 
 def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
-    DBT_VAR_MAPPING = variables.copy()
-
     def var(name: str, default: t.Optional[str] = None) -> str:
-        return DBT_VAR_MAPPING.get(name, default)
+        return variables.get(name, default)
 
     return var
 
 
-def generate_ref(refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]]) -> t.Callable:
-    DBT_REF_MAPPING = {k: v.relation_info for k, v in refs.items()}
+def generate_ref(refs: t.Dict[str, t.Any]) -> t.Callable:
 
     # TODO suport package name
     def ref(package: str, name: t.Optional[str] = None) -> t.Optional[BaseRelation]:
         name = name or package
-        relation_info = DBT_REF_MAPPING.get(name)
+        relation_info = refs.get(name)
         if relation_info is None:
             return relation_info
 
@@ -113,26 +105,15 @@ def generate_ref(refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]]) -> t.Calla
     return ref
 
 
-def generate_source(sources: t.Dict[str, SourceConfig]) -> t.Callable:
-    DBT_SOURCE_MAPPING = {k: v.relation_info for k, v in sources.items()}
-
+def generate_source(sources: t.Dict[str, t.Any]) -> t.Callable:
     def source(package: str, name: str) -> t.Optional[BaseRelation]:
-        relation_info = DBT_SOURCE_MAPPING.get(f"{package}.{name}")
+        relation_info = sources.get(f"{package}.{name}")
         if relation_info is None:
             return relation_info
 
         return BaseRelation.create(**relation_info, quote_policy=quote_policy())
 
     return source
-
-
-def generate_this(model: ModelConfig) -> t.Callable:
-    DBT_THIS_RELATION = model.relation_info
-
-    def maybw() -> BaseRelation:
-        return BaseRelation.create(**DBT_THIS_RELATION, quote_policy=quote_policy())
-
-    return maybw
 
 
 def quote_policy() -> Policy:
@@ -222,10 +203,29 @@ def create_builtins(
     jinja_globals: t.Dict[str, t.Any],
     engine_adapter: t.Optional[EngineAdapter],
 ) -> t.Dict[str, t.Any]:
-    builtins = {
-        **BUILTIN_JINJA,
-        **jinja_globals,
-    }
+    builtins = BUILTIN_JINJA.copy()
+    jinja_globals = jinja_globals.copy()
+
+    this = jinja_globals.pop("this", None)
+    if this is not None:
+        if not isinstance(this, BaseRelation):
+            builtins["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
+        else:
+            builtins["this"] = this
+
+    sources = jinja_globals.pop("sources", None)
+    if sources is not None:
+        builtins["source"] = generate_source(sources)
+
+    refs = jinja_globals.pop("refs", None)
+    if refs is not None:
+        builtins["ref"] = generate_ref(refs)
+
+    variables = jinja_globals.pop("vars", None)
+    if variables is not None:
+        builtins["var"] = generate_var(variables)
+
+    builtins.update(jinja_globals)
 
     if engine_adapter is not None:
         adapter = RuntimeAdapter(engine_adapter, jinja_macros, jinja_globals=builtins)
