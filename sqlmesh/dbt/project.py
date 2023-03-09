@@ -4,7 +4,7 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
-from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
+from sqlmesh.dbt.package import Package, PackageConfig, PackageLoader, ProjectConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
 
@@ -74,17 +74,14 @@ class Project:
         )
         if not packages_dir.is_absolute():
             packages_dir = Path(context.project_root, packages_dir)
+        package_configs = cls._get_packages(context.project_root, packages_dir)
 
-        for path in packages_dir.glob(f"**/{PROJECT_FILENAME}"):
-            name = context.render(load_yaml(path).get("name", ""))
-            if not name:
-                raise ConfigError(f"{path} must include package name")
-
+        for package_name, package_config in package_configs.items():
             package_context = context.copy()
-            package_context.project_root = path.parent
+            package_context.project_root = Path(packages_dir, package_config.location)
             package_context.variables = {}
-            packages[name] = PackageLoader(
-                package_context, cls._overrides_for_package(name, project_config)
+            packages[package_name] = PackageLoader(
+                package_context, cls._overrides_for_package(package_name, project_config)
             ).load()
 
         for name, package in packages.items():
@@ -94,6 +91,28 @@ class Project:
                 package.variables.update(package_vars)
 
         return Project(context, profile, packages)
+
+    @classmethod
+    def _get_packages(cls, project_path: Path, packages_path: Path) -> t.Dict[str, PackageConfig]:
+        package_configs = {}
+
+        def _add_project_packages(path: Path) -> None:
+            config_path = Path(path, "packages.yml")
+            if not config_path.exists():
+                return
+
+            yaml = load_yaml(config_path)
+
+            for package_yaml in yaml.get("packages", []):
+                config = PackageConfig(**package_yaml)
+                if not config.name:
+                    raise ConfigError(f"Package in {config_path} has no name")
+                if config.name not in package_configs:
+                    package_configs[config.name] = config
+                    _add_project_packages(Path(packages_path, config.location))
+
+        _add_project_packages(project_path)
+        return package_configs
 
     @classmethod
     def _overrides_for_package(cls, name: str, config: ProjectConfig) -> ProjectConfig:

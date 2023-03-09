@@ -29,12 +29,13 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
     yaml_to_columns,
 )
-from sqlmesh.dbt.common import DbtContext, Dependencies, GeneralConfig, SqlStr
+from sqlmesh.dbt.common import DbtContext, GeneralConfig, SqlStr
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroReference
+from sqlmesh.utils.jinja import MacroReference, extract_macro_references
+from sqlmesh.utils.pydantic import PydanticModel
 
 
 class Materialization(str, Enum):
@@ -44,6 +45,33 @@ class Materialization(str, Enum):
     VIEW = "view"
     INCREMENTAL = "incremental"
     EPHEMERAL = "ephemeral"
+
+
+class Dependencies(PydanticModel):
+    """
+    DBT dependencies for a model, macro, etc.
+
+    Args:
+        macros: The references to macros
+        sources: The "source_name.table_name" for source tables used
+        refs: The table_name for models used
+        variables: The names of variables used, mapped to a flag that indicates whether their
+            definition is optional or not.
+    """
+
+    macros: t.Set[MacroReference] = set()
+    sources: t.Set[str] = set()
+    refs: t.Set[str] = set()
+    variables: t.Set[str] = set()
+
+    def union(self, other: Dependencies) -> Dependencies:
+        dependencies = Dependencies()
+        dependencies.macros = self.macros | other.macros
+        dependencies.sources = self.sources | other.sources
+        dependencies.refs = self.refs | other.refs
+        dependencies.variables = self.variables | other.variables
+
+        return dependencies
 
 
 class ModelConfig(GeneralConfig):
@@ -223,6 +251,7 @@ class ModelConfig(GeneralConfig):
 
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
+        rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.sql))
         rendered = ModelSqlRenderer(context, rendered).enriched_config
 
         rendered_dependencies = rendered._dependencies

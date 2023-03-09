@@ -3,11 +3,14 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+from pydantic import Field, validator
+from sqlglot.helper import ensure_list
+
 from sqlmesh.dbt.common import (
     PROJECT_FILENAME,
     BaseConfig,
+    DbtConfig,
     DbtContext,
-    Dependencies,
     SqlStr,
     load_yaml,
 )
@@ -15,7 +18,7 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroExtractor, MacroInfo, extract_macro_references
+from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -33,6 +36,57 @@ class ProjectConfig(PydanticModel):
     source_config: ScopedSources = {(): SourceConfig()}
     seed_config: ScopedSeeds = {(): SeedConfig()}
     model_config: ScopedModels = {(): ModelConfig()}
+
+
+class PackageConfig(DbtConfig):
+    """
+    DBT package configuration
+
+    Args:
+        subdirectory: Relative path to dbt_project.yml directory if not root
+        warn_unpinned: Warn if package is not pinned to version or revision
+        git: git package url
+        revision: git package tag, branch, or commit hash
+        package: Name of the dbt Hub package
+        version: Version or range of versions of the dbt Hub package
+        install_prerelease: Allow pre-release version to be installed from dbt Hub
+        local: Location of a local package
+    """
+
+    subdirectory: t.Optional[str] = None
+    warn_unpinned: bool = Field(False, alias="warn-unpinned")
+
+    # git packages
+    git: t.Optional[str] = None
+    revision: t.Optional[str] = None
+
+    # dbt Hub packages
+    package: t.Optional[str] = None
+    version: t.List = []
+    install_prerelease: bool = Field(False, alias="install-prerelease")
+
+    # local package
+    local: t.Optional[str] = None
+
+    @validator("version", pre=True)
+    def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
+        return ensure_list(v)
+
+    @property
+    def name(self) -> t.Optional[str]:
+        if self.git:
+            return Path(self.git).stem
+        elif self.package:
+            return Path(self.package).stem
+        elif self.local:
+            return Path(self.local).stem
+
+        return None
+
+    @property
+    def location(self) -> Path:
+        name = self.name or ""
+        return Path(name, self.subdirectory) if self.subdirectory else Path(name)
 
 
 class Package(PydanticModel):
@@ -311,9 +365,7 @@ class PackageLoader:
         model_config = self._config_for_scope(scope, self.project_config.model_config).copy(
             update={"path": filepath}
         )
-
         model_config.sql = SqlStr(sql)
-        model_config._dependencies = Dependencies(macros=extract_macro_references(sql))
 
         return model_config
 

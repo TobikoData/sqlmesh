@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from sqlmesh.dbt.common import DbtContext, Dependencies
-from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.model import Dependencies, Materialization, ModelConfig
+from sqlmesh.dbt.package import PackageConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
@@ -333,3 +334,22 @@ def test_this(assert_exp_eq, sushi_dbt_project: Project):
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
     )
+
+
+@pytest.mark.parametrize(
+    "config, name, location",
+    [
+        ({"package": "dbt-labs/dbt_utils"}, "dbt_utils", "dbt_utils"),
+        ({"git": "https://github.com/TobikoData/sqlmesh.git"}, "sqlmesh", "sqlmesh"),
+        (
+            {"git": "https://github.com/TobikoData/sqlmesh.git", "subdirectory": "sub"},
+            "sqlmesh",
+            "sqlmesh/sub",
+        ),
+        ({"local": "../beta_packages/foo"}, "foo", "foo"),
+    ],
+)
+def test_package_config(config: t.Dict[str, t.Any], name: str, location: str):
+    package = PackageConfig(**config)
+    assert package.name == name
+    assert str(package.location) == location
