@@ -4,7 +4,7 @@ import { isArrayNotEmpty, isFalse } from '~/utils'
 import { ModelFile } from '../models'
 
 interface FileTreeStore {
-  files: ModelFile[]
+  files: Map<ID, ModelFile>
   activeFile: ModelFile
   openedFiles: Set<ModelFile>
   setOpenedFiles: (files: Set<ModelFile>) => void
@@ -20,24 +20,27 @@ const [getOpenedFilesIds, setOpenedFilesIds] = useLocalStorage<{ ids: ID[] }>(
 )
 
 export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
-  files: [],
+  files: new Map(),
   activeFile: initialFile,
   openedFiles: new Set([initialFile]),
   setFiles(files: ModelFile[]) {
     set(() => {
       const openedFilesIds = getOpenedFilesIds()?.ids ?? []
       const openedFiles = new Set<ModelFile>([initialFile])
+      const output = new Map()
 
       if (isArrayNotEmpty(openedFilesIds)) {
         files.forEach(file => {
           if (openedFilesIds.includes(file.id)) {
             openedFiles.add(file)
           }
+
+          output.set(file.id, file)
         })
       }
 
       return {
-        files,
+        files: output,
         openedFiles,
       }
     })
@@ -71,4 +74,3 @@ export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
     }))
   },
 }))
-
