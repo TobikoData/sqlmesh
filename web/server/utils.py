@@ -4,7 +4,7 @@ import asyncio
 import io
 import traceback
 import typing as t
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pandas as pd
 import pyarrow as pa  # type: ignore
@@ -68,3 +68,12 @@ def df_to_pyarrow_bytes(df: pd.DataFrame) -> io.BytesIO:
             writer.write_batch(batch)
 
     return io.BytesIO(sink.getvalue().to_pybytes())
+
+
+def is_relative_to(path: PurePath, other: PurePath | str) -> bool:
+    """Return whether or not path is relative to the other path."""
+    try:
+        path.relative_to(other)
+        return True
+    except ValueError:
+        return False

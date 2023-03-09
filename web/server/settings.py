@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import traceback
-import typing as t
 from functools import lru_cache
 from pathlib import Path
 
@@ -43,13 +42,13 @@ def _get_loaded_context(path: str, config: str) -> Context:
 
 
 @lru_cache()
-def _get_path_mappings(context: Context) -> dict[str, str]:
-    mapping: dict[str, str] = {}
+def _get_path_mappings(context: Context) -> dict[Path, FileType]:
+    mapping: dict[Path, FileType] = {}
     for audit in context._audits.values():
-        path = str(audit._path.relative_to(context.path))
+        path = audit._path.relative_to(context.path)
         mapping[path] = FileType.audit
     for model in context.models.values():
-        path = str(model._path.relative_to(context.path))
+        path = model._path.relative_to(context.path)
         mapping[path] = FileType.model
     return mapping
 
@@ -76,7 +75,7 @@ async def get_context(settings: Settings = Depends(get_settings)) -> Context | N
     return None
 
 
-async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[str, t.Any]:
+async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[Path, FileType]:
     try:
         context = await get_loaded_context(settings)
     except Exception:
