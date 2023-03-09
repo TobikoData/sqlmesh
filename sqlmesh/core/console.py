@@ -189,7 +189,7 @@ class TerminalConsole(Console):
         if context_diff.is_new_environment:
             self._print(
                 Tree(
-                    f"[bold]New environment `{context_diff.environment}` will be initialized from `{context_diff.init_from}`"
+                    f"[bold]New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
                 )
             )
             if not context_diff.has_snapshot_changes:

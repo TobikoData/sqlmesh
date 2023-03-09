@@ -569,7 +569,7 @@ class Context(BaseContext):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         from_: t.Optional[str] = None,
-        init_from: t.Optional[str] = None,
+        create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
@@ -589,7 +589,7 @@ class Context(BaseContext):
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
             from_: The environment to base the plan on instead of local files.
-            init_from: The environment to initialize the target environment from if it
+            create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
             restate_models: A list of of either internal or external models that need to be restated
@@ -639,7 +639,7 @@ class Context(BaseContext):
             snapshots = None
 
         plan = Plan(
-            context_diff=self._context_diff(environment or c.PROD, snapshots, init_from),
+            context_diff=self._context_diff(environment or c.PROD, snapshots, create_from),
             dag=self.dag,
             state_reader=self.state_reader,
             start=start,
@@ -847,11 +847,11 @@ class Context(BaseContext):
         self,
         environment: str | Environment,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        init_from: t.Optional[str] = None,
+        create_from: t.Optional[str] = None,
     ) -> ContextDiff:
         environment = Environment.normalize_name(environment)
         return ContextDiff.create(
-            environment, snapshots or self.snapshots, init_from or c.PROD, self.state_reader
+            environment, snapshots or self.snapshots, create_from or c.PROD, self.state_reader
         )
 
     def _load_config(self, config: t.Union[str, Config]) -> Config:

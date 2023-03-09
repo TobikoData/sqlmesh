@@ -33,8 +33,8 @@ class ContextDiff(PydanticModel):
     """The environment to diff."""
     is_new_environment: bool
     """Whether the target environment is new."""
-    init_from: str
-    """The name of the environment the target environment will be initialized from if new."""
+    create_from: str
+    """The name of the environment the target environment will be created from if new."""
     added: t.Set[str]
     """New models."""
     removed: t.Set[str]
@@ -53,7 +53,7 @@ class ContextDiff(PydanticModel):
         cls,
         environment: str | Environment,
         snapshots: t.Dict[str, Snapshot],
-        init_from: str,
+        create_from: str,
         state_reader: StateReader,
     ) -> ContextDiff:
         """Create a ContextDiff object.
@@ -61,7 +61,7 @@ class ContextDiff(PydanticModel):
         Args:
             environment: The remote environment to diff.
             snapshots: The snapshots of the current environment.
-            init_from: The environment to initialize the target environment from if it
+            create_from: The environment to create the target environment from if it
                 doesn't exist.
             state_reader: StateReader to access the remote environment to diff.
 
@@ -76,7 +76,7 @@ class ContextDiff(PydanticModel):
             environment = env.name.lower()
 
         if env is None:
-            env = state_reader.get_environment(init_from.lower())
+            env = state_reader.get_environment(create_from.lower())
             is_new_environment = True
         else:
             is_new_environment = False
@@ -144,7 +144,7 @@ class ContextDiff(PydanticModel):
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
-            init_from=init_from,
+            create_from=create_from,
             added=added,
             removed=removed,
             modified_snapshots=modified_snapshots,

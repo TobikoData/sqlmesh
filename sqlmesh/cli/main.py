@@ -176,9 +176,9 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="The environment to base the plan on rather than local files.",
 )
 @click.option(
-    "--init-from",
+    "--create-from",
     type=str,
-    help="The environment to initialize the target environment from if it doesn't exist.",
+    help="The environment to create the target environment from if it doesn't exist.",
 )
 @click.option(
     "--skip-tests",
