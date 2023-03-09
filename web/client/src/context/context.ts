@@ -16,7 +16,7 @@ export const EnumDefaultEnvironment = {
 
 export interface Profile {
   environment: string
-  environments: Environment[]
+  environments: EnvironmentShort[]
 }
 
 export type RelativeLocation = KeyOf<typeof EnumRelativeLocation>
@@ -131,7 +131,9 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       return {
         environments,
-        isInitial: environments.some(({ isInitial }) => isInitial),
+        isInitial: environments
+          .filter(({ type }) => type === EnumRelativeLocation.Remote)
+          .every(({ isInitial }) => isInitial),
       }
     })
   },
