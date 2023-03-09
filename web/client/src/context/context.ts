@@ -1,6 +1,7 @@
 import { create } from 'zustand'
+import { Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { isFalse } from '~/utils'
+import { isFalse, isStringEmptyOrNil } from '~/utils'
 
 export const EnumRelativeLocation = {
   Local: 'local',
@@ -22,18 +23,20 @@ export type RelativeLocation = KeyOf<typeof EnumRelativeLocation>
 export type DefaultEnvironment = KeyOf<typeof EnumDefaultEnvironment>
 export type EnvironmentName = DefaultEnvironment | string
 
-export interface Environment {
+export interface EnvironmentShort {
   name: EnvironmentName
   type: RelativeLocation
+  isInitial: boolean
 }
 
 interface ContextStore {
   environment?: EnvironmentName
-  environments: Environment[]
+  environments: EnvironmentShort[]
+  isInitial: boolean
   setEnvironment: (environment: EnvironmentName) => void
   addLocalEnvironments: (environments: EnvironmentName[]) => void
   removeLocalEnvironments: (environments: EnvironmentName[]) => void
-  addRemoteEnvironments: (environments: EnvironmentName[]) => void
+  addRemoteEnvironments: (environments: Environment[]) => void
   isExistingEnvironment: (environment: EnvironmentName) => boolean
 }
 
@@ -42,12 +45,13 @@ const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
 export const useStoreContext = create<ContextStore>((set, get) => ({
   environment: getProfile()?.environment,
   environments: getDefaultEnvironments(),
-  isExistingEnvironment: (environment: EnvironmentName) => {
+  isInitial: false,
+  isExistingEnvironment(environment: EnvironmentName) {
     const { environments } = get()
 
     return environments.some(({ name }) => name === environment)
   },
-  setEnvironment: (environment: EnvironmentName) => {
+  setEnvironment(environment: EnvironmentName) {
     set(s => {
       s.addLocalEnvironments([environment])
 
@@ -60,7 +64,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironments: (localEnvironments: EnvironmentName[] = []) => {
+  addLocalEnvironments(localEnvironments: EnvironmentName[] = []) {
     set(s => {
       const environments = structuredClone(s.environments)
 
@@ -73,6 +77,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           environments.push({
             name,
             type: EnumRelativeLocation.Local,
+            isInitial: false,
           })
         }
       })
@@ -84,7 +89,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       return { environments }
     })
   },
-  removeLocalEnvironments: (localEnvironments: EnvironmentName[] = []) => {
+  removeLocalEnvironments(localEnvironments: EnvironmentName[] = []) {
     set(s => {
       const environments = s.environments.filter(({ name }) =>
         isFalse(localEnvironments.includes(name)),
@@ -97,22 +102,24 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       return { environments }
     })
   },
-  addRemoteEnvironments: (remoteEnvironments: EnvironmentName[] = []) => {
+  addRemoteEnvironments(remoteEnvironments: Environment[] = []) {
     set(s => {
       const environments = structuredClone(s.environments)
 
-      remoteEnvironments.forEach(name => {
+      remoteEnvironments.forEach(env => {
         const environment = environments.find(
-          ({ name: envNameLocal }) => name === envNameLocal,
+          ({ name: envNameLocal }) => env.name === envNameLocal,
         )
 
         if (environment == null) {
           environments.push({
-            name,
+            name: env.name,
             type: EnumRelativeLocation.Remote,
+            isInitial: isStringEmptyOrNil(env.plan_id),
           })
         } else {
           environment.type = EnumRelativeLocation.Remote
+          environment.isInitial = isStringEmptyOrNil(env.plan_id)
         }
       })
 
@@ -122,22 +129,25 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       sortEnvoirnments(environments)
 
-      return { environments }
+      return {
+        environments,
+        isInitial: environments.some(({ isInitial }) => isInitial),
+      }
     })
   },
 }))
 
-function sortEnvoirnments(environments: Environment[]): void {
+function sortEnvoirnments(environments: EnvironmentShort[]): void {
   environments.sort(env => (env.type === EnumRelativeLocation.Remote ? -1 : 1))
 }
 
 function getOnlyLocalEnvironments(
-  environments: Environment[] = [],
-): Environment[] {
+  environments: EnvironmentShort[] = [],
+): EnvironmentShort[] {
   return environments.filter(({ type }) => type === EnumRelativeLocation.Local)
 }
 
-function getDefaultEnvironments(): Environment[] {
+function getDefaultEnvironments(): EnvironmentShort[] {
   const profile = getProfile()
   const environments = new Set<string>()
 
@@ -155,12 +165,13 @@ function getDefaultEnvironments(): Environment[] {
     EnumDefaultEnvironment.Stage,
   ].forEach(name => environments.add(name))
 
-  const output: Environment[] = []
+  const output: EnvironmentShort[] = []
 
   environments.forEach(name => {
     output.push({
       name,
       type: EnumRelativeLocation.Local,
+      isInitial: false,
     })
   })
 

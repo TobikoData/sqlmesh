@@ -31,19 +31,23 @@ export async function fetchAPI<T = any, B extends object = any>({
     | 'no-cache'
     | 'force-cache'
     | 'only-if-cached'
-  params?:
-    | string
-    | URLSearchParams
-    | Record<string, string>
-    | string[][]
-    | undefined
+  params?: Record<string, string>
 }): Promise<T & ResponseWithDetail> {
-  const hasSearchParams = Object.keys(params ?? {}).length > 0
+  const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
 
   if (hasSearchParams) {
-    input.search = new URLSearchParams(params).toString()
+    const searchParams: Record<string, string> = Object.entries({
+      ...params,
+    }).reduce((acc: Record<string, string>, [key, param]) => {
+      if (param != null) {
+        acc[key] = param
+      }
+
+      return acc
+    }, {})
+    input.search = new URLSearchParams(searchParams).toString()
   }
 
   return await new Promise<T & ResponseWithDetail>((resolve, reject) => {

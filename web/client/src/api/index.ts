@@ -17,6 +17,7 @@ import {
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
   BodyWriteFileApiFilesPathPost,
+  ContextEnvironmentStart,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -60,10 +61,33 @@ export function useApiContext(): UseQueryResult<Context> {
 
 export function useApiPlan(
   environment: string,
+  start?: ContextEnvironmentStart,
+  end?: ContextEnvironmentStart,
+  no_gaps?: boolean,
+  skip_backfill?: boolean,
+  forward_only?: boolean,
+  auto_apply?: boolean,
+  from_?: string,
+  no_auto_categorization?: boolean,
+  skip_tests?: boolean,
+  restate_models?: string,
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
     queryKey: ['/api/plan', environment],
-    queryFn: async () => await getPlanApiPlanGet({ environment }),
+    queryFn: async () =>
+      await getPlanApiPlanGet({
+        environment,
+        start,
+        end,
+        no_gaps,
+        skip_backfill,
+        forward_only,
+        auto_apply,
+        from_,
+        no_auto_categorization,
+        skip_tests,
+        restate_models,
+      }),
     enabled: false,
     cacheTime: 0,
   })
