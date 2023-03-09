@@ -26,7 +26,6 @@ def get_plan(
     no_gaps: bool = False,
     skip_backfill: bool = False,
     forward_only: bool = False,
-    auto_apply: bool = False,
     no_auto_categorization: bool = False,
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
@@ -54,7 +53,6 @@ def get_plan(
         skip_backfill=skip_backfill,
         forward_only=forward_only,
         no_auto_categorization=no_auto_categorization,
-        auto_apply=auto_apply,
     )
 
     payload = models.ContextEnvironment(

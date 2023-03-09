@@ -28,9 +28,16 @@ async def apply(
     environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-    category: t.Optional[SnapshotChangeCategory] = None,
+    change_category: t.Optional[SnapshotChangeCategory] = None,
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
+    skip_tests: bool = False,
+    no_gaps: bool = False,
+    skip_backfill: bool = False,
+    forward_only: bool = False,
+    no_auto_categorization: bool = False,
+    from_: t.Optional[str] = None,
+    restate_models: t.Optional[str] = None,
 ) -> models.Apply:
     """Apply a plan"""
 
@@ -39,10 +46,22 @@ async def apply(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
 
-    plan = context.plan(environment=environment, no_prompts=True, start=start, end=end)
-    apply = functools.partial(context.apply, plan)
+    plan = context.plan(
+        environment=environment,
+        no_prompts=True,
+        start=start,
+        end=end,
+        skip_tests=skip_tests,
+        no_gaps=no_gaps,
+        restate_models=restate_models,
+        from_=from_,
+        skip_backfill=skip_backfill,
+        forward_only=forward_only,
+        no_auto_categorization=no_auto_categorization,
+    )
+    apply = functools.partial(context.apply, plan, change_category)
 
-    if plan.requires_backfill:
+    if plan.requires_backfill and not skip_backfill:
         task = asyncio.create_task(run_in_executor(apply))
         request.app.state.task = task
     else:
