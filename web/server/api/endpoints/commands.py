@@ -11,7 +11,6 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
-from sqlmesh.utils.date import TimeLike
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -25,19 +24,12 @@ router = APIRouter()
 
 @router.post("/apply", response_model=models.Apply)
 async def apply(
-    environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-    change_category: t.Optional[SnapshotChangeCategory] = None,
-    start: t.Optional[TimeLike] = None,
-    end: t.Optional[TimeLike] = None,
-    skip_tests: bool = False,
-    no_gaps: bool = False,
-    skip_backfill: bool = False,
-    forward_only: bool = False,
-    no_auto_categorization: bool = False,
-    from_: t.Optional[str] = None,
-    restate_models: t.Optional[str] = None,
+    environment: str = Body(),
+    change_category: t.Optional[SnapshotChangeCategory] = Body(None),
+    plan_dates: models.PlanDates = Body(None),
+    additional_options: models.AdditionalOptions = Body(models.AdditionalOptions()),
 ) -> models.Apply:
     """Apply a plan"""
 
@@ -49,19 +41,19 @@ async def apply(
     plan = context.plan(
         environment=environment,
         no_prompts=True,
-        start=start,
-        end=end,
-        skip_tests=skip_tests,
-        no_gaps=no_gaps,
-        restate_models=restate_models,
-        from_=from_,
-        skip_backfill=skip_backfill,
-        forward_only=forward_only,
-        no_auto_categorization=no_auto_categorization,
+        start=plan_dates.start if plan_dates else None,
+        end=plan_dates.end if plan_dates else None,
+        skip_tests=additional_options.skip_tests,
+        no_gaps=additional_options.no_gaps,
+        restate_models=additional_options.restate_models,
+        from_=additional_options.from_,
+        skip_backfill=additional_options.skip_backfill,
+        forward_only=additional_options.forward_only,
+        no_auto_categorization=additional_options.no_auto_categorization,
     )
     apply = functools.partial(context.apply, plan, change_category)
 
-    if plan.requires_backfill and not skip_backfill:
+    if plan.requires_backfill and not additional_options.skip_backfill:
         task = asyncio.create_task(run_in_executor(apply))
         request.app.state.task = task
     else:

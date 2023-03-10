@@ -1,36 +1,27 @@
 from __future__ import annotations
 
-import typing as t
-
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_ds
+from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
 
 
-@router.get(
+@router.post(
     "",
     response_model=models.ContextEnvironment,
     response_model_exclude_unset=True,
 )
 def get_plan(
-    environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-    skip_tests: bool = False,
-    no_gaps: bool = False,
-    skip_backfill: bool = False,
-    forward_only: bool = False,
-    no_auto_categorization: bool = False,
-    start: t.Optional[TimeLike] = None,
-    end: t.Optional[TimeLike] = None,
-    from_: t.Optional[str] = None,
-    restate_models: t.Optional[str] = None,
+    environment: str = Body(),
+    plan_dates: models.PlanDates = Body(None),
+    additional_options: models.AdditionalOptions = Body(models.AdditionalOptions()),
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
@@ -44,15 +35,15 @@ def get_plan(
     plan = context.plan(
         environment=environment,
         no_prompts=True,
-        start=start,
-        end=end,
-        from_=from_,
-        skip_tests=skip_tests,
-        restate_models=restate_models,
-        no_gaps=no_gaps,
-        skip_backfill=skip_backfill,
-        forward_only=forward_only,
-        no_auto_categorization=no_auto_categorization,
+        start=plan_dates.start if plan_dates else None,
+        end=plan_dates.end if plan_dates else None,
+        from_=additional_options.from_,
+        skip_tests=additional_options.skip_tests,
+        restate_models=additional_options.restate_models,
+        no_gaps=additional_options.no_gaps,
+        skip_backfill=additional_options.skip_backfill,
+        forward_only=additional_options.forward_only,
+        no_auto_categorization=additional_options.no_auto_categorization,
     )
 
     payload = models.ContextEnvironment(
