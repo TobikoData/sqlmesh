@@ -18,7 +18,7 @@ async function loadPyodideAndPackages(): Promise<any[]> {
 const pyodideReadyPromise = loadPyodideAndPackages()
 
 global.onmessage = async (e: MessageEvent) => {
-  const [transpile, parse, get_dielect, get_dielects] =
+  const [transpile, parse, get_dialect, get_dialects] =
     await pyodideReadyPromise
 
   if (e.data.topic === 'transpile') {
@@ -48,7 +48,7 @@ global.onmessage = async (e: MessageEvent) => {
 
   if (e.data.topic === 'dialect') {
     const { keywords, types }: { keywords: string; types: string } = JSON.parse(
-      get_dielect(e.data.payload),
+      get_dialect(e.data.payload),
     )
 
     global.postMessage({
@@ -64,7 +64,7 @@ global.onmessage = async (e: MessageEvent) => {
     global.postMessage({
       topic: 'dialects',
       payload: {
-        dialects: JSON.parse(get_dielects()),
+        dialects: JSON.parse(get_dialects()),
         dialect: 'mysql',
       },
     })
