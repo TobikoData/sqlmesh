@@ -7,7 +7,9 @@ from pydantic import Field
 
 from sqlmesh.core.config import (
     ConnectionConfig,
+    DatabricksAPIConnectionConfig,
     DuckDBConnectionConfig,
+    RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
 )
 from sqlmesh.utils import AttributeDict
@@ -160,7 +162,7 @@ class PostgresConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        raise NotImplementedError
+        raise ConfigError("PostgreSQL is not supported by SQLMesh yet.")
 
 
 class RedshiftConfig(TargetConfig):
@@ -193,7 +195,16 @@ class RedshiftConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        raise NotImplementedError
+        return RedshiftConnectionConfig(
+            user=self.user,
+            password=self.password,
+            host=self.host,
+            port=self.port,
+            sslmode=self.sslmode,
+            timeout=self.connect_timeout,
+            tcp_keepalive=self.keepalives_idle,
+            concurrent_tasks=self.threads,
+        )
 
 
 class DatabricksConfig(TargetConfig):
@@ -213,4 +224,9 @@ class DatabricksConfig(TargetConfig):
     token: str
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        raise NotImplementedError
+        return DatabricksAPIConnectionConfig(
+            server_hostname=self.host,
+            http_path=self.http_path,
+            access_token=self.token,
+            concurrent_tasks=self.threads,
+        )
