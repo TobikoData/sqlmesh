@@ -46,7 +46,7 @@ async def apply(
         skip_tests=additional_options.skip_tests,
         no_gaps=additional_options.no_gaps,
         restate_models=additional_options.restate_models,
-        from_=additional_options.from_,
+        create_from=additional_options.create_from,
         skip_backfill=additional_options.skip_backfill,
         forward_only=additional_options.forward_only,
         no_auto_categorization=additional_options.no_auto_categorization,

@@ -37,7 +37,7 @@ def get_plan(
         no_prompts=True,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
-        from_=additional_options.from_,
+        create_from=additional_options.create_from,
         skip_tests=additional_options.skip_tests,
         restate_models=additional_options.restate_models,
         no_gaps=additional_options.no_gaps,
@@ -52,10 +52,9 @@ def get_plan(
         end=plan.end,
     )
 
-    if plan.context_diff.has_differences:
+    if plan.context_diff.has_changes:
         batches = context.scheduler().batches()
-        tasks = {snapshot.name: len(intervals)
-                 for snapshot, intervals in batches.items()}
+        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
         payload.backfills = [
             models.ContextEnvironmentBackfill(
@@ -72,8 +71,7 @@ def get_plan(
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=models.ModelsDiff.get_modified_snapshots(
-                plan.context_diff),
+            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )
 
     return payload

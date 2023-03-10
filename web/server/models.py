@@ -162,7 +162,7 @@ class AdditionalOptions(BaseModel):
     no_gaps: bool = False
     forward_only: bool = False
     no_auto_categorization: bool = False
-    from_: t.Optional[str] = None
+    create_from: t.Optional[str] = None
     restate_models: t.Optional[str] = None
 
     @validator("restate_models")
