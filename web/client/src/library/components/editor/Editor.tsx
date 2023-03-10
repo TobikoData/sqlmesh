@@ -56,6 +56,8 @@ import { type ModelEnvironment } from '~/models/environment'
 import { dracula, tomorrow } from 'thememirror'
 import { EnumColorScheme, useColorScheme } from '~/context/theme'
 import CodeEditor from './CodeEditor'
+import { PropsComponent } from '~/main'
+import { sqlglotWorker } from './workers'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -80,9 +82,6 @@ interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
 const DAY = 24 * 60 * 60 * 1000
-const worker = new Worker('./src/library/components/editor/worker.ts', {
-  type: 'module',
-})
 
 export default function Editor({
   className,
@@ -124,10 +123,11 @@ export default function Editor({
     activeFile.path,
   )
 
-  const [ast, setAst] = useState<any[]>()
+  const [dialects, setDialects] = useState<string[]>([])
+  const [dialect, setDialect] = useState<string>()
+  const [isValid, setIsValid] = useState(true)
 
   const { data: dataModels } = useApiModels()
-
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
@@ -162,22 +162,33 @@ export default function Editor({
     [activeFile],
   )
 
-  useEffect(() => {
-    worker.onmessage = (e: MessageEvent) => {
-      if (e.data.topic === 'init') {
-        console.log('Message received from worker on Init', e.data)
-      }
-
-      if (e.data.topic === 'transpile') {
-        console.log('Message received from worker on Transpile', e.data)
-      }
-
+  const handleSqlGlotWorkerMessage = useCallback(
+    (e: MessageEvent): void => {
       if (e.data.topic === 'parse') {
-        console.log('Message received from worker on Parse', e.data)
-        setAst(e.data.payload)
+        setIsValid(
+          e.data.payload?.type !== 'error' || activeFile.content === '',
+        )
       }
+
+      if (e.data.topic === 'dialects') {
+        setDialects(e.data.payload.dialects ?? [])
+        setDialect(e.data.payload.dialect)
+      }
+    },
+    [activeFile],
+  )
+
+  useEffect(() => {
+    sqlglotWorker.postMessage({
+      topic: 'dialects',
+    })
+
+    sqlglotWorker.addEventListener('message', handleSqlGlotWorkerMessage)
+
+    return () => {
+      sqlglotWorker.removeEventListener('message', handleSqlGlotWorkerMessage)
     }
-  }, [])
+  }, [handleSqlGlotWorkerMessage])
 
   useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
@@ -187,16 +198,7 @@ export default function Editor({
     return () => {
       apiCancelPlanRun(client)
     }
-
-    setAst(undefined)
-
-    if (isStringEmptyOrNil(activeFile.content)) return
-
-    worker.postMessage({
-      topic: 'parse',
-      payload: activeFile.content,
-    })
-  }, [activeFile.content, worker])
+  }, [activeFile.content])
 
   useEffect(() => {
     if (fileData == null) return
@@ -417,15 +419,8 @@ export default function Editor({
                 onChange={debouncedChange}
                 models={dataModels?.models}
                 file={activeFile}
+                dialect={dialect}
               />
-              {isFalse(isStringEmptyOrNil(ast)) && (
-                <>
-                  <Divider className="border-4" />
-                  <pre className="w-full min-h-[50%] max-h-[50%] overflow-auto">
-                    <code>{JSON.stringify(ast, null, 2)}</code>
-                  </pre>
-                </>
-              )}
             </div>
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
@@ -589,40 +584,15 @@ export default function Editor({
         </div>
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
-          <div className="flex align-center mr-4">
-            <Indicator
-              text="Valid"
-              ok={true}
-            />
-            {!activeFile.isLocal && (
-              <>
-                <Divider
-                  orientation="vertical"
-                  className="h-[12px] mx-3"
-                />
-                <Indicator
-                  text="Saved"
-                  ok={isSaved}
-                />
-              </>
-            )}
-            <Divider
-              orientation="vertical"
-              className="h-[12px] mx-3"
-            />
-            <Indicator
-              text="Status"
-              value={fileStatus}
-            />
-            <Divider
-              orientation="vertical"
-              className="h-[12px] mx-3"
-            />
-            <Indicator
-              text="Language"
-              value={getLanguageByExtension(activeFile.extension)}
-            />
-          </div>
+          <EditorFooter
+            activeFile={activeFile}
+            isSaved={isSaved}
+            fileStatus={fileStatus}
+            dialects={dialects}
+            dialect={dialect}
+            setDialect={setDialect}
+            isValid={isValid}
+          />
         </div>
       </div>
       <Tabs className="overflow-auto scrollbar scrollbar--vertical" />
@@ -630,18 +600,21 @@ export default function Editor({
   )
 }
 
+interface PropsIndicator extends PropsComponent {
+  text: string
+  value?: string | number
+  ok?: boolean
+}
+
 function Indicator({
   text,
   value,
   ok = true,
-}: {
-  text: string
-  value?: string
-  ok?: boolean
-}): JSX.Element {
+  className,
+}: PropsIndicator): JSX.Element {
   return (
-    <small className="font-bold text-xs whitespace-nowrap">
-      {text}:&nbsp;
+    <small className={clsx('font-bold whitespace-nowrap text-xs', className)}>
+      <span>{text}:&nbsp;</span>
       {value == null ? (
         <span
           className={clsx(
@@ -653,6 +626,73 @@ function Indicator({
         <span className="font-normal">{value}</span>
       )}
     </small>
+  )
+}
+
+function EditorFooter({
+  dialects = [],
+  dialect,
+  setDialect,
+  activeFile,
+  isSaved,
+  isValid,
+  fileStatus,
+}: {
+  activeFile: ModelFile
+  isSaved: boolean
+  isValid: boolean
+  fileStatus: string
+  dialects: string[]
+  dialect?: string
+  setDialect: (dialect?: string) => void
+}): JSX.Element {
+  console.log({ dialect })
+  return (
+    <div className="mr-4">
+      <Indicator
+        className="mr-2"
+        text="Valid"
+        ok={isValid}
+      />
+      {!activeFile.isLocal && (
+        <Indicator
+          className="mr-2"
+          text="Saved"
+          ok={isSaved}
+        />
+      )}
+      <Indicator
+        className="mr-2"
+        text="Status"
+        value={fileStatus}
+      />
+      <Indicator
+        className="mr-2"
+        text="Language"
+        value={getLanguageByExtension(activeFile.extension)}
+      />
+      {activeFile.extension === '.sql' && (
+        <span>
+          <small className="font-bold text-xs mr-1">Dialect</small>
+          <select
+            className="text-xs m-0 px-1 py-[0.125rem] bg-secondary-100 rounded"
+            value={dialect}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              setDialect(e.target.value)
+            }}
+          >
+            {dialects.map(dialect => (
+              <option
+                key={dialect}
+                value={dialect}
+              >
+                {dialect}
+              </option>
+            ))}
+          </select>
+        </span>
+      )}
+    </div>
   )
 }
 

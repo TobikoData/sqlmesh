@@ -1,8 +1,8 @@
 import 'https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js'
 
-const global = self as any
-
 export {}
+
+const global = self as any
 
 async function loadPyodideAndPackages(): Promise<any[]> {
   global.pyodide = await global.loadPyodide()
@@ -18,7 +18,8 @@ async function loadPyodideAndPackages(): Promise<any[]> {
 const pyodideReadyPromise = loadPyodideAndPackages()
 
 global.onmessage = async (e: MessageEvent) => {
-  const [transpile, parse] = await pyodideReadyPromise
+  const [transpile, parse, get_dielect, get_dielects] =
+    await pyodideReadyPromise
 
   if (e.data.topic === 'transpile') {
     global.postMessage({
@@ -28,9 +29,44 @@ global.onmessage = async (e: MessageEvent) => {
   }
 
   if (e.data.topic === 'parse') {
+    let payload
+
+    try {
+      payload = JSON.parse(parse(e.data.payload))
+    } catch (error) {
+      payload = {
+        type: 'error',
+        message: 'Invalid JSON',
+      }
+    }
+
     global.postMessage({
       topic: 'parse',
-      payload: JSON.parse(parse(e.data.payload)),
+      payload,
+    })
+  }
+
+  if (e.data.topic === 'dialect') {
+    const { keywords, types }: { keywords: string; types: string } = JSON.parse(
+      get_dielect(e.data.payload),
+    )
+
+    global.postMessage({
+      topic: 'dialect',
+      payload: {
+        types: `${types} `.toLowerCase(),
+        keywords: `${keywords} `.toLowerCase(),
+      },
+    })
+  }
+
+  if (e.data.topic === 'dialects') {
+    global.postMessage({
+      topic: 'dialects',
+      payload: {
+        dialects: JSON.parse(get_dielects()),
+        dialect: 'mysql',
+      },
     })
   }
 }

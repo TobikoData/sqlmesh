@@ -310,12 +310,10 @@ export default function Directory({
                   type="text"
                   className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
                   value={newName ?? directory.name}
-                  onInput={(e: FormEvent<HTMLInputElement>) => {
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                     e.stopPropagation()
 
-                    const elInput = e.target as HTMLInputElement
-
-                    setNewName(elInput.value)
+                    setNewName(e.target.value)
                   }}
                 />
                 <div className="flex">
