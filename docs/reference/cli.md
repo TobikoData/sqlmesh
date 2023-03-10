@@ -33,10 +33,10 @@ Usage: sqlmesh plan [OPTIONS] [ENVIRONMENT]
 Options:
   -s, --start TEXT          The start datetime of the interval for which this
                             command will be applied.
-  -e, --end TEXT            The end datetime of the interval for which this 
+  -e, --end TEXT            The end datetime of the interval for which this
                             command will be applied.
-  -f, --from TEXT           The environment to base the plan on rather than
-                            local files.
+  --create-from TEXT        The environment to create the target environment
+                            from if it doesn't exist. Default: prod.
   --skip-tests TEXT         Skip tests prior to generating the plan if they
                             are defined.
   -r, --restate-model TEXT  Restate data for specified models and models
@@ -56,6 +56,7 @@ Options:
                             there are uncategorized changes, plan creation
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.
+  --no-auto-categorization  Disable automatic change categorization.
   --help                    Show this message and exit.
 ```
 
