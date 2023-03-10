@@ -174,6 +174,11 @@ class SQLMeshMagics(Magics):
         help="The environment to base the plan on rather than local files.",
     )
     @argument(
+        "--create-from",
+        type=str,
+        help="The environment to create the target environment from if it doesn't exist. Default: prod.",
+    )
+    @argument(
         "--skip-tests",
         "-t",
         action="store_true",
@@ -233,6 +238,7 @@ class SQLMeshMagics(Magics):
             start=args.start,
             end=args.end,
             from_=args.from_,
+            create_from=args.create_from,
             skip_tests=args.skip_tests,
             restate_models=args.restate_model,
             no_gaps=args.no_gaps,

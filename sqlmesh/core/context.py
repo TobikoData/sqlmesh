@@ -569,6 +569,7 @@ class Context(BaseContext):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         from_: t.Optional[str] = None,
+        create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
@@ -588,6 +589,8 @@ class Context(BaseContext):
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
             from_: The environment to base the plan on instead of local files.
+            create_from: The environment to create the target environment from if it
+                doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
             restate_models: A list of of either internal or external models that need to be restated
                 for the given plan interval. If the target environment is a production environment,
@@ -636,7 +639,7 @@ class Context(BaseContext):
             snapshots = None
 
         plan = Plan(
-            context_diff=self._context_diff(environment or c.PROD, snapshots),
+            context_diff=self._context_diff(environment or c.PROD, snapshots, create_from),
             dag=self.dag,
             state_reader=self.state_reader,
             start=start,
@@ -676,7 +679,7 @@ class Context(BaseContext):
         Args:
             plan: The plan to apply.
         """
-        if not plan.context_diff.has_differences and not plan.requires_backfill:
+        if not plan.context_diff.has_changes and not plan.requires_backfill:
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
@@ -844,10 +847,12 @@ class Context(BaseContext):
         self,
         environment: str | Environment,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        create_from: t.Optional[str] = None,
     ) -> ContextDiff:
-        environment = environment or c.PROD
         environment = Environment.normalize_name(environment)
-        return ContextDiff.create(environment, snapshots or self.snapshots, self.state_reader)
+        return ContextDiff.create(
+            environment, snapshots or self.snapshots, create_from or c.PROD, self.state_reader
+        )
 
     def _load_config(self, config: t.Union[str, Config]) -> Config:
         if isinstance(config, Config):
