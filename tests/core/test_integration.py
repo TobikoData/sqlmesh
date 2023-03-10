@@ -602,7 +602,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
-    plan = context.plan(environment, start=start(context))
+    plan = context.plan(environment, start=start(context), create_from="nonexistent_env")
     validate_plan_changes(plan, added=context.models)
 
     context.apply(plan)

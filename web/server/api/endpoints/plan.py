@@ -29,7 +29,7 @@ def get_plan(
             environment=plan.environment.name, start=plan.start, end=plan.end
         )
 
-        if plan.context_diff.has_differences:
+        if plan.context_diff.has_snapshot_changes:
             batches = context.scheduler().batches()
             tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 

@@ -186,9 +186,19 @@ class TerminalConsole(Console):
             context_diff: The context diff to use to print the summary
             detailed: Show the actual SQL differences if True.
         """
-        if not context_diff.has_differences:
+        if context_diff.is_new_environment:
+            self._print(
+                Tree(
+                    f"[bold]New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`"
+                )
+            )
+            if not context_diff.has_snapshot_changes:
+                return
+
+        if not context_diff.has_changes:
             self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
             return
+
         tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
 
         if context_diff.added:
@@ -246,7 +256,7 @@ class TerminalConsole(Console):
         if plan.requires_backfill:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, auto_apply)
-        elif plan.context_diff.has_differences and not auto_apply:
+        elif plan.context_diff.has_changes and not auto_apply:
             self._prompt_promote(plan)
 
     def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
