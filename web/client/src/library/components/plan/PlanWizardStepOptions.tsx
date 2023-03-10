@@ -19,7 +19,7 @@ export default function PlanWizardStepOptions({
     skip_backfill,
     forward_only,
     auto_apply,
-    from,
+    create_from,
     no_auto_categorization,
     restate_models,
     isInitialPlanRun,
@@ -56,16 +56,16 @@ export default function PlanWizardStepOptions({
                     <div className="flex flex-wrap md:flex-nowrap">
                       <Input
                         className="w-full md:w-[50%]"
-                        label="From Environment"
+                        label="Create From"
                         info="The environment to base the plan on rather than local files"
                         placeholder="prod"
-                        value={from ?? ''}
+                        value={create_from ?? ''}
                         onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                           e.stopPropagation()
 
                           dispatch({
                             type: EnumPlanActions.AdditionalOptions,
-                            from: e.target.value,
+                            create_from: e.target.value,
                           })
                         }}
                       />

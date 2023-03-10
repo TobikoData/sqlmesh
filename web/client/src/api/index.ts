@@ -62,7 +62,7 @@ export function useApiContext(): UseQueryResult<Context> {
 
 export function useApiPlan(
   environment: string,
-  options: {
+  options?: {
     planDates?: PlanDates
     additionalOptions?: AdditionalOptions
   },

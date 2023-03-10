@@ -115,8 +115,6 @@ export function IDE(): JSX.Element {
 
   const activeEnvironemnt = environments.find(e => e.name === environment)
 
-  console.log({ activeEnvironemnt })
-
   return (
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
