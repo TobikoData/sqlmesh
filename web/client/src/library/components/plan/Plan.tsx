@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { includes, isFalse, toDate, toDateFormat } from '~/utils'
+import {
+  includes,
+  isFalse,
+  isStringEmptyOrNil,
+  toDate,
+  toDateFormat,
+} from '~/utils'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { EnvironmentName } from '~/context/context'
@@ -7,8 +13,8 @@ import { useApiPlan } from '~/api'
 import {
   Apply,
   applyApiCommandsApplyPost,
-  ApplyApiCommandsApplyPostParams,
   ApplyType,
+  BodyApplyApiCommandsApplyPost,
   ContextEnvironmentEnd,
   ContextEnvironmentStart,
 } from '~/api/client'
@@ -61,18 +67,24 @@ function Plan({
 
   const [isPlanRan, seIsPlanRan] = useState(false)
 
-  const { refetch } = useApiPlan(
-    environment,
-    start,
-    end,
-    no_gaps,
-    skip_backfill,
-    forward_only,
-    from,
-    no_auto_categorization,
-    skip_tests,
-    restate_models,
-  )
+  const { refetch } = useApiPlan(environment, {
+    planDates: {
+      start,
+      end:
+        isInitialPlanRun && isStringEmptyOrNil(restate_models)
+          ? undefined
+          : end,
+    },
+    additionalOptions: {
+      no_gaps,
+      skip_backfill,
+      forward_only,
+      from_: from,
+      no_auto_categorization,
+      skip_tests,
+      restate_models,
+    },
+  })
 
   const [startDate, endDate] = useMemo(() => {
     const ONE_DAY = 1000 * 60 * 60 * 24
@@ -199,20 +211,24 @@ function Plan({
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
-    const payload: ApplyApiCommandsApplyPostParams = {
+    const payload: BodyApplyApiCommandsApplyPost = {
       environment,
-      skip_backfill,
-      skip_tests,
-      no_gaps,
-      forward_only,
-      no_auto_categorization,
-      restate_models,
-      from_: from,
+      additional_options: {
+        no_gaps,
+        skip_backfill,
+        forward_only,
+        from_: from,
+        no_auto_categorization,
+        skip_tests,
+        restate_models,
+      },
     }
 
     if (hasBackfills && isFalse(isInitialPlanRun)) {
-      payload.start = start
-      payload.end = end
+      payload.plan_dates = {
+        start,
+        end,
+      }
     }
 
     if (hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)) {

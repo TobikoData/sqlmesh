@@ -8,7 +8,6 @@ import {
 import {
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
-  getPlanApiPlanGet,
   getApiContextApiContextGet,
   ContextEnvironment,
   DagApiCommandsDagGet200,
@@ -17,7 +16,9 @@ import {
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
   BodyWriteFileApiFilesPathPost,
-  ContextEnvironmentStart,
+  PlanDates,
+  AdditionalOptions,
+  getPlanApiPlanPost,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -61,30 +62,18 @@ export function useApiContext(): UseQueryResult<Context> {
 
 export function useApiPlan(
   environment: string,
-  start?: ContextEnvironmentStart,
-  end?: ContextEnvironmentStart,
-  no_gaps?: boolean,
-  skip_backfill?: boolean,
-  forward_only?: boolean,
-  from_?: string,
-  no_auto_categorization?: boolean,
-  skip_tests?: boolean,
-  restate_models?: string,
+  options: {
+    planDates?: PlanDates
+    additionalOptions?: AdditionalOptions
+  },
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
     queryKey: ['/api/plan', environment],
-    queryFn: async () =>
-      await getPlanApiPlanGet({
+    queryFn: () =>
+      getPlanApiPlanPost({
         environment,
-        start,
-        end,
-        no_gaps,
-        skip_backfill,
-        forward_only,
-        from_,
-        no_auto_categorization,
-        skip_tests,
-        restate_models,
+        plan_dates: options?.planDates,
+        additional_options: options?.additionalOptions,
       }),
     enabled: false,
     cacheTime: 0,
