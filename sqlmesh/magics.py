@@ -6,6 +6,7 @@ from collections import defaultdict
 from IPython.core.display import HTML, display
 from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
+from ruamel.yaml import YAML
 
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
@@ -15,7 +16,6 @@ from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 from sqlmesh.utils.yaml import dumps as yaml_dumps
 from sqlmesh.utils.yaml import load as yaml_load
-from sqlmesh.utils.yaml import yaml
 
 CONTEXT_VARIABLE_NAMES = [
     "context",
@@ -154,7 +154,7 @@ class SQLMeshMagics(Magics):
             content = yaml_load(file.read())
             content[args.test_name] = test_def
             file.seek(0)
-            yaml.dump(content, file)
+            YAML().dump(content, file)
             file.truncate()
 
     @magic_arguments()

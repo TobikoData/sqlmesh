@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.adapter import ParsetimeAdapter
-from sqlmesh.dbt.builtin import create_builtins
+from sqlmesh.dbt.builtin import create_builtin_globals
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -347,7 +347,7 @@ class ModelSqlRenderer:
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: ModelConfig = config.copy()
 
-        self._jinja_globals = create_builtins(
+        self._jinja_globals = create_builtin_globals(
             jinja_macros=context.jinja_macros,
             jinja_globals={
                 **context.jinja_globals,

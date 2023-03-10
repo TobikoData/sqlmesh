@@ -11,15 +11,13 @@ from ruamel.yaml import YAML, CommentedMap
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import ENVIRONMENT
 
-yaml = YAML()
-
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
 
 
 def load(
-    source: str | Path, raise_if_empty: bool = True, render_jinja: t.Optional[bool] = True
+    source: str | Path, raise_if_empty: bool = True, render_jinja: bool = True
 ) -> t.OrderedDict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -32,7 +30,7 @@ def load(
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(JINJA_METHODS)
 
-    contents = yaml.load(source)
+    contents = YAML().load(source)
     if contents is None:
         if raise_if_empty:
             error_path = f" '{path}'" if path else ""
@@ -45,5 +43,5 @@ def load(
 def dumps(value: CommentedMap | OrderedDict) -> str:
     """Dumps a ruamel.yaml loaded object and converts it into a string"""
     result = io.StringIO()
-    yaml.dump(value, result)
+    YAML().dump(value, result)
     return result.getvalue()

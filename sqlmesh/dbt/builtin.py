@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import json
 import os
 import typing as t
+from ast import literal_eval
 
 import agate
 import jinja2
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
+from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
-from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils import AttributeDict, yaml
+from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
 
 
@@ -59,6 +62,66 @@ class Modules:
         self.datetime = datetime
         self.re = re
         self.itertools = itertools
+
+
+class SQLExecution:
+    def __init__(self, adapter: RuntimeAdapter):
+        self.adapter = adapter
+        self._results: t.Dict[str, AttributeDict] = {}
+
+    def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
+        from dbt.clients import agate_helper
+
+        if agate_table is None:
+            agate_table = agate_helper.empty_table()
+
+        self._results[name] = AttributeDict(
+            {
+                "response": response,
+                "data": agate_helper.as_matrix(agate_table),
+                "table": agate_table,
+            }
+        )
+        return ""
+
+    def load_result(self, name: str) -> t.Optional[AttributeDict]:
+        return self._results.get(name)
+
+    def run_query(self, sql: str) -> agate.Table:
+        self.statement("run_query_statement", fetch_result=True, auto_begin=False, caller=sql)
+        resp = self.load_result("run_query_statement")
+        assert resp is not None
+        return resp["table"]
+
+    def statement(
+        self,
+        name: t.Optional[str],
+        fetch_result: bool = False,
+        auto_begin: bool = True,
+        language: str = "sql",
+        caller: t.Optional[jinja2.runtime.Macro | str] = None,
+    ) -> str:
+        """
+        Executes the SQL that is defined within the context of the caller. Therefore caller really isn't optional
+        but we make it optional and at the end because we need to match the signature of the jinja2 macro.
+
+        Name is the name that we store the results to which can be retrieved with `load_result`. If name is not
+        provided then the SQL is executed but the results are not stored.
+        """
+        if not caller:
+            raise RuntimeError(
+                "Statement relies on a caller to be set that is the target SQL to be run"
+            )
+        sql = caller if isinstance(caller, str) else caller()
+        if language != "sql":
+            raise NotImplementedError(
+                "SQLMesh's dbt integration only supports SQL statements at this time."
+            )
+        assert self.adapter is not None
+        res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
+        if name:
+            self.store_result(name, res, table)
+        return ""
 
 
 def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
@@ -124,113 +187,138 @@ def return_val(val: t.Any) -> None:
     raise MacroReturnVal(val)
 
 
-class SQLExecution:
-    def __init__(self, adapter: RuntimeAdapter):
-        self.adapter = adapter
-        self._results: t.Dict[str, AttributeDict] = {}
-
-    def store_result(self, name: str, response: t.Any, agate_table: t.Optional[agate.Table]) -> str:
-        from dbt.clients import agate_helper
-
-        if agate_table is None:
-            agate_table = agate_helper.empty_table()
-
-        self._results[name] = AttributeDict(
-            {
-                "response": response,
-                "data": agate_helper.as_matrix(agate_table),
-                "table": agate_table,
-            }
-        )
-        return ""
-
-    def load_result(self, name: str) -> t.Optional[AttributeDict]:
-        return self._results.get(name)
-
-    def run_query(self, sql: str) -> agate.Table:
-        self.statement("run_query_statement", fetch_result=True, auto_begin=False, caller=sql)
-        resp = self.load_result("run_query_statement")
-        assert resp is not None
-        return resp["table"]
-
-    def statement(
-        self,
-        name: t.Optional[str],
-        fetch_result: bool = False,
-        auto_begin: bool = True,
-        language: str = "sql",
-        caller: t.Optional[jinja2.runtime.Macro | str] = None,
-    ) -> str:
-        """
-        Executes the SQL that is defined within the context of the caller. Therefore caller really isn't optional
-        but we make it optional and at the end because we need to match the signature of the jinja2 macro.
-
-        Name is the name that we store the results to which can be retrieved with `load_result`. If name is not
-        provided then the SQL is executed but the results are not stored.
-        """
-        if not caller:
-            raise RuntimeError(
-                "Statement relies on a caller to be set that is the target SQL to be run"
-            )
-        sql = caller if isinstance(caller, str) else caller()
-        if language != "sql":
-            raise NotImplementedError(
-                "SQLMesh's dbt integration only supports SQL statements at this time."
-            )
-        assert self.adapter is not None
-        res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
-        if name:
-            self.store_result(name, res, table)
-        return ""
+def to_set(value: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return set(value)
+    except TypeError:
+        return default
 
 
-BUILTIN_JINJA = {
+def to_json(value: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return json.dumps(value)
+    except TypeError:
+        return default
+
+
+def from_json(value: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return default
+
+
+def to_yaml(value: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return yaml.dumps(value)
+    except (TypeError, YAMLError):
+        return default
+
+
+def from_yaml(value: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return dict(yaml.load(value, raise_if_empty=False, render_jinja=False))
+    except (TypeError, YAMLError):
+        return default
+
+
+def do_zip(*args: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
+    try:
+        return list(zip(*args))
+    except TypeError:
+        return default
+
+
+def as_bool(value: str) -> bool:
+    result = _try_literal_eval(value)
+    if isinstance(result, bool):
+        return result
+    raise MacroEvalError(f"Failed to convert '{value}' into boolean.")
+
+
+def as_number(value: str) -> t.Any:
+    result = _try_literal_eval(value)
+    if isinstance(value, (int, float)) and not isinstance(result, bool):
+        return result
+    raise MacroEvalError(f"Failed to convert '{value}' into number.")
+
+
+def _try_literal_eval(value: str) -> t.Any:
+    try:
+        return literal_eval(value)
+    except (ValueError, SyntaxError, MemoryError):
+        return value
+
+
+BUILTIN_GLOBALS = {
     "api": Api(),
     "config": config,
     "env_var": env_var,
     "exceptions": Exceptions(),
     "flags": Flags(),
+    "fromjson": from_json,
+    "fromyaml": from_yaml,
     "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
     "return": return_val,
+    "set": to_set,
+    "set_strict": set,
     "sqlmesh": True,
+    "tojson": to_json,
+    "toyaml": to_yaml,
+    "zip": do_zip,
+    "zip_strict": lambda *args: list(zip(*args)),
+}
+
+BUILTIN_FILTERS = {
+    "as_bool": as_bool,
+    "as_native": _try_literal_eval,
+    "as_number": as_number,
+    "as_text": lambda v: "" if v is None else str(v),
 }
 
 
-def create_builtins(
+def create_builtin_globals(
     jinja_macros: JinjaMacroRegistry,
     jinja_globals: t.Dict[str, t.Any],
     engine_adapter: t.Optional[EngineAdapter],
 ) -> t.Dict[str, t.Any]:
-    builtins = BUILTIN_JINJA.copy()
+    builtin_globals = BUILTIN_GLOBALS.copy()
     jinja_globals = jinja_globals.copy()
 
     this = jinja_globals.pop("this", None)
     if this is not None:
         if not isinstance(this, BaseRelation):
-            builtins["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
+            builtin_globals["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
         else:
-            builtins["this"] = this
+            builtin_globals["this"] = this
 
     sources = jinja_globals.pop("sources", None)
     if sources is not None:
-        builtins["source"] = generate_source(sources)
+        builtin_globals["source"] = generate_source(sources)
 
     refs = jinja_globals.pop("refs", None)
     if refs is not None:
-        builtins["ref"] = generate_ref(refs)
+        builtin_globals["ref"] = generate_ref(refs)
 
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
-        builtins["var"] = generate_var(variables)
+        builtin_globals["var"] = generate_var(variables)
 
-    builtins.update(jinja_globals)
+    builtin_globals.update(
+        {
+            **jinja_globals,
+            "builtins": AttributeDict(
+                {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
+            ),
+        }
+    )
 
     if engine_adapter is not None:
-        adapter = RuntimeAdapter(engine_adapter, jinja_macros, jinja_globals=builtins)
+        adapter = RuntimeAdapter(engine_adapter, jinja_macros, jinja_globals=builtin_globals)
         sql_execution = SQLExecution(adapter)
-        builtins.update(
+        builtin_globals.update(
             {
                 "execute": True,
                 "adapter": adapter,
@@ -243,10 +331,10 @@ def create_builtins(
             }
         )
     else:
-        builtins.update(
+        builtin_globals.update(
             {
                 "execute": False,
-                "adapter": ParsetimeAdapter(jinja_macros, jinja_globals=builtins),
+                "adapter": ParsetimeAdapter(jinja_macros, jinja_globals=builtin_globals),
                 "load_relation": lambda *args, **kwargs: None,
                 "store_result": lambda *args, **kwargs: "",
                 "load_result": lambda *args, **kwargs: None,
@@ -256,4 +344,8 @@ def create_builtins(
             }
         )
 
-    return {**builtins, **jinja_globals}
+    return {**builtin_globals, **jinja_globals}
+
+
+def create_builtin_filters() -> t.Dict[str, t.Callable]:
+    return BUILTIN_FILTERS

@@ -215,13 +215,13 @@ class JinjaMacroRegistry(PydanticModel):
         if reference.package is None and reference.name not in self.root_macros:
             return None
 
-        global_vars = self._create_builtins(kwargs)
+        global_vars = self._create_builtin_globals(kwargs)
         return self._make_callable(reference.name, reference.package, {}, global_vars)
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
 
-        global_vars = self._create_builtins(kwargs)
+        global_vars = self._create_builtin_globals(kwargs)
 
         callable_cache: t.Dict[t.Tuple[t.Optional[str], str], t.Callable] = {}
 
@@ -247,6 +247,7 @@ class JinjaMacroRegistry(PydanticModel):
                 **global_vars,
             }
         )
+        env.filters.update(self._environment.filters)
         return env
 
     def trim(self, dependencies: t.Iterable[MacroReference]) -> JinjaMacroRegistry:
@@ -359,6 +360,7 @@ class JinjaMacroRegistry(PydanticModel):
     def _environment(self) -> Environment:
         if self.__environment is None:
             self.__environment = environment()
+            self.__environment.filters.update(self._create_builtin_filters())
         return self.__environment
 
     def _trim_macros(self, names: t.Set[str], package: t.Optional[str]) -> JinjaMacroRegistry:
@@ -405,15 +407,23 @@ class JinjaMacroRegistry(PydanticModel):
 
         return template
 
-    def _create_builtins(self, global_vars: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        """Creates Jinja builtins using a factory function defined in the provided module."""
+    def _create_builtin_globals(self, global_vars: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        """Creates Jinja builtin globals using a factory function defined in the provided module."""
         engine_adapter = global_vars.pop("engine_adapter", None)
         global_vars = {**self.global_objs, **global_vars}
         if self.create_builtins_module is not None:
             module = importlib.import_module(self.create_builtins_module)
-            return module.create_builtins(self, global_vars, engine_adapter)
-        else:
-            return global_vars
+            if hasattr(module, "create_builtin_globals"):
+                return module.create_builtin_globals(self, global_vars, engine_adapter)
+        return global_vars
+
+    def _create_builtin_filters(self) -> t.Dict[str, t.Any]:
+        """Creates Jinja builtin filters using a factory function defined in the provided module."""
+        if self.create_builtins_module is not None:
+            module = importlib.import_module(self.create_builtins_module)
+            if hasattr(module, "create_builtin_filters"):
+                return module.create_builtin_filters()
+        return {}
 
 
 def _is_private_macro(name: str) -> bool:
