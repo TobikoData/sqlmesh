@@ -125,12 +125,6 @@ function Plan({
   }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
   useEffect(() => {
-    return () => {
-      cleanUp()
-    }
-  }, [])
-
-  useEffect(() => {
     dispatch([
       {
         type: EnumPlanActions.External,
