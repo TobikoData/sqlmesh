@@ -16,7 +16,7 @@ router = APIRouter()
     response_model=models.ContextEnvironment,
     response_model_exclude_unset=True,
 )
-def get_plan(
+def run_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: str = Body(),
