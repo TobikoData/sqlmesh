@@ -384,6 +384,7 @@ export default function PlanWizard({
                                 updated_at={activeBackfill?.updated_at}
                                 showBatches={hasBackfills}
                                 showLogicalUpdate={hasLogicalUpdate}
+                                planState={planState}
                               />
                             </Suspense>
                             <form>

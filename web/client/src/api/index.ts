@@ -18,7 +18,11 @@ import {
   BodyWriteFileApiFilesPathPost,
   PlanDates,
   AdditionalOptions,
-  getPlanApiPlanPost,
+  runPlanApiPlanPost,
+  applyApiCommandsApplyPost,
+  SnapshotChangeCategory,
+  Apply,
+  cancelPlanApiPlanCancelPost,
 } from './client'
 import type { File, Directory, Context } from './client'
 
@@ -60,7 +64,7 @@ export function useApiContext(): UseQueryResult<Context> {
   })
 }
 
-export function useApiPlan(
+export function useApiPlanRun(
   environment: string,
   options?: {
     planDates?: PlanDates
@@ -69,9 +73,31 @@ export function useApiPlan(
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
     queryKey: ['/api/plan', environment],
-    queryFn: () =>
-      getPlanApiPlanPost({
+    queryFn: async () =>
+      runPlanApiPlanPost({
         environment,
+        plan_dates: options?.planDates,
+        additional_options: options?.additionalOptions,
+      }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiPlanApply(
+  environment: string,
+  options?: {
+    change_category?: SnapshotChangeCategory
+    planDates?: PlanDates
+    additionalOptions?: AdditionalOptions
+  },
+): UseQueryResult<Apply> {
+  return useQuery({
+    queryKey: ['/api/commands/apply', environment],
+    queryFn: async () =>
+      await applyApiCommandsApplyPost({
+        environment,
+        change_category: options?.change_category,
         plan_dates: options?.planDates,
         additional_options: options?.additionalOptions,
       }),
@@ -116,11 +142,29 @@ export async function useApiContextCancel(client: QueryClient): Promise<void> {
   await client.cancelQueries({ queryKey: ['/api/context'] })
 }
 
-export async function useApiPlanCancel(
+export async function apiCancelPlanRun(
   client: QueryClient,
   environment: string,
 ): Promise<void> {
   await client.cancelQueries({ queryKey: ['/api/plan', environment] })
+}
+
+export async function apiCancelPlanApply(
+  client: QueryClient,
+  environment: string,
+): Promise<void> {
+  await client.cancelQueries({ queryKey: ['/api/commands/apply', environment] })
+}
+
+export async function apiCancelPlanApplyAndRun(
+  client: QueryClient,
+  environment: string,
+): Promise<void> {
+  await Promise.allSettled([
+    apiCancelPlanRun(client, environment),
+    apiCancelPlanApply(client, environment),
+    cancelPlanApiPlanCancelPost(),
+  ])
 }
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {

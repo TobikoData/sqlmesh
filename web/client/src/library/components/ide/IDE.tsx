@@ -7,13 +7,17 @@ import clsx from 'clsx'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize } from '../../../types/enum'
 import { Transition, Dialog, Popover, Menu } from '@headlessui/react'
-import { useApiPlan, useApiFiles, useApiEnvironments } from '../../../api'
+import {
+  useApiPlanRun,
+  useApiFiles,
+  useApiEnvironments,
+  apiCancelPlanApplyAndRun,
+} from '../../../api'
 import {
   EnumPlanState,
   EnumPlanAction,
   useStorePlan,
   PlanProgress,
-  PlanState,
 } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
@@ -33,9 +37,9 @@ import {
   useStoreContext,
 } from '~/context/context'
 import Spinner from '../logo/Spinner'
-import { cancelPlanApiPlanCancelPost } from '~/api/client'
 import Modal from '../modal/Modal'
 import PlanProvider from '../plan/context'
+import { useQueryClient } from '@tanstack/react-query'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -47,18 +51,12 @@ export interface Profile {
 }
 
 export function IDE(): JSX.Element {
-  const { refetch: refetchEnvironments, data: contextEnvironemnts } =
-    useApiEnvironments()
-
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
   const initialEndDate = useStoreContext(s => s.initialEndDate)
-  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
-  const planState = useStorePlan(s => s.state)
   const activePlan = useStorePlan(s => s.activePlan)
-  const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
@@ -71,30 +69,12 @@ export function IDE(): JSX.Element {
   const { data: project } = useApiFiles()
 
   useEffect(() => {
-    void refetchEnvironments()
+    const unsubscribe = subscribe('tasks')
 
-    subscribe('tasks')
+    return () => {
+      unsubscribe?.()
+    }
   }, [])
-
-  useEffect(() => {
-    if (
-      contextEnvironemnts == null ||
-      isArrayEmpty(Object.keys(contextEnvironemnts))
-    )
-      return
-
-    addRemoteEnvironments(Object.values(contextEnvironemnts))
-  }, [contextEnvironemnts])
-
-  function cancelPlan(): void {
-    setPlanState(EnumPlanState.Cancelling)
-
-    cancelPlanApiPlanCancelPost()
-      .catch(console.error)
-      .finally(() => {
-        setPlanState(EnumPlanState.Cancelled)
-      })
-  }
 
   function showGraph(): void {
     setIsGraphOpen(true)
@@ -148,8 +128,6 @@ export function IDE(): JSX.Element {
             <ActivePlan
               environment={environment}
               plan={activePlan}
-              planState={planState}
-              cancelPlan={cancelPlan}
             />
           )}
         </div>
@@ -176,15 +154,15 @@ export function IDE(): JSX.Element {
           <Graph closeGraph={closeGraph} />
         </Dialog.Panel>
       </Modal>
-      <Modal
-        show={isPlanOpen}
-        afterLeave={() => {
-          setPlanAction(EnumPlanAction.None)
-          setIsClosingModal(false)
-        }}
-      >
-        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
-          {environment != null && (
+      {environment != null && (
+        <Modal
+          show={isPlanOpen}
+          afterLeave={() => {
+            setPlanAction(EnumPlanAction.None)
+            setIsClosingModal(false)
+          }}
+        >
+          <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
             <PlanProvider>
               <Plan
                 environment={environment}
@@ -195,13 +173,12 @@ export function IDE(): JSX.Element {
                 disabled={isClosingModal}
                 initialStartDate={initialStartDate}
                 initialEndDate={initialEndDate}
-                onCancel={cancelPlan}
                 onClose={closeRunPlan}
               />
             </PlanProvider>
-          )}
-        </Dialog.Panel>
-      </Modal>
+          </Dialog.Panel>
+        </Modal>
+      )}
     </>
   )
 }
@@ -209,14 +186,28 @@ export function IDE(): JSX.Element {
 function ActivePlan({
   environment,
   plan,
-  planState,
-  cancelPlan,
 }: {
   environment: EnvironmentName
   plan: PlanProgress
-  planState: PlanState
-  cancelPlan: () => void
 }): JSX.Element {
+  const client = useQueryClient()
+
+  const planState = useStorePlan(s => s.state)
+  const setPlanState = useStorePlan(s => s.setState)
+  const setPlanAction = useStorePlan(s => s.setAction)
+
+  function cancel(): void {
+    setPlanState(EnumPlanState.Cancelling)
+    setPlanAction(EnumPlanAction.Cancelling)
+
+    void apiCancelPlanApplyAndRun(client, environment)
+      .catch(console.error)
+      .finally(() => {
+        setPlanAction(EnumPlanAction.None)
+        setPlanState(EnumPlanState.Cancelled)
+      })
+  }
+
   return (
     <Popover className="relative flex">
       {() => (
@@ -255,6 +246,7 @@ function ActivePlan({
                   headline="Most Recent Plan"
                   showBatches={plan.type !== 'logical'}
                   showLogicalUpdate={plan.type === 'logical'}
+                  planState={planState}
                 />
                 <div className="my-4 px-4">
                   {planState === EnumPlanState.Applying && (
@@ -265,7 +257,7 @@ function ActivePlan({
                       onClick={(e: MouseEvent) => {
                         e.stopPropagation()
 
-                        cancelPlan()
+                        cancel()
                       }}
                     >
                       Cancel
@@ -293,9 +285,10 @@ function RunPlan({
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
-  const setInitialDates = useStoreContext(s => s.setInitialDates)
 
   const environments = useStoreContext(s => s.environments)
+  const setInitialDates = useStoreContext(s => s.setInitialDates)
+  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
   const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const addLocalEnvironments = useStoreContext(s => s.addLocalEnvironments)
@@ -305,21 +298,22 @@ function RunPlan({
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 
-  const { refetch: refetchEnvironments } = useApiEnvironments()
-  const {
-    refetch: refetchPlan,
-    isLoading,
-    data: plan,
-  } = useApiPlan(environment)
+  const { refetch: getEnvironments, data: contextEnvironemnts } =
+    useApiEnvironments()
+  const { refetch: planRun, data: plan, isLoading } = useApiPlanRun(environment)
 
   useEffect(() => {
-    void refetchPlan()
+    void getEnvironments()
+  }, [])
+
+  useEffect(() => {
+    void planRun()
   }, [environment])
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
-      void refetchPlan()
-      void refetchEnvironments()
+      void planRun()
+      void getEnvironments()
     }
   }, [planState])
 
@@ -327,12 +321,29 @@ function RunPlan({
     setInitialDates(plan?.start, plan?.end)
   }, [plan])
 
+  useEffect(() => {
+    if (
+      contextEnvironemnts == null ||
+      isArrayEmpty(Object.keys(contextEnvironemnts))
+    )
+      return
+
+    addRemoteEnvironments(Object.values(contextEnvironemnts))
+  }, [contextEnvironemnts])
+
   function startPlan(): void {
     setActivePlan(undefined)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanAction.Run)
     showRunPlan()
   }
+
+  const hasChanges =
+    isArrayNotEmpty(plan?.changes?.added) ||
+    isArrayNotEmpty(plan?.changes?.removed) ||
+    isArrayNotEmpty(plan?.changes?.modified?.direct) ||
+    isArrayNotEmpty(plan?.changes?.modified?.indirect) ||
+    isArrayNotEmpty(plan?.changes?.modified?.metadata)
 
   return (
     <div
@@ -349,6 +360,7 @@ function RunPlan({
             isLoading ||
             planAction !== EnumPlanAction.None ||
             planState === EnumPlanState.Applying ||
+            planState === EnumPlanState.Running ||
             planState === EnumPlanState.Cancelling
           }
           variant="primary"
@@ -360,7 +372,11 @@ function RunPlan({
           }}
         >
           {includes(
-            [EnumPlanState.Applying, EnumPlanState.Cancelling],
+            [
+              EnumPlanState.Applying,
+              EnumPlanState.Running,
+              EnumPlanState.Cancelling,
+            ],
             planState,
           ) && <Spinner className="w-3 h-3 mr-1" />}
           <span className="inline-block">
@@ -408,7 +424,7 @@ function RunPlan({
                         <span className="inline-block ">Checking...</span>
                       </span>
                     )}
-                    {plan?.changes == null && isFalse(isLoading) && (
+                    {isFalse(hasChanges) && isFalse(isLoading) && (
                       <span
                         title="Latest"
                         className="block h-4 ml-1 px-2 first-child:ml-0 rounded-full bg-gray-200 text-gray-900 p-[0.125rem] text-xs leading-[0.75rem] text-center"

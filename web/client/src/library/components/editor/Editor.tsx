@@ -9,8 +9,7 @@ import { Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
-  useApiPlan,
-  useApiPlanCancel,
+  useApiPlanRun,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -96,7 +95,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-  const { refetch: refetchPlan, isLoading } = useApiPlan(environment)
+  const { refetch: planRun } = useApiPlanRun(environment)
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
@@ -132,11 +131,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
 
   useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
-      if (isLoading) {
-        void useApiPlanCancel(client, environment)
-      }
-
-      void refetchPlan()
+      void planRun()
     }
   }, [activeFile.content])
 

@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useMemo } from 'react'
 import { ContextEnvironmentChanges } from '~/api/client'
-import { PlanTasks } from '~/context/plan'
+import { PlanState, PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
@@ -16,6 +16,7 @@ interface PropsTasks {
   showBatches?: boolean
   showProgress?: boolean
   showLogicalUpdate?: boolean
+  planState: PlanState
 }
 
 export default function TasksProgress({
@@ -27,6 +28,7 @@ export default function TasksProgress({
   showBatches = true,
   showProgress = true,
   showLogicalUpdate = false,
+  planState,
 }: PropsTasks): JSX.Element {
   const { models, taskCompleted, taskTotal } = useMemo(() => {
     const models = Object.entries(tasks)
@@ -70,9 +72,10 @@ export default function TasksProgress({
             <span className="block whitespace-nowrap text-sm font-medium text-gray-900">
               {headline}
             </span>
-            <small className="inline-block ml-1 px-2 text-secondary-500 text-xs font-bold bg-secondary-100 rounded-md">
+            <small className="inline-block ml-1 px-2 py-[0.125rem] text-secondary-500 text-xs font-bold bg-secondary-100 rounded-md">
               {environment}
             </small>
+            <small className="ml-2">{planState}</small>
           </span>
           <small className="block whitespace-nowrap text-xs font-bold text-gray-900">
             <span>

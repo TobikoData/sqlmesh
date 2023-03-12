@@ -39,7 +39,7 @@ export default function PlanActions({
     no_gaps,
     no_auto_categorization,
     forward_only,
-    from,
+    create_from,
     restate_models,
   } = usePlan()
 
@@ -157,9 +157,9 @@ export default function PlanActions({
                 till <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
               </span>
             }
-            {isFalse(isStringEmptyOrNil(from)) && (
+            {isFalse(isStringEmptyOrNil(create_from)) && (
               <span className="inline-block mr-1">
-                based on <b>{from}</b> environment
+                based on <b>{create_from}</b> environment
               </span>
             )}
             {no_gaps && (
@@ -182,7 +182,7 @@ export default function PlanActions({
                 also set <b>Change Category</b> manually
               </span>
             )}
-            {isFalse(isStringEmptyOrNil(from)) && (
+            {isFalse(isStringEmptyOrNil(create_from)) && (
               <span className="inline-block mr-1">
                 and restate folowing models <b>{restate_models}</b>
               </span>

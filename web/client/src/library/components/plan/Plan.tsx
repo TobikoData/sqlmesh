@@ -9,12 +9,9 @@ import {
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { EnvironmentName } from '~/context/context'
-import { useApiPlan } from '~/api'
+import { useApiPlanRun, useApiPlanApply, apiCancelPlanApplyAndRun } from '~/api'
 import {
-  Apply,
-  applyApiCommandsApplyPost,
   ApplyType,
-  BodyApplyApiCommandsApplyPost,
   ContextEnvironmentEnd,
   ContextEnvironmentStart,
 } from '~/api/client'
@@ -24,24 +21,25 @@ import PlanActions from './PlanActions'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
+import { useQueryClient } from '@tanstack/react-query'
 
 function Plan({
   environment,
   isInitialPlanRun,
   initialStartDate,
   initialEndDate,
-  onCancel,
-  onClose,
   disabled,
+  onClose,
 }: {
   environment: EnvironmentName
   isInitialPlanRun: boolean
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
-  onCancel: () => void
-  onClose: () => void
   disabled: boolean
+  onClose: () => void
 }): JSX.Element {
+  const client = useQueryClient()
+
   const dispatch = usePlanDispatch()
   const {
     start,
@@ -67,7 +65,7 @@ function Plan({
 
   const [isPlanRan, seIsPlanRan] = useState(false)
 
-  const { refetch } = useApiPlan(environment, {
+  const { refetch: planRun } = useApiPlanRun(environment, {
     planDates: {
       start,
       end:
@@ -75,6 +73,29 @@ function Plan({
           ? undefined
           : end,
     },
+    additionalOptions: {
+      no_gaps,
+      skip_backfill,
+      forward_only,
+      create_from,
+      no_auto_categorization,
+      skip_tests,
+      restate_models,
+    },
+  })
+
+  const { refetch: planApply } = useApiPlanApply(environment, {
+    change_category:
+      hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)
+        ? change_category.value
+        : undefined,
+    planDates:
+      hasBackfills && isFalse(isInitialPlanRun)
+        ? {
+            start,
+            end,
+          }
+        : undefined,
     additionalOptions: {
       no_gaps,
       skip_backfill,
@@ -141,7 +162,7 @@ function Plan({
         [
           EnumPlanState.Running,
           EnumPlanState.Applying,
-          EnumPlanAction.Cancelling,
+          EnumPlanState.Cancelling,
         ],
         planState,
       )
@@ -199,64 +220,40 @@ function Plan({
     setPlanAction(EnumPlanAction.Run)
   }
 
+  function close(): void {
+    onClose()
+  }
+
   function cancel(): void {
+    setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    onCancel()
-
-    reset()
+    void apiCancelPlanApplyAndRun(client, environment)
+      .catch(console.error)
+      .finally(() => {
+        setPlanAction(EnumPlanAction.Run)
+        setPlanState(EnumPlanState.Cancelled)
+      })
   }
 
   function apply(): void {
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
-    const payload: BodyApplyApiCommandsApplyPost = {
-      environment,
-      additional_options: {
-        no_gaps,
-        skip_backfill,
-        forward_only,
-        create_from,
-        no_auto_categorization,
-        skip_tests,
-        restate_models,
-      },
-    }
-
-    if (hasBackfills && isFalse(isInitialPlanRun)) {
-      payload.plan_dates = {
-        start,
-        end,
-      }
-    }
-
-    if (hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)) {
-      payload.change_category = change_category.value
-    }
-
-    applyApiCommandsApplyPost(payload)
-      .then((data: Apply) => {
-        if (data.type === ApplyType.logical) {
+    void planApply()
+      .then(({ data }) => {
+        if (data?.type === ApplyType.logical) {
           setPlanState(EnumPlanState.Finished)
         }
       })
-      .catch(error => {
-        console.error(error)
-
-        reset()
-      })
-  }
-
-  function close(): void {
-    onClose()
+      .catch(console.error)
   }
 
   function run(): void {
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    void refetch()
+    void planRun()
       .then(({ data }) => {
         dispatch([
           {
@@ -280,8 +277,6 @@ function Plan({
         setPlanState(EnumPlanState.Init)
 
         if (auto_apply) {
-          setPlanAction(EnumPlanAction.Apply)
-
           apply()
         } else {
           setPlanAction(EnumPlanAction.Run)
