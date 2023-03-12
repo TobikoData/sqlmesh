@@ -123,7 +123,9 @@ export default function Editor({
     activeFile.path,
   )
 
-  const [dialects, setDialects] = useState<string[]>([])
+  const [dialects, setDialects] = useState<
+    Array<{ text: string; value: string }>
+  >([])
   const [dialect, setDialect] = useState<string>()
   const [isValid, setIsValid] = useState(true)
 
@@ -642,11 +644,10 @@ function EditorFooter({
   isSaved: boolean
   isValid: boolean
   fileStatus: string
-  dialects: string[]
+  dialects: Array<{ text: string; value: string }>
   dialect?: string
   setDialect: (dialect?: string) => void
 }): JSX.Element {
-  console.log({ dialect })
   return (
     <div className="mr-4">
       <Indicator
@@ -681,12 +682,12 @@ function EditorFooter({
               setDialect(e.target.value)
             }}
           >
-            {dialects.map(dialect => (
+            {dialects.map((d: { text: string; value: string }) => (
               <option
-                key={dialect}
-                value={dialect}
+                key={d.text}
+                value={d.value}
               >
-                {dialect}
+                {d.text}
               </option>
             ))}
           </select>
