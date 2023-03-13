@@ -54,7 +54,6 @@ def test_model_removed(sushi_context: Context):
 
     sushi_context._models.pop("sushi.top_waiters")
     removed = ["sushi.top_waiters"]
-    [key for key in sushi_context.snapshots if key not in removed]
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, removed=removed)
@@ -202,7 +201,7 @@ def validate_query_change(
     ],
 )
 def test_model_kind_change(from_: ModelKindName, to: ModelKindName, sushi_context: Context):
-    environment = "prod"
+    environment = f"test_model_kind_change__{from_.value.lower()}__{to.value.lower()}"
     incremental_snapshot = sushi_context.snapshots["sushi.items"].copy()
 
     if from_ != ModelKindName.INCREMENTAL_BY_TIME_RANGE:
@@ -375,7 +374,11 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.INT,
         DataType.Type.BIGINT,
     )
-    plan = sushi_context.plan("prod", start=start(sushi_context))
+    plan = sushi_context.plan("prod")
+    # Setting the private attribute directly to bypass validation.
+    plan._start = start(sushi_context)
+    plan._missing_intervals = None
+
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
     waiter_revenue = plan.context_diff.snapshots["sushi.waiter_revenue_by_day"]
@@ -443,7 +446,11 @@ def setup_rebase(
         DataType.Type.DOUBLE,
         DataType.Type.FLOAT,
     )
-    plan = context.plan("prod", start=start(context))
+    plan = context.plan("prod")
+    # Setting the private attribute directly to bypass validation.
+    plan._start = start(context)
+    plan._missing_intervals = None
+
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
     context.apply(plan)
@@ -621,9 +628,12 @@ def apply_to_environment(
 
     plan = context.plan(
         environment,
-        start=start(context),
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
     )
+    # Setting the private attribute directly to bypass validation for the production evnironment.
+    plan._start = start(context)
+    plan._missing_intervals = None
+
     plan_choice(plan, choice)
     for validator in plan_validators:
         validator(context, plan)
