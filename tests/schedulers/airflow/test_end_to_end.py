@@ -25,6 +25,7 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
     context = Context(path="./examples/sushi", config=airflow_config)
 
     context.plan(
+        environment="test_dev",
         start=start,
         skip_tests=True,
         no_prompts=True,
@@ -33,7 +34,7 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(
-        environment="test_dev",
+        environment="test_dev_two",
         start=start,
         skip_tests=True,
         no_prompts=True,

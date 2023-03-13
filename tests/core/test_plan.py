@@ -224,18 +224,23 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     dev_plan.end = "2022-01-04"
     assert dev_plan.end == "2022-01-04"
 
-    with pytest.raises(
-        PlanError,
-        match="The end date can't be set for a production plan without restatements.",
-    ):
+    start_end_not_allowed_message = (
+        "The start and end dates can't be set for a production plan without restatements."
+    )
+
+    with pytest.raises(PlanError, match=start_end_not_allowed_message):
         Plan(context_diff_mock, dag, state_reader_mock, end="2022-01-03")
 
+    with pytest.raises(PlanError, match=start_end_not_allowed_message):
+        Plan(context_diff_mock, dag, state_reader_mock, start="2022-01-03")
+
     prod_plan = Plan(context_diff_mock, dag, state_reader_mock)
-    with pytest.raises(
-        PlanError,
-        match="The end date can't be set for a production plan without restatements.",
-    ):
+
+    with pytest.raises(PlanError, match=start_end_not_allowed_message):
         prod_plan.end = "2022-01-03"
+
+    with pytest.raises(PlanError, match=start_end_not_allowed_message):
+        prod_plan.start = "2022-01-03"
 
     context_diff_mock.new_snapshots = {}
     restatement_prod_plan = Plan(

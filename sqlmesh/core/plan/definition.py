@@ -101,7 +101,7 @@ class Plan:
 
         self._add_restatements(restate_models or [])
 
-        self._ensure_valid_end(self._end)
+        self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
         self._ensure_no_forward_only_new_models()
         self._ensure_no_forward_only_seed_models()
@@ -134,6 +134,7 @@ class Plan:
 
     @start.setter
     def start(self, new_start: TimeLike) -> None:
+        self._ensure_valid_date_range(new_start, self._end)
         self._start = new_start
         self._missing_intervals = None
 
@@ -144,7 +145,7 @@ class Plan:
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:
-        self._ensure_valid_end(new_end)
+        self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
         self._missing_intervals = None
 
@@ -427,9 +428,13 @@ class Plan:
                     "3) recreate this plan in a forward-only mode."
                 )
 
-    def _ensure_valid_end(self, end: t.Optional[TimeLike]) -> None:
-        if end and not self.is_start_and_end_allowed:
-            raise PlanError("The end date can't be set for a production plan without restatements.")
+    def _ensure_valid_date_range(
+        self, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
+    ) -> None:
+        if (start or end) and not self.is_start_and_end_allowed:
+            raise PlanError(
+                "The start and end dates can't be set for a production plan without restatements."
+            )
 
     def _ensure_no_forward_only_revert(self) -> None:
         """Ensures that a previously superseded breaking / non-breaking snapshot is not being
