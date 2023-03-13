@@ -693,11 +693,13 @@ function EditorFooter({
           </select>
         </span>
       )}
-      <Indicator
-        className="mr-2"
-        text="SQLMesh Type"
-        value={activeFile.isSQLMeshModel ? 'Model' : 'Plain'}
-      />
+      {activeFile.isSQLMeshModel && (
+        <Indicator
+          className="mr-2"
+          text="SQLMesh Type"
+          value={activeFile.isSQLMeshModel ? 'Model' : 'Plain'}
+        />
+      )}
     </div>
   )
 }
