@@ -38,6 +38,7 @@ import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
 import {
   debounceAsync,
+  isArrayNotEmpty,
   isFalse,
   isNil,
   isObjectLike,
@@ -672,7 +673,7 @@ function EditorFooter({
         text="Language"
         value={getLanguageByExtension(activeFile.extension)}
       />
-      {activeFile.extension === '.sql' && (
+      {activeFile.extension === '.sql' && isArrayNotEmpty(dialects) && (
         <span className="inline-block mr-2">
           <small className="font-bold text-xs mr-1">Dialect</small>
           <select

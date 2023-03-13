@@ -11,8 +11,8 @@ import { ModelFile } from '~/models'
 import {
   events,
   SqlMeshModel,
-  SqlMeshDialect,
   HoverTooltip,
+  useSqlMeshExtention,
 } from './extensions'
 import { sqlglotWorker } from '~/library/components/editor/workers'
 
@@ -32,6 +32,8 @@ export default function CodeEditor({
 
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
 
+  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] = useSqlMeshExtention()
+
   const extensions = useMemo(() => {
     const showSqlSqlMeshDialect =
       file.extension === '.sql' && models != null && sqlDialectOptions != null
@@ -39,7 +41,8 @@ export default function CodeEditor({
       models != null && HoverTooltip(models),
       models != null && events(models, files, selectFile),
       models != null && SqlMeshModel(models),
-      showSqlSqlMeshDialect && SqlMeshDialect(models, file, sqlDialectOptions),
+      showSqlSqlMeshDialect &&
+        SqlMeshDialectExtension(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
     ].filter(Boolean) as Extension[]
@@ -47,7 +50,6 @@ export default function CodeEditor({
 
   const handleSqlGlotWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
-      console.log('dialect', e.data.payload)
       setSqlDialectOptions(e.data.payload)
     }
   }, [])
@@ -57,6 +59,7 @@ export default function CodeEditor({
 
     return () => {
       sqlglotWorker.removeEventListener('message', handleSqlGlotWorkerMessage)
+      SqlMeshDialectCleanUp()
     }
   }, [])
 

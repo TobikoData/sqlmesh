@@ -7,7 +7,9 @@ from sqlglot.dialects.dialect import Dialect, DialectType
 
 
 def parse_to_json(sql: str, read: DialectType = None) -> str:
-    return json.dumps([exp.dump() if exp else {} for exp in sqlglot.parse(sql, read=read)])
+    return json.dumps(
+        [exp.dump() if exp else {} for exp in sqlglot.parse(sql, read=read, error_level="ignore")]
+    )
 
 
 def get_dialect(dialect_type: str = "") -> str:
