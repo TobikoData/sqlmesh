@@ -149,8 +149,8 @@ class Plan:
         self._missing_intervals = None
 
     @property
-    def is_end_allowed(self) -> bool:
-        """Indicates whether this plan allows to set the end date."""
+    def is_start_and_end_allowed(self) -> bool:
+        """Indicates whether this plan allows to set the start and end dates."""
         return self.is_dev or bool(self.restatements)
 
     @property
@@ -428,7 +428,7 @@ class Plan:
                 )
 
     def _ensure_valid_end(self, end: t.Optional[TimeLike]) -> None:
-        if end and not self.is_end_allowed:
+        if end and not self.is_start_and_end_allowed:
             raise PlanError("The end date can't be set for a production plan without restatements.")
 
     def _ensure_no_forward_only_revert(self) -> None:

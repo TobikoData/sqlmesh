@@ -309,24 +309,25 @@ class TerminalConsole(Console):
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
 
-        if not plan.override_start:
-            blank_meaning = (
-                "to preview starting from yesterday"
-                if is_forward_only_dev
-                else "for the beginning of history"
-            )
-            start = self._prompt(
-                f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
-            )
-            if start:
-                plan.start = start
+        if plan.is_start_and_end_allowed:
+            if not plan.override_start:
+                blank_meaning = (
+                    "to preview starting from yesterday"
+                    if is_forward_only_dev
+                    else "for the beginning of history"
+                )
+                start = self._prompt(
+                    f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
+                )
+                if start:
+                    plan.start = start
 
-        if plan.is_end_allowed and not plan.override_end:
-            end = self._prompt(
-                f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
-            )
-            if end:
-                plan.end = end
+            if not plan.override_end:
+                end = self._prompt(
+                    f"Enter the {backfill_or_preview} end date (eg. '1 month ago', '2020-01-01') or blank to {backfill_or_preview} up until now",
+                )
+                if end:
+                    plan.end = end
 
         if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
@@ -527,17 +528,19 @@ class NotebookMagicConsole(TerminalConsole):
             plan.end = change["new"]
             self._show_options_after_categorization(plan, auto_apply)
 
-        add_to_layout_widget(
-            prompt,
-            widgets.HBox(
-                [
-                    widgets.Label(f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}),
-                    _date_picker(plan, to_date(plan.start), start_change_callback),
-                ]
-            ),
-        )
+        if plan.is_start_and_end_allowed:
+            add_to_layout_widget(
+                prompt,
+                widgets.HBox(
+                    [
+                        widgets.Label(
+                            f"Start {backfill_or_preview} Date:", layout={"width": "8rem"}
+                        ),
+                        _date_picker(plan, to_date(plan.start), start_change_callback),
+                    ]
+                ),
+            )
 
-        if plan.is_end_allowed:
             add_to_layout_widget(
                 prompt,
                 widgets.HBox(
