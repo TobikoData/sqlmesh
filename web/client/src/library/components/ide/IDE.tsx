@@ -337,12 +337,13 @@ function RunPlan({
     showRunPlan()
   }
 
-  const hasChanges =
-    isArrayNotEmpty(plan?.changes?.added) ||
-    isArrayNotEmpty(plan?.changes?.removed) ||
-    isArrayNotEmpty(plan?.changes?.modified?.direct) ||
-    isArrayNotEmpty(plan?.changes?.modified?.indirect) ||
-    isArrayNotEmpty(plan?.changes?.modified?.metadata)
+  const hasChanges = [
+    plan?.changes?.added,
+    plan?.changes?.removed,
+    plan?.changes?.modified?.direct,
+    plan?.changes?.modified?.indirect,
+    plan?.changes?.modified?.metadata,
+  ].some(isArrayNotEmpty)
 
   return (
     <div
