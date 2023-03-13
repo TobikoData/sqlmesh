@@ -22,7 +22,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, MacroEvalError
 
 
 @pytest.fixture()
@@ -251,3 +251,60 @@ def test_quote(sushi_dbt_project: Project):
 
     jinja = "{{ adapter.quote('foo') }} {{ adapter.quote('bar') }}"
     assert context.render(jinja) == '"foo" "bar"'
+
+
+def test_as_filters(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ True | as_bool }}") == "True"
+    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into boolean."):
+        context.render("{{ 'invalid' | as_bool }}")
+
+    assert context.render("{{ 123 | as_number }}") == "123"
+    with pytest.raises(MacroEvalError, match="Failed to convert 'invalid' into number."):
+        context.render("{{ 'invalid' | as_number }}")
+
+    assert context.render("{{ None | as_text }}") == ""
+
+    assert context.render("{{ None | as_native }}") == "None"
+
+
+def test_set(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ set([1, 1, 2]) }}") == "{1, 2}"
+    assert context.render("{{ set(1) }}") == "None"
+
+    assert context.render("{{ set_strict([1, 1, 2]) }}") == "{1, 2}"
+    with pytest.raises(TypeError):
+        assert context.render("{{ set_strict(1) }}")
+
+
+def test_json(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ tojson({'key': 'value'}) }}") == """{"key": "value"}"""
+    assert context.render("{{ tojson(set([1])) }}") == "None"
+
+    assert context.render("""{{ fromjson('{"key": "value"}') }}""") == "{'key': 'value'}"
+    assert context.render("""{{ fromjson('invalid') }}""") == "None"
+
+
+def test_yaml(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ toyaml({'key': 'value'}) }}").strip() == "key: value"
+    assert context.render("{{ toyaml(invalid) }}", invalid=lambda: "") == "None"
+
+    assert context.render("""{{ fromyaml('key: value') }}""") == "{'key': 'value'}"
+
+
+def test_zip(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+
+    assert context.render("{{ zip([1, 2], ['a', 'b']) }}") == "[(1, 'a'), (2, 'b')]"
+    assert context.render("{{ zip(12, ['a', 'b']) }}") == "None"
+
+    assert context.render("{{ zip_strict([1, 2], ['a', 'b']) }}") == "[(1, 'a'), (2, 'b')]"
+    with pytest.raises(TypeError):
+        context.render("{{ zip_strict(12, ['a', 'b']) }}")

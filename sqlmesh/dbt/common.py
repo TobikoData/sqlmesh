@@ -9,12 +9,11 @@ from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.dbt.builtin import create_builtins
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, render_jinja
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
@@ -135,21 +134,17 @@ class DbtContext:
         self._target = value
         self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
 
-    def render(self, source: str) -> str:
+    def render(self, source: str, **kwargs: t.Any) -> str:
         return (
-            self.jinja_macros.build_environment(**self.builtin_jinja).from_string(source).render()
+            self.jinja_macros.build_environment(
+                **self.jinja_globals, engine_adapter=self.engine_adapter
+            )
+            .from_string(source)
+            .render(**kwargs)
         )
 
     def copy(self) -> DbtContext:
         return replace(self)
-
-    @property
-    def builtin_jinja(self) -> t.Dict[str, t.Any]:
-        return create_builtins(
-            jinja_macros=self.jinja_macros,
-            jinja_globals=self.jinja_globals,
-            engine_adapter=self.engine_adapter,
-        )
 
     @property
     def jinja_globals(self) -> t.Dict[str, AttributeDict]:
@@ -246,11 +241,9 @@ class GeneralConfig(DbtConfig, BaseConfig):
             setattr(self, field, getattr(other, field))
 
     def render_config(self: T, context: DbtContext) -> T:
-        methods = context.builtin_jinja
-
         def render_value(val: t.Any) -> t.Any:
             if type(val) is not SqlStr and type(val) is str:
-                val = render_jinja(val, methods)
+                val = context.render(val)
             elif isinstance(val, GeneralConfig):
                 for name in val.__fields__:
                     setattr(val, name, render_value(getattr(val, name)))

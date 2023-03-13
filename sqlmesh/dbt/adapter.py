@@ -49,6 +49,18 @@ class BaseAdapter(abc.ABC):
         """Returns the columns for a given table grained relation."""
 
     @abc.abstractmethod
+    def create_schema(self, relation: BaseRelation) -> None:
+        """Creates a schema in the target database."""
+
+    @abc.abstractmethod
+    def drop_schema(self, relation: BaseRelation) -> None:
+        """Drops a schema in the target database."""
+
+    @abc.abstractmethod
+    def drop_relation(self, relation: BaseRelation) -> None:
+        """Drops a relation (table) in the target database."""
+
+    @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
@@ -90,6 +102,15 @@ class ParsetimeAdapter(BaseAdapter):
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
         return []
+
+    def create_schema(self, relation: BaseRelation) -> None:
+        pass
+
+    def drop_schema(self, relation: BaseRelation) -> None:
+        pass
+
+    def drop_relation(self, relation: BaseRelation) -> None:
+        pass
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -165,6 +186,18 @@ class RuntimeAdapter(BaseAdapter):
             Column.from_description(name=name, raw_data_type=dtype)
             for name, dtype in self.engine_adapter.columns(table_name=relation.render()).items()
         ]
+
+    def create_schema(self, relation: BaseRelation) -> None:
+        if relation.schema is not None:
+            self.engine_adapter.create_schema(relation.schema)
+
+    def drop_schema(self, relation: BaseRelation) -> None:
+        if relation.schema is not None:
+            self.engine_adapter.drop_schema(relation.schema)
+
+    def drop_relation(self, relation: BaseRelation) -> None:
+        if relation.schema is not None and relation.identifier is not None:
+            self.engine_adapter.drop_table(f"{relation.schema}.{relation.identifier}")
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
