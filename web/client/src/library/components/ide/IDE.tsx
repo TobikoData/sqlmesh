@@ -55,6 +55,7 @@ export function IDE(): JSX.Element {
   const environments = useStoreContext(s => s.environments)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
   const initialEndDate = useStoreContext(s => s.initialEndDate)
+  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
 
   const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
@@ -69,12 +70,26 @@ export function IDE(): JSX.Element {
   const { data: project } = useApiFiles()
 
   useEffect(() => {
+    void getEnvironments()
     const unsubscribe = subscribe('tasks')
 
     return () => {
       unsubscribe?.()
     }
   }, [])
+
+  const { refetch: getEnvironments, data: contextEnvironemnts } =
+    useApiEnvironments()
+
+  useEffect(() => {
+    if (
+      contextEnvironemnts == null ||
+      isArrayEmpty(Object.keys(contextEnvironemnts))
+    )
+      return
+
+    addRemoteEnvironments(Object.values(contextEnvironemnts))
+  }, [contextEnvironemnts])
 
   function showGraph(): void {
     setIsGraphOpen(true)
@@ -288,7 +303,6 @@ function RunPlan({
 
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
-  const addRemoteEnvironments = useStoreContext(s => s.addRemoteEnvironments)
   const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const addLocalEnvironments = useStoreContext(s => s.addLocalEnvironments)
@@ -298,13 +312,8 @@ function RunPlan({
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
 
-  const { refetch: getEnvironments, data: contextEnvironemnts } =
-    useApiEnvironments()
+  const { refetch: getEnvironments } = useApiEnvironments()
   const { refetch: planRun, data: plan, isLoading } = useApiPlanRun(environment)
-
-  useEffect(() => {
-    void getEnvironments()
-  }, [])
 
   useEffect(() => {
     void planRun()
@@ -320,16 +329,6 @@ function RunPlan({
   useEffect(() => {
     setInitialDates(plan?.start, plan?.end)
   }, [plan])
-
-  useEffect(() => {
-    if (
-      contextEnvironemnts == null ||
-      isArrayEmpty(Object.keys(contextEnvironemnts))
-    )
-      return
-
-    addRemoteEnvironments(Object.values(contextEnvironemnts))
-  }, [contextEnvironemnts])
 
   function startPlan(): void {
     setActivePlan(undefined)
