@@ -18,8 +18,7 @@ def test_yaml() -> None:
       password: "{{ env_var('__SQLMESH_TEST_ENV_PASSWORD__') }}"
 """
 
-    # Without Jinja rendering (uses ruamel.yaml.YAML methods directly)
-    assert contents == yaml.dumps(yaml.yaml.load(contents))
+    assert contents == yaml.dumps(yaml.load(contents, render_jinja=False))
 
     expected_contents = """profile:
   target: prod
