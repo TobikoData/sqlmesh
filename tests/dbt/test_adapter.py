@@ -39,6 +39,7 @@ def test_adapter_dispatch(sushi_dbt_project: Project):
 
     assert context.engine_adapter
     context.engine_adapter.dialect = "unknown"
+    context._jinja_environment = None
     assert context.render("{{ adapter.dispatch('current_engine', 'customers')() }}") == "default"
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):

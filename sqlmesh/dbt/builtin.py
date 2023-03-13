@@ -306,17 +306,14 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = generate_var(variables)
 
-    builtin_globals.update(
-        {
-            **jinja_globals,
-            "builtins": AttributeDict(
-                {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
-            ),
-        }
+    builtin_globals["builtins"] = AttributeDict(
+        {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
     )
 
     if engine_adapter is not None:
-        adapter = RuntimeAdapter(engine_adapter, jinja_macros, jinja_globals=builtin_globals)
+        adapter = RuntimeAdapter(
+            engine_adapter, jinja_macros, jinja_globals={**builtin_globals, **jinja_globals}
+        )
         sql_execution = SQLExecution(adapter)
         builtin_globals.update(
             {
