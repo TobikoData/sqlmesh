@@ -673,7 +673,7 @@ function EditorFooter({
         value={getLanguageByExtension(activeFile.extension)}
       />
       {activeFile.extension === '.sql' && (
-        <span>
+        <span className="inline-block mr-2">
           <small className="font-bold text-xs mr-1">Dialect</small>
           <select
             className="text-xs m-0 px-1 py-[0.125rem] bg-secondary-100 rounded"
@@ -693,6 +693,11 @@ function EditorFooter({
           </select>
         </span>
       )}
+      <Indicator
+        className="mr-2"
+        text="SQLMesh Type"
+        value={activeFile.isSQLMeshModel ? 'Model' : 'Plain'}
+      />
     </div>
   )
 }
