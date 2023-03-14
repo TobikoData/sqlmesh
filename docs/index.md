@@ -4,7 +4,9 @@
 
 ## Why SQLMesh?
 
-The experience of developing and deploying data pipelines is more uncertain and manual when compared to developing application. This is partially due to the lack of tooling revolving around the testing and deployment of data pipelines. With DevOps, software engineers are able to seamlessly confirm logic with unit tests, validate systems with containerized environments, and transition to prod with confidence. SQLMesh aims to give data teams the same confidence as their peers.
+The experience of developing and deploying data pipelines is more uncertain and manual when compared to developing applications. This is partially due to the lack of tooling revolving around the testing and deployment of data pipelines. With DevOps, software engineers are able to seamlessly confirm logic with unit tests, validate systems with containerized environments, and transition to prod with confidence. SQLMesh aims to give data teams the same confidence as their peers.
+
+Here are some challenges that data teams run into, especially when data sizes increase or the number of data users expands
 
 1. **Data pipelines are fragmented and fragile:** Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream dependencies are usually only detected at run time.
 
