@@ -1,8 +1,7 @@
 site_name: SQLMesh
 nav:
-  - Overview:
-    - "What is SQLMesh?": index.md
-    - "SQLMesh advantages": why_sqlmesh.md
+  - "What is SQLMesh?": index.md
+  - "SQLMesh advantages": why_sqlmesh.md
   - Get started:
     - Quick start:
       - prerequisites.md
@@ -48,7 +47,6 @@ nav:
     - best_practices/recommended_workflow.md
   - Resources:
     - release_notes.md
-    - community.md
     - development.md
 theme:
   name: material
