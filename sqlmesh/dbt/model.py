@@ -253,10 +253,6 @@ class ModelConfig(GeneralConfig):
     def all_sql(self) -> str:
         return ";\n".join(self.pre_hook + [self.sql] + self.post_hook)
 
-    # @property
-    # def all_sql_no_config(self) -> str:
-    #    return ";\n".join(self.pre_hook + self.post_hook + [self.sql_no_config])
-
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
         rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.all_sql))
