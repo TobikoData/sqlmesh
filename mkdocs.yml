@@ -52,16 +52,16 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: deep purple
+      primary: #091c79
+      accent: #cce8fe
       toggle:
         icon: material/weather-sunny
         name: Switch to dark mode
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
-      accent: deep purple
+      primary: #cce8fe
+      accent: #091c79
       toggle:
         icon: material/weather-night
         name: Switch to light mode
