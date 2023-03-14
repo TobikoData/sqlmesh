@@ -248,4 +248,4 @@ Congratulations, you've now conquered the basics of using SQLMesh!
 
 * For more information about how to perform tasks with SQLMesh, explore our [guides](guides/create_a_project.md).
 * For information about how SQLMesh works, explore [concepts](concepts/overview.md).
-* To connect with us, refer to [community](community.md). We'd love to hear from you!
+* To connect with us, refer to [community](index.md#join-our-community). We'd love to hear from you!
