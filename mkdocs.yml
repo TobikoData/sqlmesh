@@ -1,12 +1,10 @@
 site_name: SQLMesh
 nav:
-  - "What is SQLMesh?": index.md
-  - "SQLMesh advantages": why_sqlmesh.md
+  - "Overview": index.md
   - Get started:
-    - Quick start:
-      - prerequisites.md
-      - installation.md
-      - quick_start.md
+    - prerequisites.md
+    - installation.md
+    - quick_start.md
   - Guides:
     - guides/projects.md
     - guides/models.md
