@@ -15,7 +15,7 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.utils import UniqueKeyDict
 
 
-def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
+def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Config:
     project_root = project_root or Path()
     context = DbtContext(project_root=project_root)
     profile = Profile.load(context)
@@ -24,6 +24,7 @@ def sqlmesh_config(project_root: t.Optional[Path] = None) -> Config:
         default_connection=profile.default_target,
         connections=profile.to_sqlmesh(),
         loader=DbtLoader,
+        **kwargs,
     )
 
 
