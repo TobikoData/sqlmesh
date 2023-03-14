@@ -264,7 +264,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
         result = run_model_tests(
             tests=tests,
             snapshots=obj.local_snapshots,
-            engine_adapter=obj.engine_adapter,
+            engine_adapter=obj.test_engine_adapter,
             verbosity=verbosity,
             patterns=k,
             ignore_patterns=obj.ignore_patterns,
@@ -273,7 +273,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
         result = run_all_model_tests(
             path=obj.path,
             snapshots=obj.local_snapshots,
-            engine_adapter=obj.engine_adapter,
+            engine_adapter=obj.test_engine_adapter,
             verbosity=verbosity,
             patterns=k,
             ignore_patterns=obj.ignore_patterns,

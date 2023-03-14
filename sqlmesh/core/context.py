@@ -257,6 +257,11 @@ class Context(BaseContext):
         """Returns an engine adapter."""
         return self._engine_adapter
 
+    @property
+    def test_engine_adapter(self) -> EngineAdapter:
+        """Returns an engine adapter for tests."""
+        return self._test_engine_adapter
+
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:
         """Update or insert a model.
 
