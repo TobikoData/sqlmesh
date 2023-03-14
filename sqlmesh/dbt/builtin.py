@@ -331,7 +331,9 @@ def create_builtin_globals(
         builtin_globals.update(
             {
                 "execute": False,
-                "adapter": ParsetimeAdapter(jinja_macros, jinja_globals=builtin_globals),
+                "adapter": ParsetimeAdapter(
+                    jinja_macros, jinja_globals={**builtin_globals, **jinja_globals}
+                ),
                 "load_relation": lambda *args, **kwargs: None,
                 "store_result": lambda *args, **kwargs: "",
                 "load_result": lambda *args, **kwargs: None,
