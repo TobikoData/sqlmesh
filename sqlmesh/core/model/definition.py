@@ -1195,15 +1195,6 @@ def _python_env(
 
     _capture_expression_macros(query)
 
-    for name, macro in used_macros.items():
-        if not macro.func.__module__.startswith("sqlmesh."):
-            build_env(
-                macro.func,
-                env=python_env,
-                name=name,
-                path=module_path,
-            )
-
     for hook in hook_calls:
         if isinstance(hook, exp.Expression):
             _capture_expression_macros(hook)
@@ -1211,6 +1202,15 @@ def _python_env(
             name = hook[0]
             build_env(
                 hooks[name].func,
+                env=python_env,
+                name=name,
+                path=module_path,
+            )
+
+    for name, macro in used_macros.items():
+        if not macro.func.__module__.startswith("sqlmesh."):
+            build_env(
+                macro.func,
                 env=python_env,
                 name=name,
                 path=module_path,

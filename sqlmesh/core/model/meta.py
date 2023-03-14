@@ -5,7 +5,7 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse, parse_one
+from sqlglot import exp, maybe_parse
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.model.kind import (
@@ -89,27 +89,32 @@ class ModelMeta(PydanticModel):
             return (func.lower(), kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [extract(i) for i in v.expressions]
+            return [
+                extract(d.parse(i.this)[0]) if isinstance(i, exp.Literal) else extract(i)
+                for i in v.expressions
+            ]
         if isinstance(v, exp.Paren):
             return [extract(v.this)]
         if isinstance(v, exp.Expression):
             return [extract(v)]
         if isinstance(v, list) and v:
-            if isinstance(v[0], exp.Expression):
-                return [extract(entry) for entry in v]
-            elif isinstance(v[0], str):
-                return [d.parse(entry)[0] for entry in v]
-            else:
-                return [
-                    (
-                        entry[0].lower(),
-                        {
-                            key: parse_one(value) if isinstance(value, str) else value
-                            for key, value in entry[1].items()
-                        },
+            transformed = []
+            for entry in v:
+                if isinstance(entry, exp.Expression):
+                    transformed.append(extract(entry))
+                elif isinstance(entry, str):
+                    transformed.append(d.parse(entry)[0])
+                else:
+                    transformed.append(
+                        (
+                            entry[0].lower(),
+                            {
+                                key: d.parse(value)[0] if isinstance(value, str) else value
+                                for key, value in entry[1].items()
+                            },
+                        )
                     )
-                    for entry in v
-                ]
+            return transformed
 
         return v
 

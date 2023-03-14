@@ -137,7 +137,7 @@ def test_model_union_query():
     load_model(expressions)
 
 
-def test_model_valiadtion_union_query():
+def test_model_validation_union_query():
     expressions = parse(
         """
         MODEL (
