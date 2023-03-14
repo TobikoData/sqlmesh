@@ -202,7 +202,6 @@ class RedshiftConfig(TargetConfig):
             port=self.port,
             sslmode=self.sslmode,
             timeout=self.connect_timeout,
-            tcp_keepalive=self.keepalives_idle,
             concurrent_tasks=self.threads,
         )
 

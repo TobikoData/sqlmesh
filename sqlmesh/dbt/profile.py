@@ -92,7 +92,7 @@ class Profile:
         default_target = context.render(project_data.get("target"))
         if default_target not in targets:
             raise ConfigError(
-                f"Default target '#{default_target}' not specified in profiles for Project '{context.project_name}'."
+                f"Default target '{default_target}' not specified in profiles for Project '{context.project_name}'."
             )
 
         return (targets, default_target)

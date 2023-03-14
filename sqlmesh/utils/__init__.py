@@ -56,7 +56,7 @@ class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
 
 
 class AttributeDict(dict, t.Mapping[KEY, VALUE]):
-    __getattr__ = dict.__getitem__
+    __getattr__ = dict.get
 
 
 class registry_decorator:

@@ -18,7 +18,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
-    pass
+    from jinja2 import Environment
 
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
@@ -58,10 +58,10 @@ class DbtContext:
     jinja_macros: JinjaMacroRegistry = field(
         default_factory=lambda: JinjaMacroRegistry(create_builtins_module="sqlmesh.dbt")
     )
-    variables: t.Dict[str, t.Any] = field(default_factory=dict)
 
     engine_adapter: t.Optional[EngineAdapter] = None
 
+    _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
@@ -69,9 +69,24 @@ class DbtContext:
 
     _target: t.Optional[TargetConfig] = None
 
+    _jinja_environment: t.Optional[Environment] = None
+
     @property
     def dialect(self) -> str:
         return self.engine_adapter.dialect if self.engine_adapter is not None else ""
+
+    @property
+    def variables(self) -> t.Dict[str, t.Any]:
+        return self._variables
+
+    @variables.setter
+    def variables(self, variables: t.Dict[str, t.Any]) -> None:
+        self._variables = {}
+        self.add_variables(variables)
+
+    def add_variables(self, variables: t.Dict[str, t.Any]) -> None:
+        self._variables.update(variables)
+        self._jinja_environment = None
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
@@ -86,6 +101,7 @@ class DbtContext:
     def add_models(self, models: t.Dict[str, ModelConfig]) -> None:
         self._refs = {}
         self._models.update(models)
+        self._jinja_environment = None
 
     @property
     def seeds(self) -> t.Dict[str, SeedConfig]:
@@ -100,6 +116,7 @@ class DbtContext:
     def add_seeds(self, seeds: t.Dict[str, SeedConfig]) -> None:
         self._refs = {}
         self._seeds.update(seeds)
+        self._jinja_environment = None
 
     @property
     def sources(self) -> t.Dict[str, SourceConfig]:
@@ -112,6 +129,7 @@ class DbtContext:
 
     def add_sources(self, sources: t.Dict[str, SourceConfig]) -> None:
         self._sources.update(sources)
+        self._jinja_environment = None
 
     @property
     def refs(self) -> t.Dict[str, str]:
@@ -133,18 +151,21 @@ class DbtContext:
 
         self._target = value
         self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
+        self._jinja_environment = None
 
     def render(self, source: str, **kwargs: t.Any) -> str:
-        return (
-            self.jinja_macros.build_environment(
-                **self.jinja_globals, engine_adapter=self.engine_adapter
-            )
-            .from_string(source)
-            .render(**kwargs)
-        )
+        return self.jinja_environment.from_string(source).render(**kwargs)
 
     def copy(self) -> DbtContext:
         return replace(self)
+
+    @property
+    def jinja_environment(self) -> Environment:
+        if self._jinja_environment is None:
+            self._jinja_environment = self.jinja_macros.build_environment(
+                **self.jinja_globals, engine_adapter=self.engine_adapter
+            )
+        return self._jinja_environment
 
     @property
     def jinja_globals(self) -> t.Dict[str, AttributeDict]:
