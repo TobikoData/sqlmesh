@@ -1,6 +1,6 @@
 # SQLMesh
 
-SQLMesh is a DataOps framework that brings the best practices of DevOps to data teams. It allows data teams to efficiently run and deploy data transformations written in SQL or Python.
+SQLMesh is a DataOps framework that brings the best practices of DevOps to data teams. It enables data scientists, analysts, and engineers to efficiently run and deploy data transformations written in SQL or Python.
 
 For more infromation, check out the [website](https://sqlmesh.com) and [documentation](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/).
 
@@ -12,7 +12,7 @@ Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
 Follow the [tutorial](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/quick_start/) to learn how to use SQLMesh.
 
 ## Join our community
-We'd love to help guide you along your data journey. Connect with us in the following ways:
+We'd love to join you on your data journey. Connect with us in the following ways:
 
 * Join the [tobiko Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1je7o3xhd-C7~GuZTj0a8xz_uQbTJjHg) to ask questions, or just to say hi!
 * File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new).
