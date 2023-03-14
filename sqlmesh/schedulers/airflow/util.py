@@ -101,49 +101,38 @@ def delete_variables(
 def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
     name = name.lower()
 
-    if name in ("spark", "spark-submit", "spark_submit"):
-        try:
+    try:
+        if name in ("spark", "spark-submit", "spark_submit"):
             from sqlmesh.schedulers.airflow.operators.spark_submit import (
                 SQLMeshSparkSubmitOperator,
             )
 
             return SQLMeshSparkSubmitOperator
-        except ImportError:
-            raise SQLMeshError("Failed to automatically discover an operator for Spark")
-    if name in ("databricks", "databricks-sql", "databricks_sql"):
-        try:
+        if name in ("databricks", "databricks-sql", "databricks_sql"):
             from sqlmesh.schedulers.airflow.operators.databricks import (
                 SQLMeshDatabricksSQLOperator,
             )
 
             return SQLMeshDatabricksSQLOperator
-        except ImportError:
-            raise SQLMeshError("Failed to automatically discover an operator for Databricks")
-    if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
-        try:
+        if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
             from sqlmesh.schedulers.airflow.operators.snowflake import (
                 SQLMeshSnowflakeOperator,
             )
 
             return SQLMeshSnowflakeOperator
-        except ImportError:
-            raise SQLMeshError("Failed to automatically discover an operator for Snowflake")
-    if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
-        try:
+        if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
             from sqlmesh.schedulers.airflow.operators.bigquery import (
                 SQLMeshBigQueryOperator,
             )
 
             return SQLMeshBigQueryOperator
-        except ImportError:
-            raise SQLMeshError("Failed to automatically discover an operator for BigQuery")
-    if name in ("redshift", "redshift-sql", "redshift_sql"):
-        try:
+        if name in ("redshift", "redshift-sql", "redshift_sql"):
             from sqlmesh.schedulers.airflow.operators.redshift import (
                 SQLMeshRedshiftOperator,
             )
 
             return SQLMeshRedshiftOperator
-        except ImportError:
-            raise SQLMeshError("Failed to automatically discover an operator for Redshift")
-    raise ValueError(f"Unsupported engine name '{name}'")
+    except ImportError:
+        raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
+
+    raise ValueError(f"Unsupported engine name '{name}'.")
