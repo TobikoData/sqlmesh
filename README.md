@@ -1,15 +1,22 @@
-## What is SQLMesh?
+# SQLMesh
 
-SQLMesh is a next-generation SQL transformation platform. It provides you with powerful automation for versioning, backfilling, deployment, and testing &mdash; allowing you to focus on simply writing SQL.
+SQLMesh is a DataOps framework that brings the best practices of DevOps to data teams. It enables data scientists, analysts, and engineers to efficiently run and deploy data transformations written in SQL or Python.
 
-SQLMesh is able to achieve all of this with minimal setup; there are no additional services or dependencies required to get started using SQLMesh other than a connection to your existing data warehouse or engine.
+For more infromation, check out the [website](https://sqlmesh.com) and [documentation](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/).
 
-## Why use SQLMesh?
+## Geting Started
+Install SQLMesh through [pypi](https://pypi.org/project/sqlmesh/) by running:
 
-One of the main advantages over other transformation frameworks is that SQLMesh does not categorize incrementality as an "advanced" use case that should be avoided unless absolutely necessary. While other frameworks default to full refresh compute, the default for SQLMesh is to optimize for incremental compute, i.e. computing one day or hour at a time. 
+```pip install sqlmesh```
 
-This allows SQLMesh to be faster and more scalable than other frameworks, allowing you to take advantage of the cost and time savings of incrementality.
+Follow the [tutorial](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/quick_start/) to learn how to use SQLMesh.
 
-SQLMesh also automates away complexity, so configuring models is no longer difficult due to complex macros that require contextual understanding for execution. Writing your data pipelines incrementally with SQLMesh not only saves you money and time, but keeps your systems maintainable, reliable, and accessible to all of your data practictioners.
+## Join our community
+We'd love to join you on your data journey. Connect with us in the following ways:
 
-Read on for more about the [advantages of SQLMesh](./docs/why_sqlmesh.md)!
+* Join the [tobiko Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1je7o3xhd-C7~GuZTj0a8xz_uQbTJjHg) to ask questions, or just to say hi!
+* File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new).
+* Send us an email at [hello@tobikodata.com](hello@tobikodata.com) with your questions or feedback.
+
+## Contribution
+Contributions in the form of issues or pull requests are greatly appreciated. [Read more](development.md) about how to develop for SQLMesh.
