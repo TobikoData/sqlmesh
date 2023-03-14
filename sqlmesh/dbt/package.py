@@ -326,19 +326,17 @@ class PackageLoader:
     def _overridden_fields(self, scope: Scope, config: t.Dict[Scope, C]) -> t.Dict[str, t.Any]:
         return self._config_for_scope(scope, config).dict(exclude_defaults=True, exclude_none=True)
 
-    @classmethod
-    def _scope_from_path(cls, path: Path, root_path: Path) -> Scope:
+    def _scope_from_path(self, path: Path, root_path: Path) -> Scope:
         """
         DBT rolls-up configuration based o the directory structure. Scope mimics this structure,
         building a tuple containing the project name and directories from project root to the file,
         omitting the "models" directory and filename if a properties file.
         """
         path_from_root = path.relative_to(root_path)
-        scope = tuple(path_from_root.parts[:-1])
+        scope = (self._package_name, *path_from_root.parts[:-1])
         if path.match("*.sql") or path.match("*.csv"):
             scope = (*scope, path_from_root.stem)
         return scope
 
-    @classmethod
-    def _config_for_scope(cls, scope: Scope, configs: t.Dict[Scope, C]) -> C:
-        return configs.get(scope) or cls._config_for_scope(scope[0:-1], configs)
+    def _config_for_scope(self, scope: Scope, configs: t.Dict[Scope, C]) -> C:
+        return configs.get(scope) or self._config_for_scope(scope[0:-1], configs)

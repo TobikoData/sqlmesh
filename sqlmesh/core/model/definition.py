@@ -28,7 +28,7 @@ from sqlmesh.core.model.common import expression_validator, parse_model_name
 from sqlmesh.core.model.kind import SeedKind
 from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
-from sqlmesh.core.renderer import QueryRenderer
+from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -106,6 +106,7 @@ class _Model(ModelMeta, frozen=True):
 
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -510,23 +511,47 @@ class _Model(ModelMeta, frozen=True):
         latest = to_datetime(latest or c.EPOCH)
 
         macro_evaluator = MacroEvaluator()
+        context.engine_adapter.execute
 
-        for hook, hook_kwargs in hooks:
-            # Evaluate SQL expressions before passing them into a Python
-            # function as arguments.
-            evaluated_hook_kwargs = {
-                key: macro_evaluator.eval_expression(value)
-                if isinstance(value, exp.Expression)
-                else value
-                for key, value in hook_kwargs.items()
-            }
-            env[hook](
-                context=context,
-                start=start,
-                end=end,
-                latest=latest,
-                **{**kwargs, **evaluated_hook_kwargs},
-            )
+        for hook in hooks:
+            if isinstance(hook, exp.Expression):
+                rendered = self._expression_renderer(hook).render(
+                    start=start,
+                    end=end,
+                    latest=latest,
+                    logging=True,
+                    engine_adapter=context.engine_adapter,
+                    **kwargs,
+                )
+                if rendered:
+                    context.engine_adapter.execute(rendered)
+            else:
+                name, hook_kwargs = hook
+                # Evaluate SQL expressions before passing them into a Python
+                # function as arguments.
+                evaluated_hook_kwargs = {
+                    key: macro_evaluator.eval_expression(value)
+                    if isinstance(value, exp.Expression)
+                    else value
+                    for key, value in hook_kwargs.items()
+                }
+                env[name](
+                    context=context,
+                    start=start,
+                    end=end,
+                    latest=latest,
+                    **{**kwargs, **evaluated_hook_kwargs},
+                )
+
+    def _expression_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        return ExpressionRenderer(
+            expression,
+            self.dialect,
+            self.macro_definitions,
+            path=self._path,
+            jinja_macro_registry=self.jinja_macros,
+            python_env=self.python_env,
+        )
 
 
 class SqlModel(_Model):
@@ -537,7 +562,6 @@ class SqlModel(_Model):
     """
 
     query: t.Union[exp.Subqueryable, d.Jinja]
-    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -1158,15 +1182,18 @@ def _python_env(
 
     used_macros = {}
 
-    if isinstance(query, d.Jinja):
-        for var in query.expressions:
-            if var in macros:
-                used_macros[var] = macros[var]
-    else:
-        for macro_func in query.find_all(d.MacroFunc):
-            if macro_func.__class__ is d.MacroFunc:
-                name = macro_func.this.name.lower()
-                used_macros[name] = macros[name]
+    def _capture_expression_macros(expression: exp.Expression) -> None:
+        if isinstance(expression, d.Jinja):
+            for var in expression.expressions:
+                if var in macros:
+                    used_macros[var] = macros[var]
+        else:
+            for macro_func in expression.find_all(d.MacroFunc):
+                if macro_func.__class__ is d.MacroFunc:
+                    name = macro_func.this.name.lower()
+                    used_macros[name] = macros[name]
+
+    _capture_expression_macros(query)
 
     for name, macro in used_macros.items():
         if not macro.func.__module__.startswith("sqlmesh."):
@@ -1177,13 +1204,17 @@ def _python_env(
                 path=module_path,
             )
 
-    for hook, _ in hook_calls:
-        build_env(
-            hooks[hook].func,
-            env=python_env,
-            name=hook,
-            path=module_path,
-        )
+    for hook in hook_calls:
+        if isinstance(hook, exp.Expression):
+            _capture_expression_macros(hook)
+        else:
+            name = hook[0]
+            build_env(
+                hooks[name].func,
+                env=python_env,
+                name=name,
+                path=module_path,
+            )
 
     return serialize_env(python_env, path=module_path)
 

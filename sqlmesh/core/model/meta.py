@@ -7,6 +7,7 @@ from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse, parse_one
 
+import sqlmesh.core.dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -34,7 +35,7 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
-HookCall = t.Tuple[str, t.Dict[str, exp.Expression]]
+HookCall = t.Union[exp.Expression, t.Tuple[str, t.Dict[str, exp.Expression]]]
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
@@ -65,17 +66,19 @@ class ModelMeta(PydanticModel):
 
     @validator("pre", "post", "audits", pre=True)
     def _value_or_tuple_with_args_validator(cls, v: t.Any) -> t.Any:
-        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
+        def extract(v: exp.Expression) -> t.Union[exp.Expression, t.Tuple[str, t.Dict[str, str]]]:
             kwargs = {}
 
             if isinstance(v, exp.Anonymous):
                 func = v.name
                 args = v.expressions
-            elif isinstance(v, exp.Func):
+            elif not isinstance(v, d.Jinja) and isinstance(v, exp.Func):
                 func = v.sql_name()
                 args = list(v.args.values())
-            else:
+            elif isinstance(v, exp.Column):
                 return v.name.lower(), {}
+            else:
+                return v
 
             for arg in args:
                 if not isinstance(arg, exp.EQ):
@@ -91,17 +94,23 @@ class ModelMeta(PydanticModel):
             return [extract(v.this)]
         if isinstance(v, exp.Expression):
             return [extract(v)]
-        if isinstance(v, list):
-            return [
-                (
-                    entry[0].lower(),
-                    {
-                        key: parse_one(value) if isinstance(value, str) else value
-                        for key, value in entry[1].items()
-                    },
-                )
-                for entry in v
-            ]
+        if isinstance(v, list) and v:
+            if isinstance(v[0], exp.Expression):
+                return [extract(entry) for entry in v]
+            elif isinstance(v[0], str):
+                return [d.parse(entry)[0] for entry in v]
+            else:
+                return [
+                    (
+                        entry[0].lower(),
+                        {
+                            key: parse_one(value) if isinstance(value, str) else value
+                            for key, value in entry[1].items()
+                        },
+                    )
+                    for entry in v
+                ]
+
         return v
 
     @validator("partitioned_by_", pre=True)

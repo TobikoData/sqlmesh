@@ -249,9 +249,17 @@ class ModelConfig(GeneralConfig):
                 cursor += 1
         return self.sql
 
+    @property
+    def all_sql(self) -> str:
+        return ";\n".join(self.pre_hook + [self.sql] + self.post_hook)
+
+    # @property
+    # def all_sql_no_config(self) -> str:
+    #    return ";\n".join(self.pre_hook + self.post_hook + [self.sql_no_config])
+
     def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
         rendered = super().render_config(context)
-        rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.sql))
+        rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.all_sql))
         rendered = ModelSqlRenderer(context, rendered).enriched_config
 
         rendered_dependencies = rendered._dependencies
@@ -272,6 +280,9 @@ class ModelConfig(GeneralConfig):
         depends_on = {model_context.refs[ref] for ref in dependencies.refs}
         expressions = d.parse(self.sql_no_config)
 
+        pre_hooks = [exp for hook in self.pre_hook for exp in d.parse(hook)]
+        post_hooks = [exp for hook in self.post_hook for exp in d.parse(hook)]
+
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
 
@@ -289,6 +300,8 @@ class ModelConfig(GeneralConfig):
             kind=self.model_kind,
             dialect=model_context.dialect,
             statements=expressions[0:-1],
+            pre=pre_hooks,
+            post=post_hooks,
             columns=column_types_to_sqlmesh(self.columns) or None,
             column_descriptions_=column_descriptions_to_sqlmesh(self.columns) or None,
             jinja_macros=jinja_macros,
@@ -383,7 +396,7 @@ class ModelSqlRenderer:
             registry = self.context.jinja_macros
             self._rendered_sql = (
                 registry.build_environment(**self._jinja_globals)
-                .from_string(self.config.sql)
+                .from_string(self.config.all_sql)
                 .render()
             )
         return self._rendered_sql
