@@ -54,7 +54,7 @@ class DbtLoader(Loader):
         context = project.context.copy()
 
         for package_name, package in project.packages.items():
-            context.variables.update(package.variables)
+            context.add_variables(package.variables)
             context.add_models(package.models)
             context.add_seeds(package.seeds)
             context.add_sources(package.sources)
