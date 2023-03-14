@@ -19,4 +19,4 @@ We'd love to join you on your data journey. Connect with us in the following way
 * Send us an email at [hello@tobikodata.com](hello@tobikodata.com) with your questions or feedback.
 
 ## Contribution
-Contributions in the form of issues or pull requests are greatly appreciated. [Read more](development.md) about how to develop for SQLMesh.
+Contributions in the form of issues or pull requests are greatly appreciated. [Read more](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/development/) about how to develop for SQLMesh.
