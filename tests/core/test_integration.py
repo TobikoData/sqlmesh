@@ -377,7 +377,7 @@ def test_no_override(sushi_context: Context) -> None:
     plan = sushi_context.plan("prod")
     # Setting the private attribute directly to bypass validation.
     plan._start = start(sushi_context)
-    plan._missing_intervals = None
+    plan.__missing_intervals = None
 
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
@@ -449,7 +449,7 @@ def setup_rebase(
     plan = context.plan("prod")
     # Setting the private attribute directly to bypass validation.
     plan._start = start(context)
-    plan._missing_intervals = None
+    plan.__missing_intervals = None
 
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
@@ -632,7 +632,7 @@ def apply_to_environment(
     )
     # Setting the private attribute directly to bypass validation for the production evnironment.
     plan._start = start(context)
-    plan._missing_intervals = None
+    plan.__missing_intervals = None
 
     plan_choice(plan, choice)
     for validator in plan_validators:
