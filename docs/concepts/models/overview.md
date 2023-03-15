@@ -1,6 +1,13 @@
 # Overview
 
-Models are comprised of metadata and queries that create tables and views, which can be used by other models or even outside of SQLMesh. They are defined in the `models/` directory of your SQLMesh product, and live in `.sql` files. SQLMesh will automatically understand the relationships and lineage of your models by parsing SQL, so you don't have to worry about manually configuring dependencies.
+Models are comprised of metadata and queries that create tables and views, which can be used by other models or even outside of SQLMesh. They are stored in the `models/` directory of your SQLMesh project. 
+
+SQLMesh parses the models to automatically determine the relationships and dependencies between them, so you don't have to worry about manually specifying dependencies.
+
+## Model types
+
+SQLMesh has three types of models: seed, SQL, and Python:
+- 
 
 ## Example
 The following is an example of a model defined in SQL. The first statement of a `model.sql` file should be the `MODEL DDL`. The last statement should be a `SELECT` statement that defines the logic needed to create the table:
