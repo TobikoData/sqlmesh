@@ -78,6 +78,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
     now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
     now_ds_mock.return_value = expected_end
+    state_reader_mock.missing_intervals.return_value = {}
 
     plan = Plan(context_diff_mock, dag, state_reader_mock, forward_only=True, is_dev=True)
 

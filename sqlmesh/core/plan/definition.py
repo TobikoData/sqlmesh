@@ -130,14 +130,12 @@ class Plan:
     @property
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
+        self.missing_intervals  # ensure missing intervals exists
+
         return self._start or scheduler.earliest_start_date(
-            (
-                snapshot
-                for snapshot in self.snapshots
-                if snapshot.version_get_or_generate() in self._missing_intervals
-            )
-            if self._missing_intervals
-            else self.snapshots
+            snapshot
+            for snapshot in self.snapshots
+            if snapshot.version_get_or_generate() in (self._missing_intervals or {})
         )
 
     @start.setter
@@ -190,7 +188,7 @@ class Plan:
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
                     previous_snapshots + list(self.snapshots),
-                    start=self.start,
+                    start=self._start or scheduler.earliest_start_date(self.snapshots),
                     end=end,
                     latest=end,
                     restatements=self.restatements,
