@@ -11,7 +11,7 @@ import ruamel
 from sqlglot import Expression, exp, parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.snapshot import Snapshot, table_name
+from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.utils import unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -73,9 +73,14 @@ class ModelTest(unittest.TestCase):
 
         self.snapshot = snapshots[self.model_name]
 
+        inputs = self.body.get("inputs", {})
+        for snapshot_id in self.snapshot.parents:
+            if snapshot_id.name not in inputs:
+                self._raise_error(f"Incomplete test, missing input for table {snapshot_id.name}")
+
         self.query = self.snapshot.model.render_query(**self.body.get("vars", {}))
         # For tests we just use the model name for the table reference and we don't want to expand
-        mapping = {name: name for name in snapshots}
+        mapping = {name: _test_fixture_name(name) for name in snapshots}
         if mapping:
             self.query = exp.replace_tables(self.query, mapping)
 
@@ -95,29 +100,12 @@ class ModelTest(unittest.TestCase):
                 v = v.real if hasattr(v, "real") else v
                 columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)  # type: ignore
             self.engine_adapter.create_schema(table)
-            self.engine_adapter.create_view(table, df, columns_to_types)
-
-        for snapshot_id in self.snapshot.parents:
-            if snapshot_id.name not in inputs:
-                self._raise_error(f"Incomplete test, missing input for table {snapshot_id.name}")
-            self.view_names.append(
-                table_name(
-                    self.snapshot.physical_schema,
-                    snapshot_id.name,
-                    snapshot_id.identifier,
-                )
-            )
-            self.engine_adapter.create_view(
-                self.view_names[-1],
-                parse_one(f"SELECT * FROM {snapshot_id.name}"),  # type: ignore
-            )
+            self.engine_adapter.create_view(_test_fixture_name(table), df, columns_to_types)
 
     def tearDown(self) -> None:
         """Drop all input tables"""
         for table in self.body.get("inputs", {}):
             self.engine_adapter.drop_view(table)
-        for view in self.view_names:
-            self.engine_adapter.drop_view(view)
 
     def assert_equal(self, df1: pd.DataFrame, df2: pd.DataFrame) -> None:
         """Compare two DataFrames"""
@@ -349,3 +337,7 @@ def run_model_tests(
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
     return run_tests(loaded_tests, snapshots, engine_adapter, verbosity)
+
+
+def _test_fixture_name(name: str) -> str:
+    return f"{name}__fixture"
