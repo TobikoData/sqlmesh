@@ -18,6 +18,7 @@ from sqlmesh.core.model import (
     kind,
     parse_model_name,
 )
+from sqlmesh.core.model.meta import HookCall
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
@@ -708,6 +709,12 @@ def fingerprint_from_model(
 
 
 def _model_data_hash(model: Model, physical_schema: str) -> str:
+    def serialize_hooks(hooks: t.List[HookCall]) -> t.Iterable[str]:
+        return (
+            f"{name}:" + ",".join(f"{k}={v.sql(identify=True, comments=False)}" for k, v in sorted(args.items()))
+            for name, args in hooks
+        )
+
     data = [
         str(model.sorted_python_env),
         model.kind.name,
@@ -716,6 +723,8 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         physical_schema,
         *(model.partitioned_by or []),
         *(expression.sql(identify=True, comments=False) for expression in model.expressions or []),
+        *serialize_hooks(model.pre),
+        *serialize_hooks(model.post),
         model.stamp,
     ]
 
