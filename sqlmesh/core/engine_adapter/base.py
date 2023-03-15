@@ -567,7 +567,7 @@ class EngineAdapter:
     def update_table(
         self,
         table_name: TableName,
-        properties: t.Optional[t.Dict[str, t.Any]] = None,
+        properties: t.Dict[str, t.Any],
         where: t.Optional[str | exp.Condition] = None,
         contains_json: bool = False,
     ) -> None:
@@ -618,7 +618,7 @@ class EngineAdapter:
             matched=True,
             source=False,
             then=exp.update(
-                None,
+                exp.Table(this=""),
                 properties={
                     exp.column(col, TARGET_ALIAS): exp.column(col, SOURCE_ALIAS)
                     for col in column_names
