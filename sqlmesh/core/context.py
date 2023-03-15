@@ -277,8 +277,10 @@ class Context(BaseContext):
         if isinstance(model, str):
             model = self._models[model]
 
+        path = model._path  # type: ignore
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
         model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
+        model._path = path
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
