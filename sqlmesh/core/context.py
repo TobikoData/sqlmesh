@@ -71,7 +71,7 @@ from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
-from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
+from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError, SQLMeshError
 
 if t.TYPE_CHECKING:
     import graphviz
@@ -275,7 +275,10 @@ class Context(BaseContext):
             A new instance of the updated or inserted model.
         """
         if isinstance(model, str):
-            model = self._models[model]
+            try:
+                model = self._models[model]
+            except KeyError:
+                raise SQLMeshError(f"Model '{model}' not found.")
 
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
         model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))

@@ -11,7 +11,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -234,6 +234,10 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     sushi_context.diff("test")
     assert mock_console.show_model_difference_summary.called
 
+
+def test_upsert_unknown_model(sushi_context: Context):
+    with pytest.raises(SQLMeshError, match=r"Model 'bla' not found."):
+        sushi_context.upsert_model("bla")
 
 def test_evaluate_limit():
     context = Context(config=Config())
