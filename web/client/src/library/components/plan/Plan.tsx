@@ -8,7 +8,6 @@ import {
 } from '~/utils'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
-import { EnvironmentName } from '~/context/context'
 import { useApiPlanRun, useApiPlanApply, apiCancelPlanApplyAndRun } from '~/api'
 import {
   ApplyType,
@@ -22,6 +21,7 @@ import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
 import { useQueryClient } from '@tanstack/react-query'
+import { ModelEnvironment } from '~/models/environment'
 
 function Plan({
   environment,
@@ -31,7 +31,7 @@ function Plan({
   disabled,
   onClose,
 }: {
-  environment: EnvironmentName
+  environment: ModelEnvironment
   isInitialPlanRun: boolean
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
@@ -49,7 +49,6 @@ function Plan({
     skip_backfill,
     forward_only,
     auto_apply,
-    create_from,
     no_auto_categorization,
     restate_models,
     hasChanges,
@@ -65,26 +64,30 @@ function Plan({
 
   const [isPlanRan, seIsPlanRan] = useState(false)
 
-  const { refetch: planRun } = useApiPlanRun(environment, {
-    planDates: {
-      start,
-      end:
-        isInitialPlanRun && isStringEmptyOrNil(restate_models)
-          ? undefined
-          : end,
-    },
-    additionalOptions: {
-      no_gaps,
-      skip_backfill,
-      forward_only,
-      create_from,
-      no_auto_categorization,
-      skip_tests,
-      restate_models,
-    },
+  const { refetch: planRun } = useApiPlanRun(environment.name, {
+    planDates: environment.isInitial
+      ? undefined
+      : {
+          start,
+          end:
+            isInitialPlanRun && isStringEmptyOrNil(restate_models)
+              ? undefined
+              : end,
+        },
+    additionalOptions: environment.isInitial
+      ? undefined
+      : {
+          no_gaps,
+          skip_backfill,
+          forward_only,
+          create_from: environment.created_from,
+          no_auto_categorization,
+          skip_tests,
+          restate_models,
+        },
   })
 
-  const { refetch: planApply } = useApiPlanApply(environment, {
+  const { refetch: planApply } = useApiPlanApply(environment.name, {
     change_category:
       hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)
         ? change_category.value
@@ -100,7 +103,7 @@ function Plan({
       no_gaps,
       skip_backfill,
       forward_only,
-      create_from,
+      create_from: environment.created_from,
       no_auto_categorization,
       skip_tests,
       restate_models,
@@ -123,6 +126,12 @@ function Plan({
 
     return [start, end]
   }, [isInitialPlanRun, initialStartDate, initialEndDate])
+
+  useEffect(() => {
+    if (environment.isInitial && environment.isDefault) {
+      run()
+    }
+  }, [])
 
   useEffect(() => {
     dispatch([
@@ -152,6 +161,7 @@ function Plan({
 
   useEffect(() => {
     if (
+      (isFalse(isPlanRan) && environment.isInitial) ||
       includes(
         [
           EnumPlanState.Running,
@@ -222,7 +232,7 @@ function Plan({
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    void apiCancelPlanApplyAndRun(client, environment)
+    void apiCancelPlanApplyAndRun(client, environment.name)
       .catch(console.error)
       .finally(() => {
         setPlanAction(EnumPlanAction.Run)
@@ -280,15 +290,14 @@ function Plan({
 
   return (
     <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
-      <Plan.Header environment={environment} />
+      <Plan.Header />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <Plan.Wizard environment={environment} />
+        <Plan.Wizard />
       </div>
       <Divider />
       <Plan.Actions
         disabled={disabled}
-        environment={environment}
         planAction={planAction}
         apply={apply}
         run={run}

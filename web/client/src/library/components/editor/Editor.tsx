@@ -41,7 +41,7 @@ import Input from '../input/Input'
 import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
-import { EnvironmentName } from '~/context/context'
+import { ModelEnvironment } from '~/models/environment'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -60,7 +60,7 @@ export type EditorTabs = KeyOf<typeof EnumEditorTabs>
 export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
-  environment: EnvironmentName
+  environment: ModelEnvironment
 }
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
@@ -95,7 +95,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-  const { refetch: planRun } = useApiPlanRun(environment)
+  const { refetch: planRun } = useApiPlanRun(environment.name)
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {

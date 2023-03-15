@@ -5,6 +5,9 @@ import Input from '../input/Input'
 import InputToggle from '../input/InputToggle'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import Plan from './Plan'
+import { isFalse } from '~/utils'
+import { ModelEnvironment } from '~/models/environment'
+import { useStoreContext } from '~/context/context'
 
 interface PropsPlanWizardStepOptions
   extends React.HTMLAttributes<HTMLElement> {}
@@ -19,11 +22,18 @@ export default function PlanWizardStepOptions({
     skip_backfill,
     forward_only,
     auto_apply,
-    create_from,
     no_auto_categorization,
     restate_models,
     isInitialPlanRun,
+    create_from,
   } = usePlan()
+
+  const environment = useStoreContext(s => s.environment)
+  const environments = useStoreContext(s => s.environments)
+
+  const syncronizedEnvironments = ModelEnvironment.getOnlySyncronized(
+    Array.from(environments),
+  )
 
   return (
     <li className={clsx('mt-6 mb-2 mb-6', className)}>
@@ -54,23 +64,43 @@ export default function PlanWizardStepOptions({
                 <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
                   <div className="mt-3">
                     <div className="flex flex-wrap md:flex-nowrap">
+                      {isFalse(environment.isDefault) && (
+                        <div className="inline-block m-1 w-full">
+                          <Input.Label>Create From Environment</Input.Label>
+                          <select
+                            className={clsx(
+                              'w-full bg-secondary-100 rounded-lg py-3 px-3 text-base leading-6',
+                              syncronizedEnvironments.length < 2 &&
+                                'opacity-50 cursor-not-allowed',
+                            )}
+                            onChange={e => {
+                              dispatch({
+                                type: EnumPlanActions.AdditionalOptions,
+                                create_from: e.target.value,
+                              })
+                            }}
+                            disabled={syncronizedEnvironments.length < 2}
+                            value={create_from}
+                          >
+                            {ModelEnvironment.getOnlySyncronized(
+                              Array.from(environments),
+                            ).map(env => (
+                              <option
+                                key={env.name}
+                                value={env.name}
+                              >
+                                {env.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Input.Info>
+                            The environment to base the plan on rather than
+                            local files
+                          </Input.Info>
+                        </div>
+                      )}
                       <Input
-                        className="w-full md:w-[50%]"
-                        label="Create From"
-                        info="The environment to base the plan on rather than local files"
-                        placeholder="prod"
-                        value={create_from ?? ''}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          e.stopPropagation()
-
-                          dispatch({
-                            type: EnumPlanActions.AdditionalOptions,
-                            create_from: e.target.value,
-                          })
-                        }}
-                      />
-                      <Input
-                        className="w-full md:w-[50%]"
+                        className="w-full"
                         label="Restate Models"
                         info="Restate data for specified models and models
               downstream from the one specified. For production

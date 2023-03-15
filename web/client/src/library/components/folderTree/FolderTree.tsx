@@ -47,36 +47,49 @@ export default function FolderTree({
     >
       <ModalConfirmation
         show={showConfirmation}
-        headline={confirmation?.headline}
-        description={confirmation?.description}
         onClose={() => undefined}
       >
-        <Button
-          size="md"
-          variant="danger"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
+        <ModalConfirmation.Main>
+          {confirmation?.headline != null && (
+            <ModalConfirmation.Headline>
+              {confirmation?.headline}
+            </ModalConfirmation.Headline>
+          )}
+          {confirmation?.description != null && (
+            <ModalConfirmation.Description>
+              {confirmation?.description}
+            </ModalConfirmation.Description>
+          )}
+        </ModalConfirmation.Main>
+        <ModalConfirmation.Actions>
+          <Button
+            className="font-bold"
+            size="md"
+            variant="danger"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-            confirmation?.action?.()
+              confirmation?.action?.()
 
-            setShowConfirmation(false)
-          }}
-        >
-          {confirmation?.yesText ?? 'Confirm'}
-        </Button>
-        <Button
-          size="md"
-          variant="alternative"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
+              setShowConfirmation(false)
+            }}
+          >
+            {confirmation?.yesText ?? 'Confirm'}
+          </Button>
+          <Button
+            size="md"
+            variant="alternative"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-            confirmation?.cancel?.()
+              confirmation?.cancel?.()
 
-            setShowConfirmation(false)
-          }}
-        >
-          {confirmation?.noText ?? 'Cancel'}
-        </Button>
+              setShowConfirmation(false)
+            }}
+          >
+            {confirmation?.noText ?? 'Cancel'}
+          </Button>
+        </ModalConfirmation.Actions>
       </ModalConfirmation>
       <Directory
         directory={directory}

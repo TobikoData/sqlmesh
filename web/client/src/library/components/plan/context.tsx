@@ -110,6 +110,7 @@ const initial = {
   no_auto_categorization: false,
   from: undefined,
   restate_models: undefined,
+  create_from: undefined,
 
   change_category: defaultCategory,
   categories,

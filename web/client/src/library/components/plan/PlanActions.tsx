@@ -1,5 +1,5 @@
 import { MouseEvent } from 'react'
-import { EnvironmentName } from '~/context/context'
+import { useStoreContext } from '~/context/context'
 import { PlanAction, EnumPlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
@@ -10,7 +10,6 @@ import { getActionName } from './help'
 interface PropsPlanActions {
   planAction: PlanAction
   disabled: boolean
-  environment: EnvironmentName
   apply: () => void
   run: () => void
   cancel: () => void
@@ -21,7 +20,6 @@ interface PropsPlanActions {
 export default function PlanActions({
   planAction,
   disabled,
-  environment,
   run,
   apply,
   cancel,
@@ -39,9 +37,10 @@ export default function PlanActions({
     no_gaps,
     no_auto_categorization,
     forward_only,
-    create_from,
     restate_models,
   } = usePlan()
+
+  const environment = useStoreContext(s => s.environment)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
@@ -140,7 +139,9 @@ export default function PlanActions({
         {(isRun || isRunning || isApply || isApplying) && (
           <p className="ml-2 text-gray-600 text-xs max-w-sm">
             <span>Plan for</span>
-            <b className="text-secondary-500 font-bold mx-1">{environment}</b>
+            <b className="text-secondary-500 font-bold mx-1">
+              {environment.name}
+            </b>
             <span className="inline-block mr-1">environment</span>
             {
               <span className="inline-block mr-1">
@@ -157,11 +158,6 @@ export default function PlanActions({
                 till <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
               </span>
             }
-            {isFalse(isStringEmptyOrNil(create_from)) && (
-              <span className="inline-block mr-1">
-                based on <b>{create_from}</b> environment
-              </span>
-            )}
             {no_gaps && (
               <span className="inline-block mr-1">
                 with <b>No Gaps</b>
@@ -182,7 +178,7 @@ export default function PlanActions({
                 also set <b>Change Category</b> manually
               </span>
             )}
-            {isFalse(isStringEmptyOrNil(create_from)) && (
+            {isFalse(isStringEmptyOrNil(restate_models)) && (
               <span className="inline-block mr-1">
                 and restate folowing models <b>{restate_models}</b>
               </span>
@@ -191,7 +187,9 @@ export default function PlanActions({
         )}
       </div>
       <div className="flex items-center">
-        {isFalse(isProcessing) && isFalse(isRun) && isFalse(disabled) && (
+        {[isProcessing, isRun, disabled, environment.isInitial].every(
+          isFalse,
+        ) && (
           <Button
             onClick={handleReset}
             variant="alternative"

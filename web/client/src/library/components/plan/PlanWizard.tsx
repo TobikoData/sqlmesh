@@ -6,8 +6,8 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { Suspense, useCallback, useMemo } from 'react'
-import { ContextEnvironmentBackfill, ModelsDiffDirectItem } from '~/api/client'
-import { EnvironmentName } from '~/context/context'
+import { ContextEnvironmentBackfill } from '~/api/client'
+import { useStoreContext } from '~/context/context'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -21,7 +21,6 @@ import {
   isFalse,
   isObjectNotEmpty,
 } from '../../../utils'
-import { Divider } from '../divider/Divider'
 import Spinner from '../logo/Spinner'
 import TasksProgress from '../tasksProgress/TasksProgress'
 import {
@@ -29,18 +28,14 @@ import {
   EnumCategoryType,
   EnumPlanActions,
   EnumPlanChangeType,
-  PlanChangeType,
   usePlan,
   usePlanDispatch,
 } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
+import PlanChangePreview from './PlanChangePreview'
 
-export default function PlanWizard({
-  environment,
-}: {
-  environment: EnvironmentName
-}): JSX.Element {
+export default function PlanWizard(): JSX.Element {
   const dispatch = usePlanDispatch()
   const {
     backfills,
@@ -56,6 +51,8 @@ export default function PlanWizard({
     forward_only,
     skip_backfill,
   } = usePlan()
+
+  const environment = useStoreContext(s => s.environment)
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -169,65 +166,63 @@ export default function PlanWizard({
                 {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
                   <div className="flex">
                     {isArrayNotEmpty(added) && (
-                      <PlanWizardStepChanges
+                      <PlanChangePreview
                         className="w-full"
                         headline="Added Models"
-                        type="add"
+                        type={EnumPlanChangeType.Add}
                       >
-                        <PlanWizardStepChangesDefault
-                          type="add"
+                        <PlanChangePreview.Default
+                          type={EnumPlanChangeType.Add}
                           changes={added}
                         />
-                      </PlanWizardStepChanges>
+                      </PlanChangePreview>
                     )}
                     {isArrayNotEmpty(removed) && (
-                      <PlanWizardStepChanges
+                      <PlanChangePreview
                         className="w-full"
                         headline="Removed Models"
-                        type="remove"
+                        type={EnumPlanChangeType.Remove}
                       >
-                        <PlanWizardStepChangesDefault
-                          type="remove"
+                        <PlanChangePreview.Default
+                          type={EnumPlanChangeType.Remove}
                           changes={removed}
                         />
-                      </PlanWizardStepChanges>
+                      </PlanChangePreview>
                     )}
                   </div>
                 )}
                 {isModified(modified) && (
                   <div className="flex">
                     {isArrayNotEmpty(modified?.direct) && (
-                      <PlanWizardStepChanges
+                      <PlanChangePreview
                         className="w-full"
                         headline="Modified Directly"
-                        type="direct"
+                        type={EnumPlanChangeType.Direct}
                       >
-                        <PlanWizardStepChangesDirect
-                          changes={modified?.direct}
-                        />
-                      </PlanWizardStepChanges>
+                        <PlanChangePreview.Direct changes={modified?.direct} />
+                      </PlanChangePreview>
                     )}
                     {isArrayNotEmpty(modified?.indirect) && (
-                      <PlanWizardStepChanges
+                      <PlanChangePreview
                         headline="Modified Indirectly"
-                        type="indirect"
+                        type={EnumPlanChangeType.Indirect}
                       >
-                        <PlanWizardStepChangesDefault
-                          type="indirect"
+                        <PlanChangePreview.Default
+                          type={EnumPlanChangeType.Indirect}
                           changes={modified?.indirect}
                         />
-                      </PlanWizardStepChanges>
+                      </PlanChangePreview>
                     )}
                     {isArrayNotEmpty(modified?.metadata) && (
-                      <PlanWizardStepChanges
+                      <PlanChangePreview
                         headline="Modified Metadata"
-                        type="metadata"
+                        type={EnumPlanChangeType.Metadata}
                       >
-                        <PlanWizardStepChangesDefault
-                          type="metadata"
+                        <PlanChangePreview.Default
+                          type={EnumPlanChangeType.Metadata}
                           changes={modified?.metadata}
                         />
-                      </PlanWizardStepChanges>
+                      </PlanChangePreview>
                     )}
                   </div>
                 )}
@@ -424,139 +419,10 @@ interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
 }
 
-interface PropsPlanWizardStepChanges extends React.HTMLAttributes<HTMLElement> {
-  headline: string
-  type: PlanChangeType
-}
-
 interface PropsPlanWizardStepHeader
   extends React.ButtonHTMLAttributes<HTMLElement> {
   headline?: string
   disabled?: boolean
-}
-
-function PlanWizardStepChanges({
-  children,
-  headline,
-  type,
-  className,
-}: PropsPlanWizardStepChanges): JSX.Element {
-  return (
-    <div
-      className={clsx(
-        'flex flex-col rounded-md p-4 mx-2',
-        type === EnumPlanChangeType.Add && 'bg-success-100',
-        type === EnumPlanChangeType.Remove && 'bg-danger-100',
-        type === EnumPlanChangeType.Direct && 'bg-secondary-100',
-        type === EnumPlanChangeType.Indirect && 'bg-warning-100',
-        type === 'metadata' && 'bg-gray-100',
-        className,
-      )}
-    >
-      <h4
-        className={clsx(
-          `mb-2 font-bold`,
-          type === EnumPlanChangeType.Add && 'text-success-700',
-          type === EnumPlanChangeType.Remove && 'text-danger-700',
-          type === EnumPlanChangeType.Direct && 'text-secondary-500',
-          type === EnumPlanChangeType.Indirect && 'text-warning-700',
-          type === EnumPlanChangeType.Metadata && 'text-gray-900',
-        )}
-      >
-        {headline}
-      </h4>
-      <ul>{children}</ul>
-    </div>
-  )
-}
-
-function PlanWizardStepChangesDefault({
-  changes = [],
-  type,
-}: {
-  type: PlanChangeType
-  changes?: string[]
-}): JSX.Element {
-  return (
-    <>
-      {changes.map(change => (
-        <li
-          key={change}
-          className={clsx(
-            'px-1',
-            type === EnumPlanChangeType.Add && 'text-success-700',
-            type === EnumPlanChangeType.Remove && 'text-danger-700',
-            type === EnumPlanChangeType.Direct && 'text-secondary-500',
-            type === EnumPlanChangeType.Indirect && 'text-warning-700',
-            type === EnumPlanChangeType.Metadata && 'text-gray-900',
-          )}
-        >
-          <small>{change}</small>
-        </li>
-      ))}
-    </>
-  )
-}
-
-function PlanWizardStepChangesDirect({
-  changes = [],
-}: {
-  changes?: ModelsDiffDirectItem[]
-}): JSX.Element {
-  return (
-    <>
-      {changes.map(change => (
-        <li
-          key={change.model_name}
-          className="text-secondary-500"
-        >
-          <PlanWizardStepChangeDiff change={change} />
-        </li>
-      ))}
-    </>
-  )
-}
-
-function PlanWizardStepChangeDiff({
-  change,
-}: {
-  change: ModelsDiffDirectItem
-}): JSX.Element {
-  return (
-    <Disclosure>
-      {({ open }) => (
-        <>
-          <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-            <small className="inline-block text-sm">{change.model_name}</small>
-            <Divider className="mx-4" />
-            {(() => {
-              const Tag = open ? MinusCircleIcon : PlusCircleIcon
-
-              return (
-                <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-200" />
-              )
-            })()}
-          </Disclosure.Button>
-          <Disclosure.Panel className="text-sm text-secondary-100">
-            <pre className="my-4 bg-secondary-900 rounded-lg p-4">
-              {change.diff?.split('\n').map((line: string, idx: number) => (
-                <p
-                  key={`${line}-${idx}`}
-                  className={clsx(
-                    line.startsWith('+') && 'text-success-500',
-                    line.startsWith('-') && 'text-danger-500',
-                    line.startsWith('@@') && 'text-secondary-300 my-5',
-                  )}
-                >
-                  {line}
-                </p>
-              ))}
-            </pre>
-          </Disclosure.Panel>
-        </>
-      )}
-    </Disclosure>
-  )
 }
 
 function PlanWizardStepMessage({

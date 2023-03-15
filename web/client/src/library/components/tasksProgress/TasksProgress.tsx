@@ -1,14 +1,15 @@
 import clsx from 'clsx'
 import { useMemo } from 'react'
 import { ContextEnvironmentChanges } from '~/api/client'
-import { PlanState, PlanTasks } from '~/context/plan'
+import { EnumPlanState, PlanState, PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
+import { ModelEnvironment } from '~/models/environment'
 
 interface PropsTasks {
-  environment: string
+  environment: ModelEnvironment
   tasks: PlanTasks
   headline?: string
   updated_at?: string
@@ -73,13 +74,15 @@ export default function TasksProgress({
               {headline}
             </span>
             <small className="inline-block ml-1 px-2 py-[0.125rem] text-secondary-500 text-xs font-bold bg-secondary-100 rounded-md">
-              {environment}
+              {environment.name}
             </small>
-            <small className="ml-2">{planState}</small>
+            {planState !== EnumPlanState.Init && (
+              <small className="ml-2">{planState}</small>
+            )}
           </span>
           <small className="block whitespace-nowrap text-xs font-bold text-gray-900">
             <span>
-              {taskCompleted} of {taskTotal} task{taskTotal > 1 ? 's' : ''}
+              {taskCompleted} of {taskTotal} {pluralize('task', taskTotal)}
             </span>
             <span className="inline-block mx-2 text-gray-500">|</span>
             <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
