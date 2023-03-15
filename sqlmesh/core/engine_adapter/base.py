@@ -617,12 +617,13 @@ class EngineAdapter:
         when_matched = exp.When(
             matched=True,
             source=False,
-            then=exp.update(
-                exp.Table(this=""),
-                properties={
-                    exp.column(col, TARGET_ALIAS): exp.column(col, SOURCE_ALIAS)
+            then=exp.Update(
+                expressions=[
+                    exp.EQ(
+                        this=exp.column(col, TARGET_ALIAS), expression=exp.column(col, SOURCE_ALIAS)
+                    )
                     for col in column_names
-                },
+                ],
             ),
         )
         when_not_matched = exp.When(
