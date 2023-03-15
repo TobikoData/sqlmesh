@@ -1,4 +1,4 @@
-import { MouseEvent, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Controls,
   Background,

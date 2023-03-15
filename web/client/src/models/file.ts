@@ -1,6 +1,6 @@
 import type { File } from '../api/client'
-import { ModelDirectory } from './directory'
-import { InitialArtifact, ModelArtifact } from './artifact'
+import { type ModelDirectory } from './directory'
+import { type InitialArtifact, ModelArtifact } from './artifact'
 
 export interface InitialFile extends InitialArtifact, File {
   content: string

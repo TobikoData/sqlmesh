@@ -106,13 +106,12 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                       className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-warning-500"
                     ></span>
                   )}
-                {tabName === 'Terminal Output' &&
-                  tabTerminalContent != null && (
-                    <span
-                      title="Outdated Data. Does not match editor query!"
-                      className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
-                    ></span>
-                  )}
+                {tabName === 'Terminal Output' && tabTerminalContent != null && (
+                  <span
+                    title="Outdated Data. Does not match editor query!"
+                    className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
+                  ></span>
+                )}
                 {tabName}
               </Tab>
             ))}

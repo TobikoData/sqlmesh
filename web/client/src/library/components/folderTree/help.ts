@@ -1,4 +1,4 @@
-import { ModelDirectory, ModelFile } from '../../../models'
+import { type ModelDirectory, type ModelFile } from '../../../models'
 
 export function getAllFilesInDirectory(directory: ModelDirectory): ModelFile[] {
   const files = directory.files ?? []

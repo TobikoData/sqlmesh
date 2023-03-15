@@ -26,7 +26,7 @@ export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
   setFiles(files: ModelFile[]) {
     set(() => {
       const openedFilesIds = getOpenedFilesIds()?.ids ?? []
-      const openedFiles: Set<ModelFile> = new Set([initialFile])
+      const openedFiles = new Set<ModelFile>([initialFile])
 
       if (isArrayNotEmpty(openedFilesIds)) {
         files.forEach(file => {

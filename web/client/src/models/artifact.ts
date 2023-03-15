@@ -1,4 +1,4 @@
-import { ModelDirectory } from './directory'
+import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
 
 export interface InitialArtifact {
