@@ -1,6 +1,6 @@
 import { Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { isStringEmptyOrNil } from '~/utils'
+import { isArrayEmpty, isStringEmptyOrNil } from '~/utils'
 
 export const EnumDefaultEnvironment = {
   Empty: '',
@@ -22,7 +22,7 @@ interface InitialEnvironmemt extends Partial<Environment> {
 
 interface ProfileEnvironment {
   name: EnvironmentName
-  created_from: EnvironmentName
+  createFrom: EnvironmentName
 }
 
 interface Profile {
@@ -35,20 +35,20 @@ const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
 export class ModelEnvironment {
   private _initial: InitialEnvironmemt
   private _type: RelativeLocation
-  private _created_from: EnvironmentName
+  private _createFrom: EnvironmentName
 
   isModel = true
 
   constructor(
     initial: InitialEnvironmemt,
     type: RelativeLocation,
-    created_from: EnvironmentName = EnumDefaultEnvironment.Prod,
+    createFrom: EnvironmentName = EnumDefaultEnvironment.Prod,
   ) {
     this._initial = initial
     this._type = type ?? EnumRelativeLocation.Local
-    this._created_from = this.isDefault
+    this._createFrom = this.isDefault
       ? EnumDefaultEnvironment.Empty
-      : created_from
+      : createFrom
   }
 
   get name(): string {
@@ -59,8 +59,8 @@ export class ModelEnvironment {
     return this._type
   }
 
-  get created_from(): string {
-    return this._created_from
+  get createFrom(): string {
+    return this._createFrom
   }
 
   get isDefault(): boolean {
@@ -83,8 +83,8 @@ export class ModelEnvironment {
     this._type = type
   }
 
-  setCreatedFrom(created_from: EnvironmentName): void {
-    this._created_from = created_from
+  setCreatedFrom(createFrom: EnvironmentName): void {
+    this._createFrom = createFrom
   }
 
   update(initial: InitialEnvironmemt): void {
@@ -103,7 +103,7 @@ export class ModelEnvironment {
     if (environment != null) {
       output.environment = {
         name: environment.name,
-        created_from: environment.created_from,
+        createFrom: environment.createFrom,
       }
     }
 
@@ -111,7 +111,7 @@ export class ModelEnvironment {
       output.environments = ModelEnvironment.getOnlyLocal(environments).map(
         env => ({
           name: env.name,
-          created_from: env.created_from,
+          createFrom: env.createFrom,
         }),
       )
     }
@@ -148,10 +148,19 @@ export class ModelEnvironment {
         new ModelEnvironment(
           { name },
           EnumRelativeLocation.Local,
-          environment.created_from,
+          environment.createFrom,
         ),
       )
     })
+
+    if (isArrayEmpty(output)) {
+      output.push(
+        new ModelEnvironment(
+          { name: EnumDefaultEnvironment.Prod },
+          EnumRelativeLocation.Local,
+        ),
+      )
+    }
 
     return output
   }

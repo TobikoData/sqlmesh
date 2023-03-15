@@ -109,79 +109,84 @@ export default function TasksProgress({
         )}
       </div>
       <div className="my-4 px-4">
-        <ul className="p-4 bg-secondary-100 rounded-lg">
-          {models.map(([model_name, task]) => (
-            <li
-              key={model_name}
-              className="mb-2"
-            >
-              <small className="flex justify-between items-baseline text-xs">
-                <span className="flex whitespace-nowrap mr-6">
-                  {task.interval != null && (
-                    <span className="inline-block text-gray-500 mr-2">
-                      {task.interval[0]}&nbsp;&ndash;&nbsp;{task.interval[1]}
-                    </span>
-                  )}
-                  <span
-                    className={clsx(
-                      'font-bold',
-                      changesAdded.includes(model_name) && 'text-success-700',
-                      changesRemoved.includes(model_name) && 'text-danger-700',
-                      changesModifiedDirect.includes(model_name) &&
-                        'text-secondary-500',
-                      changesModifiedIndirect.includes(model_name) &&
-                        'text-warning-700',
-                      changesModifiedMetadata.includes(model_name) &&
-                        'text-gray-900',
+        <div className="bg-secondary-100 rounded-lg">
+          <ul className="p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+            {models.map(([model_name, task]) => (
+              <li
+                key={model_name}
+                className="mb-2"
+              >
+                <small className="flex sm:justify-between sm:items-baseline text-xs">
+                  <span className="flex mr-6 w-full sm:w-auto overflow-hidden">
+                    {task.interval != null && (
+                      <span className="inline-block text-gray-500 mr-2">
+                        {task.interval[0]}&nbsp;&ndash;&nbsp;{task.interval[1]}
+                      </span>
                     )}
-                  >
-                    {model_name}
-                  </span>
-                </span>
-                <span className="flex items-center">
-                  {showBatches && (
-                    <>
-                      <span className="block whitespace-nowrap text-gray-500">
-                        {task.completed} of {task.total}&nbsp;
-                        {pluralize('batch', task.total)}
-                      </span>
-                      <span className="inline-block mx-2 text-gray-500">|</span>
-                    </>
-                  )}
-                  {showProgress && (
-                    <>
-                      {task.end == null || task.start == null ? (
-                        <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
-                          {Math.ceil(toRatio(task.completed, task.total))}%
-                        </span>
-                      ) : (
-                        <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
-                          {`${Math.floor(
-                            (task.end - task.start) / 60000,
-                          )}:${String(
-                            Math.ceil(((task.end - task.start) / 1000) % 60),
-                          ).padStart(2, '0')}`}
-                        </span>
+                    <span
+                      className={clsx(
+                        'font-bold whitespace-nowrap',
+                        changesAdded.includes(model_name) && 'text-success-700',
+                        changesRemoved.includes(model_name) &&
+                          'text-danger-700',
+                        changesModifiedDirect.includes(model_name) &&
+                          'text-secondary-500',
+                        changesModifiedIndirect.includes(model_name) &&
+                          'text-warning-700',
+                        changesModifiedMetadata.includes(model_name) &&
+                          'text-gray-900',
                       )}
-                    </>
-                  )}
-                  {showLogicalUpdate && (
-                    <>
-                      <span className="inline-block whitespace-nowrap font-bold text-gray-500 ml-2">
-                        Updated
-                      </span>
-                    </>
-                  )}
-                </span>
-              </small>
-              {showProgress ? (
-                <Progress progress={toRatio(task.completed, task.total)} />
-              ) : (
-                <Divider className="my-1 border-gray-200 opacity-50" />
-              )}
-            </li>
-          ))}
-        </ul>
+                    >
+                      {model_name}
+                    </span>
+                  </span>
+                  <span className="flex items-center">
+                    {showBatches && (
+                      <>
+                        <span className="block whitespace-nowrap text-gray-500">
+                          {task.completed} of {task.total}&nbsp;
+                          {pluralize('batch', task.total)}
+                        </span>
+                        <span className="inline-block mx-2 text-gray-500">
+                          |
+                        </span>
+                      </>
+                    )}
+                    {showProgress && (
+                      <>
+                        {task.end == null || task.start == null ? (
+                          <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
+                            {Math.ceil(toRatio(task.completed, task.total))}%
+                          </span>
+                        ) : (
+                          <span className="inline-block whitespace-nowrap font-bold text-secondary-500">
+                            {`${Math.floor(
+                              (task.end - task.start) / 60000,
+                            )}:${String(
+                              Math.ceil(((task.end - task.start) / 1000) % 60),
+                            ).padStart(2, '0')}`}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {showLogicalUpdate && (
+                      <>
+                        <span className="inline-block whitespace-nowrap font-bold text-gray-500 ml-2">
+                          Updated
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </small>
+                {showProgress ? (
+                  <Progress progress={toRatio(task.completed, task.total)} />
+                ) : (
+                  <Divider className="my-1 border-gray-200 opacity-50" />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   )

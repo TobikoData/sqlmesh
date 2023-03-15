@@ -52,7 +52,6 @@ export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironme
     queryKey: ['/api/environments'],
     queryFn: getEnvironmentsApiEnvironmentsGet,
     cacheTime: 0,
-    enabled: false,
   })
 }
 
@@ -74,7 +73,7 @@ export function useApiPlanRun(
   return useQuery({
     queryKey: ['/api/plan', environment],
     queryFn: async () =>
-      runPlanApiPlanPost({
+      await runPlanApiPlanPost({
         environment,
         plan_dates: options?.planDates,
         additional_options: options?.additionalOptions,

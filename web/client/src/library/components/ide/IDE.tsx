@@ -38,18 +38,15 @@ export function IDE(): JSX.Element {
   const [subscribe] = useChannelEvents(updateTasks)
 
   const { data: project } = useApiFiles()
+  const { data: contextEnvironemnts } = useApiEnvironments()
 
   useEffect(() => {
-    void getEnvironments()
     const unsubscribe = subscribe('tasks')
 
     return () => {
       unsubscribe?.()
     }
   }, [])
-
-  const { refetch: getEnvironments, data: contextEnvironemnts } =
-    useApiEnvironments()
 
   useEffect(() => {
     if (

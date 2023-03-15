@@ -17,11 +17,12 @@ const client = new QueryClient({
 })
 
 ReactDOM.createRoot(getRootNode()).render(
-  // <React.StrictMode>
-  <QueryClientProvider client={client}>
-    <RouterProvider router={router} />
-  </QueryClientProvider>,
-  // </React.StrictMode>,
+  <React.StrictMode>
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+    ,
+  </React.StrictMode>,
 )
 
 function getRootNode(): HTMLElement {

@@ -54,6 +54,7 @@ function Plan({
     hasChanges,
     hasBackfills,
     change_category,
+    create_from,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
@@ -80,7 +81,7 @@ function Plan({
           no_gaps,
           skip_backfill,
           forward_only,
-          create_from: environment.created_from,
+          create_from,
           no_auto_categorization,
           skip_tests,
           restate_models,
@@ -103,7 +104,7 @@ function Plan({
       no_gaps,
       skip_backfill,
       forward_only,
-      create_from: environment.created_from,
+      create_from,
       no_auto_categorization,
       skip_tests,
       restate_models,
@@ -283,7 +284,7 @@ function Plan({
         if (auto_apply) {
           apply()
         } else {
-          setPlanAction(EnumPlanAction.Run)
+          // setPlanAction(EnumPlanAction.Run)
         }
       })
   }
