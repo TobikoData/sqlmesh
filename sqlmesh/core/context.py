@@ -66,7 +66,7 @@ from sqlmesh.core.snapshot import (
     to_table_mapping,
 )
 from sqlmesh.core.state_sync import StateReader, StateSync
-from sqlmesh.core.test import run_all_model_tests
+from sqlmesh.core.test import run_all_model_tests, run_model_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
@@ -256,11 +256,6 @@ class Context(BaseContext):
     def engine_adapter(self) -> EngineAdapter:
         """Returns an engine adapter."""
         return self._engine_adapter
-
-    @property
-    def test_engine_adapter(self) -> EngineAdapter:
-        """Returns an engine adapter for tests."""
-        return self._test_engine_adapter
 
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:
         """Update or insert a model.
@@ -739,20 +734,36 @@ class Context(BaseContext):
                 "Graphviz is pip-installed but the system install is missing. Instructions: https://graphviz.org/download/"
             ) from e
 
-    def run_tests(self, path: t.Optional[str] = None) -> t.Tuple[unittest.result.TestResult, str]:
+    def test(
+        self,
+        match_patterns: t.Optional[t.List[str]] = None,
+        tests: t.Optional[t.List[str]] = None,
+        verbose: bool = False,
+    ) -> unittest.result.TestResult:
         """Discover and run model tests"""
-        test_output = StringIO()
-        with contextlib.redirect_stderr(test_output):
-            try:
-                result = run_all_model_tests(
-                    path=Path(path) if path else self.test_directory_path,
-                    snapshots=self.snapshots,
+        verbosity = 2 if verbose else 1
+        try:
+            if tests:
+                result = run_model_tests(
+                    tests=tests,
+                    snapshots=self.local_snapshots,
                     engine_adapter=self._test_engine_adapter,
+                    verbosity=verbosity,
+                    patterns=match_patterns,
                     ignore_patterns=self.ignore_patterns,
                 )
-            finally:
-                self._test_engine_adapter.close()
-        return result, test_output.getvalue()
+            else:
+                result = run_all_model_tests(
+                    path=self.test_directory_path,
+                    snapshots=self.local_snapshots,
+                    engine_adapter=self._test_engine_adapter,
+                    verbosity=verbosity,
+                    patterns=match_patterns,
+                    ignore_patterns=self.ignore_patterns,
+                )
+        finally:
+            self._test_engine_adapter.close()
+        return result
 
     def audit(
         self,
@@ -810,7 +821,10 @@ class Context(BaseContext):
         self, skip_tests: bool = False
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         if self._test_engine_adapter and not skip_tests:
-            result, test_output = self.run_tests()
+            test_output_io = StringIO()
+            with contextlib.redirect_stderr(test_output_io):
+                result = self.test()
+            test_output = test_output_io.getvalue()
             self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
             if not result.wasSuccessful():
                 raise PlanError(
