@@ -326,7 +326,7 @@ def compute_interval_params(
 
 
 def start_date(
-    snapshot: Snapshot, snapshots: t.Dict[str, Snapshot] | t.Iterable[Snapshot]
+    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot] | t.Iterable[Snapshot]
 ) -> t.Optional[datetime]:
     """Get the effective/inferred start date for a snapshot.
 
@@ -344,12 +344,15 @@ def start_date(
         return to_datetime(snapshot.model.start)
 
     if not isinstance(snapshots, dict):
-        snapshots = {snapshot.name: snapshot for snapshot in snapshots}
+        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
     earliest = None
 
     for parent in snapshot.parents:
-        start_dt = start_date(snapshots[parent.name], snapshots)
+        if parent not in snapshots:
+            continue
+
+        start_dt = start_date(snapshots[parent], snapshots)
 
         if not earliest:
             earliest = start_dt
