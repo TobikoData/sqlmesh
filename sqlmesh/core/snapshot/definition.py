@@ -711,7 +711,10 @@ def fingerprint_from_model(
 def _model_data_hash(model: Model, physical_schema: str) -> str:
     def serialize_hooks(hooks: t.List[HookCall]) -> t.Iterable[str]:
         return (
-            f"{name}:" + ",".join(f"{k}={v.sql(identify=True, comments=False)}" for k, v in sorted(args.items()))
+            f"{name}:"
+            + ",".join(
+                f"{k}={v.sql(identify=True, comments=False)}" for k, v in sorted(args.items())
+            )
             for name, args in hooks
         )
 
