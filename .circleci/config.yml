@@ -44,7 +44,7 @@ workflows:
             web/client/.* client true
             (sqlmesh|tests|examples|web/server)/.* python true
             pytest.ini|setup.cfg|setup.py python true
-            \.circleci/.*|Makefile common true
+            \.circleci/.*|Makefile|\.pre-commit-config\.yaml common true
 
   release:
     jobs:
