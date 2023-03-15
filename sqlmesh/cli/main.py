@@ -10,7 +10,6 @@ from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.core.test import run_all_model_tests, run_model_tests
 from sqlmesh.utils.date import TimeLike
 
 
@@ -259,26 +258,7 @@ def dag(ctx: click.Context, file: str) -> None:
 def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> None:
     """Run model unit tests."""
     # Set Python unittest verbosity level
-    verbosity = 2 if verbose else 1
-    if tests:
-        result = run_model_tests(
-            tests=tests,
-            snapshots=obj.local_snapshots,
-            engine_adapter=obj.test_engine_adapter,
-            verbosity=verbosity,
-            patterns=k,
-            ignore_patterns=obj.ignore_patterns,
-        )
-    else:
-        result = run_all_model_tests(
-            path=obj.path,
-            snapshots=obj.local_snapshots,
-            engine_adapter=obj.test_engine_adapter,
-            verbosity=verbosity,
-            patterns=k,
-            ignore_patterns=obj.ignore_patterns,
-        )
-
+    result = obj.test(match_patterns=k, tests=tests, verbose=verbose)
     if not result.wasSuccessful():
         exit(1)
 
