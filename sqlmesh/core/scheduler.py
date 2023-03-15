@@ -354,10 +354,10 @@ def start_date(
 
         start_dt = start_date(snapshots[parent], snapshots)
 
-            if not earliest:
-                earliest = start_dt
-            elif start_dt:
-                earliest = min(earliest, start_dt)
+        if not earliest:
+            earliest = start_dt
+        elif start_dt:
+            earliest = min(earliest, start_dt)
 
     return earliest
 
