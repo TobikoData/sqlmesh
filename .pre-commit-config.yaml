@@ -36,6 +36,16 @@ repos:
         "types": [python]
         files: *files
         require_serial: true
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "cafd550"
+    hooks:
+      - id: prettier
+        name: prettier
+        files: ^(web/client)
+        entry: prettier --write
+        exclude: ^(web/client/node_modules)
+        require_serial: true
+        language: node
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: "5d73b35"
     hooks:
