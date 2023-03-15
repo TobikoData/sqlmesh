@@ -1,13 +1,13 @@
 # Overview
 
-This document provides a conceptual overview of what SQLMesh does and how its components fit together.
+This page provides a conceptual overview of what SQLMesh does and how its components fit together.
 
 ## What is data transformation?
 Data is essential for understanding what is happening with your business or application; it helps you make informed decisions. 
 
 However, data in its raw form (application logs, transactional database tables, etc.) is not particularly useful for making decisions. By joining various tables together or computing aggregations, it's easier to interpret, analyze, and take action based on data. 
 
-As data becomes integrated into your business operations, you are likely to add more raw data sources, create more joins and aggregations, and send results to more places (such as BI dashboards or executive reports). Code and configurations proliferate, and the overall system complexity can become overwhelming.
+As data becomes integrated into your business operations, you are likely to add more raw data sources, create more joins and aggregations, and send results to more places (such as BI dashboards or executive reports). Code and configurations proliferate, and the overall system complexity becomes overwhelming.
 
 This is where a data transformation platform comes in: to make it easy to create and organize complex data systems with many dependencies and relationships.
 
@@ -23,12 +23,12 @@ In the context of data transformation tools, a "model" is a unit of of code that
 If your data or organization is small, you may only have a small number of models to compute. In these scenarios, running SQL queries or Python scripts manually will get the job done. As your organization grows (more people or more data), however, a manual process quickly becomes unmaintainable.
 
 ### Orchestrator-based
-Organizations that have outgrown manual processes often use an orchestration framework such as [Airflow](https://airflow.apache.org/) or [Prefect](https://www.prefect.io/). Although these frameworks handle dependencies and scheduling, they are very generic. 
+Organizations that have outgrown manual processes often switch to an orchestrator-based process using tools such as [Airflow](https://airflow.apache.org/) or [Prefect](https://www.prefect.io/). Although these tools handle dependencies and scheduling, they are very generic. 
 
 You may need to develop custom tooling to make it easier to work with these frameworks. Additionally, less technical data professionals may have trouble working with them because they are complex and designed for engineers.
 
 ### Model-aware
-The final class of data transformation process integrates more elements of building data systems than just orchestration. It includes tools like SQLMesh, [dbt](https://www.getdbt.com/), and [coalesce](https://coalesce.io/). 
+Model-aware data transformation processes integrate more elements of building data systems than just orchestration. They are implemented with tools like SQLMesh, [dbt](https://www.getdbt.com/), and [coalesce](https://coalesce.io/). 
 
 These tools are "model-aware" because they can automatically determine the set of actions needed to accomplish a task based on the project's models and their dependency structure. 
 
@@ -49,22 +49,22 @@ You begin by writing your business logic in SQL or Python. A model consists of c
 ### Plan
 Creating new models or changing existing models can have dramatic effects downstream when working with large data transformation systems. 
 
-There are often complex interdependencies between models, which makes it challenging to determine the implications of changes to even a single model. However, it is critical to understand both what will change and what computations will will be required for the change before expending the time and resources to perform the computations.
+There are often complex interdependencies between models, which makes it challenging to determine the implications of changes to even a single model. However, it is critical to understand both what effects a change will have and what computations will be required to implement the change before expending the time and resources to perform the computations.
 
-SQLMesh automatically identifies all the computations a model change entails by creating a "SQLMesh plan." SQLMesh generates the plan *for a specified environment* (e.g., dev, test, prod) when the `plan` command is executed. 
+SQLMesh automatically identifies all affected models and the computations a model change entails by creating a "SQLMesh plan." When you execute the `plan` command, SQLMesh generates the plan *for the specified environment* (e.g., dev, test, prod). 
 
 The plan allows you to understand the full scope of a change's effects in the environment by automatically identifying both directly and indirectly-impacted models. This gives a holistic view of all impacts a change will have. Learn more about [plans](./plans.md).
 
 ### Apply
 After using `plan` to understand the impacts of a change in an environment, SQLMesh offers to execute the computations by `apply`ing the plan. However, you must provide additional information that determines the scope of what computations are executed. 
 
-The computations executed when a SQLMesh plan is applied are determined by both the plan's code changes and the backfill parameters you specify.
+The computations need to apply a SQLMesh plan are determined by both the code changes reflected in the plan and the backfill parameters you specify.
 
 "Backfilling" is the process of updating existing data to align with your changed models. For example, if your model change alters a calculation, then all existing data based on the old calculation method will be inaccurate once the new model is deployed. Backfilling entails re-calculating the existing fields whose calculation method has now changed.
 
 Most business data is temporal - each data fact was collected at a specific moment in time. The scale of backfill computations is directly tied to how much historical data is to be re-calculated.
 
-The SQLMesh plan automatically determines and displays which models and dates require backfill due to your changes. Based on this information, you specify the dates for which backfill will occur before you apply the plan.
+The SQLMesh plan automatically determines and displays which models and dates require backfill due to your changes. Based on this information, you specify the dates for which backfills will occur before you apply the plan.
 
 ### Deploy
 Development activities for complex data systems should occur in a non-production environment so errors can be detected before being deployed in production business systems.
