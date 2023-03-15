@@ -83,7 +83,7 @@ class Plan:
         self._apply = apply
         self._dag = dag
         self._state_reader = state_reader
-        self.__missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
+        self._missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
         self._restatements: t.Set[str] = set()
 
         if restate_models and context_diff.new_snapshots:
@@ -135,14 +135,14 @@ class Plan:
         return self._start or scheduler.earliest_start_date(
             snapshot
             for snapshot in self.snapshots
-            if snapshot.version_get_or_generate() in self._missing_intervals
+            if snapshot.version_get_or_generate() in (self._missing_intervals or {})
         )
 
     @start.setter
     def start(self, new_start: TimeLike) -> None:
         self._ensure_valid_date_range(new_start, self._end)
         self._start = new_start
-        self.__missing_intervals = None
+        self._missing_intervals = None
 
     @property
     def end(self) -> TimeLike:
@@ -153,7 +153,7 @@ class Plan:
     def end(self, new_end: TimeLike) -> None:
         self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
-        self.__missing_intervals = None
+        self._missing_intervals = None
 
     @property
     def is_start_and_end_allowed(self) -> bool:
@@ -167,18 +167,7 @@ class Plan:
     @property
     def missing_intervals(self) -> t.List[MissingIntervals]:
         """Returns a list of missing intervals."""
-        return [
-            MissingIntervals(
-                snapshot_name=snapshot.name,
-                intervals=self._missing_intervals[snapshot.version_get_or_generate()],
-            )
-            for snapshot in self.snapshots
-            if snapshot.version_get_or_generate() in self._missing_intervals
-        ]
-
-    @property
-    def _missing_intervals(self) -> t.Dict[str, Intervals]:
-        if self.__missing_intervals is None:
+        if self._missing_intervals is None:
             previous_ids = [
                 SnapshotId(
                     name=snapshot.name,
@@ -195,7 +184,7 @@ class Plan:
             )
 
             end = self.end
-            self.__missing_intervals = {
+            self._missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
                     previous_snapshots + list(self.snapshots),
@@ -205,7 +194,14 @@ class Plan:
                     restatements=self.restatements,
                 ).items()
             }
-        return self.__missing_intervals
+        return [
+            MissingIntervals(
+                snapshot_name=snapshot.name,
+                intervals=self._missing_intervals[snapshot.version_get_or_generate()],
+            )
+            for snapshot in self.snapshots
+            if snapshot.version_get_or_generate() in self._missing_intervals
+        ]
 
     @property
     def snapshots(self) -> t.List[Snapshot]:
