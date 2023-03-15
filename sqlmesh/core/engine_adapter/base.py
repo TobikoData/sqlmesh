@@ -567,7 +567,7 @@ class EngineAdapter:
     def update_table(
         self,
         table_name: TableName,
-        properties: t.Optional[t.Dict[str, t.Any]] = None,
+        properties: t.Dict[str, t.Any],
         where: t.Optional[str | exp.Condition] = None,
         contains_json: bool = False,
     ) -> None:
@@ -617,12 +617,13 @@ class EngineAdapter:
         when_matched = exp.When(
             matched=True,
             source=False,
-            then=exp.update(
-                None,
-                properties={
-                    exp.column(col, TARGET_ALIAS): exp.column(col, SOURCE_ALIAS)
+            then=exp.Update(
+                expressions=[
+                    exp.EQ(
+                        this=exp.column(col, TARGET_ALIAS), expression=exp.column(col, SOURCE_ALIAS)
+                    )
                     for col in column_names
-                },
+                ],
             ),
         )
         when_not_matched = exp.When(
