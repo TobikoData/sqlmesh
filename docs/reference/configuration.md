@@ -117,8 +117,138 @@ An optional dictionary of Spark session parameters.
 TBD
 
 ## redshift
+### user
+The username to use for authentication with the Amazon Redshift cluster.
 
-TBD
+**Type:** string
+
+**Default:** `None`
+
+### password
+The password to use for authentication with the Amazon Redshift cluster.
+
+**Type:** string
+
+**Default:** `None`
+
+### database
+The name of the database instance to connect to.
+
+**Type:** string
+
+**Default:** `None`
+
+### host
+The hostname of the Amazon Redshift cluster.
+
+**Type:** string
+
+**Default:** `None`
+
+### port
+The port number of the Amazon Redshift cluster.
+
+**Type:** int
+
+**Default:** `5439`
+
+### ssl
+Is SSL enabled. SSL must be enabled when authenticating using IAM.
+
+**Type:** bool
+
+**Default:** `True`
+
+### sslmode
+The security of the connection to the Amazon Redshift cluster. `verify-ca` and `verify-full` are supported.
+
+**Type:** string
+
+**Default:** `None`
+
+### timeout
+The number of seconds before the connection to the server will timeout.
+
+**Type:** int
+
+**Default:** `None`
+
+### tcp_keepalive
+Is [TCP keepalive](https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive) used.
+
+**Type:** bool
+
+**Default:** `True`
+
+### application_name
+The application name.
+
+**Type:** string
+
+**Default:** `None`
+
+### preferred_role
+The IAM role preferred for the current connection.
+
+**Type:** string
+
+**Default:** `None`
+
+### principal_arn
+The ARN of the IAM entity (user or role) for which you are generating a policy.
+
+**Type:** string
+
+**Default:** `None`
+
+### credentials_provider
+The class name of the IdP that will be used for authenticating with the Amazon Redshift cluster.
+
+**Type:** string
+
+**Default:** `None`
+
+### region
+The AWS region where the Amazon Redshift cluster is located.
+
+**Type:** string
+
+**Default:** `None`
+
+### cluster_identifier
+The cluster identifier of the Amazon Redshift cluster.
+
+**Type:** string
+
+**Default:** `None`
+
+### iam
+If IAM authentication is enabled. IAM must be True when authenticating using an IdP.
+
+**Type:** bool
+
+**Default:** `False`
+
+### is_serverless
+Whether Redshift endpoint is serverless or provisional.
+
+**Type:** bool
+
+**Default:** `False`
+
+### serverless_acct_id
+The account ID of the serverless.
+
+**Type:** string
+
+**Default:** `None`
+
+### serverless_work_group
+The name of work group for serverless end point.
+
+**Type:** string
+
+**Default:** `None`
 
 ## default_connection
 
