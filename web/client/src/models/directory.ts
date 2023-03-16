@@ -1,5 +1,5 @@
 import type { Directory, File } from '../api/client'
-import { InitialArtifact, ModelArtifact } from './artifact'
+import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
 
 interface InitialDirectory extends InitialArtifact, Directory {

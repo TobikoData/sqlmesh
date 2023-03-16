@@ -1,8 +1,8 @@
 import {
   EnumPlanAction,
   EnumPlanState,
-  PlanAction,
-  PlanState,
+  type PlanAction,
+  type PlanState,
 } from '../../../context/plan'
 import { isArrayNotEmpty } from '../../../utils'
 

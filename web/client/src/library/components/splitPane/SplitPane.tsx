@@ -1,4 +1,4 @@
-import Split, { SplitProps } from 'react-split'
+import Split, { type SplitProps } from 'react-split'
 import './SplitPane.css'
 
 export default function SplitPane({

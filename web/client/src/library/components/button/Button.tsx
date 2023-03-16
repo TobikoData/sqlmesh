@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { EnumSize } from '../../../types/enum'
 import { Menu } from '@headlessui/react'
-import { ForwardedRef, forwardRef } from 'react'
+import { type ForwardedRef, forwardRef } from 'react'
 
 export type ButtonVariant =
   | 'primary'

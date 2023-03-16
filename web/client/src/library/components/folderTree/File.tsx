@@ -1,4 +1,4 @@
-import { useState, MouseEvent } from 'react'
+import { useState, type MouseEvent } from 'react'
 import {
   DocumentIcon,
   XCircleIcon,
@@ -11,9 +11,9 @@ import {
   writeFileApiFilesPathPost,
 } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
-import { ModelFile } from '~/models'
+import { type ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
-import { WithConfirmation } from '../modal/ModalConfirmation'
+import { type WithConfirmation } from '../modal/ModalConfirmation'
 
 interface PropsFile extends WithConfirmation {
   file: ModelFile
