@@ -104,7 +104,6 @@ class Plan:
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
         self._ensure_no_forward_only_new_models()
-        self._ensure_no_forward_only_seed_models()
 
         categorized_snapshots = self._categorize_snapshots()
         self.added_and_directly_modified = categorized_snapshots[0]
@@ -386,8 +385,14 @@ class Plan:
             if model_name in self.context_diff.modified_snapshots:
                 if self.forward_only and self.is_new_snapshot(snapshot):
                     # In case of the forward only plan any modifications result in reuse of the
-                    # previous version.
-                    snapshot.set_version(snapshot.previous_version)
+                    # previous version for non-seed models.
+                    # New snapshots of seed models are considered non-breaking ones.
+                    if not snapshot.is_seed_kind:
+                        snapshot.set_version(snapshot.previous_version)
+                        snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+                    else:
+                        snapshot.set_version()
+                        snapshot.change_category = SnapshotChangeCategory.NON_BREAKING
 
                 if self.context_diff.directly_modified(model_name):
                     added_and_directly_modified.append(snapshot)
@@ -473,14 +478,6 @@ class Plan:
     def _ensure_no_forward_only_new_models(self) -> None:
         if self.forward_only and self.context_diff.added:
             raise PlanError("New models can't be added as part of the forward-only plan.")
-
-    def _ensure_no_forward_only_seed_models(self) -> None:
-        if self.forward_only:
-            for snapshot in self.new_snapshots:
-                if snapshot.is_seed_kind:
-                    raise PlanError(
-                        f"Seed model '{snapshot.name}' can't be updated as part of the forward-only plan."
-                    )
 
 
 class PlanStatus(str, Enum):

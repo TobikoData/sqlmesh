@@ -291,7 +291,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
 
 
-def test_forward_only_plan_seed_models_not_allowed(make_snapshot, mocker: MockerFixture):
+def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SeedModel(
             name="a",
@@ -302,18 +302,27 @@ def test_forward_only_plan_seed_models_not_allowed(make_snapshot, mocker: Mocker
     )
     snapshot_a.set_version()
 
+    snapshot_a_updated = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="new_content"),
+            depends_on=set(),
+        )
+    )
+    assert snapshot_a_updated.version is None
+    assert snapshot_a_updated.change_category is None
+
     dag = DAG[str]({"a": set()})
 
     context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.snapshots = {"a": snapshot_a_updated}
     context_diff_mock.added = {}
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+    context_diff_mock.modified_snapshots = {"a": (snapshot_a_updated, snapshot_a)}
+    context_diff_mock.new_snapshots = {snapshot_a_updated.snapshot_id: snapshot_a_updated}
 
     state_reader_mock = mocker.Mock()
 
-    with pytest.raises(
-        PlanError,
-        match="Seed model 'a' can't be updated as part of the forward-only plan.",
-    ):
-        Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+    Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+    assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
+    assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
