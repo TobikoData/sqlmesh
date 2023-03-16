@@ -65,7 +65,6 @@ from sqlmesh.core.snapshot import (
     categorize_change,
     to_table_mapping,
 )
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.test import run_all_model_tests, run_model_tests
 from sqlmesh.core.user import User
@@ -657,24 +656,19 @@ class Context(BaseContext):
 
         return plan
 
-    def apply(self, plan: Plan, change_category: t.Optional[SnapshotChangeCategory] = None) -> None:
+    def apply(self, plan: Plan) -> None:
         """Applies a plan by pushing snapshots and backfilling data.
 
         Given a plan, it pushes snapshots into the state sync and then uses the scheduler
         to backfill all models.
 
         Args:
-            plan: The plan to apply.
-            change_category: The change category to assign to all new snapshots in the plan.
+            plan: The plan to apply
         """
         if not plan.context_diff.has_changes and not plan.requires_backfill:
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-
-        for new, _ in plan.context_diff.modified_snapshots.values():
-            if plan.is_new_snapshot(new) and change_category is not None:
-                plan.set_choice(new, change_category)
 
         self.config.scheduler.create_plan_evaluator(self).evaluate(plan)
 
