@@ -11,8 +11,8 @@ import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, apiCancelPlanApplyAndRun } from '~/api'
 import {
   ApplyType,
-  ContextEnvironmentEnd,
-  ContextEnvironmentStart,
+  type ContextEnvironmentEnd,
+  type ContextEnvironmentStart,
 } from '~/api/client'
 import PlanWizard from './PlanWizard'
 import PlanHeader from './PlanHeader'
@@ -21,7 +21,7 @@ import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
 import { useQueryClient } from '@tanstack/react-query'
-import { ModelEnvironment } from '~/models/environment'
+import { type ModelEnvironment } from '~/models/environment'
 
 function Plan({
   environment,
@@ -53,7 +53,6 @@ function Plan({
     restate_models,
     hasChanges,
     hasBackfills,
-    change_category,
     create_from,
   } = usePlan()
 
@@ -65,7 +64,11 @@ function Plan({
 
   const [isPlanRan, seIsPlanRan] = useState(false)
 
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
+  const {
+    refetch: planRun,
+    isLoading,
+    isFetching,
+  } = useApiPlanRun(environment.name, {
     planDates: environment.isInitial
       ? undefined
       : {
@@ -89,10 +92,6 @@ function Plan({
   })
 
   const { refetch: planApply } = useApiPlanApply(environment.name, {
-    change_category:
-      hasChanges && isFalse(isInitialPlanRun) && isFalse(forward_only)
-        ? change_category.value
-        : undefined,
     planDates:
       hasBackfills && isFalse(isInitialPlanRun)
         ? {
@@ -129,7 +128,8 @@ function Plan({
   }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
   useEffect(() => {
-    if (environment.isInitial && environment.isDefault) {
+    console.log({ isLoading, isFetching })
+    if (environment.isInitial && environment.isDefault && isFalse(isLoading)) {
       run()
     }
   }, [])

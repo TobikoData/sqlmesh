@@ -1,30 +1,31 @@
 import {
   useQuery,
   useMutation,
-  QueryClient,
-  UseQueryResult,
-  UseMutationResult,
+  type QueryClient,
+  type UseQueryResult,
+  type UseMutationResult,
 } from '@tanstack/react-query'
 import {
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
   getApiContextApiContextGet,
-  ContextEnvironment,
-  DagApiCommandsDagGet200,
+  type ContextEnvironment,
+  type DagApiCommandsDagGet200,
   dagApiCommandsDagGet,
-  GetEnvironmentsApiEnvironmentsGet200,
+  type GetEnvironmentsApiEnvironmentsGet200,
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
-  BodyWriteFileApiFilesPathPost,
-  PlanDates,
-  AdditionalOptions,
+  type BodyWriteFileApiFilesPathPost,
+  type PlanDates,
+  type AdditionalOptions,
   runPlanApiPlanPost,
   applyApiCommandsApplyPost,
-  SnapshotChangeCategory,
-  Apply,
+  type Apply,
   cancelPlanApiPlanCancelPost,
+  type File,
+  type Directory,
+  type Context,
 } from './client'
-import type { File, Directory, Context } from './client'
 
 export function useApiFileByPath(path?: string): UseQueryResult<File> {
   const shouldEnable = path != null && path !== ''
@@ -86,7 +87,6 @@ export function useApiPlanRun(
 export function useApiPlanApply(
   environment: string,
   options?: {
-    change_category?: SnapshotChangeCategory
     planDates?: PlanDates
     additionalOptions?: AdditionalOptions
   },
@@ -96,7 +96,6 @@ export function useApiPlanApply(
     queryFn: async () =>
       await applyApiCommandsApplyPost({
         environment,
-        change_category: options?.change_category,
         plan_dates: options?.planDates,
         additional_options: options?.additionalOptions,
       }),

@@ -1,20 +1,22 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useState, useEffect, Fragment, MouseEvent, useMemo } from 'react'
+import { useState, useEffect, Fragment, type MouseEvent, useMemo } from 'react'
 import { useApiEnvironments, useApiPlanRun } from '~/api'
-import { ContextEnvironment } from '~/api/client'
+import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
-import { ModelEnvironment } from '~/models/environment'
+import { type ModelEnvironment } from '~/models/environment'
 import { EnumSize } from '~/types/enum'
 import { isArrayNotEmpty, includes, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
-import ModalConfirmation, { Confirmation } from '../modal/ModalConfirmation'
-import { EnumPlanChangeType, PlanChangeType } from '../plan/context'
+import ModalConfirmation, {
+  type Confirmation,
+} from '../modal/ModalConfirmation'
+import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 import PlanChangePreview from '../plan/PlanChangePreview'
 
 export default function RunPlan({
@@ -100,13 +102,13 @@ export default function RunPlan({
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
-      <div className="flex items-center relative rounded-lg bg-secondary-100 border-2 border-secondary-500">
+      <div className="flex items-center relative">
         <Button
           className={clsx(
-            'font-bold m-0 border-none py-[0.25rem]  border-r',
+            'font-bold mx-0 py-[0.25rem] bg-secondary-100 border-secondary-500',
             environment.isInitial && environment.isDefault
               ? 'rounded-lg'
-              : 'rounded-none rounded-l-lg',
+              : 'rounded-none rounded-l-lg border-r',
           )}
           disabled={
             isLoading ||
@@ -149,7 +151,7 @@ export default function RunPlan({
         </Button>
         {(isFalse(environment.isInitial) || isFalse(environment.isDefault)) && (
           <SelectEnvironemnt
-            className="border-0 rounded-none rounded-r-lg border-l-2 border-gray-200"
+            className="rounded-none rounded-r-lg border-l border-secondary-500 mx-0"
             environment={environment}
             disabled={
               isLoading ||
@@ -359,7 +361,7 @@ function SelectEnvironemnt({
             variant="primary"
             size={size}
             disabled={disabled}
-            className={clsx('flex m-0 text-gray-700', className)}
+            className={clsx(className)}
           >
             <span className="block overflow-hidden truncate ">
               {environment.name}

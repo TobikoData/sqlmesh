@@ -1,18 +1,18 @@
 import {
   createContext,
-  Dispatch,
-  ReactNode,
+  type Dispatch,
+  type ReactNode,
   useContext,
   useReducer,
 } from 'react'
 import {
-  ContextEnvironmentBackfill,
-  ContextEnvironmentChanges,
-  ContextEnvironmentEnd,
-  ContextEnvironmentStart,
+  type ContextEnvironmentBackfill,
+  type ContextEnvironmentChanges,
+  type ContextEnvironmentEnd,
+  type ContextEnvironmentStart,
   SnapshotChangeCategory,
 } from '~/api/client'
-import { PlanProgress } from '~/context/plan'
+import { type PlanProgress } from '~/context/plan'
 import { isArrayNotEmpty } from '~/utils'
 import { isModified } from './help'
 
@@ -81,7 +81,6 @@ interface PlanBackfills {
   hasBackfills: boolean
   backfills: ContextEnvironmentBackfill[]
   activeBackfill?: PlanProgress
-  change_category: Category
 }
 
 interface PlanDetails
@@ -112,8 +111,8 @@ const initial = {
   restate_models: undefined,
   create_from: undefined,
 
-  change_category: defaultCategory,
   categories,
+  defaultCategory,
 
   hasChanges: false,
   hasDirect: false,
@@ -183,7 +182,11 @@ function reducer(
 ): PlanDetails {
   switch (type) {
     case EnumPlanActions.ResetAdditionalOptions: {
-      return Object.assign<{}, PlanDetails, PlanAdditionalOptions>({}, plan, {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        PlanAdditionalOptions
+      >({}, plan, {
         skip_tests: false,
         no_gaps: false,
         skip_backfill: false,
@@ -195,51 +198,58 @@ function reducer(
       })
     }
     case EnumPlanActions.AdditionalOptions: {
-      return Object.assign<{}, PlanDetails, Partial<PlanAdditionalOptions>>(
-        {},
-        plan,
-        newState as Partial<PlanAdditionalOptions>,
-      )
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Partial<PlanAdditionalOptions>
+      >({}, plan, newState as Partial<PlanAdditionalOptions>)
     }
     case EnumPlanActions.ResetBackfills: {
-      return Object.assign<{}, PlanDetails, PlanBackfills>({}, plan, {
-        hasLogicalUpdate: false,
-        activeBackfill: undefined,
-        hasBackfills: false,
-        backfills: [],
-        change_category: defaultCategory,
-      })
-    }
-    case EnumPlanActions.ResetChanges: {
-      return Object.assign<{}, PlanDetails, PlanChanges>({}, plan, {
-        hasChanges: false,
-        hasDirect: false,
-        hasIndirect: false,
-        hasMetadata: false,
-        hasAdded: false,
-        hasRemoved: false,
-        added: [],
-        removed: [],
-        modified: {
-          direct: [],
-          indirect: [],
-          metadata: [],
-        },
-      })
-    }
-    case EnumPlanActions.Dates: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'start' | 'end'>>(
+      return Object.assign<Record<string, unknown>, PlanDetails, PlanBackfills>(
         {},
         plan,
         {
-          start: newState.start,
-          end: newState.end,
+          hasLogicalUpdate: false,
+          activeBackfill: undefined,
+          hasBackfills: false,
+          backfills: [],
         },
       )
     }
+    case EnumPlanActions.ResetChanges: {
+      return Object.assign<Record<string, unknown>, PlanDetails, PlanChanges>(
+        {},
+        plan,
+        {
+          hasChanges: false,
+          hasDirect: false,
+          hasIndirect: false,
+          hasMetadata: false,
+          hasAdded: false,
+          hasRemoved: false,
+          added: [],
+          removed: [],
+          modified: {
+            direct: [],
+            indirect: [],
+            metadata: [],
+          },
+        },
+      )
+    }
+    case EnumPlanActions.Dates: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'start' | 'end'>
+      >({}, plan, {
+        start: newState.start,
+        end: newState.end,
+      })
+    }
     case EnumPlanActions.External: {
       return Object.assign<
-        {},
+        Record<string, unknown>,
         PlanDetails,
         Pick<PlanDetails, 'isInitialPlanRun'>
       >({}, plan, {
@@ -247,35 +257,26 @@ function reducer(
       })
     }
     case EnumPlanActions.DateStart: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'start'>>(
-        {},
-        plan,
-        {
-          start: newState.start,
-        },
-      )
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'start'>
+      >({}, plan, {
+        start: newState.start,
+      })
     }
     case EnumPlanActions.DateEnd: {
-      return Object.assign<{}, PlanDetails, Pick<PlanDetails, 'end'>>(
-        {},
-        plan,
-        {
-          end: newState.end,
-        },
-      )
-    }
-    case EnumPlanActions.Category: {
       return Object.assign<
-        {},
+        Record<string, unknown>,
         PlanDetails,
-        Pick<PlanDetails, 'change_category'>
+        Pick<PlanDetails, 'end'>
       >({}, plan, {
-        change_category: newState.change_category ?? defaultCategory,
+        end: newState.end,
       })
     }
     case EnumPlanActions.BackfillProgress: {
       return Object.assign<
-        {},
+        Record<string, unknown>,
         PlanDetails,
         Pick<PlanDetails, 'activeBackfill'>
       >({}, plan, {
@@ -288,7 +289,7 @@ function reducer(
         []
 
       return Object.assign<
-        {},
+        Record<string, unknown>,
         PlanDetails,
         Pick<PlanDetails, 'backfills' | 'hasBackfills'>
       >({}, plan, {
@@ -304,17 +305,21 @@ function reducer(
         isArrayNotEmpty(removed),
       ].some(Boolean)
 
-      return Object.assign<{}, PlanDetails, PlanChanges>({}, plan, {
-        modified,
-        added,
-        removed,
-        hasChanges,
-        hasDirect: isArrayNotEmpty(modified?.direct),
-        hasIndirect: isArrayNotEmpty(modified?.indirect),
-        hasMetadata: isArrayNotEmpty(modified?.metadata),
-        hasAdded: isArrayNotEmpty(added),
-        hasRemoved: isArrayNotEmpty(removed),
-      })
+      return Object.assign<Record<string, unknown>, PlanDetails, PlanChanges>(
+        {},
+        plan,
+        {
+          modified,
+          added,
+          removed,
+          hasChanges,
+          hasDirect: isArrayNotEmpty(modified?.direct),
+          hasIndirect: isArrayNotEmpty(modified?.indirect),
+          hasMetadata: isArrayNotEmpty(modified?.metadata),
+          hasAdded: isArrayNotEmpty(added),
+          hasRemoved: isArrayNotEmpty(removed),
+        },
+      )
     }
     default: {
       return Object.assign({}, plan)

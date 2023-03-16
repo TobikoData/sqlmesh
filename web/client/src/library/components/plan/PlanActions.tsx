@@ -1,10 +1,10 @@
-import { MouseEvent } from 'react'
+import { type MouseEvent } from 'react'
 import { useStoreContext } from '~/context/context'
-import { PlanAction, EnumPlanAction } from '~/context/plan'
+import { type PlanAction, EnumPlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button } from '../button/Button'
-import { EnumCategoryType, usePlan } from './context'
+import { usePlan } from './context'
 import { getActionName } from './help'
 
 interface PropsPlanActions {
@@ -30,7 +30,6 @@ export default function PlanActions({
     start,
     end,
     hasBackfills,
-    change_category,
     skip_tests,
     auto_apply,
     skip_backfill,
@@ -82,10 +81,7 @@ export default function PlanActions({
     run()
   }
 
-  const shouldApplyWithBackfill =
-    hasBackfills &&
-    change_category?.id !== EnumCategoryType.NoChange &&
-    isFalse(skip_backfill)
+  const shouldApplyWithBackfill = hasBackfills && isFalse(skip_backfill)
 
   return (
     <div className="flex justify-between px-4 py-2">

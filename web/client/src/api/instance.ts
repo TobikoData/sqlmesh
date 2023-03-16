@@ -7,16 +7,7 @@ export interface ResponseWithDetail {
   detail?: string
 }
 
-export async function fetchAPI<T = any, B extends object = any>({
-  url,
-  method,
-  params,
-  data,
-  headers,
-  credentials,
-  mode,
-  cache,
-}: {
+export interface FetchOptions<B extends object = any> {
   url: string
   method: 'get' | 'post' | 'put' | 'delete' | 'patch'
   data?: B
@@ -32,7 +23,23 @@ export async function fetchAPI<T = any, B extends object = any>({
     | 'force-cache'
     | 'only-if-cached'
   params?: Record<string, string>
-}): Promise<T & ResponseWithDetail> {
+  signal?: AbortSignal
+}
+
+export async function fetchAPI<T = any, B extends object = any>(
+  options: FetchOptions<B>,
+): Promise<T & ResponseWithDetail> {
+  const {
+    url,
+    method,
+    params,
+    data,
+    headers,
+    credentials,
+    mode,
+    cache,
+    signal,
+  } = options
   const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
@@ -58,6 +65,7 @@ export async function fetchAPI<T = any, B extends object = any>({
       cache,
       headers: toRequestHeaders(headers),
       body: toRequestBody(data),
+      signal,
     })
       .then(async response => {
         const headerContentType = response.headers.get('Content-Type')
