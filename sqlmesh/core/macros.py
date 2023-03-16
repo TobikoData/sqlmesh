@@ -6,6 +6,7 @@ from functools import reduce
 from string import Template
 
 import sqlglot
+from jinja2 import Environment
 from sqlglot import Generator, exp
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
@@ -108,6 +109,7 @@ class MacroEvaluator:
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
         self.jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
+        self._jinja_env: t.Optional[Environment] = None
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -129,15 +131,11 @@ class MacroEvaluator:
             raise MacroEvalError(f"Error trying to eval macro.") from e
 
     def transform(self, query: exp.Expression) -> exp.Expression | t.List[exp.Expression] | None:
-        jinja_env_methods = {**self.locals, **self.env}
-        del jinja_env_methods["self"]
-        jinja_env = self.jinja_macro_registry.build_environment(**jinja_env_methods)
-
         def _transform_node(node: exp.Expression) -> exp.Expression:
             if isinstance(node, MacroVar):
                 return exp.convert(_norm_env_value(self.locals[node.name]))
             elif node.is_string and JINJA_PATTERN.search(node.this):
-                node.set("this", jinja_env.from_string(node.this).render())
+                node.set("this", self.jinja_env.from_string(node.this).render())
                 return node
             else:
                 return node
@@ -228,6 +226,14 @@ class MacroEvaluator:
             Expression: the syntax tree for the first parsed statement
         """
         return sqlglot.maybe_parse(sql, dialect=self.dialect, into=into, **opts)
+
+    @property
+    def jinja_env(self) -> Environment:
+        if not self._jinja_env:
+            jinja_env_methods = {**self.locals, **self.env}
+            del jinja_env_methods["self"]
+            self._jinja_env = self.jinja_macro_registry.build_environment(**jinja_env_methods)
+        return self._jinja_env
 
 
 class macro(registry_decorator):

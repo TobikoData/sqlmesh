@@ -130,10 +130,15 @@ class ModelMeta(PydanticModel):
             return (func.lower(), kwargs)
 
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [
-                extract(d.parse(i.this)[0]) if isinstance(i, exp.Literal) else extract(i)
-                for i in v.expressions
-            ]
+            items: t.List[t.Any] = []
+            for item in v.expressions:
+                if isinstance(item, exp.Literal):
+                    items.append(d.parse(item.this)[0])
+                elif isinstance(item, exp.Column) and isinstance(item.this, exp.Identifier):
+                    items.append(d.parse(item.this.this)[0])
+                else:
+                    items.append(extract(item))
+            return items
         if isinstance(v, exp.Paren):
             return [extract(v.this)]
         if isinstance(v, exp.Expression):
