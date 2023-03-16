@@ -192,6 +192,7 @@ class SnapshotEvaluator:
         target_snapshots: t.Iterable[SnapshotInfoLike],
         environment: str,
         is_dev: bool = False,
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
         view with a physical table associated with the given snapshot.
@@ -201,25 +202,32 @@ class SnapshotEvaluator:
             environment: The target environment.
             is_dev: Indicates whether the promotion happens in the development mode and temporary
                 tables / table clones should be used where applicable.
+            on_complete: a callback to call on each successfully promoted snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment, is_dev),
+                lambda s: self._promote_snapshot(s, environment, is_dev, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
-    def demote(self, target_snapshots: t.Iterable[SnapshotInfoLike], environment: str) -> None:
+    def demote(
+        self,
+        target_snapshots: t.Iterable[SnapshotInfoLike],
+        environment: str,
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
+    ) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
 
         Args:
             target_snapshots: Snapshots to demote.
             environment: The target environment.
+            on_complete: a callback to call on each successfully demoted snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._demote_snapshot(s, environment),
+                lambda s: self._demote_snapshot(s, environment, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
@@ -414,7 +422,13 @@ class SnapshotEvaluator:
         )
         self.adapter.alter_table(target_table_name, added_columns, dropped_columns)
 
-    def _promote_snapshot(self, snapshot: SnapshotInfoLike, environment: str, is_dev: bool) -> None:
+    def _promote_snapshot(
+        self,
+        snapshot: SnapshotInfoLike,
+        environment: str,
+        is_dev: bool,
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+    ) -> None:
         qualified_view_name = snapshot.qualified_view_name
         schema = qualified_view_name.schema_for_environment(environment=environment)
         if schema is not None:
@@ -429,10 +443,21 @@ class SnapshotEvaluator:
             logger.info("Dropping view '%s' for non-materialized table", view_name)
             self.adapter.drop_view(view_name)
 
-    def _demote_snapshot(self, snapshot: SnapshotInfoLike, environment: str) -> None:
+        if on_complete is not None:
+            on_complete(snapshot)
+
+    def _demote_snapshot(
+        self,
+        snapshot: SnapshotInfoLike,
+        environment: str,
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+    ) -> None:
         view_name = snapshot.qualified_view_name.for_environment(environment=environment)
         logger.info("Dropping view '%s'", view_name)
         self.adapter.drop_view(view_name)
+
+        if on_complete is not None:
+            on_complete(snapshot)
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         if snapshot.is_embedded_kind:
