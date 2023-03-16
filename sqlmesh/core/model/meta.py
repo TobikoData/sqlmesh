@@ -64,7 +64,48 @@ class ModelMeta(PydanticModel):
 
     _model_kind_validator = model_kind_validator
 
-    @validator("pre", "post", "audits", pre=True)
+    @validator("audits", pre=True)
+    def _audits_validator(cls, v: t.Any) -> t.Any:
+        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
+            kwargs = {}
+
+            if isinstance(v, exp.Anonymous):
+                func = v.name
+                args = v.expressions
+            elif isinstance(v, exp.Func):
+                func = v.sql_name()
+                args = list(v.args.values())
+            else:
+                return v.name.lower(), {}
+
+            for arg in args:
+                if not isinstance(arg, exp.EQ):
+                    raise ConfigError(
+                        f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
+                    )
+                kwargs[arg.left.name] = arg.right
+            return (func.lower(), kwargs)
+
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return [extract(i) for i in v.expressions]
+        if isinstance(v, exp.Paren):
+            return [extract(v.this)]
+        if isinstance(v, exp.Expression):
+            return [extract(v)]
+        if isinstance(v, list):
+            return [
+                (
+                    entry[0].lower(),
+                    {
+                        key: d.parse(value)[0] if isinstance(value, str) else value
+                        for key, value in entry[1].items()
+                    },
+                )
+                for entry in v
+            ]
+        return v
+
+    @validator("pre", "post", pre=True)
     def _value_or_tuple_with_args_validator(cls, v: t.Any) -> t.Any:
         def extract(v: exp.Expression) -> t.Union[exp.Expression, t.Tuple[str, t.Dict[str, str]]]:
             kwargs = {}

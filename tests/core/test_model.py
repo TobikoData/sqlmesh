@@ -299,6 +299,23 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     )
 
 
+def test_model_hooks():
+    return
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+            pre [x(), 'create table x{{ 1 + 1 }}'],
+        );
+
+        SELECT 1 AS x;
+    """
+    )
+    load_model(expressions)
+
+
 def test_seed():
     expressions = parse(
         """
@@ -787,8 +804,8 @@ def test_parse(assert_exp_eq):
         "id": exp.DataType.build("int"),
     }
     assert model.dialect == ""
-    assert isinstance(model.query, d.Jinja)
-    assert isinstance(SqlModel.parse_raw(model.json()).query, d.Jinja)
+    assert isinstance(model.query, exp.Select)
+    assert isinstance(SqlModel.parse_raw(model.json()).query, exp.Select)
     assert_exp_eq(
         model.render_query(),
         """

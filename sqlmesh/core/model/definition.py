@@ -511,7 +511,6 @@ class _Model(ModelMeta, frozen=True):
         latest = to_datetime(latest or c.EPOCH)
 
         macro_evaluator = MacroEvaluator()
-        context.engine_adapter.execute
 
         for hook in hooks:
             if isinstance(hook, exp.Expression):

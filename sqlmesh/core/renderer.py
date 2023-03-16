@@ -45,6 +45,7 @@ class ExpressionRenderer:
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
+        only_latest: bool = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -52,20 +53,32 @@ class ExpressionRenderer:
         self._path = path
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
+        self._only_latest = only_latest
 
     def render(
         self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental models. Defaults to epoch start.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The rendered expression.
         """
         expression = self._expression
+
+        render_kwargs = {
+            **date_dict(*self._dates(start, end, latest), only_latest=self._only_latest),
+            **kwargs,
+        }
 
         if isinstance(expression, d.Jinja):
             env = prepare_env(self._python_env)
@@ -74,7 +87,7 @@ class ExpressionRenderer:
 
             try:
                 rendered_expression = (
-                    self._jinja_macro_registry.build_environment(**{**kwargs, **env})
+                    self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
                     .from_string(expression.name)
                     .render()
                 )
@@ -88,8 +101,12 @@ class ExpressionRenderer:
             except Exception as ex:
                 raise ConfigError(f"Invalid expression. {ex} at '{self._path}'") from ex
 
-        macro_evaluator = MacroEvaluator(self._dialect, python_env=self._python_env)
-        macro_evaluator.locals.update(kwargs)
+        macro_evaluator = MacroEvaluator(
+            self._dialect,
+            python_env=self._python_env,
+            jinja_macro_registry=self._jinja_macro_registry,
+        )
+        macro_evaluator.locals.update(render_kwargs)
 
         for definition in self._macro_definitions:
             try:
@@ -103,6 +120,18 @@ class ExpressionRenderer:
             raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
         return expression
+
+    @classmethod
+    def _dates(
+        cls,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+    ) -> t.Tuple[datetime, datetime, datetime]:
+        return (
+            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
+            to_datetime(latest or c.EPOCH),
+        )
 
 
 class QueryRenderer(ExpressionRenderer):
@@ -125,11 +154,11 @@ class QueryRenderer(ExpressionRenderer):
             path=path,
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
+            only_latest=only_latest,
         )
 
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
-        self._only_latest = only_latest
 
         self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Subqueryable] = {}
         self._schema: t.Optional[MappingSchema] = None
@@ -167,10 +196,7 @@ class QueryRenderer(ExpressionRenderer):
         """
         from sqlmesh.core.snapshot import to_table_mapping
 
-        dates = (
-            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
-            to_datetime(latest or c.EPOCH),
-        )
+        dates = self._dates(start, end, latest)
         cache_key = dates
 
         snapshots = snapshots or {}
@@ -182,12 +208,7 @@ class QueryRenderer(ExpressionRenderer):
         query = self._expression
 
         if cache_key not in self._query_cache:
-            render_kwargs = {
-                **date_dict(*dates, only_latest=self._only_latest),
-                **kwargs,
-            }
-
-            query = super().render(**render_kwargs)  # type: ignore
+            query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
             if not query:
                 raise ConfigError(f"Failed to render query {query}")
 

@@ -381,7 +381,6 @@ def text_diff(
 DIALECT_PATTERN = re.compile(
     r"(model|audit).*?\(.*?dialect[^a-z,]+([a-z]*|,)", re.IGNORECASE | re.DOTALL
 )
-JINJA_PATTERN = re.compile(r"{{|{%|{#")
 
 
 def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression]:
@@ -409,14 +408,10 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
             if i < total - 1:
                 chunks.append(([], False))
         else:
-            if (
-                token.token_type == TokenType.BLOCK_START
-                or (
-                    i < total - 1
-                    and token.token_type == TokenType.L_BRACE
-                    and tokens[i + 1].token_type == TokenType.L_BRACE
-                )
-                or (token.token_type == TokenType.STRING and JINJA_PATTERN.search(token.text))
+            if token.token_type == TokenType.BLOCK_START or (
+                i < total - 1
+                and token.token_type == TokenType.L_BRACE
+                and tokens[i + 1].token_type == TokenType.L_BRACE
             ):
                 chunks[-1] = (chunks[-1][0], True)
             chunks[-1][0].append(token)
