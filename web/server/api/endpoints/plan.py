@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing as t
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -19,9 +21,9 @@ router = APIRouter()
 def run_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
-    environment: str = Body(),
-    plan_dates: models.PlanDates = Body(None),
-    additional_options: models.AdditionalOptions = Body(models.AdditionalOptions()),
+    environment: t.Optional[str] = Body(),
+    plan_dates: t.Optional[models.PlanDates] = None,
+    plan_options: models.PlanOptions = models.PlanOptions(),
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
@@ -37,13 +39,13 @@ def run_plan(
         no_prompts=True,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
-        create_from=additional_options.create_from,
-        skip_tests=additional_options.skip_tests,
-        restate_models=additional_options.restate_models,
-        no_gaps=additional_options.no_gaps,
-        skip_backfill=additional_options.skip_backfill,
-        forward_only=additional_options.forward_only,
-        no_auto_categorization=additional_options.no_auto_categorization,
+        create_from=plan_options.create_from,
+        skip_tests=plan_options.skip_tests,
+        restate_models=plan_options.restate_models,
+        no_gaps=plan_options.no_gaps,
+        skip_backfill=plan_options.skip_backfill,
+        forward_only=plan_options.forward_only,
+        no_auto_categorization=plan_options.no_auto_categorization,
     )
 
     payload = models.ContextEnvironment(

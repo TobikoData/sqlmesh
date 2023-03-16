@@ -21,14 +21,14 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post("/apply", response_model=models.Apply)
+@router.post("/apply", response_model=models.ApplyResponse)
 async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
-    environment: str = Body(),
-    plan_dates: models.PlanDates = Body(None),
-    additional_options: models.AdditionalOptions = Body(models.AdditionalOptions()),
-) -> models.Apply:
+    environment: t.Optional[str] = Body(),
+    plan_dates: t.Optional[models.PlanDates] = None,
+    plan_options: models.PlanOptions = models.PlanOptions(),
+) -> models.ApplyResponse:
     """Apply a plan"""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -41,24 +41,24 @@ async def apply(
         no_prompts=True,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
-        skip_tests=additional_options.skip_tests,
-        no_gaps=additional_options.no_gaps,
-        restate_models=additional_options.restate_models,
-        create_from=additional_options.create_from,
-        skip_backfill=additional_options.skip_backfill,
-        forward_only=additional_options.forward_only,
-        no_auto_categorization=additional_options.no_auto_categorization,
+        skip_tests=plan_options.skip_tests,
+        no_gaps=plan_options.no_gaps,
+        restate_models=plan_options.restate_models,
+        create_from=plan_options.create_from,
+        skip_backfill=plan_options.skip_backfill,
+        forward_only=plan_options.forward_only,
+        no_auto_categorization=plan_options.no_auto_categorization,
     )
 
     apply = functools.partial(context.apply, plan)
 
-    if plan.requires_backfill and not additional_options.skip_backfill:
+    if plan.requires_backfill and not plan_options.skip_backfill:
         task = asyncio.create_task(run_in_executor(apply))
         request.app.state.task = task
     else:
         apply()
 
-    return models.Apply(type="backfill" if plan.requires_backfill else "logical")
+    return models.ApplyResponse(type="backfill" if plan.requires_backfill else "logical")
 
 
 @router.post("/evaluate")

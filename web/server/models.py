@@ -156,7 +156,7 @@ class PlanDates(BaseModel):
     end: t.Optional[TimeLike] = None
 
 
-class AdditionalOptions(BaseModel):
+class PlanOptions(BaseModel):
     skip_tests: bool = False
     skip_backfill: bool = False
     no_gaps: bool = False
@@ -176,5 +176,5 @@ class Query(BaseModel):
     sql: str
 
 
-class Apply(BaseModel):
+class ApplyResponse(BaseModel):
     type: ApplyType
