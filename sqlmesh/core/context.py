@@ -663,13 +663,12 @@ class Context(BaseContext):
         to backfill all models.
 
         Args:
-            plan: The plan to apply
+            plan: The plan to apply.
         """
         if not plan.context_diff.has_changes and not plan.requires_backfill:
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-
         self.config.scheduler.create_plan_evaluator(self).evaluate(plan)
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
