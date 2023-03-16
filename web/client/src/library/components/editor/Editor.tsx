@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import clsx from 'clsx'
 import CodeMirror from '@uiw/react-codemirror'
 import { sql } from '@codemirror/lang-sql'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { Extension } from '@codemirror/state'
+import { type Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
@@ -38,10 +38,10 @@ import {
 import { debounce, getLanguageByExtension } from './help'
 import './Editor.css'
 import Input from '../input/Input'
-import { Table } from 'apache-arrow'
-import { ResponseWithDetail } from '~/api/instance'
+import { type Table } from 'apache-arrow'
+import { type ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
-import { ModelEnvironment } from '~/models/environment'
+import { type ModelEnvironment } from '~/models/environment'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',

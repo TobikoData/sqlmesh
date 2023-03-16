@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import {
-  ContextEnvironmentEnd,
-  ContextEnvironmentStart,
-  Environment,
+  type ContextEnvironmentEnd,
+  type ContextEnvironmentStart,
+  type Environment,
 } from '~/api/client'
 import {
   EnumRelativeLocation,
-  EnvironmentName,
+  type EnvironmentName,
   ModelEnvironment,
 } from '~/models/environment'
 import { isStringEmptyOrNil } from '~/utils'

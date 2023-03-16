@@ -1,4 +1,4 @@
-import { useState, FormEvent, MouseEvent, useEffect } from 'react'
+import { useState, type FormEvent, type MouseEvent, useEffect } from 'react'
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -19,7 +19,7 @@ import {
 import { useStoreFileTree } from '~/context/fileTree'
 import { ModelDirectory, ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
-import { WithConfirmation } from '../modal/ModalConfirmation'
+import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { toUniqueName, getAllFilesInDirectory } from './help'
 import File from './File'
 

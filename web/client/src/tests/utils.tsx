@@ -1,5 +1,5 @@
 /* eslint-disable import/export */
-import { cleanup, render, RenderResult } from '@testing-library/react'
+import { cleanup, render, type RenderResult } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
 afterEach(() => {

@@ -7,9 +7,9 @@ import {
   ArrowPathRoundedSquareIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { ModelsDiffDirectItem } from '~/api/client'
+import { type ModelsDiffDirectItem } from '~/api/client'
 import { Divider } from '../divider/Divider'
-import { EnumPlanChangeType, PlanChangeType } from './context'
+import { EnumPlanChangeType, type PlanChangeType } from './context'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
