@@ -1,4 +1,4 @@
-# Overview
+# Quick start
 In this quick start guide, you'll get up and running with SQLMesh's scaffold generator. This example project will run locally on your computer using [DuckDB](https://duckdb.org/) as an embedded SQL engine.
 
 Before beginning, ensure that you meet all the [prerequisites](prerequisites.md) for using SQLMesh.
