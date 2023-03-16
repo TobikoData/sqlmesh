@@ -506,8 +506,8 @@ class _Model(ModelMeta, frozen=True):
         **kwargs: t.Any,
     ) -> None:
         env = prepare_env(self.python_env)
-        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
-        latest = to_datetime(latest or c.EPOCH_DS)
+        start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
+        latest = to_datetime(latest or c.EPOCH)
 
         macro_evaluator = MacroEvaluator()
 
@@ -786,8 +786,8 @@ class PythonModel(_Model):
         **kwargs: t.Any,
     ) -> t.Generator[DF, None, None]:
         env = prepare_env(self.python_env)
-        start, end = make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS)
-        latest = to_datetime(latest or c.EPOCH_DS)
+        start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
+        latest = to_datetime(latest or c.EPOCH)
         try:
             df_or_iter = env[self.entrypoint](
                 context=context, start=start, end=end, latest=latest, **kwargs

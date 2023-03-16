@@ -185,9 +185,7 @@ class Audit(AuditMeta, frozen=True):
         query_renderer = self._create_query_renderer(model)
 
         this_model_subquery = exp.select("*").from_(exp.to_table(this_model))
-        query_renderer.filter_time_column(
-            this_model_subquery, start or c.EPOCH_DS, end or c.EPOCH_DS
-        )
+        query_renderer.filter_time_column(this_model_subquery, start or c.EPOCH, end or c.EPOCH)
 
         return query_renderer.render(
             start=start,

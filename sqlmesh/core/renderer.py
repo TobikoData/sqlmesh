@@ -96,8 +96,8 @@ class QueryRenderer:
         from sqlmesh.core.snapshot import to_table_mapping
 
         dates = (
-            *make_inclusive(start or c.EPOCH_DS, end or c.EPOCH_DS),
-            to_datetime(latest or c.EPOCH_DS),
+            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
+            to_datetime(latest or c.EPOCH),
         )
         cache_key = dates
 

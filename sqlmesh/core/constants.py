@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import datetime
+
 SQLMESH = "sqlmesh"
 
 PROD = "prod"
@@ -24,7 +28,7 @@ DATA_VERSION_LIMIT = 10
 DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
 
-EPOCH_DS = "1970-01-01"
+EPOCH = datetime.date(1970, 1, 1)
 
 DEFAULT_MAX_LIMIT = 1000
 """The default maximum row limit that is used when evaluating a model."""
