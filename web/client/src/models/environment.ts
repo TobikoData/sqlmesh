@@ -1,6 +1,6 @@
 import { Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { isArrayEmpty, isStringEmptyOrNil } from '~/utils'
+import { isArrayEmpty, isFalse, isStringEmptyOrNil } from '~/utils'
 
 export const EnumDefaultEnvironment = {
   Empty: '',
@@ -120,11 +120,15 @@ export class ModelEnvironment {
   }
 
   static getOnlyLocal(envs: ModelEnvironment[] = []): ModelEnvironment[] {
-    return envs.filter(env => env.isLocal)
+    return envs.filter(
+      env => isFalse(isStringEmptyOrNil(env.name)) && env.isLocal,
+    )
   }
 
   static getOnlySyncronized(envs: ModelEnvironment[] = []): ModelEnvironment[] {
-    return envs.filter(env => env.isSyncronized)
+    return envs.filter(
+      env => isFalse(isStringEmptyOrNil(env.name)) && env.isSyncronized,
+    )
   }
 
   static getDefaultEnvironments(): ModelEnvironment[] {

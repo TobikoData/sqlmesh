@@ -350,9 +350,7 @@ function SelectEnvironemnt({
 }): JSX.Element {
   const environments = useStoreContext(s => s.environments)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
-  const removeLocalEnvironments = useStoreContext(
-    s => s.removeLocalEnvironments,
-  )
+  const removeLocalEnvironment = useStoreContext(s => s.removeLocalEnvironment)
   return (
     <Menu>
       {({ close }) => (
@@ -446,7 +444,7 @@ function SelectEnvironemnt({
                             onClick={(e: MouseEvent) => {
                               e.stopPropagation()
 
-                              removeLocalEnvironments(env)
+                              removeLocalEnvironment(env)
                             }}
                           >
                             -
@@ -488,7 +486,7 @@ function AddEnvironemnt({
 }): JSX.Element {
   const getNextEnvironment = useStoreContext(s => s.getNextEnvironment)
   const isExistingEnvironment = useStoreContext(s => s.isExistingEnvironment)
-  const addLocalEnvironments = useStoreContext(s => s.addLocalEnvironments)
+  const addLocalEnvironment = useStoreContext(s => s.addLocalEnvironment)
 
   const [customEnvironment, setCustomEnvironment] = useState<string>('')
   const [createdFrom, setCreatedFrom] = useState<string>(
@@ -518,7 +516,7 @@ function AddEnvironemnt({
         onClick={(e: MouseEvent) => {
           e.stopPropagation()
 
-          addLocalEnvironments(customEnvironment, createdFrom)
+          addLocalEnvironment(customEnvironment, createdFrom)
 
           setCustomEnvironment('')
           setCreatedFrom(getNextEnvironment().name)

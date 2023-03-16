@@ -1,30 +1,30 @@
 import {
-  useQuery,
-  useMutation,
   type QueryClient,
   type UseQueryResult,
   type UseMutationResult,
+  useQuery,
+  useMutation,
 } from '@tanstack/react-query'
 import {
-  getFileApiFilesPathGet,
-  getFilesApiFilesGet,
-  getApiContextApiContextGet,
   type ContextEnvironment,
   type DagApiCommandsDagGet200,
-  dagApiCommandsDagGet,
   type GetEnvironmentsApiEnvironmentsGet200,
-  getEnvironmentsApiEnvironmentsGet,
-  writeFileApiFilesPathPost,
   type BodyWriteFileApiFilesPathPost,
   type PlanDates,
-  type AdditionalOptions,
-  runPlanApiPlanPost,
-  applyApiCommandsApplyPost,
-  type Apply,
-  cancelPlanApiPlanCancelPost,
   type File,
   type Directory,
   type Context,
+  type ApplyResponse,
+  type PlanOptions,
+  getFileApiFilesPathGet,
+  getFilesApiFilesGet,
+  getApiContextApiContextGet,
+  dagApiCommandsDagGet,
+  getEnvironmentsApiEnvironmentsGet,
+  writeFileApiFilesPathPost,
+  runPlanApiPlanPost,
+  applyApiCommandsApplyPost,
+  cancelPlanApiPlanCancelPost,
 } from './client'
 
 export function useApiFileByPath(path?: string): UseQueryResult<File> {
@@ -68,7 +68,7 @@ export function useApiPlanRun(
   environment: string,
   options?: {
     planDates?: PlanDates
-    additionalOptions?: AdditionalOptions
+    planOptions?: PlanOptions
   },
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
@@ -77,7 +77,7 @@ export function useApiPlanRun(
       await runPlanApiPlanPost({
         environment,
         plan_dates: options?.planDates,
-        additional_options: options?.additionalOptions,
+        plan_options: options?.planOptions,
       }),
     enabled: false,
     cacheTime: 0,
@@ -88,16 +88,16 @@ export function useApiPlanApply(
   environment: string,
   options?: {
     planDates?: PlanDates
-    additionalOptions?: AdditionalOptions
+    planOptions?: PlanOptions
   },
-): UseQueryResult<Apply> {
+): UseQueryResult<ApplyResponse> {
   return useQuery({
     queryKey: ['/api/commands/apply', environment],
     queryFn: async () =>
       await applyApiCommandsApplyPost({
         environment,
         plan_dates: options?.planDates,
-        additional_options: options?.additionalOptions,
+        plan_options: options?.planOptions,
       }),
     enabled: false,
     cacheTime: 0,

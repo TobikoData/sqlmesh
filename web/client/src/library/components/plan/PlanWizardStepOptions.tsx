@@ -75,7 +75,7 @@ export default function PlanWizardStepOptions({
                             )}
                             onChange={e => {
                               dispatch({
-                                type: EnumPlanActions.AdditionalOptions,
+                                type: EnumPlanActions.PlanOptions,
                                 create_from: e.target.value,
                               })
                             }}
@@ -116,7 +116,7 @@ export default function PlanWizardStepOptions({
                           e.stopPropagation()
 
                           dispatch({
-                            type: EnumPlanActions.AdditionalOptions,
+                            type: EnumPlanActions.PlanOptions,
                             restate_models: e.target.value,
                           })
                         }}
@@ -133,7 +133,7 @@ export default function PlanWizardStepOptions({
                           enabled={Boolean(skip_tests)}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               skip_tests: value,
                             })
                           }}
@@ -149,7 +149,7 @@ export default function PlanWizardStepOptions({
                           disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               no_gaps: value,
                             })
                           }}
@@ -163,7 +163,7 @@ export default function PlanWizardStepOptions({
                           disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               skip_backfill: value,
                             })
                           }}
@@ -179,7 +179,7 @@ export default function PlanWizardStepOptions({
                           disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               forward_only: value,
                             })
                           }}
@@ -192,7 +192,7 @@ export default function PlanWizardStepOptions({
                           enabled={Boolean(auto_apply)}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               auto_apply: value,
                             })
                           }}
@@ -206,7 +206,7 @@ export default function PlanWizardStepOptions({
                           disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
-                              type: EnumPlanActions.AdditionalOptions,
+                              type: EnumPlanActions.PlanOptions,
                               no_auto_categorization: value,
                             })
                           }}

@@ -119,7 +119,7 @@ export default function TasksProgress({
                 <small className="flex sm:justify-between sm:items-baseline text-xs">
                   <span className="flex mr-6 w-full sm:w-auto overflow-hidden">
                     {task.interval != null && (
-                      <span className="inline-block text-gray-500 mr-2">
+                      <span className="inline-block text-gray-500 mr-2 whitespace-nowrap">
                         {task.interval[0]}&nbsp;&ndash;&nbsp;{task.interval[1]}
                       </span>
                     )}

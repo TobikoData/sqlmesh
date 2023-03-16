@@ -17,7 +17,7 @@ import { isArrayNotEmpty } from '~/utils'
 import { isModified } from './help'
 
 export const EnumPlanActions = {
-  ResetAdditionalOptions: 'reset-additional-options',
+  ResetPlanOptions: 'reset-plan-options',
   ResetBackfills: 'reset-backfills',
   ResetChanges: 'reset-changes',
   Dates: 'dates',
@@ -27,7 +27,7 @@ export const EnumPlanActions = {
   Backfills: 'backfills',
   BackfillProgress: 'backfill-progress',
   Changes: 'changes',
-  AdditionalOptions: 'additional-options',
+  PlanOptions: 'plan-options',
   External: 'external',
 } as const
 
@@ -56,7 +56,7 @@ export interface Category {
   value: SnapshotChangeCategory
 }
 
-interface PlanAdditionalOptions {
+interface PlanOptions {
   skip_tests: boolean
   no_gaps: boolean
   skip_backfill: boolean
@@ -83,10 +83,7 @@ interface PlanBackfills {
   activeBackfill?: PlanProgress
 }
 
-interface PlanDetails
-  extends PlanAdditionalOptions,
-    PlanChanges,
-    PlanBackfills {
+interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   start?: ContextEnvironmentStart
   end?: ContextEnvironmentEnd
   categories: Category[]
@@ -181,28 +178,28 @@ function reducer(
   { type, ...newState }: PlanAction,
 ): PlanDetails {
   switch (type) {
-    case EnumPlanActions.ResetAdditionalOptions: {
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        PlanAdditionalOptions
-      >({}, plan, {
-        skip_tests: false,
-        no_gaps: false,
-        skip_backfill: false,
-        forward_only: false,
-        auto_apply: false,
-        no_auto_categorization: false,
-        create_from: undefined,
-        restate_models: undefined,
-      })
+    case EnumPlanActions.ResetPlanOptions: {
+      return Object.assign<Record<string, unknown>, PlanDetails, PlanOptions>(
+        {},
+        plan,
+        {
+          skip_tests: false,
+          no_gaps: false,
+          skip_backfill: false,
+          forward_only: false,
+          auto_apply: false,
+          no_auto_categorization: false,
+          create_from: undefined,
+          restate_models: undefined,
+        },
+      )
     }
-    case EnumPlanActions.AdditionalOptions: {
+    case EnumPlanActions.PlanOptions: {
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
-        Partial<PlanAdditionalOptions>
-      >({}, plan, newState as Partial<PlanAdditionalOptions>)
+        Partial<PlanOptions>
+      >({}, plan, newState as Partial<PlanOptions>)
     }
     case EnumPlanActions.ResetBackfills: {
       return Object.assign<Record<string, unknown>, PlanDetails, PlanBackfills>(

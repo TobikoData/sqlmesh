@@ -78,7 +78,7 @@ function Plan({
               ? undefined
               : end,
         },
-    additionalOptions: environment.isInitial
+    planOptions: environment.isInitial
       ? undefined
       : {
           no_gaps,
@@ -99,7 +99,7 @@ function Plan({
             end,
           }
         : undefined,
-    additionalOptions: {
+    planOptions: {
       no_gaps,
       skip_backfill,
       forward_only,
@@ -150,7 +150,7 @@ function Plan({
     if (isInitialPlanRun) {
       dispatch([
         {
-          type: EnumPlanActions.AdditionalOptions,
+          type: EnumPlanActions.PlanOptions,
           skip_backfill: false,
           forward_only: false,
           no_auto_categorization: false,
@@ -211,7 +211,7 @@ function Plan({
         end: endDate,
       },
       {
-        type: EnumPlanActions.ResetAdditionalOptions,
+        type: EnumPlanActions.ResetPlanOptions,
       },
     ])
   }

@@ -21,11 +21,11 @@ interface ContextStore {
   ) => boolean
   getNextEnvironment: () => ModelEnvironment
   setEnvironment: (environment: ModelEnvironment) => void
-  addLocalEnvironments: (
+  addLocalEnvironment: (
     environments: EnvironmentName,
     created_from: EnvironmentName,
   ) => void
-  removeLocalEnvironments: (environments: ModelEnvironment) => void
+  removeLocalEnvironment: (environments: ModelEnvironment) => void
   addSyncronizedEnvironments: (environments: Environment[]) => void
   setInitialDates: (
     initialStartDate?: ContextEnvironmentStart,
@@ -82,16 +82,16 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironments(
-    localEnvironments: EnvironmentName,
+  addLocalEnvironment(
+    localEnvironment: EnvironmentName,
     created_from?: EnvironmentName,
   ): void {
     set(s => {
-      if (isStringEmptyOrNil(localEnvironments)) return s
+      if (isStringEmptyOrNil(localEnvironment)) return s
 
       const environment = new ModelEnvironment(
         {
-          name: localEnvironments,
+          name: localEnvironment,
         },
         EnumRelativeLocation.Local,
         created_from,
@@ -110,9 +110,9 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  removeLocalEnvironments(localEnvironments: ModelEnvironment) {
+  removeLocalEnvironment(localEnvironment: ModelEnvironment) {
     set(s => {
-      s.environments.delete(localEnvironments)
+      s.environments.delete(localEnvironment)
 
       ModelEnvironment.save({
         environments: Array.from(s.environments),
