@@ -7,6 +7,7 @@ nav:
     - quick_start.md
   - Guides:
     - guides/projects.md
+    - guides/connections.md
     - guides/models.md
     - guides/testing.md
     - guides/scheduling.md
