@@ -11,6 +11,7 @@ from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
 
 from sqlmesh.core.dialect import (
+    Jinja,
     MacroDef,
     MacroFunc,
     MacroSQL,
@@ -137,6 +138,8 @@ class MacroEvaluator:
 
         if isinstance(transformed, list):
             return [self.parse_one(node.sql(dialect=self.dialect)) for node in transformed]
+        elif isinstance(transformed, Jinja):
+            return transformed
         elif isinstance(transformed, exp.Expression):
             return self.parse_one(transformed.sql(dialect=self.dialect))
 

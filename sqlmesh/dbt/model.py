@@ -351,7 +351,7 @@ class ModelSqlRenderer:
             jinja_macros=context.jinja_macros,
             jinja_globals={
                 **context.jinja_globals,
-                **date_dict(c.EPOCH_DS, c.EPOCH_DS, c.EPOCH_DS),
+                **date_dict(c.EPOCH, c.EPOCH, c.EPOCH),
                 "config": self._config,
                 "ref": self._ref,
                 "var": self._var,
