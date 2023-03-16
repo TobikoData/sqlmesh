@@ -69,9 +69,7 @@ def init_and_plan_sushi_context(
     confirm.ask.return_value = False
 
     plan = sushi_context.plan("prod")
-    # Setting the private attribute directly to bypass validation.
-    plan._start = start
-    plan._missing_intervals = None
+    plan.set_start(start)
 
     return (sushi_context, plan)
 
