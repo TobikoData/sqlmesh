@@ -181,7 +181,7 @@ class TerminalConsole(Console):
         """Indicates that a new promotion progress has begun."""
         if self.promotion_progress is None:
             self.promotion_progress = Progress(
-                TextColumn(f"[bold blue]Updating '{environment}'", justify="right"),
+                TextColumn(f"[bold blue]Virtually Updating '{environment}'", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -190,7 +190,7 @@ class TerminalConsole(Console):
             )
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
-                f"Updating {environment}...",
+                f"Virtually Updating {environment}...",
                 total=total_tasks,
             )
 
