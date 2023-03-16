@@ -20,7 +20,7 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import SnapshotEvaluator
+from sqlmesh.core.snapshot import SnapshotEvaluator, SnapshotInfoLike
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
@@ -112,20 +112,32 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
+        self.console.start_promotion_progress(environment.name, len(added) + len(removed))
+
         if not environment.end_at:
             if not plan.is_dev:
                 self.snapshot_evaluator.migrate(plan.environment.snapshots)
             self.state_sync.unpause_snapshots(added, now())
 
-        self.snapshot_evaluator.promote(
-            added,
-            environment=environment.name,
-            is_dev=plan.is_dev,
-        )
-        self.snapshot_evaluator.demote(
-            removed,
-            environment=environment.name,
-        )
+        def on_complete(snapshot: SnapshotInfoLike) -> None:
+            self.console.update_promotion_progress(1)
+
+        completed = False
+        try:
+            self.snapshot_evaluator.promote(
+                added,
+                environment=environment.name,
+                is_dev=plan.is_dev,
+                on_complete=on_complete,
+            )
+            self.snapshot_evaluator.demote(
+                removed,
+                environment=environment.name,
+                on_complete=on_complete,
+            )
+            completed = True
+        finally:
+            self.console.stop_promotion_progress(success=completed)
 
     def _restate(self, plan: Plan) -> None:
         all_snapshots = (

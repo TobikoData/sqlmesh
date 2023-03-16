@@ -179,10 +179,7 @@ class Scheduler:
                 raise_on_error=False,
             )
 
-        if not errors:
-            self.console.complete_snapshot_progress()
-        else:
-            self.console.stop_snapshot_progress()
+        self.console.stop_snapshot_progress(success=not errors)
 
         for error in errors:
             sid = error.node[0]
