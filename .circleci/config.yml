@@ -32,6 +32,7 @@ jobs:
             git commit -m "CI: Auto-generated documentation" -a | exit 0
       - run:
           name: Deploy API Documentation
+          command: |
             GITHUB_TOKEN="$GITHUB_TOKEN" \
             git push origin main
 
