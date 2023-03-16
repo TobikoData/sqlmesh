@@ -1,12 +1,12 @@
 import clsx from 'clsx'
 import { useMemo } from 'react'
-import { ContextEnvironmentChanges } from '~/api/client'
-import { EnumPlanState, PlanState, PlanTasks } from '~/context/plan'
+import { type ContextEnvironmentChanges } from '~/api/client'
+import { EnumPlanState, type PlanState, type PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
-import { ModelEnvironment } from '~/models/environment'
+import { type ModelEnvironment } from '~/models/environment'
 
 interface PropsTasks {
   environment: ModelEnvironment

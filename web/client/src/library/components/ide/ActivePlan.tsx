@@ -1,11 +1,11 @@
 import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { lazy, Fragment, MouseEvent } from 'react'
+import { lazy, Fragment, type MouseEvent } from 'react'
 import { apiCancelPlanApplyAndRun } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
-  PlanProgress,
+  type PlanProgress,
   useStorePlan,
   EnumPlanState,
   EnumPlanAction,

@@ -1,4 +1,4 @@
-import { Environment } from '~/api/client'
+import { type Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { isArrayEmpty, isFalse, isStringEmptyOrNil } from '~/utils'
 
