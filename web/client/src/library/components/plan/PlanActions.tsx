@@ -1,15 +1,14 @@
-import { MouseEvent } from 'react'
-import { EnvironmentName } from '~/context/context'
-import { PlanAction, EnumPlanAction } from '~/context/plan'
+import { type MouseEvent } from 'react'
+import { useStoreContext } from '~/context/context'
+import { type PlanAction, EnumPlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
-import { includes, isFalse } from '~/utils'
+import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button } from '../button/Button'
+import { usePlan } from './context'
 import { getActionName } from './help'
 
 interface PropsPlanActions {
-  environment: EnvironmentName
   planAction: PlanAction
-  shouldApplyWithBackfill: boolean
   disabled: boolean
   apply: () => void
   run: () => void
@@ -19,9 +18,7 @@ interface PropsPlanActions {
 }
 
 export default function PlanActions({
-  environment,
   planAction,
-  shouldApplyWithBackfill,
   disabled,
   run,
   apply,
@@ -29,6 +26,21 @@ export default function PlanActions({
   close,
   reset,
 }: PropsPlanActions): JSX.Element {
+  const {
+    start,
+    end,
+    hasBackfills,
+    skip_tests,
+    auto_apply,
+    skip_backfill,
+    no_gaps,
+    no_auto_categorization,
+    forward_only,
+    restate_models,
+  } = usePlan()
+
+  const environment = useStoreContext(s => s.environment)
+
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
   const isRun = planAction === EnumPlanAction.Run
@@ -69,32 +81,31 @@ export default function PlanActions({
     run()
   }
 
+  const shouldApplyWithBackfill = hasBackfills && isFalse(skip_backfill)
+
   return (
     <div className="flex justify-between px-4 py-2">
       <div className="flex w-full items-center">
         {(isRun || isRunning) && (
-          <>
-            <Button
-              disabled={isRunning || disabled}
-              onClick={handleRun}
-              autoFocus
-              ref={setFocus}
-            >
+          <Button
+            disabled={isRunning || disabled}
+            onClick={handleRun}
+            autoFocus
+            ref={setFocus}
+          >
+            <span>
               {getActionName(planAction, [
                 EnumPlanAction.Running,
                 EnumPlanAction.Run,
               ])}
-            </Button>
-            {isRun && (
-              <p className="ml-2 text-gray-600">
-                <small>Plan for</small>
-                <b className="text-secondary-500 font-bold mx-1">
-                  {environment}
-                </b>
-                <small>Environment</small>
-              </p>
+            </span>
+            {skip_tests && (
+              <span className="inline-block ml-1">And Skip Test</span>
             )}
-          </>
+            {auto_apply && (
+              <span className="inline-block ml-1">And Auto Apply</span>
+            )}
+          </Button>
         )}
 
         {(isApply || isApplying) && (
@@ -110,7 +121,6 @@ export default function PlanActions({
             )}
           </Button>
         )}
-
         {isProcessing && (
           <Button
             onClick={handleCancel}
@@ -121,9 +131,61 @@ export default function PlanActions({
             {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
           </Button>
         )}
+
+        {(isRun || isRunning || isApply || isApplying) && (
+          <p className="ml-2 text-gray-600 text-xs max-w-sm">
+            <span>Plan for</span>
+            <b className="text-secondary-500 font-bold mx-1">
+              {environment.name}
+            </b>
+            <span className="inline-block mr-1">environment</span>
+            {
+              <span className="inline-block mr-1">
+                from{' '}
+                <b>
+                  {isFalse(isStringEmptyOrNil(start))
+                    ? start
+                    : 'the begining of history'}
+                </b>
+              </span>
+            }
+            {
+              <span className="inline-block mr-1">
+                till <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
+              </span>
+            }
+            {no_gaps && (
+              <span className="inline-block mr-1">
+                with <b>No Gaps</b>
+              </span>
+            )}
+            {skip_backfill && (
+              <span className="inline-block mr-1">
+                without <b>Backfills</b>
+              </span>
+            )}
+            {forward_only && (
+              <span className="inline-block mr-1">
+                consider as a <b>Breaking Change</b>
+              </span>
+            )}
+            {no_auto_categorization && (
+              <span className="inline-block mr-1">
+                also set <b>Change Category</b> manually
+              </span>
+            )}
+            {isFalse(isStringEmptyOrNil(restate_models)) && (
+              <span className="inline-block mr-1">
+                and restate folowing models <b>{restate_models}</b>
+              </span>
+            )}
+          </p>
+        )}
       </div>
       <div className="flex items-center">
-        {isFalse(isProcessing) && isFalse(isRun) && isFalse(disabled) && (
+        {[isProcessing, isRun, disabled, environment.isInitial].every(
+          isFalse,
+        ) && (
           <Button
             onClick={handleReset}
             variant="alternative"

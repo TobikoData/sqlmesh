@@ -4,9 +4,11 @@ type ChannelCallback = (data: any) => void
 
 const SSE_CHANNEL = getEventSource('/api/events')
 
+const CHANNELS = new Map<string, Optional<() => void>>()
+
 export function useChannelEvents(
   callback: ChannelCallback,
-): [(topic: string) => void] {
+): [(topic: string) => Optional<() => void>] {
   return [(topic: string) => subscribe(topic, callback)]
 }
 
@@ -14,13 +16,18 @@ function subscribe(
   topic: string,
   callback: ChannelCallback,
 ): Optional<() => void> {
-  if (isNil(topic)) return
+  if (isNil(topic) || CHANNELS.has(topic)) return CHANNELS.get(topic)
 
-  SSE_CHANNEL.addEventListener(topic, handleChannelTasks(topic, callback))
+  const handler = handleChannelTasks(topic, callback)
 
-  return () => {
-    SSE_CHANNEL.removeEventListener(topic, handleChannelTasks(topic, callback))
-  }
+  SSE_CHANNEL.addEventListener(topic, handler)
+
+  CHANNELS.set(topic, () => {
+    SSE_CHANNEL.removeEventListener(topic, handler)
+    CHANNELS.delete(topic)
+  })
+
+  return CHANNELS.get(topic)
 }
 
 function handleChannelTasks(

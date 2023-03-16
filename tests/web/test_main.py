@@ -368,7 +368,7 @@ def test_apply(project_tmp_path: Path) -> None:
     sql_file = models_dir / "foo.sql"
     sql_file.write_text("MODEL (name foo); SELECT 1;")
 
-    response = client.post("/api/commands/apply?environment=dev", params={"environment": "dev"})
+    response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 200
 
 

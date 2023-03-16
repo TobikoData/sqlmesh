@@ -151,9 +151,30 @@ class RenderInput(BaseModel):
     dialect: t.Optional[str] = None
 
 
+class PlanDates(BaseModel):
+    start: t.Optional[TimeLike] = None
+    end: t.Optional[TimeLike] = None
+
+
+class PlanOptions(BaseModel):
+    skip_tests: bool = False
+    skip_backfill: bool = False
+    no_gaps: bool = False
+    forward_only: bool = False
+    no_auto_categorization: bool = False
+    create_from: t.Optional[str] = None
+    restate_models: t.Optional[str] = None
+
+    @validator("restate_models")
+    def validate_restate_models(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            return v.split(",")
+        return v
+
+
 class Query(BaseModel):
     sql: str
 
 
-class Apply(BaseModel):
+class ApplyResponse(BaseModel):
     type: ApplyType

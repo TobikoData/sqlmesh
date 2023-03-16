@@ -13,7 +13,7 @@ export interface PropsInput extends React.HTMLAttributes<HTMLElement> {
   onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-export default function Input({
+function Input({
   type = 'text',
   label,
   info,
@@ -26,9 +26,7 @@ export default function Input({
 }: PropsInput): JSX.Element {
   return (
     <div className={clsx('inline-block relative m-1', className)}>
-      {label != null && (
-        <label className="block mb-1 px-3 text-sm font-bold">{label}</label>
-      )}
+      {label != null && <InputLabel>{label}</InputLabel>}
       <input
         className={clsx(
           'flex w-full bg-secondary-100 rounded-md border-secondary-100',
@@ -44,9 +42,43 @@ export default function Input({
         onInput={onInput}
         disabled={disabled}
       />
-      {info != null && (
-        <small className="block text-xs mt-1 px-3 text-gray-500">{info}</small>
-      )}
+      {info != null && <InputInfo>{info}</InputInfo>}
     </div>
   )
 }
+
+function InputLabel({
+  htmlFor,
+  className,
+  children,
+}: React.LabelHTMLAttributes<HTMLLabelElement>): JSX.Element {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className={clsx(
+        'block mb-1 px-3 text-sm font-bold whitespace-nowrap',
+        className,
+      )}
+    >
+      {children}
+    </label>
+  )
+}
+
+function InputInfo({
+  className,
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return (
+    <small
+      className={clsx('block text-xs mt-1 px-3 text-gray-500p', className)}
+    >
+      {children}
+    </small>
+  )
+}
+
+Input.Label = InputLabel
+Input.Info = InputInfo
+
+export default Input

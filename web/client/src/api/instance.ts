@@ -7,16 +7,7 @@ export interface ResponseWithDetail {
   detail?: string
 }
 
-export async function fetchAPI<T = any, B extends object = any>({
-  url,
-  method,
-  params,
-  data,
-  headers,
-  credentials,
-  mode,
-  cache,
-}: {
+export interface FetchOptions<B extends object = any> {
   url: string
   method: 'get' | 'post' | 'put' | 'delete' | 'patch'
   data?: B
@@ -31,19 +22,39 @@ export async function fetchAPI<T = any, B extends object = any>({
     | 'no-cache'
     | 'force-cache'
     | 'only-if-cached'
-  params?:
-    | string
-    | URLSearchParams
-    | Record<string, string>
-    | string[][]
-    | undefined
-}): Promise<T & ResponseWithDetail> {
-  const hasSearchParams = Object.keys(params ?? {}).length > 0
+  params?: Record<string, string>
+  signal?: AbortSignal
+}
+
+export async function fetchAPI<T = any, B extends object = any>(
+  options: FetchOptions<B>,
+): Promise<T & ResponseWithDetail> {
+  const {
+    url,
+    method,
+    params,
+    data,
+    headers,
+    credentials,
+    mode,
+    cache,
+    signal,
+  } = options
+  const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
 
   if (hasSearchParams) {
-    input.search = new URLSearchParams(params).toString()
+    const searchParams: Record<string, string> = Object.entries({
+      ...params,
+    }).reduce((acc: Record<string, string>, [key, param]) => {
+      if (param != null) {
+        acc[key] = param
+      }
+
+      return acc
+    }, {})
+    input.search = new URLSearchParams(searchParams).toString()
   }
 
   return await new Promise<T & ResponseWithDetail>((resolve, reject) => {
@@ -54,6 +65,7 @@ export async function fetchAPI<T = any, B extends object = any>({
       cache,
       headers: toRequestHeaders(headers),
       body: toRequestBody(data),
+      signal,
     })
       .then(async response => {
         const headerContentType = response.headers.get('Content-Type')
