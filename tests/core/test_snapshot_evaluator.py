@@ -280,7 +280,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     evaluator.create([snapshot], {})
 
     updated_model_dict = snapshot.model.dict()
-    updated_model_dict["query"] = "SELECT a AS b FROM tbl"
+    updated_model_dict["query"] = "SELECT a::int, 1 as b FROM tbl"
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)

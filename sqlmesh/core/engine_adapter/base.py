@@ -297,18 +297,18 @@ class EngineAdapter:
         with self.transaction(TransactionType.DDL):
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
 
+            for column_name in dropped_columns:
+                drop_column = exp.Drop(this=exp.column(column_name, quoted=True), kind="COLUMN")
+                alter_table.set("actions", [drop_column])
+
+                self.execute(alter_table)
+
             for column_name, column_type in added_columns.items():
                 add_column = exp.ColumnDef(
                     this=exp.to_identifier(column_name),
                     kind=parse_one(column_type, into=exp.DataType),  # type: ignore
                 )
                 alter_table.set("actions", [add_column])
-
-                self.execute(alter_table)
-
-            for column_name in dropped_columns:
-                drop_column = exp.Drop(this=exp.column(column_name, quoted=True), kind="COLUMN")
-                alter_table.set("actions", [drop_column])
 
                 self.execute(alter_table)
 
