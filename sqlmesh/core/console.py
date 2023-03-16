@@ -48,12 +48,20 @@ class Console(abc.ABC):
         """Update snapshot progress."""
 
     @abc.abstractmethod
-    def complete_snapshot_progress(self) -> None:
-        """Indicates that load progress is complete."""
+    def stop_snapshot_progress(self, success: bool = True) -> None:
+        """Stop the load progress"""
 
     @abc.abstractmethod
-    def stop_snapshot_progress(self) -> None:
-        """Stop the load progress"""
+    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+        """Indicates that a new promotion progress has begun."""
+
+    @abc.abstractmethod
+    def update_promotion_progress(self, num_tasks: int) -> None:
+        """Update promotion progress."""
+
+    @abc.abstractmethod
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        """Stop the promotion progress"""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -115,8 +123,10 @@ class TerminalConsole(Console):
 
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         self.console: RichConsole = console or srich.console
-        self.progress: t.Optional[Progress] = None
-        self.tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
+        self.evaluation_progress: t.Optional[Progress] = None
+        self.evaluation_tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
+        self.promotion_progress: t.Optional[Progress] = None
+        self.promotion_task: t.Optional[TaskID] = None
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
@@ -130,8 +140,8 @@ class TerminalConsole(Console):
 
     def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
         """Indicates that a new load progress has begun."""
-        if not self.progress:
-            self.progress = Progress(
+        if not self.evaluation_progress:
+            self.evaluation_progress = Progress(
                 TextColumn("[bold blue]{task.fields[snapshot_name]}", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
@@ -141,10 +151,10 @@ class TerminalConsole(Console):
                 TimeElapsedColumn(),
                 console=self.console,
             )
-            self.progress.start()
-            self.tasks = {}
-        self.tasks[snapshot_name] = (
-            self.progress.add_task(
+            self.evaluation_progress.start()
+            self.evaluation_tasks = {}
+        self.evaluation_tasks[snapshot_name] = (
+            self.evaluation_progress.add_task(
                 f"Running {snapshot_name}...",
                 snapshot_name=snapshot_name,
                 total=total_batches,
@@ -154,28 +164,49 @@ class TerminalConsole(Console):
 
     def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
         """Update snapshot progress."""
-        if self.progress and self.tasks:
-            task_id = self.tasks[snapshot_name][0]
-            self.progress.update(task_id, advance=num_batches)
+        if self.evaluation_progress and self.evaluation_tasks:
+            task_id = self.evaluation_tasks[snapshot_name][0]
+            self.evaluation_progress.update(task_id, refresh=True, advance=num_batches)
 
-    def complete_snapshot_progress(self) -> None:
-        """Indicates that load progress is complete"""
-        # Make sure all tasks are marked as completed when we're done processing the batches. The
-        # refresh argument is used so that the bars are finalized properly in Jupyter notebooks.
-        # See first "Note" here: https://rich.readthedocs.io/en/stable/progress.html#progress-display
-        if self.progress:
-            for task_id, total_batches in self.tasks.values():
-                self.progress.update(task_id, refresh=True, completed=total_batches)
-
-        self.log_success("All model batches have been executed successfully")
-        self.stop_snapshot_progress()
-
-    def stop_snapshot_progress(self) -> None:
+    def stop_snapshot_progress(self, success: bool = True) -> None:
         """Stop the load progress"""
-        self.tasks = {}
-        if self.progress:
-            self.progress.stop()
-            self.progress = None
+        self.evaluation_tasks = {}
+        if self.evaluation_progress:
+            self.evaluation_progress.stop()
+            self.evaluation_progress = None
+            if success:
+                self.log_success("All model batches have been executed successfully")
+
+    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+        """Indicates that a new promotion progress has begun."""
+        if self.promotion_progress is None:
+            self.promotion_progress = Progress(
+                TextColumn(f"[bold blue]Updating '{environment}'", justify="right"),
+                BarColumn(bar_width=40),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                TimeElapsedColumn(),
+                console=self.console,
+            )
+            self.promotion_progress.start()
+            self.promotion_task = self.promotion_progress.add_task(
+                f"Updating {environment}...",
+                total=total_tasks,
+            )
+
+    def update_promotion_progress(self, num_tasks: int) -> None:
+        """Update promotion progress."""
+        if self.promotion_progress is not None and self.promotion_task is not None:
+            self.promotion_progress.update(self.promotion_task, refresh=True, advance=num_tasks)
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        """Stop the promotion progress"""
+        self.promotion_task = None
+        if self.promotion_progress is not None:
+            self.promotion_progress.stop()
+            self.promotion_progress = None
+            if success:
+                self.log_success("The target environment has been updated successfully")
 
     def show_model_difference_summary(
         self, context_diff: ContextDiff, detailed: bool = False

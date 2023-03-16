@@ -51,14 +51,13 @@ class ApiConsole(TerminalConsole):
                 self._make_event({"tasks": self.current_task_status}, event="tasks")
             )
 
-    def complete_snapshot_progress(self) -> None:
-        """Indicates that load progress is complete"""
-        self.queue.put_nowait(self._make_event("All model batches have been executed successfully"))
-        self.stop_snapshot_progress()
-
-    def stop_snapshot_progress(self) -> None:
+    def stop_snapshot_progress(self, success: bool = True) -> None:
         """Stop the load progress"""
         self.current_task_status = {}
+        if success:
+            self.queue.put_nowait(
+                self._make_event("All model batches have been executed successfully")
+            )
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
