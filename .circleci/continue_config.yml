@@ -71,11 +71,22 @@ jobs:
       - halt_unless_client
       - checkout
       - run:
+          command: |
+            cp .pre-commit-config.yaml pre-commit-cache-key.txt
+            python --version --version >> pre-commit-cache-key.txt
+      - restore_cache:
+          keys:
+          - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+      - run:
           name: Install pre-commit
           command: pip install pre-commit
       - run:
           name: Run linters and code style checks
           command: make ui-style
+      - save_cache:
+          key: v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+          paths:
+            - ~/.cache/pre-commit
 
   core_integration_tests:
     docker:
