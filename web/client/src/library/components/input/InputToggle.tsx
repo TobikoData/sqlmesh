@@ -4,6 +4,7 @@ interface PropsInputToggle {
   label: string
   info: string
   enabled: boolean
+  disabled?: boolean
   setEnabled: (enabled: boolean) => void
 }
 
@@ -11,6 +12,7 @@ export default function InputToggle({
   label,
   info,
   enabled,
+  disabled = false,
   setEnabled,
 }: PropsInputToggle): JSX.Element {
   return (
@@ -20,6 +22,7 @@ export default function InputToggle({
         <small className="block text-xs text-gray-500">{info}</small>
       </label>
       <Toggle
+        disabled={disabled}
         className="mt-2"
         enabled={enabled}
         setEnabled={setEnabled}

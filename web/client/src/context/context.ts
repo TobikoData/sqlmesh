@@ -1,57 +1,79 @@
 import { create } from 'zustand'
-import useLocalStorage from '~/hooks/useLocalStorage'
-import { isFalse } from '~/utils'
-
-export const EnumRelativeLocation = {
-  Local: 'local',
-  Remote: 'remote',
-} as const
-
-export const EnumDefaultEnvironment = {
-  Prod: 'prod',
-  Dev: 'dev',
-  Stage: 'stage',
-} as const
-
-export interface Profile {
-  environment: string
-  environments: Environment[]
-}
-
-export type RelativeLocation = KeyOf<typeof EnumRelativeLocation>
-export type DefaultEnvironment = KeyOf<typeof EnumDefaultEnvironment>
-export type EnvironmentName = DefaultEnvironment | string
-
-export interface Environment {
-  name: EnvironmentName
-  type: RelativeLocation
-}
+import {
+  ContextEnvironmentEnd,
+  ContextEnvironmentStart,
+  Environment,
+} from '~/api/client'
+import {
+  EnumRelativeLocation,
+  EnvironmentName,
+  ModelEnvironment,
+} from '~/models/environment'
+import { isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
-  environment?: EnvironmentName
-  environments: Environment[]
-  setEnvironment: (environment: EnvironmentName) => void
-  addLocalEnvironments: (environments: EnvironmentName[]) => void
-  removeLocalEnvironments: (environments: EnvironmentName[]) => void
-  addRemoteEnvironments: (environments: EnvironmentName[]) => void
-  isExistingEnvironment: (environment: EnvironmentName) => boolean
+  environment: ModelEnvironment
+  environments: Set<ModelEnvironment>
+  initialStartDate?: ContextEnvironmentStart
+  initialEndDate?: ContextEnvironmentEnd
+  isExistingEnvironment: (
+    environment: ModelEnvironment | EnvironmentName,
+  ) => boolean
+  getNextEnvironment: () => ModelEnvironment
+  setEnvironment: (environment: ModelEnvironment) => void
+  addLocalEnvironment: (
+    environments: EnvironmentName,
+    created_from: EnvironmentName,
+  ) => void
+  removeLocalEnvironment: (environments: ModelEnvironment) => void
+  addSyncronizedEnvironments: (environments: Environment[]) => void
+  setInitialDates: (
+    initialStartDate?: ContextEnvironmentStart,
+    initialEndDate?: ContextEnvironmentEnd,
+  ) => void
 }
 
-const [getProfile, setProfile] = useLocalStorage<Profile>('profile')
+const environments = new Set(ModelEnvironment.getDefaultEnvironments())
+const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
-  environment: getProfile()?.environment,
-  environments: getDefaultEnvironments(),
-  isExistingEnvironment: (environment: EnvironmentName) => {
-    const { environments } = get()
-
-    return environments.some(({ name }) => name === environment)
+  environment,
+  environments,
+  initialStartDate: undefined,
+  initialEndDate: undefined,
+  getNextEnvironment(): ModelEnvironment {
+    return get().environments.values().next().value
   },
-  setEnvironment: (environment: EnvironmentName) => {
-    set(s => {
-      s.addLocalEnvironments([environment])
+  setInitialDates(
+    initialStartDate?: ContextEnvironmentStart,
+    initialEndDate?: ContextEnvironmentEnd,
+  ): void {
+    set({
+      initialStartDate,
+      initialEndDate,
+    })
+  },
+  isExistingEnvironment(
+    environment: ModelEnvironment | EnvironmentName,
+  ): boolean {
+    const s = get()
 
-      setProfile({
+    if ((environment as ModelEnvironment).isModel)
+      return s.environments.has(environment as ModelEnvironment)
+
+    let hasEnvironment = false
+
+    s.environments.forEach(env => {
+      if (env.name === (environment as EnvironmentName)) {
+        hasEnvironment = true
+      }
+    })
+
+    return hasEnvironment
+  },
+  setEnvironment(environment: ModelEnvironment): void {
+    set(() => {
+      ModelEnvironment.save({
         environment,
       })
 
@@ -60,109 +82,82 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironments: (localEnvironments: EnvironmentName[] = []) => {
+  addLocalEnvironment(
+    localEnvironment: EnvironmentName,
+    created_from?: EnvironmentName,
+  ): void {
     set(s => {
-      const environments = structuredClone(s.environments)
+      if (isStringEmptyOrNil(localEnvironment)) return s
 
-      localEnvironments.forEach(name => {
-        const environment = environments.find(
-          ({ name: envNameLocal }) => name === envNameLocal,
-        )
-
-        if (environment == null) {
-          environments.push({
-            name,
-            type: EnumRelativeLocation.Local,
-          })
-        }
-      })
-
-      setProfile({
-        environments: getOnlyLocalEnvironments(environments),
-      })
-
-      return { environments }
-    })
-  },
-  removeLocalEnvironments: (localEnvironments: EnvironmentName[] = []) => {
-    set(s => {
-      const environments = s.environments.filter(({ name }) =>
-        isFalse(localEnvironments.includes(name)),
+      const environment = new ModelEnvironment(
+        {
+          name: localEnvironment,
+        },
+        EnumRelativeLocation.Local,
+        created_from,
       )
 
-      setProfile({
-        environments: getOnlyLocalEnvironments(environments),
+      s.environments.add(environment)
+
+      s.setEnvironment(environment)
+
+      ModelEnvironment.save({
+        environments: Array.from(s.environments),
       })
 
-      return { environments }
+      return {
+        environments: new Set(s.environments),
+      }
     })
   },
-  addRemoteEnvironments: (remoteEnvironments: EnvironmentName[] = []) => {
+  removeLocalEnvironment(localEnvironment: ModelEnvironment) {
     set(s => {
-      const environments = structuredClone(s.environments)
+      s.environments.delete(localEnvironment)
 
-      remoteEnvironments.forEach(name => {
-        const environment = environments.find(
-          ({ name: envNameLocal }) => name === envNameLocal,
+      ModelEnvironment.save({
+        environments: Array.from(s.environments),
+      })
+
+      return {
+        environments: new Set(s.environments),
+      }
+    })
+  },
+  addSyncronizedEnvironments(envs: Environment[] = []) {
+    set(s => {
+      const environments = Array.from(s.environments)
+
+      envs.forEach(env => {
+        let environment = environments.find(
+          ({ name: envNameLocal }) => env.name === envNameLocal,
         )
 
         if (environment == null) {
-          environments.push({
-            name,
-            type: EnumRelativeLocation.Remote,
-          })
+          environment = new ModelEnvironment(
+            env,
+            EnumRelativeLocation.Syncronized,
+          )
+
+          environments.push(environment)
         } else {
-          environment.type = EnumRelativeLocation.Remote
+          environment.update(env)
+          environment.setType(EnumRelativeLocation.Syncronized)
+        }
+
+        if (environment.isInitial && environment.isDefault) {
+          s.setEnvironment(environment)
         }
       })
 
-      setProfile({
-        environments: getOnlyLocalEnvironments(environments),
+      ModelEnvironment.save({
+        environments,
       })
 
-      sortEnvoirnments(environments)
+      ModelEnvironment.sort(environments)
 
-      return { environments }
+      return {
+        environments: new Set(environments),
+      }
     })
   },
 }))
-
-function sortEnvoirnments(environments: Environment[]): void {
-  environments.sort(env => (env.type === EnumRelativeLocation.Remote ? -1 : 1))
-}
-
-function getOnlyLocalEnvironments(
-  environments: Environment[] = [],
-): Environment[] {
-  return environments.filter(({ type }) => type === EnumRelativeLocation.Local)
-}
-
-function getDefaultEnvironments(): Environment[] {
-  const profile = getProfile()
-  const environments = new Set<string>()
-
-  if (profile?.environment != null) {
-    environments.add(profile.environment)
-  }
-
-  if (profile?.environments != null) {
-    profile.environments.forEach(({ name }) => environments.add(name))
-  }
-
-  ;[
-    EnumDefaultEnvironment.Prod,
-    EnumDefaultEnvironment.Dev,
-    EnumDefaultEnvironment.Stage,
-  ].forEach(name => environments.add(name))
-
-  const output: Environment[] = []
-
-  environments.forEach(name => {
-    output.push({
-      name,
-      type: EnumRelativeLocation.Local,
-    })
-  })
-
-  return output
-}

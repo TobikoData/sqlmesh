@@ -9,8 +9,7 @@ import { Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
-  useApiPlan,
-  useApiPlanCancel,
+  useApiPlanRun,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -42,7 +41,7 @@ import Input from '../input/Input'
 import { Table } from 'apache-arrow'
 import { ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
-import { EnvironmentName } from '~/context/context'
+import { ModelEnvironment } from '~/models/environment'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -61,7 +60,7 @@ export type EditorTabs = KeyOf<typeof EnumEditorTabs>
 export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
-  environment: EnvironmentName
+  environment: ModelEnvironment
 }
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
@@ -96,7 +95,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-  const { refetch: refetchPlan, isLoading } = useApiPlan(environment)
+  const { refetch: planRun } = useApiPlanRun(environment.name)
   const { data: fileData } = useApiFileByPath(activeFile.path)
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
@@ -132,11 +131,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
 
   useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
-      if (isLoading) {
-        void useApiPlanCancel(client, environment)
-      }
-
-      void refetchPlan()
+      void planRun()
     }
   }, [activeFile.content])
 

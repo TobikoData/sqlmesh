@@ -36,7 +36,6 @@
     "zustand": "^4.3.2"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.9",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^14.4.3",

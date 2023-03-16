@@ -3,9 +3,6 @@ import Modal from './Modal'
 
 interface PropsModalConfirmation extends React.HTMLAttributes<HTMLElement> {
   show: boolean
-  headline?: string
-  tagline?: string
-  description?: string
   onClose: () => void
 }
 
@@ -23,11 +20,8 @@ export interface WithConfirmation {
   setConfirmation: (confirmation?: Confirmation) => void
 }
 
-export default function ModalConfirmation({
+function ModalConfirmation({
   show,
-  headline,
-  tagline,
-  description,
   children,
   onClose,
 }: PropsModalConfirmation): JSX.Element {
@@ -36,16 +30,49 @@ export default function ModalConfirmation({
       show={show}
       onClose={onClose}
     >
-      <Dialog.Panel className="w-[30rem] transform overflow-hidden rounded-xl bg-white text-left align-middle shadow-xl transition-all">
-        <div className="py-4 px-5 mt-2 mb-5">
-          <h2 className="font-black text-xl mb-2">{headline}</h2>
-          <h4>{tagline}</h4>
-          <p>{description}</p>
-        </div>
-        <div className="flex justify-end items-center py-3 px-3">
-          {children}
-        </div>
+      <Dialog.Panel className="w-[30rem] transform rounded-xl bg-white text-left align-middle shadow-xl transition-all">
+        {children}
       </Dialog.Panel>
     </Modal>
   )
 }
+
+function ModalConfirmationMain({
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return <div className="py-4 px-5 m-2">{children}</div>
+}
+
+function ModalConfirmationHeadline({
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return <h2 className="text-gray-700 font-bold text-xl mb-2">{children}</h2>
+}
+
+function ModalConfirmationTagline({
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return <h4 className="text-gray-700 font-bold">{children}</h4>
+}
+
+function ModalConfirmationDescription({
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return <p className="text-gray-500 text-sm">{children}</p>
+}
+
+function ModalConfirmationActions({
+  children,
+}: React.HTMLAttributes<HTMLElement>): JSX.Element {
+  return (
+    <div className="flex justify-end items-center py-3 px-3">{children}</div>
+  )
+}
+
+ModalConfirmation.Headline = ModalConfirmationHeadline
+ModalConfirmation.Tagline = ModalConfirmationTagline
+ModalConfirmation.Description = ModalConfirmationDescription
+ModalConfirmation.Actions = ModalConfirmationActions
+ModalConfirmation.Main = ModalConfirmationMain
+
+export default ModalConfirmation

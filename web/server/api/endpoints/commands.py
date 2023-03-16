@@ -21,12 +21,14 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post("/apply", response_model=models.Apply)
+@router.post("/apply", response_model=models.ApplyResponse)
 async def apply(
-    environment: str,
     request: Request,
     context: Context = Depends(get_loaded_context),
-) -> models.Apply:
+    environment: t.Optional[str] = Body(),
+    plan_dates: t.Optional[models.PlanDates] = None,
+    plan_options: models.PlanOptions = models.PlanOptions(),
+) -> models.ApplyResponse:
     """Apply a plan"""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -34,16 +36,29 @@ async def apply(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
         )
 
-    plan = context.plan(environment=environment, no_prompts=True)
+    plan = context.plan(
+        environment=environment,
+        no_prompts=True,
+        start=plan_dates.start if plan_dates else None,
+        end=plan_dates.end if plan_dates else None,
+        skip_tests=plan_options.skip_tests,
+        no_gaps=plan_options.no_gaps,
+        restate_models=plan_options.restate_models,
+        create_from=plan_options.create_from,
+        skip_backfill=plan_options.skip_backfill,
+        forward_only=plan_options.forward_only,
+        no_auto_categorization=plan_options.no_auto_categorization,
+    )
+
     apply = functools.partial(context.apply, plan)
 
-    if plan.requires_backfill:
+    if plan.requires_backfill and not plan_options.skip_backfill:
         task = asyncio.create_task(run_in_executor(apply))
         request.app.state.task = task
     else:
         apply()
 
-    return models.Apply(type="backfill" if plan.requires_backfill else "logical")
+    return models.ApplyResponse(type="backfill" if plan.requires_backfill else "logical")
 
 
 @router.post("/evaluate")
