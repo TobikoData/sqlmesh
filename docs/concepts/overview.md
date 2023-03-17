@@ -49,6 +49,7 @@ Because SQLMesh uses virtual data marts instead of re-computing everything in th
 ## Test your code and data
 Bad data is worse than no data. The best way to keep bad data out of your system is by testing your transformation code and results.
 
+### [Tests](./tests.md)
 SQLMesh "tests" are similar to unit tests in software development, where the unit is a single model. SQLMesh tests validate model *code* - you specify the input data and expected output, then SQLMesh runs the test and compares the expected and actual output.
 
 SQLMesh automatically runs tests when you apply a `plan`, or you can run them on demand with the [`test` command](../reference/cli.md#test).
