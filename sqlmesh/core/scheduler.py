@@ -142,7 +142,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-    ) -> None:
+    ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
         Args:
@@ -151,6 +151,9 @@ class Scheduler:
             latest: The latest datetime to use for non-incremental queries.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
+
+        Returns:
+            True if the execution was successful and False otherwise.
         """
         validate_date_range(start, end)
 
@@ -189,6 +192,8 @@ class Scheduler:
         skipped_snapshots = {i[0] for i in skipped_intervals}
         for skipped in skipped_snapshots:
             self.console.log_status_update(f"SKIPPED snapshot {skipped}\n")
+
+        return not errors
 
     def _interval_params(
         self,

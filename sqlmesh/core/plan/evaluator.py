@@ -73,7 +73,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 max_workers=self.backfill_concurrent_tasks,
                 console=self.console,
             )
-            scheduler.run(plan.start, plan.end, is_dev=plan.is_dev)
+            is_run_successful = scheduler.run(plan.start, plan.end, is_dev=plan.is_dev)
+            if not is_run_successful:
+                raise SQLMeshError("Plan application failed.")
 
         self._promote(plan)
 
@@ -223,4 +225,4 @@ class AirflowPlanEvaluator(PlanEvaluator):
                 self.dag_run_poll_interval_secs,
             )
             if not plan_application_succeeded:
-                raise SQLMeshError("Plan application failed")
+                raise SQLMeshError("Plan application failed.")
