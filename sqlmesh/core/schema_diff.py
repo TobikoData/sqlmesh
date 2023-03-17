@@ -78,8 +78,8 @@ class SchemaDiffCalculator:
 
         for to_column_name, to_column_type in to_schema.items():
             from_column_type = from_schema.get(to_column_name)
-
-            if from_column_type != to_column_type:
+            from_column_type = from_column_type.upper() if from_column_type else None
+            if from_column_type != to_column_type.upper():
                 if from_column_type and self.is_type_transition_allowed(
                     to_column_type, from_column_type
                 ):

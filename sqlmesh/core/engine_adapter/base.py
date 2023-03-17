@@ -395,7 +395,7 @@ class EngineAdapter:
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
-            t[0]: t[1].upper()
+            t[0]: t[1]
             for t in itertools.takewhile(
                 lambda t: not t[0].startswith("#"),
                 describe_output,
