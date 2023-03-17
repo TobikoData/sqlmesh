@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import typing as t
 from functools import reduce
 from string import Template
@@ -74,9 +73,6 @@ class MacroDialect(Python):
         }
 
 
-JINJA_PATTERN = re.compile(r"{{|{%|{#")
-
-
 class MacroEvaluator:
     """The class responsible for evaluating SQLMesh Macros/SQL.
 
@@ -101,15 +97,14 @@ class MacroEvaluator:
         self,
         dialect: str = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
+        jinja_env: t.Optional[Environment] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
         self.locals: t.Dict[str, t.Any] = {}
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
-        self.jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
-        self._jinja_env: t.Optional[Environment] = None
+        self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -134,7 +129,7 @@ class MacroEvaluator:
         def _transform_node(node: exp.Expression) -> exp.Expression:
             if isinstance(node, MacroVar):
                 return exp.convert(_norm_env_value(self.locals[node.name]))
-            elif node.is_string and JINJA_PATTERN.search(node.this):
+            elif node.is_string:
                 node.set("this", self.jinja_env.from_string(node.this).render())
                 return node
             else:
@@ -232,7 +227,7 @@ class MacroEvaluator:
         if not self._jinja_env:
             jinja_env_methods = {**self.locals, **self.env}
             del jinja_env_methods["self"]
-            self._jinja_env = self.jinja_macro_registry.build_environment(**jinja_env_methods)
+            self._jinja_env = JinjaMacroRegistry().build_environment(**jinja_env_methods)
         return self._jinja_env
 
 

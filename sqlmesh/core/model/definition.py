@@ -518,7 +518,6 @@ class _Model(ModelMeta, frozen=True):
                     start=start,
                     end=end,
                     latest=latest,
-                    logging=True,
                     engine_adapter=context.engine_adapter,
                     **kwargs,
                 )

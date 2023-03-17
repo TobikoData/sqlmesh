@@ -298,7 +298,7 @@ class EngineAdapter:
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
 
             for column_name in dropped_columns:
-                drop_column = exp.Drop(this=exp.column(column_name, quoted=True), kind="COLUMN")
+                drop_column = exp.Drop(this=exp.column(column_name), kind="COLUMN")
                 alter_table.set("actions", [drop_column])
 
                 self.execute(alter_table)

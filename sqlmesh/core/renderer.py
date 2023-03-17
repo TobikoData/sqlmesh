@@ -36,6 +36,17 @@ RENDER_OPTIMIZER_RULES = (
 )
 
 
+def _dates(
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
+    latest: t.Optional[TimeLike] = None,
+) -> t.Tuple[datetime, datetime, datetime]:
+    return (
+        *make_inclusive(start or c.EPOCH, end or c.EPOCH),
+        to_datetime(latest or c.EPOCH),
+    )
+
+
 class ExpressionRenderer:
     def __init__(
         self,
@@ -76,21 +87,16 @@ class ExpressionRenderer:
         expression = self._expression
 
         render_kwargs = {
-            **date_dict(*self._dates(start, end, latest), only_latest=self._only_latest),
+            **date_dict(*_dates(start, end, latest), only_latest=self._only_latest),
             **kwargs,
         }
 
-        if isinstance(expression, d.Jinja):
-            env = prepare_env(self._python_env)
-            if not kwargs.get("logging"):
-                env["log"] = lambda msg, info=False: ""
+        env = prepare_env(self._python_env)
+        jinja_env = self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
 
+        if isinstance(expression, d.Jinja):
             try:
-                rendered_expression = (
-                    self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
-                    .from_string(expression.name)
-                    .render()
-                )
+                rendered_expression = jinja_env.from_string(expression.name).render()
                 if not rendered_expression:
                     return None
 
@@ -104,7 +110,7 @@ class ExpressionRenderer:
         macro_evaluator = MacroEvaluator(
             self._dialect,
             python_env=self._python_env,
-            jinja_macro_registry=self._jinja_macro_registry,
+            jinja_env=jinja_env,
         )
         macro_evaluator.locals.update(render_kwargs)
 
@@ -120,18 +126,6 @@ class ExpressionRenderer:
             raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
         return expression
-
-    @classmethod
-    def _dates(
-        cls,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-    ) -> t.Tuple[datetime, datetime, datetime]:
-        return (
-            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
-            to_datetime(latest or c.EPOCH),
-        )
 
 
 class QueryRenderer(ExpressionRenderer):
@@ -196,7 +190,7 @@ class QueryRenderer(ExpressionRenderer):
         """
         from sqlmesh.core.snapshot import to_table_mapping
 
-        dates = self._dates(start, end, latest)
+        dates = _dates(start, end, latest)
         cache_key = dates
 
         snapshots = snapshots or {}
