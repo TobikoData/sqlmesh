@@ -10,7 +10,7 @@ from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
 from sqlglot.optimizer.pushdown_projections import pushdown_projections
-from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.optimizer.qualify_columns import qualify_columns, validate_qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import MappingSchema
@@ -268,8 +268,25 @@ class QueryRenderer(ExpressionRenderer):
         """Returns True if the model's query contains a star projection."""
         return any(isinstance(expression, exp.Star) for expression in self.render().expressions)
 
+    def check_column_references(self) -> None:
+        """
+        Leverages the SQLGlot optimizer to ensure that all column references are valid,
+        e.g. they exist upstream. If the optimization fails, it will raise a ConfigError.
+        """
+        try:
+            rendered_expression = super().render()
+            if rendered_expression:
+                optimize(
+                    rendered_expression,
+                    schema=self._schema,
+                    rules=(*RENDER_OPTIMIZER_RULES, validate_qualify_columns),
+                )
+        except (SchemaError, OptimizeError) as ex:
+            raise_config_error(f"Invalid model query. {ex}", self._path)
+
     def update_schema(self, schema: MappingSchema) -> None:
         self._schema = schema
+        self.check_column_references()
 
         if self.contains_star_query:
             # We need to re-render in order to expand the star projection
