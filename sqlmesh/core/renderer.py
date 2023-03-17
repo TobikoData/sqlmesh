@@ -271,7 +271,7 @@ class QueryRenderer(ExpressionRenderer):
     def check_column_references(self) -> None:
         """
         Leverages the SQLGlot optimizer to ensure that all column references are valid,
-        e.g. they exist upstream. If the optimization fails, it will raise a ConfigError.
+        e.g. they exist upstream. If the optimizer fails, a ConfigError will be raised.
         """
         try:
             rendered_expression = super().render()
