@@ -1,5 +1,4 @@
 import json
-import typing as t
 
 import sqlglot
 from sqlglot import exp
@@ -12,25 +11,27 @@ def parse_to_json(sql: str, read: DialectType = None) -> str:
     )
 
 
-def get_dialect(dialect_type: str = "") -> str:
-    dialect: t.Any = Dialect.classes.get(dialect_type, Dialect)
+def get_dialect(dialect_type: str = "") -> str | None:
+    dialect = Dialect.classes.get(dialect_type, Dialect)
+    tokenizer = dialect.tokenizer_class
+    output = {"keywords": "", "types": ""}
 
-    tokenizer: t.Any = dialect.tokenizer_class
-    type_mapping: t.Any = dialect.generator_class.TYPE_MAPPING
+    if tokenizer is not None:
+        type_mapping = dialect.generator_class.TYPE_MAPPING
 
-    return json.dumps(
-        {
+        output = {
             "keywords": " ".join(tokenizer.KEYWORDS) + " ",
             "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type) + " ",
         }
-    )
+
+    return json.dumps(output)
 
 
 def get_dialects() -> str:
-    dialects = list()
-
-    for name, dialect in Dialect.classes.items():
-        dialects.append({"text": "SqlGlot" if name == "" else dialect.__name__, "value": name})
+    dialects = [
+        {"text": "SqlGlot" if name == "" else dialect.__name__, "value": name}
+        for name, dialect in Dialect.classes.items()
+    ]
 
     return json.dumps(dialects)
 
