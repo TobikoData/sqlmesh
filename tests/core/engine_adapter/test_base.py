@@ -60,10 +60,10 @@ def test_columns(mocker: MockerFixture):
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert adapter.columns("test_table") == {
-        "id": "INT",
-        "name": "STRING",
-        "price": "DOUBLE",
-        "ds": "STRING",
+        "id": "int",
+        "name": "string",
+        "price": "double",
+        "ds": "string",
     }
 
     cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
