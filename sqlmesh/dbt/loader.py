@@ -9,6 +9,7 @@ from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model
+from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
@@ -64,14 +65,11 @@ class DbtLoader(Loader):
                 package=package_name if package_name != context.project_name else None,
             )
 
-        for name, package in project.packages.items():
-            for model in package.models.values():
+        for package in project.packages.values():
+            package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
+            for model in package_models.values():
                 rendered_model = model.render_config(context)
                 models[rendered_model.model_name] = rendered_model.to_sqlmesh(context)
-
-            for seed in package.seeds.values():
-                rendered_seed = seed.render_config(context)
-                models[rendered_seed.seed_name] = rendered_seed.to_sqlmesh()
 
         return models
 

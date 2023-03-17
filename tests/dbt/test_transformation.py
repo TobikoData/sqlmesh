@@ -100,7 +100,7 @@ def test_model_columns():
 
 def test_seed_columns():
     seed = SeedConfig(
-        seed_name="foo",
+        model_name="foo",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         columns={
             "address": ColumnConfig(
@@ -121,7 +121,8 @@ def test_seed_columns():
         "zipcode": "Business zipcode",
     }
 
-    sqlmesh_seed = seed.to_sqlmesh()
+    context = DbtContext()
+    sqlmesh_seed = seed.to_sqlmesh(context)
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
@@ -166,8 +167,9 @@ def test_config_containing_jinja():
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
 
 
-def test_hooks(capsys, sushi_dbt_context: Context):
-    waiters = sushi_dbt_context.models["sushi.waiters"]
+@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
+def test_hooks(capsys, sushi_dbt_context: Context, model: str):
+    waiters = sushi_dbt_context.models[model]
     execution_context = ExecutionContext(sushi_dbt_context.engine_adapter, {}, False)
     capsys.readouterr()
 
