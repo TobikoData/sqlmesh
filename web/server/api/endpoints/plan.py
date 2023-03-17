@@ -33,7 +33,7 @@ async def run_plan(
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"{request.app.state.task.get_name().capitalize()} is already running.",
+            detail="Plan/apply is already running.",
         )
 
     context.refresh()
@@ -53,7 +53,6 @@ async def run_plan(
         no_auto_categorization=plan_options.no_auto_categorization,
     )
     request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
-    request.app.state.task.set_name("plan")
     plan = await request.app.state.task
 
     payload = models.ContextEnvironment(
