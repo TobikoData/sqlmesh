@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import functools
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
@@ -9,6 +11,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.settings import get_loaded_context
+from web.server.utils import run_in_executor
 
 router = APIRouter()
 
@@ -18,7 +21,7 @@ router = APIRouter()
     response_model=models.ContextEnvironment,
     response_model_exclude_unset=True,
 )
-def run_plan(
+async def run_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(),
@@ -29,12 +32,14 @@ def run_plan(
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{request.app.state.task.get_name().capitalize()} is already running.",
         )
 
     context.refresh()
 
-    plan = context.plan(
+    plan_func = functools.partial(
+        context.plan,
         environment=environment,
         no_prompts=True,
         start=plan_dates.start if plan_dates else None,
@@ -47,6 +52,9 @@ def run_plan(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
+    request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
+    request.app.state.task.set_name("plan")
+    plan = await request.app.state.task
 
     payload = models.ContextEnvironment(
         environment=plan.environment.name,

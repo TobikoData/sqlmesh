@@ -33,10 +33,12 @@ async def apply(
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="An apply is already running."
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{request.app.state.task.get_name().capitalize()} is already running.",
         )
 
-    plan = context.plan(
+    plan_func = functools.partial(
+        context.plan,
         environment=environment,
         no_prompts=True,
         start=plan_dates.start if plan_dates else None,
@@ -49,14 +51,14 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
+    request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
+    request.app.state.task.set_name("plan")
+    plan = await request.app.state.task
 
-    apply = functools.partial(context.apply, plan)
-
-    if plan.requires_backfill and not plan_options.skip_backfill:
-        task = asyncio.create_task(run_in_executor(apply))
-        request.app.state.task = task
-    else:
-        apply()
+    request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
+    request.app.state.task.set_name("apply")
+    if not plan.requires_backfill or plan_options.skip_backfill:
+        await request.app.state.task
 
     return models.ApplyResponse(type="backfill" if plan.requires_backfill else "logical")
 
