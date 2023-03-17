@@ -7,6 +7,10 @@ export interface ResponseWithDetail {
   detail?: string
 }
 
+export interface FetchOptionsWithSignal {
+  signal?: AbortSignal
+}
+
 export interface FetchOptions<B extends object = any> {
   url: string
   method: 'get' | 'post' | 'put' | 'delete' | 'patch'
@@ -23,23 +27,15 @@ export interface FetchOptions<B extends object = any> {
     | 'force-cache'
     | 'only-if-cached'
   params?: Record<string, string>
-  signal?: AbortSignal
 }
 
 export async function fetchAPI<T = any, B extends object = any>(
-  options: FetchOptions<B>,
+  config: FetchOptions<B>,
+  options?: Partial<FetchOptionsWithSignal>,
 ): Promise<T & ResponseWithDetail> {
-  const {
-    url,
-    method,
-    params,
-    data,
-    headers,
-    credentials,
-    mode,
-    cache,
-    signal,
-  } = options
+  const { url, method, params, data, headers, credentials, mode, cache } =
+    config
+
   const hasSearchParams = Object.keys({ ...params }).length > 0
   const fullUrl = url.replace(/([^:]\/)\/+/g, '$1')
   const input = new URL(fullUrl, baseURL)
@@ -65,16 +61,17 @@ export async function fetchAPI<T = any, B extends object = any>(
       cache,
       headers: toRequestHeaders(headers),
       body: toRequestBody(data),
-      signal,
+      signal: options?.signal,
     })
       .then(async response => {
         const headerContentType = response.headers.get('Content-Type')
 
         if (headerContentType == null)
           return { ok: false, detail: 'Empty response' }
-        if (response.status === 204) return { ok: true }
+        if (response.status >= 500) throw new Error(response.statusText)
         if (response.status >= 400)
-          return { ok: false, ...(await response.json()) }
+          throw new Error({ ...(await response.json()).detail })
+        if (response.status === 204) return { ok: true }
 
         const isEventStream = headerContentType.includes('text/event-stream')
         const isApplicationJson = headerContentType.includes('application/json')
@@ -92,7 +89,13 @@ export async function fetchAPI<T = any, B extends object = any>(
         }
       })
       .then(resolve)
-      .catch(reject)
+      .catch(error => {
+        if (error.name === 'AbortError') {
+          console.log(['Request aborted', 'fetchAPI', method, url])
+        } else {
+          reject(error)
+        }
+      })
   })
 }
 

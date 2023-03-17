@@ -10,6 +10,7 @@ import {
   useMutationApiSaveFile,
   useApiFileByPath,
   useApiPlanRun,
+  apiCancelPlanRun,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -95,8 +96,14 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-  const { refetch: planRun } = useApiPlanRun(environment.name)
-  const { data: fileData } = useApiFileByPath(activeFile.path)
+  const { refetch: planRun } = useApiPlanRun(environment.name, {
+    planOptions: {
+      skip_tests: true,
+    },
+  })
+  const { data: fileData, refetch: getFileContent } = useApiFileByPath(
+    activeFile.path,
+  )
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
@@ -133,6 +140,10 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
       void planRun()
     }
+
+    return () => {
+      apiCancelPlanRun(client)
+    }
   }, [activeFile.content])
 
   useEffect(() => {
@@ -144,6 +155,10 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
   }, [fileData])
 
   useEffect(() => {
+    if (isFalse(isStringEmptyOrNil(activeFile.path))) {
+      void getFileContent()
+    }
+
     if (isNil(cache[activeFile.id])) {
       cache[activeFile.id] = new Map()
     }

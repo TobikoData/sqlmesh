@@ -1,6 +1,6 @@
 import { useStoreContext } from '~/context/context'
 
-export default function Plan(): JSX.Element {
+export default function Plan({ error }: { error?: Error }): JSX.Element {
   const environment = useStoreContext(s => s.environment)
 
   return (
@@ -12,7 +12,7 @@ export default function Plan(): JSX.Element {
         </b>
       </h4>
       {environment.isInitial && environment.isDefault && (
-        <li className="mt-4 mb-2 flex items-center w-full text-sm">
+        <div className="mt-4 mb-2 flex items-center w-full text-sm">
           <div className="p-4 w-full h-full border border-warning-500 bg-warning-100 rounded-lg">
             <h4 className="mb-2">Running Default Plan prod</h4>
             <p>
@@ -22,7 +22,15 @@ export default function Plan(): JSX.Element {
               Saepe voluptates eaque ducimus!
             </p>
           </div>
-        </li>
+        </div>
+      )}
+      {error != null && (
+        <div className="mt-4 mb-2 flex items-center w-full text-sm">
+          <div className="p-4 w-full h-full border border-danger-500 bg-danger-100 rounded-lg">
+            <h4 className="mb-2">Erorr</h4>
+            <p>{error.message}</p>
+          </div>
+        </div>
       )}
     </div>
   )

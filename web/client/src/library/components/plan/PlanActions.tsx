@@ -183,7 +183,7 @@ export default function PlanActions({
         )}
       </div>
       <div className="flex items-center">
-        {[isProcessing, isRun, disabled, environment.isInitial].every(
+        {[isProcessing, isRun, disabled, environment.isInitial, isDone].every(
           isFalse,
         ) && (
           <Button
