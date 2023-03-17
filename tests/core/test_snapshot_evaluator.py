@@ -89,7 +89,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
             name test_schea.test_model,
             kind INCREMENTAL_BY_TIME_RANGE (time_column a),
             storage_format 'parquet',
-            pre x(),
+            pre [x(), 'create table hook_called'],
             post [x(), x(y=['a', 2, TRUE])],
         );
 
@@ -114,6 +114,8 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     assert payload["calls"] == 3
     assert payload["y"] == ["a", 2, True]
+
+    adapter_mock.execute.assert_called_once_with(parse_one("create table hook_called"))
 
     adapter_mock.create_schema.assert_has_calls(
         [
@@ -278,7 +280,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     evaluator.create([snapshot], {})
 
     updated_model_dict = snapshot.model.dict()
-    updated_model_dict["query"] = "SELECT a AS b FROM tbl"
+    updated_model_dict["query"] = "SELECT a::int, 1 as b FROM tbl"
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)

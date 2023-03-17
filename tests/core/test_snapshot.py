@@ -324,18 +324,23 @@ def test_fingerprint_seed_model():
 
 
 def test_fingerprint_jinja_macros(model: Model):
+
     model = SqlModel(
         **{
             **model.dict(),
             "jinja_macros": JinjaMacroRegistry(
-                root_macros={"test_macro": MacroInfo(definition="macro_content_a", depends_on=[])}
+                root_macros={
+                    "test_macro": MacroInfo(
+                        definition="{% macro test_macro() %}a{% endmacro %}", depends_on=[]
+                    )
+                }
             ),
         }
     )
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2778873847",
+        data_hash="2665680291",
         metadata_hash="3589467163",
     )
 
@@ -343,7 +348,7 @@ def test_fingerprint_jinja_macros(model: Model):
     assert fingerprint == original_fingerprint
 
     model.jinja_macros.root_macros["test_macro"] = MacroInfo(
-        definition="macro_content_b", depends_on=[]
+        definition="{% macro test_macro() %}b{% endmacro %}", depends_on=[]
     )
     updated_fingerprint = fingerprint_from_model(model, models={})
     assert updated_fingerprint.data_hash != original_fingerprint.data_hash

@@ -7,6 +7,7 @@ from enum import IntEnum
 
 from croniter import croniter_range
 from pydantic import validator
+from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
@@ -710,13 +711,20 @@ def fingerprint_from_model(
 
 def _model_data_hash(model: Model, physical_schema: str) -> str:
     def serialize_hooks(hooks: t.List[HookCall]) -> t.Iterable[str]:
-        return (
-            f"{name}:"
-            + ",".join(
-                f"{k}={v.sql(identify=True, comments=False)}" for k, v in sorted(args.items())
-            )
-            for name, args in hooks
-        )
+        serialized = []
+        for hook in hooks:
+            if isinstance(hook, exp.Expression):
+                serialized.append(hook.sql())
+            else:
+                name, args = hook
+                serialized.append(
+                    f"{name}:"
+                    + ",".join(
+                        f"{k}={v.sql(identify=True, comments=False)}"
+                        for k, v in sorted(args.items())
+                    )
+                )
+        return serialized
 
     data = [
         str(model.sorted_python_env),

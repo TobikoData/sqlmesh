@@ -6,6 +6,7 @@ from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -127,7 +128,10 @@ def test_seed_columns():
 
 def test_config_containing_jinja():
     model = ModelConfig(
-        **{"pre-hook": "GRANT INSERT ON {{ source('package', 'table') }}"},
+        **{
+            "pre-hook": "GRANT INSERT ON {{ source('package', 'table') }} TO admin",
+            "post-hook": "GRANT DELETE ON {{ source('package', 'table') }} TO admin",
+        },
         target_schema="{{ var('schema') }}",
         table_name="bar",
         sql="SELECT * FROM {{ source('package', 'table') }}",
@@ -160,6 +164,18 @@ def test_config_containing_jinja():
     assert str(sqlmesh_model.query) == model.sql
     assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
+
+
+def test_hooks(capsys, sushi_dbt_context: Context):
+    waiters = sushi_dbt_context.models["sushi.waiters"]
+    execution_context = ExecutionContext(sushi_dbt_context.engine_adapter, {}, False)
+    capsys.readouterr()
+
+    waiters.run_pre_hooks(execution_context)
+    assert "pre-hook" in capsys.readouterr().out
+
+    waiters.run_post_hooks(execution_context)
+    assert "post-hook" in capsys.readouterr().out
 
 
 def test_target_jinja(sushi_dbt_project: Project):

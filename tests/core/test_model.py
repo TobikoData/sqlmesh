@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,8 @@ from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
-from sqlmesh.core.context import Context
+from sqlmesh.core.context import Context, ExecutionContext
+from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelMeta,
@@ -137,7 +139,7 @@ def test_model_union_query():
     load_model(expressions)
 
 
-def test_model_valiadtion_union_query():
+def test_model_validation_union_query():
     expressions = parse(
         """
         MODEL (
@@ -297,6 +299,42 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         FROM table
     """,
     )
+
+
+def test_model_hooks():
+    @hook()
+    def foo(
+        context: ExecutionContext,
+        start: datetime,
+        end: datetime,
+        latest: datetime,
+        **kwargs,
+    ) -> None:
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+            pre [foo(), 'create table x{{ 1 + 1 }}'],
+            post [foo(bar='x',val=@this), "drop table x2"],
+        );
+
+        SELECT 1 AS x;
+    """
+    )
+    model = load_model(expressions)
+
+    expected_pre = [("foo", {}), d.parse("create table x{{ 1 + 1 }}")[0]]
+    assert model.pre == expected_pre
+
+    expected_post = [
+        ("foo", {"bar": d.parse("'x'")[0], "val": d.parse("@this")[0]}),
+        d.parse("drop table x2")[0],
+    ]
+    assert model.post == expected_post
 
 
 def test_seed():
@@ -787,8 +825,8 @@ def test_parse(assert_exp_eq):
         "id": exp.DataType.build("int"),
     }
     assert model.dialect == ""
-    assert isinstance(model.query, d.Jinja)
-    assert isinstance(SqlModel.parse_raw(model.json()).query, d.Jinja)
+    assert isinstance(model.query, exp.Select)
+    assert isinstance(SqlModel.parse_raw(model.json()).query, exp.Select)
     assert_exp_eq(
         model.render_query(),
         """
