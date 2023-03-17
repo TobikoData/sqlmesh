@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type MouseEvent, useEffect } from 'react'
+import { useState, type MouseEvent, useEffect } from 'react'
 import {
   FolderOpenIcon,
   FolderIcon,
@@ -45,7 +45,7 @@ export default function Directory({
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
 
   useEffect(() => {
-    // Update compoent every time ModelDirectory's state isOpen is changing
+    // Update component every time ModelDirectory's state "isOpen" is changing
     directory.syncStateOpen = setIsOpen
   }, [])
 

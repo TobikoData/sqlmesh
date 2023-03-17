@@ -25,7 +25,7 @@ import {
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
   getModelsApiModelsGet,
-  Models,
+  type Models,
 } from './client'
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {

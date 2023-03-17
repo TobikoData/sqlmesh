@@ -1,16 +1,16 @@
 import { syntaxTree } from '@codemirror/language'
-import { Extension } from '@codemirror/state'
+import { type Extension } from '@codemirror/state'
 import {
   ViewPlugin,
-  DecorationSet,
+  type DecorationSet,
   Decoration,
-  ViewUpdate,
+  type ViewUpdate,
   EditorView,
-  Tooltip,
+  type Tooltip,
   hoverTooltip,
 } from '@codemirror/view'
-import { ModelsModels } from '~/api/client'
-import { ModelFile } from '~/models'
+import { type ModelsModels } from '~/api/client'
+import { type ModelFile } from '~/models'
 import { isNil } from '~/utils'
 
 import { useSqlMeshExtention } from './SqlMeshDialect'

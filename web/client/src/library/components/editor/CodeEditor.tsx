@@ -4,10 +4,10 @@ import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { Extension } from '@codemirror/state'
-import { ModelsModels } from '~/api/client'
+import { type Extension } from '@codemirror/state'
+import { type ModelsModels } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
-import { ModelFile } from '~/models'
+import { type ModelFile } from '~/models'
 import {
   events,
   SqlMeshModel,

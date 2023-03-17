@@ -6,20 +6,12 @@ import {
   type MouseEvent,
 } from 'react'
 import clsx from 'clsx'
-import CodeMirror from '@uiw/react-codemirror'
-import { sql } from '@codemirror/lang-sql'
-import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { type Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
   useApiPlanRun,
   apiCancelPlanRun,
   useApiModels,
-  useApiPlan,
-  useApiPlanCancel,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -57,8 +49,8 @@ import { type ModelEnvironment } from '~/models/environment'
 import { dracula, tomorrow } from 'thememirror'
 import { EnumColorScheme, useColorScheme } from '~/context/theme'
 import CodeEditor from './CodeEditor'
-import { PropsComponent } from '~/main'
 import { sqlglotWorker } from './workers'
+import { type PropsComponent } from '~/main'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',

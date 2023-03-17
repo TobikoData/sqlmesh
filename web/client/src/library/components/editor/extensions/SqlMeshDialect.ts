@@ -1,12 +1,12 @@
 import {
   completeFromList,
-  CompletionContext,
-  Completion,
+  type CompletionContext,
+  type Completion,
 } from '@codemirror/autocomplete'
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
-import { ModelsModels } from '~/api/client'
-import { ModelFile } from '~/models'
+import { type ModelsModels } from '~/api/client'
+import { type ModelFile } from '~/models'
 import { isFalse } from '~/utils'
 import { sqlglotWorker } from '../workers'
 
@@ -74,7 +74,7 @@ export function useSqlMeshExtention(): [
         ]),
       }),
       lang.language.data.of({
-        autocomplete(ctx: CompletionContext) {
+        async autocomplete(ctx: CompletionContext) {
           const match = ctx.matchBefore(/\w*$/)?.text.trim() ?? ''
           const text = ctx.state.doc.toJSON().join('\n')
           const keywordFrom = ctx.matchBefore(/from.+/i)
@@ -99,9 +99,10 @@ export function useSqlMeshExtention(): [
           let suggestions: Completion[] = tables
 
           if (isFalse(isInsideModel) || isFalse(file.isSQLMeshModel)) {
-            if (keywordFrom != null) return completeFromList(suggestions)(ctx)
+            if (keywordFrom != null)
+              return await completeFromList(suggestions)(ctx)
 
-            return keywordCompletionSource(lang)(ctx)
+            return await keywordCompletionSource(lang)(ctx)
           }
 
           suggestions = SQLMeshModelDictionary.get('keywords') ?? []
@@ -114,7 +115,7 @@ export function useSqlMeshExtention(): [
             suggestions = SQLMeshModelDictionary.get('dialect') ?? []
           }
 
-          return completeFromList(suggestions)(ctx)
+          return await completeFromList(suggestions)(ctx)
         },
       }),
     ])
