@@ -218,10 +218,10 @@ def test_alter_table(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE "test_table" ADD COLUMN "a" INT"""),
-            call("""ALTER TABLE "test_table" ADD COLUMN "b" TEXT"""),
             call("""ALTER TABLE "test_table" DROP COLUMN "c\""""),
             call("""ALTER TABLE "test_table" DROP COLUMN "d\""""),
+            call("""ALTER TABLE "test_table" ADD COLUMN "a" INT"""),
+            call("""ALTER TABLE "test_table" ADD COLUMN "b" TEXT"""),
         ]
     )
 

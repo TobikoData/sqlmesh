@@ -36,7 +36,99 @@ RENDER_OPTIMIZER_RULES = (
 )
 
 
-class QueryRenderer:
+def _dates(
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
+    latest: t.Optional[TimeLike] = None,
+) -> t.Tuple[datetime, datetime, datetime]:
+    return (
+        *make_inclusive(start or c.EPOCH, end or c.EPOCH),
+        to_datetime(latest or c.EPOCH),
+    )
+
+
+class ExpressionRenderer:
+    def __init__(
+        self,
+        expression: exp.Expression,
+        dialect: str,
+        macro_definitions: t.List[d.MacroDef],
+        path: Path = Path(),
+        jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
+        python_env: t.Optional[t.Dict[str, Executable]] = None,
+        only_latest: bool = False,
+    ):
+        self._expression = expression
+        self._dialect = dialect
+        self._macro_definitions = macro_definitions
+        self._path = path
+        self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
+        self._python_env = python_env or {}
+        self._only_latest = only_latest
+
+    def render(
+        self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
+    ) -> t.Optional[exp.Expression]:
+        """Renders a expression, expanding macros with provided kwargs
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental models. Defaults to epoch start.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered expression.
+        """
+        expression = self._expression
+
+        render_kwargs = {
+            **date_dict(*_dates(start, end, latest), only_latest=self._only_latest),
+            **kwargs,
+        }
+
+        env = prepare_env(self._python_env)
+        jinja_env = self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
+
+        if isinstance(expression, d.Jinja):
+            try:
+                rendered_expression = jinja_env.from_string(expression.name).render()
+                if not rendered_expression:
+                    return None
+
+                parsed_expression = parse_one(rendered_expression, read=self._dialect)
+                if not parsed_expression:
+                    raise ConfigError(f"Failed to parse a expression {expression}")
+                expression = parsed_expression
+            except Exception as ex:
+                raise ConfigError(f"Invalid expression. {ex} at '{self._path}'") from ex
+
+        macro_evaluator = MacroEvaluator(
+            self._dialect,
+            python_env=self._python_env,
+            jinja_env=jinja_env,
+        )
+        macro_evaluator.locals.update(render_kwargs)
+
+        for definition in self._macro_definitions:
+            try:
+                macro_evaluator.evaluate(definition)
+            except MacroEvalError as ex:
+                raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
+
+        try:
+            expression = macro_evaluator.transform(expression)  # type: ignore
+        except MacroEvalError as ex:
+            raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
+
+        return expression
+
+
+class QueryRenderer(ExpressionRenderer):
     def __init__(
         self,
         query: exp.Expression,
@@ -49,15 +141,18 @@ class QueryRenderer:
         time_converter: t.Optional[t.Callable[[TimeLike], exp.Expression]] = None,
         only_latest: bool = False,
     ):
-        self._query = query
-        self._dialect = dialect
-        self._macro_definitions = macro_definitions
-        self._path = path
-        self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
-        self._python_env = python_env or {}
+        super().__init__(
+            expression=query,
+            dialect=dialect,
+            macro_definitions=macro_definitions,
+            path=path,
+            jinja_macro_registry=jinja_macro_registry,
+            python_env=python_env,
+            only_latest=only_latest,
+        )
+
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
-        self._only_latest = only_latest
 
         self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Subqueryable] = {}
         self._schema: t.Optional[MappingSchema] = None
@@ -95,10 +190,7 @@ class QueryRenderer:
         """
         from sqlmesh.core.snapshot import to_table_mapping
 
-        dates = (
-            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
-            to_datetime(latest or c.EPOCH),
-        )
+        dates = _dates(start, end, latest)
         cache_key = dates
 
         snapshots = snapshots or {}
@@ -107,45 +199,14 @@ class QueryRenderer:
         # won't be valid
         expand = set(expand) | {name for name in snapshots if name not in mapping}
 
-        query = self._query
+        query = self._expression
 
         if cache_key not in self._query_cache:
-            render_kwargs = {
-                **date_dict(*dates, only_latest=self._only_latest),
-                **kwargs,
-            }
+            query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
+            if not query:
+                raise ConfigError(f"Failed to render query {query}")
 
-            if isinstance(query, d.Jinja):
-                env = prepare_env(self._python_env)
-                if not kwargs.get("logging"):
-                    env["log"] = lambda msg, info=False: ""
-
-                try:
-                    parsed_query = parse_one(
-                        self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
-                        .from_string(query.name)
-                        .render(),
-                        read=self._dialect,
-                    )
-                    if not parsed_query:
-                        raise ConfigError(f"Failed to parse a Jinja query {query}")
-                    query = parsed_query
-                except Exception as ex:
-                    raise ConfigError(f"Invalid model query. {ex} at '{self._path}'") from ex
-
-            macro_evaluator = MacroEvaluator(self._dialect, python_env=self._python_env)
-            macro_evaluator.locals.update(render_kwargs)
-
-            for definition in self._macro_definitions:
-                try:
-                    macro_evaluator.evaluate(definition)
-                except MacroEvalError as ex:
-                    raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
-
-            try:
-                self._query_cache[cache_key] = macro_evaluator.transform(query)  # type: ignore
-            except MacroEvalError as ex:
-                raise_config_error(f"Failed to resolve macro for query. {ex}", self._path)
+            self._query_cache[cache_key] = t.cast(exp.Subqueryable, query)
 
             try:
                 self._query_cache[cache_key] = optimize(

@@ -155,7 +155,6 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            logging=True,
             engine_adapter=self.adapter,
             **kwargs,
         )

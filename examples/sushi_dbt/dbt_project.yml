@@ -23,6 +23,10 @@ models:
   +start: Jan 1 2022
   sushi:
     +materialized: table
+    +pre-hook:
+      - '{{ log("pre-hook") }}'
+    +post-hook: 
+      - '{{ log("post-hook") }}'
   customers:
     +materialized: table
 
