@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.common import DbtContext
-from sqlmesh.dbt.model import Dependencies, Materialization, ModelConfig
+from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
@@ -217,7 +218,7 @@ def test_seed_config(sushi_dbt_project: Project):
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert raw_items_seed.seed_name == "sushi.waiter_names"
+    assert raw_items_seed.model_name == "sushi.waiter_names"
 
 
 def _test_warehouse_config(config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str):

@@ -30,6 +30,13 @@ models:
   customers:
     +materialized: table
 
+seeds:
+  sushi:
+    +pre-hook:
+      - '{{ log("pre-hook") }}'
+    +post-hook: 
+      - '{{ log("post-hook") }}'
+
 vars:
   top_waiters:limit: 10
   'top_waiters:revenue': "revenue"

@@ -134,8 +134,7 @@ class DbtContext:
     @property
     def refs(self) -> t.Dict[str, str]:
         if not self._refs:
-            self._refs = {k: v.seed_name for k, v in self._seeds.items()}
-            self._refs.update({k: v.model_name for k, v in self._models.items()})
+            self._refs = {k: v.model_name for k, v in {**self._seeds, **self._models}.items()}  # type: ignore
         return self._refs
 
     @property
