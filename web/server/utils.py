@@ -22,10 +22,10 @@ class ArrowStreamingResponse(StreamingResponse):
         super().__init__(*args, **kwargs)
 
 
-async def run_in_executor(func: t.Callable) -> t.Any:
+async def run_in_executor(func: t.Callable, *args: t.Any) -> t.Any:
     """Run in the default loop's executor"""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, func)
+    return await loop.run_in_executor(None, func, *args)
 
 
 def validate_path(
