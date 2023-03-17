@@ -11,8 +11,8 @@ def parse_to_json(sql: str, read: DialectType = None) -> str:
     )
 
 
-def get_dialect(dialect_type: str = "") -> str | None:
-    dialect = Dialect.classes.get(dialect_type, Dialect)
+def get_dialect(name: str = "") -> str:
+    dialect = Dialect.classes.get(name, Dialect)
     tokenizer = dialect.tokenizer_class
     output = {"keywords": "", "types": ""}
 
