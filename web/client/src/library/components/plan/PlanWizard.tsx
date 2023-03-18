@@ -68,6 +68,8 @@ export default function PlanWizard(): JSX.Element {
 
   const filterActiveBackfillsTasks = useCallback(
     (tasks: PlanTasks): PlanTasks => {
+      const x = Array.from(change_categorization.values())
+
       return Object.entries(tasks).reduce(
         (acc: PlanTasks, [taskModelName, task]) => {
           const choices = categories[taskModelName]
@@ -88,6 +90,24 @@ export default function PlanWizard(): JSX.Element {
 
   const filterBackfillsTasks = useCallback(
     (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
+      const categories = Array.from(change_categorization.values()).reduce<
+        Record<string, boolean[]>
+      >((acc, { category, change }) => {
+        change?.indirect?.forEach(model => {
+          if (acc[model] == null) {
+            acc[model] = []
+          }
+
+          acc[model]?.push(category.value !== 1)
+        })
+
+        if (category.value === 3) {
+          acc[change.model_name] = [true]
+        }
+
+        return acc
+      }, {})
+
       return backfills.reduce((acc: PlanTasks, task) => {
         const taskModelName = task.model_name
         const taskInterval = task.interval as [string, string]

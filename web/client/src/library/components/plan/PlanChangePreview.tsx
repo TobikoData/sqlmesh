@@ -101,6 +101,12 @@ function PlanChangePreviewDirect({
 }: {
   changes: ChangeDirect[]
 }): JSX.Element {
+  const dispatch = usePlanDispatch()
+
+  const { change_categorization, categories } = usePlan()
+
+  const planState = useStorePlan(s => s.state)
+
   return (
     <ul>
       {changes.map((change, idx) => (
