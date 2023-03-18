@@ -106,8 +106,32 @@ export default function PlanWizard(): JSX.Element {
         }
 
         return acc
-      }, {})
+      }, {}),
+    [change_categorization],
+  )
 
+  const filterActiveBackfillsTasks = useCallback(
+    (tasks: PlanTasks): PlanTasks => {
+      return Object.entries(tasks).reduce(
+        (acc: PlanTasks, [taskModelName, task]) => {
+          const choices = categories[taskModelName]
+
+          const shouldExclude = choices != null ? choices.every(Boolean) : false
+
+          if (shouldExclude) return acc
+
+          acc[taskModelName] = task
+
+          return acc
+        },
+        {},
+      )
+    },
+    [categories],
+  )
+
+  const filterBackfillsTasks = useCallback(
+    (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
       return backfills.reduce((acc: PlanTasks, task) => {
         const taskModelName = task.model_name
         const taskInterval = task.interval as [string, string]
