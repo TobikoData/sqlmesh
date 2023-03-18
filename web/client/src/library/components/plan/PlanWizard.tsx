@@ -44,29 +44,9 @@ export default function PlanWizard(): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
 
-  const filterActiveBackfillsTasks = useCallback(
-    (tasks: PlanTasks): PlanTasks => {
-      const x = Array.from(change_categorization.values())
-
-      console.log({ x })
-
-      return Object.entries(tasks).reduce(
-        (acc: PlanTasks, [taskModelName, task]) => {
-          // const category = change_categorization.get(taskModelName)
-
-          acc[taskModelName] = task
-
-          return acc
-        },
-        {},
-      )
-    },
-    [modified],
-  )
-
-  const filterBackfillsTasks = useCallback(
-    (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
-      const categories = Array.from(change_categorization.values()).reduce<
+  const categories = useMemo(
+    () =>
+      Array.from(change_categorization.values()).reduce<
         Record<string, boolean[]>
       >((acc, { category, change }) => {
         change?.indirect?.forEach(model => {
@@ -82,8 +62,32 @@ export default function PlanWizard(): JSX.Element {
         }
 
         return acc
-      }, {})
+      }, {}),
+    [change_categorization],
+  )
 
+  const filterActiveBackfillsTasks = useCallback(
+    (tasks: PlanTasks): PlanTasks => {
+      return Object.entries(tasks).reduce(
+        (acc: PlanTasks, [taskModelName, task]) => {
+          const choices = categories[taskModelName]
+
+          const shouldExclude = choices != null ? choices.every(Boolean) : false
+
+          if (shouldExclude) return acc
+
+          acc[taskModelName] = task
+
+          return acc
+        },
+        {},
+      )
+    },
+    [categories],
+  )
+
+  const filterBackfillsTasks = useCallback(
+    (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
       return backfills.reduce((acc: PlanTasks, task) => {
         const taskModelName = task.model_name
         const taskInterval = task.interval as [string, string]
@@ -103,7 +107,7 @@ export default function PlanWizard(): JSX.Element {
         return acc
       }, {})
     },
-    [change_categorization],
+    [categories],
   )
 
   const tasks: PlanTasks = useMemo(
