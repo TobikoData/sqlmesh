@@ -9,6 +9,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
+from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import run_in_executor
@@ -53,7 +54,13 @@ async def run_plan(
         no_auto_categorization=plan_options.no_auto_categorization,
     )
     request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
-    plan = await request.app.state.task
+    try:
+        plan = await request.app.state.task
+    except PlanError as e:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
     payload = models.ContextEnvironment(
         environment=plan.environment.name,

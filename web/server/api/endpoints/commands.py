@@ -11,6 +11,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -54,7 +55,13 @@ async def apply(
         no_auto_categorization=plan_options.no_auto_categorization,
     )
     request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
-    plan = await task
+    try:
+        plan = await task
+    except PlanError as e:
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
