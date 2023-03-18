@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -28,6 +29,7 @@ async def apply(
     environment: t.Optional[str] = Body(),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> models.ApplyResponse:
     """Apply a plan"""
 
@@ -51,10 +53,16 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
-    request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
+    request.app.state.task = task = asyncio.create_task(
+        run_in_executor(plan_func))
     plan = await task
 
-    request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
+    if categories is not None:
+        for model_name, category in categories.items():
+            plan.set_choice(model_name, category)
+
+    request.app.state.task = asyncio.create_task(
+        run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
         await request.app.state.task
 
@@ -120,7 +128,8 @@ async def render(
     snapshot = context.snapshots.get(options.model)
 
     if not snapshot:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
 
     rendered = context.render(
         snapshot,
