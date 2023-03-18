@@ -76,9 +76,9 @@ export function getBackfillStepHeadline({
     return 'Completed Backfill'
   if (planState === EnumPlanState.Finished && hasLogicalUpdate)
     return 'Completed Logical Update'
+  if (hasNoChange) return 'No Changes'
   if (hasBackfills) return 'Needs Backfill'
   if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
-  if (hasNoChange) return 'No Changes'
 
   return 'Updating...'
 }

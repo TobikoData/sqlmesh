@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react'
 import clsx from 'clsx'
 import CodeMirror from '@uiw/react-codemirror'
 import { sql } from '@codemirror/lang-sql'
@@ -28,6 +34,7 @@ import {
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
 import {
+  debounceAsync,
   isFalse,
   isNil,
   isObjectLike,
@@ -120,7 +127,9 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
       setEditorFileStatus(EnumEditorFileStatus.Saving)
     },
   })
-
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
   const debouncedChange = useMemo(
     () =>
       debounce(
@@ -138,7 +147,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
 
   useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
-      void planRun()
+      void debouncedPlanRun()
     }
 
     return () => {

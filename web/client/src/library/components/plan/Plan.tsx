@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  debounceAsync,
   includes,
   isFalse,
   isStringEmptyOrNil,
@@ -16,6 +17,7 @@ import {
 } from '~/api'
 import {
   ApplyType,
+  type BodyApplyApiCommandsApplyPostCategories,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
 } from '~/api/client'
@@ -59,6 +61,7 @@ function Plan({
     hasChanges,
     hasBackfills,
     create_from,
+    change_categorization,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
@@ -71,18 +74,23 @@ function Plan({
   const [error, setError] = useState<Error>()
 
   const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planDates: environment.isInitial
-      ? undefined
-      : {
-          start,
-          end:
-            isInitialPlanRun && isStringEmptyOrNil(restate_models)
-              ? undefined
-              : end,
-        },
+    planDates:
+      environment.isInitial || environment.isDefault
+        ? undefined
+        : {
+            start,
+            end:
+              isInitialPlanRun && isStringEmptyOrNil(restate_models)
+                ? undefined
+                : end,
+          },
     planOptions: environment.isInitial
       ? {
           skip_tests: true,
+        }
+      : environment.isDefault
+      ? {
+          skip_tests,
         }
       : {
           no_gaps,
@@ -112,6 +120,16 @@ function Plan({
       skip_tests,
       restate_models,
     },
+    categories: Array.from(
+      change_categorization.values(),
+    ).reduce<BodyApplyApiCommandsApplyPostCategories>(
+      (acc, { category, change }) => {
+        acc[change.model_name] = category.value
+
+        return acc
+      },
+      {},
+    ),
   })
 
   const [startDate, endDate] = useMemo(() => {
@@ -131,12 +149,18 @@ function Plan({
     return [start, end]
   }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
+
   useEffect(() => {
     if (environment.isInitial && environment.isDefault) {
       run()
     }
 
     return () => {
+      debouncedPlanRun.cancel()
+
       apiCancelPlanRun(client)
     }
   }, [])
@@ -262,7 +286,9 @@ function Plan({
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
-    planApply()
+    planApply({
+      throwOnError: true,
+    })
       .then(({ data }) => {
         if (data?.type === ApplyType.logical) {
           setPlanState(EnumPlanState.Finished)
@@ -284,9 +310,8 @@ function Plan({
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    planRun({
+    debouncedPlanRun({
       throwOnError: true,
-      cancelRefetch: false,
     })
       .then(({ data }) => {
         dispatch([
