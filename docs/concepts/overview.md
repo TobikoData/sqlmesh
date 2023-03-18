@@ -1,41 +1,73 @@
 # Overview
 
-This collection of topics provides a conceptual overview of how the various components of SQLMesh fit together, as well as the types of data transformation.
+This page provides a conceptual overview of what SQLMesh does and how its components fit together.
 
-## What is data transformation?
-Data is essential for understanding what is happening with your business or application; it helps you make informed decisions. However, data in its raw form (application logs, transactional database tables, and so forth) is not particularly useful for making decisions. By joining various tables together or computing aggregations, it's easier to interpret, analyze, and then take action on data.
+## What SQLMesh Is
+SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and orchestrators](../integrations/overview.md). 
 
-This is where a data transformation platform comes in: to make it easy to create and organize complex data pipelines with many dependencies and relationships.
+It was created with a focus on both data and organizational scale and works regardless of your data warehouse or SQL engine's capabilities.
 
-## Types of data transformation processes
-
-There are three types of data transformation processes: manual, scheduler-based, and model-aware.
-
-### Manual
-If your data or organization are small, you may only have a couple of key metrics that you want to compute. In these scenarios, running SQL queries or Python scripts manually will get the job done. As your organization grows (more people/more data), a manual process quickly becomes unmaintainable.
-
-### Scheduler-based
-A common approach for organizations that have grown past manual pipelines is to build around an orchestration framework such as [Airflow](https://airflow.apache.org/) or [Prefect](https://www.prefect.io/). Although these frameworks handle dependencies and scheduling, they are very generic. Custom tooling needs to be developed in order to make it easier to work with these frameworks. Also, less technical data professionals may have trouble working with these tools directly because they are complex and geared towards engineers.
-
-### Model-aware
-The final class of data transformation platforms provides more integrations to common data modeling patterns like SQLMesh, [dbt](https://www.getdbt.com/), and [coalesce](https://coalesce.io/). Unlike generic scheduling tools, these platforms provide automation around common patterns such as  natively supporting various materialization strategies.
-
-Read more about why SQLMesh is the most efficient and powerful data transformation platform [here](../index.md).
+You can use SQLMesh with the [CLI](../reference/cli.md), [notebook](../reference/notebook.md), or [Python](../reference/python.md) APIs.
 
 ## How SQLMesh works
-SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and schedulers](../integrations/overview.md). It was created with a focus on both data and organizational scale.
-
 ### Create models
-You begin by writing your business logic in SQL or Python, which will result in a table or view.
+You begin by writing your business logic in SQL or Python. A model consists of code that populates a single table or view, along with metadata properties such as the model's name.
 
-### Plan and apply
-Changing SQL query models can have dramatic effects downstream when working with complex pipelines. SQLMesh's plan command allows developers to understand the full scope of directly and indirectly-impacted workflows automatically, giving them a holistic view of the changes.
+### Make a [Plan](./plans.md)
+Creating new models or changing existing models can have dramatic downstream effects in large data systems. Complex interdependencies between models make it challenging to determine the implications of changes to even a single model. 
 
-Deploying new pipelines can be time-consuming, expensive, and error-prone. A SQLMesh plan can be applied to allow developers to deploy their changes to isolated environments for testing and validation, seamlessly handling backfilling and reuse of existing tables. When development is complete, promoting an environment to production is quick and has no downtime. SQLMesh is able to accomplish all of this regardless of your data warehouse or SQL engine's capabilities.
+Beyond understanding the logical implications of a change, you also need to understand the computations required to implement the change *before* you expend the time and resources to actually perform the computations.
 
-You can interact with SQLMesh through a [CLI](../reference/cli.md), [notebook](../reference/notebook.md), or [Python](../reference/python.md) API.
+SQLMesh automatically identifies all affected models and the computations a change entails by creating a "SQLMesh plan." When you execute the [`plan` command](../reference/cli.md#plan), SQLMesh generates the plan *for the environment specified in the command* (e.g., dev, test, prod). 
 
-## Infrastructure and deployment
-Every company's data infrastructure is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use. The only requirement for SQLMesh is to have access to the target SQL / analytics engine.
+The plan conveys the full scope of a change's effects in the environment by automatically identifying both directly and indirectly-impacted models. This gives a holistic view of all impacts a change will have. 
 
-SQLMesh is able to keep track of model versions and intervals using your existing infrastructure. If SQLMesh is configured without a scheduler, it will automatically create a `sqlmesh` database in your data warehouse. It will use this database for internal metadata and physical storage of SQLMesh managed tables. If SQLMesh is configured with Airflow, then it will store all its metadata in the Airflow database. Read more about how [SQLMesh integrates with Airflow](../integrations/airflow.md).
+Learn more about [plans](./plans.md).
+
+#### Apply the plan
+After using [`plan`](../reference/cli.md#plan) to understand the impacts of a change in an environment, SQLMesh offers to execute the computations by [`apply`](./plans.md#plan-application)ing the plan. However, you must provide additional information that determines the scope of what computations are executed. 
+
+The computations needed to apply a SQLMesh plan are determined by both the code changes reflected in the plan and the backfill parameters you specify.
+
+"Backfilling" is the process of updating existing data to align with your changed models. For example, if your model change alters a calculation, then all existing data based on the old calculation method will be inaccurate once the new model is deployed. Backfilling entails re-calculating the existing fields whose calculation method has now changed.
+
+Most business data is temporal - each data fact was collected at a specific moment in time. The scale of backfill computations is directly tied to how much historical data is to be re-calculated.
+
+The SQLMesh plan automatically determines which models and dates require backfill due to your changes. Based on this information, you specify the dates for which backfills will occur before you apply the plan.
+
+#### Build a Virtual Data Mart
+Development activities for complex data systems should occur in a non-production environment so errors can be detected before being deployed in production systems.
+
+One challenge with using multiple data environments is that backfill and other computations must happen twice - once for the non-production and again for the production environment. This process consumes time and computing resources, resulting in delays and extra costs.
+
+SQLMesh solves this problem by maintaining a record of all model versions and their changes. It uses this record to determine when computations executed in a non-production environment generate outputs identical to what they would generate in the production environment. 
+
+SQLMesh uses its knowledge of equivalent outputs to create a **virtual data mart**. It does this by replacing references to outdated tables in the production environment with references to newly computed tables in the non-production environment. It effectively promotes views and tables from non-production to production, but *without computation or data movement*.
+
+Because SQLMesh uses virtual data marts instead of re-computing everything in the prod environment, promoting changes to production is quick and has no downtime. 
+
+## Test your code and data
+Bad data is worse than no data. The best way to keep bad data out of your system is by testing your transformation code and results.
+
+### [Tests](./tests.md)
+SQLMesh "tests" are similar to unit tests in software development, where the unit is a single model. SQLMesh tests validate model *code* - you specify the input data and expected output, then SQLMesh runs the test and compares the expected and actual output.
+
+SQLMesh automatically runs tests when you apply a `plan`, or you can run them on demand with the [`test` command](../reference/cli.md#test).
+
+### [Audits](./audits.md)
+In contrast to tests, SQLMesh "audits" validate the results of model code applied to your actual data. 
+
+You create audits by writing SQL queries that should return 0 rows. For example, an audit query to ensure `your_field` has no `NULL` values would include `WHERE your_field IS NULL`. If any NULLs are detected, the query will return at least one row and the audit will fail.
+
+Audits are flexible - they can be tied to a specific model's contents, or you can use [macros](concepts/macros.md) to create audits usable by multiple models. SQLMesh also includes pre-made audits for common use cases like detecting NULL or duplicated values.
+
+You specify which audits should run for a model by including them in the model's metadata properties. 
+
+SQLMesh automatically runs audits when you apply a `plan` to an environment, or you can run them on demand with the [`audit` command](../reference/cli.md#audit).
+
+## Infrastructure and Orchestration
+Every company's data infrastructure is different. SQLMesh is flexible with regard to which engines and orchestration frameworks you use - its only requirement is access to the target SQL / analytics engine.
+
+SQLMesh keeps track of model versions and processed data intervals using your existing infrastructure. If SQLMesh is configured without an external orchestrator (like Airflow), it automatically creates a `sqlmesh` database in your data warehouse for its internal metadata. 
+
+If SQLMesh is configured with Airflow, then it will store all its metadata in the Airflow database. Read more about how [SQLMesh integrates with Airflow](../integrations/airflow.md).
