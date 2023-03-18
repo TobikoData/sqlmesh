@@ -53,7 +53,8 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
-    request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
+    request.app.state.task = task = asyncio.create_task(
+        run_in_executor(plan_func))
     plan = await task
 
     if categories is not None:
@@ -61,7 +62,8 @@ async def apply(
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan.set_choice(new, categories[new.name])
 
-    request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
+    request.app.state.task = asyncio.create_task(
+        run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
         await request.app.state.task
 
@@ -127,7 +129,8 @@ async def render(
     snapshot = context.snapshots.get(options.model)
 
     if not snapshot:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
 
     rendered = context.render(
         snapshot,

@@ -91,7 +91,8 @@ class ModelsDiff(BaseModel):
 
         indirect = [
             ChangeIndirect(
-                model_name=current.name, direct=[parent.name for parent in current.parents]
+                model_name=current.name, direct=[
+                    parent.name for parent in current.parents]
             )
             for current, _ in context_diff.modified_snapshots.values()
             if context_diff.indirectly_modified(current.name)
