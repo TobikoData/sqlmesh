@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
@@ -98,6 +99,26 @@ def test_model_config(sushi_dbt_project: Project):
     assert actual_config == expected_config
 
     assert rendered.model_name == "sushi.customer_revenue_by_day"
+
+
+def test_to_sqlmesh_fields(sushi_dbt_project: Project):
+    model_config = ModelConfig(
+        alias="model",
+        target_schema="schema",
+        schema_="custom",
+        database="database",
+        description="test model",
+        sql="SELECT 1 FROM a",
+        start="Jan 1 2023",
+    )
+    context = DbtContext()
+    model = model_config.to_sqlmesh(context)
+
+    assert isinstance(model, SqlModel)
+    assert model.name == "database.schema_custom.model"
+    assert model.description == "test model"
+    assert model.query.sql() == "SELECT 1 FROM a"
+    assert model.start == "Jan 1 2023"
 
 
 def test_model_config_sql_no_config():
