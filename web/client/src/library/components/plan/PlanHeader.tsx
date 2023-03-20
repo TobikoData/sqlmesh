@@ -27,7 +27,7 @@ export default function Plan({ error }: { error?: Error }): JSX.Element {
       {error != null && (
         <div className="mt-4 mb-2 flex items-center w-full text-sm">
           <div className="p-4 w-full h-full border border-danger-500 bg-danger-100 rounded-lg">
-            <h4 className="mb-2">Erorr</h4>
+            <h4 className="mb-2">Error</h4>
             <p>{error.message}</p>
           </div>
         </div>
