@@ -421,7 +421,12 @@ class _Model(ModelMeta, frozen=True):
     @property
     def sql_statements(self) -> t.List[exp.Expression]:
         """All sql statements from the list of expressions."""
-        return [s for s in self.expressions if not isinstance(s, d.MacroDef)]
+        rendered_statements = [
+            self._expression_renderer(s).render()
+            for s in self.expressions
+            if not isinstance(s, d.MacroDef)
+        ]
+        return [statement for statement in rendered_statements if statement is not None]
 
     @property
     def view_name(self) -> str:
