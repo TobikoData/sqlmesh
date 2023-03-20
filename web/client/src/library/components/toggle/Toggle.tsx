@@ -20,7 +20,8 @@ export default function Toggle({
       checked={disabled ? false : enabled}
       onChange={setEnabled}
       className={clsx(
-        'relative inline-flex h-8 w-16 shrink-0 rounded-full border-2 border-secondary-300  transition-colors duration-200 ease-in-out focus:outline-none focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 focus-visible:ring-opacity-75',
+        'relative inline-flex h-8 w-16 shrink-0 rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 focus-visible:ring-opacity-75',
+        'border-secondary-300',
         enabled ? 'bg-secondary-500' : 'bg-secondary-100',
         className,
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
@@ -31,7 +32,7 @@ export default function Toggle({
       <span
         aria-hidden="true"
         className={clsx(
-          'pointer-events-none inline-block h-6 w-6 transform  rounded-full shadow-md  transition duration-200 ease-in-out',
+          'pointer-events-none inline-block h-6 w-6 transform rounded-full shadow-md  transition duration-200 ease-in-out',
           'bg-light translate-y-[0.125rem]',
           enabled
             ? 'translate-x-8 shadow-primary-800'

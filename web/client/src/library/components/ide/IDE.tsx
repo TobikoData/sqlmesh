@@ -147,7 +147,7 @@ export function IDE(): JSX.Element {
           setIsPlanOpen(false)
         }}
       >
-        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
+        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-light dark:bg-dark-lighter text-left align-middle shadow-xl transition-all">
           {environment != null && isPlanOpen && (
             <PlanProvider>
               <Plan

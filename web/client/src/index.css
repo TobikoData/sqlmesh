@@ -140,9 +140,9 @@ html[mode='dark'] {
   --color-text: var(--color-nutral-200);
   --color-text-lighter: var(--color-nutral-100);
 
-  --color-divider-darker: var(--color-nutral-800);
-  --color-divider: var(--color-nutral-700);
-  --color-divider-lighter: var(--color-nutral-200);
+  --color-divider-darker: var(--color-theme-darker);
+  --color-divider: var(--color-theme-lighter);
+  --color-divider-lighter: var(--color-nutral-100);
 
   --color-logo-darker: var(--color-nutral-300);
   --color-logo: var(--color-nutral-200);

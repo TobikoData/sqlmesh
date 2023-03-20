@@ -71,7 +71,6 @@ export default function TasksProgress({
 
   return (
     <div
-      className="bg-white"
       ref={setRefTaskProgress}
     >
       <div className="my-3 mx-4">
