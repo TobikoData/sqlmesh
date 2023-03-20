@@ -51,8 +51,8 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
-    request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
-    plan = await request.app.state.task
+    request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
+    plan = await task
 
     request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
