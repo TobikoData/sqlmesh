@@ -261,6 +261,7 @@ BUILTIN_GLOBALS = {
     "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
+    "print": no_log,
     "return": return_val,
     "set": to_set,
     "set_strict": set,
@@ -325,6 +326,7 @@ def create_builtin_globals(
                 "run_query": sql_execution.run_query,
                 "statement": sql_execution.statement,
                 "log": log,
+                "print": log,
             }
         )
     else:
@@ -340,6 +342,7 @@ def create_builtin_globals(
                 "run_query": lambda *args, **kwargs: None,
                 "statement": lambda *args, **kwargs: "",
                 "log": no_log,
+                "print": no_log,
             }
         )
 
