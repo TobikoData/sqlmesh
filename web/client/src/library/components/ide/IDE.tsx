@@ -4,7 +4,12 @@ import { Editor } from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy } from 'react'
 import { EnumSize } from '../../../types/enum'
-import { useApiFiles, useApiEnvironments } from '../../../api'
+import {
+  useApiFiles,
+  useApiEnvironments,
+  apiCancelGetEnvironments,
+  apiCancelFiles,
+} from '../../../api'
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
@@ -15,11 +20,14 @@ import PlanProvider from '../plan/context'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
 import { Dialog } from '@headlessui/react'
+import { useQueryClient } from '@tanstack/react-query'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
 
 export function IDE(): JSX.Element {
+  const client = useQueryClient()
+
   const environment = useStoreContext(s => s.environment)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
   const initialEndDate = useStoreContext(s => s.initialEndDate)
@@ -35,16 +43,18 @@ export function IDE(): JSX.Element {
   const [isPlanOpen, setIsPlanOpen] = useState(false)
   const [isClosingModal, setIsClosingModal] = useState(false)
 
-  const [subscribe] = useChannelEvents(updateTasks)
+  const [subscribe] = useChannelEvents()
 
   const { data: project } = useApiFiles()
   const { data: contextEnvironemnts } = useApiEnvironments()
 
   useEffect(() => {
-    const unsubscribe = subscribe('tasks')
+    const unsubscribeTasks = subscribe('tasks', updateTasks)
 
     return () => {
-      unsubscribe?.()
+      apiCancelFiles(client)
+      apiCancelGetEnvironments(client)
+      unsubscribeTasks?.()
     }
   }, [])
 

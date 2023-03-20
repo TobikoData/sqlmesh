@@ -13,12 +13,10 @@ import {
   type PlanDates,
   type File,
   type Directory,
-  type Context,
   type ApplyResponse,
   type PlanOptions,
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
-  getApiContextApiContextGet,
   dagApiCommandsDagGet,
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
@@ -27,15 +25,21 @@ import {
   cancelPlanApiPlanCancelPost,
 } from './client'
 
-export function useApiFileByPath(path?: string): UseQueryResult<File> {
-  const shouldEnable = path != null && path !== ''
+export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
+  return useQuery({
+    queryKey: ['/api/commands/dag'],
+    queryFn: async ({ signal }) => await dagApiCommandsDagGet({ signal }),
+  })
+}
 
+export function useApiFileByPath(path?: string): UseQueryResult<File> {
   return useQuery({
     queryKey: [`/api/files`, path],
-    queryFn: shouldEnable
-      ? async () => await getFileApiFilesPathGet(path)
-      : undefined,
-    enabled: shouldEnable,
+    queryFn: async ({ signal }) =>
+      path != null &&
+      path !== '' &&
+      (await getFileApiFilesPathGet(path, { signal })),
+    enabled: false,
     cacheTime: 0,
   })
 }
@@ -43,7 +47,7 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
 export function useApiFiles(): UseQueryResult<Directory> {
   return useQuery({
     queryKey: ['/api/files'],
-    queryFn: getFilesApiFilesGet,
+    queryFn: async ({ signal }) => await getFilesApiFilesGet({ signal }),
     cacheTime: 0,
   })
 }
@@ -51,15 +55,8 @@ export function useApiFiles(): UseQueryResult<Directory> {
 export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
   return useQuery({
     queryKey: ['/api/environments'],
-    queryFn: getEnvironmentsApiEnvironmentsGet,
-    cacheTime: 0,
-  })
-}
-
-export function useApiContext(): UseQueryResult<Context> {
-  return useQuery({
-    queryKey: ['/api/context'],
-    queryFn: getApiContextApiContextGet,
+    queryFn: async ({ signal }) =>
+      await getEnvironmentsApiEnvironmentsGet({ signal }),
     cacheTime: 0,
   })
 }
@@ -73,12 +70,15 @@ export function useApiPlanRun(
 ): UseQueryResult<ContextEnvironment> {
   return useQuery({
     queryKey: ['/api/plan', environment],
-    queryFn: async () =>
-      await runPlanApiPlanPost({
-        environment,
-        plan_dates: options?.planDates,
-        plan_options: options?.planOptions,
-      }),
+    queryFn: async ({ signal }) =>
+      await runPlanApiPlanPost(
+        {
+          environment,
+          plan_dates: options?.planDates,
+          plan_options: options?.planOptions,
+        },
+        { signal },
+      ),
     enabled: false,
     cacheTime: 0,
   })
@@ -93,12 +93,15 @@ export function useApiPlanApply(
 ): UseQueryResult<ApplyResponse> {
   return useQuery({
     queryKey: ['/api/commands/apply', environment],
-    queryFn: async () =>
-      await applyApiCommandsApplyPost({
-        environment,
-        plan_dates: options?.planDates,
-        plan_options: options?.planOptions,
-      }),
+    queryFn: async ({ signal }) =>
+      await applyApiCommandsApplyPost(
+        {
+          environment,
+          plan_dates: options?.planDates,
+          plan_options: options?.planOptions,
+        },
+        { signal },
+      ),
     enabled: false,
     cacheTime: 0,
   })
@@ -136,38 +139,20 @@ export function useMutationApiSaveFile(
   })
 }
 
-export async function useApiContextCancel(client: QueryClient): Promise<void> {
-  await client.cancelQueries({ queryKey: ['/api/context'] })
+export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
+  void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
+
+  return await cancelPlanApiPlanCancelPost()
 }
 
-export async function apiCancelPlanRun(
-  client: QueryClient,
-  environment: string,
-): Promise<void> {
-  await client.cancelQueries({ queryKey: ['/api/plan', environment] })
+export function apiCancelPlanRun(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/plan'] })
 }
 
-export async function apiCancelPlanApply(
-  client: QueryClient,
-  environment: string,
-): Promise<void> {
-  await client.cancelQueries({ queryKey: ['/api/commands/apply', environment] })
+export function apiCancelGetEnvironments(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/environments'] })
 }
 
-export async function apiCancelPlanApplyAndRun(
-  client: QueryClient,
-  environment: string,
-): Promise<void> {
-  await Promise.allSettled([
-    apiCancelPlanRun(client, environment),
-    apiCancelPlanApply(client, environment),
-    cancelPlanApiPlanCancelPost(),
-  ])
-}
-
-export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
-  return useQuery({
-    queryKey: ['/api/commands/dag'],
-    queryFn: dagApiCommandsDagGet,
-  })
+export function apiCancelFiles(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/files'] })
 }

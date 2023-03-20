@@ -2,7 +2,7 @@ import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { lazy, Fragment, type MouseEvent } from 'react'
-import { apiCancelPlanApplyAndRun } from '~/api'
+import { apiCancelPlanApply } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
   type PlanProgress,
@@ -33,7 +33,7 @@ export default function ActivePlan({
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    void apiCancelPlanApplyAndRun(client, environment.name)
+    apiCancelPlanApply(client)
       .catch(console.error)
       .finally(() => {
         setPlanAction(EnumPlanAction.None)

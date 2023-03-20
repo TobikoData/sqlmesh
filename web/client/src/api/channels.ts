@@ -6,10 +6,12 @@ const SSE_CHANNEL = getEventSource('/api/events')
 
 const CHANNELS = new Map<string, Optional<() => void>>()
 
-export function useChannelEvents(
-  callback: ChannelCallback,
-): [(topic: string) => Optional<() => void>] {
-  return [(topic: string) => subscribe(topic, callback)]
+export function useChannelEvents(): [
+  (topic: string, callback: ChannelCallback) => Optional<() => void>,
+] {
+  return [
+    (topic: string, callback: ChannelCallback) => subscribe(topic, callback),
+  ]
 }
 
 function subscribe(
@@ -45,6 +47,6 @@ function handleChannelTasks(
   }
 }
 
-function getEventSource(topic: string): EventSource {
-  return new EventSource(topic)
+function getEventSource(source: string): EventSource {
+  return new EventSource(source)
 }
