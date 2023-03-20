@@ -193,13 +193,14 @@ class BaseModelConfig(GeneralConfig):
         )
 
         return {
-            "pre": [exp for hook in self.pre_hook for exp in d.parse(hook)],
-            "post": [exp for hook in self.post_hook for exp in d.parse(hook)],
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "jinja_macros": jinja_macros,
             "depends_on": {model_context.refs[ref] for ref in self._dependencies.refs},
+            "description": self.description,
+            "jinja_macros": jinja_macros,
             "path": self.path,
+            "pre": [exp for hook in self.pre_hook for exp in d.parse(hook)],
+            "post": [exp for hook in self.post_hook for exp in d.parse(hook)],
         }
 
     def render_config(self: BMC, context: DbtContext) -> BMC:
