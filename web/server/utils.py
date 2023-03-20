@@ -15,6 +15,8 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 from sqlmesh.core.context import Context
 from web.server.settings import get_context
 
+R = t.TypeVar("R")
+
 
 class ArrowStreamingResponse(StreamingResponse):
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
@@ -22,7 +24,7 @@ class ArrowStreamingResponse(StreamingResponse):
         super().__init__(*args, **kwargs)
 
 
-async def run_in_executor(func: t.Callable, *args: t.Any) -> t.Any:
+async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
     """Run in the default loop's executor"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, func, *args)
