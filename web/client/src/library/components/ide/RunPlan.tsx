@@ -150,10 +150,9 @@ export default function RunPlan({
       <div className="flex items-center relative">
         <Button
           className={clsx(
-            'font-bold mx-0 py-[0.25rem] bg-secondary-100 border-secondary-500',
-            environment.isInitial && environment.isDefault
-              ? 'rounded-lg'
-              : 'rounded-none rounded-l-lg border-r',
+            'mx-0',
+            isFalse(environment.isInitial && environment.isDefault) &&
+              'rounded-none rounded-l-lg border-r',
           )}
           disabled={
             isError ||
@@ -163,7 +162,7 @@ export default function RunPlan({
             planState === EnumPlanState.Running ||
             planState === EnumPlanState.Cancelling
           }
-          variant="primary"
+          variant={EnumVariant.Alternative}
           size={EnumSize.sm}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
@@ -407,7 +406,7 @@ function SelectEnvironemnt({
   environment: ModelEnvironment
   disabled: boolean
   className?: string
-  size?: Size
+  size?: ButtonSize
   side?: 'left' | 'right'
   onSelect?: () => void
   showAddEnvironemnt?: boolean
@@ -543,7 +542,7 @@ function AddEnvironemnt({
   label = 'Add',
   size = EnumSize.sm,
 }: {
-  size?: Size
+  size?: ButtonSize
   onAdd?: () => void
   className?: string
   label?: string

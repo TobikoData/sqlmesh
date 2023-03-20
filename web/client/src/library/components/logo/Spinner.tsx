@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import React, { memo } from 'react'
-import { EnumVariant } from '~/types/enum'
+import { EnumVariant, type Variant } from '~/types/enum'
 
 interface PropsSpinner extends React.SVGAttributes<SVGAElement> {
   variant?: Variant

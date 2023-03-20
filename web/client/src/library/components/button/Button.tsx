@@ -1,15 +1,23 @@
 import clsx from 'clsx'
-import { EnumSize } from '../../../types/enum'
+import {
+  EnumSize,
+  type Size,
+  type Variant,
+  type EnumVariant,
+} from '../../../types/enum'
 import { Menu } from '@headlessui/react'
 import { type ForwardedRef, forwardRef } from 'react'
 
-export type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'success'
-  | 'danger'
-  | 'warning'
-  | 'alternative'
+export type ButtonVariant = Subset<
+  Variant,
+  | typeof EnumVariant.Primary
+  | typeof EnumVariant.Secondary
+  | typeof EnumVariant.Success
+  | typeof EnumVariant.Danger
+  | typeof EnumVariant.Warning
+  | typeof EnumVariant.Alternative
+  | typeof EnumVariant.Nutral
+>
 
 export type ButtonSize = Subset<
   Size,
@@ -18,13 +26,31 @@ export type ButtonSize = Subset<
   | typeof EnumSize.md
   | typeof EnumSize.lg
 >
-export type ButtonShape = 'square' | 'rounded' | 'circle' | 'pill'
+
+export const EnumButtonShape = {
+  Square: 'square',
+  Rounded: 'rounded',
+  Circle: 'circle',
+  Pill: 'pill',
+} as const
+
+export const EnumButtonFormat = {
+  Solid: 'solid',
+  Outline: 'outline',
+  Ghost: 'ghost',
+  Link: 'link',
+} as const
+
+export type ButtonShape = (typeof EnumButtonShape)[keyof typeof EnumButtonShape]
+export type ButtonFormat =
+  (typeof EnumButtonFormat)[keyof typeof EnumButtonFormat]
 
 export interface PropsButton
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: ButtonSize
   shape?: ButtonShape
+  format?: ButtonFormat
   value?: string
   form?: string
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void
@@ -33,11 +59,15 @@ export interface PropsButton
 const VARIANT = new Map<ButtonVariant, string>([
   [
     'primary',
-    'border-secondary-100 bg-secondary-100 hover:bg-secondary-100 active:bg-secondary-100 text-secondary-600',
+    'border-primary-500 bg-primary-500 hover:bg-primary-400 active:bg-primary-400 text-primary-100',
+  ],
+  [
+    'alternative',
+    'border-accent-500 dark:border-accent-300 bg-accent-100 hover:bg-accent-200 active:bg-accent-200 text-accent-500',
   ],
   [
     'secondary',
-    'border-secondary-500 bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-gray-100',
+    'border-secondary-500 bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-nutral-100',
   ],
   [
     'success',
@@ -52,8 +82,8 @@ const VARIANT = new Map<ButtonVariant, string>([
     'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-gray-100',
   ],
   [
-    'alternative',
-    'border-gray-100 bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-800',
+    'nutral',
+    'border-nutral-200 bg-nutral-200 hover:bg-nutral-300 active:bg-nutral-300 text-primary-900',
   ],
 ])
 
@@ -63,10 +93,10 @@ const SHAPE = new Map<ButtonShape, string>([
 ])
 
 const SIZE = new Map<ButtonSize, string>([
-  [EnumSize.xs, `px-2 py-0 text-xs leading-2`],
-  [EnumSize.sm, `px-2 py-1 text-xs leading-4`],
-  [EnumSize.md, `px-3 py-2 text-base leading-6`],
-  [EnumSize.lg, `px-4 py-3 text-lg`],
+  [EnumSize.xs, `px-2 py-0 text-xs leading-2 border`],
+  [EnumSize.sm, `px-2 py-[0.125rem] text-xs leading-4 border-2`],
+  [EnumSize.md, `px-3 py-2 text-base leading-6 border-2`],
+  [EnumSize.lg, `px-4 py-3 text-lg border-4`],
 ])
 
 export const Button = forwardRef(function Button(
@@ -94,13 +124,13 @@ export const Button = forwardRef(function Button(
       form={form}
       disabled={disabled}
       className={clsx(
-        'whitespace-nowrap flex m-1 items-center justify-center',
-        'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
+        'whitespace-nowrap flex m-1 items-center justify-center font-bold',
+        'focus:ring-4 focus:outline-none focus:border-secondary-500',
         'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed'
+          ? 'opacity-50 bg-nutral-200 border-nutral-300 text-nutral-700 cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}
