@@ -8,7 +8,12 @@ import {
 } from '~/utils'
 import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
-import { useApiPlanRun, useApiPlanApply, apiCancelPlanApplyAndRun } from '~/api'
+import {
+  useApiPlanRun,
+  useApiPlanApply,
+  apiCancelPlanRun,
+  apiCancelPlanApply,
+} from '~/api'
 import {
   ApplyType,
   type ContextEnvironmentEnd,
@@ -20,7 +25,7 @@ import PlanActions from './PlanActions'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
-import { useQueryClient } from '@tanstack/react-query'
+import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
 
 function Plan({
@@ -63,12 +68,9 @@ function Plan({
   const setPlanState = useStorePlan(s => s.setState)
 
   const [isPlanRan, seIsPlanRan] = useState(false)
+  const [error, setError] = useState<Error>()
 
-  const {
-    refetch: planRun,
-    isLoading,
-    isFetching,
-  } = useApiPlanRun(environment.name, {
+  const { refetch: planRun } = useApiPlanRun(environment.name, {
     planDates: environment.isInitial
       ? undefined
       : {
@@ -79,7 +81,9 @@ function Plan({
               : end,
         },
     planOptions: environment.isInitial
-      ? undefined
+      ? {
+          skip_tests: true,
+        }
       : {
           no_gaps,
           skip_backfill,
@@ -128,9 +132,12 @@ function Plan({
   }, [isInitialPlanRun, initialStartDate, initialEndDate])
 
   useEffect(() => {
-    console.log({ isLoading, isFetching })
-    if (environment.isInitial && environment.isDefault && isFalse(isLoading)) {
+    if (environment.isInitial && environment.isDefault) {
       run()
+    }
+
+    return () => {
+      apiCancelPlanRun(client)
     }
   }, [])
 
@@ -230,35 +237,57 @@ function Plan({
   }
 
   function cancel(): void {
+    setError(undefined)
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    void apiCancelPlanApplyAndRun(client, environment.name)
-      .catch(console.error)
-      .finally(() => {
+    apiCancelPlanApply(client)
+      .then(() => {
         setPlanAction(EnumPlanAction.Run)
         setPlanState(EnumPlanState.Cancelled)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log('apiCancelPlanApply', 'Request aborted by React Query')
+        } else {
+          console.log('apiCancelPlanApply', error)
+          setError(error)
+          reset()
+        }
       })
   }
 
   function apply(): void {
+    setError(undefined)
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
-    void planApply()
+    planApply()
       .then(({ data }) => {
         if (data?.type === ApplyType.logical) {
           setPlanState(EnumPlanState.Finished)
         }
       })
-      .catch(console.error)
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log('planApply', 'Request aborted by React Query')
+        } else {
+          console.log('planApply', error)
+          setError(error)
+          reset()
+        }
+      })
   }
 
   function run(): void {
+    setError(undefined)
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    void planRun()
+    planRun({
+      throwOnError: true,
+      cancelRefetch: false,
+    })
       .then(({ data }) => {
         dispatch([
           {
@@ -275,23 +304,30 @@ function Plan({
             end: data?.end,
           },
         ])
-      })
-      .catch(console.error)
-      .finally(() => {
+
         seIsPlanRan(true)
         setPlanState(EnumPlanState.Init)
 
         if (auto_apply) {
           apply()
         } else {
-          // setPlanAction(EnumPlanAction.Run)
+          setPlanAction(EnumPlanAction.Run)
+        }
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log('planRun', 'Request aborted by React Query')
+        } else {
+          console.log('planRun', error)
+          setError(error)
+          reset()
         }
       })
   }
 
   return (
     <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
-      <Plan.Header />
+      <Plan.Header error={error} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
         <Plan.Wizard />

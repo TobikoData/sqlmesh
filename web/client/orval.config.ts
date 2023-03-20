@@ -4,6 +4,7 @@ export default defineConfig({
   'sqlmesh-api': {
     input: 'http://api:8000/openapi.json',
     output: {
+      prettier: true,
       target: './src/api/client.ts',
       override: {
         mutator: {
