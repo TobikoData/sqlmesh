@@ -74,16 +74,15 @@ function Plan({
   const [error, setError] = useState<Error>()
 
   const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planDates:
-      environment.isInitial || environment.isDefault
-        ? undefined
-        : {
-            start,
-            end:
-              isInitialPlanRun && isStringEmptyOrNil(restate_models)
-                ? undefined
-                : end,
-          },
+    planDates: environment.isDefault
+      ? undefined
+      : {
+          start,
+          end:
+            isInitialPlanRun || isStringEmptyOrNil(restate_models)
+              ? undefined
+              : end,
+        },
     planOptions: environment.isInitial
       ? {
           skip_tests: true,

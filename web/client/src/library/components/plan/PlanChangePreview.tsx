@@ -56,7 +56,7 @@ function PlanChangePreview({
           {headline}
         </h4>
       )}
-      <ul>{children}</ul>
+      {children}
     </div>
   )
 }
@@ -69,7 +69,7 @@ function PlanChangePreviewDefault({
   changes: string[]
 }): JSX.Element {
   return (
-    <>
+    <ul>
       {changes.map(change => (
         <li
           key={change}
@@ -92,7 +92,7 @@ function PlanChangePreviewDefault({
           <small>{change}</small>
         </li>
       ))}
-    </>
+    </ul>
   )
 }
 
@@ -101,14 +101,8 @@ function PlanChangePreviewDirect({
 }: {
   changes: ChangeDirect[]
 }): JSX.Element {
-  const dispatch = usePlanDispatch()
-
-  const { change_categorization, categories } = usePlan()
-
-  const planState = useStorePlan(s => s.state)
-
   return (
-    <>
+    <ul>
       {changes.map((change, idx) => (
         <li
           key={change.model_name}
@@ -117,9 +111,11 @@ function PlanChangePreviewDirect({
           <Disclosure defaultOpen={idx < 1}>
             {({ open }) => (
               <>
-                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-                  <PlanChangePreviewTitle model_name={change.model_name} />
-                  <Divider className="mx-4" />
+                <Disclosure.Button className="flex items-start w-full justify-between rounded-lg text-left">
+                  <div className="w-full">
+                    <PlanChangePreviewTitle model_name={change.model_name} />
+                  </div>
+
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
@@ -134,59 +130,7 @@ function PlanChangePreviewDirect({
                     models={change.indirect ?? []}
                   />
                   <Divider className="border-gray-200 mt-2" />
-                  <RadioGroup
-                    className={clsx(
-                      'flex flex-col mt-2',
-                      planState === EnumPlanState.Finished
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'cursor-pointer',
-                    )}
-                    value={
-                      change_categorization.get(change.model_name)?.category
-                    }
-                    onChange={(category: Category) => {
-                      dispatch({
-                        type: EnumPlanActions.Category,
-                        category,
-                        change,
-                      })
-                    }}
-                    disabled={planState === EnumPlanState.Finished}
-                  >
-                    {categories.map(category => (
-                      <RadioGroup.Option
-                        key={category.name}
-                        value={category}
-                        className={() => clsx('relative flex rounded-md')}
-                      >
-                        {({ checked }) => (
-                          <div
-                            className={clsx(
-                              'text-sm flex px-2 py-1 w-full rounded-lg',
-                              checked ? 'text-secondary-500' : 'text-gray-800',
-                            )}
-                          >
-                            <div className="mt-[0.125rem] mr-2 border-2 border-gray-400 w-4 h-4 rounded-full flex justify-center items-center">
-                              {checked && (
-                                <span className="inline-block w-2 h-2 bg-secondary-500 rounded-full"></span>
-                              )}
-                            </div>
-                            <div>
-                              <RadioGroup.Label as="p">
-                                {category.name}
-                              </RadioGroup.Label>
-                              <RadioGroup.Description
-                                as="span"
-                                className="text-xs text-gray-500"
-                              >
-                                {category.description}
-                              </RadioGroup.Description>
-                            </div>
-                          </div>
-                        )}
-                      </RadioGroup.Option>
-                    ))}
-                  </RadioGroup>
+                  <ChangeCategories change={change} />
                   <Divider className="border-gray-200 mt-2" />
                   {change?.diff != null && (
                     <PlanChangePreviewDiff diff={change?.diff} />
@@ -197,7 +141,67 @@ function PlanChangePreviewDirect({
           </Disclosure>
         </li>
       ))}
-    </>
+    </ul>
+  )
+}
+
+function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
+  const dispatch = usePlanDispatch()
+
+  const { change_categorization, categories } = usePlan()
+
+  const planState = useStorePlan(s => s.state)
+
+  return (
+    <RadioGroup
+      className={clsx(
+        'flex flex-col mt-2',
+        planState === EnumPlanState.Finished
+          ? 'opacity-50 cursor-not-allowed'
+          : 'cursor-pointer',
+      )}
+      value={change_categorization.get(change.model_name)?.category}
+      onChange={(category: Category) => {
+        dispatch({
+          type: EnumPlanActions.Category,
+          category,
+          change,
+        })
+      }}
+      disabled={planState === EnumPlanState.Finished}
+    >
+      {categories.map(category => (
+        <RadioGroup.Option
+          key={category.name}
+          value={category}
+          className={() => clsx('relative flex rounded-md')}
+        >
+          {({ checked }) => (
+            <div
+              className={clsx(
+                'text-sm flex px-2 py-1 w-full rounded-lg',
+                checked ? 'text-secondary-500' : 'text-gray-800',
+              )}
+            >
+              <div className="mt-[0.125rem] mr-2 border-2 border-gray-400 w-4 h-4 rounded-full flex justify-center items-center">
+                {checked && (
+                  <span className="inline-block w-2 h-2 bg-secondary-500 rounded-full"></span>
+                )}
+              </div>
+              <div>
+                <RadioGroup.Label as="p">{category.name}</RadioGroup.Label>
+                <RadioGroup.Description
+                  as="span"
+                  className="text-xs text-gray-500"
+                >
+                  {category.description}
+                </RadioGroup.Description>
+              </div>
+            </div>
+          )}
+        </RadioGroup.Option>
+      ))}
+    </RadioGroup>
   )
 }
 
@@ -207,7 +211,7 @@ function PlanChangePreviewIndirect({
   changes: ChangeIndirect[]
 }): JSX.Element {
   return (
-    <>
+    <ul>
       {changes.map((change, idx) => (
         <li
           key={change.model_name}
@@ -238,7 +242,7 @@ function PlanChangePreviewIndirect({
           </Disclosure>
         </li>
       ))}
-    </>
+    </ul>
   )
 }
 
@@ -247,10 +251,18 @@ function PlanChangePreviewTitle({
 }: {
   model_name: string
 }): JSX.Element {
+  const { change_categorization } = usePlan()
+  const category = change_categorization.get(model_name)?.category
+
   return (
     <div className="flex items-center font-bold">
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
-      <small className="inline-block text-sm">{model_name}</small>
+      <small className="inline-block text-sm ">{model_name}</small>
+      {category != null && (
+        <span className="ml-2 text-xs px-1 bg-gray-400 text-gray-100 rounded">
+          {category.name}
+        </span>
+      )}
     </div>
   )
 }

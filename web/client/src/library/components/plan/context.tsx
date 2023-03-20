@@ -44,7 +44,7 @@ export const EnumPlanChangeType = {
 export const EnumCategoryType = {
   BreakingChange: 'breaking-change',
   NonBreakingChange: 'non-breaking-change',
-  NoChange: 'no-change',
+  ForwardOnly: 'forward-only',
 } as const
 
 export type PlanActions = KeyOf<typeof EnumPlanActions>
@@ -381,7 +381,7 @@ function useCategories(): [Category, Category[]] {
   const categoryBreakingChange: Category = {
     id: EnumCategoryType.BreakingChange,
     name: 'Breaking Change',
-    description: 'This is a breaking change',
+    description: 'It will rebuild all models',
     value: SnapshotChangeCategory.NUMBER_1,
   }
   const categories = [
@@ -389,13 +389,13 @@ function useCategories(): [Category, Category[]] {
     {
       id: EnumCategoryType.NonBreakingChange,
       name: 'Non-Breaking Change',
-      description: 'This is a non-breaking change',
+      description: 'It will exclude all indirect models caused by this change',
       value: SnapshotChangeCategory.NUMBER_2,
     },
     {
-      id: EnumCategoryType.NoChange,
-      name: 'No Change',
-      description: 'This is a no change',
+      id: EnumCategoryType.ForwardOnly,
+      name: 'Forward Only',
+      description: 'This is forward only change',
       value: SnapshotChangeCategory.NUMBER_3,
     },
   ]
