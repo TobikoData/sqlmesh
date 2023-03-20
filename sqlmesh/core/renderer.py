@@ -268,30 +268,21 @@ class QueryRenderer(ExpressionRenderer):
         """Returns True if the model's query contains a star projection."""
         return any(isinstance(expression, exp.Star) for expression in self.render().expressions)
 
-    def check_column_references(self) -> None:
-        """
-        Leverages the SQLGlot optimizer to ensure that all column references are valid,
-        e.g. they exist upstream. If the optimizer fails, a ConfigError will be raised.
-        """
-        try:
-            rendered_expression = super().render()
-            if rendered_expression:
-                optimize(
-                    rendered_expression,
-                    schema=self._schema,
-                    rules=(*RENDER_OPTIMIZER_RULES, validate_qualify_columns),
-                )
-        except (SchemaError, OptimizeError) as ex:
-            raise_config_error(f"Invalid model query. {ex}", self._path)
-
     def update_schema(self, schema: MappingSchema) -> None:
-        self._schema = schema
-        self.check_column_references()
+        if not self._schema:
+            self._query_cache.clear()
 
+        self._schema = schema
         if self.contains_star_query:
             # We need to re-render in order to expand the star projection
             self._query_cache.clear()
             self.render()
+
+        try:
+            # Checks that used columns are qualified & they exist upstream
+            validate_qualify_columns(next(iter(self._query_cache.values())))
+        except OptimizeError as ex:
+            raise_config_error(f"Invalid model query. {ex}", self._path)
 
     def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
