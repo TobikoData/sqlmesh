@@ -56,20 +56,33 @@ class DbtLoader(Loader):
         context = project.context.copy()
 
         for package_name, package in project.packages.items():
-            context.add_variables(package.variables)
-            context.add_models(package.models)
-            context.add_seeds(package.seeds)
             context.add_sources(package.sources)
+            context.add_seeds(package.seeds)
+            context.add_models(package.models)
             context.jinja_macros.add_macros(
                 package.macros,
                 package=package_name if package_name != context.project_name else None,
             )
 
+        # First render all the config and discover dependencies
         for package in project.packages.values():
+            context.variables = package.variables
+
+            package.sources = {k: v.render_config(context) for k, v in package.sources.items()}
+            package.seeds = {k: v.render_config(context) for k, v in package.seeds.items()}
+            package.models = {k: v.render_config(context) for k, v in package.models.items()}
+
+            context.add_sources(package.sources)
+            context.add_seeds(package.seeds)
+            context.add_models(package.models)
+
+        # Now that config is rendered, create the sqlmesh models
+        for package in project.packages.values():
+            context.variables = package.variables
             package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
-            for model in package_models.values():
-                rendered_model = model.render_config(context)
-                models[rendered_model.model_name] = rendered_model.to_sqlmesh(context)
+            models.update(
+                {model.model_name: model.to_sqlmesh(context) for model in package_models.values()}
+            )
 
         return models
 
