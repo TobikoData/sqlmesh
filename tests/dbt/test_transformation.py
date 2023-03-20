@@ -206,11 +206,11 @@ def test_run_query(sushi_dbt_project: Project):
 def test_logging(capsys, sushi_dbt_project: Project):
     context = sushi_dbt_project.context
 
-    assert context.render('{{ log("test") }}') == ""
-    assert "test" in capsys.readouterr().out
+    assert context.render('{{ log("foo") }}') == ""
+    assert "foo" in capsys.readouterr().out
 
-    assert context.render('{{ print("test") }}') == ""
-    assert "test" in capsys.readouterr().out
+    assert context.render('{{ print("bar") }}') == ""
+    assert "bar" in capsys.readouterr().out
 
 
 def test_exceptions(capsys, sushi_dbt_project: Project):
