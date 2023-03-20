@@ -189,7 +189,7 @@ class PackageLoader:
                 scope = self._scope_from_path(path, root)
                 model_config = self._load_model_config_from_model(path, scope)
                 model_config.update_with(self._overridden_model_fields(scope))
-                if model_config.table_name:
+                if model_config.enabled and model_config.table_name:
                     models[model_config.table_name] = model_config
 
         return (models, sources)
@@ -229,7 +229,8 @@ class PackageLoader:
                 seed_config = self._config_for_scope(scope, self.project_config.seed_config).copy()
                 seed_config.update_with(self._overridden_seed_fields(scope))
                 seed_config.path = path
-                seeds[path.stem] = seed_config
+                if seed_config.enabled:
+                    seeds[path.stem] = seed_config
 
         return seeds
 
@@ -299,7 +300,8 @@ class PackageLoader:
                     table_config = table_config.update_with(config_fields)
 
                 table_config.config_name = f"{source_name}.{table_name}"
-                configs[table_config.config_name] = table_config
+                if table_config.enabled:
+                    configs[table_config.config_name] = table_config
 
         return configs
 
