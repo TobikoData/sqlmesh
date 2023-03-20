@@ -30,8 +30,13 @@ export default function Toggle({
       <span className="sr-only">{a11yTitle}</span>
       <span
         aria-hidden="true"
-        className={`${enabled ? 'translate-x-8' : 'translate-x-0'}
-        pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out`}
+        className={clsx(
+          'pointer-events-none inline-block h-6 w-6 transform  rounded-full shadow-md  transition duration-200 ease-in-out',
+          'bg-light translate-y-[0.125rem]',
+          enabled
+            ? 'translate-x-8 shadow-primary-800'
+            : 'translate-x-1 shadow-nutral-300 dark:shadow-nutral-600',
+        )}
       />
     </Switch>
   )
