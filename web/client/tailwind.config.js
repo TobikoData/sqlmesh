@@ -9,6 +9,9 @@ module.exports = {
       },
     },
     colors: {
+      prose: {
+        DEFAULT: 'var(--color-text)',
+      },
       dark: {
         DEFAULT: 'var(--color-dark)',
         darker: 'var(--color-dark-darker)',
