@@ -369,7 +369,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
             snapOffset={0}
             expandToMin={true}
           >
-            <div className="flex h-full xxxx">
+            <div className="flex h-full">
               <CodeEditor
                 extension={activeFile.extension}
                 value={activeFile.content}
@@ -611,8 +611,8 @@ function Indicator({
       {value == null ? (
         <span
           className={clsx(
-            `bg-${ok ? 'success' : 'warning'}-500`,
             'inline-block w-2 h-2 rounded-full',
+            ok ? 'bg-success-500' : 'bg-danger-500',
           )}
         ></span>
       ) : (
