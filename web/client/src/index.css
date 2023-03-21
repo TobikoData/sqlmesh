@@ -62,6 +62,14 @@
 
     /* Secondary */
     --color-secondary-10: hsla(216, 100%, 50%, 0.1);
+    --color-secondary-20: hsla(216, 100%, 50%, 0.2);
+    --color-secondary-30: hsla(216, 100%, 50%, 0.3);
+    --color-secondary-40: hsla(216, 100%, 50%, 0.4);
+    --color-secondary-50: hsla(216, 100%, 50%, 0.5);
+    --color-secondary-60: hsla(216, 100%, 50%, 0.6);
+    --color-secondary-70: hsla(216, 100%, 50%, 0.7);
+    --color-secondary-80: hsla(216, 100%, 50%, 0.8);
+    --color-secondary-90: hsla(216, 100%, 50%, 0.9);
     --color-secondary-100: hsla(207, 100%, 90%, 1);
     --color-secondary-200: hsla(209, 100%, 80%, 1);
     --color-secondary-300: hsla(211, 100%, 70%, 1);
@@ -73,7 +81,6 @@
     --color-secondary-900: hsla(226, 100%, 24%, 1);
 
     /* Accent */
-
     --color-accent-100: hsla(264, 100%, 98%, 1);
     --color-accent-200: hsla(260, 100%, 90%, 1);
     --color-accent-300: hsla(260, 100%, 80%, 1);
@@ -109,6 +116,7 @@
     --color-warning-900: hsla(18, 82%, 26%, 1);
 
     /* Danger */
+    --color-danger-10: hsla(21, 100%, 50%, 0.1);
     --color-danger-100: hsla(21, 100%, 93%, 1);
     --color-danger-200: hsla(16, 100%, 86%, 1);
     --color-danger-300: hsla(11, 100%, 78%, 1);
@@ -120,15 +128,15 @@
     --color-danger-900: hsla(341, 79%, 27%, 1);
 
     /* Nutral */
-    --color-nutral-10: hsla(190, 8%, 98%, 0.1);
-    --color-nutral-20: hsla(190, 8%, 98%, 0.2);
-    --color-nutral-30: hsla(190, 8%, 98%, 0.3);
-    --color-nutral-40: hsla(190, 8%, 98%, 0.4);
-    --color-nutral-50: hsla(190, 8%, 98%, 0.5);
-    --color-nutral-60: hsla(190, 8%, 98%, 0.6);
-    --color-nutral-70: hsla(190, 8%, 98%, 0.7);
-    --color-nutral-80: hsla(190, 8%, 98%, 0.8);
-    --color-nutral-90: hsla(190, 8%, 98%, 0.9);
+    --color-nutral-10: hsla(190, 8%, 50%, 0.1);
+    --color-nutral-20: hsla(190, 8%, 50%, 0.2);
+    --color-nutral-30: hsla(190, 8%, 50%, 0.3);
+    --color-nutral-40: hsla(190, 8%, 50%, 0.4);
+    --color-nutral-50: hsla(190, 8%, 50%, 0.5);
+    --color-nutral-60: hsla(190, 8%, 50%, 0.6);
+    --color-nutral-70: hsla(190, 8%, 50%, 0.7);
+    --color-nutral-80: hsla(190, 8%, 50%, 0.8);
+    --color-nutral-90: hsla(190, 8%, 50%, 0.9);
     --color-nutral-100: hsl(190, 8%, 98%);
     --color-nutral-200: hsl(190, 8%, 86%);
     --color-nutral-300: hsl(190, 8%, 74%);
@@ -172,6 +180,8 @@ html[mode='dark'] {
 
   --color-editor-text: var(--color-nutral-300);
   --color-editor-active-line-text: var(--color-nutral-100);
+
+  --color-graph-edge: var(--color-primary-50);
 }
 
 html[mode='light'] {
@@ -193,6 +203,8 @@ html[mode='light'] {
 
   --color-editor-text: var(--color-nutral-600);
   --color-editor-active-line-text: var(--color-nutral-800);
+
+  --color-graph-edge: var(--color-secondary-50);
 }
 
 html {

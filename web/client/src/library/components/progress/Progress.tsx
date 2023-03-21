@@ -15,12 +15,12 @@ export default function Progress({
   return (
     <div
       className={clsx(
-        'w-full h-1 bg-nutral-200 overflow-hidden flex items-center rounded-lg my-1',
+        'w-full h-1 bg-nutral-50 overflow-hidden flex items-center rounded-lg my-1',
         className,
       )}
     >
       <div
-        className={`transition-[width] h-full bg-success-600 rounded-lg`}
+        className={`transition-[width] h-full bg-success-500 rounded-lg`}
         style={{
           width: `${progress}%`,
           transitionDelay: `${delay}ms`,

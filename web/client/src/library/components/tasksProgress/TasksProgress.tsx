@@ -79,7 +79,7 @@ export default function TasksProgress({
             <span className="block whitespace-nowrap text-sm font-medium">
               {headline}
             </span>
-            <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-primary-10 rounded-md">
+            <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-nutral-10 rounded-md">
               {environment.name}
             </small>
             {planState !== EnumPlanState.Init && (
@@ -115,7 +115,7 @@ export default function TasksProgress({
         )}
       </div>
       <div className="my-4 px-4">
-        <div className="bg-primary-10 rounded-lg">
+        <div className="bg-nutral-10  rounded-lg">
           <ul className="p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
             {models.map(([model_name, task]) => (
               <li
@@ -132,13 +132,13 @@ export default function TasksProgress({
                     <span
                       className={clsx(
                         'font-bold whitespace-nowrap',
-                        changesAdded.includes(model_name) && 'text-success-600',
+                        changesAdded.includes(model_name) && 'text-success-500',
                         changesRemoved.includes(model_name) &&
-                          'text-danger-700',
+                          'text-danger-500',
                         changesModifiedDirect.includes(model_name) &&
                           'text-secondary-500',
                         changesModifiedIndirect.includes(model_name) &&
-                          'text-warning-700',
+                          'text-warning-500',
                         changesModifiedMetadata.includes(model_name) &&
                           'text-nutral-900',
                       )}

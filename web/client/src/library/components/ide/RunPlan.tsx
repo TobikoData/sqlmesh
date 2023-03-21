@@ -642,11 +642,11 @@ function ChangesPreview({
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute right-1 z-10 mt-8 transform flex">
+            <Popover.Panel className="absolute right-1 z-10 mt-8 transform flex p-2 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg ">
               <PlanChangePreview
                 headline={headline}
                 type={type}
-                className="w-full h-full max-h-[40vh] overflow-hidden overflow-y-auto rounded-lg shadow-lg ring-1 ring-black ring-opacity-5"
+                className="w-full h-full max-h-[40vh] overflow-hidden overflow-y-auto "
               >
                 <PlanChangePreview.Default
                   type={type}

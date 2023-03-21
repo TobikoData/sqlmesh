@@ -137,6 +137,10 @@ module.exports = {
         900: 'var(--color-success-900)',
       },
       danger: {
+        10: 'var(--color-danger-10)',
+        20: 'var(--color-danger-20)',
+        30: 'var(--color-danger-30)',
+        40: 'var(--color-danger-40)',
         100: 'var(--color-danger-100)',
         200: 'var(--color-danger-200)',
         300: 'var(--color-danger-300)',

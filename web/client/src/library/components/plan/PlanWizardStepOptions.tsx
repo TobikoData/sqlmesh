@@ -39,7 +39,7 @@ export default function PlanWizardStepOptions({
     <li className={clsx('mt-6 mb-2 mb-6', className)}>
       <form className="w-full h-full">
         <fieldset className={clsx('mb-10 mt-6')}>
-          <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-nutral-900 px-4">
+          <h2 className="whitespace-nowrap text-xl font-bold mb-1 px-4">
             Set Dates
           </h2>
           <div className="mt-3">
@@ -50,11 +50,10 @@ export default function PlanWizardStepOptions({
           <Disclosure>
             {({ open }) => (
               <>
-                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 hover:bg-secondary-100">
-                  <h2 className="whitespace-nowrap text-xl font-bold mb-1 text-nutral-900">
+                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 hover:bg-theme-darker dark:hover:bg-theme-lighter">
+                  <h2 className="whitespace-nowrap text-xl font-bold mb-1">
                     Additional Options
                   </h2>
-
                   {open ? (
                     <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
                   ) : (
