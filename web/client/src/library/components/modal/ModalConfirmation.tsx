@@ -30,7 +30,7 @@ function ModalConfirmation({
       show={show}
       onClose={onClose}
     >
-      <Dialog.Panel className="w-[30rem] transform rounded-xl bg-white text-left align-middle shadow-xl transition-all">
+      <Dialog.Panel className="w-[30rem] transform rounded-xl bg-light text-left align-middle shadow-xl transition-all">
         {children}
       </Dialog.Panel>
     </Modal>
@@ -46,19 +46,19 @@ function ModalConfirmationMain({
 function ModalConfirmationHeadline({
   children,
 }: React.HTMLAttributes<HTMLElement>): JSX.Element {
-  return <h2 className="text-gray-700 font-bold text-xl mb-2">{children}</h2>
+  return <h2 className="text-nutral-700 font-bold text-xl mb-2">{children}</h2>
 }
 
 function ModalConfirmationTagline({
   children,
 }: React.HTMLAttributes<HTMLElement>): JSX.Element {
-  return <h4 className="text-gray-700 font-bold">{children}</h4>
+  return <h4 className="text-nutral-700 font-bold">{children}</h4>
 }
 
 function ModalConfirmationDescription({
   children,
 }: React.HTMLAttributes<HTMLElement>): JSX.Element {
-  return <p className="text-gray-500 text-sm">{children}</p>
+  return <p className="text-nutral-500 text-sm">{children}</p>
 }
 
 function ModalConfirmationActions({

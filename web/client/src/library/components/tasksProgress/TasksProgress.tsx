@@ -140,7 +140,7 @@ export default function TasksProgress({
                         changesModifiedIndirect.includes(model_name) &&
                           'text-warning-700',
                         changesModifiedMetadata.includes(model_name) &&
-                          'text-gray-900',
+                          'text-nutral-900',
                       )}
                     >
                       {model_name}
@@ -185,7 +185,7 @@ export default function TasksProgress({
                 {showProgress ? (
                   <Progress progress={toRatio(task.completed, task.total)} />
                 ) : (
-                  <Divider className="my-1 border-gray-200 opacity-50" />
+                  <Divider className="my-1 border-nutral-200 opacity-50" />
                 )}
               </li>
             ))}

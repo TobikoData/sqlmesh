@@ -1,7 +1,5 @@
 import { useState, type FormEvent, type MouseEvent, useEffect } from 'react'
 import {
-  ChevronDownIcon,
-  ChevronRightIcon,
   FolderOpenIcon,
   FolderIcon,
   CheckCircleIcon,
@@ -10,6 +8,7 @@ import {
   XCircleIcon,
   ArrowsUpDownIcon,
 } from '@heroicons/react/24/solid'
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import {
   writeDirectoryApiDirectoriesPathPost,
@@ -223,8 +222,9 @@ export default function Directory({
       {directory.withParent && (
         <span
           className={clsx(
-            'w-full  overflow-hidden hover:bg-secondary-100 group flex justify-between items-center rounded-md',
-            isFalse(isStringEmptyOrNil(newName)) && 'bg-warning-100',
+            'w-full overflow-hidden group flex justify-between items-center rounded-md py-[0.125rem]',
+            'hover:bg-nutral-100 dark:hover:bg-dark-lighter text-nutral-600 dark:text-nutral-100',
+            isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
           )}
         >
           <div
@@ -242,20 +242,18 @@ export default function Directory({
           >
             {(directory.withDirectories || directory.withFiles) && (
               <IconChevron
-                className={clsx(
-                  `inline-block ${CSS_ICON_SIZE} ml-1 mr-1 text-secondary-500`,
-                )}
+                className={clsx(`inline-block ${CSS_ICON_SIZE} ml-1 mr-1`)}
               />
             )}
             <IconFolder
-              className={`inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
+              className={`inline-block ${CSS_ICON_SIZE} mr-1 fill-primary-500`}
             />
           </div>
-          <span className="w-full overflow-hidden flex items-center justify-between pr-1 py-[0.125rem]">
+          <span className="w-full overflow-hidden flex items-center justify-between pr-1">
             {isStringEmptyOrNil(newName) ? (
-              <span className="w-full flex text-base overflow-hidden items-center cursor-default">
+              <span className="w-full flex overflow-hidden items-center cursor-default">
                 <span
-                  className="w-full text-sm overflow-hidden overflow-ellipsis justify-between"
+                  className="w-full overflow-hidden overflow-ellipsis justify-between"
                   onClick={(e: MouseEvent) => {
                     e.stopPropagation()
 
@@ -269,7 +267,7 @@ export default function Directory({
                 >
                   {directory.name}
                 </span>
-                <span className="hidden w-full -hover:flex items-center justify-end">
+                <span className="hidden w-full group-hover:flex items-center justify-end">
                   <ArrowsUpDownIcon
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
@@ -282,17 +280,19 @@ export default function Directory({
                     }}
                     className={clsx(
                       `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
-                      directory.isCollapsed && 'text-gray-500',
-                      directory.isExpanded && 'text-secondary-500',
+                      directory.isCollapsed &&
+                        'text-nutral-500 dark:text-nutral-100',
+                      directory.isExpanded &&
+                        'text-secondary-500 dark:text-primary-500',
                     )}
                   />
                   <DocumentPlusIcon
                     onClick={createFile}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-nutral-500 dark:text-nutral-100`}
                   />
                   <FolderPlusIcon
                     onClick={createDirectory}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-secondary-500`}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-nutral-500 dark:text-nutral-100`}
                   />
                   <XCircleIcon
                     onClick={(e: MouseEvent) => {
@@ -308,7 +308,7 @@ export default function Directory({
               <div className="flex w-full items-center">
                 <input
                   type="text"
-                  className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
+                  className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
                   value={newName ?? directory.name}
                   onInput={(e: FormEvent<HTMLInputElement>) => {
                     e.stopPropagation()
@@ -320,7 +320,7 @@ export default function Directory({
                 />
                 <div className="flex">
                   <CheckCircleIcon
-                    className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-300 hover:text-gray-500 cursor-pointer`}
+                    className={`inline-block ${CSS_ICON_SIZE} ml-2 text-success-500 cursor-pointer`}
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 

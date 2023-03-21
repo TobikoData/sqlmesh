@@ -335,7 +335,7 @@ function PlanChanges({
       {isLoading && (
         <span className="flex items-center ml-2">
           <Spinner className="w-3 h-3 mr-1" />
-          <span className="inline-block text-xs text-gray-500">
+          <span className="inline-block text-xs text-nutral-500">
             Checking...
           </span>
         </span>
@@ -442,7 +442,7 @@ function SelectEnvironemnt({
           >
             <div
               className={clsx(
-                'absolute top-8 overflow-hidden shadow-lg bg-white rounded-md flex flex-col z-10',
+                'absolute top-8 overflow-hidden shadow-lg bg-light rounded-md flex flex-col z-10',
                 side === 'left' && 'left-0',
                 side === 'right' && 'right-0',
               )}
@@ -460,7 +460,7 @@ function SelectEnvironemnt({
                           onSelect?.()
                         }}
                         className={clsx(
-                          'flex justify-between items-center px-4 py-1 text-gray-900 cursor-pointer overflow-auto',
+                          'flex justify-between items-center px-4 py-1 text-nutral-900 cursor-pointer overflow-auto',
                           active && 'bg-secondary-100',
                           env === environment &&
                             'pointer-events-none cursor-default bg-secondary-100',
@@ -481,18 +481,18 @@ function SelectEnvironemnt({
                                   'block truncate ml-2',
                                   env.isSyncronized
                                     ? 'text-secondary-500'
-                                    : 'text-gray-700',
+                                    : 'text-nutral-700',
                                 )}
                               >
                                 {env.name}
                               </span>
-                              <small className="block ml-2 text-gray-400">
+                              <small className="block ml-2 text-nutral-400">
                                 ({env.type})
                               </small>
                             </span>
                             {env.isDefault && (
                               <span className="flex ml-2">
-                                <small className="text-xs text-gray-700">
+                                <small className="text-xs text-nutral-700">
                                   Default Environment
                                 </small>
                               </span>
@@ -618,7 +618,7 @@ function ChangesPreview({
         <>
           <span
             className={clsx(
-              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-gray-100 cursor-default border border-inherit cursor-pointer',
+              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-nutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
                 'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
@@ -627,7 +627,7 @@ function ChangesPreview({
                 'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
                 'bg-warning-500 border-warning-500',
-              type === 'metadata' && 'bg-gray-500 border-gray-500',
+              type === 'metadata' && 'bg-nutral-500 border-nutral-500',
             )}
           >
             {changes.length}

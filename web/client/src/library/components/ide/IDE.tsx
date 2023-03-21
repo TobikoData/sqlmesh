@@ -100,8 +100,8 @@ export function IDE(): JSX.Element {
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold">
-            <span className="inline-block text-secondary-500">/</span>
+          <h3 className="font-bold text-primary-500">
+            <span className="inline-block">/</span>
             {project?.name}
           </h3>
         </div>

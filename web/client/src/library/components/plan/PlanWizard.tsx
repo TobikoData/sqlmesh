@@ -258,7 +258,7 @@ export default function PlanWizard({
                         <h3
                           className={clsx(
                             planState === EnumPlanState.Cancelled &&
-                              'text-gray-700',
+                              'text-nutral-700',
                             planState === EnumPlanState.Failed &&
                               'text-danger-700',
                             planState === EnumPlanState.Finished &&

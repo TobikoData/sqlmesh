@@ -71,15 +71,15 @@ const VARIANT = new Map<ButtonVariant, string>([
   ],
   [
     'success',
-    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-gray-100',
+    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-nutral-100',
   ],
   [
     'danger',
-    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-gray-100',
+    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-nutral-100',
   ],
   [
     'warning',
-    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-gray-100',
+    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-nutral-100',
   ],
   [
     'nutral',
@@ -162,7 +162,7 @@ export const ButtonMenu = forwardRef(function ButtonMenu(
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-gray-100 hover:bg-gray-100 active:bg-gray-100 text-gray-900 cursor-not-allowed'
+          ? 'opacity-50 bg-nutral-100 hover:bg-nutral-100 active:bg-nutral-100 text-nutral-900 cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}
