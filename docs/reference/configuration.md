@@ -100,6 +100,7 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 [Airflow Configuration Information](../integrations/airflow.md#bigquery)
 
 ### Redshift
+#### Local/Build-in Scheduler
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
@@ -121,6 +122,9 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 | `is_serverless`         | If the Amazon Redshift cluster is serverless (Default: `False`)                                             |  bool  |    N     |
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
+
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#redshift)
 
 ## Scheduler
 
