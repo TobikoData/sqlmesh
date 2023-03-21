@@ -128,20 +128,27 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 
 ## Scheduler
 
-Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata, and that has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow.
+Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata, and that has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow and is recommended for production deployments.
 
+Below is the list of configuration options specific to each corresponding scheduler type.
+
+### Builtin
 ```yaml linenums="1"
 scheduler:
     type: builtin
 ```
 
-Below is the list of configuration options specific to each corresponding scheduler type.
-
-### Builtin
-
 No additional configuration options are supported by this scheduler type.
 
 ### Airflow
+```yaml linenums="1"
+scheduler:
+    type: airflow
+    airflow_url: <airflow_url>
+    username: <username>
+    password: <password>
+```
+
 | Option                            | Description                                                                                                                        |  Type  | Required |
 |-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `airflow_url`                     | The URL of the Airflow Webserver                                                                                                   | string |    Y     |
@@ -153,8 +160,18 @@ No additional configuration options are supported by this scheduler type.
 | `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                   |  int   |    N     |
 | `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)             |  int   |    N     |
 
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to setup Airflow with SQLMesh.
+
 ### Cloud Composer
-This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`.
+```yaml linenums="1"
+scheduler:
+    type: cloud_composer
+    airflow_url: <airflow_url>
+```
+This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. 
+Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
+
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to setup Airflow with SQLMesh.
 
 ## SQLMesh Specific Configurations
 | Option                    | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |
@@ -175,7 +192,6 @@ model_defaults:
     owner: jen
     start: 2022-01-01
 ```
-
 | Option           | Description                                                                                                                                                                                                                                                                                                    |      Type      | Required |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------:|:--------:|
 | `kind`           | The default model kind. [Additional Details](#kind) (Default: `full`)                                                                                                                                                                                                                                          | string or dict |    N     |
