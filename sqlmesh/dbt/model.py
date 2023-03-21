@@ -36,7 +36,8 @@ class ModelConfig(BaseModelConfig):
     Args:
         sql: The model sql
         time_column: The name of the time column
-        partitioned_by: List of columns to partition by
+        partitioned_by: List of columns to partition by. time_column will automatically be
+            included, if specified.
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         start: The earliest date that the model will be backfilled for

@@ -87,6 +87,7 @@ class DuckDbConfig(TargetConfig):
         path: Location of the database file. If not specified, an in memory database is used.
     """
 
+    type: t.Literal["duckdb"] = "duckdb"
     path: t.Optional[str] = None
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -116,6 +117,7 @@ class SnowflakeConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
+    type: t.Literal["snowflake"] = "snowflake"
     account: str
     warehouse: str
     database: str
@@ -162,6 +164,7 @@ class PostgresConfig(TargetConfig):
         sslmode: SSL Mode used to connect to the database
     """
 
+    type: t.Literal["postgres"] = "postgres"
     host: str
     user: str
     password: str
@@ -199,6 +202,7 @@ class RedshiftConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
+    type: t.Literal["redshift"] = "redshift"
     host: str
     user: str
     password: str
@@ -236,6 +240,7 @@ class DatabricksConfig(TargetConfig):
         token: Personal access token
     """
 
+    type: t.Literal["databricks"] = "databricks"
     catalog: t.Optional[str] = None
     host: str
     http_path: str

@@ -116,7 +116,7 @@ def test_to_sqlmesh_fields(sushi_dbt_project: Project):
         cron="@hourly",
     )
     context = DbtContext(project_name="Foo")
-    context.target = DuckDbConfig(type="duckdb", schema="foo")
+    context.target = DuckDbConfig(schema="foo")
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
