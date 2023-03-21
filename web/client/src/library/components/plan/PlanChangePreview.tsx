@@ -303,7 +303,7 @@ function PlanChangePreviewRelations({
 function PlanChangePreviewDiff({ diff }: { diff: string }): JSX.Element {
   return (
     <div className="my-4 bg-secondary-900 rounded-lg overflow-hidden">
-      <pre className="p-4 text-secondary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizantal">
+      <pre className="p-4 text-secondary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
         {diff.split('\n').map((line: string, idx: number) => (
           <p
             key={`${line}-${idx}`}
