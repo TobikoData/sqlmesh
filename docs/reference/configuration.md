@@ -160,7 +160,7 @@ scheduler:
 | `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                   |  int   |    N     |
 | `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)             |  int   |    N     |
 
-See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to setup Airflow with SQLMesh.
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to set up Airflow with SQLMesh.
 
 ### Cloud Composer
 ```yaml linenums="1"
@@ -171,7 +171,7 @@ scheduler:
 This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. 
 Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
 
-See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to setup Airflow with SQLMesh.
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to set up Airflow with SQLMesh.
 
 ## SQLMesh Specific Configurations
 | Option                    | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |
