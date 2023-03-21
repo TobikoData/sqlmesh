@@ -56,7 +56,7 @@ export default function ActivePlan({
               planState !== EnumPlanState.Finished &&
                 planState !== EnumPlanState.Failed &&
                 planState !== EnumPlanState.Applying &&
-                'bg-gray-100 text-gray-500',
+                'bg-nutral-100 text-nutral-500',
             )}
           >
             {plan == null ? 0 : 1}

@@ -336,8 +336,8 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     className={clsx(
                       'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent',
                       file === activeFile
-                        ? 'bg-secondary-10 border-secondary-10 text-primary-500 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
-                        : 'bg-nutral-10 hover:bg-secondary-10',
+                        ? 'bg-nutral-200 border-nutral-200 text-nutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
+                        : 'bg-trasparent hover:bg-nutral-30',
                     )}
                   >
                     <small className="text-xs">

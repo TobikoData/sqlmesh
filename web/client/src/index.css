@@ -77,6 +77,7 @@
     --color-accent-900: hsla(264, 100%, 8%, 1);
 
     /* Success */
+    --color-success-10: hsla(111, 66%, 55%, 0.1);
     --color-success-100: hsla(92, 90%, 92%, 1);
     --color-success-200: hsla(98, 90%, 84%, 1);
     --color-success-300: hsla(102, 81%, 75%, 1);
@@ -112,6 +113,14 @@
 
     /* Nutral */
     --color-nutral-10: hsla(190, 8%, 98%, 0.1);
+    --color-nutral-20: hsla(190, 8%, 98%, 0.2);
+    --color-nutral-30: hsla(190, 8%, 98%, 0.3);
+    --color-nutral-40: hsla(190, 8%, 98%, 0.4);
+    --color-nutral-50: hsla(190, 8%, 98%, 0.5);
+    --color-nutral-60: hsla(190, 8%, 98%, 0.6);
+    --color-nutral-70: hsla(190, 8%, 98%, 0.7);
+    --color-nutral-80: hsla(190, 8%, 98%, 0.8);
+    --color-nutral-90: hsla(190, 8%, 98%, 0.9);
     --color-nutral-100: hsl(190, 8%, 98%);
     --color-nutral-200: hsl(190, 8%, 86%);
     --color-nutral-300: hsl(190, 8%, 74%);

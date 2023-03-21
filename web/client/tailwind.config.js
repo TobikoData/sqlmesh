@@ -58,6 +58,14 @@ module.exports = {
       },
       nutral: {
         10: 'var(--color-nutral-10)',
+        20: 'var(--color-nutral-20)',
+        30: 'var(--color-nutral-30)',
+        40: 'var(--color-nutral-40)',
+        50: 'var(--color-nutral-50)',
+        60: 'var(--color-nutral-60)',
+        70: 'var(--color-nutral-70)',
+        80: 'var(--color-nutral-80)',
+        90: 'var(--color-nutral-90)',
         100: 'var(--color-nutral-100)',
         200: 'var(--color-nutral-200)',
         300: 'var(--color-nutral-300)',
@@ -104,6 +112,7 @@ module.exports = {
         900: 'var(--color-accent-900)',
       },
       success: {
+        10: 'var(--color-success-10)',
         100: 'var(--color-success-100)',
         200: 'var(--color-success-200)',
         300: 'var(--color-success-300)',
