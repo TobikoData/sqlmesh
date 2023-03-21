@@ -56,21 +56,26 @@ DuckDB only works when running locally and therefore does not support Airflow.
 [Airflow Configuration Information](../integrations/airflow.md#snowflake)
 
 ### Databricks
-[Airflow Configuration Information](../integrations/airflow.md#databricks)
+#### Local/Build-in Scheduler
+If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
+This can be done using the [Notebook magic](../reference/notebook.md) or using the [CLI](../reference/cli.md).
+This is something we are looking into improving and please leave us feedback in slack if this impacts you.
+A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster and should theoretically work.
 
-#### Type: databricks
+Databricks has a few options for connection types to choose from:
+###### Type: databricks
 The recommended connection type configuration for Databricks is the `databricks` type. 
 This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
 If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
 If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
-the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). See [limitations](#limitations-1)
-for the impact of this. See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
+the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). 
+See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
 
-#### Type: databricks_spark_session
+###### Type: databricks_spark_session
 This connection type assumes that wherever you are running you have access to a Databricks SparkSession. 
 This will simplify the required configuration to run since you will not need to provide connection configuration.
 
-#### Type: databricks_sql
+###### Type: databricks_sql
 This connection type assumes you only need to run SQL queries against Databricks.
 If all of your models are SQL models or if Python don't use PySpark DataFrame then this can be used.
 Below is the connection configuration for this type:
@@ -83,11 +88,8 @@ Below is the connection configuration for this type:
 | `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
 | `session_configuration` | An optional dictionary of Spark session parameters.                                                                                                                                      |  dict  |    N     |
 
-#### Limitations
-##### Built-in Scheduler
-If your project contains Python models that are running PySpark DataFrame operations then you must execute your plan on a Databricks notebook directly. That means you must use the Notebook magics to execute your plan. 
-
-We are looking to add support for all Python model kinds when running locally. A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to run your plan locally. This will make it look like you are running on a cluster and should theoretically work. 
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#databricks)
 
 ### Bigquery
 
