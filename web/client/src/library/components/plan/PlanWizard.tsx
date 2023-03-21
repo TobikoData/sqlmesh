@@ -68,50 +68,6 @@ export default function PlanWizard(): JSX.Element {
 
   const filterActiveBackfillsTasks = useCallback(
     (tasks: PlanTasks): PlanTasks => {
-      const x = Array.from(change_categorization.values())
-
-      return Object.entries(tasks).reduce(
-        (acc: PlanTasks, [taskModelName, task]) => {
-          const choices = categories[taskModelName]
-
-          const shouldExclude = choices != null ? choices.every(Boolean) : false
-
-          if (shouldExclude) return acc
-
-          acc[taskModelName] = task
-
-          return acc
-        },
-        {},
-      )
-    },
-    [categories],
-  )
-
-  const filterBackfillsTasks = useCallback(
-    (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
-      const categories = Array.from(change_categorization.values()).reduce<
-        Record<string, boolean[]>
-      >((acc, { category, change }) => {
-        change?.indirect?.forEach(model => {
-          if (acc[model] == null) {
-            acc[model] = []
-          }
-
-          acc[model]?.push(category.value !== 1)
-        })
-
-        if (category.value === 3) {
-          acc[change.model_name] = [true]
-        }
-
-        return acc
-      }, {}),
-    [change_categorization],
-  )
-
-  const filterActiveBackfillsTasks = useCallback(
-    (tasks: PlanTasks): PlanTasks => {
       return Object.entries(tasks).reduce(
         (acc: PlanTasks, [taskModelName, task]) => {
           const choices = categories[taskModelName]
