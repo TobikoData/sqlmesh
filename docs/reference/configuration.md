@@ -33,13 +33,16 @@ connections:
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
 ### Duckdb
+#### Local/Build-in Scheduler
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
-### Snowflake
-[Airflow Configuration Information](../integrations/airflow.md#snowflake)
+##### Airflow
+DuckDB only works when running locally and therefore does not support Airflow. 
 
+### Snowflake
+#### Local/Build-in Scheduler
 | Option      | Description                  |  Type  | Required |
 |-------------|------------------------------|:------:|:--------:|
 | `user`      | The Snowflake username       | string |    Y     |
@@ -49,6 +52,9 @@ connections:
 | `database`  | The Snowflake database name  | string |    N     |
 | `role`      | The Snowflake role name      | string |    N     |
 
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#snowflake)
+
 ### Databricks
 [Airflow Configuration Information](../integrations/airflow.md#databricks)
 
@@ -57,7 +63,7 @@ The recommended connection type configuration for Databricks is the `databricks`
 This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
 If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
 If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
-the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). See [limitations](#limitations)
+the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). See [limitations](#limitations-1)
 for the impact of this. See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
 
 #### Type: databricks_spark_session
