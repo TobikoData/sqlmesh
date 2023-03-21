@@ -398,12 +398,10 @@ function PlanWizardStepHeader({
       )}
     >
       {headline != null && (
-        <h3 className="whitespace-nowrap text-gray-600 font-bold text-lg">
-          {headline}
-        </h3>
+        <h3 className="whitespace-nowrap font-bold text-lg">{headline}</h3>
       )}
       {children != null && (
-        <small className="whitespace-nowrap text-gray-500">{children}</small>
+        <small className="whitespace-nowrap">{children}</small>
       )}
     </div>
   )

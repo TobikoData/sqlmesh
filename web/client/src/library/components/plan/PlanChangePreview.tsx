@@ -38,7 +38,7 @@ function PlanChangePreview({
         type === EnumPlanChangeType.Remove && 'bg-danger-100',
         type === EnumPlanChangeType.Direct && 'bg-secondary-100',
         type === EnumPlanChangeType.Indirect && 'bg-warning-100',
-        type === 'metadata' && 'bg-gray-100',
+        type === 'metadata' && 'bg-nutral-100',
         className,
       )}
     >
@@ -50,7 +50,7 @@ function PlanChangePreview({
             type === EnumPlanChangeType.Remove && 'text-danger-700',
             type === EnumPlanChangeType.Direct && 'text-secondary-500',
             type === EnumPlanChangeType.Indirect && 'text-warning-700',
-            type === EnumPlanChangeType.Metadata && 'text-gray-900',
+            type === EnumPlanChangeType.Metadata && 'text-nutral-900',
           )}
         >
           {headline}
@@ -79,7 +79,7 @@ function PlanChangePreviewDefault({
             type === EnumPlanChangeType.Remove && 'text-danger-700',
             type === EnumPlanChangeType.Direct && 'text-secondary-500',
             type === EnumPlanChangeType.Indirect && 'text-warning-700',
-            type === EnumPlanChangeType.Metadata && 'text-gray-900',
+            type === EnumPlanChangeType.Metadata && 'text-nutral-900',
           )}
         >
           {type === EnumPlanChangeType.Add ? (

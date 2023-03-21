@@ -88,14 +88,14 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                 }
                 className={({ selected }) =>
                   clsx(
-                    'inline-block text-sm font-medium px-3 py-1 mr-2 last-chald:mr-0 rounded-md relative',
+                    'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
                     isDisabledTabTable(tabName) ||
                       isDisabledTabTerminal(tabName) ||
                       isDisabledTabQueryPreview(tabName)
-                      ? 'text-gray-400 cursor-not-allowed'
+                      ? 'text-nutral-400 cursor-not-allowed'
                       : selected
                       ? 'bg-secondary-100 text-secondary-500 cursor-default'
-                      : 'text-gray-900 hover:bg-white/[0.12] hover:text-gray-500 cursor-pointer',
+                      : 'text-nutral-900 hover:bg-light/[0.12] hover:text-nutral-500 cursor-pointer',
                   )
                 }
               >
@@ -134,7 +134,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {headerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="px-2 text-sm text-left text-gray-600 border-b-2 border-gray-100"
+                            className="px-2 text-sm text-left border-b-2 border-nutral-100"
                           >
                             {header.isPlaceholder
                               ? null
@@ -153,7 +153,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {row.getVisibleCells().map(cell => (
                           <td
                             key={cell.id}
-                            className="px-2 py-1 text-sm text-left text-gray-600 border-b border-gray-100"
+                            className="px-2 py-1 text-sm text-left border-b border-nutral-100"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
@@ -164,7 +164,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="text-left sticky bottom-0 bg-gray-100">
+                  <tfoot className="text-left sticky bottom-0 bg-nutral-100">
                     {table.getFooterGroups().map(footerGroup => (
                       <tr key={footerGroup.id}>
                         {footerGroup.headers.map(header => (
