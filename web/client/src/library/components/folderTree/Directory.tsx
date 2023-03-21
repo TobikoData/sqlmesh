@@ -269,7 +269,7 @@ export default function Directory({
                 >
                   {directory.name}
                 </span>
-                <span className="hidden w-full group-hover:flex items-center justify-end">
+                <span className="hidden w-full -hover:flex items-center justify-end">
                   <ArrowsUpDownIcon
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()

@@ -57,6 +57,7 @@ module.exports = {
         900: 'var(--color-brand-900)',
       },
       nutral: {
+        10: 'var(--color-nutral-10)',
         100: 'var(--color-nutral-100)',
         200: 'var(--color-nutral-200)',
         300: 'var(--color-nutral-300)',
@@ -68,6 +69,7 @@ module.exports = {
         900: 'var(--color-nutral-900)',
       },
       primary: {
+        10: 'var(--color-primary-10)',
         100: 'var(--color-primary-100)',
         200: 'var(--color-primary-200)',
         300: 'var(--color-primary-300)',
@@ -79,6 +81,7 @@ module.exports = {
         900: 'var(--color-primary-900)',
       },
       secondary: {
+        10: 'var(--color-secondary-10)',
         100: 'var(--color-secondary-100)',
         200: 'var(--color-secondary-200)',
         300: 'var(--color-secondary-300)',
@@ -123,6 +126,7 @@ module.exports = {
         900: 'var(--color-danger-900)',
       },
       warning: {
+        10: 'var(--color-warning-10)',
         100: 'var(--color-warning-100)',
         200: 'var(--color-warning-200)',
         300: 'var(--color-warning-300)',
@@ -133,6 +137,7 @@ module.exports = {
         800: 'var(--color-warning-800)',
         900: 'var(--color-warning-900)',
       },
+      transparent: 'transparent',
     },
     fontFamily: {
       mono: ['JetBrains Mono', 'monospace'],

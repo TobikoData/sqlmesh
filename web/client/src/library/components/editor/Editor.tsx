@@ -22,7 +22,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
 import { Divider } from '../divider/Divider'
 import { Button } from '../button/Button'
-import { EnumSize } from '../../../types/enum'
+import { EnumSize, EnumVariant } from '../../../types/enum'
 import { ModelFile } from '../../../models'
 import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
@@ -308,15 +308,15 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
         <div className="flex items-center">
           <Button
             className="m-0 ml-1 mr-3"
-            variant="primary"
-            size="sm"
+            variant={EnumVariant.Nutral}
+            size={EnumSize.sm}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
               addNewFileAndSelect()
             }}
           >
-            <PlusIcon className="inline-block text-secondary-500 font-black w-3 h-4 cursor-pointer " />
+            <PlusIcon className="inline-block w-3 h-4 cursor-pointer" />
           </Button>
           <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
             {openedFiles.size > 0 &&
@@ -334,10 +334,10 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                 >
                   <span
                     className={clsx(
-                      'flex justify-between items-center pl-2 pr-1 py-[0.25rem] min-w-[8rem] rounded-md',
+                      'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent',
                       file === activeFile
-                        ? 'bg-secondary-100'
-                        : 'bg-transparent  hover:shadow-border hover:shadow-secondary-300',
+                        ? 'bg-secondary-10 border-secondary-10 text-primary-500 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
+                        : 'bg-nutral-10 hover:bg-secondary-10',
                     )}
                   >
                     <small className="text-xs">
@@ -345,7 +345,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     </small>
                     {openedFiles.size > 1 && (
                       <XCircleIcon
-                        className="inline-block text-gray-200 w-4 h-4 ml-2 cursor-pointer hover:text-gray-700"
+                        className="inline-block hidden group-hover:block text-nutral-500 w-4 h-4 ml-2 cursor-pointer"
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
@@ -377,27 +377,18 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
               />
             </div>
             <div className="flex flex-col h-full">
-              <div className="px-4 py-2 w-full">
-                <p className="inline-block font-bold text-xs text-secondary-500 border-b-2 border-secondary-500 mr-3">
-                  Actions
-                </p>
-                <p className="inline-block font-bold text-xs text-gray-500 border-b-2 border-white mr-3 opacity-50 cursor-not-allowed">
-                  Docs
-                </p>
-              </div>
-              <Divider />
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
                 <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
                   {isTrue(isModel) && (
                     <form className="my-3">
                       <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
                         <h3 className="whitespace-nowrap ml-2">Model Name</h3>
-                        <p className="ml-2 px-2 py-1 bg-gray-100 text-alternative-500 text-xs rounded">
+                        <p className="ml-2 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10  text-xs rounded">
                           {formEvaluate.model}
                         </p>
                       </fieldset>
                       <fieldset className="flex my-3 px-3">
-                        <div className="p-4 bg-warning-100 text-warning-700 rounded-xl">
+                        <div className="p-4 bg-warning-10 text-warning-600 rounded-xl">
                           <p className="text-sm">
                             Please, fill out all fileds to{' '}
                             <b>
@@ -492,7 +483,6 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     </form>
                   )}
                 </div>
-
                 <Divider />
                 {hasContentActiveFile && (
                   <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
@@ -501,23 +491,16 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                         <div className="flex">
                           <Button
                             size={EnumSize.sm}
-                            variant="alternative"
+                            variant={EnumVariant.Alternative}
                             disabled={true}
                           >
                             Validate
-                          </Button>
-                          <Button
-                            size={EnumSize.sm}
-                            variant="alternative"
-                            disabled={true}
-                          >
-                            Format
                           </Button>
                         </div>
                         {isTrue(isModel) && (
                           <Button
                             size={EnumSize.sm}
-                            variant="secondary"
+                            variant={EnumVariant.Secondary}
                             disabled={isFalse(shouldEvaluate)}
                             onClick={e => {
                               e.stopPropagation()
@@ -616,7 +599,7 @@ function Indicator({
           )}
         ></span>
       ) : (
-        <span className="font-normal text-gray-600">{value}</span>
+        <span className="font-normal">{value}</span>
       )}
     </small>
   )
@@ -642,7 +625,7 @@ function CodeEditor({
       value={value}
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto"
+      className="w-full h-full overflow-auto font-mono text-sm"
       extensions={extensions}
       onChange={onChange}
     />

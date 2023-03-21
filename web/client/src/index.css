@@ -41,6 +41,7 @@
     --color-brand-900: hsla(10, 86%, 26%, 1);
 
     /* Primary */
+    --color-primary-10: hsla(198, 100%, 63%, 0.1);
     --color-primary-100: hsla(183, 100%, 93%, 1);
     --color-primary-200: hsla(186, 100%, 85%, 1);
     --color-primary-300: hsla(191, 100%, 78%, 1);
@@ -52,6 +53,7 @@
     --color-primary-900: hsla(214, 82%, 26%, 1);
 
     /* Secondary */
+    --color-secondary-10: hsla(216, 100%, 50%, 0.1);
     --color-secondary-100: hsla(207, 100%, 90%, 1);
     --color-secondary-200: hsla(209, 100%, 80%, 1);
     --color-secondary-300: hsla(211, 100%, 70%, 1);
@@ -63,6 +65,7 @@
     --color-secondary-900: hsla(226, 100%, 24%, 1);
 
     /* Accent */
+
     --color-accent-100: hsla(264, 100%, 98%, 1);
     --color-accent-200: hsla(260, 100%, 90%, 1);
     --color-accent-300: hsla(260, 100%, 80%, 1);
@@ -85,6 +88,7 @@
     --color-success-900: hsla(130, 81%, 22%, 1);
 
     /* Warning */
+    --color-warning-10: hsla(30, 94%, 62%, 0.1);
     --color-warning-100: hsla(42, 95%, 92%, 1);
     --color-warning-200: hsla(39, 97%, 85%, 1);
     --color-warning-300: hsla(36, 97%, 77%, 1);
@@ -107,6 +111,7 @@
     --color-danger-900: hsla(341, 79%, 27%, 1);
 
     /* Nutral */
+    --color-nutral-10: hsla(190, 8%, 98%, 0.1);
     --color-nutral-100: hsl(190, 8%, 98%);
     --color-nutral-200: hsl(190, 8%, 86%);
     --color-nutral-300: hsl(190, 8%, 74%);
