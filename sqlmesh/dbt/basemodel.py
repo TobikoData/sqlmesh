@@ -72,6 +72,11 @@ class Materialization(str, Enum):
 class BaseModelConfig(GeneralConfig):
     """
     Args:
+        owner: The owner of the model.
+        stamp: An optional arbitrary string sequence used to create new model versions without making
+            changes to any of the functional components of the definition.
+        storage_format: The storage format used to store the physical table, only applicable in certain engines.
+            (eg. 'parquet')
         path: The file path of the model
         target_schema: The schema for the profile target
         database: Database the model is stored in
@@ -85,6 +90,9 @@ class BaseModelConfig(GeneralConfig):
     """
 
     # sqlmesh fields
+    owner: t.Optional[str] = None
+    stamp: t.Optional[str] = None
+    storage_format: t.Optional[str] = None
     path: Path = Path()
     target_schema: str = ""
     _dependencies: Dependencies = Dependencies()
@@ -192,15 +200,21 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
+        optional_kwargs: t.Dict[str, t.Any] = {}
+        for field in ["description", "owner", "stamp", "storage_format"]:
+            field_val = getattr(self, field, None) or self.meta.get(field, None)
+            if field_val:
+                optional_kwargs[field] = field_val
+
         return {
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {model_context.refs[ref] for ref in self._dependencies.refs},
-            "description": self.description,
             "jinja_macros": jinja_macros,
             "path": self.path,
             "pre": [exp for hook in self.pre_hook for exp in d.parse(hook)],
             "post": [exp for hook in self.post_hook for exp in d.parse(hook)],
+            **optional_kwargs,
         }
 
     def render_config(self: BMC, context: DbtContext) -> BMC:
