@@ -49,6 +49,12 @@ class BaseAdapter(abc.ABC):
         """Returns the columns for a given table grained relation."""
 
     @abc.abstractmethod
+    def get_missing_columns(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> t.List[Column]:
+        """Returns the columns in from_relation missing from to_relation."""
+
+    @abc.abstractmethod
     def create_schema(self, relation: BaseRelation) -> None:
         """Creates a schema in the target database."""
 
@@ -101,6 +107,11 @@ class ParsetimeAdapter(BaseAdapter):
         return []
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
+        return []
+
+    def get_missing_columns(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> t.List[Column]:
         return []
 
     def create_schema(self, relation: BaseRelation) -> None:
@@ -185,6 +196,17 @@ class RuntimeAdapter(BaseAdapter):
         return [
             Column.from_description(name=name, raw_data_type=dtype)
             for name, dtype in self.engine_adapter.columns(table_name=relation.render()).items()
+        ]
+
+    def get_missing_columns(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> t.List[Column]:
+        target_columns = {col.name for col in self.get_columns_in_relation(to_relation)}
+
+        return [
+            col
+            for col in self.get_columns_in_relation(from_relation)
+            if col.name not in target_columns
         ]
 
     def create_schema(self, relation: BaseRelation) -> None:
