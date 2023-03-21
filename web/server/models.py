@@ -91,7 +91,7 @@ class ModelsDiff(BaseModel):
 
         indirect = [
             ChangeIndirect(
-                model_name=current.name, direct=[parent.name for parent in list(current.parents)]
+                model_name=current.name, direct=[parent.name for parent in current.parents]
             )
             for current, _ in context_diff.modified_snapshots.values()
             if context_diff.indirectly_modified(current.name)
@@ -115,6 +115,8 @@ class ModelsDiff(BaseModel):
             elif context_diff.metadata_updated(snapshot_name):
                 metadata.add(snapshot_name)
 
+        direct_change_model_names = [change.model_name for change in direct]
+
         return ModelsDiff(
             direct=direct,
             indirect=[
@@ -123,7 +125,7 @@ class ModelsDiff(BaseModel):
                     direct=[
                         model_name
                         for model_name in change.direct
-                        if model_name in [c.model_name for c in direct]
+                        if model_name in direct_change_model_names
                     ],
                 )
                 for change in indirect
