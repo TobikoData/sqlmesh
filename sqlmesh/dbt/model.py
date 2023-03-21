@@ -18,7 +18,11 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import DbtContext, SqlStr
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+
+INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite"])
+INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
 class ModelConfig(BaseModelConfig):
@@ -32,6 +36,10 @@ class ModelConfig(BaseModelConfig):
     Args:
         sql: The model sql
         time_column: The name of the time column
+        partitioned_by: List of columns to partition by. time_column will automatically be
+            included, if specified.
+        cron: A cron string specifying how often the model should be refreshed, leveraging the
+            [croniter](https://github.com/kiorky/croniter) library.
         start: The earliest date that the model will be backfilled for
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         incremental_strategy: Strategy used to build the incremental model
@@ -43,6 +51,8 @@ class ModelConfig(BaseModelConfig):
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
+    partitioned_by: t.Optional[t.Union[t.List[str], str]] = None
+    cron: t.Optional[str] = None
 
     # DBT configuration fields
     start: t.Optional[str] = None
@@ -58,6 +68,7 @@ class ModelConfig(BaseModelConfig):
     @validator(
         "unique_key",
         "cluster_by",
+        "partitioned_by",
         pre=True,
     )
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
@@ -83,8 +94,7 @@ class ModelConfig(BaseModelConfig):
     def model_materialization(self) -> Materialization:
         return self.materialized
 
-    @property
-    def model_kind(self) -> ModelKind:
+    def model_kind(self, target: TargetConfig) -> ModelKind:
         """
         Get the sqlmesh ModelKind
         Returns:
@@ -97,8 +107,30 @@ class ModelConfig(BaseModelConfig):
             return ModelKind(name=ModelKindName.VIEW)
         if materialization == Materialization.INCREMENTAL:
             if self.time_column:
+                strategy = self.incremental_strategy or target.default_incremental_strategy(
+                    IncrementalByTimeRangeKind
+                )
+                if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
+                    valid_strategies = ", ".join(
+                        f"'{strat}'" for strat in INCREMENTAL_BY_TIME_STRATEGIES
+                    )
+                    raise ConfigError(
+                        f"SQLMesh IncrementalByTime not compatible with '{strategy}'"
+                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                    )
                 return IncrementalByTimeRangeKind(time_column=self.time_column)
             if self.unique_key:
+                strategy = self.incremental_strategy or target.default_incremental_strategy(
+                    IncrementalByUniqueKeyKind
+                )
+                if strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES:
+                    valid_strategies = ", ".join(
+                        f"'{strat}'" for strat in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
+                    )
+                    raise ConfigError(
+                        f"SQLMesh IncrementalByUniqueKey not compatible with '{strategy}'"
+                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                    )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
             raise ConfigError(
                 "SQLMesh ensures idempotent incremental loads and thus does not support append."
@@ -137,12 +169,19 @@ class ModelConfig(BaseModelConfig):
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
 
+        optional_kwargs: t.Dict[str, t.Any] = {}
+        if self.partitioned_by:
+            optional_kwargs["partitioned_by"] = self.partitioned_by
+        if self.cron:
+            optional_kwargs["cron"] = self.cron
+
         return create_sql_model(
             self.model_name,
             expressions[-1],
-            kind=self.model_kind,
             dialect=model_context.dialect,
-            statements=expressions[0:-1],
+            kind=self.model_kind(context.target),
             start=self.start,
+            statements=expressions[0:-1],
+            **optional_kwargs,
             **self.sqlmesh_model_kwargs(model_context),
         )

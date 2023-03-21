@@ -11,6 +11,7 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
     DatabricksConfig,
+    DuckDbConfig,
     PostgresConfig,
     RedshiftConfig,
     SnowflakeConfig,
@@ -107,18 +108,24 @@ def test_to_sqlmesh_fields(sushi_dbt_project: Project):
         target_schema="schema",
         schema_="custom",
         database="database",
+        materialized=Materialization.TABLE,
         description="test model",
-        sql="SELECT 1 FROM a",
+        sql="SELECT 1 AS a FROM foo",
         start="Jan 1 2023",
+        partitioned_by=["a"],
+        cron="@hourly",
     )
-    context = DbtContext()
+    context = DbtContext(project_name="Foo")
+    context.target = DuckDbConfig(schema="foo")
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
     assert model.name == "database.schema_custom.model"
     assert model.description == "test model"
-    assert model.query.sql() == "SELECT 1 FROM a"
+    assert model.query.sql() == "SELECT 1 AS a FROM foo"
     assert model.start == "Jan 1 2023"
+    assert model.partitioned_by == ["a"]
+    assert model.cron == "@hourly"
 
 
 def test_model_config_sql_no_config():
