@@ -347,7 +347,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     </small>
                     {openedFiles.size > 1 && (
                       <XCircleIcon
-                        className="inline-block hidden group-hover:block text-nutral-600 dark:text-nutral-100 w-4 h-4 ml-2 cursor-pointer"
+                        className="inline-block opacity-0 group-hover:opacity-100 text-nutral-600 dark:text-nutral-100 w-4 h-4 ml-2 cursor-pointer"
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
