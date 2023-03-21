@@ -126,7 +126,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         return connector.connect
 
 
-class DatabricksAPIConnectionConfig(_ConnectionConfig):
+class DatabricksSQLConnectionConfig(_ConnectionConfig):
     """
     Configuration for the Databricks API connection. This connection is used to access the Databricks
     when you don't have access to a SparkSession. Ex: Running Jupyter locally on your laptop to connect to a
@@ -151,7 +151,7 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
 
     concurrent_tasks: int = 4
 
-    type_: Literal["databricks_api"] = Field(alias="type", default="databricks_api")
+    type_: Literal["databricks_sql"] = Field(alias="type", default="databricks_sql")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
@@ -168,7 +168,7 @@ class DatabricksAPIConnectionConfig(_ConnectionConfig):
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DatabricksAPIEngineAdapter
+        return engine_adapter.DatabricksSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -290,7 +290,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         if self.has_spark_session_access:
             return engine_adapter.DatabricksSparkSessionEngineAdapter
-        return engine_adapter.DatabricksAPIEngineAdapter
+        return engine_adapter.DatabricksSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -445,7 +445,7 @@ ConnectionConfig = Annotated[
     t.Union[
         DuckDBConnectionConfig,
         SnowflakeConnectionConfig,
-        DatabricksAPIConnectionConfig,
+        DatabricksSQLConnectionConfig,
         DatabricksSparkSessionConnectionConfig,
         DatabricksConnectionConfig,
         BigQueryConnectionConfig,

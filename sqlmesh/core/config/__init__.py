@@ -2,9 +2,9 @@ from sqlmesh.core.config.categorizer import AutoCategorizationMode, CategorizerC
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     ConnectionConfig,
-    DatabricksAPIConnectionConfig,
     DatabricksConnectionConfig,
     DatabricksSparkSessionConnectionConfig,
+    DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,

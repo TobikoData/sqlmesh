@@ -38,6 +38,8 @@ connections:
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
 ### Snowflake
+[Airflow Configuration Information](../integrations/airflow.md#snowflake)
+
 | Option      | Description                  |  Type  | Required |
 |-------------|------------------------------|:------:|:--------:|
 | `user`      | The Snowflake username       | string |    Y     |
@@ -48,6 +50,25 @@ connections:
 | `role`      | The Snowflake role name      | string |    N     |
 
 ### Databricks
+[Airflow Configuration Information](../integrations/airflow.md#databricks)
+
+#### Type: databricks
+The recommended connection type configuration for Databricks is the `databricks` type. 
+This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
+If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
+If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
+the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). See [limitations](#limitations)
+for the impact of this. See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
+
+#### Type: databricks_spark_session
+This connection type assumes that wherever you are running you have access to a Databricks SparkSession. 
+This will simplify the required configuration to run since you will not need to provide connection configuration.
+
+#### Type: databricks_sql
+This connection type assumes you only need to run SQL queries against Databricks.
+If all of your models are SQL models or if Python don't use PySpark DataFrame then this can be used.
+Below is the connection configuration for this type:
+
 | Option                  | Description                                                                                                                                                                              |  Type  | Required |
 |-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `server_hostname`       | Databricks instance host name                                                                                                                                                            | string |    Y     |
