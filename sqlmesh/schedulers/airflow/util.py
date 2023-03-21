@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 # and prevents mypy from complaining.
 PROVIDED_SESSION: Session = t.cast(Session, None)
 
+ENGINE_ADAPTER_ALIASES = {
+    "spark": ("spark", "spark-submit", "spark_submit"),
+    "databricks": ("databricks", "databricks-submit", "databricks_submit"),
+    "snowflake": ("snowflake", "snowflake-sql", "snowflake_sql"),
+    "bigquery": ("bigquery", "bigquery-sql", "bigquery_sql"),
+    "redshift": ("redshift", "redshift-sql", "redshift_sql"),
+}
+
 
 @contextlib.contextmanager
 def scoped_state_sync() -> t.Generator[StateSync, None, None]:
@@ -98,35 +106,35 @@ def delete_variables(
     (session.query(Variable).filter(Variable.key.in_(keys)).delete(synchronize_session=False))
 
 
-def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
+def discover_evaluate_engine_operator(name: str) -> t.Type[BaseOperator]:
     name = name.lower()
 
     try:
-        if name in ("spark", "spark-submit", "spark_submit"):
+        if name in ENGINE_ADAPTER_ALIASES["spark"]:
             from sqlmesh.schedulers.airflow.operators.spark_submit import (
                 SQLMeshSparkSubmitOperator,
             )
 
             return SQLMeshSparkSubmitOperator
-        if name in ("databricks", "databricks-sql", "databricks_sql"):
+        if name in ENGINE_ADAPTER_ALIASES["databricks"]:
             from sqlmesh.schedulers.airflow.operators.databricks import (
-                SQLMeshDatabricksSQLOperator,
+                SQLMeshDatabricksSubmitOperator,
             )
 
-            return SQLMeshDatabricksSQLOperator
-        if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
+            return SQLMeshDatabricksSubmitOperator
+        if name in ENGINE_ADAPTER_ALIASES["snowflake"]:
             from sqlmesh.schedulers.airflow.operators.snowflake import (
                 SQLMeshSnowflakeOperator,
             )
 
             return SQLMeshSnowflakeOperator
-        if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
+        if name in ENGINE_ADAPTER_ALIASES["bigquery"]:
             from sqlmesh.schedulers.airflow.operators.bigquery import (
                 SQLMeshBigQueryOperator,
             )
 
             return SQLMeshBigQueryOperator
-        if name in ("redshift", "redshift-sql", "redshift_sql"):
+        if name in ENGINE_ADAPTER_ALIASES["redshift"]:
             from sqlmesh.schedulers.airflow.operators.redshift import (
                 SQLMeshRedshiftOperator,
             )
@@ -136,3 +144,15 @@ def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
         raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
 
     raise ValueError(f"Unsupported engine name '{name}'.")
+
+
+def discover_env_management_engine_operator(name: str) -> t.Type[BaseOperator]:
+    name = name.lower()
+
+    if name in ENGINE_ADAPTER_ALIASES["databricks"]:
+        from sqlmesh.schedulers.airflow.operators.databricks import (
+            SQLMeshDatabricksSQLOperator,
+        )
+
+        return SQLMeshDatabricksSQLOperator
+    return discover_evaluate_engine_operator(name)

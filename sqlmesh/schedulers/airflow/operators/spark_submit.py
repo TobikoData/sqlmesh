@@ -96,10 +96,14 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         command_payload_file_path: t.Optional[str],
         ddl_concurrent_tasks: t.Optional[int],
     ) -> SparkSubmitHook:
-        application_args = [
-            *([command_type.value] if command_type else []),
-            *([str(ddl_concurrent_tasks)] if ddl_concurrent_tasks else []),
-        ]
+        application_args = {
+            "dialect": "spark",
+            "command_type": command_type.value if command_type else None,
+            "ddl_concurrent_tasks": ddl_concurrent_tasks,
+            "payload_path": command_payload_file_path.split("/")[-1]
+            if command_payload_file_path
+            else None,
+        }
         return SparkSubmitHook(
             conf=self._spark_conf,
             conn_id=self._connection_id,
@@ -112,6 +116,6 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
             proxy_user=self._proxy_user,
             name=self._application_name,
             num_executors=self._num_executors,
-            application_args=application_args,
+            application_args=[f"--{k}={v}" for k, v in application_args.items() if v is not None],
             files=command_payload_file_path,
         )

@@ -38,14 +38,24 @@ class SQLMeshAirflow:
                 globals()[dag.dag_id] = dag
 
     Args:
-        engine_operator: The type of the Airflow operator that will be used for model evaluation.
+        default_engine_operator: The type of Airflow operator to use if one is not explicitly provided.
             If a string value is passed, an automatic operator discovery is attempted based
-            on the engine name specified in the string. Supported string values are: spark.
-        engine_operator_args: The dictionary of arguments that will be passed into the engine
-            operator during its construction. This can be used to customize parameters such as
-            connection ID.
-        ddl_engine_operator_args: Same as `engine_operator_args`, but only used for the
-            snapshot promotion process. If not specified, falls back to using `engine_operator_args`.
+            on the engine name specified in the string.
+        default_engine_operator_args: The dictionary of arguments that will be passed into an engine operator
+            if one is not explicitly defined.
+        evaluate_engine_operator: The type of the Airflow operator that will be used for model evaluation.
+            If a string value is passed, an automatic operator discovery is attempted based
+            on the engine name specified in the string.
+        evaluate_engine_operator_args: The dictionary of arguments that will be passed into the evaluate engine
+            operator during its construction.
+            This can be used to customize parameters such as connection ID.
+        env_management_engine_operator: The type of the Airflow operator that will be used for environment management.
+            These operations are SQL only.
+            If a string value is passed, an automatic operator discovery is attempted based
+            on the engine name specified in the string.
+        env_management_operator_args: Args to be passed into just the environment management operator.
+            This can be used to customize parameters such as connection ID.
+            If not specified, falls back to using `default_engine_operator_args`.
         janitor_interval: Defines how often the janitor DAG runs.
             The janitor DAG removes platform-managed DAG instances that are pending
             deletion from Airflow. Default: 1 hour.
@@ -55,18 +65,42 @@ class SQLMeshAirflow:
 
     def __init__(
         self,
-        engine_operator: t.Union[str, t.Type[BaseOperator]],
-        engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
-        ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
+        default_engine_operator: t.Optional[t.Union[str, t.Type[BaseOperator]]] = None,
+        default_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
+        evaluate_engine_operator: t.Optional[t.Union[str, t.Type[BaseOperator]]] = None,
+        evaluate_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
+        env_management_engine_operator: t.Optional[t.Union[str, t.Type[BaseOperator]]] = None,
+        env_management_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
         janitor_interval: timedelta = timedelta(hours=1),
         plan_application_dag_ttl: timedelta = timedelta(days=2),
     ):
-        if isinstance(engine_operator, str):
-            engine_operator = util.discover_engine_operator(engine_operator)
+        if not default_engine_operator and (
+            not evaluate_engine_operator or not env_management_engine_operator
+        ):
+            raise ValueError(
+                "A default_engine_operator must be specified if evaluate_engine_operator and env_management_engine_operator must be specified."
+            )
+        evaluate_engine_operator = evaluate_engine_operator or default_engine_operator
+        assert evaluate_engine_operator is not None
+        env_management_engine_operator = env_management_engine_operator or default_engine_operator
+        assert env_management_engine_operator is not None
+        if isinstance(evaluate_engine_operator, str):
+            evaluate_engine_operator = util.discover_evaluate_engine_operator(
+                evaluate_engine_operator
+            )
+        if isinstance(env_management_engine_operator, str):
+            env_management_engine_operator = util.discover_env_management_engine_operator(
+                env_management_engine_operator
+            )
 
-        self._engine_operator = engine_operator
-        self._engine_operator_args = engine_operator_args
-        self._ddl_engine_operator_args = ddl_engine_operator_args or engine_operator_args or {}
+        self._evaluate_engine_operator = evaluate_engine_operator
+        self._evaluate_engine_operator_args = (
+            evaluate_engine_operator_args or default_engine_operator_args or {}
+        )
+        self._env_management_engine_operator = env_management_engine_operator
+        self._env_management_engine_operator_args = (
+            env_management_operator_args or default_engine_operator_args or {}
+        )
         self._janitor_interval = janitor_interval
         self._plan_application_dag_ttl = plan_application_dag_ttl
 
@@ -82,9 +116,10 @@ class SQLMeshAirflow:
             stored_snapshots = state_sync.get_snapshots(None)
 
         dag_generator = SnapshotDagGenerator(
-            self._engine_operator,
-            self._engine_operator_args,
-            self._ddl_engine_operator_args,
+            self._evaluate_engine_operator,
+            self._evaluate_engine_operator_args,
+            self._env_management_engine_operator,
+            self._env_management_engine_operator_args,
             stored_snapshots,
         )
 
@@ -109,8 +144,8 @@ class SQLMeshAirflow:
             dag=dag,
         )
 
-        table_cleanup_task_op = self._engine_operator(
-            **self._ddl_engine_operator_args,
+        table_cleanup_task_op = self._env_management_engine_operator(
+            **self._env_management_engine_operator_args,
             target=targets.SnapshotCleanupTarget(),
             task_id="snapshot_table_cleanup_task",
             dag=dag,

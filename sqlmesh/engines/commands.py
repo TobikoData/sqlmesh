@@ -14,13 +14,17 @@ from sqlmesh.utils.pydantic import PydanticModel
 COMMAND_PAYLOAD_FILE_NAME = "payload.json"
 
 
-class CommandType(Enum):
+class CommandType(str, Enum):
     EVALUATE = "evaluate"
     PROMOTE = "promote"
     DEMOTE = "demote"
     CLEANUP = "cleanup"
     CREATE_TABLES = "create_tables"
     MIGRATE_TABLES = "migrate_tables"
+
+    # This makes it easy to integrate with argparse
+    def __str__(self) -> str:
+        return self.value
 
 
 class EvaluateCommandPayload(PydanticModel):
