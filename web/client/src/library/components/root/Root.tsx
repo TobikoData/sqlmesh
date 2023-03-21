@@ -4,12 +4,12 @@ import { IDE } from '../ide/IDE'
 import LogoTobiko from '../logo/Tobiko'
 import LogoSqlMesh from '../logo/SqlMesh'
 import { SunIcon, MoonIcon } from '@heroicons/react/24/solid'
-import { EnumColorScheme, useColorScheme } from '~/hooks/useColorScheme'
 import clsx from 'clsx'
+import ThemeProvider, { EnumColorScheme, useColorScheme } from '~/context/theme'
 
 export default function Root(): JSX.Element {
   return (
-    <>
+    <ThemeProvider>
       <Header></Header>
       <Divider />
       <Main>
@@ -17,27 +17,26 @@ export default function Root(): JSX.Element {
       </Main>
       <Divider />
       <Footer></Footer>
-    </>
+    </ThemeProvider>
   )
 }
 
 function Header(): JSX.Element {
-  const [colorScheme, toggleColorScheme] = useColorScheme()
+  const { mode, toggleColorScheme } = useColorScheme()
 
-  const IconMoonOrSun =
-    colorScheme === EnumColorScheme.Light ? MoonIcon : SunIcon
+  const IconMoonOrSun = mode === EnumColorScheme.Light ? MoonIcon : SunIcon
 
   return (
     <header className="min-h-[2.5rem] px-2 flex justify-between items-center">
       <div className="flex h-full items-center">
         <LogoSqlMesh
           style={{ height: '32px' }}
-          mode={colorScheme}
+          mode={mode}
         />
         <span className="inline-block mx-2 text-xs font-bold">by</span>
         <LogoTobiko
           style={{ height: '24px' }}
-          mode={colorScheme}
+          mode={mode}
         />
       </div>
       <div>
@@ -50,7 +49,7 @@ function Header(): JSX.Element {
               'dark:hover:bg-theme-lighter',
             )}
             onClick={() => {
-              toggleColorScheme()
+              toggleColorScheme?.()
             }}
           >
             <IconMoonOrSun className="h-4 w-4 text-primary-500" />

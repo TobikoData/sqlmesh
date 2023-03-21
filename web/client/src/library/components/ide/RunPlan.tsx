@@ -20,7 +20,7 @@ import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
-import { EnumSize } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import {
   isArrayNotEmpty,
   includes,
@@ -28,7 +28,7 @@ import {
   isStringEmptyOrNil,
   debounceAsync,
 } from '~/utils'
-import { Button, ButtonMenu } from '../button/Button'
+import { Button, ButtonMenu, type ButtonSize } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'

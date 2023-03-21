@@ -14,16 +14,15 @@ function Spinner({
   return (
     <svg
       style={style}
-      className={clsx('animate-spin bg-nutral-100 rounded-full', className)}
+      className={clsx('animate-spin bg-theme rounded-full', className)}
       viewBox="0 0 64 64"
-      fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
         d="M16 59.7128C31.3054 68.5494 50.8763 63.3054 59.7128 48C68.5494 32.6946 63.3054 13.1237 48 4.28719C32.6946 -4.54937 13.1237 0.694636 4.28719 16C-4.54937 31.3054 0.694637 50.8763 16 59.7128ZM23 47.5885C31.6093 52.559 42.6179 49.6093 47.5885 41C52.559 32.3907 49.6093 21.3821 41 16.4115C32.3907 11.441 21.3821 14.3907 16.4115 23C11.441 31.6093 14.3907 42.6179 23 47.5885Z"
-        className="fill-nutral-200"
+        className="fill-theme-darker"
       />
       <path
         fillRule="evenodd"
@@ -37,6 +36,15 @@ function Spinner({
           variant === EnumVariant.Danger && 'fill-danger-500',
           variant === EnumVariant.Info && 'fill-nutral-500',
         )}
+        stroke={clsx(
+          variant === EnumVariant.Primary && 'var(--color-primary-500)',
+          variant === EnumVariant.Secondary && 'var(--color-secondary-500)',
+          variant === EnumVariant.Success && 'var(--color-success-500)',
+          variant === EnumVariant.Warning && 'var(--color-warning-500)',
+          variant === EnumVariant.Danger && 'var(--color-danger-500)',
+          variant === EnumVariant.Info && 'var(--color-nutral-500)',
+        )}
+        strokeWidth="4"
       />
     </svg>
   )

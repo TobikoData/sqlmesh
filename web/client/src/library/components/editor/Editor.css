@@ -9,7 +9,7 @@
 }
 
 .cm-editor .cm-gutters {
-  background-color: var(--color-editor-gutter);
+  background-color: var(--color-editor);
   border: none;
   padding-left: 0.25rem;
   padding-right: 0.5rem;
@@ -29,4 +29,18 @@
 .cm-editor .cm-line > *::selection {
   background-color: var(--color-brand-100) !important;
   color: var(--color-brand-700) !important;
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar {
+  height: 0.2rem;
+  width: 0.2rem;
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--color-brand);
+  border-radius: 1rem;
 }

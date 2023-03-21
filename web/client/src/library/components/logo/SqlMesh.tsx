@@ -1,5 +1,5 @@
 import React, { memo } from 'react'
-import { type ColorScheme, EnumColorScheme } from '~/hooks/useColorScheme'
+import { type ColorScheme, EnumColorScheme } from '~/context/theme'
 
 interface PropsLogoSqlMesh extends React.SVGAttributes<SVGAElement> {
   mode: ColorScheme

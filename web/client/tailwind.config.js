@@ -11,6 +11,8 @@ module.exports = {
     colors: {
       prose: {
         DEFAULT: 'var(--color-text)',
+        darker: 'var(--color-text-darker)',
+        lighter: 'var(--color-text-lighter)',
       },
       dark: {
         DEFAULT: 'var(--color-dark)',

@@ -50,6 +50,8 @@ import { type Table } from 'apache-arrow'
 import { type ResponseWithDetail } from '~/api/instance'
 import type { File } from '../../../api/client'
 import { type ModelEnvironment } from '~/models/environment'
+import { dracula, tomorrow } from 'thememirror'
+import { EnumColorScheme, useColorScheme } from '~/context/theme'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -307,8 +309,8 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
       <div className="flex flex-col overflow-hidden">
         <div className="flex items-center">
           <Button
-            className="m-0 ml-1 mr-3"
-            variant={EnumVariant.Nutral}
+            className="m-0 ml-1 mr-3 bg-primary-10  hover:bg-secondary-10 active:bg-secondary-10 border-none"
+            variant={EnumVariant.Alternative}
             size={EnumSize.sm}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
@@ -316,7 +318,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
               addNewFileAndSelect()
             }}
           >
-            <PlusIcon className="inline-block w-3 h-4 cursor-pointer" />
+            <PlusIcon className="inline-block w-3 h-4 text-secondary-500 dark:text-primary-500" />
           </Button>
           <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
             {openedFiles.size > 0 &&
@@ -334,10 +336,10 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                 >
                   <span
                     className={clsx(
-                      'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent',
+                      'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
                       file === activeFile
                         ? 'bg-nutral-200 border-nutral-200 text-nutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
-                        : 'bg-trasparent hover:bg-nutral-30',
+                        : 'bg-trasparent hover:bg-theme-darker dark:hover:bg-theme-lighter',
                     )}
                   >
                     <small className="text-xs">
@@ -345,7 +347,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     </small>
                     {openedFiles.size > 1 && (
                       <XCircleIcon
-                        className="inline-block hidden group-hover:block text-nutral-500 w-4 h-4 ml-2 cursor-pointer"
+                        className="inline-block hidden group-hover:block text-nutral-600 dark:text-nutral-100 w-4 h-4 ml-2 cursor-pointer"
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
@@ -614,10 +616,14 @@ function CodeEditor({
   extension: string
   onChange: (value: string) => void
 }): JSX.Element {
+  const { mode } = useColorScheme()
+  const theme = mode === EnumColorScheme.Dark ? dracula : tomorrow
+
   const extensions = [
     extension === '.sql' && sql(),
     extension === '.py' && python(),
     extension === '.yaml' && StreamLanguage.define(yaml),
+    theme,
   ].filter(Boolean) as Extension[]
 
   return (
@@ -625,7 +631,7 @@ function CodeEditor({
       value={value}
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto font-mono text-sm"
+      className="w-full h-full font-mono text-sm "
       extensions={extensions}
       onChange={onChange}
     />

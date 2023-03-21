@@ -3,7 +3,7 @@ import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
-import { EnumSize } from '../../../types/enum'
+import { EnumSize, EnumVariant } from '../../../types/enum'
 import {
   useApiFiles,
   useApiEnvironments,
@@ -105,7 +105,6 @@ export function IDE(): JSX.Element {
             {project?.name}
           </h3>
         </div>
-
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
             className="mr-4"
