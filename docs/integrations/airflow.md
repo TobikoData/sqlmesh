@@ -156,3 +156,26 @@ sqlmesh_airflow = SQLMeshAirflow(
     },
 )
 ```
+
+### BigQuery
+**Engine Name:** `bigquery` / `bigquery-sql` / `bigquery_sql`.
+
+Due to wanting to share a common implementation across local and Airflow, SQLMesh Bigquery implements it's own hook and operator. 
+
+To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
+```
+pip install "apache-airflow-providers-google"
+pip install "sqlmesh[bigquery]"
+```
+
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) for more details.
+
+By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overriden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python linenums="1"
+sqlmesh_airflow = SQLMeshAirflow(
+    "bigquery",
+    default_engine_operator_args={
+        "bigquery_conn_id": "<Connection ID>"
+    },
+)
+```

@@ -92,8 +92,12 @@ Below is the connection configuration for this type:
 [Airflow Configuration Information](../integrations/airflow.md#databricks)
 
 ### Bigquery
+#### Local/Build-in Scheduler
+Currently relies on local configuration of `gcloud` CLI to be authenticated in order to connect. 
+[Issue to expand supported methods](https://github.com/TobikoData/sqlmesh/issues/270).
 
-TODO
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#bigquery)
 
 ### Redshift
 | Option                  | Description                                                                                                 |  Type  | Required |

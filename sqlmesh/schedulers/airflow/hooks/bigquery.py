@@ -13,8 +13,7 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
     """
     Interact with BigQuery. This hook uses the Google Cloud connection. We didn't use the Airflow BigQueryHook
     because it implements an Airflow specific version of the BigQuery DB API that is different then the DB API
-    provided from Google's python package. As a result we wanted to use that we would then require Airflow
-    when running BigQuery commands locally or support these two different APIs.
+    provided from Google's python package.
 
     :param gcp_conn_id: The Airflow connection used for GCP credentials.
     :param delegate_to: This performs a task on one host with reference to other hosts.
