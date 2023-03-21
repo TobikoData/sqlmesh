@@ -68,6 +68,8 @@ class SQLMeshAirflow:
         plan_application_dag_ttl: timedelta = timedelta(days=2),
     ):
         if isinstance(engine_operator, str):
+            if not ddl_engine_operator:
+                ddl_engine_operator = util.discover_engine_operator(engine_operator, sql_only=True)
             engine_operator = util.discover_engine_operator(engine_operator, sql_only=False)
 
         if isinstance(ddl_engine_operator, str):
