@@ -23,6 +23,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.target import DuckDbConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 
 
@@ -43,26 +44,74 @@ def test_model_name():
 
 
 def test_model_kind():
-    assert ModelConfig(materialized=Materialization.TABLE).model_kind == ModelKind(
+    target = DuckDbConfig(type="duckdb", schema="foo")
+
+    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
         name=ModelKindName.FULL
     )
-    assert ModelConfig(materialized=Materialization.VIEW).model_kind == ModelKind(
+    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ModelKind(
         name=ModelKindName.VIEW
     )
-    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind == ModelKind(
+    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == ModelKind(
         name=ModelKindName.EMBEDDED
     )
-    with pytest.raises(ConfigError) as exception:
-        ModelConfig(materialized=Materialization.INCREMENTAL).model_kind
+
+    assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
+        target
+    ) == IncrementalByTimeRangeKind(time_column="foo")
     assert ModelConfig(
-        materialized=Materialization.INCREMENTAL, time_column="foo"
-    ).model_kind == IncrementalByTimeRangeKind(time_column="foo")
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="delete+insert",
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="insert_overwrite",
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+
     assert ModelConfig(
-        materialized=Materialization.INCREMENTAL, unique_key=["bar"]
-    ).model_kind == IncrementalByUniqueKeyKind(unique_key=["bar"])
+        materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
+    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            time_column="foo",
+            incremental_strategy="merge",
+        ).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            time_column="foo",
+            incremental_strategy="append",
+        ).model_kind(target)
+
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy="delete+insert",
+        ).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy="insert_overwrite",
+        ).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            unique_key=["bar"],
+            incremental_strategy="append",
+        ).model_kind(target)
 
 
 def test_model_columns():
@@ -92,7 +141,8 @@ def test_model_columns():
     assert column_types_to_sqlmesh(model.columns) == expected_column_types
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
-    context = DbtContext()
+    context = DbtContext(project_name="Foo")
+    context.target = DuckDbConfig(type="duckdb", schema="foo")
     sqlmesh_model = model.to_sqlmesh(context)
     assert sqlmesh_model.columns_to_types == expected_column_types
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
@@ -148,7 +198,8 @@ def test_config_containing_jinja():
         },
     )
 
-    context = DbtContext()
+    context = DbtContext(project_name="Foo")
+    context.target = DuckDbConfig(type="duckdb", schema="foo")
     context.variables = {"schema": "foo", "size": "5"}
     model._dependencies.sources = set(["package.table"])
     context.sources = {"package.table": SourceConfig(schema_="raw", name="baz")}

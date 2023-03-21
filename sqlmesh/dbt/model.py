@@ -18,7 +18,11 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import DbtContext, SqlStr
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+
+INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite"])
+INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
 class ModelConfig(BaseModelConfig):
@@ -89,8 +93,7 @@ class ModelConfig(BaseModelConfig):
     def model_materialization(self) -> Materialization:
         return self.materialized
 
-    @property
-    def model_kind(self) -> ModelKind:
+    def model_kind(self, target: TargetConfig) -> ModelKind:
         """
         Get the sqlmesh ModelKind
         Returns:
@@ -103,8 +106,30 @@ class ModelConfig(BaseModelConfig):
             return ModelKind(name=ModelKindName.VIEW)
         if materialization == Materialization.INCREMENTAL:
             if self.time_column:
+                strategy = self.incremental_strategy or target.default_incremental_strategy(
+                    IncrementalByTimeRangeKind
+                )
+                if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
+                    valid_strategies = ", ".join(
+                        f"'{strat}'" for strat in INCREMENTAL_BY_TIME_STRATEGIES
+                    )
+                    raise ConfigError(
+                        f"SQLMesh IncrementalByTime not compatible with '{strategy}'"
+                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                    )
                 return IncrementalByTimeRangeKind(time_column=self.time_column)
             if self.unique_key:
+                strategy = self.incremental_strategy or target.default_incremental_strategy(
+                    IncrementalByUniqueKeyKind
+                )
+                if strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES:
+                    valid_strategies = ", ".join(
+                        f"'{strat}'" for strat in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
+                    )
+                    raise ConfigError(
+                        f"SQLMesh IncrementalByUniqueKey not compatible with '{strategy}'"
+                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                    )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
             raise ConfigError(
                 "SQLMesh ensures idempotent incremental loads and thus does not support append."
@@ -153,7 +178,7 @@ class ModelConfig(BaseModelConfig):
             self.model_name,
             expressions[-1],
             dialect=model_context.dialect,
-            kind=self.model_kind,
+            kind=self.model_kind(context.target),
             start=self.start,
             statements=expressions[0:-1],
             **optional_kwargs,

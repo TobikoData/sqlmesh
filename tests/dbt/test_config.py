@@ -11,6 +11,7 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
     DatabricksConfig,
+    DuckDbConfig,
     PostgresConfig,
     RedshiftConfig,
     SnowflakeConfig,
@@ -114,7 +115,8 @@ def test_to_sqlmesh_fields(sushi_dbt_project: Project):
         partitioned_by=["a"],
         cron="@hourly",
     )
-    context = DbtContext()
+    context = DbtContext(project_name="Foo")
+    context.target = DuckDbConfig(type="duckdb", schema="foo")
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)

@@ -12,9 +12,12 @@ from sqlmesh.core.config import (
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
 )
+from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
+
+IncrementalKind = t.Union[t.Type[IncrementalByUniqueKeyKind], t.Type[IncrementalByTimeRangeKind]]
 
 
 class TargetConfig(abc.ABC, PydanticModel):
@@ -62,6 +65,10 @@ class TargetConfig(abc.ABC, PydanticModel):
 
         raise ConfigError(f"{db_type} not supported.")
 
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        """The default incremental strategy for the db"""
+        raise NotImplementedError
+
     def to_sqlmesh(self) -> ConnectionConfig:
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
@@ -81,6 +88,9 @@ class DuckDbConfig(TargetConfig):
     """
 
     path: t.Optional[str] = None
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "delete+insert"
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return DuckDBConnectionConfig(database=self.path, concurrent_tasks=self.threads)
@@ -118,6 +128,9 @@ class SnowflakeConfig(TargetConfig):
     connect_timeout: int = 10
     retry_on_database_errors: bool = False
     retry_all: bool = False
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "merge"
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return SnowflakeConnectionConfig(
@@ -161,6 +174,9 @@ class PostgresConfig(TargetConfig):
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
+
     def to_sqlmesh(self) -> ConnectionConfig:
         raise ConfigError("PostgreSQL is not supported by SQLMesh yet.")
 
@@ -194,6 +210,9 @@ class RedshiftConfig(TargetConfig):
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "append"
+
     def to_sqlmesh(self) -> ConnectionConfig:
         return RedshiftConnectionConfig(
             user=self.user,
@@ -221,6 +240,9 @@ class DatabricksConfig(TargetConfig):
     host: str
     http_path: str
     token: str
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "merge"
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return DatabricksAPIConnectionConfig(
