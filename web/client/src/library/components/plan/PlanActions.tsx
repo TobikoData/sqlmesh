@@ -183,9 +183,13 @@ export default function PlanActions({
         )}
       </div>
       <div className="flex items-center">
-        {[isProcessing, isRun, disabled, environment.isInitial, isDone].every(
-          isFalse,
-        ) && (
+        {[
+          isProcessing,
+          isRun,
+          disabled,
+          environment.isInitial && environment.isDefault,
+          isDone,
+        ].every(isFalse) && (
           <Button
             onClick={handleReset}
             variant="alternative"

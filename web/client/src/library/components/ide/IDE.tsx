@@ -2,7 +2,7 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
-import { useEffect, type MouseEvent, useState, lazy } from 'react'
+import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
 import { EnumSize } from '../../../types/enum'
 import {
   useApiFiles,
@@ -13,7 +13,7 @@ import {
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
-import { isArrayEmpty, isFalse, isTrue } from '~/utils'
+import { isArrayEmpty, isFalse, isTrue, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import Modal from '../modal/Modal'
 import PlanProvider from '../plan/context'
@@ -45,15 +45,31 @@ export function IDE(): JSX.Element {
 
   const [subscribe] = useChannelEvents()
 
-  const { data: project } = useApiFiles()
-  const { data: contextEnvironemnts } = useApiEnvironments()
+  const { data: project, refetch: getFiles } = useApiFiles()
+  const { data: contextEnvironemnts, refetch: getEnvironments } =
+    useApiEnvironments()
+
+  const debouncedGetEnvironemnts = useCallback(
+    debounceAsync(getEnvironments, 1000, true),
+    [getEnvironments],
+  )
+  const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
+    getFiles,
+  ])
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
 
+    void debouncedGetEnvironemnts()
+    void debouncedGetFiles()
+
     return () => {
+      debouncedGetEnvironemnts.cancel()
+      debouncedGetFiles.cancel()
+
       apiCancelFiles(client)
       apiCancelGetEnvironments(client)
+
       unsubscribeTasks?.()
     }
   }, [])

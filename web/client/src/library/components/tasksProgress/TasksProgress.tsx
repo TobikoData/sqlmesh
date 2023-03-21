@@ -1,19 +1,19 @@
 import clsx from 'clsx'
 import { useMemo } from 'react'
-import { type ContextEnvironmentChanges } from '~/api/client'
 import { EnumPlanState, type PlanState, type PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
 import { type ModelEnvironment } from '~/models/environment'
+import { type ContextEnvironmentChanges } from '~/api/client'
 
 interface PropsTasks {
   environment: ModelEnvironment
   tasks: PlanTasks
   headline?: string
   updated_at?: string
-  changes?: Partial<ContextEnvironmentChanges>
+  changes: ContextEnvironmentChanges
   showBatches?: boolean
   showProgress?: boolean
   showLogicalUpdate?: boolean
@@ -57,8 +57,10 @@ export default function TasksProgress({
     return {
       changesAdded: changes?.added ?? [],
       changesRemoved: changes?.removed ?? [],
-      changesModifiedIndirect: modified?.indirect ?? [],
-      changesModifiedMetadata: modified?.indirect ?? [],
+      changesModifiedMetadata: modified?.metadata ?? [],
+      changesModifiedIndirect: (modified?.indirect ?? []).map(
+        ({ model_name }) => model_name,
+      ),
       changesModifiedDirect: (modified?.direct ?? []).map(
         ({ model_name }) => model_name,
       ),

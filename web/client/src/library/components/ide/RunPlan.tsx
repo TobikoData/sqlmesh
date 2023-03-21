@@ -2,7 +2,14 @@ import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { useState, useEffect, Fragment, type MouseEvent, useMemo } from 'react'
+import {
+  useState,
+  useEffect,
+  Fragment,
+  type MouseEvent,
+  useMemo,
+  useCallback,
+} from 'react'
 import {
   apiCancelGetEnvironments,
   apiCancelPlanRun,
@@ -14,7 +21,13 @@ import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSize } from '~/types/enum'
-import { isArrayNotEmpty, includes, isFalse, isStringEmptyOrNil } from '~/utils'
+import {
+  isArrayNotEmpty,
+  includes,
+  isFalse,
+  isStringEmptyOrNil,
+  debounceAsync,
+} from '~/utils'
 import { Button, ButtonMenu } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -57,6 +70,14 @@ export default function RunPlan({
     },
   })
 
+  const debouncedGetEnvironemnts = useCallback(
+    debounceAsync(getEnvironments, 1000, true),
+    [getEnvironments],
+  )
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
+
   const confirmation: Confirmation | undefined = useMemo(() => {
     return environment.isDefault
       ? {
@@ -73,13 +94,16 @@ export default function RunPlan({
 
   useEffect(() => {
     return () => {
+      debouncedGetEnvironemnts.cancel()
+      debouncedPlanRun.cancel()
+
       apiCancelPlanRun(client)
       apiCancelGetEnvironments(client)
     }
   }, [])
 
   useEffect(() => {
-    planRun().finally(() => {
+    debouncedPlanRun().finally(() => {
       if (shouldStartPlanAutomatically) {
         startPlan()
         setShouldSartPlanAutomatically(false)
@@ -89,8 +113,8 @@ export default function RunPlan({
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
-      void planRun()
-      void getEnvironments()
+      void debouncedPlanRun()
+      void debouncedGetEnvironemnts()
     }
   }, [planState])
 
@@ -335,7 +359,11 @@ function PlanChanges({
           <ChangesPreview
             headline="Indirectly Modified"
             type={EnumPlanChangeType.Indirect}
-            changes={plan.changes.modified.indirect}
+            changes={
+              plan.changes.modified.indirect.map(
+                ci => ci.model_name,
+              ) as string[]
+            }
           />
         )}
       {plan?.changes?.removed != null &&

@@ -13,6 +13,7 @@ import {
 } from '../../../context/plan'
 import {
   includes,
+  isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
   isObjectNotEmpty,
@@ -35,6 +36,7 @@ export default function PlanWizard(): JSX.Element {
     removed,
     logicalUpdateDescription,
     skip_backfill,
+    change_categorization,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -42,10 +44,38 @@ export default function PlanWizard(): JSX.Element {
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
 
+  const categories = useMemo(
+    () =>
+      Array.from(change_categorization.values()).reduce<
+        Record<string, boolean[]>
+      >((acc, { category, change }) => {
+        change?.indirect?.forEach(model => {
+          if (acc[model] == null) {
+            acc[model] = []
+          }
+
+          acc[model]?.push(category.value !== 1)
+        })
+
+        if (category.value === 3) {
+          acc[change.model_name] = [true]
+        }
+
+        return acc
+      }, {}),
+    [change_categorization],
+  )
+
   const filterActiveBackfillsTasks = useCallback(
     (tasks: PlanTasks): PlanTasks => {
       return Object.entries(tasks).reduce(
         (acc: PlanTasks, [taskModelName, task]) => {
+          const choices = categories[taskModelName]
+
+          const shouldExclude = choices != null ? choices.every(Boolean) : false
+
+          if (shouldExclude) return acc
+
           acc[taskModelName] = task
 
           return acc
@@ -53,7 +83,7 @@ export default function PlanWizard(): JSX.Element {
         {},
       )
     },
-    [modified],
+    [categories],
   )
 
   const filterBackfillsTasks = useCallback(
@@ -66,13 +96,18 @@ export default function PlanWizard(): JSX.Element {
           total: task.batches,
           interval: taskInterval,
         }
+        const choices = categories[taskModelName]
+
+        const shouldExclude = choices != null ? choices.every(Boolean) : false
+
+        if (shouldExclude) return acc
 
         acc[taskModelName] = taskBackfill
 
         return acc
       }, {})
     },
-    [modified],
+    [categories],
   )
 
   const tasks: PlanTasks = useMemo(
@@ -80,7 +115,7 @@ export default function PlanWizard(): JSX.Element {
       activeBackfill?.tasks != null
         ? filterActiveBackfillsTasks(activeBackfill.tasks)
         : filterBackfillsTasks(backfills),
-    [backfills, modified, activeBackfill],
+    [backfills, change_categorization, activeBackfill],
   )
 
   const hasLogicalUpdate = hasChanges && isFalse(hasBackfills)
@@ -89,19 +124,23 @@ export default function PlanWizard(): JSX.Element {
     planState,
   )
   const isFinished = planState === EnumPlanState.Finished
-  const hasNoChange = [hasChanges, hasBackfills, isObjectNotEmpty(tasks)].every(
-    isFalse,
-  )
+  const hasNoChanges = [
+    hasChanges,
+    hasBackfills,
+    isObjectNotEmpty(tasks),
+  ].every(isFalse)
   const showDetails =
-    isFalse(hasNoChange) &&
+    isFalse(hasNoChanges) &&
     (hasBackfills || (hasLogicalUpdate && isFalse(isFinished))) &&
-    isFalse(skip_backfill)
+    isFalse(skip_backfill) &&
+    isArrayNotEmpty(Object.keys(tasks))
+
   const backfillStepHeadline = getBackfillStepHeadline({
     planAction,
     planState,
     hasBackfills,
     hasLogicalUpdate,
-    hasNoChange,
+    hasNoChanges: hasNoChanges || isArrayEmpty(Object.keys(tasks)),
     skip_backfill,
   })
 
@@ -154,17 +193,18 @@ export default function PlanWizard(): JSX.Element {
                         headline="Modified Directly"
                         type={EnumPlanChangeType.Direct}
                       >
-                        <PlanChangePreview.Direct changes={modified?.direct} />
+                        <PlanChangePreview.Direct
+                          changes={modified.direct ?? []}
+                        />
                       </PlanChangePreview>
                     )}
-                    {isArrayNotEmpty(modified?.indirect) && (
+                    {isArrayNotEmpty(modified.indirect) && (
                       <PlanChangePreview
                         headline="Modified Indirectly"
                         type={EnumPlanChangeType.Indirect}
                       >
-                        <PlanChangePreview.Default
-                          type={EnumPlanChangeType.Indirect}
-                          changes={modified?.indirect}
+                        <PlanChangePreview.Indirect
+                          changes={modified.indirect ?? []}
                         />
                       </PlanChangePreview>
                     )}
@@ -175,7 +215,7 @@ export default function PlanWizard(): JSX.Element {
                       >
                         <PlanChangePreview.Default
                           type={EnumPlanChangeType.Metadata}
-                          changes={modified?.metadata}
+                          changes={modified?.metadata ?? []}
                         />
                       </PlanChangePreview>
                     )}
@@ -239,32 +279,34 @@ export default function PlanWizard(): JSX.Element {
                   </PlanWizardStepMessage>
 
                   <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
-                    {hasBackfills && isFalse(skip_backfill) && (
-                      <>
-                        <Suspense
-                          fallback={<Spinner className="w-4 h-4 mr-2" />}
-                        >
-                          <TasksProgress
-                            environment={environment}
-                            tasks={tasks}
-                            changes={{
-                              modified,
-                              added,
-                              removed,
-                            }}
-                            updated_at={activeBackfill?.updated_at}
-                            showBatches={hasBackfills}
-                            showLogicalUpdate={hasLogicalUpdate}
-                            planState={planState}
-                          />
-                        </Suspense>
-                        <form>
-                          <fieldset className="flex w-full">
-                            <Plan.BackfillDates disabled={isProgress} />
-                          </fieldset>
-                        </form>
-                      </>
-                    )}
+                    {hasBackfills &&
+                      isFalse(skip_backfill) &&
+                      isArrayNotEmpty(Object.keys(tasks)) && (
+                        <>
+                          <Suspense
+                            fallback={<Spinner className="w-4 h-4 mr-2" />}
+                          >
+                            <TasksProgress
+                              environment={environment}
+                              tasks={tasks}
+                              changes={{
+                                modified,
+                                added,
+                                removed,
+                              }}
+                              updated_at={activeBackfill?.updated_at}
+                              showBatches={hasBackfills}
+                              showLogicalUpdate={hasLogicalUpdate}
+                              planState={planState}
+                            />
+                          </Suspense>
+                          <form>
+                            <fieldset className="flex w-full">
+                              <Plan.BackfillDates disabled={isProgress} />
+                            </fieldset>
+                          </form>
+                        </>
+                      )}
                     {hasChanges && isFalse(hasBackfills) && (
                       <div>
                         <small className="text-sm">

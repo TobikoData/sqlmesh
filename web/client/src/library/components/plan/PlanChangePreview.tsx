@@ -1,4 +1,4 @@
-import { Disclosure } from '@headlessui/react'
+import { Disclosure, RadioGroup } from '@headlessui/react'
 import {
   MinusCircleIcon,
   PlusCircleIcon,
@@ -7,9 +7,17 @@ import {
   ArrowPathRoundedSquareIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { type ModelsDiffDirectItem } from '~/api/client'
+import { type ChangeDirect, type ChangeIndirect } from '~/api/client'
+import { EnumPlanState, useStorePlan } from '~/context/plan'
 import { Divider } from '../divider/Divider'
-import { EnumPlanChangeType, type PlanChangeType } from './context'
+import {
+  type Category,
+  EnumPlanActions,
+  EnumPlanChangeType,
+  usePlan,
+  usePlanDispatch,
+  type PlanChangeType,
+} from './context'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
@@ -48,7 +56,7 @@ function PlanChangePreview({
           {headline}
         </h4>
       )}
-      <ul>{children}</ul>
+      {children}
     </div>
   )
 }
@@ -58,10 +66,10 @@ function PlanChangePreviewDefault({
   type,
 }: {
   type: PlanChangeType
-  changes?: string[]
+  changes: string[]
 }): JSX.Element {
   return (
-    <>
+    <ul>
       {changes.map(change => (
         <li
           key={change}
@@ -84,78 +92,239 @@ function PlanChangePreviewDefault({
           <small>{change}</small>
         </li>
       ))}
-    </>
+    </ul>
   )
 }
 
 function PlanChangePreviewDirect({
   changes = [],
 }: {
-  changes?: ModelsDiffDirectItem[]
+  changes: ChangeDirect[]
 }): JSX.Element {
   return (
-    <>
-      {changes.map(change => (
+    <ul>
+      {changes.map((change, idx) => (
         <li
           key={change.model_name}
           className="text-secondary-500"
         >
-          <PlanChangePreviewDiff change={change} />
+          <Disclosure defaultOpen={idx < 1}>
+            {({ open }) => (
+              <>
+                <Disclosure.Button className="flex items-start w-full justify-between rounded-lg text-left">
+                  <div className="w-full">
+                    <PlanChangePreviewTitle model_name={change.model_name} />
+                  </div>
+
+                  {(() => {
+                    const Tag = open ? MinusCircleIcon : PlusCircleIcon
+
+                    return (
+                      <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-200" />
+                    )
+                  })()}
+                </Disclosure.Button>
+                <Disclosure.Panel className="text-sm px-4 mb-4">
+                  <PlanChangePreviewRelations
+                    type="indirect"
+                    models={change.indirect ?? []}
+                  />
+                  <Divider className="border-gray-200 mt-2" />
+                  <ChangeCategories change={change} />
+                  <Divider className="border-gray-200 mt-2" />
+                  {change?.diff != null && (
+                    <PlanChangePreviewDiff diff={change?.diff} />
+                  )}
+                </Disclosure.Panel>
+              </>
+            )}
+          </Disclosure>
         </li>
       ))}
-    </>
+    </ul>
   )
 }
 
-function PlanChangePreviewDiff({
-  change,
+function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
+  const dispatch = usePlanDispatch()
+
+  const { change_categorization, categories } = usePlan()
+
+  const planState = useStorePlan(s => s.state)
+
+  return (
+    <RadioGroup
+      className={clsx(
+        'flex flex-col mt-2',
+        planState === EnumPlanState.Finished
+          ? 'opacity-50 cursor-not-allowed'
+          : 'cursor-pointer',
+      )}
+      value={change_categorization.get(change.model_name)?.category}
+      onChange={(category: Category) => {
+        dispatch({
+          type: EnumPlanActions.Category,
+          category,
+          change,
+        })
+      }}
+      disabled={planState === EnumPlanState.Finished}
+    >
+      {categories.map(category => (
+        <RadioGroup.Option
+          key={category.name}
+          value={category}
+          className={() => clsx('relative flex rounded-md')}
+        >
+          {({ checked }) => (
+            <div
+              className={clsx(
+                'text-sm flex px-2 py-1 w-full rounded-lg',
+                checked ? 'text-secondary-500' : 'text-gray-800',
+              )}
+            >
+              <div className="mt-[0.125rem] mr-2 border-2 border-gray-400 w-4 h-4 rounded-full flex justify-center items-center">
+                {checked && (
+                  <span className="inline-block w-2 h-2 bg-secondary-500 rounded-full"></span>
+                )}
+              </div>
+              <div>
+                <RadioGroup.Label as="p">{category.name}</RadioGroup.Label>
+                <RadioGroup.Description
+                  as="span"
+                  className="text-xs text-gray-500"
+                >
+                  {category.description}
+                </RadioGroup.Description>
+              </div>
+            </div>
+          )}
+        </RadioGroup.Option>
+      ))}
+    </RadioGroup>
+  )
+}
+
+function PlanChangePreviewIndirect({
+  changes = [],
 }: {
-  change: ModelsDiffDirectItem
+  changes: ChangeIndirect[]
 }): JSX.Element {
   return (
-    <Disclosure>
-      {({ open }) => (
-        <>
-          <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-            <div className="flex items-center ">
-              <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
-              <small className="inline-block text-sm">
-                {change.model_name}
-              </small>
-            </div>
-            <Divider className="mx-4" />
-            {(() => {
-              const Tag = open ? MinusCircleIcon : PlusCircleIcon
+    <ul>
+      {changes.map((change, idx) => (
+        <li
+          key={change.model_name}
+          className="text-warning-700"
+        >
+          <Disclosure defaultOpen={idx < 1}>
+            {({ open }) => (
+              <>
+                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
+                  <PlanChangePreviewTitle model_name={change.model_name} />
+                  <Divider className="mx-4" />
+                  {(() => {
+                    const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
-              return (
-                <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-200" />
-              )
-            })()}
-          </Disclosure.Button>
-          <Disclosure.Panel className="text-sm text-secondary-100">
-            <pre className="my-4 bg-secondary-900 rounded-lg p-4">
-              {change.diff?.split('\n').map((line: string, idx: number) => (
-                <p
-                  key={`${line}-${idx}`}
-                  className={clsx(
-                    line.startsWith('+') && 'text-success-500',
-                    line.startsWith('-') && 'text-danger-500',
-                    line.startsWith('@@') && 'text-secondary-300 my-5',
-                  )}
-                >
-                  {line}
-                </p>
-              ))}
-            </pre>
-          </Disclosure.Panel>
-        </>
+                    return (
+                      <Tag className="max-h-[1rem] min-w-[1rem] text-warning-700" />
+                    )
+                  })()}
+                </Disclosure.Button>
+                <Disclosure.Panel className="text-sm px-4 mb-4">
+                  <PlanChangePreviewRelations
+                    type="direct"
+                    models={change.direct ?? []}
+                  />
+                </Disclosure.Panel>
+              </>
+            )}
+          </Disclosure>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PlanChangePreviewTitle({
+  model_name,
+}: {
+  model_name: string
+}): JSX.Element {
+  const { change_categorization } = usePlan()
+  const category = change_categorization.get(model_name)?.category
+
+  return (
+    <div className="flex items-center font-bold">
+      <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
+      <small className="inline-block text-sm ">{model_name}</small>
+      {category != null && (
+        <span className="ml-2 text-xs px-1 bg-gray-400 text-gray-100 rounded">
+          {category.name}
+        </span>
       )}
-    </Disclosure>
+    </div>
+  )
+}
+
+function PlanChangePreviewRelations({
+  type,
+  models,
+}: {
+  type: 'direct' | 'indirect'
+  models: string[]
+}): JSX.Element {
+  return (
+    <ul
+      className={clsx(
+        'mt-2 ml-4',
+        type === 'indirect' && 'text-warning-700',
+        type === 'direct' && 'text-secondary-500',
+      )}
+    >
+      {models.map(model_name => (
+        <li
+          key={model_name}
+          className="flex"
+        >
+          <span
+            className={clsx(
+              'h-3 w-3 border-l-2 border-b-2 innline-block mr-2',
+              'border-warning-700/20',
+            )}
+          ></span>
+          {model_name}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PlanChangePreviewDiff({ diff }: { diff: string }): JSX.Element {
+  return (
+    <div className="my-4 bg-secondary-900 rounded-lg overflow-hidden">
+      <pre className="p-4 text-secondary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+        {diff.split('\n').map((line: string, idx: number) => (
+          <p
+            key={`${line}-${idx}`}
+            className={clsx(
+              line.startsWith('+') && 'text-success-500 bg-success-500/10 px-2',
+              line.startsWith('-') && 'text-danger-500 bg-danger-500/10 px-2',
+              line.startsWith('@@') && 'text-secondary-300 my-5 px-2',
+            )}
+          >
+            {line}
+          </p>
+        ))}
+      </pre>
+    </div>
   )
 }
 
 PlanChangePreview.Default = PlanChangePreviewDefault
-PlanChangePreview.Diff = PlanChangePreviewDiff
 PlanChangePreview.Direct = PlanChangePreviewDirect
+PlanChangePreview.Indirect = PlanChangePreviewIndirect
+PlanChangePreview.Diff = PlanChangePreviewDiff
+PlanChangePreview.Title = PlanChangePreviewTitle
 
 export default PlanChangePreview
