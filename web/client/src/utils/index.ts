@@ -132,32 +132,25 @@ export function parseJSON<T>(value: string | null): Optional<T> {
 export function debounceAsync<T = any>(
   fn: (...args: any) => Promise<T>,
   delay: number = 0,
-  immidiate: boolean = false,
+  immediate: boolean = false,
 ): ((...args: any) => Promise<T>) & { cancel: () => void } {
-  let timeoutID: ReturnType<typeof setTimeout>
+  let timeoutID: ReturnType<typeof setTimeout> | undefined
 
   async function callback(...args: any): Promise<T> {
+    const callNow = immediate && timeoutID == null
     const promise = new Promise<T>((resolve, reject) => {
-      if (immidiate) {
-        timeoutID = setTimeout(() => {
-          fn(...args)
-            .then(resolve)
-            .catch(reject)
-            .finally(() => {
-              immidiate = false
-            })
-        })
-
-        return
-      }
-
       clearTimeout(timeoutID)
 
-      timeoutID = setTimeout(() => {
+      timeoutID = setTimeout(execute, callNow ? 0 : delay)
+
+      function execute(): void {
         fn(...args)
           .then(resolve)
           .catch(reject)
-      }, delay)
+          .finally(() => {
+            timeoutID = undefined
+          })
+      }
     })
 
     return await promise
@@ -165,6 +158,7 @@ export function debounceAsync<T = any>(
 
   callback.cancel = () => {
     clearTimeout(timeoutID)
+    timeoutID = undefined
   }
 
   return callback

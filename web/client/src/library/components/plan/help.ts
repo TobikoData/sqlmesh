@@ -54,14 +54,14 @@ export function getBackfillStepHeadline({
   planState,
   hasBackfills,
   hasLogicalUpdate,
-  hasForwardOnly,
+  hasNoChanges,
   skip_backfill,
 }: {
   planAction: PlanAction
   planState: PlanState
   hasBackfills: boolean
   hasLogicalUpdate: boolean
-  hasForwardOnly: boolean
+  hasNoChanges: boolean
   skip_backfill: boolean
 }): string {
   if (skip_backfill) return 'Skipping Backfill'
@@ -76,7 +76,7 @@ export function getBackfillStepHeadline({
     return 'Completed Backfill'
   if (planState === EnumPlanState.Finished && hasLogicalUpdate)
     return 'Completed Logical Update'
-  if (hasForwardOnly) return 'No Changes'
+  if (hasNoChanges) return 'No Changes'
   if (hasBackfills) return 'Needs Backfill'
   if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
 

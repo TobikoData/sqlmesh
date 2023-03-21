@@ -124,13 +124,13 @@ export default function PlanWizard(): JSX.Element {
     planState,
   )
   const isFinished = planState === EnumPlanState.Finished
-  const hasForwardOnly = [
+  const hasNoChanges = [
     hasChanges,
     hasBackfills,
     isObjectNotEmpty(tasks),
   ].every(isFalse)
   const showDetails =
-    isFalse(hasForwardOnly) &&
+    isFalse(hasNoChanges) &&
     (hasBackfills || (hasLogicalUpdate && isFalse(isFinished))) &&
     isFalse(skip_backfill) &&
     isArrayNotEmpty(Object.keys(tasks))
@@ -140,7 +140,7 @@ export default function PlanWizard(): JSX.Element {
     planState,
     hasBackfills,
     hasLogicalUpdate,
-    hasForwardOnly: hasForwardOnly || isArrayEmpty(Object.keys(tasks)),
+    hasNoChanges: hasNoChanges || isArrayEmpty(Object.keys(tasks)),
     skip_backfill,
   })
 

@@ -314,8 +314,6 @@ function reducer(
         })
       }
 
-      console.log({ change, category }, plan.change_categorization)
-
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
@@ -395,7 +393,7 @@ function useCategories(): [Category, Category[]] {
     {
       id: EnumCategoryType.ForwardOnly,
       name: 'Forward Only',
-      description: 'This is forward only change',
+      description: 'This is a forward only change',
       value: SnapshotChangeCategory.NUMBER_3,
     },
   ]
