@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from web.server import models
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -28,6 +29,7 @@ async def apply(
     environment: t.Optional[str] = Body(),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> models.ApplyResponse:
     """Apply a plan"""
 
@@ -53,6 +55,11 @@ async def apply(
     )
     request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
     plan = await task
+
+    if categories is not None:
+        for new, _ in plan.context_diff.modified_snapshots.values():
+            if plan.is_new_snapshot(new) and new.name in categories:
+                plan.set_choice(new, categories[new.name])
 
     request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:

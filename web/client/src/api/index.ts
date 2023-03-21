@@ -23,6 +23,7 @@ import {
   runPlanApiPlanPost,
   applyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
+  type BodyApplyApiCommandsApplyPostCategories,
 } from './client'
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
@@ -49,6 +50,7 @@ export function useApiFiles(): UseQueryResult<Directory> {
     queryKey: ['/api/files'],
     queryFn: async ({ signal }) => await getFilesApiFilesGet({ signal }),
     cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -58,6 +60,7 @@ export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironme
     queryFn: async ({ signal }) =>
       await getEnvironmentsApiEnvironmentsGet({ signal }),
     cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -89,6 +92,7 @@ export function useApiPlanApply(
   options?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
+    categories?: BodyApplyApiCommandsApplyPostCategories
   },
 ): UseQueryResult<ApplyResponse> {
   return useQuery({
@@ -99,6 +103,7 @@ export function useApiPlanApply(
           environment,
           plan_dates: options?.planDates,
           plan_options: options?.planOptions,
+          categories: options?.categories,
         },
         { signal },
       ),

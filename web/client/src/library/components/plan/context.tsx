@@ -7,9 +7,11 @@ import {
 } from 'react'
 import {
   type ContextEnvironmentBackfill,
-  type ContextEnvironmentChanges,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
+  type ModelsDiff,
+  type ChangeDirect,
+  type ContextEnvironmentChanges,
   SnapshotChangeCategory,
 } from '~/api/client'
 import { type PlanProgress } from '~/context/plan'
@@ -42,7 +44,7 @@ export const EnumPlanChangeType = {
 export const EnumCategoryType = {
   BreakingChange: 'breaking-change',
   NonBreakingChange: 'non-breaking-change',
-  NoChange: 'no-change',
+  ForwardOnly: 'forward-only',
 } as const
 
 export type PlanActions = KeyOf<typeof EnumPlanActions>
@@ -56,6 +58,11 @@ export interface Category {
   value: SnapshotChangeCategory
 }
 
+export interface ChangeCategory {
+  change: ChangeDirect
+  category: Category
+}
+
 interface PlanOptions {
   skip_tests: boolean
   no_gaps: boolean
@@ -67,7 +74,7 @@ interface PlanOptions {
   restate_models?: string
 }
 
-interface PlanChanges extends Partial<ContextEnvironmentChanges> {
+interface PlanChanges extends ContextEnvironmentChanges {
   hasChanges: boolean
   hasDirect: boolean
   hasIndirect: boolean
@@ -86,12 +93,14 @@ interface PlanBackfills {
 interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   start?: ContextEnvironmentStart
   end?: ContextEnvironmentEnd
-  categories: Category[]
   logicalUpdateDescription: string
   isInitialPlanRun: boolean
+  categories: Category[]
+  change_categorization: Map<string, ChangeCategory>
 }
 
-type PlanAction = { type: PlanActions } & Partial<PlanDetails>
+type PlanAction = { type: PlanActions } & Partial<PlanDetails> &
+  Partial<ChangeCategory> & { modified?: ModelsDiff }
 
 const [defaultCategory, categories] = useCategories()
 const initial = {
@@ -110,6 +119,7 @@ const initial = {
 
   categories,
   defaultCategory,
+  change_categorization: new Map(),
 
   hasChanges: false,
   hasDirect: false,
@@ -294,19 +304,57 @@ function reducer(
         hasBackfills: isArrayNotEmpty(backfills),
       })
     }
+    case EnumPlanActions.Category: {
+      const { change, category } = newState as ChangeCategory
+
+      if (change?.model_name != null) {
+        plan.change_categorization.set(change.model_name, {
+          category,
+          change,
+        })
+      }
+
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        { change_categorization: Map<string, ChangeCategory> }
+      >({}, plan, {
+        change_categorization: new Map(plan.change_categorization),
+      })
+    }
     case EnumPlanActions.Changes: {
-      const { modified, added, removed } = newState ?? {}
+      const { modified, added = [], removed = [] } = newState
       const hasChanges = [
         isModified(modified),
         isArrayNotEmpty(added),
         isArrayNotEmpty(removed),
       ].some(Boolean)
 
-      return Object.assign<Record<string, unknown>, PlanDetails, PlanChanges>(
+      const change_categorization = new Map()
+
+      modified?.direct?.forEach(changeDirect => {
+        if (changeDirect?.model_name != null) {
+          change_categorization.set(changeDirect.model_name, {
+            change: changeDirect,
+            category: defaultCategory,
+          })
+        }
+      })
+
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        PlanChanges,
+        { change_categorization: Map<string, ChangeCategory> }
+      >(
         {},
         plan,
         {
-          modified,
+          modified: {
+            direct: modified?.direct ?? [],
+            indirect: modified?.indirect ?? [],
+            metadata: modified?.metadata ?? [],
+          },
           added,
           removed,
           hasChanges,
@@ -315,6 +363,9 @@ function reducer(
           hasMetadata: isArrayNotEmpty(modified?.metadata),
           hasAdded: isArrayNotEmpty(added),
           hasRemoved: isArrayNotEmpty(removed),
+        },
+        {
+          change_categorization,
         },
       )
     }
@@ -328,7 +379,7 @@ function useCategories(): [Category, Category[]] {
   const categoryBreakingChange: Category = {
     id: EnumCategoryType.BreakingChange,
     name: 'Breaking Change',
-    description: 'This is a breaking change',
+    description: 'It will rebuild all models',
     value: SnapshotChangeCategory.NUMBER_1,
   }
   const categories = [
@@ -336,13 +387,13 @@ function useCategories(): [Category, Category[]] {
     {
       id: EnumCategoryType.NonBreakingChange,
       name: 'Non-Breaking Change',
-      description: 'This is a non-breaking change',
+      description: 'It will exclude all indirect models caused by this change',
       value: SnapshotChangeCategory.NUMBER_2,
     },
     {
-      id: EnumCategoryType.NoChange,
-      name: 'No Change',
-      description: 'This is a no change',
+      id: EnumCategoryType.ForwardOnly,
+      name: 'Forward Only',
+      description: 'This is a forward only change',
       value: SnapshotChangeCategory.NUMBER_3,
     },
   ]

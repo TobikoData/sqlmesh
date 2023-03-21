@@ -66,10 +66,21 @@ class Context(BaseModel):
     config: str
 
 
+class ChangeDirect(BaseModel):
+    model_name: str
+    diff: str
+    indirect: t.List[str] = []
+
+
+class ChangeIndirect(BaseModel):
+    model_name: str
+    direct: t.List[str] = []
+
+
 class ModelsDiff(BaseModel):
-    direct: t.List[t.Dict[str, str]]
-    indirect: t.Set[str]
-    metadata: t.Set[str]
+    direct: t.List[ChangeDirect] = []
+    indirect: t.List[ChangeIndirect] = []
+    metadata: t.Set[str] = set()
 
     @classmethod
     def get_modified_snapshots(
@@ -78,26 +89,47 @@ class ModelsDiff(BaseModel):
     ) -> ModelsDiff:
         """Get the modified snapshots for a environment."""
 
-        direct = []
-        indirect = set()
+        indirect = [
+            ChangeIndirect(
+                model_name=current.name, direct=[parent.name for parent in current.parents]
+            )
+            for current, _ in context_diff.modified_snapshots.values()
+            if context_diff.indirectly_modified(current.name)
+        ]
+        direct: t.List[ChangeDirect] = []
         metadata = set()
 
         for snapshot_name in context_diff.modified_snapshots:
             if context_diff.directly_modified(snapshot_name):
                 direct.append(
-                    {
-                        "model_name": snapshot_name,
-                        "diff": context_diff.text_diff(snapshot_name),
-                    }
+                    ChangeDirect(
+                        model_name=snapshot_name,
+                        diff=context_diff.text_diff(snapshot_name),
+                        indirect=[
+                            change.model_name
+                            for change in indirect
+                            if snapshot_name in change.direct
+                        ],
+                    )
                 )
-            elif context_diff.indirectly_modified(snapshot_name):
-                indirect.add(snapshot_name)
             elif context_diff.metadata_updated(snapshot_name):
                 metadata.add(snapshot_name)
 
+        direct_change_model_names = [change.model_name for change in direct]
+
         return ModelsDiff(
             direct=direct,
-            indirect=indirect,
+            indirect=[
+                ChangeIndirect(
+                    model_name=change.model_name,
+                    direct=[
+                        model_name
+                        for model_name in change.direct
+                        if model_name in direct_change_model_names
+                    ],
+                )
+                for change in indirect
+            ],
             metadata=metadata,
         )
 
