@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { EnumSize } from '~/types/enum'
+import { EnumSize, type Size } from '~/types/enum'
 import { isTrue } from '~/utils'
 
 export interface PropsInput extends React.HTMLAttributes<HTMLElement> {
@@ -29,10 +29,10 @@ function Input({
       {label != null && <InputLabel>{label}</InputLabel>}
       <input
         className={clsx(
-          'flex w-full bg-secondary-100 rounded-md border-secondary-100',
+          'flex w-full text-prose-lighter bg-theme-lighter border-theme-darker dark:border-theme-lighter dark:text-prose-darker rounded-md',
           'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
           'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
-          size === EnumSize.md && 'px-3 py-2 text-base leading-6',
+          size === EnumSize.md && 'px-3 py-2 text-sm leading-6',
           size === EnumSize.sm && 'px-3 py-1 text-xs leading-4',
           isTrue(disabled) && 'opacity-50 cursor-not-allowed',
         )}
@@ -71,7 +71,7 @@ function InputInfo({
 }: React.HTMLAttributes<HTMLElement>): JSX.Element {
   return (
     <small
-      className={clsx('block text-xs mt-1 px-3 text-gray-500p', className)}
+      className={clsx('block text-xs mt-1 px-3 text-neutral-500p', className)}
     >
       {children}
     </small>

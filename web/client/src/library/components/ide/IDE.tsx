@@ -3,7 +3,7 @@ import { Divider } from '../divider/Divider'
 import { Editor } from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
-import { EnumSize } from '../../../types/enum'
+import { EnumSize, EnumVariant } from '../../../types/enum'
 import {
   useApiFiles,
   useApiEnvironments,
@@ -100,16 +100,15 @@ export function IDE(): JSX.Element {
     <>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold">
-            <span className="inline-block text-secondary-500">/</span>
+          <h3 className="font-bold text-primary-500">
+            <span className="inline-block">/</span>
             {project?.name}
           </h3>
         </div>
-
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
             className="mr-4"
-            variant="alternative"
+            variant={EnumVariant.Neutral}
             size={EnumSize.sm}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
@@ -147,7 +146,7 @@ export function IDE(): JSX.Element {
           setIsPlanOpen(false)
         }}
       >
-        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-xl transition-all">
+        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-theme text-left align-middle shadow-xl transition-all">
           {environment != null && isPlanOpen && (
             <PlanProvider>
               <Plan

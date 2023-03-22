@@ -3,12 +3,13 @@ import { Divider } from '../divider/Divider'
 import { IDE } from '../ide/IDE'
 import LogoTobiko from '../logo/Tobiko'
 import LogoSqlMesh from '../logo/SqlMesh'
-
-import './Root.css'
+import { SunIcon, MoonIcon } from '@heroicons/react/24/solid'
+import clsx from 'clsx'
+import ThemeProvider, { EnumColorScheme, useColorScheme } from '~/context/theme'
 
 export default function Root(): JSX.Element {
   return (
-    <>
+    <ThemeProvider>
       <Header></Header>
       <Divider />
       <Main>
@@ -16,25 +17,43 @@ export default function Root(): JSX.Element {
       </Main>
       <Divider />
       <Footer></Footer>
-    </>
+    </ThemeProvider>
   )
 }
 
 function Header(): JSX.Element {
+  const { mode, toggleColorScheme } = useColorScheme()
+
+  const IconMoonOrSun = mode === EnumColorScheme.Light ? MoonIcon : SunIcon
+
   return (
     <header className="min-h-[2.5rem] px-2 flex justify-between items-center">
       <div className="flex h-full items-center">
-        <LogoSqlMesh style={{ height: '32px' }} />
+        <LogoSqlMesh
+          style={{ height: '32px' }}
+          mode={mode}
+        />
         <span className="inline-block mx-2 text-xs font-bold">by</span>
         <LogoTobiko
           style={{ height: '24px' }}
-          mode="dark"
+          mode={mode}
         />
       </div>
       <div>
-        <ul className="flex">
-          <li className="px-2 prose underline">Docs</li>
-          <li className="px-2 prose underline">GitHub</li>
+        <ul className="flex items-center">
+          <li className="px-2">Docs</li>
+          <li className="px-2">GitHub</li>
+          <li
+            className={clsx(
+              'p-2 cursor-pointer rounded-full hover:bg-theme-darker',
+              'dark:hover:bg-theme-lighter',
+            )}
+            onClick={() => {
+              toggleColorScheme?.()
+            }}
+          >
+            <IconMoonOrSun className="h-4 w-4 text-primary-500" />
+          </li>
         </ul>
       </div>
     </header>

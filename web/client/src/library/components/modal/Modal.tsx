@@ -28,13 +28,13 @@ export default function Modal({
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
+          enterFrom="bg-overlay opacity-0"
+          enterTo="bg-overlay opacity-90"
           leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
+          leaveFrom="bg-overlay opacity-90"
+          leaveTo="bg-overlay opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
+          <div className="fixed inset-0 " />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">

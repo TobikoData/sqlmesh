@@ -43,7 +43,10 @@ export default function FolderTree({
 
   return (
     <div
-      className={clsx('py-2 px-1 overflow-hidden overflow-y-auto', className)}
+      className={clsx(
+        'py-2 px-1 overflow-hidden overflow-y-auto text-sm',
+        className,
+      )}
     >
       <ModalConfirmation
         show={showConfirmation}

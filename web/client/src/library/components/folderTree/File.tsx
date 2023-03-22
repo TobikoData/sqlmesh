@@ -4,7 +4,6 @@ import {
   XCircleIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/solid'
-import { DocumentIcon as DocumentIconOutline } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
   deleteFileApiFilesPathDelete,
@@ -103,10 +102,15 @@ export default function File({
   return (
     <span
       className={clsx(
-        'text-base whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex justify-between rounded-md',
-        file === activeFile ? 'text-secondary-500' : 'text-gray-800',
-        file.is_supported && 'group hover:bg-secondary-100',
-        isFalse(isStringEmptyOrNil(newName)) && 'bg-warning-100',
+        'whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex rounded-md',
+        'hover:bg-neutral-100 dark:hover:bg-dark-lighter  ',
+        file.is_supported &&
+          'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
+        isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+        openedFiles.has(file)
+          ? 'text-brand-500'
+          : 'text-neutral-500 dark:text-neutral-100',
+        file === activeFile && 'bg-neutral-100 dark:bg-dark-lighter',
       )}
     >
       <span
@@ -115,15 +119,14 @@ export default function File({
         )}
       >
         <div className="flex items-center">
-          {openedFiles.has(file) ? (
-            <DocumentIcon
-              className={`inline-block ${CSS_ICON_SIZE} mr-2 text-secondary-500`}
-            />
-          ) : (
-            <DocumentIconOutline
-              className={`inline-block ${CSS_ICON_SIZE} mr-2 text-secondary-500`}
-            />
-          )}
+          <DocumentIcon
+            className={clsx(
+              `inline-block ${CSS_ICON_SIZE} mr-2`,
+              file === activeFile
+                ? 'text-brand-500'
+                : 'text-neutral-500 dark:text-neutral-100',
+            )}
+          />
         </div>
         {isStringEmptyOrNil(newName) ? (
           <>
@@ -139,9 +142,8 @@ export default function File({
                 setNewName(file.name)
               }}
               className={clsx(
-                'w-full text-sm overflow-hidden overflow-ellipsis cursor-default',
-                !file.is_supported &&
-                  'opacity-50 cursor-not-allowed text-gray-800',
+                'w-full overflow-hidden overflow-ellipsis cursor-default',
+                !file.is_supported && 'opacity-50 cursor-not-allowed',
               )}
             >
               {file.name}
@@ -163,7 +165,7 @@ export default function File({
           <div className="w-full flex items-center">
             <input
               type="text"
-              className="w-full text-sm overflow-hidden overflow-ellipsis group-hover:text-secondary-500"
+              className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
               value={newName === '' ? file.name : newName}
               onInput={(e: any) => {
                 e.stopPropagation()
@@ -173,7 +175,7 @@ export default function File({
             />
             <div className="flex">
               <CheckCircleIcon
-                className={`inline-block ${CSS_ICON_SIZE} ml-2 text-gray-500 cursor-pointer`}
+                className={`inline-block ${CSS_ICON_SIZE} ml-2 text-success-500 cursor-pointer`}
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation()
 

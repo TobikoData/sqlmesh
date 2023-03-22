@@ -1,7 +1,11 @@
 .gutter {
-  background-color: #eee;
+  background-color: var(--color-divider);
   background-repeat: no-repeat;
   background-position: 50%;
+}
+
+.gutter:hover {
+  background-color: var(--color-brand);
 }
 
 .gutter.gutter-vertical {

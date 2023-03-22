@@ -138,7 +138,7 @@ export default function PlanActions({
         )}
 
         {(isRun || isRunning || isApply || isApplying) && (
-          <p className="ml-2 text-gray-600 text-xs max-w-sm">
+          <p className="ml-2 text-xs max-w-sm">
             <span>Plan for</span>
             <b className="text-secondary-500 font-bold mx-1">
               {environment.name}

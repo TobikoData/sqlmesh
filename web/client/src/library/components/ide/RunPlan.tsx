@@ -20,7 +20,7 @@ import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
-import { EnumSize } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import {
   isArrayNotEmpty,
   includes,
@@ -28,7 +28,7 @@ import {
   isStringEmptyOrNil,
   debounceAsync,
 } from '~/utils'
-import { Button, ButtonMenu } from '../button/Button'
+import { Button, ButtonMenu, type ButtonSize } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
@@ -150,10 +150,9 @@ export default function RunPlan({
       <div className="flex items-center relative">
         <Button
           className={clsx(
-            'font-bold mx-0 py-[0.25rem] bg-secondary-100 border-secondary-500',
-            environment.isInitial && environment.isDefault
-              ? 'rounded-lg'
-              : 'rounded-none rounded-l-lg border-r',
+            'mx-0',
+            isFalse(environment.isInitial && environment.isDefault) &&
+              'rounded-none rounded-l-lg border-r',
           )}
           disabled={
             isError ||
@@ -163,7 +162,7 @@ export default function RunPlan({
             planState === EnumPlanState.Running ||
             planState === EnumPlanState.Cancelling
           }
-          variant="primary"
+          variant={EnumVariant.Alternative}
           size={EnumSize.sm}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
@@ -197,7 +196,7 @@ export default function RunPlan({
         </Button>
         {(isFalse(environment.isInitial) || isFalse(environment.isDefault)) && (
           <SelectEnvironemnt
-            className="rounded-none rounded-r-lg border-l border-secondary-500 mx-0"
+            className="rounded-none rounded-r-lg border-l mx-0"
             environment={environment}
             disabled={
               isError ||
@@ -328,7 +327,7 @@ function PlanChanges({
           {environment.isInitial && (
             <span
               title="New"
-              className="block ml-1 px-2 first-child:ml-0 rounded-full border border-success-500 bg-success-100 text-success-600 text-xs text-center font-bold"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
             >
               New
             </span>
@@ -336,7 +335,7 @@ function PlanChanges({
           {isLoading && (
             <span className="flex items-center ml-2">
               <Spinner className="w-3 h-3 mr-1" />
-              <span className="inline-block text-xs text-gray-500">
+              <span className="inline-block text-xs text-neutral-500">
                 Checking...
               </span>
             </span>
@@ -344,7 +343,7 @@ function PlanChanges({
           {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
             <span
               title="Latest"
-              className="block ml-1 px-2 first-child:ml-0 rounded-full border bg-gray-200 text-gray-900 text-xs text-center"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
             >
               <span>Latest</span>
             </span>
@@ -376,7 +375,7 @@ function PlanChanges({
                 type={EnumPlanChangeType.Indirect}
                 changes={
                   plan.changes.modified.indirect.map(
-                    ({ model_name }) => model_name,
+                    ci => ci.model_name,
                   ) as string[]
                 }
               />
@@ -407,7 +406,7 @@ function SelectEnvironemnt({
   environment: ModelEnvironment
   disabled: boolean
   className?: string
-  size?: Size
+  size?: ButtonSize
   side?: 'left' | 'right'
   onSelect?: () => void
   showAddEnvironemnt?: boolean
@@ -420,12 +419,12 @@ function SelectEnvironemnt({
       {({ close }) => (
         <>
           <ButtonMenu
-            variant="primary"
+            variant={EnumVariant.Alternative}
             size={size}
             disabled={disabled}
             className={clsx(className)}
           >
-            <span className="block overflow-hidden truncate ">
+            <span className="block overflow-hidden truncate">
               {environment.name}
             </span>
             <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2">
@@ -443,7 +442,7 @@ function SelectEnvironemnt({
           >
             <div
               className={clsx(
-                'absolute top-8 overflow-hidden shadow-lg bg-white rounded-md flex flex-col z-10',
+                'absolute top-8 overflow-hidden shadow-lg bg-light rounded-md flex flex-col z-10',
                 side === 'left' && 'left-0',
                 side === 'right' && 'right-0',
               )}
@@ -461,7 +460,7 @@ function SelectEnvironemnt({
                           onSelect?.()
                         }}
                         className={clsx(
-                          'flex justify-between items-center px-4 py-1 text-gray-900 cursor-pointer overflow-auto',
+                          'flex justify-between items-center px-4 py-1 text-neutral-900 cursor-pointer overflow-auto',
                           active && 'bg-secondary-100',
                           env === environment &&
                             'pointer-events-none cursor-default bg-secondary-100',
@@ -482,18 +481,18 @@ function SelectEnvironemnt({
                                   'block truncate ml-2',
                                   env.isSyncronized
                                     ? 'text-secondary-500'
-                                    : 'text-gray-700',
+                                    : 'text-neutral-700',
                                 )}
                               >
                                 {env.name}
                               </span>
-                              <small className="block ml-2 text-gray-400">
+                              <small className="block ml-2 text-neutral-400">
                                 ({env.type})
                               </small>
                             </span>
                             {env.isDefault && (
                               <span className="flex ml-2">
-                                <small className="text-xs text-gray-700">
+                                <small className="text-xs text-neutral-700">
                                   Default Environment
                                 </small>
                               </span>
@@ -543,7 +542,7 @@ function AddEnvironemnt({
   label = 'Add',
   size = EnumSize.sm,
 }: {
-  size?: Size
+  size?: ButtonSize
   onAdd?: () => void
   className?: string
   label?: string
@@ -619,7 +618,7 @@ function ChangesPreview({
         <>
           <span
             className={clsx(
-              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-gray-100 cursor-default border border-inherit cursor-pointer',
+              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
                 'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
@@ -628,7 +627,7 @@ function ChangesPreview({
                 'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
                 'bg-warning-500 border-warning-500',
-              type === 'metadata' && 'bg-gray-500 border-gray-500',
+              type === 'metadata' && 'bg-neutral-500 border-neutral-500',
             )}
           >
             {changes.length}
@@ -643,11 +642,11 @@ function ChangesPreview({
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute right-1 z-10 mt-8 transform flex">
+            <Popover.Panel className="absolute right-1 z-10 mt-8 transform flex p-2 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg ">
               <PlanChangePreview
                 headline={headline}
                 type={type}
-                className="w-full h-full max-h-[40vh] overflow-hidden overflow-y-auto rounded-lg shadow-lg ring-1 ring-black ring-opacity-5"
+                className="w-full h-full max-h-[40vh] overflow-hidden overflow-y-auto "
               >
                 <PlanChangePreview.Default
                   type={type}
