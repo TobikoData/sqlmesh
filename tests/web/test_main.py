@@ -4,8 +4,10 @@ from pathlib import Path
 import pyarrow as pa  # type: ignore
 import pytest
 from fastapi.testclient import TestClient
+from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.errors import PlanError
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -370,6 +372,29 @@ def test_apply(project_tmp_path: Path) -> None:
 
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 200
+
+
+def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
+    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
+    response = client.post("/api/commands/apply", json={"environment": "dev"})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "foo"
+
+
+def test_plan(web_sushi_context: Context) -> None:
+    response = client.post("/api/plan", json={"environment": "dev"})
+    assert response.status_code == 200
+    plan = response.json()
+    assert plan["environment"] == "dev"
+    assert "backfills" in plan
+    assert "changes" in plan
+
+
+def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
+    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
+    response = client.post("/api/plan", json={"environment": "dev"})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "foo"
 
 
 @pytest.mark.asyncio
