@@ -53,14 +53,14 @@ export function getBackfillStepHeadline({
   planAction,
   planState,
   hasBackfills,
-  hasLogicalUpdate,
+  hasVirtualUpdate,
   hasNoChanges,
   skip_backfill,
 }: {
   planAction: PlanAction
   planState: PlanState
   hasBackfills: boolean
-  hasLogicalUpdate: boolean
+  hasVirtualUpdate: boolean
   hasNoChanges: boolean
   skip_backfill: boolean
 }): string {
@@ -68,17 +68,17 @@ export function getBackfillStepHeadline({
   if (planAction === EnumPlanAction.Running) return 'Collecting Backfill...'
   if (planState === EnumPlanState.Applying && hasBackfills)
     return 'Backfilling...'
-  if (planState === EnumPlanState.Applying && hasLogicalUpdate)
+  if (planState === EnumPlanState.Applying && hasVirtualUpdate)
     return 'Applying...'
   if (planState === EnumPlanState.Failed) return 'Failed'
   if (planState === EnumPlanState.Cancelled) return 'Cancelled'
   if (planState === EnumPlanState.Finished && hasBackfills)
     return 'Completed Backfill'
-  if (planState === EnumPlanState.Finished && hasLogicalUpdate)
-    return 'Completed Logical Update'
-  if (hasNoChanges) return 'No Changes'
+  if (planState === EnumPlanState.Finished && hasVirtualUpdate)
+    return 'Completed Virtual Update'
   if (hasBackfills) return 'Needs Backfill'
-  if (hasLogicalUpdate) return 'Logical Update Will Be Applied'
+  if (hasVirtualUpdate) return 'Virtual Update Will Be Applied'
+  if (hasNoChanges) return 'No Changes'
 
   return 'Updating...'
 }

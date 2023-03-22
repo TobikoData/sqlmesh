@@ -77,8 +77,8 @@ export default function ActivePlan({
                   tasks={plan.tasks}
                   updated_at={plan.updated_at}
                   headline="Most Recent Plan"
-                  showBatches={plan.type !== 'logical'}
-                  showLogicalUpdate={plan.type === 'logical'}
+                  showBatches={plan.type !== 'virtual'}
+                  showVirtualUpdate={plan.type === 'virtual'}
                   planState={planState}
                 />
                 <div className="my-4 px-4">

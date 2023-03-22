@@ -15,7 +15,7 @@ import {
   SnapshotChangeCategory,
 } from '~/api/client'
 import { type PlanProgress } from '~/context/plan'
-import { isArrayNotEmpty } from '~/utils'
+import { isArrayEmpty, isArrayNotEmpty } from '~/utils'
 import { isModified } from './help'
 
 export const EnumPlanActions = {
@@ -84,7 +84,7 @@ interface PlanChanges extends ContextEnvironmentChanges {
 }
 
 interface PlanBackfills {
-  hasLogicalUpdate: boolean
+  hasVirtualUpdate: boolean
   hasBackfills: boolean
   backfills: ContextEnvironmentBackfill[]
   activeBackfill?: PlanProgress
@@ -93,7 +93,7 @@ interface PlanBackfills {
 interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   start?: ContextEnvironmentStart
   end?: ContextEnvironmentEnd
-  logicalUpdateDescription: string
+  virtualUpdateDescription: string
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
@@ -136,9 +136,9 @@ const initial = {
     metadata: [],
   },
 
-  hasLogicalUpdate: false,
-  logicalUpdateDescription:
-    'All changes and their downstream dependencies can be fully previewed before they get promoted. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as logical. Logical updates impose no additional runtime overhead or cost.',
+  hasVirtualUpdate: false,
+  virtualUpdateDescription:
+    'All changes and their downstream dependencies can be fully previewed before they get promoted. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as Virtual. Virtual updates impose no additional runtime overhead or cost.',
   activeBackfill: undefined,
   hasBackfills: false,
   backfills: [],
@@ -216,7 +216,7 @@ function reducer(
         {},
         plan,
         {
-          hasLogicalUpdate: false,
+          hasVirtualUpdate: false,
           activeBackfill: undefined,
           hasBackfills: false,
           backfills: [],
@@ -291,17 +291,18 @@ function reducer(
       })
     }
     case EnumPlanActions.Backfills: {
-      const backfills =
-        (newState as { backfills: ContextEnvironmentBackfill[] }).backfills ??
-        []
+      const backfills = (
+        newState as { backfills: ContextEnvironmentBackfill[] }
+      ).backfills
 
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
-        Pick<PlanDetails, 'backfills' | 'hasBackfills'>
+        Pick<PlanDetails, 'backfills' | 'hasBackfills' | 'hasVirtualUpdate'>
       >({}, plan, {
-        backfills,
+        backfills: backfills ?? [],
         hasBackfills: isArrayNotEmpty(backfills),
+        hasVirtualUpdate: isArrayEmpty(backfills),
       })
     }
     case EnumPlanActions.Category: {

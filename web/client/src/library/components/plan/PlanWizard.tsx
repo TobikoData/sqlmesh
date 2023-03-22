@@ -1,7 +1,7 @@
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { Suspense, useCallback, useMemo } from 'react'
+import { type RefObject, Suspense, useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import {
@@ -25,7 +25,11 @@ import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
 
-export default function PlanWizard(): JSX.Element {
+export default function PlanWizard({
+  setRefTaskProgress,
+}: {
+  setRefTaskProgress: RefObject<HTMLDivElement>
+}): JSX.Element {
   const {
     backfills,
     hasChanges,
@@ -34,9 +38,10 @@ export default function PlanWizard(): JSX.Element {
     modified,
     added,
     removed,
-    logicalUpdateDescription,
+    virtualUpdateDescription,
     skip_backfill,
     change_categorization,
+    hasVirtualUpdate,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -118,7 +123,7 @@ export default function PlanWizard(): JSX.Element {
     [backfills, change_categorization, activeBackfill],
   )
 
-  const hasLogicalUpdate = hasChanges && isFalse(hasBackfills)
+  // const hasVirtualUpdate = hasChanges && isFalse(hasBackfills)
   const isProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
@@ -130,16 +135,17 @@ export default function PlanWizard(): JSX.Element {
     isObjectNotEmpty(tasks),
   ].every(isFalse)
   const showDetails =
-    isFalse(hasNoChanges) &&
-    (hasBackfills || (hasLogicalUpdate && isFalse(isFinished))) &&
-    isFalse(skip_backfill) &&
-    isArrayNotEmpty(Object.keys(tasks))
+    (hasVirtualUpdate && isFalse(isFinished)) ||
+    (isFalse(hasNoChanges) &&
+      hasBackfills &&
+      isFalse(skip_backfill) &&
+      isArrayNotEmpty(Object.keys(tasks)))
 
   const backfillStepHeadline = getBackfillStepHeadline({
     planAction,
     planState,
     hasBackfills,
-    hasLogicalUpdate,
+    hasVirtualUpdate,
     hasNoChanges: hasNoChanges || isArrayEmpty(Object.keys(tasks)),
     skip_backfill,
   })
@@ -296,8 +302,9 @@ export default function PlanWizard(): JSX.Element {
                               }}
                               updated_at={activeBackfill?.updated_at}
                               showBatches={hasBackfills}
-                              showLogicalUpdate={hasLogicalUpdate}
+                              showVirtualUpdate={hasVirtualUpdate}
                               planState={planState}
+                              setRefTaskProgress={setRefTaskProgress}
                             />
                           </Suspense>
                           <form>
@@ -307,10 +314,10 @@ export default function PlanWizard(): JSX.Element {
                           </form>
                         </>
                       )}
-                    {hasChanges && isFalse(hasBackfills) && (
+                    {hasVirtualUpdate && (
                       <div>
                         <small className="text-sm">
-                          {logicalUpdateDescription}
+                          {virtualUpdateDescription}
                         </small>
                       </div>
                     )}

@@ -43,7 +43,7 @@ export interface PlanProgress {
   total?: number
   completed?: number
   is_completed?: boolean
-  type?: 'logical' | 'backfill'
+  type?: 'virtual' | 'backfill'
 }
 
 interface PlanStore {
