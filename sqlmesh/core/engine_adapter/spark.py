@@ -7,6 +7,8 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame, PySparkSession
 from sqlmesh.core.engine_adapter.base_spark import BaseSparkEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.utils import nullsafe_join
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -84,3 +86,20 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
             table_name, overwrite=overwrite
         )
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        target = nullsafe_join(".", catalog_name, schema_name)
+        df = self.fetch_pyspark_df(f"SHOW TABLE EXTENDED IN {target} LIKE '*'")
+        return [
+            DataObject(
+                catalog=catalog_name,
+                schema=schema_name,
+                name=row["tableName"],
+                type=DataObjectType.VIEW
+                if "Type: VIEW" in row["information"]
+                else DataObjectType.TABLE,
+            )
+            for row in df.collect()
+        ]

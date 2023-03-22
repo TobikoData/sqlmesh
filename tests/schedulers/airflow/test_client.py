@@ -11,7 +11,6 @@ from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
-from sqlmesh.utils.date import to_datetime
 
 
 @pytest.fixture
@@ -44,8 +43,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     apply_plan_mock = mocker.patch("requests.Session.post")
     apply_plan_mock.return_value = apply_plan_response_mock
 
-    timestamp = to_datetime("2022-08-16T02:40:19.000000Z")
-
     environment = Environment(
         name="test_env",
         snapshots=[snapshot.table_info],
@@ -58,7 +55,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     request_id = "test_request_id"
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    client.apply_plan([snapshot], environment, request_id, timestamp=timestamp)
+    client.apply_plan([snapshot], environment, request_id)
 
     apply_plan_mock.assert_called_once()
     args, data = apply_plan_mock.call_args_list[0]

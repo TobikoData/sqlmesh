@@ -2,7 +2,6 @@ import json
 import time
 import typing as t
 import uuid
-from datetime import datetime
 from urllib.parse import urlencode, urljoin
 
 import requests
@@ -52,7 +51,6 @@ class AirflowClient:
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
-        timestamp: t.Optional[datetime] = None,
         users: t.Optional[t.List[User]] = None,
         is_dev: bool = False,
     ) -> None:

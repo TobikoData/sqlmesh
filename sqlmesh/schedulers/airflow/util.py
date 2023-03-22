@@ -98,35 +98,42 @@ def delete_variables(
     (session.query(Variable).filter(Variable.key.in_(keys)).delete(synchronize_session=False))
 
 
-def discover_engine_operator(name: str) -> t.Type[BaseOperator]:
+def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOperator]:
     name = name.lower()
 
     try:
-        if name in ("spark", "spark-submit", "spark_submit"):
+        if name == "spark":
             from sqlmesh.schedulers.airflow.operators.spark_submit import (
                 SQLMeshSparkSubmitOperator,
             )
 
             return SQLMeshSparkSubmitOperator
-        if name in ("databricks", "databricks-sql", "databricks_sql"):
-            from sqlmesh.schedulers.airflow.operators.databricks import (
-                SQLMeshDatabricksSQLOperator,
-            )
+        if name in ("databricks", "databricks-submit", "databricks-sql"):
+            if name == "databricks-submit" or (name == "databricks" and not sql_only):
+                from sqlmesh.schedulers.airflow.operators.databricks import (
+                    SQLMeshDatabricksSubmitOperator,
+                )
 
-            return SQLMeshDatabricksSQLOperator
-        if name in ("snowflake", "snowflake-sql", "snowflake_sql"):
+                return SQLMeshDatabricksSubmitOperator
+            if name == "databricks-sql" or (name == "databricks" and sql_only):
+                from sqlmesh.schedulers.airflow.operators.databricks import (
+                    SQLMeshDatabricksSQLOperator,
+                )
+
+                return SQLMeshDatabricksSQLOperator
+        if name == "snowflake":
             from sqlmesh.schedulers.airflow.operators.snowflake import (
                 SQLMeshSnowflakeOperator,
             )
 
             return SQLMeshSnowflakeOperator
-        if name in ("bigquery", "bigquery-sql", "bigquery_sql"):
+        if name == "bigquery":
             from sqlmesh.schedulers.airflow.operators.bigquery import (
                 SQLMeshBigQueryOperator,
             )
 
             return SQLMeshBigQueryOperator
-        if name in ("redshift", "redshift-sql", "redshift_sql"):
+        if name == "redshift":
             from sqlmesh.schedulers.airflow.operators.redshift import (
                 SQLMeshRedshiftOperator,
             )

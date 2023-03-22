@@ -55,12 +55,14 @@ class SnapshotDagGenerator:
         self,
         engine_operator: t.Type[BaseOperator],
         engine_operator_args: t.Optional[t.Dict[str, t.Any]],
+        ddl_engine_operator: t.Type[BaseOperator],
         ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]],
         snapshots: t.Dict[SnapshotId, Snapshot],
     ):
         self._engine_operator = engine_operator
         self._engine_operator_args = engine_operator_args or {}
-        self._ddl_engine_operator_args = ddl_engine_operator_args or self._engine_operator_args
+        self._ddl_engine_operator = ddl_engine_operator
+        self._ddl_engine_operator_args = ddl_engine_operator_args or {}
         self._snapshots = snapshots
 
     def generate_cadence_dags(self) -> t.List[DAG]:
@@ -377,7 +379,7 @@ class SnapshotDagGenerator:
         is_dev: bool,
         task_id: str,
     ) -> BaseOperator:
-        return self._engine_operator(
+        return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotPromotionTarget(
                 snapshots=snapshots,
@@ -395,7 +397,7 @@ class SnapshotDagGenerator:
         ddl_concurrent_tasks: int,
         task_id: str,
     ) -> BaseOperator:
-        return self._engine_operator(
+        return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotDemotionTarget(
                 snapshots=snapshots,
@@ -411,7 +413,7 @@ class SnapshotDagGenerator:
         ddl_concurrent_tasks: int,
         task_id: str,
     ) -> BaseOperator:
-        return self._engine_operator(
+        return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotCreateTablesTarget(
                 new_snapshots=new_snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
@@ -425,7 +427,7 @@ class SnapshotDagGenerator:
         ddl_concurrent_tasks: int,
         task_id: str,
     ) -> BaseOperator:
-        return self._engine_operator(
+        return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotMigrateTablesTarget(
                 snapshots=snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
