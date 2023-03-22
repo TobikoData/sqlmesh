@@ -20,10 +20,12 @@ class SQLMeshRedshiftHook(DbApiHook):
     def get_conn(self) -> redshift_connector.Connection:
         """Returns a Redshift connection object"""
         db = self.get_connection(getattr(self, t.cast(str, self.conn_name_attr)))
+
         return self.connector.connect(
             host=db.host,
             port=db.port,
             user=db.login,
             password=db.password,
             database=db.schema,
+            **db.extra_dejson,
         )
