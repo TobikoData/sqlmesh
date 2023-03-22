@@ -92,10 +92,10 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                     isDisabledTabTable(tabName) ||
                       isDisabledTabTerminal(tabName) ||
                       isDisabledTabQueryPreview(tabName)
-                      ? 'text-nutral-400 cursor-not-allowed'
+                      ? 'text-neutral-400 cursor-not-allowed'
                       : selected
                       ? 'bg-secondary-100 text-secondary-500 cursor-default'
-                      : 'text-nutral-900 hover:bg-light/[0.12] hover:text-nutral-500 cursor-pointer',
+                      : 'text-neutral-900 hover:bg-light/[0.12] hover:text-neutral-500 cursor-pointer',
                   )
                 }
               >
@@ -134,7 +134,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {headerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="px-2 text-sm text-left border-b-2 border-nutral-100"
+                            className="px-2 text-sm text-left border-b-2 border-neutral-100"
                           >
                             {header.isPlaceholder
                               ? null
@@ -153,7 +153,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {row.getVisibleCells().map(cell => (
                           <td
                             key={cell.id}
-                            className="px-2 py-1 text-sm text-left border-b border-nutral-100"
+                            className="px-2 py-1 text-sm text-left border-b border-neutral-100"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
@@ -164,7 +164,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="text-left sticky bottom-0 bg-nutral-100">
+                  <tfoot className="text-left sticky bottom-0 bg-neutral-100">
                     {table.getFooterGroups().map(footerGroup => (
                       <tr key={footerGroup.id}>
                         {footerGroup.headers.map(header => (

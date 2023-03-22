@@ -108,7 +108,7 @@ export function IDE(): JSX.Element {
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <Button
             className="mr-4"
-            variant={EnumVariant.Nutral}
+            variant={EnumVariant.Neutral}
             size={EnumSize.sm}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()

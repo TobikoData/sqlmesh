@@ -223,7 +223,7 @@ export default function Directory({
         <span
           className={clsx(
             'w-full overflow-hidden group flex justify-between items-center rounded-md py-[0.125rem]',
-            'hover:bg-nutral-100 dark:hover:bg-dark-lighter text-nutral-600 dark:text-nutral-100',
+            'hover:bg-neutral-100 dark:hover:bg-dark-lighter text-neutral-600 dark:text-neutral-100',
             isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
           )}
         >
@@ -281,18 +281,18 @@ export default function Directory({
                     className={clsx(
                       `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
                       directory.isCollapsed &&
-                        'text-nutral-500 dark:text-nutral-100',
+                        'text-neutral-500 dark:text-neutral-100',
                       directory.isExpanded &&
                         'text-secondary-500 dark:text-primary-500',
                     )}
                   />
                   <DocumentPlusIcon
                     onClick={createFile}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-nutral-500 dark:text-nutral-100`}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-neutral-500 dark:text-neutral-100`}
                   />
                   <FolderPlusIcon
                     onClick={createDirectory}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-nutral-500 dark:text-nutral-100`}
+                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-neutral-500 dark:text-neutral-100`}
                   />
                   <XCircleIcon
                     onClick={(e: MouseEvent) => {

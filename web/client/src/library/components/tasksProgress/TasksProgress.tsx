@@ -79,7 +79,7 @@ export default function TasksProgress({
             <span className="block whitespace-nowrap text-sm font-medium">
               {headline}
             </span>
-            <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-nutral-10 rounded-md">
+            <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-neutral-10 rounded-md">
               {environment.name}
             </small>
             {planState !== EnumPlanState.Init && (
@@ -115,7 +115,7 @@ export default function TasksProgress({
         )}
       </div>
       <div className="my-4 px-4">
-        <div className="bg-nutral-10  rounded-lg">
+        <div className="bg-neutral-10  rounded-lg">
           <ul className="p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
             {models.map(([model_name, task]) => (
               <li
@@ -140,7 +140,7 @@ export default function TasksProgress({
                         changesModifiedIndirect.includes(model_name) &&
                           'text-warning-500',
                         changesModifiedMetadata.includes(model_name) &&
-                          'text-nutral-900',
+                          'text-neutral-900',
                       )}
                     >
                       {model_name}
@@ -185,7 +185,7 @@ export default function TasksProgress({
                 {showProgress ? (
                   <Progress progress={toRatio(task.completed, task.total)} />
                 ) : (
-                  <Divider className="my-1 border-nutral-200 opacity-50" />
+                  <Divider className="my-1 border-neutral-200 opacity-50" />
                 )}
               </li>
             ))}

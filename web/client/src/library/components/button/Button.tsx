@@ -16,7 +16,7 @@ export type ButtonVariant = Subset<
   | typeof EnumVariant.Danger
   | typeof EnumVariant.Warning
   | typeof EnumVariant.Alternative
-  | typeof EnumVariant.Nutral
+  | typeof EnumVariant.Neutral
 >
 
 export type ButtonSize = Subset<
@@ -67,23 +67,23 @@ const VARIANT = new Map<ButtonVariant, string>([
   ],
   [
     'secondary',
-    'border-secondary-500 bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-nutral-100',
+    'border-secondary-500 bg-secondary-500 hover:bg-secondary-600 active:bg-secondary-400 text-neutral-100',
   ],
   [
     'success',
-    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-nutral-100',
+    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-neutral-100',
   ],
   [
     'danger',
-    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-nutral-100',
+    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-neutral-100',
   ],
   [
     'warning',
-    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-nutral-100',
+    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-neutral-100',
   ],
   [
-    'nutral',
-    'border-nutral-200 bg-nutral-200 hover:bg-nutral-300 active:bg-nutral-300 text-primary-900',
+    'neutral',
+    'border-neutral-200 bg-neutral-200 hover:bg-neutral-300 active:bg-neutral-300 text-primary-900',
   ],
 ])
 
@@ -130,7 +130,7 @@ export const Button = forwardRef(function Button(
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-nutral-200 border-nutral-300 text-nutral-700 cursor-not-allowed'
+          ? 'opacity-50 bg-neutral-200 border-neutral-300 text-neutral-700 cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}
@@ -162,7 +162,7 @@ export const ButtonMenu = forwardRef(function ButtonMenu(
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-nutral-100 hover:bg-nutral-100 active:bg-nutral-100 text-nutral-900 cursor-not-allowed'
+          ? 'opacity-50 bg-neutral-100 hover:bg-neutral-100 active:bg-neutral-100 text-neutral-900 cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}

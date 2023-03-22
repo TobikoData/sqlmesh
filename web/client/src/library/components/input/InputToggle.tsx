@@ -19,7 +19,7 @@ export default function InputToggle({
     <div className="flex justify-between">
       <label className="block mb-1 px-3 text-sm font-bold">
         {label}
-        <small className="block text-xs text-nutral-500">{info}</small>
+        <small className="block text-xs text-neutral-500">{info}</small>
       </label>
       <Toggle
         disabled={disabled}

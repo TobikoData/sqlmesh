@@ -27,7 +27,7 @@
     --color-success: hsla(111, 66%, 55%, 1);
     --color-warning: hsla(30, 94%, 62%, 1);
     --color-danger: hsla(1, 100%, 64%, 1);
-    --color-nutral: hsla(0, 0%, 50%, 1);
+    --color-neutral: hsla(0, 0%, 50%, 1);
 
     /* Brand */
     --color-brand-100: hsla(37, 100%, 92%, 1);
@@ -127,25 +127,25 @@
     --color-danger-800: hsla(345, 73%, 33%, 1);
     --color-danger-900: hsla(341, 79%, 27%, 1);
 
-    /* Nutral */
-    --color-nutral-10: hsla(190, 8%, 50%, 0.1);
-    --color-nutral-20: hsla(190, 8%, 50%, 0.2);
-    --color-nutral-30: hsla(190, 8%, 50%, 0.3);
-    --color-nutral-40: hsla(190, 8%, 50%, 0.4);
-    --color-nutral-50: hsla(190, 8%, 50%, 0.5);
-    --color-nutral-60: hsla(190, 8%, 50%, 0.6);
-    --color-nutral-70: hsla(190, 8%, 50%, 0.7);
-    --color-nutral-80: hsla(190, 8%, 50%, 0.8);
-    --color-nutral-90: hsla(190, 8%, 50%, 0.9);
-    --color-nutral-100: hsl(190, 8%, 98%);
-    --color-nutral-200: hsl(190, 8%, 86%);
-    --color-nutral-300: hsl(190, 8%, 74%);
-    --color-nutral-400: hsl(190, 8%, 66%);
-    --color-nutral-500: var(--color-nutral);
-    --color-nutral-600: hsl(190, 8%, 38%);
-    --color-nutral-700: hsl(202, 8%, 26%);
-    --color-nutral-800: hsl(214, 8%, 14%);
-    --color-nutral-900: hsl(226, 8%, 4%);
+    /* Neutral */
+    --color-neutral-10: hsla(190, 8%, 50%, 0.1);
+    --color-neutral-20: hsla(190, 8%, 50%, 0.2);
+    --color-neutral-30: hsla(190, 8%, 50%, 0.3);
+    --color-neutral-40: hsla(190, 8%, 50%, 0.4);
+    --color-neutral-50: hsla(190, 8%, 50%, 0.5);
+    --color-neutral-60: hsla(190, 8%, 50%, 0.6);
+    --color-neutral-70: hsla(190, 8%, 50%, 0.7);
+    --color-neutral-80: hsla(190, 8%, 50%, 0.8);
+    --color-neutral-90: hsla(190, 8%, 50%, 0.9);
+    --color-neutral-100: hsl(190, 8%, 98%);
+    --color-neutral-200: hsl(190, 8%, 86%);
+    --color-neutral-300: hsl(190, 8%, 74%);
+    --color-neutral-400: hsl(190, 8%, 66%);
+    --color-neutral-500: var(--color-neutral);
+    --color-neutral-600: hsl(190, 8%, 38%);
+    --color-neutral-700: hsl(202, 8%, 26%);
+    --color-neutral-800: hsl(214, 8%, 14%);
+    --color-neutral-900: hsl(226, 8%, 4%);
 
     --color-dark-darker: hsl(226, 16%, 4%);
     --color-dark: hsl(226, 24%, 8%);
@@ -166,20 +166,20 @@ html[mode='dark'] {
   --color-theme: var(--color-dark);
   --color-theme-lighter: var(--color-dark-lighter);
 
-  --color-text-darker: var(--color-nutral-300);
-  --color-text: var(--color-nutral-200);
-  --color-text-lighter: var(--color-nutral-100);
+  --color-text-darker: var(--color-neutral-300);
+  --color-text: var(--color-neutral-200);
+  --color-text-lighter: var(--color-neutral-100);
 
   --color-divider-darker: var(--color-theme-darker);
   --color-divider: var(--color-theme-lighter);
-  --color-divider-lighter: var(--color-nutral-100);
+  --color-divider-lighter: var(--color-neutral-100);
 
-  --color-logo-darker: var(--color-nutral-300);
-  --color-logo: var(--color-nutral-200);
-  --color-logo-lighter: var(--color-nutral-100);
+  --color-logo-darker: var(--color-neutral-300);
+  --color-logo: var(--color-neutral-200);
+  --color-logo-lighter: var(--color-neutral-100);
 
-  --color-editor-text: var(--color-nutral-300);
-  --color-editor-active-line-text: var(--color-nutral-100);
+  --color-editor-text: var(--color-neutral-300);
+  --color-editor-active-line-text: var(--color-neutral-100);
 
   --color-graph-edge: var(--color-primary-50);
 }
@@ -189,20 +189,20 @@ html[mode='light'] {
   --color-theme: var(--color-light);
   --color-theme-lighter: var(--color-light-lighter);
 
-  --color-text-darker: var(--color-nutral-900);
-  --color-text: var(--color-nutral-800);
-  --color-text-lighter: var(--color-nutral-700);
+  --color-text-darker: var(--color-neutral-900);
+  --color-text: var(--color-neutral-800);
+  --color-text-lighter: var(--color-neutral-700);
 
-  --color-divider-darker: var(--color-nutral-500);
-  --color-divider: var(--color-nutral-200);
-  --color-divider-lighter: var(--color-nutral-300);
+  --color-divider-darker: var(--color-neutral-500);
+  --color-divider: var(--color-neutral-200);
+  --color-divider-lighter: var(--color-neutral-300);
 
-  --color-logo-darker: var(--color-nutral-900);
-  --color-logo: var(--color-nutral-800);
-  --color-logo-lighter: var(--color-nutral-300);
+  --color-logo-darker: var(--color-neutral-900);
+  --color-logo: var(--color-neutral-800);
+  --color-logo-lighter: var(--color-neutral-300);
 
-  --color-editor-text: var(--color-nutral-600);
-  --color-editor-active-line-text: var(--color-nutral-800);
+  --color-editor-text: var(--color-neutral-600);
+  --color-editor-active-line-text: var(--color-neutral-800);
 
   --color-graph-edge: var(--color-secondary-50);
 }

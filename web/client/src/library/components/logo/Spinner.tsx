@@ -34,7 +34,7 @@ function Spinner({
           variant === EnumVariant.Success && 'fill-success-500',
           variant === EnumVariant.Warning && 'fill-warning-500',
           variant === EnumVariant.Danger && 'fill-danger-500',
-          variant === EnumVariant.Info && 'fill-nutral-500',
+          variant === EnumVariant.Info && 'fill-neutral-500',
         )}
         stroke={clsx(
           variant === EnumVariant.Primary && 'var(--color-primary-500)',
@@ -42,7 +42,7 @@ function Spinner({
           variant === EnumVariant.Success && 'var(--color-success-500)',
           variant === EnumVariant.Warning && 'var(--color-warning-500)',
           variant === EnumVariant.Danger && 'var(--color-danger-500)',
-          variant === EnumVariant.Info && 'var(--color-nutral-500)',
+          variant === EnumVariant.Info && 'var(--color-neutral-500)',
         )}
         strokeWidth="4"
       />

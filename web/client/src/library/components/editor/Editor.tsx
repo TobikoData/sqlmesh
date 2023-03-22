@@ -338,7 +338,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     className={clsx(
                       'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
                       file === activeFile
-                        ? 'bg-nutral-200 border-nutral-200 text-nutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
+                        ? 'bg-neutral-200 border-neutral-200 text-neutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
                         : 'bg-trasparent hover:bg-theme-darker dark:hover:bg-theme-lighter',
                     )}
                   >
@@ -347,7 +347,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                     </small>
                     {openedFiles.size > 1 && (
                       <XCircleIcon
-                        className="inline-block opacity-0 group-hover:opacity-100 text-nutral-600 dark:text-nutral-100 w-4 h-4 ml-2 cursor-pointer"
+                        className="inline-block opacity-0 group-hover:opacity-100 text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 

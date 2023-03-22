@@ -59,7 +59,7 @@ function Banner({
           variant === EnumVariant.Danger &&
             'bg-danger-10 border-danger-400 text-danger-600',
           variant === EnumVariant.Info &&
-            'bg-nutral-10 border-nutral-400 text-nutral-400',
+            'bg-neutral-10 border-neutral-400 text-neutral-400',
         )}
       >
         {headline != null && (

@@ -103,14 +103,14 @@ export default function File({
     <span
       className={clsx(
         'whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex rounded-md',
-        'hover:bg-nutral-100 dark:hover:bg-dark-lighter  ',
+        'hover:bg-neutral-100 dark:hover:bg-dark-lighter  ',
         file.is_supported &&
-          'group hover:bg-nutral-100 dark:hover:bg-dark-lighter',
+          'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
         openedFiles.has(file)
           ? 'text-brand-500'
-          : 'text-nutral-500 dark:text-nutral-100',
-        file === activeFile && 'bg-nutral-100 dark:bg-dark-lighter',
+          : 'text-neutral-500 dark:text-neutral-100',
+        file === activeFile && 'bg-neutral-100 dark:bg-dark-lighter',
       )}
     >
       <span
@@ -124,7 +124,7 @@ export default function File({
               `inline-block ${CSS_ICON_SIZE} mr-2`,
               file === activeFile
                 ? 'text-brand-500'
-                : 'text-nutral-500 dark:text-nutral-100',
+                : 'text-neutral-500 dark:text-neutral-100',
             )}
           />
         </div>

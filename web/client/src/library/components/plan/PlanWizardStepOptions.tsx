@@ -60,7 +60,7 @@ export default function PlanWizardStepOptions({
                     <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
                   )}
                 </Disclosure.Button>
-                <Disclosure.Panel className="px-4 pb-2 text-sm text-nutral-500">
+                <Disclosure.Panel className="px-4 pb-2 text-sm text-neutral-500">
                   <div className="mt-3">
                     <div className="flex flex-wrap md:flex-nowrap">
                       {isFalse(environment.isDefault) && (

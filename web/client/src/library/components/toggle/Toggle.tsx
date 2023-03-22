@@ -22,7 +22,7 @@ export default function Toggle({
       className={clsx(
         'relative inline-flex h-8 w-16 shrink-0 rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 focus-visible:ring-opacity-75',
         'border-secondary-300',
-        enabled ? 'bg-secondary-500' : 'bg-nutral-200',
+        enabled ? 'bg-secondary-500' : 'bg-neutral-200',
         className,
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
       )}
@@ -36,7 +36,7 @@ export default function Toggle({
           'bg-light translate-y-[0.125rem]',
           enabled
             ? 'translate-x-8 shadow-primary-800'
-            : 'translate-x-1 shadow-nutral-300 dark:shadow-nutral-600',
+            : 'translate-x-1 shadow-neutral-300 dark:shadow-neutral-600',
         )}
       />
     </Switch>

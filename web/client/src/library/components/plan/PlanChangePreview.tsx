@@ -38,7 +38,7 @@ function PlanChangePreview({
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
         type === EnumPlanChangeType.Indirect && 'bg-warning-10',
-        type === 'metadata' && 'bg-nutral-10',
+        type === 'metadata' && 'bg-neutral-10',
         className,
       )}
     >
@@ -55,7 +55,7 @@ function PlanChangePreview({
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
             type === EnumPlanChangeType.Metadata &&
-              'text-nutral-600 dark:text-nutral-300',
+              'text-neutral-600 dark:text-neutral-300',
           )}
         >
           {headline}
@@ -89,7 +89,7 @@ function PlanChangePreviewDefault({
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
             type === EnumPlanChangeType.Metadata &&
-              'text-nutral-600 dark:text-nutral-300',
+              'text-neutral-600 dark:text-neutral-300',
           )}
         >
           {type === EnumPlanChangeType.Add ? (

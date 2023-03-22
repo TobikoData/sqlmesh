@@ -71,7 +71,7 @@ function InputInfo({
 }: React.HTMLAttributes<HTMLElement>): JSX.Element {
   return (
     <small
-      className={clsx('block text-xs mt-1 px-3 text-nutral-500p', className)}
+      className={clsx('block text-xs mt-1 px-3 text-neutral-500p', className)}
     >
       {children}
     </small>

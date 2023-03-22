@@ -17,7 +17,7 @@ export const EnumVariant = {
   Danger: 'danger',
   Warning: 'warning',
   Info: 'info',
-  Nutral: 'nutral',
+  Neutral: 'neutral',
 } as const
 
 export type Variant = (typeof EnumVariant)[keyof typeof EnumVariant]
