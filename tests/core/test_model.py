@@ -76,7 +76,7 @@ def test_load(assert_exp_eq):
     assert model.macro_definitions == [
         parse_one("@DEF(x, 1)"),
     ]
-    assert model.sql_statements == [
+    assert list(model.sql_statements) == [
         parse_one("CACHE TABLE x AS SELECT 1"),
         parse_one("ADD JAR 's3://my_jar.jar'", read="spark"),
     ]
