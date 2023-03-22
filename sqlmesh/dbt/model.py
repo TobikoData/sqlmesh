@@ -25,6 +25,10 @@ INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite"])
 INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
 
 
+def collection_to_str(collection: t.Iterable) -> str:
+    return ", ".join(f"'{item}'" for item in collection)
+
+
 class ModelConfig(BaseModelConfig):
     """
     ModelConfig contains all config parameters available to DBT models
@@ -122,12 +126,9 @@ class ModelConfig(BaseModelConfig):
                     IncrementalByTimeRangeKind
                 )
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
-                    valid_strategies = ", ".join(
-                        f"'{strat}'" for strat in INCREMENTAL_BY_TIME_STRATEGIES
-                    )
                     raise ConfigError(
                         f"SQLMesh IncrementalByTime not compatible with '{strategy}'"
-                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
                     )
                 return IncrementalByTimeRangeKind(time_column=self.time_column)
             if self.unique_key:
@@ -135,17 +136,21 @@ class ModelConfig(BaseModelConfig):
                     IncrementalByUniqueKeyKind
                 )
                 if strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES:
-                    valid_strategies = ", ".join(
-                        f"'{strat}'" for strat in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
+                    support_msg = (
+                        "does not currently support"
+                        if strategy is "append"
+                        else "not compatible with"
                     )
                     raise ConfigError(
-                        f"SQLMesh IncrementalByUniqueKey not compatible with '{strategy}'"
-                        f" incremental strategy. Valid strategies include {valid_strategies}."
+                        f"{self.model_name}: SQLMesh IncrementalByUniqueKey {support_msg} '{strategy}'"
+                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
+
             raise ConfigError(
-                "SQLMesh ensures idempotent incremental loads and thus does not support append."
-                " Add either an unique key (merge) or a time column (insert-overwrite)."
+                f"{self.model_name}: Incremental materialization requires either "
+                f"time_column ({collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or "
+                f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}) configuration."
             )
         if materialization == Materialization.EPHEMERAL:
             return ModelKind(name=ModelKindName.EMBEDDED)
