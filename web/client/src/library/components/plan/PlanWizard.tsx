@@ -166,7 +166,7 @@ export default function PlanWizard({
                   <div className="flex">
                     {isArrayNotEmpty(added) && (
                       <PlanChangePreview
-                        className="w-full"
+                        className="w-full mx-2"
                         headline="Added Models"
                         type={EnumPlanChangeType.Add}
                       >
@@ -178,7 +178,7 @@ export default function PlanWizard({
                     )}
                     {isArrayNotEmpty(removed) && (
                       <PlanChangePreview
-                        className="w-full"
+                        className="w-full mx-2"
                         headline="Removed Models"
                         type={EnumPlanChangeType.Remove}
                       >
@@ -194,7 +194,7 @@ export default function PlanWizard({
                   <div className="flex">
                     {isArrayNotEmpty(modified?.direct) && (
                       <PlanChangePreview
-                        className="w-full"
+                        className="w-full mx-2"
                         headline="Modified Directly"
                         type={EnumPlanChangeType.Direct}
                       >
@@ -205,6 +205,7 @@ export default function PlanWizard({
                     )}
                     {isArrayNotEmpty(modified.indirect) && (
                       <PlanChangePreview
+                        className="w-full mx-2"
                         headline="Modified Indirectly"
                         type={EnumPlanChangeType.Indirect}
                       >
@@ -258,7 +259,7 @@ export default function PlanWizard({
                         <h3
                           className={clsx(
                             planState === EnumPlanState.Cancelled &&
-                              'text-neutral-700',
+                              'text-prose',
                             planState === EnumPlanState.Failed &&
                               'text-danger-700',
                             planState === EnumPlanState.Finished &&
@@ -283,7 +284,7 @@ export default function PlanWizard({
                     </div>
                   </PlanWizardStepMessage>
 
-                  <Disclosure.Panel className="px-4 pb-2 text-sm text-gray-500">
+                  <Disclosure.Panel className="px-4 pb-2 text-sm">
                     {hasBackfills &&
                       isFalse(skip_backfill) &&
                       isArrayNotEmpty(Object.keys(tasks)) && (

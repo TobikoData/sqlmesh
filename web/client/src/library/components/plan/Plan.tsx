@@ -306,7 +306,6 @@ function Plan({
         }
       })
       .finally(() => {
-        console.log({ elTaskProgress })
         elTaskProgress?.current?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
