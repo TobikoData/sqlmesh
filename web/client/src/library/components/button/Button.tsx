@@ -130,7 +130,7 @@ export const Button = forwardRef(function Button(
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-neutral-200 border-neutral-300 text-neutral-700 cursor-not-allowed'
+          ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}
@@ -162,7 +162,7 @@ export const ButtonMenu = forwardRef(function ButtonMenu(
         SHAPE.get(shape),
         SIZE.get(size),
         disabled
-          ? 'opacity-50 bg-neutral-100 hover:bg-neutral-100 active:bg-neutral-100 text-neutral-900 cursor-not-allowed'
+          ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
           : VARIANT.get(variant),
         className,
       )}

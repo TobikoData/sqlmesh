@@ -113,24 +113,23 @@ function PlanChangePreviewDirect({
 }): JSX.Element {
   return (
     <ul>
-      {changes.map((change, idx) => (
+      {changes.map(change => (
         <li
           key={change.model_name}
-          className="text-secondary-500"
+          className="text-secondary-500 dark:text-primary-500"
         >
-          <Disclosure defaultOpen={idx < 1}>
+          <Disclosure>
             {({ open }) => (
               <>
                 <Disclosure.Button className="flex items-start w-full justify-between rounded-lg text-left">
                   <div className="w-full">
                     <PlanChangePreviewTitle model_name={change.model_name} />
                   </div>
-
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
                     return (
-                      <Tag className="max-h-[1rem] min-w-[1rem] text-secondary-200" />
+                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500" />
                     )
                   })()}
                 </Disclosure.Button>
@@ -139,9 +138,9 @@ function PlanChangePreviewDirect({
                     type="indirect"
                     models={change.indirect ?? []}
                   />
-                  <Divider className="border-gray-200 mt-2" />
+                  <Divider className="border-neutral-200 mt-2" />
                   <ChangeCategories change={change} />
-                  <Divider className="border-gray-200 mt-2" />
+                  <Divider className="border-neutral-200 mt-2" />
                   {change?.diff != null && (
                     <PlanChangePreviewDiff diff={change?.diff} />
                   )}
@@ -165,7 +164,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
   return (
     <RadioGroup
       className={clsx(
-        'flex flex-col mt-2',
+        'flex flex-col mt-2 ',
         planState === EnumPlanState.Finished
           ? 'opacity-50 cursor-not-allowed'
           : 'cursor-pointer',
@@ -190,19 +189,21 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
             <div
               className={clsx(
                 'text-sm flex px-2 py-1 w-full rounded-lg',
-                checked ? 'text-secondary-500' : 'text-gray-800',
+                checked
+                  ? 'text-secondary-500 dark:text-primary-300'
+                  : 'text-prose',
               )}
             >
-              <div className="mt-[0.125rem] mr-2 border-2 border-gray-400 w-4 h-4 rounded-full flex justify-center items-center">
+              <div className="mt-[0.125rem] mr-2 border-2 border-neutral-400 w-4 h-4 rounded-full flex justify-center items-center">
                 {checked && (
-                  <span className="inline-block w-2 h-2 bg-secondary-500 rounded-full"></span>
+                  <span className="inline-block w-2 h-2 bg-secondary-500 dark:bg-primary-300 rounded-full"></span>
                 )}
               </div>
               <div>
                 <RadioGroup.Label as="p">{category.name}</RadioGroup.Label>
                 <RadioGroup.Description
                   as="span"
-                  className="text-xs text-gray-500"
+                  className="text-xs text-neutral-500"
                 >
                   {category.description}
                 </RadioGroup.Description>
@@ -222,23 +223,20 @@ function PlanChangePreviewIndirect({
 }): JSX.Element {
   return (
     <ul>
-      {changes.map((change, idx) => (
+      {changes.map(change => (
         <li
           key={change.model_name}
-          className="text-warning-700"
+          className="text-warning-700 dark:text-warning-500"
         >
-          <Disclosure defaultOpen={idx < 1}>
+          <Disclosure>
             {({ open }) => (
               <>
                 <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
                   <PlanChangePreviewTitle model_name={change.model_name} />
-                  <Divider className="mx-4" />
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
-                    return (
-                      <Tag className="max-h-[1rem] min-w-[1rem] text-warning-700" />
-                    )
+                    return <Tag className="max-h-[1rem] min-w-[1rem]" />
                   })()}
                 </Disclosure.Button>
                 <Disclosure.Panel className="text-sm px-4 mb-4">
@@ -269,7 +267,7 @@ function PlanChangePreviewTitle({
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
       <small className="inline-block text-sm ">{model_name}</small>
       {category != null && (
-        <span className="ml-2 text-xs px-1 bg-gray-400 text-gray-100 rounded">
+        <span className="ml-2 text-xs px-1 bg-neutral-400 text-neutral-100  dark:bg-neutral-400 dark:text-neutral-800 rounded">
           {category.name}
         </span>
       )}
@@ -288,8 +286,8 @@ function PlanChangePreviewRelations({
     <ul
       className={clsx(
         'mt-2 ml-4',
-        type === 'indirect' && 'text-warning-700',
-        type === 'direct' && 'text-secondary-500',
+        type === 'indirect' && 'text-warning-700 dark:text-warning-500',
+        type === 'direct' && 'text-secondary-500 dark:text-primary-500',
       )}
     >
       {models.map(model_name => (
@@ -298,10 +296,7 @@ function PlanChangePreviewRelations({
           className="flex"
         >
           <span
-            className={clsx(
-              'h-3 w-3 border-l-2 border-b-2 innline-block mr-2',
-              'border-warning-700/20',
-            )}
+            className={clsx('h-3 w-3 border-l-2 border-b-2 innline-block mr-2')}
           ></span>
           {model_name}
         </li>
@@ -312,15 +307,15 @@ function PlanChangePreviewRelations({
 
 function PlanChangePreviewDiff({ diff }: { diff: string }): JSX.Element {
   return (
-    <div className="my-4 bg-secondary-900 rounded-lg overflow-hidden">
-      <pre className="p-4 text-secondary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+    <div className="my-4 bg-dark-lighter rounded-lg overflow-hidden">
+      <pre className="p-4 text-primary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
         {diff.split('\n').map((line: string, idx: number) => (
           <p
             key={`${line}-${idx}`}
             className={clsx(
               line.startsWith('+') && 'text-success-500 bg-success-500/10 px-2',
               line.startsWith('-') && 'text-danger-500 bg-danger-500/10 px-2',
-              line.startsWith('@@') && 'text-secondary-300 my-5 px-2',
+              line.startsWith('@@') && 'text-primary-300 my-5 px-2',
             )}
           >
             {line}

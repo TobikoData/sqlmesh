@@ -71,7 +71,7 @@ export default function TasksProgress({
 
   return (
     <div ref={setRefTaskProgress}>
-      <div className="my-3 mx-4">
+      <div className="my-3 mx-4 text-prose">
         <div className="flex justify-between items-baseline">
           <span className="flex items-center">
             <span className="block whitespace-nowrap text-sm font-medium">
@@ -99,7 +99,7 @@ export default function TasksProgress({
           <div className="flex justify-between mt-1">
             <small className="text-xs">
               <b>Update Type:</b>
-              <span className="inline-block ml-1 text-gray-500">
+              <span className="inline-block ml-1">
                 {showVirtualUpdate ? 'Virtual' : 'Backfill'}
               </span>
             </small>
@@ -113,8 +113,8 @@ export default function TasksProgress({
         )}
       </div>
       <div className="my-4 px-4">
-        <div className="bg-neutral-10  rounded-lg">
-          <ul className="p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+        <div className="bg-neutral-10 rounded-lg">
+          <ul className="p-4 overflow-auto text-prose scrollbar scrollbar--vertical scrollbar--horizontal">
             {models.map(([model_name, task]) => (
               <li
                 key={model_name}
@@ -134,11 +134,11 @@ export default function TasksProgress({
                         changesRemoved.includes(model_name) &&
                           'text-danger-500',
                         changesModifiedDirect.includes(model_name) &&
-                          'text-secondary-500',
+                          'text-secondary-500 dark:text-primary-500',
                         changesModifiedIndirect.includes(model_name) &&
                           'text-warning-500',
                         changesModifiedMetadata.includes(model_name) &&
-                          'text-neutral-900',
+                          'text-prose',
                       )}
                     >
                       {model_name}
@@ -157,11 +157,11 @@ export default function TasksProgress({
                     {showProgress && (
                       <>
                         {task.end == null || task.start == null ? (
-                          <span className="inline-block whitespace-nowrap font-bold text-primary-500">
+                          <span className="inline-block whitespace-nowrap font-bold">
                             {Math.ceil(toRatio(task.completed, task.total))}%
                           </span>
                         ) : (
-                          <span className="inline-block whitespace-nowrap font-bold text-primary-500">
+                          <span className="inline-block whitespace-nowrap font-bold">
                             {`${Math.floor(
                               (task.end - task.start) / 60000,
                             )}:${String(
