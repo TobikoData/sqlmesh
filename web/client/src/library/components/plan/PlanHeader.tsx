@@ -1,4 +1,6 @@
+import clsx from 'clsx'
 import { useStoreContext } from '~/context/context'
+import { EnumVariant, type Variant } from '~/types/enum'
 
 export default function Plan({ error }: { error?: Error }): JSX.Element {
   const environment = useStoreContext(s => s.environment)
@@ -12,26 +14,59 @@ export default function Plan({ error }: { error?: Error }): JSX.Element {
         </b>
       </h4>
       {environment.isInitial && environment.isDefault && (
-        <div className="mt-4 mb-2 flex items-center w-full text-sm">
-          <div className="p-4 w-full h-full border border-warning-500 bg-warning-100 rounded-lg">
-            <h4 className="mb-2">Running Default Plan prod</h4>
-            <p>
-              Lorem ipsum dolor sit amet, consectetur adipisicing elit. Tempora
-              expedita totam quis dignissimos veniam officia debitis atque
-              nesciunt, voluptatem eos omnis quidem nihil error, nulla soluta?
-              Saepe voluptates eaque ducimus!
-            </p>
-          </div>
-        </div>
+        <Banner
+          variant={EnumVariant.Warning}
+          headline="Running Default Plan"
+          description="Lorem ipsum dolor sit amet, consectetur adipisicing elit. Tempora
+          expedita totam quis dignissimos veniam officia debitis atque
+          nesciunt, voluptatem eos omnis quidem nihil error, nulla soluta?
+          Saepe voluptates eaque ducimus!"
+        />
       )}
       {error != null && (
-        <div className="mt-4 mb-2 flex items-center w-full text-sm">
-          <div className="p-4 w-full h-full border border-danger-500 bg-danger-100 rounded-lg">
-            <h4 className="mb-2">Error</h4>
-            <p>{error.message}</p>
-          </div>
-        </div>
+        <Banner
+          variant={EnumVariant.Danger}
+          headline="Error"
+          description={error.message}
+        />
       )}
+    </div>
+  )
+}
+
+function Banner({
+  variant,
+  headline,
+  description,
+}: {
+  variant: Variant
+  description?: string
+  headline?: string
+}): JSX.Element {
+  return (
+    <div className="mt-4 mb-2 flex items-center w-full text-sm">
+      <div
+        className={clsx(
+          'p-4 w-full h-full border-2 rounded-lg',
+          variant === EnumVariant.Primary &&
+            'bg-primary-10 border-primary-400 text-primary-600',
+          variant === EnumVariant.Secondary &&
+            'bg-secondary-10 border-secondary-400 text-secondary-600',
+          variant === EnumVariant.Success &&
+            'bg-success-10 border-success-400 text-success-600',
+          variant === EnumVariant.Warning &&
+            'bg-warning-10 border-warning-400 text-warning-600',
+          variant === EnumVariant.Danger &&
+            'bg-danger-10 border-danger-400 text-danger-600',
+          variant === EnumVariant.Info &&
+            'bg-neutral-10 border-neutral-400 text-neutral-400',
+        )}
+      >
+        {headline != null && (
+          <h4 className="mb-2 font-bold text-lg">{headline}</h4>
+        )}
+        {description != null && <p className="text-prose">{description}</p>}
+      </div>
     </div>
   )
 }

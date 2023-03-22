@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { EnumSize } from '../../../types/enum'
+import { EnumSize, type Size } from '../../../types/enum'
 
 interface PropsDivider extends React.HTMLAttributes<HTMLSpanElement> {
   size?: Subset<
@@ -20,14 +20,18 @@ export function Divider({
   orientation = 'horizontal',
   className,
 }: PropsDivider): JSX.Element {
-  const clsOrientation =
-    orientation === 'horizontal'
-      ? `w-full border-b${SIZE.get(size) ?? ''}`
-      : `h-full border-r${SIZE.get(size) ?? ''}`
-
   return (
     <span
-      className={clsx(['block', clsOrientation, 'border-gray-100'], className)}
+      className={clsx(
+        [
+          'block border-divider',
+          orientation === 'horizontal' &&
+            `w-full border-b${SIZE.get(size) ?? ''}`,
+          orientation === 'vertical' &&
+            `h-full  border-r${SIZE.get(size) ?? ''}`,
+        ],
+        className,
+      )}
     ></span>
   )
 }

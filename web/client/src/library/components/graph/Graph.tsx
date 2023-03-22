@@ -92,13 +92,13 @@ export default function Graph({ closeGraph }: any): JSX.Element {
 
 function ModelNode({ data, sourcePosition, targetPosition }: any): JSX.Element {
   return (
-    <div className="bg-secondary-100 border-2 border-secondary-500 px-3 py-1 rounded-full text-xs font-semibold text-secondary-500">
+    <div className="bg-theme-lighter border-2 border-secondary-500 px-3 py-1 rounded-full text-xs font-semibold text-secondary-500 dark:text-secondary-100 dark:border-primary-500 dark:text-primary-500 ">
       {targetPosition === Position.Right && (
         <Handle
           type="target"
           position={Position.Right}
           isConnectable={false}
-          className="bg-secondary-500 w-2 h-2 rounded-full"
+          className="!bg-secondary-500 dark:!bg-primary-500 w-2 h-2 rounded-full mr-[0.05rem]"
         />
       )}
       <div>{data.label}</div>
@@ -106,7 +106,7 @@ function ModelNode({ data, sourcePosition, targetPosition }: any): JSX.Element {
         <Handle
           type="source"
           position={Position.Left}
-          className="bg-secondary-500 w-0 h-0"
+          className="!bg-transparent w-0 h-0 border-none ml-[0.3rem] rounded-full"
           isConnectable={false}
         />
       )}

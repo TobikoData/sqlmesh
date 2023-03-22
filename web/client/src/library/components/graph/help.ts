@@ -141,10 +141,10 @@ function toGraphEdge(source: string, target: string): GraphEdge {
     target,
     style: {
       strokeWidth: 2,
-      stroke: 'hsl(260, 100%, 80%)', //
+      stroke: 'var(--color-graph-edge)', //
     },
     markerStart: {
-      color: '#8533FF',
+      color: '#0066FF',
       type: MarkerType.ArrowClosed,
       width: 12,
       height: 12,

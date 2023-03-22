@@ -33,12 +33,12 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 mx-2',
-        type === EnumPlanChangeType.Add && 'bg-success-100',
-        type === EnumPlanChangeType.Remove && 'bg-danger-100',
-        type === EnumPlanChangeType.Direct && 'bg-secondary-100',
-        type === EnumPlanChangeType.Indirect && 'bg-warning-100',
-        type === 'metadata' && 'bg-gray-100',
+        'flex flex-col rounded-md p-4 w-full',
+        type === EnumPlanChangeType.Add && 'bg-success-10',
+        type === EnumPlanChangeType.Remove && 'bg-danger-10',
+        type === EnumPlanChangeType.Direct && 'bg-secondary-10',
+        type === EnumPlanChangeType.Indirect && 'bg-warning-10',
+        type === 'metadata' && 'bg-neutral-10',
         className,
       )}
     >
@@ -46,11 +46,16 @@ function PlanChangePreview({
         <h4
           className={clsx(
             `mb-2 font-bold whitespace-nowrap`,
-            type === EnumPlanChangeType.Add && 'text-success-700',
-            type === EnumPlanChangeType.Remove && 'text-danger-700',
-            type === EnumPlanChangeType.Direct && 'text-secondary-500',
-            type === EnumPlanChangeType.Indirect && 'text-warning-700',
-            type === EnumPlanChangeType.Metadata && 'text-gray-900',
+            type === EnumPlanChangeType.Add &&
+              'text-success-600 dark:text-success-300',
+            type === EnumPlanChangeType.Remove &&
+              'text-danger-600 dark:text-danger-300',
+            type === EnumPlanChangeType.Direct &&
+              'text-secondary-600 dark:text-secondary-300',
+            type === EnumPlanChangeType.Indirect &&
+              'text-warning-600 dark:text-warning-300',
+            type === EnumPlanChangeType.Metadata &&
+              'text-neutral-600 dark:text-neutral-300',
           )}
         >
           {headline}
@@ -75,11 +80,16 @@ function PlanChangePreviewDefault({
           key={change}
           className={clsx(
             'flex items-center px-1 leading-5',
-            type === EnumPlanChangeType.Add && 'text-success-700',
-            type === EnumPlanChangeType.Remove && 'text-danger-700',
-            type === EnumPlanChangeType.Direct && 'text-secondary-500',
-            type === EnumPlanChangeType.Indirect && 'text-warning-700',
-            type === EnumPlanChangeType.Metadata && 'text-gray-900',
+            type === EnumPlanChangeType.Add &&
+              'text-success-600 dark:text-success-300',
+            type === EnumPlanChangeType.Remove &&
+              'text-danger-600 dark:text-danger-300',
+            type === EnumPlanChangeType.Direct &&
+              'text-secondary-600 dark:text-secondary-300',
+            type === EnumPlanChangeType.Indirect &&
+              'text-warning-600 dark:text-warning-300',
+            type === EnumPlanChangeType.Metadata &&
+              'text-neutral-600 dark:text-neutral-300',
           )}
         >
           {type === EnumPlanChangeType.Add ? (

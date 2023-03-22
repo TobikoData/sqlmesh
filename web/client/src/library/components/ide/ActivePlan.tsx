@@ -56,7 +56,7 @@ export default function ActivePlan({
               planState !== EnumPlanState.Finished &&
                 planState !== EnumPlanState.Failed &&
                 planState !== EnumPlanState.Applying &&
-                'bg-gray-100 text-gray-500',
+                'bg-neutral-100 text-neutral-500',
             )}
           >
             {plan == null ? 0 : 1}
@@ -71,7 +71,7 @@ export default function ActivePlan({
             leaveTo="opacity-0 translate-y-1"
           >
             <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
-              <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
+              <div className="overflow-hidden rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5">
                 <TasksProgress
                   environment={environment}
                   tasks={plan.tasks}
