@@ -324,70 +324,70 @@ function PlanChanges({
         <ErrorPreview error={error} />
       ) : (
         <>
-{environment.isInitial && (
-        <span
-          title="New"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
-        >
-          New
-        </span>
-      )}
-      {isLoading && (
-        <span className="flex items-center ml-2">
-          <Spinner className="w-3 h-3 mr-1" />
-          <span className="inline-block text-xs text-neutral-500">
-            Checking...
-          </span>
-        </span>
-      )}
-      {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-        <span
-          title="Latest"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-        >
-          <span>Latest</span>
-        </span>
-      )}
-      {plan?.changes?.added != null &&
-        isArrayNotEmpty(plan?.changes?.added) && (
-          <ChangesPreview
-            headline="Added Models"
-            type={EnumPlanChangeType.Add}
-            changes={plan.changes.added}
-          />
-        )}
-      {plan?.changes?.modified?.direct != null &&
-        isArrayNotEmpty(plan?.changes?.modified.direct) && (
-          <ChangesPreview
-            headline="Direct Changes"
-            type={EnumPlanChangeType.Direct}
-            changes={
-              plan.changes.modified.direct.map(
-                ({ model_name }) => model_name,
-              ) as string[]
-            }
-          />
-        )}
-      {plan?.changes?.modified?.indirect != null &&
-        isArrayNotEmpty(plan?.changes?.modified.indirect) && (
-          <ChangesPreview
-            headline="Indirectly Modified"
-            type={EnumPlanChangeType.Indirect}
-            changes={
-              plan.changes.modified.indirect.map(
-                ci => ci.model_name,
-              ) as string[]
-            }
-          />
-        )}
-      {plan?.changes?.removed != null &&
-        isArrayNotEmpty(plan?.changes?.removed) && (
-          <ChangesPreview
-            headline="Removed Models"
-            type={EnumPlanChangeType.Remove}
-            changes={plan.changes.removed}
-          />
-        )}
+          {environment.isInitial && (
+            <span
+              title="New"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
+            >
+              New
+            </span>
+          )}
+          {isLoading && (
+            <span className="flex items-center ml-2">
+              <Spinner className="w-3 h-3 mr-1" />
+              <span className="inline-block text-xs text-neutral-500">
+                Checking...
+              </span>
+            </span>
+          )}
+          {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
+            <span
+              title="Latest"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
+            >
+              <span>Latest</span>
+            </span>
+          )}
+          {plan?.changes?.added != null &&
+            isArrayNotEmpty(plan?.changes?.added) && (
+              <ChangesPreview
+                headline="Added Models"
+                type={EnumPlanChangeType.Add}
+                changes={plan.changes.added}
+              />
+            )}
+          {plan?.changes?.modified?.direct != null &&
+            isArrayNotEmpty(plan?.changes?.modified.direct) && (
+              <ChangesPreview
+                headline="Direct Changes"
+                type={EnumPlanChangeType.Direct}
+                changes={
+                  plan.changes.modified.direct.map(
+                    ({ model_name }) => model_name,
+                  ) as string[]
+                }
+              />
+            )}
+          {plan?.changes?.modified?.indirect != null &&
+            isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+              <ChangesPreview
+                headline="Indirectly Modified"
+                type={EnumPlanChangeType.Indirect}
+                changes={
+                  plan.changes.modified.indirect.map(
+                    ci => ci.model_name,
+                  ) as string[]
+                }
+              />
+            )}
+          {plan?.changes?.removed != null &&
+            isArrayNotEmpty(plan?.changes?.removed) && (
+              <ChangesPreview
+                headline="Removed Models"
+                type={EnumPlanChangeType.Remove}
+                changes={plan.changes.removed}
+              />
+            )}
         </>
       )}
     </span>

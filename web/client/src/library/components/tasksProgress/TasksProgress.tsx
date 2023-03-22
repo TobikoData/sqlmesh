@@ -70,9 +70,7 @@ export default function TasksProgress({
   }, [changes])
 
   return (
-    <div
-      ref={setRefTaskProgress}
-    >
+    <div ref={setRefTaskProgress}>
       <div className="my-3 mx-4">
         <div className="flex justify-between items-baseline">
           <span className="flex items-center">
