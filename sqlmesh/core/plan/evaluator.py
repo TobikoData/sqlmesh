@@ -80,7 +80,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self._promote(plan)
 
         if not plan.requires_backfill:
-            self.console.log_success("Logical Update executed successfully")
+            self.console.log_success("Virtual Update executed successfully")
 
     def _push(self, plan: Plan) -> None:
         """

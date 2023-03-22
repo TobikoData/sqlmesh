@@ -107,7 +107,7 @@ Before reverting a change, ensure that you have already made a change and that y
 To revert your change:
 
 1. Open the model file you wish to edit in your preferred editor, and undo a change you made earlier. For this example, we'll remove the column we added from the [quickstart](/quick_start).
-2. Run `sqlmesh plan` and apply your changes. Enter `y` to run a logical update.
+2. Run `sqlmesh plan` and apply your changes. Enter `y` to run a Virtual Update.
 
         $ sqlmesh plan dev
         ======================================================================
@@ -132,13 +132,13 @@ To revert your change:
         Directly Modified: sqlmesh_example.example_incremental_model (Non-breaking)
         └── Indirectly Modified Children:
             └── sqlmesh_example.example_full_model
-        Apply - Logical Update [y/n]: y
+        Apply - Virtual Update [y/n]: y
 
-        Logical Update executed successfully
+        Virtual Update executed successfully
 
-### Logical updates
+### Virtual Update
 
-Reverting to a previous version is a quick operation as no additional work is being done. For more information, refer to [plan application](../concepts/plans.md#plan-application) and [logical updates](../concepts/plans.md#logical-updates).
+Reverting to a previous version is a quick operation as no additional work is being done. For more information, refer to [plan application](../concepts/plans.md#plan-application) and [Virtual Update](../concepts/plans.md#virtual-update).
 
 **Note:** The janitor runs periodically and automatically to clean up SQLMesh artifacts no longer being used, and determines the time-to-live (TTL) for tables (how much time can pass before reverting is no longer possible).
 
@@ -222,7 +222,7 @@ To delete a model:
 
     **Note:** If you have other files that reference the model you wish to delete, an error message will note the file(s) containing the reference. You will need to also delete these files in order for the change to be applied.
 
-3. Plan and apply your changes to production, and enter `y` for the logical update. By default, the `sqlmesh plan` command targets your production environment:
+3. Plan and apply your changes to production, and enter `y` for the Virtual Update. By default, the `sqlmesh plan` command targets your production environment:
 
         ```
         $ sqlmesh plan
@@ -232,9 +232,9 @@ To delete a model:
         Summary of differences against `prod`:
         └── Removed Models:
             └── sqlmesh_example.example_full_model
-        Apply - Logical Update [y/n]: y
+        Apply - Virtual Update [y/n]: y
 
-        Logical Update executed successfully
+        Virtual Update executed successfully
         ```
 
 4. Verify that the `example_full_model.sql` model was removed from the output.
