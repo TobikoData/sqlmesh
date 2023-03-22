@@ -45,8 +45,9 @@ nav:
   - Best practices:
     - best_practices/recommended_workflow.md
   - Resources:
-    - release_notes.md
+    - comparisons.md
     - development.md
+    - release_notes.md
 theme:
   name: material
   logo: sqlmesh.png
@@ -74,6 +75,7 @@ plugins:
   - include-markdown
   - search
 markdown_extensions:
+  - tables
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
