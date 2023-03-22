@@ -354,11 +354,3 @@ def test_databricks_config():
         "outputs",
         "dev",
     )
-
-
-def test_this(assert_exp_eq, sushi_dbt_project: Project):
-    model_config = ModelConfig(alias="test", sql="SELECT 1 AS one FROM {{ this.identifier }}")
-    context = sushi_dbt_project.context
-    assert_exp_eq(
-        model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
-    )

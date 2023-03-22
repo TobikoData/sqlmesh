@@ -159,6 +159,9 @@ def extract_macro_references(jinja_str: str) -> t.Set[MacroReference]:
     return result
 
 
+JinjaGlobalAttribute = t.Union[str, int, float, bool, AttributeDict]
+
+
 class JinjaMacroRegistry(PydanticModel):
     """Registry for Jinja macros.
 
@@ -172,7 +175,7 @@ class JinjaMacroRegistry(PydanticModel):
 
     packages: t.Dict[str, t.Dict[str, MacroInfo]] = {}
     root_macros: t.Dict[str, MacroInfo] = {}
-    global_objs: t.Dict[str, AttributeDict] = {}
+    global_objs: t.Dict[str, JinjaGlobalAttribute] = {}
     create_builtins_module: t.Optional[str] = None
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
@@ -181,7 +184,10 @@ class JinjaMacroRegistry(PydanticModel):
     @validator("global_objs", pre=True)
     def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
         if isinstance(value, t.Dict):
-            return {k: AttributeDict(v) for k, v in value.items()}
+            attributes = {}
+            for k, v in value.items():
+                attributes[k] = AttributeDict(v) if isinstance(v, dict) else v
+            return attributes
         return value
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
