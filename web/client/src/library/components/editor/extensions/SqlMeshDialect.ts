@@ -5,45 +5,51 @@ import {
 } from '@codemirror/autocomplete'
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
-import { type ModelsModels } from '~/api/client'
+import { type Model } from '~/api/client'
 import { type ModelFile } from '~/models'
 import { isFalse } from '~/utils'
 import { sqlglotWorker } from '../workers'
 
 const cache = new Map<string, (e: MessageEvent) => void>()
+const WHITE_SPACE = ' '
 
-export function useSqlMeshExtension(): [
+export function useSqlMeshExtension(
+  dialects?: string[],
+): [
   (
-    models: ModelsModels,
+    models: Map<string, Model>,
     file: ModelFile,
     options: { types: string; keywords: string },
   ) => LanguageSupport,
   () => void,
 ] {
   function SqlMeshDialectExtension(
-    models: ModelsModels,
+    models: Map<string, Model>,
     file: ModelFile,
     options: { types: string; keywords: string },
   ): LanguageSupport {
     const SQLTypes = options.types
     const SQLKeywords = options.keywords
-    const SQLMeshModelDictionary = SQLMeshModelKeywords()
+    const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
     const SQLMeshKeywords =
-      'model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect '
+      'model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
+    const SQLMeshTypes =
+      'seed full incremental_by_time_range incremental_by_unique_key view embedded'
 
     const lang = SQLDialect.define({
-      keywords: SQLKeywords + (file.isSQLMeshModel ? SQLMeshKeywords : ''),
-      types:
-        SQLTypes +
-        (file.isSQLMeshModel
-          ? 'seed full incremental_by_time_range incremental_by_unique_key view embedded'
-          : ''),
+      keywords:
+        SQLKeywords +
+        (file.isSQLMeshModel ? SQLMeshKeywords : '') +
+        WHITE_SPACE,
+      types: SQLTypes + (file.isSQLMeshModel ? SQLMeshTypes : '') + WHITE_SPACE,
     })
 
-    const tables: Completion[] = Object.keys(models).map(label => ({
-      label,
-      type: 'keyword',
-    }))
+    const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
+      label => ({
+        label,
+        type: 'keyword',
+      }),
+    )
 
     let handler = cache.get('message')
 
@@ -62,6 +68,8 @@ export function useSqlMeshExtension(): [
     cache.set('message', handler)
 
     sqlglotWorker.addEventListener('message', handler)
+
+    console.log({ tree })
 
     return new LanguageSupport(lang.language, [
       lang.language.data.of({
@@ -93,8 +101,6 @@ export function useSqlMeshExtension(): [
               ([start, end]: [number, number]) =>
                 ctx.pos >= start && ctx.pos <= end,
             )
-
-          console.log({ tree })
 
           let suggestions: Completion[] = tables
 
@@ -132,17 +138,9 @@ export function useSqlMeshExtension(): [
   return [SqlMeshDialectExtension, SqlMeshDialectCleanUp]
 }
 
-function SQLMeshModelKeywords(): Map<string, Completion[]> {
-  const dialect = [
-    'Hive',
-    'Spark',
-    'Databricks',
-    'Snowflake',
-    'BigQuery',
-    'Redshift',
-    'Postgres',
-    'DuckDB',
-  ]
+function SQLMeshModelKeywords(
+  dialects: string[] = [],
+): Map<string, Completion[]> {
   return new Map([
     [
       'kind',
@@ -176,7 +174,7 @@ function SQLMeshModelKeywords(): Map<string, Completion[]> {
     ],
     [
       'dialect',
-      dialect.map(w => ({ label: w, type: 'keyword', apply: `${w}, ` })),
+      dialects.map(w => ({ label: w, type: 'keyword', apply: `${w}, ` })),
     ],
     [
       'keywords',
@@ -194,7 +192,7 @@ function SQLMeshModelKeywords(): Map<string, Completion[]> {
         {
           label: 'name',
           type: 'keyword',
-          apply: 'name sushi.,',
+          apply: 'name ,',
         },
         {
           label: 'kind',

@@ -5,7 +5,7 @@ import { StreamLanguage } from '@codemirror/language'
 
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
-import { type ModelsModels } from '~/api/client'
+import { type Model } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
 import { type ModelFile } from '~/models'
 import {
@@ -20,11 +20,13 @@ export default function CodeEditor({
   file,
   models,
   dialect,
+  dialects,
   onChange,
 }: {
   file: ModelFile
-  models?: ModelsModels
+  models: Map<string, Model>
   dialect?: string
+  dialects?: string[]
   onChange: (value: string) => void
 }): JSX.Element {
   const files = useStoreFileTree(s => s.files)
@@ -32,7 +34,8 @@ export default function CodeEditor({
 
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
 
-  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] = useSqlMeshExtension()
+  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] =
+    useSqlMeshExtension(dialects)
 
   const extensions = useMemo(() => {
     const showSqlSqlMeshDialect =

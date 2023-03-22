@@ -9,7 +9,7 @@ import {
   type Tooltip,
   hoverTooltip,
 } from '@codemirror/view'
-import { type ModelsModels } from '~/api/client'
+import { type Model } from '~/api/client'
 import { type ModelFile } from '~/models'
 import { isNil } from '~/utils'
 
@@ -17,7 +17,7 @@ import { useSqlMeshExtension } from './SqlMeshDialect'
 
 export { useSqlMeshExtension }
 
-export function SqlMeshModel(models: ModelsModels): Extension {
+export function SqlMeshModel(models: Map<string, Model>): Extension {
   return ViewPlugin.fromClass(
     class SqlMeshModelView {
       decorations: DecorationSet = Decoration.set([])
@@ -32,7 +32,7 @@ export function SqlMeshModel(models: ModelsModels): Extension {
               enter({ from, to }) {
                 const model = viewUpdate.view.state.doc.sliceString(from, to)
 
-                if (isNil(models[model])) return true
+                if (isNil(models.get(model))) return true
 
                 const decoration = Decoration.mark({
                   attributes: {
@@ -57,7 +57,7 @@ export function SqlMeshModel(models: ModelsModels): Extension {
 }
 
 export function events(
-  models: ModelsModels,
+  models: Map<string, Model>,
   files: Map<ID, ModelFile>,
   selectFile: (file: ModelFile) => void,
 ): Extension {
@@ -68,7 +68,7 @@ export function events(
   })
 }
 
-export function HoverTooltip(models: ModelsModels): Extension {
+export function HoverTooltip(models: Map<string, Model>): Extension {
   return hoverTooltip(
     (view: EditorView, pos: number, side: number): Tooltip | null => {
       const { from, to, text } = view.state.doc.lineAt(pos)
@@ -83,7 +83,7 @@ export function HoverTooltip(models: ModelsModels): Extension {
       if ((start === pos && side < 0) || (end === pos && side > 0)) return null
 
       const modelName = view.state.doc.sliceString(start, end)
-      const model = models[modelName]
+      const model = models.get(modelName)
 
       if (model == null) return null
 
@@ -115,7 +115,7 @@ export function HoverTooltip(models: ModelsModels): Extension {
 
 function handleClickOnSqlMeshModel(
   event: MouseEvent,
-  models: ModelsModels,
+  models: Map<string, Model>,
   files: Map<ID, ModelFile>,
   selectFile: (file: ModelFile) => void,
 ): void {
@@ -126,7 +126,7 @@ function handleClickOnSqlMeshModel(
 
   if (modelName == null) return
 
-  const model = models[modelName]
+  const model = models.get(modelName)
 
   if (model == null) return
 

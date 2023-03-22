@@ -50,8 +50,9 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
 export function useApiModels(): UseQueryResult<Models> {
   return useQuery({
     queryKey: ['/api/models'],
-    queryFn: getModelsApiModelsGet,
+    queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
     cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -170,4 +171,8 @@ export function apiCancelGetEnvironments(client: QueryClient): void {
 
 export function apiCancelFiles(client: QueryClient): void {
   void client.cancelQueries({ queryKey: ['/api/files'] })
+}
+
+export function apiCancelModels(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/models'] })
 }

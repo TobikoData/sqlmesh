@@ -11,7 +11,6 @@ import {
   useApiFileByPath,
   useApiPlanRun,
   apiCancelPlanRun,
-  useApiModels,
 } from '../../../api'
 import { useQueryClient } from '@tanstack/react-query'
 import { XCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
@@ -24,7 +23,15 @@ import { useStoreEditor } from '../../../context/editor'
 import {
   evaluateApiCommandsEvaluatePost,
   fetchdfApiCommandsFetchdfPost,
+  type File,
   renderApiCommandsRenderPost,
+  type Model,
+  type EvaluateInputEnd,
+  type EvaluateInputLatest,
+  type EvaluateInputStart,
+  type RenderInputEnd,
+  type RenderInputLatest,
+  type RenderInputStart,
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
@@ -44,7 +51,6 @@ import './Editor.css'
 import Input from '../input/Input'
 import { type Table } from 'apache-arrow'
 import { type ResponseWithDetail } from '~/api/instance'
-import type { File } from '../../../api/client'
 import { type ModelEnvironment } from '~/models/environment'
 import { dracula, tomorrow } from 'thememirror'
 import { EnumColorScheme, useColorScheme } from '~/context/theme'
@@ -70,15 +76,25 @@ export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
   environment: ModelEnvironment
+  models?: Map<string, Model>
 }
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
 const DAY = 24 * 60 * 60 * 1000
 
+interface FormEvaluate {
+  model?: string
+  start: EvaluateInputStart | RenderInputStart
+  end: EvaluateInputEnd | RenderInputEnd
+  latest: EvaluateInputLatest | RenderInputLatest
+  limit: number
+}
+
 export default function Editor({
   className,
   environment,
+  models,
 }: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
@@ -100,29 +116,28 @@ export default function Editor({
     EnumEditorFileStatus.Edit,
   )
   const [isSaved, setIsSaved] = useState(true)
-  const [formEvaluate, setFormEvaluate] = useState({
-    model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+  const [formEvaluate, setFormEvaluate] = useState<FormEvaluate>({
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
-  const { data: fileData, refetch: getFileContent } = useApiFileByPath(
-    activeFile.path,
-  )
-
   const [dialects, setDialects] = useState<
     Array<{ dialect_title: string; dialect_name: string }>
   >([])
   const [dialect, setDialect] = useState<string>()
   const [isValid, setIsValid] = useState(true)
 
-  const { data: dataModels } = useApiModels()
+  const { refetch: planRun } = useApiPlanRun(environment.name, {
+    planOptions: {
+      skip_tests: true,
+    },
+  })
+
+  const { data: fileData, refetch: getFileContent } = useApiFileByPath(
+    activeFile.path,
+  )
+
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
@@ -142,6 +157,7 @@ export default function Editor({
   const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
+
   const debouncedChange = useMemo(
     () =>
       debounce(
@@ -220,10 +236,14 @@ export default function Editor({
     setTabTableContent(bucket.get(EnumEditorTabs.Table))
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    setFormEvaluate({
-      ...formEvaluate,
-      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
-    })
+    const model = models?.get(activeFile.path)?.name
+
+    if (model != null) {
+      setFormEvaluate(s => ({
+        ...s,
+        model,
+      }))
+    }
   }, [activeFile])
 
   function closeEditorTab(file: ModelFile): void {
@@ -283,16 +303,24 @@ export default function Editor({
     bucket.set(EnumEditorTabs.Terminal, undefined)
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    renderApiCommandsRenderPost(formEvaluate)
-      .then(({ sql }) => {
-        bucket.set(EnumEditorTabs.QueryPreview, sql)
-        setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+    if (formEvaluate?.model != null) {
+      renderApiCommandsRenderPost({
+        ...formEvaluate,
+        model: formEvaluate.model,
       })
-      .catch(console.log)
+        .then(({ sql }) => {
+          bucket.set(EnumEditorTabs.QueryPreview, sql)
+          setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+        })
+        .catch(console.log)
 
-    evaluateApiCommandsEvaluatePost(formEvaluate)
-      .then(updateTabs)
-      .catch(console.log)
+      evaluateApiCommandsEvaluatePost({
+        ...formEvaluate,
+        model: formEvaluate.model,
+      })
+        .then(updateTabs)
+        .catch(console.log)
+    }
   }
 
   function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
@@ -329,7 +357,8 @@ export default function Editor({
   // TODO: remove once we have a better way to determine if a file is a model
   const isModel = activeFile.path.includes('models/')
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
-  const shouldEvaluate = isModel && Object.values(formEvaluate).every(Boolean)
+  const shouldEvaluate =
+    isModel && Object.values({ ...formEvaluate }).every(Boolean)
   const sizesActions = isStringEmptyOrNil(activeFile.content)
     ? [100, 0]
     : [80, 20]
@@ -410,17 +439,20 @@ export default function Editor({
             expandToMin={true}
           >
             <div className="flex flex-col h-full">
-              <CodeEditor
-                onChange={debouncedChange}
-                models={dataModels?.models}
-                file={activeFile}
-                dialect={dialect}
-              />
+              {models != null && (
+                <CodeEditor
+                  onChange={debouncedChange}
+                  models={models}
+                  file={activeFile}
+                  dialect={dialect}
+                  dialects={dialects.map(d => d.dialect_name)}
+                />
+              )}
             </div>
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
                 <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
-                  {isTrue(isModel) && (
+                  {isTrue(isModel) && formEvaluate.model != null && (
                     <form className="my-3">
                       <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
                         <h3 className="whitespace-nowrap ml-2">Model Name</h3>
