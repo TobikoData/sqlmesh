@@ -16,12 +16,12 @@ SQLMesh aims to be dbt format compatible. Importing existing dbt projects with m
 | `Python models`                   | ✅ | ✅
 | `Seed models`                     | ✅ | ✅
 | `Jinja support`                   | ✅ | ✅
-| `Views / Embedded Models`         | ✅ | ✅
-| `Incremental Models`              | ✅ | ✅
-| `Seed Models`                     | ✅ | ✅
-| `Snapshot Models`                 | ✅ | ❌
+| `Views / Embedded models`         | ✅ | ✅
+| `Incremental models`              | ✅ | ✅
+| `Seed models`                     | ✅ | ✅
+| `Snapshot models`                 | ✅ | ❌
 | `Documentation generation`        | ✅ | ❌
-| `Package Manager`                 | ✅ | ❌
+| `Package manager`                 | ✅ | ❌
 | `Semantic validation`             | ❌ | ✅
 | `Transpilation`                   | ❌ | ✅
 | `Unit tests`                      | ❌ | ✅
@@ -37,6 +37,9 @@ SQLMesh aims to be dbt format compatible. Importing existing dbt projects with m
 | `Local Python execution`          | ❌ | ✅
 | `Open-source CI/CD Bot`           | ❌ | ✅
 | `Open-source IDE (UI)`            | ❌ | ✅
+| `CLI`                             | ✅ | ✅
+| `Notebook Support`                | ❌ | ✅
+| `Comprehensive Python API`        | ❌ | ✅
 
 
 ### Incremental Models
