@@ -56,6 +56,12 @@ connections:
 | `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
 | `session_configuration` | An optional dictionary of Spark session parameters.                                                                                                                                      |  dict  |    N     |
 
+#### Limitations
+##### Built-in Scheduler
+If your project contains Python models that are running PySpark DataFrame operations then you must execute your plan on a Databricks notebook directly. That means you must use the Notebook magics to execute your plan. 
+
+We are looking to add support for all Python model kinds when running locally. A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to run your plan locally. This will make it look like you are running on a cluster and should theoretically work. 
+
 ### Bigquery
 
 TODO

@@ -33,7 +33,6 @@ def create_engine_adapter(
     dialect = dialect.lower()
     if dialect == "postgresql":
         dialect = "postgres"
-    # TODO: Update in follow up PR
     if dialect == "databricks":
         try:
             from pyspark.sql import SparkSession

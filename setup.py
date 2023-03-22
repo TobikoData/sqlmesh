@@ -84,6 +84,7 @@ setup(
         ],
         "databricks": [
             "databricks-sql-connector",
+            "databricks-cli",
         ],
         "redshift": [
             "redshift_connector",
