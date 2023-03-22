@@ -36,9 +36,6 @@ In a full data refresh, a complete dataset is deleted and then entirely overwrit
 ## Idempotency
 The property that, given a particular operation, the same outputs will be produced when given the same inputs no matter how many times the operation is applied.
 
-## Incremental refresh
-In an incremental data refresh, incoming data is compared to existing data, and only changes are updated. In SQLMesh, this is referred to as a logical update. For more information, refer to [plans](plans.md).
-
 ## Integration
 Combining data from various sources (such as from a data warehouse) into one unified view.
 
@@ -50,3 +47,9 @@ A table is the visual representation of data stored in rows and columns.
 
 ## View
 A view is the result of a SQL query on a database.
+
+## Virtual Data Marts
+Term used to describe's SQLMesh's ability to share tables across environments to ensure tables are only built once while maintaining data integrity and environment isolation. See [Plan Application](plans.md#plan-application) for more information. 
+
+## Virtual Update
+Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Plan's Virtual Update](plans.md#virtual-update) for more information.

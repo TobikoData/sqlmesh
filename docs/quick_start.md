@@ -66,7 +66,7 @@ You've now created a new production environment with all of history backfilled.
 ### 2.2 Create a dev environment
 Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called `dev`.
 
-Although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a logical update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Enter `y` to perform the logical update:
+Although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Enter `y` to perform the Virtual Update:
 
 ```bash
 (.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
@@ -77,9 +77,9 @@ Summary of differences against `dev`:
 └── Added Models:
     ├── sqlmesh_example.example_incremental_model
     └── sqlmesh_example.example_full_model
-Apply - Logical Update [y/n]: y
+Apply - Virtual Update [y/n]: y
 
-Logical Update executed successfully
+Virtual Update executed successfully
 ```
 
 ## 3. Make your first update
