@@ -93,6 +93,8 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
             post [x(), x(y=['a', 2, TRUE])],
         );
 
+        SELECT @SQL(@REDUCE([100, 200, 300, 400], (x,y) -> x + y));
+
         SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds
         """
         ),
@@ -115,7 +117,8 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     assert payload["calls"] == 3
     assert payload["y"] == ["a", 2, True]
 
-    adapter_mock.execute.assert_called_once_with(parse_one("create table hook_called"))
+    execute_calls = [call(parse_one("select 1000")), call(parse_one("create table hook_called"))]
+    adapter_mock.execute.assert_has_calls(execute_calls)
 
     adapter_mock.create_schema.assert_has_calls(
         [
