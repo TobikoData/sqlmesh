@@ -48,7 +48,7 @@ A table is the visual representation of data stored in rows and columns.
 ## View
 A view is the result of a SQL query on a database.
 
-# Virtual Data Marts
+## Virtual Data Marts
 Term used to describe's SQLMesh's ability to share tables across environments to ensure tables are only built once while maintaining data integrity and environment isolation. See [Plan Application](plans.md#plan-application) for more information. 
 
 ## Virtual Update
