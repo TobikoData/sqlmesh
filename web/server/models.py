@@ -25,7 +25,7 @@ class FileType(str, enum.Enum):
 class ApplyType(str, enum.Enum):
     """An enumeration of possible apply types."""
 
-    logical = "logical"
+    virtual = "virtual"
     backfill = "backfill"
 
 
