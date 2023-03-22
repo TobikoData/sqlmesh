@@ -66,7 +66,7 @@ async def apply(
         await request.app.state.task
 
     return models.ApplyResponse(
-        type="backfill" if plan.requires_backfill else models.ApplyType.virtual
+        type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
     )
 
 
