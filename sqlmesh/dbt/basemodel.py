@@ -188,7 +188,8 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros.global_objs.update(
             {
                 "this": self.relation_info,
-                **model_context.jinja_globals,
+                "schema": self.table_schema,
+                **model_context.jinja_globals,  # type: ignore
             }
         )
 
@@ -265,6 +266,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
                 "var": self._var,
                 "source": self._source,
                 "this": self.config.relation_info,
+                "schema": self.config.table_schema,
             },
             engine_adapter=None,
         )

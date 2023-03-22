@@ -240,6 +240,25 @@ def test_target_jinja(sushi_dbt_project: Project):
     assert context.render("{{ target.profile_name }}") == "sushi"
 
 
+def test_project_name_jinja(sushi_dbt_project: Project):
+    context = sushi_dbt_project.context
+    assert context.render("{{ project_name }}") == "sushi"
+
+
+def test_schema_jinja(sushi_dbt_project: Project):
+    model_config = ModelConfig(target_schema="sushi", sql="SELECT 1 AS one FROM {{ schema }}")
+    context = sushi_dbt_project.context
+    model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+
+
+def test_this(assert_exp_eq, sushi_dbt_project: Project):
+    model_config = ModelConfig(alias="test", sql="SELECT 1 AS one FROM {{ this.identifier }}")
+    context = sushi_dbt_project.context
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
+    )
+
+
 def test_statement(sushi_dbt_project: Project):
     context = sushi_dbt_project.context
     assert context.render(

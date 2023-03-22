@@ -13,7 +13,7 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
 from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
@@ -167,13 +167,15 @@ class DbtContext:
         return self._jinja_environment
 
     @property
-    def jinja_globals(self) -> t.Dict[str, AttributeDict]:
+    def jinja_globals(self) -> t.Dict[str, JinjaGlobalAttribute]:
         refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = {**self.models, **self.seeds}
-        output: t.Dict[str, AttributeDict] = {
+        output: t.Dict[str, JinjaGlobalAttribute] = {
             "vars": AttributeDict(self.variables),
             "refs": AttributeDict({k: v.relation_info for k, v in refs.items()}),
             "sources": AttributeDict({k: v.relation_info for k, v in self.sources.items()}),
         }
+        if self.project_name is not None:
+            output["project_name"] = self.project_name
         if self._target is not None and self.project_name is not None:
             output["target"] = self._target.target_jinja(self.project_name)
         return output
