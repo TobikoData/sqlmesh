@@ -15,7 +15,7 @@ export default function Progress({
   return (
     <div
       className={clsx(
-        'w-full h-1 bg-neutral-50 overflow-hidden flex items-center rounded-lg my-1',
+        'w-full h-1 bg-neutral-30 overflow-hidden flex items-center rounded-lg my-1',
         className,
       )}
     >

@@ -203,6 +203,7 @@ export default function RunPlan({
               isLoading ||
               planAction !== EnumPlanAction.None ||
               planState === EnumPlanState.Applying ||
+              planState === EnumPlanState.Running ||
               planState === EnumPlanState.Cancelling
             }
           />
@@ -361,11 +362,9 @@ function PlanChanges({
               <ChangesPreview
                 headline="Direct Changes"
                 type={EnumPlanChangeType.Direct}
-                changes={
-                  plan.changes.modified.direct.map(
-                    ({ model_name }) => model_name,
-                  ) as string[]
-                }
+                changes={plan.changes.modified.direct.map(
+                  ({ model_name }) => model_name,
+                )}
               />
             )}
           {plan?.changes?.modified?.indirect != null &&
@@ -373,11 +372,9 @@ function PlanChanges({
               <ChangesPreview
                 headline="Indirectly Modified"
                 type={EnumPlanChangeType.Indirect}
-                changes={
-                  plan.changes.modified.indirect.map(
-                    ci => ci.model_name,
-                  ) as string[]
-                }
+                changes={plan.changes.modified.indirect.map(
+                  ci => ci.model_name,
+                )}
               />
             )}
           {plan?.changes?.removed != null &&
@@ -684,7 +681,7 @@ function ErrorPreview({
         <>
           <span
             title="Latest"
-            className="block ml-1 px-2 first-child:ml-0 rounded-full border border-danger-500 bg-danger-500 text-gray-100 text-xs text-center cursor-pointer"
+            className="block ml-1 px-2 first-child:ml-0 rounded-full border border-danger-500 bg-danger-500 text-neutral-100 text-xs text-center cursor-pointer"
           >
             <span>Error</span>
           </span>
