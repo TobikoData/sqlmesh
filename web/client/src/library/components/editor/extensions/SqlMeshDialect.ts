@@ -12,7 +12,7 @@ import { sqlglotWorker } from '../workers'
 
 const cache = new Map<string, (e: MessageEvent) => void>()
 
-export function useSqlMeshExtention(): [
+export function useSqlMeshExtension(): [
   (
     models: ModelsModels,
     file: ModelFile,

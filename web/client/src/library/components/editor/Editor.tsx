@@ -117,7 +117,7 @@ export default function Editor({
   )
 
   const [dialects, setDialects] = useState<
-    Array<{ text: string; value: string }>
+    Array<{ dialect_title: string; dialect_name: string }>
   >([])
   const [dialect, setDialect] = useState<string>()
   const [isValid, setIsValid] = useState(true)
@@ -637,7 +637,7 @@ function EditorFooter({
   isSaved: boolean
   isValid: boolean
   fileStatus: string
-  dialects: Array<{ text: string; value: string }>
+  dialects: Array<{ dialect_title: string; dialect_name: string }>
   dialect?: string
   setDialect: (dialect?: string) => void
 }): JSX.Element {
@@ -675,12 +675,12 @@ function EditorFooter({
               setDialect(e.target.value)
             }}
           >
-            {dialects.map((d: { text: string; value: string }) => (
+            {dialects.map(dialect => (
               <option
-                key={d.text}
-                value={d.value}
+                key={dialect.dialect_title}
+                value={dialect.dialect_name}
               >
-                {d.text}
+                {dialect.dialect_title}
               </option>
             ))}
           </select>

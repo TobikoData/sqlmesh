@@ -4,6 +4,16 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.dialects.dialect import Dialect, DialectType
 
+dialects = json.dumps(
+    [
+        {
+            "dialect_title": "SqlGlot" if dialect == "" else dialect_class.__name__,
+            "dialect_name": dialect,
+        }
+        for dialect, dialect_class in Dialect.classes.items()
+    ]
+)
+
 
 def parse_to_json(sql: str, read: DialectType = None) -> str:
     return json.dumps(
@@ -27,13 +37,4 @@ def get_dialect(name: str = "") -> str:
     return json.dumps(output)
 
 
-def get_dialects() -> str:
-    dialects = [
-        {"text": "SqlGlot" if name == "" else dialect.__name__, "value": name}
-        for name, dialect in Dialect.classes.items()
-    ]
-
-    return json.dumps(dialects)
-
-
-[sqlglot.transpile, parse_to_json, get_dialect, get_dialects]
+[parse_to_json, get_dialect, dialects]

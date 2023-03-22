@@ -12,7 +12,7 @@ import {
   events,
   SqlMeshModel,
   HoverTooltip,
-  useSqlMeshExtention,
+  useSqlMeshExtension,
 } from './extensions'
 import { sqlglotWorker } from '~/library/components/editor/workers'
 
@@ -32,7 +32,7 @@ export default function CodeEditor({
 
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
 
-  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] = useSqlMeshExtention()
+  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] = useSqlMeshExtension()
 
   const extensions = useMemo(() => {
     const showSqlSqlMeshDialect =

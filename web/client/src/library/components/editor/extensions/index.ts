@@ -13,9 +13,9 @@ import { type ModelsModels } from '~/api/client'
 import { type ModelFile } from '~/models'
 import { isNil } from '~/utils'
 
-import { useSqlMeshExtention } from './SqlMeshDialect'
+import { useSqlMeshExtension } from './SqlMeshDialect'
 
-export { useSqlMeshExtention }
+export { useSqlMeshExtension }
 
 export function SqlMeshModel(models: ModelsModels): Extension {
   return ViewPlugin.fromClass(

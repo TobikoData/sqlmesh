@@ -18,15 +18,7 @@ async function loadPyodideAndPackages(): Promise<any[]> {
 const pyodideReadyPromise = loadPyodideAndPackages()
 
 global.onmessage = async (e: MessageEvent) => {
-  const [transpile, parse, get_dialect, get_dialects] =
-    await pyodideReadyPromise
-
-  if (e.data.topic === 'transpile') {
-    global.postMessage({
-      topic: 'transpile',
-      payload: toArray(transpile(e.data.payload, 'duckdb')),
-    })
-  }
+  const [parse, get_dialect, dialects] = await pyodideReadyPromise
 
   if (e.data.topic === 'parse') {
     let payload
@@ -64,7 +56,7 @@ global.onmessage = async (e: MessageEvent) => {
     global.postMessage({
       topic: 'dialects',
       payload: {
-        dialects: JSON.parse(get_dialects()),
+        dialects: JSON.parse(dialects),
         dialect: 'mysql',
       },
     })
@@ -72,7 +64,3 @@ global.onmessage = async (e: MessageEvent) => {
 }
 
 global.postMessage({ topic: 'init' })
-
-function toArray<T>(proxy: ArrayLike<T>): T[] {
-  return Array.from(proxy)
-}
