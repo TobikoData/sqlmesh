@@ -33,11 +33,16 @@ connections:
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
 ### Duckdb
+#### Local/Built-in Scheduler
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
+##### Airflow
+DuckDB only works when running locally and therefore does not support Airflow. 
+
 ### Snowflake
+#### Local/Built-in Scheduler
 | Option      | Description                  |  Type  | Required |
 |-------------|------------------------------|:------:|:--------:|
 | `user`      | The Snowflake username       | string |    Y     |
@@ -47,7 +52,34 @@ connections:
 | `database`  | The Snowflake database name  | string |    N     |
 | `role`      | The Snowflake role name      | string |    N     |
 
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#snowflake)
+
 ### Databricks
+#### Local/Built-in Scheduler
+If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
+This can be done using the [Notebook magic](../reference/notebook.md) or using the [CLI](../reference/cli.md).
+This is something we are looking into improving and please leave us feedback in slack if this impacts you.
+A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster and should theoretically work.
+
+Databricks has a few options for connection types to choose from:
+###### Type: databricks
+The recommended connection type configuration for Databricks is the `databricks` type. 
+This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
+If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
+If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
+the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). 
+See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
+
+###### Type: databricks_spark_session
+This connection type assumes that wherever you are running you have access to a Databricks SparkSession. 
+This will simplify the required configuration to run since you will not need to provide connection configuration.
+
+###### Type: databricks_sql
+This connection type assumes you only need to run SQL queries against Databricks.
+If all of your models are SQL models or if Python don't use PySpark DataFrame then this can be used.
+Below is the connection configuration for this type:
+
 | Option                  | Description                                                                                                                                                                              |  Type  | Required |
 |-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `server_hostname`       | Databricks instance host name                                                                                                                                                            | string |    Y     |
@@ -56,17 +88,19 @@ connections:
 | `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
 | `session_configuration` | An optional dictionary of Spark session parameters.                                                                                                                                      |  dict  |    N     |
 
-#### Limitations
-##### Built-in Scheduler
-If your project contains Python models that are running PySpark DataFrame operations then you must execute your plan on a Databricks notebook directly. That means you must use the Notebook magics to execute your plan. 
-
-We are looking to add support for all Python model kinds when running locally. A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to run your plan locally. This will make it look like you are running on a cluster and should theoretically work. 
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#databricks)
 
 ### Bigquery
+#### Local/Built-in Scheduler
+Currently relies on local configuration of `gcloud` CLI to be authenticated in order to connect. 
+[Issue to expand supported methods](https://github.com/TobikoData/sqlmesh/issues/270).
 
-TODO
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#bigquery)
 
 ### Redshift
+#### Local/Built-in Scheduler
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
@@ -89,22 +123,32 @@ TODO
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
 
+#### Airflow Scheduler
+[Airflow Configuration Information](../integrations/airflow.md#redshift)
+
 ## Scheduler
 
-Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata, and that has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow.
+Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata, and that has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow and is recommended for production deployments.
 
+Below is the list of configuration options specific to each corresponding scheduler type.
+
+### Builtin
 ```yaml linenums="1"
 scheduler:
     type: builtin
 ```
 
-Below is the list of configuration options specific to each corresponding scheduler type.
-
-### Builtin
-
 No additional configuration options are supported by this scheduler type.
 
 ### Airflow
+```yaml linenums="1"
+scheduler:
+    type: airflow
+    airflow_url: <airflow_url>
+    username: <username>
+    password: <password>
+```
+
 | Option                            | Description                                                                                                                        |  Type  | Required |
 |-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `airflow_url`                     | The URL of the Airflow Webserver                                                                                                   | string |    Y     |
@@ -116,8 +160,18 @@ No additional configuration options are supported by this scheduler type.
 | `backfill_concurrent_tasks`       | The number of concurrent tasks used for model backfilling during plan application (Default: `4`)                                   |  int   |    N     |
 | `ddl_concurrent_tasks`            | The number of concurrent tasks used for DDL operations like table/view creation, deletion, and so forth (Default: `4`)             |  int   |    N     |
 
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to set up Airflow with SQLMesh.
+
 ### Cloud Composer
-This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`.
+```yaml linenums="1"
+scheduler:
+    type: cloud_composer
+    airflow_url: <airflow_url>
+```
+This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. 
+Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
+
+See [Airflow Integration Guide](../integrations/airflow.md) for detailed information on how to set up Airflow with SQLMesh.
 
 ## SQLMesh Specific Configurations
 | Option                    | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |
@@ -138,7 +192,6 @@ model_defaults:
     owner: jen
     start: 2022-01-01
 ```
-
 | Option           | Description                                                                                                                                                                                                                                                                                                    |      Type      | Required |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------:|:--------:|
 | `kind`           | The default model kind. [Additional Details](#kind) (Default: `full`)                                                                                                                                                                                                                                          | string or dict |    N     |

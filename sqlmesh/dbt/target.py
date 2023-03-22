@@ -7,7 +7,7 @@ from pydantic import Field
 
 from sqlmesh.core.config import (
     ConnectionConfig,
-    DatabricksAPIConnectionConfig,
+    DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
@@ -250,7 +250,7 @@ class DatabricksConfig(TargetConfig):
         return "merge"
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        return DatabricksAPIConnectionConfig(
+        return DatabricksSQLConnectionConfig(
             server_hostname=self.host,
             http_path=self.http_path,
             access_token=self.token,

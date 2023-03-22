@@ -11,7 +11,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
 
-class DatabricksAPIEngineAdapter(BaseSparkEngineAdapter):
+class DatabricksSQLEngineAdapter(BaseSparkEngineAdapter):
     DIALECT = "databricks"
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
