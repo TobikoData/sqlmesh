@@ -138,7 +138,7 @@ const initial = {
 
   hasVirtualUpdate: false,
   virtualUpdateDescription:
-    'All changes and their downstream dependencies can be fully previewed before they get promoted. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as Virtual Update. Virtual Updates impose no additional runtime overhead or cost.',
+    'All changes and their downstream dependencies can be fully previewed before they get promoted. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such an update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.',
   activeBackfill: undefined,
   hasBackfills: false,
   backfills: [],

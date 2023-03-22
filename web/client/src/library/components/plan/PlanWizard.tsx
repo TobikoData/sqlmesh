@@ -123,7 +123,6 @@ export default function PlanWizard({
     [backfills, change_categorization, activeBackfill],
   )
 
-  // const hasVirtualUpdate = hasChanges && isFalse(hasBackfills)
   const isProgress = includes(
     [EnumPlanState.Cancelling, EnumPlanState.Applying],
     planState,
