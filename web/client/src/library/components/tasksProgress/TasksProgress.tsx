@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useMemo } from 'react'
+import { type RefObject, useMemo } from 'react'
 import { EnumPlanState, type PlanState, type PlanTasks } from '~/context/plan'
 import { toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
@@ -13,11 +13,12 @@ interface PropsTasks {
   tasks: PlanTasks
   headline?: string
   updated_at?: string
-  changes: ContextEnvironmentChanges
+  changes?: ContextEnvironmentChanges
   showBatches?: boolean
   showProgress?: boolean
-  showLogicalUpdate?: boolean
+  showVirtualUpdate?: boolean
   planState: PlanState
+  setRefTaskProgress: RefObject<HTMLDivElement>
 }
 
 export default function TasksProgress({
@@ -28,8 +29,9 @@ export default function TasksProgress({
   headline = 'Target Environment',
   showBatches = true,
   showProgress = true,
-  showLogicalUpdate = false,
+  showVirtualUpdate = false,
   planState,
+  setRefTaskProgress,
 }: PropsTasks): JSX.Element {
   const { models, taskCompleted, taskTotal } = useMemo(() => {
     const models = Object.entries(tasks)
@@ -68,7 +70,10 @@ export default function TasksProgress({
   }, [changes])
 
   return (
-    <div className="bg-white">
+    <div
+      className="bg-white"
+      ref={setRefTaskProgress}
+    >
       <div className="my-3 mx-4">
         <div className="flex justify-between items-baseline">
           <span className="flex items-center">
@@ -98,7 +103,7 @@ export default function TasksProgress({
             <small className="text-xs">
               <b>Update Type:</b>
               <span className="inline-block ml-1 text-gray-500">
-                {showLogicalUpdate ? 'Logical' : 'Backfill'}
+                {showVirtualUpdate ? 'Virtual' : 'Backfill'}
               </span>
             </small>
             <small className="text-xs">
@@ -171,7 +176,7 @@ export default function TasksProgress({
                         )}
                       </>
                     )}
-                    {showLogicalUpdate && (
+                    {showVirtualUpdate && (
                       <>
                         <span className="inline-block whitespace-nowrap font-bold text-gray-500 ml-2">
                           Updated
