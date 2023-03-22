@@ -40,6 +40,11 @@ class ModelConfig(BaseModelConfig):
             included, if specified.
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        dialect: The SQL dialect that the model's query is written in. By default,
+            this is assumed to be the dialect of the context.
+        batch_size: The maximum number of intervals that can be run per backfill job. If this is None,
+            then backfilling this model will do all of history in one job. If this is set, a model's backfill
+            will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
         start: The earliest date that the model will be backfilled for
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         incremental_strategy: Strategy used to build the incremental model
@@ -53,6 +58,8 @@ class ModelConfig(BaseModelConfig):
     time_column: t.Optional[str] = None
     partitioned_by: t.Optional[t.Union[t.List[str], str]] = None
     cron: t.Optional[str] = None
+    dialect: t.Optional[str] = None
+    batch_size: t.Optional[int]
 
     # DBT configuration fields
     start: t.Optional[str] = None
@@ -89,6 +96,10 @@ class ModelConfig(BaseModelConfig):
             "time_column": UpdateStrategy.IMMUTABLE,
         },
     }
+
+    @property
+    def model_dialect(self) -> t.Optional[str]:
+        return self.dialect or self.meta.get("dialect", None)
 
     @property
     def model_materialization(self) -> Materialization:
@@ -172,13 +183,15 @@ class ModelConfig(BaseModelConfig):
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
             optional_kwargs["partitioned_by"] = self.partitioned_by
-        if self.cron:
-            optional_kwargs["cron"] = self.cron
+        for field in ("cron", "batch_size"):
+            field_val = getattr(self, field, None) or self.meta.get(field, None)
+            if field_val:
+                optional_kwargs[field] = field_val
 
         return create_sql_model(
             self.model_name,
             expressions[-1],
-            dialect=model_context.dialect,
+            dialect=self.model_dialect or model_context.dialect,
             kind=self.model_kind(context.target),
             start=self.start,
             statements=expressions[0:-1],
