@@ -33,7 +33,7 @@ connections:
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
 ### Duckdb
-#### Local/Build-in Scheduler
+#### Local/Built-in Scheduler
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
@@ -42,7 +42,7 @@ connections:
 DuckDB only works when running locally and therefore does not support Airflow. 
 
 ### Snowflake
-#### Local/Build-in Scheduler
+#### Local/Built-in Scheduler
 | Option      | Description                  |  Type  | Required |
 |-------------|------------------------------|:------:|:--------:|
 | `user`      | The Snowflake username       | string |    Y     |
@@ -56,7 +56,7 @@ DuckDB only works when running locally and therefore does not support Airflow.
 [Airflow Configuration Information](../integrations/airflow.md#snowflake)
 
 ### Databricks
-#### Local/Build-in Scheduler
+#### Local/Built-in Scheduler
 If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
 This can be done using the [Notebook magic](../reference/notebook.md) or using the [CLI](../reference/cli.md).
 This is something we are looking into improving and please leave us feedback in slack if this impacts you.
@@ -92,7 +92,7 @@ Below is the connection configuration for this type:
 [Airflow Configuration Information](../integrations/airflow.md#databricks)
 
 ### Bigquery
-#### Local/Build-in Scheduler
+#### Local/Built-in Scheduler
 Currently relies on local configuration of `gcloud` CLI to be authenticated in order to connect. 
 [Issue to expand supported methods](https://github.com/TobikoData/sqlmesh/issues/270).
 
@@ -100,7 +100,7 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 [Airflow Configuration Information](../integrations/airflow.md#bigquery)
 
 ### Redshift
-#### Local/Build-in Scheduler
+#### Local/Built-in Scheduler
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
