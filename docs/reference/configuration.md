@@ -32,99 +32,13 @@ connections:
 |--------------------|--------------------------------------------------------------------|:----:|:--------:|
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
-### Duckdb
-#### Local/Built-in Scheduler
-| Option     | Description                                                                  |  Type  | Required |
-|------------|------------------------------------------------------------------------------|:------:|:--------:|
-| `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
-
-##### Airflow
-DuckDB only works when running locally and therefore does not support Airflow. 
-
-### Snowflake
-#### Local/Built-in Scheduler
-| Option      | Description                  |  Type  | Required |
-|-------------|------------------------------|:------:|:--------:|
-| `user`      | The Snowflake username       | string |    Y     |
-| `password`  | The Snowflake password       | string |    Y     |
-| `account`   | The Snowflake account name   | string |    Y     |
-| `warehouse` | The Snowflake warehouse name | string |    N     |
-| `database`  | The Snowflake database name  | string |    N     |
-| `role`      | The Snowflake role name      | string |    N     |
-
-#### Airflow Scheduler
-[Airflow Configuration Information](../integrations/airflow.md#snowflake)
-
-### Databricks
-#### Local/Built-in Scheduler
-If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
-This can be done using the [Notebook magic](../reference/notebook.md) or using the [CLI](../reference/cli.md).
-This is something we are looking into improving and please leave us feedback in slack if this impacts you.
-A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster and should theoretically work.
-
-Databricks has a few options for connection types to choose from:
-###### Type: databricks
-The recommended connection type configuration for Databricks is the `databricks` type. 
-This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
-If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
-If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
-the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). 
-See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
-
-###### Type: databricks_spark_session
-This connection type assumes that wherever you are running you have access to a Databricks SparkSession. 
-This will simplify the required configuration to run since you will not need to provide connection configuration.
-
-###### Type: databricks_sql
-This connection type assumes you only need to run SQL queries against Databricks.
-If all of your models are SQL models or if Python don't use PySpark DataFrame then this can be used.
-Below is the connection configuration for this type:
-
-| Option                  | Description                                                                                                                                                                              |  Type  | Required |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `server_hostname`       | Databricks instance host name                                                                                                                                                            | string |    Y     |
-| `http_path`             | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    Y     |
-| `access_token`          | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    Y     |
-| `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
-| `session_configuration` | An optional dictionary of Spark session parameters.                                                                                                                                      |  dict  |    N     |
-
-#### Airflow Scheduler
-[Airflow Configuration Information](../integrations/airflow.md#databricks)
-
-### Bigquery
-#### Local/Built-in Scheduler
-Currently relies on local configuration of `gcloud` CLI to be authenticated in order to connect. 
-[Issue to expand supported methods](https://github.com/TobikoData/sqlmesh/issues/270).
-
-#### Airflow Scheduler
-[Airflow Configuration Information](../integrations/airflow.md#bigquery)
-
-### Redshift
-#### Local/Built-in Scheduler
-| Option                  | Description                                                                                                 |  Type  | Required |
-|-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
-| `password`              | The password to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
-| `database`              | The name of the database instance to connect to                                                             | string |    N     |
-| `host`                  | The hostname of the Amazon Redshift cluster                                                                 | string |    N     |
-| `port`                  | The port number of the Amazon Redshift cluster                                                              |  int   |    N     |
-| `ssl`                   | Is SSL enabled. SSL must be enabled when authenticating using IAM (Default: `True`)                         |  bool  |    N     |
-| `sslmode`               | The security of the connection to the Amazon Redshift cluster. `verify-ca` and `verify-full` are supported. | string |    N     |
-| `timeout`               | The number of seconds before the connection to the server will timeout.                                     |  int   |    N     |
-| `tcp_keepalive`         | Is [TCP keepalive](https://en.wikipedia.org/wiki/Keepalive#TCP_keepalive) used. (Default: `True`)           |  bool  |    N     |
-| `application_name`      | The name of the application                                                                                 | string |    N     |
-| `preferred_role`        | The IAM role preferred for the current connection                                                           | string |    N     |
-| `principal_arn`         | The ARN of the IAM entity (user or role) for which you are generating a policy                              | string |    N     |
-| `credentials_provider`  | The class name of the IdP that will be used for authenticating with the Amazon Redshift cluster             | string |    N     |
-| `region`                | The AWS region of the Amazon Redshift cluster                                                               | string |    N     |
-| `cluster_identifier`    | The cluster identifier of the Amazon Redshift cluster                                                       | string |    N     |
-| `iam`                   | If IAM authentication is enabled. IAM must be True when authenticating using an IdP                         |  dict  |    N     |
-| `is_serverless`         | If the Amazon Redshift cluster is serverless (Default: `False`)                                             |  bool  |    N     |
-| `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
-| `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
-
-#### Airflow Scheduler
-[Airflow Configuration Information](../integrations/airflow.md#redshift)
+### Engine Connection Configuration
+* [BigQuery](../integrations/engines.md#bigquery---localbuilt-in-scheduler)
+* [Databricks](../integrations/engines.md#databricks---localbuilt-in-scheduler)
+* [DuckDB](../integrations/engines.md#duckdb---localbuilt-in-scheduler)
+* [Redshift](../integrations/engines.md#redshift---localbuilt-in-scheduler)
+* [Snowflake](../integrations/engines.md#snowflake---localbuilt-in-scheduler)
+* [Spark](../integrations/engines.md#spark---localbuilt-in-scheduler)
 
 ## Scheduler
 
