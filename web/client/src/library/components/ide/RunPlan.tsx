@@ -321,7 +321,7 @@ function PlanChanges({
 }): JSX.Element {
   return (
     <span className="flex align-center pr-2 h-full w-full">
-      {isError ? (
+      {isError && error != null ? (
         <ErrorPreview error={error} />
       ) : (
         <>
@@ -667,7 +667,7 @@ function ErrorPreview({
   error,
 }: {
   headline?: string
-  error?: Error & { detail: string }
+  error: Error & { detail: string }
 }): JSX.Element {
   const [isShowing, setIsShowing] = useState(false)
 
@@ -714,7 +714,7 @@ function ErrorPreview({
                     {headline}
                   </h4>
                 )}
-                <p className="text-xs">{error?.detail ?? error?.message}</p>
+                <p className="text-xs">{error.detail ?? error.message}</p>
               </div>
             </Popover.Panel>
           </Transition>
