@@ -365,7 +365,7 @@ class TerminalConsole(Console):
 
     def _prompt_promote(self, plan: Plan) -> None:
         if self._confirm(
-            f"Apply - Logical Update",
+            f"Apply - Virtual Update",
         ):
             plan.apply()
 
@@ -506,7 +506,7 @@ class NotebookMagicConsole(TerminalConsole):
         import ipywidgets as widgets
 
         button = widgets.Button(
-            description="Apply - Logical Update",
+            description="Apply - Virtual Update",
             disabled=False,
             button_style="success",
             # Auto will make the button really large.

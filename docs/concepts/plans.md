@@ -41,15 +41,15 @@ When a plan is applied to an environment, that environment gets associated with 
 
 *Each model variant gets its own physical table while environments only contain references to these tables.*
 
-This approach allows SQLMesh to ensure complete isolation between environments, while allowing it to share physical data assets between environments when appropriate and safe to do so. Additionally, since each model change is captured in a separate physical table, reverting to a previous version becomes a simple and quick operation (refer to [logical updates](#logical-updates)) as long as its physical table hasn't been garbage collected by the janitor process. SQLMesh makes it really hard to accidentally and irreversibly break things.
+This unique approach to understanding and applying changes is what enables SQLMesh's Virtual Data Mart technology. This technology allows SQLMesh to ensure complete isolation between environments, while allowing it to share physical data assets between environments when appropriate and safe to do so. Additionally, since each model change is captured in a separate physical table, reverting to a previous version becomes a simple and quick operation (refer to [Virtual Update](#virtual-update)) as long as its physical table hasn't been garbage collected by the janitor process. SQLMesh makes it easy to be correct and really hard to accidentally and irreversibly break things.
 
 ### Backfilling
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
 
 Despite the fact that backfilling happens incrementally, there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
 
-### Logical updates
-Another benefit of the aforementioned approach is that data for a new model version can be fully pre-built while still in a development environment. This means that all changes and their downstream dependencies can be fully previewed before they get promoted to the production environment. Therefore, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as logical. Logical updates impose no additional runtime overhead or cost.
+### Virtual Update
+Another benefit of the aforementioned approach is that data for a new model version can be fully pre-built while still in a development environment. This means that all changes and their downstream dependencies can be fully previewed before they get promoted to the production environment. Therefore, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.
 
 ## Forward-only plans
 Sometimes the runtime cost associated with rebuilding an entire physical table is too high, and outweighs the benefits a separate table provides. This is when a forward-only plan comes in handy.
