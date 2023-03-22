@@ -1,11 +1,13 @@
 # Comparisons
 
+**This documentation is a work in progress.**
+
 There are many tools and frameworks in the data ecosystem. This page tries to make sense of it all.
 
 ## dbt
 [dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fanstastic tool, it has trouble scaling with data and organizational size.
 
-SQLMesh aims to be dbt format compatible. Importing existing dbt projects with minor changes is currently supported in alpha status.
+SQLMesh aims to be dbt format compatible. Importing existing dbt projects with minor changes is in development.
 
 ### Feature Comparisons
 | Feature                           | dbt | SQLMesh
@@ -74,7 +76,7 @@ WHERE d.ds BETWEEN @start_ds AND @end_ds
 #### Data leakage
 dbt does not enforce that the data inserted into the incremental table should be there. This can lead to problems or consistency issues such as late arriving data overriding past partitions. SQLMesh wraps all queries under the hood in a subquery with a time filter to enforce that the data inserted for a particular batch is as expected.
 
-dbt also only supports the 'insert/overwrite' incremental load pattern for systems that natively support it. SQLMesh enables 'insert/overwrite' on any system because it is the most robust way to do incremental pipelines. 'Append' pipelines are extremely dangerous due data leakage / duplicates.
+dbt also only supports the 'insert/overwrite' incremental load pattern for systems that natively support it. SQLMesh enables 'insert/overwrite' on any system because it is the most robust way to do incremental pipelines. 'Append' pipelines risk data accuracy in the variety of scenarios where your pipelines may run more than once for a given date.
 
 
 ```sql
@@ -112,6 +114,3 @@ SQLMesh stores each date interval a model has been run with so that it knows exa
 The subqueries that look for MAX(date) could have a performance impact on the query. SQLMesh is able to avoid these extra subqueries.
 
 Additionally, dbt expects an incremental model to be able to fully refresh the first time it runs. For some large scale data sets, this is cost prohibitive or infeasible. SQLMesh is able to [batch](../concepts/models/overview#batch_size) up backfills into more manageable chunks.
-
-### SQL unaware
-dbt does not parse or understand SQL. It relies heavily on Jinja which is basically just string manipulation. Syntax errors are difficult to debug and only discovered at runtime.
