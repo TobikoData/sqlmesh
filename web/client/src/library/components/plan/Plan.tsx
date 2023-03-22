@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   debounceAsync,
   includes,
@@ -60,6 +60,7 @@ function Plan({
     restate_models,
     hasChanges,
     hasBackfills,
+    hasVirtualUpdate,
     create_from,
     change_categorization,
   } = usePlan()
@@ -69,6 +70,8 @@ function Plan({
   const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
+
+  const elTaskProgress = useRef<HTMLDivElement>(null)
 
   const [isPlanRan, seIsPlanRan] = useState(false)
   const [error, setError] = useState<Error>()
@@ -207,7 +210,7 @@ function Plan({
     if (isFalse(isPlanRan)) {
       setPlanAction(EnumPlanAction.Run)
     } else if (
-      isFalse(hasChanges || hasBackfills) ||
+      (isFalse(hasChanges || hasBackfills) && isFalse(hasVirtualUpdate)) ||
       includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)
     ) {
       setPlanAction(EnumPlanAction.Done)
@@ -289,7 +292,7 @@ function Plan({
       throwOnError: true,
     })
       .then(({ data }) => {
-        if (data?.type === ApplyType.logical) {
+        if (data?.type === ApplyType.virtual) {
           setPlanState(EnumPlanState.Finished)
         }
       })
@@ -301,6 +304,13 @@ function Plan({
           setError(error)
           reset()
         }
+      })
+      .finally(() => {
+        console.log({ elTaskProgress })
+        elTaskProgress?.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
       })
   }
 
@@ -354,7 +364,7 @@ function Plan({
       <Plan.Header error={error} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <Plan.Wizard />
+        <Plan.Wizard setRefTaskProgress={elTaskProgress} />
       </div>
       <Divider />
       <Plan.Actions

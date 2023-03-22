@@ -37,6 +37,7 @@ export default function PlanActions({
     no_auto_categorization,
     forward_only,
     restate_models,
+    hasVirtualUpdate,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -117,7 +118,11 @@ export default function PlanActions({
             {getActionName(
               planAction,
               [EnumPlanAction.Applying],
-              shouldApplyWithBackfill ? 'Apply And Backfill' : 'Apply',
+              shouldApplyWithBackfill
+                ? 'Apply And Backfill'
+                : hasVirtualUpdate
+                ? 'Apply Virtual Update'
+                : 'Apply',
             )}
           </Button>
         )}

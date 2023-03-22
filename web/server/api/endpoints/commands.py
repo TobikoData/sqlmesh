@@ -72,7 +72,9 @@ async def apply(
     if not plan.requires_backfill or plan_options.skip_backfill:
         await request.app.state.task
 
-    return models.ApplyResponse(type="backfill" if plan.requires_backfill else "logical")
+    return models.ApplyResponse(
+        type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
+    )
 
 
 @router.post("/evaluate")
