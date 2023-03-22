@@ -183,7 +183,7 @@ class ModelConfig(BaseModelConfig):
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
             optional_kwargs["partitioned_by"] = self.partitioned_by
-        for field in ["cron", "batch_size"]:
+        for field in ("cron", "batch_size"):
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val

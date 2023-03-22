@@ -201,7 +201,7 @@ class BaseModelConfig(GeneralConfig):
         )
 
         optional_kwargs: t.Dict[str, t.Any] = {}
-        for field in ["description", "owner", "stamp", "storage_format"]:
+        for field in ("description", "owner", "stamp", "storage_format"):
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val
