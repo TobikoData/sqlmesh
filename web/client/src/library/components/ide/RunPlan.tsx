@@ -63,7 +63,9 @@ export default function RunPlan({
   const {
     refetch: planRun,
     data: plan,
+    error,
     isLoading,
+    isError,
   } = useApiPlanRun(environment.name, {
     planOptions: {
       skip_tests: true,
@@ -154,6 +156,7 @@ export default function RunPlan({
               : 'rounded-none rounded-l-lg border-r',
           )}
           disabled={
+            isError ||
             isLoading ||
             planAction !== EnumPlanAction.None ||
             planState === EnumPlanState.Applying ||
@@ -197,6 +200,7 @@ export default function RunPlan({
             className="rounded-none rounded-r-lg border-l border-secondary-500 mx-0"
             environment={environment}
             disabled={
+              isError ||
               isLoading ||
               planAction !== EnumPlanAction.None ||
               planState === EnumPlanState.Applying ||
@@ -210,9 +214,12 @@ export default function RunPlan({
           environment={environment}
           plan={plan}
           isLoading={isLoading}
+          isError={isError}
+          error={error as Error & { detail: string }}
           hasChanges={hasChanges}
         />
       )}
+
       <ModalConfirmation
         show={showConfirmation}
         onClose={() => undefined}
@@ -302,78 +309,88 @@ function PlanChanges({
   hasChanges,
   environment,
   plan,
+  isError,
+  error,
 }: {
   environment: ModelEnvironment
   plan?: ContextEnvironment
   isLoading: boolean
   hasChanges: boolean
+  isError: boolean
+  error?: Error & { detail: string }
 }): JSX.Element {
   return (
     <span className="flex align-center pr-2 h-full w-full">
-      {environment.isInitial && (
-        <span
-          title="New"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full border border-success-500 bg-success-100 text-success-600 text-xs text-center font-bold"
-        >
-          New
-        </span>
+      {isError && error != null ? (
+        <ErrorPreview error={error} />
+      ) : (
+        <>
+          {environment.isInitial && (
+            <span
+              title="New"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full border border-success-500 bg-success-100 text-success-600 text-xs text-center font-bold"
+            >
+              New
+            </span>
+          )}
+          {isLoading && (
+            <span className="flex items-center ml-2">
+              <Spinner className="w-3 h-3 mr-1" />
+              <span className="inline-block text-xs text-gray-500">
+                Checking...
+              </span>
+            </span>
+          )}
+          {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
+            <span
+              title="Latest"
+              className="block ml-1 px-2 first-child:ml-0 rounded-full border bg-gray-200 text-gray-900 text-xs text-center"
+            >
+              <span>Latest</span>
+            </span>
+          )}
+          {plan?.changes?.added != null &&
+            isArrayNotEmpty(plan?.changes?.added) && (
+              <ChangesPreview
+                headline="Added Models"
+                type={EnumPlanChangeType.Add}
+                changes={plan.changes.added}
+              />
+            )}
+          {plan?.changes?.modified?.direct != null &&
+            isArrayNotEmpty(plan?.changes?.modified.direct) && (
+              <ChangesPreview
+                headline="Direct Changes"
+                type={EnumPlanChangeType.Direct}
+                changes={
+                  plan.changes.modified.direct.map(
+                    ({ model_name }) => model_name,
+                  ) as string[]
+                }
+              />
+            )}
+          {plan?.changes?.modified?.indirect != null &&
+            isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+              <ChangesPreview
+                headline="Indirectly Modified"
+                type={EnumPlanChangeType.Indirect}
+                changes={
+                  plan.changes.modified.indirect.map(
+                    ({ model_name }) => model_name,
+                  ) as string[]
+                }
+              />
+            )}
+          {plan?.changes?.removed != null &&
+            isArrayNotEmpty(plan?.changes?.removed) && (
+              <ChangesPreview
+                headline="Removed Models"
+                type={EnumPlanChangeType.Remove}
+                changes={plan.changes.removed}
+              />
+            )}
+        </>
       )}
-      {isLoading && (
-        <span className="flex items-center ml-2">
-          <Spinner className="w-3 h-3 mr-1" />
-          <span className="inline-block text-xs text-gray-500">
-            Checking...
-          </span>
-        </span>
-      )}
-      {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-        <span
-          title="Latest"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full border bg-gray-200 text-gray-900 text-xs text-center"
-        >
-          <span>Latest</span>
-        </span>
-      )}
-      {plan?.changes?.added != null &&
-        isArrayNotEmpty(plan?.changes?.added) && (
-          <ChangesPreview
-            headline="Added Models"
-            type={EnumPlanChangeType.Add}
-            changes={plan.changes.added}
-          />
-        )}
-      {plan?.changes?.modified?.direct != null &&
-        isArrayNotEmpty(plan?.changes?.modified.direct) && (
-          <ChangesPreview
-            headline="Direct Changes"
-            type={EnumPlanChangeType.Direct}
-            changes={
-              plan.changes.modified.direct.map(
-                ({ model_name }) => model_name,
-              ) as string[]
-            }
-          />
-        )}
-      {plan?.changes?.modified?.indirect != null &&
-        isArrayNotEmpty(plan?.changes?.modified.indirect) && (
-          <ChangesPreview
-            headline="Indirectly Modified"
-            type={EnumPlanChangeType.Indirect}
-            changes={
-              plan.changes.modified.indirect.map(
-                ci => ci.model_name,
-              ) as string[]
-            }
-          />
-        )}
-      {plan?.changes?.removed != null &&
-        isArrayNotEmpty(plan?.changes?.removed) && (
-          <ChangesPreview
-            headline="Removed Models"
-            type={EnumPlanChangeType.Remove}
-            changes={plan.changes.removed}
-          />
-        )}
     </span>
   )
 }
@@ -602,7 +619,7 @@ function ChangesPreview({
         <>
           <span
             className={clsx(
-              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-gray-100 cursor-default border border-inherit',
+              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-gray-100 cursor-default border border-inherit cursor-pointer',
               type === EnumPlanChangeType.Add &&
                 'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
@@ -637,6 +654,68 @@ function ChangesPreview({
                   changes={changes}
                 />
               </PlanChangePreview>
+            </Popover.Panel>
+          </Transition>
+        </>
+      )}
+    </Popover>
+  )
+}
+
+function ErrorPreview({
+  headline,
+  error,
+}: {
+  headline?: string
+  error: Error & { detail: string }
+}): JSX.Element {
+  const [isShowing, setIsShowing] = useState(false)
+
+  return (
+    <Popover
+      onMouseEnter={() => {
+        setIsShowing(true)
+      }}
+      onMouseLeave={() => {
+        setIsShowing(false)
+      }}
+      className="relative flex"
+    >
+      {() => (
+        <>
+          <span
+            title="Latest"
+            className="block ml-1 px-2 first-child:ml-0 rounded-full border border-danger-500 bg-danger-500 text-gray-100 text-xs text-center cursor-pointer"
+          >
+            <span>Error</span>
+          </span>
+          <Transition
+            show={isShowing}
+            as={Fragment}
+            enter="transition ease-out duration-200"
+            enterFrom="opacity-0 translate-y-1"
+            enterTo="opacity-100 translate-y-0"
+            leave="transition ease-in duration-150"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-1"
+          >
+            <Popover.Panel className="absolute right-0 z-10 mt-8 transform flex min-w-[10rem] ">
+              <div
+                className={clsx(
+                  'flex flex-col rounded-md p-4 bg-danger-100 w-full',
+                )}
+              >
+                {headline != null && (
+                  <h4
+                    className={clsx(
+                      'mb-2 font-bold whitespace-nowrap text-danger-700',
+                    )}
+                  >
+                    {headline}
+                  </h4>
+                )}
+                <p className="text-xs">{error.detail ?? error.message}</p>
+              </div>
             </Popover.Panel>
           </Transition>
         </>

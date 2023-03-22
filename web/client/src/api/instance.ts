@@ -70,7 +70,7 @@ export async function fetchAPI<T = any, B extends object = any>(
           return { ok: false, detail: 'Empty response' }
         if (response.status >= 500) throw new Error(response.statusText)
         if (response.status >= 400)
-          throw new Error({ ...(await response.json()).detail })
+          throw new Error({ ...(await response.json()) }.detail)
         if (response.status === 204) return { ok: true }
 
         const isEventStream = headerContentType.includes('text/event-stream')
