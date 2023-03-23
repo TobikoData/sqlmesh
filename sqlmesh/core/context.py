@@ -642,7 +642,7 @@ class Context(BaseContext):
         if not no_auto_categorization and not forward_only:
             # Attempt to automatically determine and assign change categories.
             for new, old in plan.context_diff.modified_snapshots.values():
-                if plan.is_new_snapshot(new):
+                if new in plan.directly_modified:
                     change_category = categorize_change(
                         new, old, config=self.config.auto_categorize_changes
                     )
