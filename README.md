@@ -1,5 +1,7 @@
 # SQLMesh
 
+![SQLMesh logo](sqlmesh.jpg)
+
 SQLMesh is a DataOps framework that brings the best practices of DevOps to data teams. It enables data scientists, analysts, and engineers to efficiently run and deploy data transformations written in SQL or Python.
 
 For more infromation, check out the [website](https://sqlmesh.com) and [documentation](https://tobikodata-inc-sqlmesh.readthedocs-hosted.com/en/latest/).
