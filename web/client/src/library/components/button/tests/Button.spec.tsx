@@ -1,8 +1,15 @@
 import React from 'react'
 import { vi } from 'vitest'
-import { render, fireEvent , renderHook } from '../../../../tests/utils'
+import { render, fireEvent, renderHook } from '../../../../tests/utils'
 import { EnumSize, EnumVariant } from '../../../../types/enum'
-import { Button, makeButton, VARIANT, SHAPE, SIZE, EnumButtonShape } from '../Button'
+import {
+  Button,
+  makeButton,
+  VARIANT,
+  SHAPE,
+  SIZE,
+  EnumButtonShape,
+} from '../Button'
 
 describe('Button', () => {
   test('renders with default variant, shape, and size', () => {
@@ -44,9 +51,7 @@ describe('Button', () => {
 describe('ButtonMenu', () => {
   test('renders with default variant, shape, and size', () => {
     const ButtonMenu = createButton()
-    const { getByText } = render(
-        <ButtonMenu>Click me</ButtonMenu>
-    )
+    const { getByText } = render(<ButtonMenu>Click me</ButtonMenu>)
     const button = getByText('Click me')
 
     expect(button).toHaveClass(VARIANT.get(EnumVariant.Primary) as string)
@@ -63,10 +68,9 @@ describe('ButtonMenu', () => {
         size={EnumSize.sm}
       >
         Click me
-      </ButtonMenu>
+      </ButtonMenu>,
     )
     const button = getByText('Click me')
-
 
     expect(button).toHaveClass(VARIANT.get(EnumVariant.Secondary) as string)
     expect(button).toHaveClass(SHAPE.get(EnumButtonShape.Square) as string)
@@ -76,7 +80,9 @@ describe('ButtonMenu', () => {
   test('calls onClick when clicked', () => {
     const ButtonMenu = createButton()
     const onClick = vi.fn()
-    const { getByText } = render(<ButtonMenu onClick={onClick}>Click me</ButtonMenu>)
+    const { getByText } = render(
+      <ButtonMenu onClick={onClick}>Click me</ButtonMenu>,
+    )
     const button = getByText('Click me')
 
     fireEvent.click(button)
@@ -86,16 +92,27 @@ describe('ButtonMenu', () => {
   test('get ref from component', () => {
     const ButtonMenu = createButton()
     const { result } = renderHook(() => React.useRef<HTMLDivElement>(null))
-    const { getByText } =  render(<ButtonMenu ref={result.current}>Click me</ButtonMenu>)
+    const { getByText } = render(
+      <ButtonMenu ref={result.current}>Click me</ButtonMenu>,
+    )
     const button = getByText('Click me')
 
     expect(result.current.current).toBe(button)
   })
 })
 
-
 function createButton(): any {
-  return makeButton(React.forwardRef<any, any>(function Button({ children, ...props }, ref) {
-    return <div {...props} role="button" ref={ref}>{children}</div>
-  }));
+  return makeButton(
+    React.forwardRef<any, any>(function Button({ children, ...props }, ref) {
+      return (
+        <div
+          {...props}
+          role="button"
+          ref={ref}
+        >
+          {children}
+        </div>
+      )
+    }),
+  )
 }

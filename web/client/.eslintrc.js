@@ -17,15 +17,16 @@ module.exports = {
   rules: {
     'react/jsx-uses-react': OFF,
     'react/react-in-jsx-scope': OFF,
-    "no-use-before-define": OFF,
-    "@typescript-eslint/no-use-before-define": [
-        ERROR,
-        {
-          "variables": true,
-          "functions": false,
-          "classes": false,
-          "allowNamedExports": true
-    }],
+    'no-use-before-define': OFF,
+    '@typescript-eslint/no-use-before-define': [
+      ERROR,
+      {
+        variables: true,
+        functions: false,
+        classes: false,
+        allowNamedExports: true,
+      },
+    ],
     '@typescript-eslint/no-dynamic-delete': OFF,
     '@typescript-eslint/naming-convention': [
       ERROR,

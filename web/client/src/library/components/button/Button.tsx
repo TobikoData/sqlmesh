@@ -99,15 +99,11 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg border-4`],
 ])
 
-const Button = makeButton(React.forwardRef<HTMLButtonElement, PropsButton>(ButtonPlain))
+const Button = makeButton(
+  React.forwardRef<HTMLButtonElement, PropsButton>(ButtonPlain),
+)
 
-export {
-  VARIANT,
-  SHAPE,
-  SIZE,
-  Button,
-  makeButton
-}
+export { VARIANT, SHAPE, SIZE, Button, makeButton }
 
 function ButtonPlain(
   {
@@ -118,7 +114,7 @@ function ButtonPlain(
     autoFocus,
     tabIndex,
     onClick,
-    className
+    className,
   }: PropsButton,
   ref?: React.ForwardedRef<HTMLButtonElement>,
 ): JSX.Element {
@@ -139,8 +135,10 @@ function ButtonPlain(
 }
 
 function makeButton<TElement = HTMLButtonElement>(
-  Component: React.ElementType
-): React.ForwardRefExoticComponent<PropsButton & React.RefAttributes<TElement>> {
+  Component: React.ElementType,
+): React.ForwardRefExoticComponent<
+  PropsButton & React.RefAttributes<TElement>
+> {
   return React.forwardRef<TElement, PropsButton>(function Wrapper(
     {
       type = 'button',
@@ -155,7 +153,7 @@ function makeButton<TElement = HTMLButtonElement>(
       tabIndex,
       onClick,
     }: PropsButton,
-    ref?: React.ForwardedRef<TElement>
+    ref?: React.ForwardedRef<TElement>,
   ): JSX.Element {
     return (
       <Component
@@ -178,7 +176,7 @@ function makeButton<TElement = HTMLButtonElement>(
           className,
         )}
       >
-          {children}
+        {children}
       </Component>
     )
   })
