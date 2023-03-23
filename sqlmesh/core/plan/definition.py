@@ -106,7 +106,7 @@ class Plan:
         self._ensure_no_forward_only_new_models()
 
         categorized_snapshots = self._categorize_snapshots()
-        self.added_and_directly_modified = categorized_snapshots[0]
+        self.directly_modified = categorized_snapshots[0]
         self.indirectly_modified = categorized_snapshots[1]
 
         self._categorized: t.Optional[t.List[Snapshot]] = None
@@ -116,14 +116,14 @@ class Plan:
     def categorized(self) -> t.List[Snapshot]:
         """Returns the already categorized snapshots."""
         if self._categorized is None:
-            self._categorized = [s for s in self.added_and_directly_modified if s.version]
+            self._categorized = [s for s in self.directly_modified if s.version]
         return self._categorized
 
     @property
     def uncategorized(self) -> t.List[Snapshot]:
         """Returns the uncategorized snapshots."""
         if self._uncategorized is None:
-            self._uncategorized = [s for s in self.added_and_directly_modified if not s.version]
+            self._uncategorized = [s for s in self.directly_modified if not s.version]
         return self._uncategorized
 
     @property
@@ -253,7 +253,7 @@ class Plan:
 
             # If any other snapshot specified breaking this child, then that child
             # needs to be backfilled as a part of the plan.
-            for upstream in self.added_and_directly_modified:
+            for upstream in self.directly_modified:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
@@ -366,7 +366,7 @@ class Plan:
             snapshots while the second element contains a mapping of indirectly modified snapshots.
         """
         queue = deque(self._dag.sorted())
-        added_and_directly_modified = []
+        directly_modified = []
         all_indirectly_modified = set()
 
         while queue:
@@ -395,7 +395,7 @@ class Plan:
                         snapshot.change_category = SnapshotChangeCategory.NON_BREAKING
 
                 if self.context_diff.directly_modified(model_name):
-                    added_and_directly_modified.append(snapshot)
+                    directly_modified.append(snapshot)
                 else:
                     all_indirectly_modified.add(model_name)
 
@@ -412,17 +412,17 @@ class Plan:
             elif model_name in self.context_diff.added:
                 if self.is_new_snapshot(snapshot):
                     snapshot.set_version()
-                added_and_directly_modified.append(snapshot)
+                directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
 
-        for snapshot in added_and_directly_modified:
+        for snapshot in directly_modified:
             for downstream in self._dag.downstream(snapshot.name):
                 if downstream in all_indirectly_modified:
                     indirectly_modified[snapshot.name].add(downstream)
 
         return (
-            added_and_directly_modified,
+            directly_modified,
             indirectly_modified,
         )
 

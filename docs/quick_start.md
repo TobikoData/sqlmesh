@@ -45,20 +45,23 @@ To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
+New environment `prod` will be created from `prod`
 Summary of differences against `prod`:
 └── Added Models:
     ├── sqlmesh_example.example_incremental_model
     └── sqlmesh_example.example_full_model
 Models needing backfill (missing dates):
-├── sqlmesh_example.example_incremental_model: (2020-01-01, 2022-12-29)
-└── sqlmesh_example.example_full_model: (2022-12-29, 2022-12-29)
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
+├── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-03-22)
+└── sqlmesh_example.example_full_model: (2023-03-22, 2023-03-22)
 Apply - Backfill Tables [y/n]: y
+sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+       sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
 All model batches have been executed successfully
 
-sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
-       sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+The target environment has been updated successfully
 ```
 
 You've now created a new production environment with all of history backfilled.
@@ -73,18 +76,19 @@ Although the summary of changes is similar, by showing that you've added two new
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
-Summary of differences against `dev`:
-└── Added Models:
-    ├── sqlmesh_example.example_incremental_model
-    └── sqlmesh_example.example_full_model
+New environment `dev` will be created from `prod`
 Apply - Virtual Update [y/n]: y
+Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+The target environment has been updated successfully
+
 
 Virtual Update executed successfully
 ```
 
 ## 3. Make your first update
 ### 3.1 Edit the configuration
-Let's add a new column. Open the `models/example_incremental_model.sq` file and add `#!sql 1 AS new_column` under `item_id` as follows:
+Let's add a new column. Open the `models/example_incremental_model.sql` file and add `#!sql 'z' AS new_column` under `item_id` as follows:
 
 ```bash
 diff --git a/models/example_incremental_model.sql b/models/example_incremental_model.sql
@@ -95,7 +99,7 @@ index e1407e6..8154da2 100644
  SELECT
      id,
      item_id,
-+    1 AS new_column,
++    'z' AS new_column,
      ds,
  FROM
      (VALUES

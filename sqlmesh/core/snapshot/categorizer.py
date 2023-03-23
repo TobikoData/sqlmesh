@@ -4,6 +4,7 @@ import typing as t
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.snapshot.definition import Snapshot, SnapshotChangeCategory
+from sqlmesh.utils.errors import SQLMeshError
 
 
 def categorize_change(
@@ -35,8 +36,17 @@ def categorize_change(
         SnapshotChangeCategory.BREAKING if mode == AutoCategorizationMode.FULL else None
     )
 
-    if type(new_model) != type(old_model) or new.fingerprint.data_hash == old.fingerprint.data_hash:
+    if type(new_model) != type(old_model):
         return default_category
+
+    if new.fingerprint.data_hash == old.fingerprint.data_hash:
+        if new.fingerprint.metadata_hash == old.fingerprint.metadata_hash:
+            raise SQLMeshError(
+                f"{new} is unmodified or indirectly modified and should not be categorized"
+            )
+        if new.fingerprint.parent_data_hash == old.fingerprint.parent_data_hash:
+            return SnapshotChangeCategory.NON_BREAKING
+        return None
 
     is_breaking_change = new_model.is_breaking_change(old_model)
     if is_breaking_change is None:

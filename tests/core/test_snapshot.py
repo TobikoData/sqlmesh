@@ -23,6 +23,7 @@ from sqlmesh.core.snapshot import (
     fingerprint_from_model,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 
 
@@ -449,7 +450,8 @@ def test_categorize_change_sql(make_snapshot):
     )
 
     # No change.
-    assert categorize_change(old_snapshot, old_snapshot, config=config) is None
+    with pytest.raises(SQLMeshError):
+        categorize_change(old_snapshot, old_snapshot, config=config)
 
     # A projection has been removed.
     assert (
@@ -563,6 +565,16 @@ def test_categorize_change_sql(make_snapshot):
             config=config,
         )
         is None
+    )
+
+    # A metadata change occurred
+    assert (
+        categorize_change(
+            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds"), owner="foo")),
+            old=old_snapshot,
+            config=config,
+        )
+        is SnapshotChangeCategory.NON_BREAKING
     )
 
 
