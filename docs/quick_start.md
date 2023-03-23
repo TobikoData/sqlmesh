@@ -211,23 +211,23 @@ Summary of differences against `prod`:
  SELECT
    id,
    item_id,
-+  1 AS new_column,
++  'z' AS new_column,
    ds
  FROM (VALUES
    (1, 1, '2020-01-01'),
 Directly Modified: sqlmesh_example.example_incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example.example_full_model
-Models needing backfill (missing dates):
-└── sqlmesh_example.example_incremental_model: (2022-01-06, 2022-12-29)
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
-Apply - Backfill Tables [y/n]: y
+Apply - Virtual Update [y/n]: y
+Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
 
-All model batches have been executed successfully
+The target environment has been updated successfully
 
-sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+
+Virtual Update executed successfully
 ```
+
+Notice that there was backfill necessary and only a Virtual Update occurred.
 
 ### 4.3. Validate updates in prod
 Double-check that the data did indeed update in prod by running `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
