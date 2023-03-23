@@ -5,6 +5,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot.expressions import DataType
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import AutoCategorizationMode
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import (
@@ -602,6 +603,25 @@ def test_revert_after_downstream_change(sushi_context: Context):
     )
 
 
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_auto_categorization(sushi_context: Context):
+    environment = "dev"
+    sushi_context.config.auto_categorize_changes.sql = AutoCategorizationMode.FULL
+    initial_add(sushi_context, environment)
+
+    version = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version
+    fingerprint = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint
+
+    model = t.cast(SqlModel, sushi_context.models["sushi.waiters"])
+    sushi_context.upsert_model("sushi.waiters", query=model.query.select("'foo' AS foo"))  # type: ignore
+    apply_to_environment(sushi_context, environment)
+
+    assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].change_category is None
+    assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint != fingerprint
+    assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version == version
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
@@ -615,7 +635,7 @@ def initial_add(context: Context, environment: str):
 def apply_to_environment(
     context: Context,
     environment: str,
-    choice: SnapshotChangeCategory,
+    choice: t.Optional[SnapshotChangeCategory] = None,
     plan_validators: t.Optional[t.Iterable[t.Callable]] = None,
     apply_validators: t.Optional[t.Iterable[t.Callable]] = None,
 ):
@@ -628,7 +648,8 @@ def apply_to_environment(
     )
     plan.set_start(start(context))
 
-    plan_choice(plan, choice)
+    if choice:
+        plan_choice(plan, choice)
     for validator in plan_validators:
         validator(context, plan)
 
