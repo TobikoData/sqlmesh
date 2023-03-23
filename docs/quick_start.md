@@ -129,30 +129,30 @@ Summary of differences against `dev`:
  SELECT
    id,
    item_id,
-+  1 AS new_column,
++  'z' AS new_column,
    ds
  FROM (VALUES
    (1, 1, '2020-01-01'),
-Directly Modified: sqlmesh_example.example_incremental_model
+Directly Modified: sqlmesh_example.example_incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example.example_full_model
-[1] [Breaking] Backfill sqlmesh_example.example_incremental_model and indirectly modified children
-[2] [Non-breaking] Backfill sqlmesh_example.example_incremental_model but not indirectly modified children: 2
 Models needing backfill (missing dates):
-└── sqlmesh_example.example_incremental_model: (2020-01-01, 2022-12-29)
+└── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-03-22)
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 2022-01-05
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
-
+sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
 All model batches have been executed successfully
 
-sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+The target environment has been updated successfully
 ```
 
-Notice that SQLMesh has detected that you've added `new_column`. It also shows you that the downstream model `sqlmesh_example.example_full_model` was indirectly modified, and asks you to classify the changes as `Breaking` or `Non-Breaking`. Because we've only added a new column, this change should be classified as `Non-Breaking`. Enter `2`.
+Notice that SQLMesh has detected that you've added `new_column`. It also shows you that the downstream model `sqlmesh_example.example_full_model` was indirectly modified. SQLMesh semantically understood that your change was additive (added an unused column) and so it was automatically classified as a non-breaking change.
 
-SQLMesh now applies the change to `sqlmesh_example.example_incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.example_full_model`, since `Non-Breaking` change was selected.
+SQLMesh now applies the change to `sqlmesh_example.example_incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.example_full_model`, since it was `non-breaking`.
 
 ### 4.1 Validate updates in dev
 You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_example__dev.example_incremental_model"`:
