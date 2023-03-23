@@ -11,14 +11,14 @@ import { type ContextEnvironmentChanges } from '~/api/client'
 interface PropsTasks {
   environment: ModelEnvironment
   tasks: PlanTasks
+  planState: PlanState
   headline?: string
   updated_at?: string
   changes?: ContextEnvironmentChanges
   showBatches?: boolean
   showProgress?: boolean
   showVirtualUpdate?: boolean
-  planState: PlanState
-  setRefTaskProgress: RefObject<HTMLDivElement>
+  setRefTaskProgress?: RefObject<HTMLDivElement>
 }
 
 export default function TasksProgress({

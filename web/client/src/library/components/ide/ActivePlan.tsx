@@ -6,10 +6,13 @@ import { apiCancelPlanApply } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
   type PlanProgress,
+  type PlanState,
   useStorePlan,
   EnumPlanState,
   EnumPlanAction,
+  EnumPlanApplyType,
 } from '~/context/plan'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
 
 const TasksProgress = lazy(
@@ -47,16 +50,8 @@ export default function ActivePlan({
         <>
           <Popover.Button
             className={clsx(
-              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
-              planState === EnumPlanState.Finished &&
-                'bg-success-500 text-white',
-              planState === EnumPlanState.Failed && 'bg-danger-500 text-white',
-              planState === EnumPlanState.Applying &&
-                'bg-secondary-500 text-white',
-              planState !== EnumPlanState.Finished &&
-                planState !== EnumPlanState.Failed &&
-                planState !== EnumPlanState.Applying &&
-                'bg-neutral-100 text-neutral-500',
+              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold text-light',
+              getTriggerBgColor(planState)
             )}
           >
             {plan == null ? 0 : 1}
@@ -77,15 +72,15 @@ export default function ActivePlan({
                   tasks={plan.tasks}
                   updated_at={plan.updated_at}
                   headline="Most Recent Plan"
-                  showBatches={plan.type !== 'virtual'}
-                  showVirtualUpdate={plan.type === 'virtual'}
+                  showBatches={plan.type !== EnumPlanApplyType.Virtual}
+                  showVirtualUpdate={plan.type === EnumPlanApplyType.Virtual}
                   planState={planState}
                 />
                 <div className="my-4 px-4">
                   {planState === EnumPlanState.Applying && (
                     <Button
-                      size="sm"
-                      variant="danger"
+                      size={EnumSize.sm}
+                      variant={EnumVariant.Danger}
                       className="mx-0"
                       onClick={(e: MouseEvent) => {
                         e.stopPropagation()
@@ -104,4 +99,12 @@ export default function ActivePlan({
       )}
     </Popover>
   )
+}
+
+function getTriggerBgColor(planState: PlanState): string {
+  if (planState === EnumPlanState.Finished) return 'bg-success-500'
+  if (planState === EnumPlanState.Failed) return 'bg-danger-500'
+  if (planState === EnumPlanState.Applying) return 'bg-secondary-500'
+
+  return 'bg-neutral-100 text-neutral-500'
 }

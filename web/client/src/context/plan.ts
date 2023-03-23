@@ -22,6 +22,12 @@ export const EnumPlanState = {
   Cancelled: 'cancelled',
 } as const
 
+export const EnumPlanApplyType = {
+  Virtual: 'virtual',
+  Backfill: 'backfill'
+} as const
+
+export type PlanApplyType = KeyOf<typeof EnumPlanApplyType>
 export type PlanState = KeyOf<typeof EnumPlanState>
 export type PlanAction = KeyOf<typeof EnumPlanAction>
 
@@ -43,7 +49,7 @@ export interface PlanProgress {
   total?: number
   completed?: number
   is_completed?: boolean
-  type?: 'virtual' | 'backfill'
+  type?: PlanApplyType
 }
 
 interface PlanStore {

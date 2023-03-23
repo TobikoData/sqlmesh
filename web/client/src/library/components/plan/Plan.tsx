@@ -7,7 +7,7 @@ import {
   toDate,
   toDateFormat,
 } from '~/utils'
-import { EnumPlanState, EnumPlanAction, useStorePlan } from '~/context/plan'
+import { EnumPlanState, EnumPlanAction, useStorePlan, EnumPlanApplyType } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import {
   useApiPlanRun,
@@ -16,7 +16,6 @@ import {
   apiCancelPlanApply,
 } from '~/api'
 import {
-  ApplyType,
   type BodyApplyApiCommandsApplyPostCategories,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
@@ -292,7 +291,7 @@ function Plan({
       throwOnError: true,
     })
       .then(({ data }) => {
-        if (data?.type === ApplyType.virtual) {
+        if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
         }
       })
