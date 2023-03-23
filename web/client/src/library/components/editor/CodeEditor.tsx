@@ -50,7 +50,7 @@ export default function CodeEditor({
       models != null && events(models, files, selectFile),
       models != null && SqlMeshModel(models),
       showSqlSqlMeshDialect &&
-      SqlMeshDialectExtension(models, file, sqlDialectOptions),
+        SqlMeshDialectExtension(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
       theme,
@@ -91,7 +91,7 @@ export default function CodeEditor({
       value={file.content}
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto text-sm"
+      className="w-full h-full overflow-auto text-sm font-mono"
       extensions={extensions}
       onChange={onChange}
     />

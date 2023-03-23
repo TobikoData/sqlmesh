@@ -7,6 +7,7 @@ import typing as t
 from pydantic import BaseModel, validator
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
@@ -70,6 +71,7 @@ class ChangeDirect(BaseModel):
     model_name: str
     diff: str
     indirect: t.List[str] = []
+    change_category: SnapshotChangeCategory
 
 
 class ChangeIndirect(BaseModel):
@@ -100,6 +102,7 @@ class ModelsDiff(BaseModel):
         metadata = set()
 
         for snapshot_name in context_diff.modified_snapshots:
+            current, _ = context_diff.modified_snapshots[snapshot_name]
             if context_diff.directly_modified(snapshot_name):
                 direct.append(
                     ChangeDirect(
@@ -110,6 +113,7 @@ class ModelsDiff(BaseModel):
                             for change in indirect
                             if snapshot_name in change.direct
                         ],
+                        change_category=current.change_category,
                     )
                 )
             elif context_diff.metadata_updated(snapshot_name):

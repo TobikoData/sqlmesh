@@ -31,7 +31,7 @@ import {
   type RenderInputEnd,
   type RenderInputLatest,
   type RenderInputStart,
-  type File
+  type File,
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
@@ -351,13 +351,21 @@ export default function Editor({
 
   // TODO: remove once we have a better way to determine if a file is a model
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
-  const shouldEvaluate = activeFile.isSQLMeshModel && Object.values(formEvaluate).every(Boolean)
-  const sizesActions = isStringEmptyOrNil(activeFile.content)
-    ? [100, 0]
-    : [80, 20]
-  const sizesMain = [tabTableContent, tabTerminalContent].some(Boolean)
-    ? [75, 25]
+  const shouldEvaluate =
+    activeFile.isSQLMeshModel && Object.values(formEvaluate).every(isTrue)
+  const showActionsPane =
+    (activeFile.isSQLMeshModel || activeFile.isLocal) && hasContentActiveFile
+  const sizesActions = [
+    isStringEmptyOrNil(activeFile.content),
+    activeFile.isSQLMeshModel,
+  ].every(isTrue)
+    ? [80, 20]
     : [100, 0]
+  const sizesMain =
+    activeFile.isSQLMeshModel &&
+    [tabTableContent, tabTerminalContent].some(isTrue)
+      ? [75, 25]
+      : [100, 0]
 
   return (
     <SplitPane
@@ -426,7 +434,7 @@ export default function Editor({
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
-            minSize={[320, activeFile.content === '' ? 0 : 240]}
+            minSize={[320, showActionsPane ? 240 : 0]}
             maxSize={[Infinity, 320]}
             snapOffset={0}
             expandToMin={true}
@@ -445,94 +453,105 @@ export default function Editor({
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
                 <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
-                  {isTrue(activeFile.isSQLMeshModel) && formEvaluate.model != null && (
-                    <form className="my-3">
-                      <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
-                        <h3 className="whitespace-nowrap ml-2">Model Name</h3>
-                        <p className="ml-2 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10  text-xs rounded">
-                          {formEvaluate.model}
-                        </p>
-                      </fieldset>
-                      <fieldset className="flex my-3 px-3">
-                        <div className="p-4 bg-warning-10 text-warning-600 rounded-xl">
-                          <p className="text-sm">
-                            Please, fill out all fileds to{' '}
-                            <b>
-                              {activeFile.isSQLMeshModel ? 'evaluate the model' : 'run query'}
-                            </b>
-                            .
+                  {isTrue(activeFile.isSQLMeshModel) &&
+                    formEvaluate.model != null && (
+                      <form className="my-3">
+                        <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
+                          <h3 className="whitespace-nowrap ml-2">Model Name</h3>
+                          <p className="ml-2 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10  text-xs rounded">
+                            {formEvaluate.model}
                           </p>
-                        </div>
-                      </fieldset>
-                      <fieldset className="my-3 px-3">
-                        <Input
-                          className="w-full mx-0"
-                          label="Start Date"
-                          placeholder="02/11/2023"
-                          value={formEvaluate.start}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            e.stopPropagation()
+                        </fieldset>
+                        <fieldset className="flex my-3 px-3">
+                          <div className="p-4 bg-warning-10 text-warning-600 rounded-xl">
+                            <p className="text-sm">
+                              Please, fill out all fileds to{' '}
+                              <b>
+                                {activeFile.isSQLMeshModel
+                                  ? 'evaluate the model'
+                                  : 'run query'}
+                              </b>
+                              .
+                            </p>
+                          </div>
+                        </fieldset>
+                        <fieldset className="my-3 px-3">
+                          <Input
+                            className="w-full mx-0"
+                            label="Start Date"
+                            placeholder="02/11/2023"
+                            value={formEvaluate.start}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              e.stopPropagation()
 
-                            const el = e.target as HTMLInputElement
+                              const el = e.target as HTMLInputElement
 
-                            setFormEvaluate({
-                              ...formEvaluate,
-                              start: el?.value ?? '',
-                            })
-                          }}
-                        />
-                        <Input
-                          className="w-full mx-0"
-                          label="End Date"
-                          placeholder="02/13/2023"
-                          value={formEvaluate.end}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            e.stopPropagation()
+                              setFormEvaluate({
+                                ...formEvaluate,
+                                start: el?.value ?? '',
+                              })
+                            }}
+                          />
+                          <Input
+                            className="w-full mx-0"
+                            label="End Date"
+                            placeholder="02/13/2023"
+                            value={formEvaluate.end}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              e.stopPropagation()
 
-                            const el = e.target as HTMLInputElement
+                              const el = e.target as HTMLInputElement
 
-                            setFormEvaluate({
-                              ...formEvaluate,
-                              end: el?.value ?? '',
-                            })
-                          }}
-                        />
-                        <Input
-                          className="w-full mx-0"
-                          label="Latest Date"
-                          placeholder="02/13/2023"
-                          value={formEvaluate.latest}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            e.stopPropagation()
+                              setFormEvaluate({
+                                ...formEvaluate,
+                                end: el?.value ?? '',
+                              })
+                            }}
+                          />
+                          <Input
+                            className="w-full mx-0"
+                            label="Latest Date"
+                            placeholder="02/13/2023"
+                            value={formEvaluate.latest}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              e.stopPropagation()
 
-                            const el = e.target as HTMLInputElement
+                              const el = e.target as HTMLInputElement
 
-                            setFormEvaluate({
-                              ...formEvaluate,
-                              latest: el?.value ?? '',
-                            })
-                          }}
-                        />
-                        <Input
-                          className="w-full mx-0"
-                          type="number"
-                          label="Limit"
-                          placeholder="1000"
-                          value={formEvaluate.limit}
-                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                            e.stopPropagation()
+                              setFormEvaluate({
+                                ...formEvaluate,
+                                latest: el?.value ?? '',
+                              })
+                            }}
+                          />
+                          <Input
+                            className="w-full mx-0"
+                            type="number"
+                            label="Limit"
+                            placeholder="1000"
+                            value={formEvaluate.limit}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              e.stopPropagation()
 
-                            const el = e.target as HTMLInputElement
+                              const el = e.target as HTMLInputElement
 
-                            setFormEvaluate({
-                              ...formEvaluate,
-                              limit: el?.valueAsNumber ?? formEvaluate.limit,
-                            })
-                          }}
-                        />
-                      </fieldset>
-                    </form>
-                  )}
+                              setFormEvaluate({
+                                ...formEvaluate,
+                                limit: el?.valueAsNumber ?? formEvaluate.limit,
+                              })
+                            }}
+                          />
+                        </fieldset>
+                      </form>
+                    )}
                   {isFalse(activeFile.isSQLMeshModel) && activeFile.isLocal && (
                     <form className="my-3 w-full">
                       <fieldset className="mb-4">
@@ -545,6 +564,18 @@ export default function Editor({
                             console.log(e.target.value)
                           }}
                         />
+                        <Input
+                          className="w-full mx-0"
+                          type="number"
+                          label="Limit"
+                          placeholder="1000"
+                          value={formEvaluate.limit}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
+                            console.log(e.target.value)
+                          }}
+                        />
                       </fieldset>
                     </form>
                   )}
@@ -552,33 +583,34 @@ export default function Editor({
                 <Divider />
                 {hasContentActiveFile && (
                   <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
-                    {isFalse(activeFile.isLocal) && activeFile.isSQLMeshModel && (
-                      <div className="flex w-full justify-between">
-                        <div className="flex">
-                          <Button
-                            size={EnumSize.sm}
-                            variant={EnumVariant.Alternative}
-                            disabled={true}
-                          >
-                            Validate
-                          </Button>
-                        </div>
-                        {isTrue(activeFile.isSQLMeshModel) && (
-                          <Button
-                            size={EnumSize.sm}
-                            variant={EnumVariant.Secondary}
-                            disabled={isFalse(shouldEvaluate)}
-                            onClick={e => {
-                              e.stopPropagation()
+                    {isFalse(activeFile.isLocal) &&
+                      activeFile.isSQLMeshModel && (
+                        <div className="flex w-full justify-between">
+                          <div className="flex">
+                            <Button
+                              size={EnumSize.sm}
+                              variant={EnumVariant.Alternative}
+                              disabled={true}
+                            >
+                              Validate
+                            </Button>
+                          </div>
+                          {isTrue(activeFile.isSQLMeshModel) && (
+                            <Button
+                              size={EnumSize.sm}
+                              variant={EnumVariant.Secondary}
+                              disabled={isFalse(shouldEvaluate)}
+                              onClick={e => {
+                                e.stopPropagation()
 
-                              evaluateModel()
-                            }}
-                          >
-                            Evaluate
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                                evaluateModel()
+                              }}
+                            >
+                              Evaluate
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     {isFalse(activeFile.isSQLMeshModel) &&
                       activeFile.extension === '.sql' &&
                       activeFile.content !== '' && (
@@ -721,7 +753,6 @@ function EditorFooter({
     </div>
   )
 }
-
 
 type TableCellValue = number | string | null
 type TableRows = Array<Record<string, TableCellValue>>
