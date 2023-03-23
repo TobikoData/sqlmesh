@@ -24,6 +24,8 @@ import {
   applyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
+  getModelsApiModelsGet,
+  type Models,
 } from './client'
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
@@ -42,6 +44,15 @@ export function useApiFileByPath(path?: string): UseQueryResult<File> {
       (await getFileApiFilesPathGet(path, { signal })),
     enabled: false,
     cacheTime: 0,
+  })
+}
+
+export function useApiModels(): UseQueryResult<Models> {
+  return useQuery({
+    queryKey: ['/api/models'],
+    queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
+    cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -160,4 +171,8 @@ export function apiCancelGetEnvironments(client: QueryClient): void {
 
 export function apiCancelFiles(client: QueryClient): void {
   void client.cancelQueries({ queryKey: ['/api/files'] })
+}
+
+export function apiCancelModels(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/models'] })
 }
