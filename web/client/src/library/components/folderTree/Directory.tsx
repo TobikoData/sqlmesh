@@ -281,9 +281,9 @@ export default function Directory({
                     className={clsx(
                       `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
                       directory.isCollapsed &&
-                        'text-neutral-500 dark:text-neutral-100',
+                      'text-neutral-500 dark:text-neutral-100',
                       directory.isExpanded &&
-                        'text-secondary-500 dark:text-primary-500',
+                      'text-secondary-500 dark:text-primary-500',
                     )}
                   />
                   <DocumentPlusIcon

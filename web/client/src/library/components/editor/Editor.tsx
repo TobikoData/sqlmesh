@@ -22,16 +22,16 @@ import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
 import {
   evaluateApiCommandsEvaluatePost,
-  fetchdfApiCommandsFetchdfPost,
-  type File,
-  renderApiCommandsRenderPost,
-  type Model,
   type EvaluateInputEnd,
   type EvaluateInputLatest,
   type EvaluateInputStart,
+  fetchdfApiCommandsFetchdfPost,
+  type Model,
+  renderApiCommandsRenderPost,
   type RenderInputEnd,
   type RenderInputLatest,
   type RenderInputStart,
+  type File
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
@@ -52,11 +52,9 @@ import Input from '../input/Input'
 import { type Table } from 'apache-arrow'
 import { type ResponseWithDetail } from '~/api/instance'
 import { type ModelEnvironment } from '~/models/environment'
-import { dracula, tomorrow } from 'thememirror'
-import { EnumColorScheme, useColorScheme } from '~/context/theme'
 import CodeEditor from './CodeEditor'
-import { sqlglotWorker } from './workers'
 import { type PropsComponent } from '~/main'
+import { sqlglotWorker } from './workers'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -133,11 +131,9 @@ export default function Editor({
       skip_tests: true,
     },
   })
-
   const { data: fileData, refetch: getFileContent } = useApiFileByPath(
     activeFile.path,
   )
-
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
@@ -157,7 +153,6 @@ export default function Editor({
   const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
-
   const debouncedChange = useMemo(
     () =>
       debounce(
@@ -355,10 +350,8 @@ export default function Editor({
   }
 
   // TODO: remove once we have a better way to determine if a file is a model
-  const isModel = activeFile.path.includes('models/')
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
-  const shouldEvaluate =
-    isModel && Object.values({ ...formEvaluate }).every(Boolean)
+  const shouldEvaluate = activeFile.isSQLMeshModel && Object.values(formEvaluate).every(Boolean)
   const sizesActions = isStringEmptyOrNil(activeFile.content)
     ? [100, 0]
     : [80, 20]
@@ -452,7 +445,7 @@ export default function Editor({
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
                 <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
-                  {isTrue(isModel) && formEvaluate.model != null && (
+                  {isTrue(activeFile.isSQLMeshModel) && formEvaluate.model != null && (
                     <form className="my-3">
                       <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
                         <h3 className="whitespace-nowrap ml-2">Model Name</h3>
@@ -465,7 +458,7 @@ export default function Editor({
                           <p className="text-sm">
                             Please, fill out all fileds to{' '}
                             <b>
-                              {isModel ? 'evaluate the model' : 'run query'}
+                              {activeFile.isSQLMeshModel ? 'evaluate the model' : 'run query'}
                             </b>
                             .
                           </p>
@@ -540,7 +533,7 @@ export default function Editor({
                       </fieldset>
                     </form>
                   )}
-                  {isFalse(isModel) && activeFile.isLocal && (
+                  {isFalse(activeFile.isSQLMeshModel) && activeFile.isLocal && (
                     <form className="my-3 w-full">
                       <fieldset className="mb-4">
                         <Input
@@ -559,7 +552,7 @@ export default function Editor({
                 <Divider />
                 {hasContentActiveFile && (
                   <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
-                    {isFalse(activeFile.isLocal) && isModel && (
+                    {isFalse(activeFile.isLocal) && activeFile.isSQLMeshModel && (
                       <div className="flex w-full justify-between">
                         <div className="flex">
                           <Button
@@ -570,7 +563,7 @@ export default function Editor({
                             Validate
                           </Button>
                         </div>
-                        {isTrue(isModel) && (
+                        {isTrue(activeFile.isSQLMeshModel) && (
                           <Button
                             size={EnumSize.sm}
                             variant={EnumVariant.Secondary}
@@ -586,7 +579,7 @@ export default function Editor({
                         )}
                       </div>
                     )}
-                    {isFalse(isModel) &&
+                    {isFalse(activeFile.isSQLMeshModel) &&
                       activeFile.extension === '.sql' &&
                       activeFile.content !== '' && (
                         <>
@@ -699,9 +692,9 @@ function EditorFooter({
       />
       {activeFile.extension === '.sql' && isArrayNotEmpty(dialects) && (
         <span className="inline-block mr-2">
-          <small className="font-bold text-xs mr-1">Dialect</small>
+          <small className="font-bold text-xs mr-2">Dialect</small>
           <select
-            className="text-xs m-0 px-1 py-[0.125rem] bg-secondary-100 rounded"
+            className="text-xs m-0 px-1 py-[0.125rem] bg-neutral-10 rounded"
             value={dialect}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
               setDialect(e.target.value)
@@ -728,6 +721,7 @@ function EditorFooter({
     </div>
   )
 }
+
 
 type TableCellValue = number | string | null
 type TableRows = Array<Record<string, TableCellValue>>

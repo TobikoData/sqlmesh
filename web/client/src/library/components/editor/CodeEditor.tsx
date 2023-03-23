@@ -15,6 +15,8 @@ import {
   useSqlMeshExtension,
 } from './extensions'
 import { sqlglotWorker } from '~/library/components/editor/workers'
+import { dracula, tomorrow } from 'thememirror'
+import { useColorScheme, EnumColorScheme } from '~/context/theme'
 
 export default function CodeEditor({
   file,
@@ -29,6 +31,9 @@ export default function CodeEditor({
   dialects?: string[]
   onChange: (value: string) => void
 }): JSX.Element {
+  const { mode } = useColorScheme()
+  const theme = mode === EnumColorScheme.Dark ? dracula : tomorrow
+
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
@@ -45,9 +50,10 @@ export default function CodeEditor({
       models != null && events(models, files, selectFile),
       models != null && SqlMeshModel(models),
       showSqlSqlMeshDialect &&
-        SqlMeshDialectExtension(models, file, sqlDialectOptions),
+      SqlMeshDialectExtension(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
+      theme,
     ].filter(Boolean) as Extension[]
   }, [file, models, sqlDialectOptions])
 
@@ -85,7 +91,7 @@ export default function CodeEditor({
       value={file.content}
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto"
+      className="w-full h-full overflow-auto text-sm"
       extensions={extensions}
       onChange={onChange}
     />
