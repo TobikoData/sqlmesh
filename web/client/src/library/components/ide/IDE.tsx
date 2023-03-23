@@ -1,6 +1,6 @@
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import { Editor } from '../editor/Editor'
+import Editor from '../editor/Editor'
 import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
 import { EnumSize, EnumVariant } from '../../../types/enum'
@@ -9,6 +9,8 @@ import {
   useApiEnvironments,
   apiCancelGetEnvironments,
   apiCancelFiles,
+  useApiModels,
+  apiCancelModels,
 } from '../../../api'
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
@@ -21,6 +23,7 @@ import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
 import { Dialog } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
+import { type Model, type ModelsModels } from '~/api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -45,6 +48,7 @@ export function IDE(): JSX.Element {
 
   const [subscribe] = useChannelEvents()
 
+  const { data: dataModels, refetch: getModels } = useApiModels()
   const { data: project, refetch: getFiles } = useApiFiles()
   const { data: contextEnvironemnts, refetch: getEnvironments } =
     useApiEnvironments()
@@ -56,17 +60,23 @@ export function IDE(): JSX.Element {
   const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
     getFiles,
   ])
+  const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
+    getModels,
+  ])
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
 
     void debouncedGetEnvironemnts()
     void debouncedGetFiles()
+    void debouncedGetModels()
 
     return () => {
       debouncedGetEnvironemnts.cancel()
       debouncedGetFiles.cancel()
+      debouncedGetModels.cancel()
 
+      apiCancelModels(client)
       apiCancelFiles(client)
       apiCancelGetEnvironments(client)
 
@@ -132,7 +142,10 @@ export function IDE(): JSX.Element {
           className="flex w-full h-full overflow-hidden"
         >
           <FolderTree project={project} />
-          <Editor environment={environment} />
+          <Editor
+            environment={environment}
+            models={toModels(dataModels?.models)}
+          />
         </SplitPane>
       )}
       <Divider />
@@ -168,4 +181,13 @@ export function IDE(): JSX.Element {
       </Modal>
     </>
   )
+}
+
+function toModels(models: ModelsModels = {}): Map<string, Model> {
+  return Object.values(models).reduce((acc, model) => {
+    acc.set(model.name, model)
+    acc.set(model.path, model)
+
+    return acc
+  }, new Map())
 }

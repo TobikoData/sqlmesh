@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type MouseEvent, useEffect } from 'react'
+import { useState, type MouseEvent, useEffect } from 'react'
 import {
   FolderOpenIcon,
   FolderIcon,
@@ -45,7 +45,7 @@ export default function Directory({
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
 
   useEffect(() => {
-    // Update compoent every time ModelDirectory's state isOpen is changing
+    // Update component every time ModelDirectory's state "isOpen" is changing
     directory.syncStateOpen = setIsOpen
   }, [])
 
@@ -281,9 +281,9 @@ export default function Directory({
                     className={clsx(
                       `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
                       directory.isCollapsed &&
-                        'text-neutral-500 dark:text-neutral-100',
+                      'text-neutral-500 dark:text-neutral-100',
                       directory.isExpanded &&
-                        'text-secondary-500 dark:text-primary-500',
+                      'text-secondary-500 dark:text-primary-500',
                     )}
                   />
                   <DocumentPlusIcon
@@ -310,12 +310,10 @@ export default function Directory({
                   type="text"
                   className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
                   value={newName ?? directory.name}
-                  onInput={(e: FormEvent<HTMLInputElement>) => {
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                     e.stopPropagation()
 
-                    const elInput = e.target as HTMLInputElement
-
-                    setNewName(elInput.value)
+                    setNewName(e.target.value)
                   }}
                 />
                 <div className="flex">

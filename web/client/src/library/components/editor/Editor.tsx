@@ -6,12 +6,6 @@ import {
   type MouseEvent,
 } from 'react'
 import clsx from 'clsx'
-import CodeMirror from '@uiw/react-codemirror'
-import { sql } from '@codemirror/lang-sql'
-import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { type Extension } from '@codemirror/state'
 import {
   useMutationApiSaveFile,
   useApiFileByPath,
@@ -28,13 +22,22 @@ import { useStoreFileTree } from '../../../context/fileTree'
 import { useStoreEditor } from '../../../context/editor'
 import {
   evaluateApiCommandsEvaluatePost,
+  type EvaluateInputEnd,
+  type EvaluateInputLatest,
+  type EvaluateInputStart,
   fetchdfApiCommandsFetchdfPost,
+  type Model,
   renderApiCommandsRenderPost,
+  type RenderInputEnd,
+  type RenderInputLatest,
+  type RenderInputStart,
+  type File
 } from '../../../api/client'
 import Tabs from '../tabs/Tabs'
 import SplitPane from '../splitPane/SplitPane'
 import {
   debounceAsync,
+  isArrayNotEmpty,
   isFalse,
   isNil,
   isObjectLike,
@@ -48,10 +51,10 @@ import './Editor.css'
 import Input from '../input/Input'
 import { type Table } from 'apache-arrow'
 import { type ResponseWithDetail } from '~/api/instance'
-import type { File } from '../../../api/client'
 import { type ModelEnvironment } from '~/models/environment'
-import { dracula, tomorrow } from 'thememirror'
-import { EnumColorScheme, useColorScheme } from '~/context/theme'
+import CodeEditor from './CodeEditor'
+import { type PropsComponent } from '~/main'
+import { sqlglotWorker } from './workers'
 
 export const EnumEditorFileStatus = {
   Edit: 'edit',
@@ -71,13 +74,26 @@ export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
   environment: ModelEnvironment
+  models?: Map<string, Model>
 }
 
 const cache: Record<string, Map<EditorTabs, any>> = {}
 
 const DAY = 24 * 60 * 60 * 1000
 
-export function Editor({ className, environment }: PropsEditor): JSX.Element {
+interface FormEvaluate {
+  model?: string
+  start: EvaluateInputStart | RenderInputStart
+  end: EvaluateInputEnd | RenderInputEnd
+  latest: EvaluateInputLatest | RenderInputLatest
+  limit: number
+}
+
+export default function Editor({
+  className,
+  environment,
+  models,
+}: PropsEditor): JSX.Element {
   const client = useQueryClient()
 
   const activeFile = useStoreFileTree(s => s.activeFile)
@@ -98,13 +114,18 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     EnumEditorFileStatus.Edit,
   )
   const [isSaved, setIsSaved] = useState(true)
-  const [formEvaluate, setFormEvaluate] = useState({
-    model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
+  const [formEvaluate, setFormEvaluate] = useState<FormEvaluate>({
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
     latest: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
+  const [dialects, setDialects] = useState<
+    Array<{ dialect_title: string; dialect_name: string }>
+  >([])
+  const [dialect, setDialect] = useState<string>()
+  const [isValid, setIsValid] = useState(true)
+
   const { refetch: planRun } = useApiPlanRun(environment.name, {
     planOptions: {
       skip_tests: true,
@@ -147,6 +168,34 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     [activeFile],
   )
 
+  const handleSqlGlotWorkerMessage = useCallback(
+    (e: MessageEvent): void => {
+      if (e.data.topic === 'parse') {
+        setIsValid(
+          e.data.payload?.type !== 'error' || activeFile.content === '',
+        )
+      }
+
+      if (e.data.topic === 'dialects') {
+        setDialects(e.data.payload.dialects ?? [])
+        setDialect(e.data.payload.dialect)
+      }
+    },
+    [activeFile],
+  )
+
+  useEffect(() => {
+    sqlglotWorker.postMessage({
+      topic: 'dialects',
+    })
+
+    sqlglotWorker.addEventListener('message', handleSqlGlotWorkerMessage)
+
+    return () => {
+      sqlglotWorker.removeEventListener('message', handleSqlGlotWorkerMessage)
+    }
+  }, [handleSqlGlotWorkerMessage])
+
   useEffect(() => {
     if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
       void debouncedPlanRun()
@@ -182,10 +231,14 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     setTabTableContent(bucket.get(EnumEditorTabs.Table))
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    setFormEvaluate({
-      ...formEvaluate,
-      model: `sushi.${activeFile.name.replace(activeFile.extension, '')}`,
-    })
+    const model = models?.get(activeFile.path)?.name
+
+    if (model != null) {
+      setFormEvaluate(s => ({
+        ...s,
+        model,
+      }))
+    }
   }, [activeFile])
 
   function closeEditorTab(file: ModelFile): void {
@@ -245,16 +298,24 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
     bucket.set(EnumEditorTabs.Terminal, undefined)
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    renderApiCommandsRenderPost(formEvaluate)
-      .then(({ sql }) => {
-        bucket.set(EnumEditorTabs.QueryPreview, sql)
-        setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+    if (formEvaluate?.model != null) {
+      renderApiCommandsRenderPost({
+        ...formEvaluate,
+        model: formEvaluate.model,
       })
-      .catch(console.log)
+        .then(({ sql }) => {
+          bucket.set(EnumEditorTabs.QueryPreview, sql)
+          setTabQueryPreviewContent(bucket.get(EnumEditorTabs.QueryPreview))
+        })
+        .catch(console.log)
 
-    evaluateApiCommandsEvaluatePost(formEvaluate)
-      .then(updateTabs)
-      .catch(console.log)
+      evaluateApiCommandsEvaluatePost({
+        ...formEvaluate,
+        model: formEvaluate.model,
+      })
+        .then(updateTabs)
+        .catch(console.log)
+    }
   }
 
   function updateTabs<T = ResponseWithDetail | Table<any>>(result: T): void {
@@ -289,9 +350,8 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
   }
 
   // TODO: remove once we have a better way to determine if a file is a model
-  const isModel = activeFile.path.includes('models/')
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
-  const shouldEvaluate = isModel && Object.values(formEvaluate).every(Boolean)
+  const shouldEvaluate = activeFile.isSQLMeshModel && Object.values(formEvaluate).every(Boolean)
   const sizesActions = isStringEmptyOrNil(activeFile.content)
     ? [100, 0]
     : [80, 20]
@@ -371,17 +431,21 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
             snapOffset={0}
             expandToMin={true}
           >
-            <div className="flex h-full">
-              <CodeEditor
-                extension={activeFile.extension}
-                value={activeFile.content}
-                onChange={debouncedChange}
-              />
+            <div className="flex flex-col h-full">
+              {models != null && (
+                <CodeEditor
+                  onChange={debouncedChange}
+                  models={models}
+                  file={activeFile}
+                  dialect={dialect}
+                  dialects={dialects.map(d => d.dialect_name)}
+                />
+              )}
             </div>
             <div className="flex flex-col h-full">
               <div className="flex flex-col w-full h-full items-center overflow-hidden">
                 <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
-                  {isTrue(isModel) && (
+                  {isTrue(activeFile.isSQLMeshModel) && formEvaluate.model != null && (
                     <form className="my-3">
                       <fieldset className="flex flex-wrap items-center my-3 px-3 text-sm font-bold">
                         <h3 className="whitespace-nowrap ml-2">Model Name</h3>
@@ -394,7 +458,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                           <p className="text-sm">
                             Please, fill out all fileds to{' '}
                             <b>
-                              {isModel ? 'evaluate the model' : 'run query'}
+                              {activeFile.isSQLMeshModel ? 'evaluate the model' : 'run query'}
                             </b>
                             .
                           </p>
@@ -469,7 +533,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                       </fieldset>
                     </form>
                   )}
-                  {isFalse(isModel) && activeFile.isLocal && (
+                  {isFalse(activeFile.isSQLMeshModel) && activeFile.isLocal && (
                     <form className="my-3 w-full">
                       <fieldset className="mb-4">
                         <Input
@@ -488,7 +552,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                 <Divider />
                 {hasContentActiveFile && (
                   <div className="w-full flex overflow-hidden py-1 px-2 justify-end">
-                    {isFalse(activeFile.isLocal) && isModel && (
+                    {isFalse(activeFile.isLocal) && activeFile.isSQLMeshModel && (
                       <div className="flex w-full justify-between">
                         <div className="flex">
                           <Button
@@ -499,7 +563,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                             Validate
                           </Button>
                         </div>
-                        {isTrue(isModel) && (
+                        {isTrue(activeFile.isSQLMeshModel) && (
                           <Button
                             size={EnumSize.sm}
                             variant={EnumVariant.Secondary}
@@ -515,7 +579,7 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
                         )}
                       </div>
                     )}
-                    {isFalse(isModel) &&
+                    {isFalse(activeFile.isSQLMeshModel) &&
                       activeFile.extension === '.sql' &&
                       activeFile.content !== '' && (
                         <>
@@ -540,40 +604,15 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
         </div>
         <Divider />
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
-          <div className="flex align-center mr-4">
-            <Indicator
-              text="Valid"
-              ok={true}
-            />
-            {!activeFile.isLocal && (
-              <>
-                <Divider
-                  orientation="vertical"
-                  className="h-[12px] mx-3"
-                />
-                <Indicator
-                  text="Saved"
-                  ok={isSaved}
-                />
-              </>
-            )}
-            <Divider
-              orientation="vertical"
-              className="h-[12px] mx-3"
-            />
-            <Indicator
-              text="Status"
-              value={fileStatus}
-            />
-            <Divider
-              orientation="vertical"
-              className="h-[12px] mx-3"
-            />
-            <Indicator
-              text="Language"
-              value={getLanguageByExtension(activeFile.extension)}
-            />
-          </div>
+          <EditorFooter
+            activeFile={activeFile}
+            isSaved={isSaved}
+            fileStatus={fileStatus}
+            dialects={dialects}
+            dialect={dialect}
+            setDialect={setDialect}
+            isValid={isValid}
+          />
         </div>
       </div>
       <Tabs className="overflow-auto scrollbar scrollbar--vertical" />
@@ -581,18 +620,21 @@ export function Editor({ className, environment }: PropsEditor): JSX.Element {
   )
 }
 
+interface PropsIndicator extends PropsComponent {
+  text: string
+  value?: string | number
+  ok?: boolean
+}
+
 function Indicator({
   text,
   value,
   ok = true,
-}: {
-  text: string
-  value?: string
-  ok?: boolean
-}): JSX.Element {
+  className,
+}: PropsIndicator): JSX.Element {
   return (
-    <small className="font-bold text-xs whitespace-nowrap">
-      {text}:&nbsp;
+    <small className={clsx('font-bold whitespace-nowrap text-xs', className)}>
+      <span>{text}:&nbsp;</span>
       {value == null ? (
         <span
           className={clsx(
@@ -607,36 +649,79 @@ function Indicator({
   )
 }
 
-function CodeEditor({
-  value,
-  onChange,
-  extension,
+function EditorFooter({
+  dialects = [],
+  dialect,
+  setDialect,
+  activeFile,
+  isSaved,
+  isValid,
+  fileStatus,
 }: {
-  value: string
-  extension: string
-  onChange: (value: string) => void
+  activeFile: ModelFile
+  isSaved: boolean
+  isValid: boolean
+  fileStatus: string
+  dialects: Array<{ dialect_title: string; dialect_name: string }>
+  dialect?: string
+  setDialect: (dialect?: string) => void
 }): JSX.Element {
-  const { mode } = useColorScheme()
-  const theme = mode === EnumColorScheme.Dark ? dracula : tomorrow
-
-  const extensions = [
-    extension === '.sql' && sql(),
-    extension === '.py' && python(),
-    extension === '.yaml' && StreamLanguage.define(yaml),
-    theme,
-  ].filter(Boolean) as Extension[]
-
   return (
-    <CodeMirror
-      value={value}
-      height="100%"
-      width="100%"
-      className="w-full h-full font-mono text-sm "
-      extensions={extensions}
-      onChange={onChange}
-    />
+    <div className="mr-4">
+      <Indicator
+        className="mr-2"
+        text="Valid"
+        ok={isValid}
+      />
+      {!activeFile.isLocal && (
+        <Indicator
+          className="mr-2"
+          text="Saved"
+          ok={isSaved}
+        />
+      )}
+      <Indicator
+        className="mr-2"
+        text="Status"
+        value={fileStatus}
+      />
+      <Indicator
+        className="mr-2"
+        text="Language"
+        value={getLanguageByExtension(activeFile.extension)}
+      />
+      {activeFile.extension === '.sql' && isArrayNotEmpty(dialects) && (
+        <span className="inline-block mr-2">
+          <small className="font-bold text-xs mr-2">Dialect</small>
+          <select
+            className="text-xs m-0 px-1 py-[0.125rem] bg-neutral-10 rounded"
+            value={dialect}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              setDialect(e.target.value)
+            }}
+          >
+            {dialects.map(dialect => (
+              <option
+                key={dialect.dialect_title}
+                value={dialect.dialect_name}
+              >
+                {dialect.dialect_title}
+              </option>
+            ))}
+          </select>
+        </span>
+      )}
+      {activeFile.isSQLMeshModel && (
+        <Indicator
+          className="mr-2"
+          text="SQLMesh Type"
+          value={activeFile.isSQLMeshModel ? 'Model' : 'Plain'}
+        />
+      )}
+    </div>
   )
 }
+
 
 type TableCellValue = number | string | null
 type TableRows = Array<Record<string, TableCellValue>>
