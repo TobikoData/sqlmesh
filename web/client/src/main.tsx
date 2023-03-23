@@ -6,7 +6,7 @@ import { router } from './routes'
 
 import './index.css'
 
-export interface PropsComponent extends HTMLAttributes<HTMLElement> { }
+export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
 
 const client = new QueryClient({
   defaultOptions: {

@@ -50,7 +50,7 @@ export default function CodeEditor({
       models != null && events(models, files, selectFile),
       models != null && SqlMeshModel(models),
       showSqlSqlMeshDialect &&
-      SqlMeshDialectExtension(models, file, sqlDialectOptions),
+        SqlMeshDialectExtension(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
       theme,
