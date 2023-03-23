@@ -91,7 +91,7 @@ export default function CodeEditor({
       value={file.content}
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto text-sm"
+      className="w-full h-full overflow-auto text-sm font-mono"
       extensions={extensions}
       onChange={onChange}
     />

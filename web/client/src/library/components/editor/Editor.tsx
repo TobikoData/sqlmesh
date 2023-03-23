@@ -351,11 +351,12 @@ export default function Editor({
 
   // TODO: remove once we have a better way to determine if a file is a model
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
-  const shouldEvaluate = activeFile.isSQLMeshModel && Object.values(formEvaluate).every(Boolean)
-  const sizesActions = isStringEmptyOrNil(activeFile.content)
-    ? [100, 0]
-    : [80, 20]
-  const sizesMain = [tabTableContent, tabTerminalContent].some(Boolean)
+  const shouldEvaluate = activeFile.isSQLMeshModel && Object.values(formEvaluate).every(isTrue)
+  const showActionsPane = (activeFile.isSQLMeshModel || activeFile.isLocal) && hasContentActiveFile
+  const sizesActions = [isStringEmptyOrNil(activeFile.content), activeFile.isSQLMeshModel].every(isTrue)
+    ? [80, 20]
+    : [100, 0]
+  const sizesMain = activeFile.isSQLMeshModel && [tabTableContent, tabTerminalContent].some(isTrue)
     ? [75, 25]
     : [100, 0]
 
@@ -426,7 +427,7 @@ export default function Editor({
           <SplitPane
             className="flex h-full"
             sizes={sizesActions}
-            minSize={[320, activeFile.content === '' ? 0 : 240]}
+            minSize={[320, showActionsPane ? 240 : 0]}
             maxSize={[Infinity, 320]}
             snapOffset={0}
             expandToMin={true}
@@ -542,6 +543,18 @@ export default function Editor({
                           placeholder="prod"
                           value="prod"
                           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            console.log(e.target.value)
+                          }}
+                        />
+                        <Input
+                          className="w-full mx-0"
+                          type="number"
+                          label="Limit"
+                          placeholder="1000"
+                          value={formEvaluate.limit}
+                          onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            e.stopPropagation()
+
                             console.log(e.target.value)
                           }}
                         />
