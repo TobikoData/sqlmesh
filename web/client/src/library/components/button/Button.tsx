@@ -1,3 +1,4 @@
+import React from 'react'
 import clsx from 'clsx'
 import {
   EnumSize,
@@ -5,8 +6,6 @@ import {
   type Variant,
   type EnumVariant,
 } from '../../../types/enum'
-import { Menu } from '@headlessui/react'
-import { type ForwardedRef, forwardRef } from 'react'
 
 export type ButtonVariant = Subset<
   Variant,
@@ -89,6 +88,7 @@ const VARIANT = new Map<ButtonVariant, string>([
 
 const SHAPE = new Map<ButtonShape, string>([
   ['rounded', `rounded-md`],
+  ['square', `rounded-none`],
   ['circle', `rounded-full`],
 ])
 
@@ -99,21 +99,28 @@ const SIZE = new Map<ButtonSize, string>([
   [EnumSize.lg, `px-4 py-3 text-lg border-4`],
 ])
 
-export const Button = forwardRef(function Button(
+const Button = makeButton(React.forwardRef<HTMLButtonElement, PropsButton>(ButtonPlain))
+
+export {
+  VARIANT,
+  SHAPE,
+  SIZE,
+  Button,
+  makeButton
+}
+
+function ButtonPlain(
   {
     type = 'button',
     disabled = false,
-    variant = 'secondary',
-    shape = 'rounded',
-    size = EnumSize.md,
     children = [],
     form,
-    className,
     autoFocus,
     tabIndex,
     onClick,
+    className
   }: PropsButton,
-  ref: ForwardedRef<HTMLButtonElement>,
+  ref?: React.ForwardedRef<HTMLButtonElement>,
 ): JSX.Element {
   return (
     <button
@@ -123,52 +130,56 @@ export const Button = forwardRef(function Button(
       tabIndex={tabIndex}
       form={form}
       disabled={disabled}
-      className={clsx(
-        'whitespace-nowrap flex m-1 items-center justify-center font-bold',
-        'focus:ring-4 focus:outline-none focus:border-secondary-500',
-        'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
-        SHAPE.get(shape),
-        SIZE.get(size),
-        disabled
-          ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
-          : VARIANT.get(variant),
-        className,
-      )}
       onClick={onClick}
+      className={className}
     >
       {children}
     </button>
   )
-})
+}
 
-export const ButtonMenu = forwardRef(function ButtonMenu(
-  {
-    variant = 'secondary',
-    shape = 'rounded',
-    size = EnumSize.md,
-    children = [],
-    disabled = false,
-    className,
-  }: PropsButton,
-  ref: ForwardedRef<HTMLButtonElement>,
-): JSX.Element {
-  return (
-    <Menu.Button
-      ref={ref}
-      className={clsx(
-        'whitespace-nowrap flex m-1 items-center justify-center',
-        'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
-        'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
-        SHAPE.get(shape),
-        SIZE.get(size),
-        disabled
-          ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
-          : VARIANT.get(variant),
-        className,
-      )}
-      disabled={disabled}
-    >
-      {children}
-    </Menu.Button>
-  )
-})
+function makeButton<TElement = HTMLButtonElement>(
+  Component: React.ElementType
+): React.ForwardRefExoticComponent<PropsButton & React.RefAttributes<TElement>> {
+  return React.forwardRef<TElement, PropsButton>(function Wrapper(
+    {
+      type = 'button',
+      disabled = false,
+      variant = 'primary',
+      shape = 'rounded',
+      size = EnumSize.md,
+      children = [],
+      className,
+      form,
+      autoFocus,
+      tabIndex,
+      onClick,
+    }: PropsButton,
+    ref?: React.ForwardedRef<TElement>
+  ): JSX.Element {
+    return (
+      <Component
+        ref={ref}
+        type={type}
+        disabled={disabled}
+        form={form}
+        autoFocus={autoFocus}
+        tabIndex={tabIndex}
+        onClick={onClick}
+        className={clsx(
+          'whitespace-nowrap flex m-1 items-center justify-center font-bold',
+          'focus:ring-4 focus:outline-none focus:border-secondary-500',
+          'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
+          SHAPE.get(shape),
+          SIZE.get(size),
+          disabled
+            ? 'opacity-50 bg-neutral-10 border-neutral-300 text-prose cursor-not-allowed'
+            : VARIANT.get(variant),
+          className,
+        )}
+      >
+          {children}
+      </Component>
+    )
+  })
+}
