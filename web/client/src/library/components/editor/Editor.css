@@ -26,7 +26,7 @@
 }
 
 .cm-editor .cm-line::selection,
-.cm-editor .cm-line>*::selection {
+.cm-editor .cm-line > *::selection {
   background-color: var(--color-brand-100) !important;
   color: var(--color-brand-700) !important;
 }

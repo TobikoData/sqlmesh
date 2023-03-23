@@ -335,9 +335,12 @@ function reducer(
 
       modified?.direct?.forEach(changeDirect => {
         if (changeDirect?.model_name != null) {
+          const change_category = categories.find(
+            c => c.value === changeDirect.change_category,
+          )
           change_categorization.set(changeDirect.model_name, {
             change: changeDirect,
-            category: defaultCategory,
+            category: change_category ?? defaultCategory,
           })
         }
       })

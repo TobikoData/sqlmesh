@@ -16,13 +16,13 @@ const WHITE_SPACE = ' '
 export function useSqlMeshExtension(
   dialects?: string[],
 ): [
-    (
-      models: Map<string, Model>,
-      file: ModelFile,
-      options: { types: string; keywords: string },
-    ) => LanguageSupport,
-    () => void,
-  ] {
+  (
+    models: Map<string, Model>,
+    file: ModelFile,
+    options: { types: string; keywords: string },
+  ) => LanguageSupport,
+  () => void,
+] {
   function SqlMeshDialectExtension(
     models: Map<string, Model>,
     file: ModelFile,
