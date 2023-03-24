@@ -274,7 +274,7 @@ export default function RunPlan({
           <Button
             className="font-bold"
             size="md"
-            variant="warning"
+            variant={EnumVariant.Primary}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
@@ -287,7 +287,7 @@ export default function RunPlan({
           </Button>
           <Button
             size="md"
-            variant="alternative"
+            variant={EnumVariant.Neutral}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 

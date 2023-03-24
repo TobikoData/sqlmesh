@@ -100,6 +100,8 @@ module.exports = {
       },
       secondary: {
         10: 'var(--color-secondary-10)',
+        20: 'var(--color-secondary-20)',
+        30: 'var(--color-secondary-30)',
         100: 'var(--color-secondary-100)',
         200: 'var(--color-secondary-200)',
         300: 'var(--color-secondary-300)',

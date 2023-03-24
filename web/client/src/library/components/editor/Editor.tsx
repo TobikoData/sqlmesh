@@ -352,7 +352,7 @@ export default function Editor({
   // TODO: remove once we have a better way to determine if a file is a model
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
   const shouldEvaluate =
-    activeFile.isSQLMeshModel && Object.values(formEvaluate).every(isTrue)
+    activeFile.isSQLMeshModel && Object.values(formEvaluate).every(Boolean)
   const showActionsPane =
     (activeFile.isSQLMeshModel || activeFile.isLocal) && hasContentActiveFile
   const sizesActions = [
@@ -462,19 +462,21 @@ export default function Editor({
                             {formEvaluate.model}
                           </p>
                         </fieldset>
-                        <fieldset className="flex my-3 px-3">
-                          <div className="p-4 bg-warning-10 text-warning-600 rounded-xl">
-                            <p className="text-sm">
-                              Please, fill out all fileds to{' '}
-                              <b>
-                                {activeFile.isSQLMeshModel
-                                  ? 'evaluate the model'
-                                  : 'run query'}
-                              </b>
-                              .
-                            </p>
-                          </div>
-                        </fieldset>
+                        {isFalse(shouldEvaluate) && (
+                          <fieldset className="flex my-3 px-3">
+                            <div className="p-4 bg-warning-10 text-warning-600 rounded-lg">
+                              <p className="text-sm">
+                                Please fill out all fields to{' '}
+                                <b>
+                                  {activeFile.isSQLMeshModel
+                                    ? 'evaluate the model'
+                                    : 'run the query'}
+                                </b>
+                                .
+                              </p>
+                            </div>
+                          </fieldset>
+                        )}
                         <fieldset className="my-3 px-3">
                           <Input
                             className="w-full mx-0"
