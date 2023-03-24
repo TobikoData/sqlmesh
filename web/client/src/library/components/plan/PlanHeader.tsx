@@ -6,10 +6,10 @@ export default function Plan({ error }: { error?: Error }): JSX.Element {
   const environment = useStoreContext(s => s.environment)
 
   return (
-    <div className="h-full w-full py-4 px-6">
+    <div className="w-full py-4 px-6">
       <h4 className="text-xl">
         <span className="font-bold">Target Environment is</span>
-        <b className="ml-2 px-2 py-1 font-sm rounded-md bg-secondary-500 text-secondary-100">
+        <b className="ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">
           {environment.name}
         </b>
       </h4>
@@ -49,17 +49,17 @@ function Banner({
         className={clsx(
           'p-4 w-full h-full border-2 rounded-lg',
           variant === EnumVariant.Primary &&
-            'bg-primary-10 border-primary-400 text-primary-600',
+          'bg-primary-10 border-primary-400 text-primary-600',
           variant === EnumVariant.Secondary &&
-            'bg-secondary-10 border-secondary-400 text-secondary-600',
+          'bg-secondary-10 border-secondary-400 text-secondary-600',
           variant === EnumVariant.Success &&
-            'bg-success-10 border-success-400 text-success-600',
+          'bg-success-10 border-success-400 text-success-600',
           variant === EnumVariant.Warning &&
-            'bg-warning-10 border-warning-400 text-warning-600',
+          'bg-warning-10 border-warning-400 text-warning-600',
           variant === EnumVariant.Danger &&
-            'bg-danger-10 border-danger-400 text-danger-600',
+          'bg-danger-10 border-danger-400 text-danger-600',
           variant === EnumVariant.Info &&
-            'bg-neutral-10 border-neutral-400 text-neutral-400',
+          'bg-neutral-10 border-neutral-400 text-neutral-400',
         )}
       >
         {headline != null && (

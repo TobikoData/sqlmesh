@@ -129,7 +129,7 @@ function PlanChangePreviewDirect({
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
                     return (
-                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500" />
+                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
                     )
                   })()}
                 </Disclosure.Button>
@@ -194,7 +194,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
                   : 'text-prose',
               )}
             >
-              <div className="mt-[0.125rem] mr-2 border-2 border-neutral-400 w-4 h-4 rounded-full flex justify-center items-center">
+              <div className="mt-[0.125rem] mr-2 border-2 border-neutral-400 min-w-[1rem] h-4 rounded-full flex justify-center items-center">
                 {checked && (
                   <span className="inline-block w-2 h-2 bg-secondary-500 dark:bg-primary-300 rounded-full"></span>
                 )}
@@ -236,7 +236,7 @@ function PlanChangePreviewIndirect({
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
-                    return <Tag className="max-h-[1rem] min-w-[1rem]" />
+                    return <Tag  className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
                   })()}
                 </Disclosure.Button>
                 <Disclosure.Panel className="text-sm px-4 mb-4">
@@ -267,7 +267,7 @@ function PlanChangePreviewTitle({
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
       <small className="inline-block text-sm ">{model_name}</small>
       {category != null && (
-        <span className="ml-2 text-xs px-1 bg-neutral-400 text-neutral-100  dark:bg-neutral-400 dark:text-neutral-800 rounded">
+        <span className="ml-2 text-xs px-1 bg-neutral-400 text-neutral-100  dark:bg-neutral-400 dark:text-neutral-800 rounded whitespace-nowrap mr-2">
           {category.name}
         </span>
       )}

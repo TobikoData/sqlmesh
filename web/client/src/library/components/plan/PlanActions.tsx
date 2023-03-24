@@ -2,6 +2,7 @@ import { type MouseEvent } from 'react'
 import { useStoreContext } from '~/context/context'
 import { type PlanAction, EnumPlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
+import { EnumVariant } from '~/types/enum'
 import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button } from '../button/Button'
 import { usePlan } from './context'
@@ -93,6 +94,7 @@ export default function PlanActions({
             onClick={handleRun}
             autoFocus
             ref={setFocus}
+            variant={EnumVariant.Primary}
           >
             <span>
               {getActionName(planAction, [
@@ -114,6 +116,7 @@ export default function PlanActions({
             onClick={handleApply}
             disabled={isApplying || disabled}
             ref={setFocus}
+            variant={EnumVariant.Primary}
           >
             {getActionName(
               planAction,
@@ -129,7 +132,7 @@ export default function PlanActions({
         {isProcessing && (
           <Button
             onClick={handleCancel}
-            variant="danger"
+            variant={EnumVariant.Danger}
             className="justify-self-end"
             disabled={isCanceling || disabled}
           >
@@ -140,7 +143,7 @@ export default function PlanActions({
         {(isRun || isRunning || isApply || isApplying) && (
           <p className="ml-2 text-xs max-w-sm">
             <span>Plan for</span>
-            <b className="text-secondary-500 font-bold mx-1">
+            <b className="text-primary-500 font-bold mx-1">
               {environment.name}
             </b>
             <span className="inline-block mr-1">environment</span>
@@ -197,7 +200,7 @@ export default function PlanActions({
         ].every(isFalse) && (
           <Button
             onClick={handleReset}
-            variant="alternative"
+            variant={EnumVariant.Neutral}
             disabled={
               includes(
                 [
@@ -219,7 +222,7 @@ export default function PlanActions({
         )}
         <Button
           onClick={handleClose}
-          variant={isDone ? 'secondary' : 'alternative'}
+          variant={isDone ? EnumVariant.Primary : EnumVariant.Neutral}
           disabled={
             includes(
               [

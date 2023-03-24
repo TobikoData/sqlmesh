@@ -79,21 +79,21 @@ function Plan({
     planDates: environment.isDefault
       ? undefined
       : {
-          start,
-          end:
-            isInitialPlanRun || isStringEmptyOrNil(restate_models)
-              ? undefined
-              : end,
-        },
+        start,
+        end:
+          isInitialPlanRun || isStringEmptyOrNil(restate_models)
+            ? undefined
+            : end,
+      },
     planOptions: environment.isInitial
       ? {
-          skip_tests: true,
-        }
+        skip_tests: true,
+      }
       : environment.isDefault
-      ? {
+        ? {
           skip_tests,
         }
-      : {
+        : {
           no_gaps,
           skip_backfill,
           forward_only,
@@ -108,9 +108,9 @@ function Plan({
     planDates:
       hasBackfills && isFalse(isInitialPlanRun)
         ? {
-            start,
-            end,
-          }
+          start,
+          end,
+        }
         : undefined,
     planOptions: {
       no_gaps,
@@ -358,7 +358,7 @@ function Plan({
   }
 
   return (
-    <div className="flex flex-col w-full max-h-[90vh] overflow-hidden">
+    <div className="flex flex-col w-full h-full overflow-hidden pt-6">
       <Plan.Header error={error} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
