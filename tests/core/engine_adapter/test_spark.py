@@ -59,8 +59,8 @@ def test_alter_table(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             # 1st call.
-            call("""ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"""),
             call("""ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)"""),
+            call("""ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"""),
             # 2nd call.
             call("""ALTER TABLE `test_table` ADD COLUMNS (`e` DOUBLE)"""),
             # 3d call.
