@@ -58,7 +58,7 @@ export interface PropsButton
 const VARIANT = new Map<ButtonVariant, string>([
   [
     'primary',
-    'border-primary-500 bg-primary-500 hover:bg-primary-400 active:bg-primary-400 text-primary-100',
+    'border-primary-500 bg-primary-500 hover:bg-primary-400 active:bg-primary-400 text-light',
   ],
   [
     'alternative',

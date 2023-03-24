@@ -150,9 +150,9 @@ export default function PlanWizard({
   })
 
   return (
-    <ul className="w-full mx-auto">
+    <ul className="w-full">
       {planAction === EnumPlanAction.Run ? (
-        <Plan.StepOptions className="w-full mx-auto md:w-[75%] lg:w-[60%]" />
+        <Plan.StepOptions className="w-full" />
       ) : (
         <>
           <PlanWizardStep
@@ -274,9 +274,9 @@ export default function PlanWizard({
                           <p className="mr-2 text-sm">Details</p>
                           <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
                             {open ? (
-                              <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
+                              <MinusCircleIcon className="h-6 w-6 text-primary-500" />
                             ) : (
-                              <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
+                              <PlusCircleIcon className="h-6 w-6 text-primary-500" />
                             )}
                           </Disclosure.Button>
                         </div>
@@ -353,7 +353,7 @@ function PlanWizardStepMessage({
   children,
 }: PropsPlanWizardStepMessage): JSX.Element {
   return (
-    <span className="mt-1 mb-4 px-4 py-2 border border-secondary-100 flex w-full rounded-lg">
+    <span className="mt-1 mb-4 px-4 py-2 bg-primary-10 flex w-full rounded-lg">
       <span className="flex items-center w-full">
         {hasSpinner && <Spinner className="w-4 h-4 mr-2" />}
         {children}

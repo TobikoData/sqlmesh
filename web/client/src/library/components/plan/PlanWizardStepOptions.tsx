@@ -36,7 +36,7 @@ export default function PlanWizardStepOptions({
   )
 
   return (
-    <li className={clsx('mt-6 mb-2 mb-6', className)}>
+    <li className={clsx('mt-6 mb-6', className)}>
       <form className="w-full h-full">
         <fieldset className={clsx('mb-10 mt-6')}>
           <h2 className="whitespace-nowrap text-xl font-bold mb-1 px-4">
@@ -55,9 +55,9 @@ export default function PlanWizardStepOptions({
                     Additional Options
                   </h2>
                   {open ? (
-                    <MinusCircleIcon className="h-6 w-6 text-secondary-500" />
+                    <MinusCircleIcon className="h-6 w-6 text-primary-500" />
                   ) : (
-                    <PlusCircleIcon className="h-6 w-6 text-secondary-500" />
+                    <PlusCircleIcon className="h-6 w-6 text-primary-500" />
                   )}
                 </Disclosure.Button>
                 <Disclosure.Panel className="px-4 pb-2 text-sm text-neutral-500">
@@ -68,9 +68,12 @@ export default function PlanWizardStepOptions({
                           <Input.Label>Create From Environment</Input.Label>
                           <select
                             className={clsx(
-                              'w-full bg-secondary-100 rounded-lg py-3 px-3 text-base leading-6',
+                              'w-full bg-neutral-100 border-2 rounded-lg py-2 px-3 text-base leading-4',
                               syncronizedEnvironments.length < 2 &&
-                                'opacity-50 cursor-not-allowed',
+                              'opacity-50 cursor-not-allowed',
+                              'flex w-full text-prose-lighter bg-theme-lighter border-theme-darker dark:border-theme-lighter dark:text-prose-darker rounded-md',
+                              'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
+                              'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
                             )}
                             onChange={e => {
                               dispatch({
