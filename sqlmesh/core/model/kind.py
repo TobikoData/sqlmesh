@@ -19,10 +19,11 @@ class ModelKindName(str, Enum):
     INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
     FULL = "FULL"
-    SNAPSHOT = "SNAPSHOT"
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
+    # TODO: Add support for snapshots
+    # SNAPSHOT = "SNAPSHOT"
 
 
 class ModelKind(PydanticModel):
@@ -40,9 +41,9 @@ class ModelKind(PydanticModel):
     def is_full(self) -> bool:
         return self.name == ModelKindName.FULL
 
-    @property
-    def is_snapshot(self) -> bool:
-        return self.name == ModelKindName.SNAPSHOT
+    # @property
+    # def is_snapshot(self) -> bool:
+    #     return self.name == ModelKindName.SNAPSHOT
 
     @property
     def is_view(self) -> bool:
