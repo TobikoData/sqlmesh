@@ -466,7 +466,7 @@ export default function Editor({
                           <fieldset className="flex my-3 px-3">
                             <div className="p-4 bg-warning-10 text-warning-600 rounded-lg">
                               <p className="text-sm">
-                                Please, fill out all fileds to{' '}
+                                Please fill out all fields to{' '}
                                 <b>
                                   {activeFile.isSQLMeshModel
                                     ? 'evaluate the model'
