@@ -106,7 +106,7 @@ class SnapshotEvaluator:
                 self.adapter.insert_append(
                     table_name, query_or_df, columns_to_types=columns_to_types
                 )
-            elif snapshot.is_full_kind:
+            elif snapshot.is_full_kind or snapshot.is_seed_kind:
                 self.adapter.replace_query(table_name, query_or_df, columns_to_types)
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
