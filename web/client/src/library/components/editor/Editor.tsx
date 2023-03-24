@@ -470,7 +470,7 @@ export default function Editor({
                                 <b>
                                   {activeFile.isSQLMeshModel
                                     ? 'evaluate the model'
-                                    : 'run query'}
+                                    : 'run the query'}
                                 </b>
                                 .
                               </p>
