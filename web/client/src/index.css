@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  .scrollbar--horizontal::-webkit-scrollbar {
+    height: 0.2rem;
+  }
+  
+  .scrollbar--vertical::-webkit-scrollbar {
+    width: 0.2rem;
+  }
+  
+  .scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  
+  .scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-brand);
+    border-radius: 1rem;
+  }  
+}
+
 @layer components {
   .input-ring {
     @apply ring-accent-200 ring-offset-accent-500;
@@ -259,19 +278,3 @@ html {
   font-weight: 900;
 }
 
-.scrollbar--horizontal::-webkit-scrollbar {
-  height: 0.2rem;
-}
-
-.scrollbar--vertical::-webkit-scrollbar {
-  width: 0.2rem;
-}
-
-.scrollbar::-webkit-scrollbar-track {
-  background-color: transparent;
-}
-
-.scrollbar::-webkit-scrollbar-thumb {
-  background: var(--color-brand);
-  border-radius: 1rem;
-}
