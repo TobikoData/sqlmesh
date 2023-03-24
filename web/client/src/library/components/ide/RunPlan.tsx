@@ -710,7 +710,7 @@ function ErrorPreview({
                     {headline}
                   </h4>
                 )}
-                <p className="text-xs ">{error.detail ?? error.message}</p>
+                <p className="text-xs">{error.detail ?? error.message}</p>
               </div>
             </Popover.Panel>
           </Transition>
