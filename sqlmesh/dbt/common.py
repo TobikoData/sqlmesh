@@ -54,6 +54,7 @@ class DbtContext:
     project_root: Path = Path()
     target_name: t.Optional[str] = None
     project_name: t.Optional[str] = None
+    profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
     jinja_macros: JinjaMacroRegistry = field(
         default_factory=lambda: JinjaMacroRegistry(create_builtins_module="sqlmesh.dbt")

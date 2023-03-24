@@ -43,13 +43,15 @@ class Profile:
         Returns:
             The Profile for the specified project
         """
-        if not context.project_name:
+        if not context.profile_name:
             project_file = Path(context.project_root, PROJECT_FILENAME)
             if not project_file.exists():
                 raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
 
-            context.project_name = context.render(load_yaml(project_file).get("name", ""))
-            if not context.project_name:
+            context.profile_name = context.render(
+                load_yaml(project_file).get("profile", "")
+            ) or context.render(load_yaml(project_file).get("name", ""))
+            if not context.profile_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
 
         profile_filepath = cls._find_profile(context.project_root)
@@ -80,19 +82,19 @@ class Profile:
             source = file.read()
         contents = load_yaml(context.render(source))
 
-        project_data = contents.get(context.project_name)
+        project_data = contents.get(context.profile_name)
         if not project_data:
-            raise ConfigError(f"Project '{context.project_name}' does not exist in profiles.")
+            raise ConfigError(f"Profile '{context.profile_name}' not found in profiles.")
 
         outputs = project_data.get("outputs")
         if not outputs:
-            raise ConfigError(f"No outputs exist in profiles for Project '{context.project_name}'.")
+            raise ConfigError(f"No outputs exist in profiles for '{context.profile_name}'.")
 
         targets = {name: TargetConfig.load(name, output) for name, output in outputs.items()}
         default_target = context.render(project_data.get("target"))
         if default_target not in targets:
             raise ConfigError(
-                f"Default target '{default_target}' not specified in profiles for Project '{context.project_name}'."
+                f"Default target '{default_target}' not specified in profiles for '{context.profile_name}'."
             )
 
         return (targets, default_target)
