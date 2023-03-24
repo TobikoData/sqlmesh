@@ -39,23 +39,22 @@ export default function CodeEditor({
 
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
 
-  const [SqlMeshDialectExtension, SqlMeshDialectCleanUp] =
+  const [SqlMeshDialect, SqlMeshDialectCleanUp] =
     useSqlMeshExtension(dialects)
 
   const extensions = useMemo(() => {
-    const showSqlSqlMeshDialect =
-      file.extension === '.sql' && models != null && sqlDialectOptions != null
+    const showSqlMeshDialect = file.extension === '.sql' && models != null && sqlDialectOptions != null
+
     return [
+      theme,
       models != null && HoverTooltip(models),
       models != null && events(models, files, selectFile),
       models != null && SqlMeshModel(models),
-      showSqlSqlMeshDialect &&
-        SqlMeshDialectExtension(models, file, sqlDialectOptions),
+      showSqlMeshDialect && SqlMeshDialect(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
-      theme,
     ].filter(Boolean) as Extension[]
-  }, [file, models, sqlDialectOptions])
+  }, [file, models, sqlDialectOptions, theme])
 
   const handleSqlGlotWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {

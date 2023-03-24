@@ -698,13 +698,13 @@ function ErrorPreview({
             <Popover.Panel className="absolute right-0 z-10 mt-8 transform flex min-w-[10rem] ">
               <div
                 className={clsx(
-                  'flex flex-col rounded-md p-4 bg-danger-100 w-full',
+                  'flex flex-col rounded-md p-4 bg-danger-100 w-full text-danger-700',
                 )}
               >
                 {headline != null && (
                   <h4
                     className={clsx(
-                      'mb-2 font-bold whitespace-nowrap text-danger-700',
+                      'mb-2 font-bold whitespace-nowrap',
                     )}
                   >
                     {headline}
