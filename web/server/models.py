@@ -71,7 +71,7 @@ class ChangeDirect(BaseModel):
     model_name: str
     diff: str
     indirect: t.List[str] = []
-    change_category: SnapshotChangeCategory
+    change_category: t.Optional[SnapshotChangeCategory] = None
 
 
 class ChangeIndirect(BaseModel):
