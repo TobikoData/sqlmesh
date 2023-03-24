@@ -191,10 +191,10 @@ export default function PlanWizard({
                   </div>
                 )}
                 {isModified(modified) && (
-                  <div className="flex">
+                  <>
                     {isArrayNotEmpty(modified?.direct) && (
                       <PlanChangePreview
-                        className="w-full mx-2"
+                        className="w-full my-2"
                         headline="Modified Directly"
                         type={EnumPlanChangeType.Direct}
                       >
@@ -205,7 +205,7 @@ export default function PlanWizard({
                     )}
                     {isArrayNotEmpty(modified.indirect) && (
                       <PlanChangePreview
-                        className="w-full mx-2"
+                        className="w-full my-2"
                         headline="Modified Indirectly"
                         type={EnumPlanChangeType.Indirect}
                       >
@@ -216,6 +216,7 @@ export default function PlanWizard({
                     )}
                     {isArrayNotEmpty(modified?.metadata) && (
                       <PlanChangePreview
+                      className="w-full my-2"
                         headline="Modified Metadata"
                         type={EnumPlanChangeType.Metadata}
                       >
@@ -225,7 +226,7 @@ export default function PlanWizard({
                         />
                       </PlanChangePreview>
                     )}
-                  </div>
+                  </>
                 )}
               </>
             ) : planAction === EnumPlanAction.Running ? (

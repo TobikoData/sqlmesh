@@ -442,12 +442,12 @@ function SelectEnvironemnt({
           >
             <div
               className={clsx(
-                'absolute top-8 overflow-hidden shadow-lg bg-light rounded-md flex flex-col z-10',
+                'absolute top-9 overflow-hidden shadow-xl bg-theme border-2 border-primary-20 rounded-md flex flex-col z-10',
                 side === 'left' && 'left-0',
                 side === 'right' && 'right-0',
               )}
             >
-              <Menu.Items className="overflow-auto max-h-80  py-2 scrollbar scrollbar--vertical">
+              <Menu.Items className="overflow-auto max-h-80 py-2 scrollbar scrollbar--vertical">
                 {Array.from(environments).map(env => (
                   <Menu.Item key={env.name}>
                     {({ active }) => (
@@ -460,16 +460,16 @@ function SelectEnvironemnt({
                           onSelect?.()
                         }}
                         className={clsx(
-                          'flex justify-between items-center px-4 py-1 text-neutral-900 cursor-pointer overflow-auto',
-                          active && 'bg-secondary-100',
+                          'flex justify-between items-center px-4 py-1 cursor-pointer overflow-auto',
+                          active && 'bg-primary-10',
                           env === environment &&
-                            'pointer-events-none cursor-default bg-secondary-100',
+                            'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
                           <CheckCircleIcon
                             className={clsx(
-                              'w-4 h-4 text-secondary-500 mt-1',
+                              'w-4 h-4 text-primary-500 mt-1',
                               active && 'opacity-10',
                               env !== environment && 'opacity-0',
                             )}
@@ -479,20 +479,18 @@ function SelectEnvironemnt({
                               <span
                                 className={clsx(
                                   'block truncate ml-2',
-                                  env.isSyncronized
-                                    ? 'text-secondary-500'
-                                    : 'text-neutral-700',
+                                  env.isSyncronized && 'text-primary-500'
                                 )}
                               >
                                 {env.name}
                               </span>
-                              <small className="block ml-2 text-neutral-400">
+                              <small className="block ml-2">
                                 ({env.type})
                               </small>
                             </span>
                             {env.isDefault && (
                               <span className="flex ml-2">
-                                <small className="text-xs text-neutral-700">
+                                <small className="text-xs text-neutral-500">
                                   Default Environment
                                 </small>
                               </span>
@@ -503,7 +501,7 @@ function SelectEnvironemnt({
                           <Button
                             className="my-0 mx-0"
                             size={EnumSize.xs}
-                            variant="alternative"
+                            variant={EnumVariant.Neutral}
                             onClick={(e: MouseEvent) => {
                               e.stopPropagation()
 

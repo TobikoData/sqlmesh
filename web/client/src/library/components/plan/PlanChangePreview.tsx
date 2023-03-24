@@ -33,7 +33,7 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 w-full',
+        'flex flex-col rounded-md p-4 w-full overflow-auto ',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
