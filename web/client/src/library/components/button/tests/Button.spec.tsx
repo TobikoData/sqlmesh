@@ -1,24 +1,31 @@
+import React from 'react'
 import { vi } from 'vitest'
-import { render, fireEvent } from '../../../../tests/utils'
-import { EnumSize } from '../../../../types/enum'
-import { Button, ButtonMenu } from '../Button'
-import { Menu } from '@headlessui/react'
+import { render, fireEvent, renderHook } from '../../../../tests/utils'
+import { EnumSize, EnumVariant } from '../../../../types/enum'
+import {
+  Button,
+  makeButton,
+  VARIANT,
+  SHAPE,
+  SIZE,
+  EnumButtonShape,
+} from '../Button'
 
 describe('Button', () => {
   test('renders with default variant, shape, and size', () => {
     const { getByText } = render(<Button>Click me</Button>)
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-secondary-500')
-    expect(button).toHaveClass('rounded-md')
-    expect(button).toHaveClass('px-3 py-2 text-base')
+    expect(button).toHaveClass(VARIANT.get(EnumVariant.Primary) as string)
+    expect(button).toHaveClass(SHAPE.get(EnumButtonShape.Rounded) as string)
+    expect(button).toHaveClass(SIZE.get(EnumSize.md) as string)
   })
 
   test('renders with custom variant, shape, and size', () => {
     const { getByText } = render(
       <Button
-        variant="primary"
-        shape="square"
+        variant={EnumVariant.Secondary}
+        shape={EnumButtonShape.Square}
         size={EnumSize.sm}
       >
         Click me
@@ -26,9 +33,9 @@ describe('Button', () => {
     )
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-secondary-100')
-    expect(button).not.toHaveClass('rounded-md')
-    expect(button).toHaveClass('px-2 py-1 text-xs')
+    expect(button).toHaveClass(VARIANT.get(EnumVariant.Secondary) as string)
+    expect(button).toHaveClass(SHAPE.get(EnumButtonShape.Square) as string)
+    expect(button).toHaveClass(SIZE.get(EnumSize.sm) as string)
   })
 
   test('calls onClick when clicked', () => {
@@ -43,34 +50,69 @@ describe('Button', () => {
 
 describe('ButtonMenu', () => {
   test('renders with default variant, shape, and size', () => {
-    const { getByText } = render(
-      <Menu>
-        <ButtonMenu>Click me</ButtonMenu>
-      </Menu>,
-    )
+    const ButtonMenu = createButton()
+    const { getByText } = render(<ButtonMenu>Click me</ButtonMenu>)
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-secondary-500')
-    expect(button).toHaveClass('rounded-md')
-    expect(button).toHaveClass('px-3 py-2 text-base')
+    expect(button).toHaveClass(VARIANT.get(EnumVariant.Primary) as string)
+    expect(button).toHaveClass(SHAPE.get(EnumButtonShape.Rounded) as string)
+    expect(button).toHaveClass(SIZE.get(EnumSize.md) as string)
   })
 
   test('renders with custom variant, shape, and size', () => {
+    const ButtonMenu = createButton()
     const { getByText } = render(
-      <Menu>
-        <ButtonMenu
-          variant="primary"
-          shape="square"
-          size={EnumSize.sm}
-        >
-          Click me
-        </ButtonMenu>
-      </Menu>,
+      <ButtonMenu
+        variant={EnumVariant.Secondary}
+        shape={EnumButtonShape.Square}
+        size={EnumSize.sm}
+      >
+        Click me
+      </ButtonMenu>,
     )
     const button = getByText('Click me')
 
-    expect(button).toHaveClass('bg-secondary-100')
-    expect(button).not.toHaveClass('rounded-md')
-    expect(button).toHaveClass('px-2 py-1 text-xs')
+    expect(button).toHaveClass(VARIANT.get(EnumVariant.Secondary) as string)
+    expect(button).toHaveClass(SHAPE.get(EnumButtonShape.Square) as string)
+    expect(button).toHaveClass(SIZE.get(EnumSize.sm) as string)
+  })
+
+  test('calls onClick when clicked', () => {
+    const ButtonMenu = createButton()
+    const onClick = vi.fn()
+    const { getByText } = render(
+      <ButtonMenu onClick={onClick}>Click me</ButtonMenu>,
+    )
+    const button = getByText('Click me')
+
+    fireEvent.click(button)
+    expect(onClick).toHaveBeenCalled()
+  })
+
+  test('get ref from component', () => {
+    const ButtonMenu = createButton()
+    const { result } = renderHook(() => React.useRef<HTMLDivElement>(null))
+    const { getByText } = render(
+      <ButtonMenu ref={result.current}>Click me</ButtonMenu>,
+    )
+    const button = getByText('Click me')
+
+    expect(result.current.current).toBe(button)
   })
 })
+
+function createButton(): any {
+  return makeButton(
+    React.forwardRef<any, any>(function Button({ children, ...props }, ref) {
+      return (
+        <div
+          {...props}
+          role="button"
+          ref={ref}
+        >
+          {children}
+        </div>
+      )
+    }),
+  )
+}

@@ -43,7 +43,7 @@ export const EnumPlanChangeType = {
 
 export const EnumCategoryType = {
   BreakingChange: 'breaking-change',
-  NonBreakingChange: 'non-breaking-change'
+  NonBreakingChange: 'non-breaking-change',
 } as const
 
 export type PlanActions = KeyOf<typeof EnumPlanActions>
@@ -147,7 +147,7 @@ const initial = {
 export const PlanContext = createContext<PlanDetails>(initial)
 export const PlanDispatchContext = createContext<
   Dispatch<PlanAction | PlanAction[]>
->(() => { })
+>(() => {})
 
 export default function PlanProvider({
   children,
@@ -392,7 +392,7 @@ function useCategories(): [Category, Category[]] {
       name: 'Non-Breaking Change',
       description: 'It will exclude all indirect models caused by this change',
       value: SnapshotChangeCategory.NUMBER_2,
-    }
+    },
   ]
 
   return [categoryBreakingChange, categories]

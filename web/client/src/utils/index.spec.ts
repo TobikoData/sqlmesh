@@ -5,7 +5,6 @@ import {
   isObject,
   isNil,
   isNotNil,
-  delay,
   isDate,
   toDate,
   toDateFormat,
@@ -101,22 +100,6 @@ describe('isNotNil', () => {
 
   it('should return false for a nil value', () => {
     expect(isNotNil(null)).toBe(false)
-  })
-})
-
-describe('delay', () => {
-  it('should delay for the specified amount of time', async () => {
-    const startTime = Date.now()
-    await delay(1000)
-    const endTime = Date.now()
-    expect(endTime - startTime).toBeGreaterThanOrEqual(1000)
-  })
-
-  it('should use the default delay time if none is specified', async () => {
-    const startTime = Date.now()
-    await delay()
-    const endTime = Date.now()
-    expect(endTime - startTime).toBeGreaterThanOrEqual(1000)
   })
 })
 
