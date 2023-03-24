@@ -227,7 +227,7 @@ The target environment has been updated successfully
 Virtual Update executed successfully
 ```
 
-Notice that there was backfill necessary and only a Virtual Update occurred.
+Notice that a backfill was not necessary and only a Virtual Update occurred.
 
 ### 4.3. Validate updates in prod
 Double-check that the data did indeed update in prod by running `sqlmesh fetchdf "select * from sqlmesh_example.example_incremental_model"`:
