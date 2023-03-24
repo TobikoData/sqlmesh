@@ -94,7 +94,7 @@ export default function PlanActions({
             onClick={handleRun}
             autoFocus
             ref={setFocus}
-            variant={EnumVariant.Primary}
+            variant={EnumVariant.Secondary}
           >
             <span>
               {getActionName(planAction, [
