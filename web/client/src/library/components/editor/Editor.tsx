@@ -150,7 +150,7 @@ export default function Editor({
       setEditorFileStatus(EnumEditorFileStatus.Saving)
     },
   })
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 5000), [
     planRun,
   ])
   const debouncedChange = useMemo(
@@ -163,7 +163,7 @@ export default function Editor({
         () => {
           setEditorFileStatus(EnumEditorFileStatus.Edit)
         },
-        200,
+        1000,
       ),
     [activeFile],
   )
