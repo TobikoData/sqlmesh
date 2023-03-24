@@ -82,6 +82,16 @@ class BaseSparkEngineAdapter(EngineAdapter):
     ) -> None:
         alter_table = exp.AlterTable(this=exp.to_table(table_name))
 
+        if dropped_columns:
+            drop_columns = exp.Drop(
+                this=exp.Schema(
+                    expressions=[exp.to_identifier(column_name) for column_name in dropped_columns]
+                ),
+                kind="COLUMNS",
+            )
+            alter_table.set("actions", [drop_columns])
+            self.execute(alter_table)
+
         if added_columns:
             add_columns = exp.Schema(
                 expressions=[
@@ -93,16 +103,6 @@ class BaseSparkEngineAdapter(EngineAdapter):
                 ],
             )
             alter_table.set("actions", [add_columns])
-            self.execute(alter_table)
-
-        if dropped_columns:
-            drop_columns = exp.Drop(
-                this=exp.Schema(
-                    expressions=[exp.to_identifier(column_name) for column_name in dropped_columns]
-                ),
-                kind="COLUMNS",
-            )
-            alter_table.set("actions", [drop_columns])
             self.execute(alter_table)
 
     def _create_table_properties(
