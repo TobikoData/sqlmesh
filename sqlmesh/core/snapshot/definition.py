@@ -618,9 +618,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def is_incremental_by_unique_key_kind(self) -> bool:
         return self.model.kind.is_incremental_by_unique_key
 
-    @property
-    def is_snapshot_kind(self) -> bool:
-        return self.model.kind.is_snapshot
+    # @property
+    # def is_snapshot_kind(self) -> bool:
+    #     return self.model.kind.is_snapshot
 
     @property
     def is_embedded_kind(self) -> bool:

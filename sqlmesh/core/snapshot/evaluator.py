@@ -131,9 +131,7 @@ class SnapshotEvaluator:
                         unique_key=model.unique_key,
                     )
                 else:
-                    self.adapter.insert_append(
-                        table_name, query_or_df, columns_to_types=columns_to_types
-                    )
+                    raise SQLMeshError(f"Unexpected SnapshotKind: {snapshot.model.kind}")
 
         for sql_statement in model.sql_statements:
             self.adapter.execute(sql_statement)
