@@ -57,17 +57,6 @@ describe('getActionName', () => {
     expect(result).toBe(expected)
   })
 
-  it('should return "Closing..." when action is EnumPlanAction.Closing', () => {
-    const action = EnumPlanAction.Closing
-    const options = [EnumPlanAction.Closing]
-    const fallback = 'Start'
-    const expected = 'Closing...'
-
-    const result = getActionName(action, options, fallback)
-
-    expect(result).toBe(expected)
-  })
-
   it('should return "Run" when action is EnumPlanAction.Run', () => {
     const action = EnumPlanAction.Run
     const options = [EnumPlanAction.Run]

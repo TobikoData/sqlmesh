@@ -28,7 +28,7 @@ import {
   isStringEmptyOrNil,
   debounceAsync,
 } from '~/utils'
-import { Button, ButtonMenu, type ButtonSize } from '../button/Button'
+import { Button, makeButton, type ButtonSize } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import Spinner from '../logo/Spinner'
@@ -411,6 +411,9 @@ function SelectEnvironemnt({
   const environments = useStoreContext(s => s.environments)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const removeLocalEnvironment = useStoreContext(s => s.removeLocalEnvironment)
+
+  const ButtonMenu = makeButton<HTMLDivElement>(Menu.Button)
+
   return (
     <Menu>
       {({ close }) => (
