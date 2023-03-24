@@ -149,8 +149,6 @@ export function IDE(): JSX.Element {
           />
         </SplitPane>
       )}
-      <Divider />
-      <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
       <ModalSidebar
         show={isPlanOpen && isFalse(isClosingModal)}
         afterLeave={() => {

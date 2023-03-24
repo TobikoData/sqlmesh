@@ -41,8 +41,11 @@ function Header(): JSX.Element {
       </div>
       <div>
         <ul className="flex items-center">
-          <li className="px-2">Docs</li>
-          <li className="px-2">GitHub</li>
+          <li className="px-2">
+            <a href="http://sqlmesh.readthedocs.io/en/stable/" target="_blank" rel="noopener noreferrer" className='hover:underline'>
+            Documentation
+            </a>
+          </li>
           <li
             className={clsx(
               'p-2 cursor-pointer rounded-full hover:bg-theme-darker',
@@ -74,8 +77,7 @@ function Main({ children }: { children: React.ReactNode }): JSX.Element {
 function Footer(): JSX.Element {
   return (
     <footer className="px-2 py-1 text-xs flex justify-between">
-      <small>{new Date().getFullYear()}</small>
-      platform footer
+      <small className='text-xs'>© {new Date().getFullYear()} <a href="http://https://tobikodata.com/" target="_blank" rel="noopener noreferrer" className='underline'>Tobiko, Inc.</a> All rights reserved.</small>
     </footer>
   )
 }
