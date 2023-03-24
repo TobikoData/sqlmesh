@@ -50,7 +50,7 @@ export default function ActivePlan({
         <>
           <Popover.Button
             className={clsx(
-              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold text-light',
+              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
               getTriggerBgColor(planState)
             )}
           >
@@ -102,9 +102,9 @@ export default function ActivePlan({
 }
 
 function getTriggerBgColor(planState: PlanState): string {
-  if (planState === EnumPlanState.Finished) return 'bg-success-500'
-  if (planState === EnumPlanState.Failed) return 'bg-danger-500'
-  if (planState === EnumPlanState.Applying) return 'bg-secondary-500'
+  if (planState === EnumPlanState.Finished) return 'bg-success-500 text-light'
+  if (planState === EnumPlanState.Failed) return 'bg-danger-500 text-light'
+  if (planState === EnumPlanState.Applying) return 'bg-secondary-500 text-light'
 
   return 'bg-neutral-100 text-neutral-500'
 }
