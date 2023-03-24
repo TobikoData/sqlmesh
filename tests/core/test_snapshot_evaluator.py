@@ -34,7 +34,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
 
     model = SqlModel(
         name="db.model",
-        kind=ModelKind(name=ModelKindName.SNAPSHOT),
+        kind=ModelKind(name=ModelKindName.FULL),
         query=parse_one("SELECT a::int FROM tbl"),
     )
 
@@ -272,10 +272,7 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [
-        (1,),
-        (1,),
-    ]
+    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [(1,)]
 
 
 def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
