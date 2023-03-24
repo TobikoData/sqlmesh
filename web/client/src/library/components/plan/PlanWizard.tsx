@@ -259,11 +259,11 @@ export default function PlanWizard({
                         <h3
                           className={clsx(
                             planState === EnumPlanState.Cancelled &&
-                              'text-prose',
+                            'text-prose',
                             planState === EnumPlanState.Failed &&
-                              'text-danger-700',
+                            'text-danger-700',
                             planState === EnumPlanState.Finished &&
-                              'text-success-700',
+                            'text-success-700',
                           )}
                         >
                           {backfillStepHeadline}
@@ -369,17 +369,15 @@ function PlanWizardStep({
   disabled = false,
 }: PropsPlanWizardStep): JSX.Element {
   return (
-    <li className="mb-2 flex items-center w-full p-4">
-      <div className="flex flex-col items-start w-full lg:flex-row">
-        <PlanWizardStepHeader
-          className="min-w-[25%] pr-12 lg:text-right"
-          headline={headline}
-          disabled={disabled}
-        >
-          {description}
-        </PlanWizardStepHeader>
-        <div className="w-full">{!disabled && children}</div>
-      </div>
+    <li className="mb-2 p-4">
+      <PlanWizardStepHeader
+        className="min-w-[25%] pr-12"
+        headline={headline}
+        disabled={disabled}
+      >
+        {description}
+      </PlanWizardStepHeader>
+      {!disabled && children}
     </li>
   )
 }

@@ -24,6 +24,7 @@ import ActivePlan from './ActivePlan'
 import { Dialog } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { type Model, type ModelsModels } from '~/api/client'
+import ModalSidebar from '../modal/ModalDrawer'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -150,8 +151,33 @@ export function IDE(): JSX.Element {
       )}
       <Divider />
       <div className="px-2 py-1 text-xs">Version: 0.0.1</div>
+      <ModalSidebar
+        show={isPlanOpen && isFalse(isClosingModal)}
+        afterLeave={() => {
+          setPlanAction(EnumPlanAction.None)
+          setIsClosingModal(false)
+          setIsGraphOpen(false)
+          setIsPlanOpen(false)
+        }}
+      >
+        <Dialog.Panel className="bg-theme border-8 border-r-0 border-secondary-10 dark:border-primary-10 absolute w-[90%] md:w-[75%] xl:w-[60%] h-full right-0">
+          <PlanProvider>
+            <Plan
+              environment={environment}
+              isInitialPlanRun={
+                environment?.isDefault == null ||
+                isTrue(environment?.isDefault)
+              }
+              disabled={isClosingModal}
+              initialStartDate={initialStartDate}
+              initialEndDate={initialEndDate}
+              onClose={closeModal}
+            />
+          </PlanProvider>
+        </Dialog.Panel>
+      </ModalSidebar>
       <Modal
-        show={(isGraphOpen || isPlanOpen) && isFalse(isClosingModal)}
+        show={isGraphOpen && isFalse(isClosingModal)}
         afterLeave={() => {
           setPlanAction(EnumPlanAction.None)
           setIsClosingModal(false)
@@ -160,23 +186,7 @@ export function IDE(): JSX.Element {
         }}
       >
         <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-theme text-left align-middle shadow-xl transition-all">
-          {environment != null && isPlanOpen && (
-            <PlanProvider>
-              <Plan
-                environment={environment}
-                isInitialPlanRun={
-                  environment?.isDefault == null ||
-                  isTrue(environment?.isDefault)
-                }
-                disabled={isClosingModal}
-                initialStartDate={initialStartDate}
-                initialEndDate={initialEndDate}
-                onClose={closeModal}
-              />
-            </PlanProvider>
-          )}
-
-          {isGraphOpen && <Graph closeGraph={closeModal} />}
+          {<Graph closeGraph={closeModal} />}
         </Dialog.Panel>
       </Modal>
     </>
