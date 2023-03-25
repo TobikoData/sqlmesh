@@ -12,7 +12,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
 )
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
 
@@ -326,3 +326,32 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
     assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
     assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
+
+
+def test_start_inference(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), start="2022-01-01")
+    )
+    snapshot_a.set_version()
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
+    snapshot_b.set_version()
+
+    dag = DAG[str]({"a": set(), "b": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
+    context_diff_mock.added = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.missing_intervals.return_value = {
+        snapshot_b: [(to_timestamp("2022-01-01"), to_timestamp("2023-01-01"))]
+    }
+
+    plan = Plan(context_diff_mock, dag, state_reader_mock)
+    assert len(plan._missing_intervals) == 1
+    assert snapshot_b.version_get_or_generate() in plan._missing_intervals
+
+    assert plan.start == to_timestamp("2022-01-01")
