@@ -62,7 +62,6 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotFingerprint,
-    categorize_change,
     to_table_mapping,
 )
 from sqlmesh.core.state_sync import StateReader, StateSync
@@ -637,17 +636,9 @@ class Context(BaseContext):
             is_dev=environment != c.PROD,
             forward_only=forward_only,
             environment_ttl=self.config.environment_ttl,
+            categorizer_config=self.config.auto_categorize_changes,
+            auto_categorization_enabled=not no_auto_categorization,
         )
-
-        if not no_auto_categorization and not forward_only:
-            # Attempt to automatically determine and assign change categories.
-            for new, old in plan.context_diff.modified_snapshots.values():
-                if new in plan.directly_modified and plan.is_new_snapshot(new):
-                    change_category = categorize_change(
-                        new, old, config=self.config.auto_categorize_changes
-                    )
-                    if change_category is not None:
-                        plan.set_choice(new, change_category)
 
         if not no_prompts:
             self.console.plan(plan, auto_apply)
