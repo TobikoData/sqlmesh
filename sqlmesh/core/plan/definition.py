@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import typing as t
-from collections import defaultdict, deque
+from collections import defaultdict
 from enum import Enum
 
 from sqlmesh.core import scheduler
+from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
@@ -12,6 +13,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
+    categorize_change,
     merge_intervals,
 )
 from sqlmesh.core.state_sync import StateReader
@@ -52,6 +54,8 @@ class Plan:
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
         environment_ttl: The period of time that a development environment should exist before being deleted.
+        categorizer_config: Auto categorization settings.
+        auto_categorization_enabled: Whether to apply auto categorization.
     """
 
     def __init__(
@@ -68,6 +72,8 @@ class Plan:
         is_dev: bool = False,
         forward_only: bool = False,
         environment_ttl: t.Optional[str] = None,
+        categorizer_config: t.Optional[CategorizerConfig] = None,
+        auto_categorization_enabled: bool = True,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -78,6 +84,8 @@ class Plan:
         self.is_dev = is_dev
         self.forward_only = forward_only
         self.environment_ttl = environment_ttl
+        self.categorizer_config = categorizer_config or CategorizerConfig()
+        self.auto_categorization_enabled = auto_categorization_enabled
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
         self._apply = apply
@@ -105,9 +113,11 @@ class Plan:
         self._ensure_no_forward_only_revert()
         self._ensure_no_forward_only_new_models()
 
-        categorized_snapshots = self._categorize_snapshots()
-        self.directly_modified = categorized_snapshots[0]
-        self.indirectly_modified = categorized_snapshots[1]
+        directly_indirectly_modified = self._build_directly_and_indirectly_modified()
+        self.directly_modified = directly_indirectly_modified[0]
+        self.indirectly_modified = directly_indirectly_modified[1]
+
+        self._categorize_snapshots()
 
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
@@ -360,66 +370,26 @@ class Plan:
                 )
             self._restatements.update(downstream)
 
-    def _categorize_snapshots(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
-        """Automatically categorizes snapshots that can be automatically categorized and
-        returns a list of added and directly modified snapshots as well as the mapping of
-        indirectly modified snapshots.
+    def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
+        """Builds collections of directly and inderectly modified snapshots.
 
         Returns:
             The tuple in which the first element contains a list of added and directly modified
             snapshots while the second element contains a mapping of indirectly modified snapshots.
         """
-        queue = deque(self._dag.sorted())
         directly_modified = []
         all_indirectly_modified = set()
 
-        while queue:
-            model_name = queue.popleft()
-
-            if model_name not in self.context_diff.snapshots:
-                continue
-
-            upstream_model_names = self._dag.upstream(model_name)
-
-            if not self.forward_only:
-                self._ensure_no_paused_forward_only_upstream(model_name, upstream_model_names)
-
-            snapshot = self.context_diff.snapshots[model_name]
-
+        for model_name, snapshot in self.context_diff.snapshots.items():
             if model_name in self.context_diff.modified_snapshots:
-                if self.forward_only and self.is_new_snapshot(snapshot):
-                    # In case of the forward only plan any modifications result in reuse of the
-                    # previous version for non-seed models.
-                    # New snapshots of seed models are considered non-breaking ones.
-                    if not snapshot.is_seed_kind:
-                        snapshot.set_version(snapshot.previous_version)
-                        snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
-                    else:
-                        snapshot.set_version()
-                        snapshot.change_category = SnapshotChangeCategory.NON_BREAKING
-
                 if self.context_diff.directly_modified(model_name):
                     directly_modified.append(snapshot)
                 else:
                     all_indirectly_modified.add(model_name)
-
-                    # set to breaking if an indirect child has no directly modified parents
-                    # that need a decision. this can happen when a revert to a parent causes
-                    # an indirectly modified snapshot to be created because of a new parent
-                    if not snapshot.version and not any(
-                        self.context_diff.directly_modified(upstream)
-                        and not self.context_diff.snapshots[upstream].version
-                        for upstream in upstream_model_names
-                    ):
-                        snapshot.set_version()
-
             elif model_name in self.context_diff.added:
-                if self.is_new_snapshot(snapshot):
-                    snapshot.set_version()
                 directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
-
         for snapshot in directly_modified:
             for downstream in self._dag.downstream(snapshot.name):
                 if downstream in all_indirectly_modified:
@@ -429,6 +399,56 @@ class Plan:
             directly_modified,
             indirectly_modified,
         )
+
+    def _categorize_snapshots(self) -> None:
+        """Automatically categorizes snapshots that can be automatically categorized and
+        returns a list of added and directly modified snapshots as well as the mapping of
+        indirectly modified snapshots.
+        """
+        for model_name, snapshot in self.context_diff.snapshots.items():
+            upstream_model_names = self._dag.upstream(model_name)
+
+            if not self.forward_only:
+                self._ensure_no_paused_forward_only_upstream(model_name, upstream_model_names)
+
+            if model_name in self.context_diff.modified_snapshots:
+                is_directly_modified = self.context_diff.directly_modified(model_name)
+
+                if self.is_new_snapshot(snapshot):
+                    if self.forward_only:
+                        # In case of the forward only plan any modifications result in reuse of the
+                        # previous version for non-seed models.
+                        # New snapshots of seed models are considered non-breaking ones.
+                        if not snapshot.is_seed_kind:
+                            snapshot.set_version(snapshot.previous_version)
+                            snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+                        else:
+                            snapshot.set_version()
+                            snapshot.change_category = SnapshotChangeCategory.NON_BREAKING
+                    elif self.auto_categorization_enabled and is_directly_modified:
+                        new, old = self.context_diff.modified_snapshots[model_name]
+                        change_category = categorize_change(
+                            new, old, config=self.categorizer_config
+                        )
+                        if change_category is not None:
+                            self.set_choice(new, change_category)
+
+                # set to breaking if an indirect child has no directly modified parents
+                # that need a decision. this can happen when a revert to a parent causes
+                # an indirectly modified snapshot to be created because of a new parent
+                if (
+                    not is_directly_modified
+                    and not snapshot.version
+                    and not any(
+                        self.context_diff.directly_modified(upstream)
+                        and not self.context_diff.snapshots[upstream].version
+                        for upstream in upstream_model_names
+                    )
+                ):
+                    snapshot.set_version()
+
+            elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
+                snapshot.set_version()
 
     def _ensure_no_paused_forward_only_upstream(
         self, model_name: str, upstream_model_names: t.Iterable[str]
