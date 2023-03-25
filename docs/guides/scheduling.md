@@ -1,6 +1,6 @@
 # Scheduling guide
 
-SQLMesh currently offers two ways of scheduling model evaluation:
+SQLMesh currently offers two ways of scheduling model execution:
 
 * Using the [built-in scheduler](#built-in-scheduler)
 * By [integrating with Airflow](#integrating-with-airflow)
@@ -11,14 +11,14 @@ The built-in scheduler is appropriate for trying out SQLMesh, as well as for sma
 
 ## Built-in scheduler
 
-SQLMesh comes with a built-in scheduler that can be used to schedule model evaluation without requiring any additional tools or dependencies.
+SQLMesh comes with a built-in scheduler that can be used to schedule model execution without requiring any additional tools or dependencies.
 
-To perform model evaluation using the built-in scheduler, run the following command:
+To perform model execution using the built-in scheduler, run the following command:
 ```bash
 sqlmesh run
 ```
 
-The command above will automatically detect missing intervals for all models in the current project and then evaluate them:
+The command above will automatically detect missing intervals for all models in the current project and then execute them:
 ```bash
 $ sqlmesh run
 
@@ -28,7 +28,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
        sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the evaluation is complete. It is the responsibility of users to run this command periodically with a cron job, a CI / CD tool like Jenkins, or via similar means.
+**Note:** The `sqlmesh run` command performs model execution based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the execution is complete. It is the responsibility of users to run this command periodically with a cron job, a CI / CD tool like Jenkins, or via similar means.
 
 
 ## Integrating with Airflow
@@ -74,7 +74,7 @@ On the client side, you must configure the connection to your Airflow cluster in
             username: airflow
             password: airflow
 
-Alternatively, the configuration above can be generated automatically as part of the project initialization using the `airflow` template:
+Alternatively, the configuration above can be generated automatically during project initialization using the `airflow` template:
 ```bash
 sqlmesh init -t airflow
 ```
