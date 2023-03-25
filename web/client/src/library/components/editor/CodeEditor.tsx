@@ -42,13 +42,13 @@ export default function CodeEditor({
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
   
   const extensions = useMemo(() => {
-    const showSqlMeshDialect = file.extension === '.sql' && models != null && sqlDialectOptions != null
+    const showSqlMeshDialect = file.extension === '.sql' && sqlDialectOptions != null
 
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      models != null && HoverTooltip(models),
-      models != null && events(models, files, selectFile),
-      models != null && SqlMeshModel(models),
+      HoverTooltip(models),
+      events(models, files, selectFile),
+      SqlMeshModel(models),
       showSqlMeshDialect && SqlMeshDialect(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
