@@ -8,7 +8,7 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`
 
-Due to wanting to share a common implementation across local and Airflow, SQLMesh Bigquery implements it's own hook and operator. 
+In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements it's own hook and operator. 
 
 To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
 ```
@@ -18,7 +18,7 @@ pip install "sqlmesh[bigquery]"
 
 The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) for more details.
 
-By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overriden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
@@ -31,15 +31,15 @@ sqlmesh_airflow = SQLMeshAirflow(
 # Databricks
 ## Databricks - Local/Built-in Scheduler
 If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
-This can be done using the [Notebook magic](../reference/notebook.md) or using the [CLI](../reference/cli.md).
-This is something we are looking into improving and please leave us feedback in slack if this impacts you.
-A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster and should theoretically work.
+This can be done using the [Notebook magic](../reference/notebook.md) or by using the [CLI](../reference/cli.md).
+This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://join.slack.com/t/tobiko-data/shared_invite/zt-1ma66d79v-a4dbf4DUpLAQJ8ptQrJygg) if this impacts you.
+A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster, and should theoretically work.
 
 Databricks has a few options for connection types to choose from:
 ### Type: databricks (Recommended)
 This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
-If it detects when exists then it assumes this is a Databricks SparkSession and uses that. 
-If it doesn't detect a SparkSession then it will use the connection configuration to connect to Databricks over
+If it detects a SparkSession, then it assumes this is a Databricks SparkSession and uses that. 
+If it doesn't detect a SparkSession, then it will use the connection configuration to connect to Databricks over
 the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). 
 See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
 
@@ -49,7 +49,7 @@ This will simplify the required configuration to run since you will not need to 
 
 ### Type: databricks_sql
 This connection type assumes you only need to run SQL queries against Databricks.
-If all of your models are SQL models or if Python don't use PySpark DataFrame then this can be used.
+If all of your models are SQL models or if Python doesn't use PySpark DataFrame, then this can be used.
 Below is the connection configuration for this type:
 
 | Option                  | Description                                                                                                                                                                              |  Type  | Required |
@@ -58,19 +58,19 @@ Below is the connection configuration for this type:
 | `http_path`             | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    Y     |
 | `access_token`          | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    Y     |
 | `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
-| `session_configuration` | An optional dictionary of Spark session parameters.                                                                                                                                      |  dict  |    N     |
+| `session_configuration` | An optional dictionary of Spark session parameters                                                                                                                                      |  dict  |    N     |
 
 ## Databricks - Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.
 
-Databricks has multiple operators to help differentiating running a SQL query vs. running a Python script.
+Databricks has multiple operators to help differentiate running a SQL query vs. running a Python script.
 
 ### Engine: `databricks` (Recommended)
 
 When evaluating models, the SQLMesh Databricks integration implements the [DatabricksSubmitRunOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/1.0.0/operators.html). This is needed to be able to run either SQL or Python scripts on the Databricks cluster.
 
 When performing environment management operations, the SQLMesh Databricks integration is similar to the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator), and relies on the same [DatabricksSqlHook](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/_api/airflow/providers/databricks/hooks/databricks_sql/index.html#airflow.providers.databricks.hooks.databricks_sql.DatabricksSqlHook) implementation. 
-All environment management operations are SQL based and the overhead of submitting jobs can be avoided.
+All environment management operations are SQL-based, and the overhead of submitting jobs can be avoided.
 
 ### Engine: `databricks-submit`
 
@@ -78,20 +78,20 @@ Whether evaluating models or performing environment management operations, the S
 
 ### Engine: `databricks-sql`
 
-Forces the SQLMesh Databricks integration to use the operator based on the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator) for all operations. If your project is pure SQL operations then this is an option. 
+Forces the SQLMesh Databricks integration to use the operator based on the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator) for all operations. If your project is pure SQL operations, then this is an option. 
 
-To enable support for this operator, the Airflow Databricks provider package should be installed on the target Airflow cluster along with the SQLMesh package with databricks extra as follows :
+To enable support for this operator, the Airflow Databricks provider package should be installed on the target Airflow cluster along with the SQLMesh package with databricks extra as follows:
 ```
 pip install apache-airflow-providers-databricks
 sqlmesh[databricks]
 ```
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Databricks cluster. Please see [Databricks connection](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/connections/databricks.html) for more details. SQLMesh requires that `http_path` be defined in the connection since it uses this to determine the cluster for both SQL and submit operators.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Databricks cluster. Refer to [Databricks connection](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/connections/databricks.html) for more details. SQLMesh requires that `http_path` be defined in the connection since it uses this to determine the cluster for both SQL and submit operators.
 
 Example format: `databricks://<hostname>?token=<token>&http_path=<http_path>`
 
-By default, the connection ID is set to `databricks_default`, but can be overriden using both the `engine_operator_args` and the `ddl_engine_operator_args` parameters to the `SQLMeshAirflow` instance.
-In addition, one special configuration that SQLMesh Airflow evaluation operator requires is a dbfs path to store an application to load a given SQLMesh model. Also a payload is stored that contains the information require for SQLMesh to do the loading. This must be defined in the `evaluate_engine_operator_args` parameter. Example of defining both:
+By default, the connection ID is set to `databricks_default`, but it can be overridden using both the `engine_operator_args` and the `ddl_engine_operator_args` parameters to the `SQLMeshAirflow` instance.
+In addition, one special configuration that the SQLMesh Airflow evaluation operator requires is a dbfs path to store an application to load a given SQLMesh model. Also, a payload is stored that contains the information required for SQLMesh to do the loading. This must be defined in the `evaluate_engine_operator_args` parameter. Example of defining both:
 
 ```python linenums="1"
 from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
@@ -111,7 +111,7 @@ for dag in sqlmesh_airflow.dags:
     globals()[dag.dag_id] = dag
 ```
 
-Note: If your Databricks connection is configured to run on serverless [DBSQL](https://www.databricks.com/product/databricks-sql) then you need to define `existing_cluster_id` or `new_cluster` in your `engine_operator_args`. Example:
+**Note:** If your Databricks connection is configured to run on serverless [DBSQL](https://www.databricks.com/product/databricks-sql), then you need to define `existing_cluster_id` or `new_cluster` in your `engine_operator_args`. Example:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "databricks",
@@ -129,7 +129,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
 ## DuckDB - Airflow
-DuckDB only works when running locally and therefore it does not support Airflow. 
+DuckDB only works when running locally; therefore it does not support Airflow. 
 
 # Redshift
 ## Redshift - Local/Built-in Scheduler
@@ -158,7 +158,7 @@ DuckDB only works when running locally and therefore it does not support Airflow
 ## Redshift - Airflow Scheduler
 **Engine Name:** `redshift`
 
-Due to wanting to share a common implementation across local and Airflow, SQLMesh Bigquery implements it's own hook and operator. 
+In order to share a common implementation across local and Airflow, SQLMesh Bigquery implements its own hook and operator. 
 
 To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
 ```
@@ -166,9 +166,9 @@ pip install "apache-airflow-providers-amazon"
 pip install "sqlmesh[redshift]"
 ```
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Please see [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Refer to [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
 
-By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overriden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "redshift",
@@ -200,9 +200,9 @@ pip install "apache-airflow-providers-snowflake[common.sql]"
 pip install "sqlmesh[snowflake]"
 ```
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Please see [Snowflake connection](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/connections/snowflake.html) for more details.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Snowflake account. Refer to [Snowflake connection](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/connections/snowflake.html) for more details.
 
-By default, the connection ID is set to `snowflake_default`, but can be overriden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `snowflake_default`, but can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "snowflake",
@@ -226,7 +226,7 @@ To enable support for this operator, the Airflow Spark provider package should b
 pip install apache-airflow-providers-apache-spark
 ```
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target cluster, queue, and deploy mode in which the Spark Job should be submitted. Please see [Apache Spark connection](https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/stable/connections/spark.html) for more details.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target cluster, queue, and deploy mode in which the Spark Job should be submitted. Refer to [Apache Spark connection](https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/stable/connections/spark.html) for more details.
 
 By default, the connection ID is set to `spark_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
@@ -237,7 +237,7 @@ sqlmesh_airflow = SQLMeshAirflow(
     },
 )
 ```
-Similarly, the `engine_operator_args` parameter can be used to override other job submission parameters, such as  number of allocated cores, executors, and so forth. The full list of parameters that can be overridden is found in `sqlmesh.schedulers.airflow.operators.spark_submit.SQLMeshSparkSubmitOperator`.
+Similarly, the `engine_operator_args` parameter can be used to override other job submission parameters, such as number of allocated cores, executors, and so forth. The full list of parameters that can be overridden can be found in `sqlmesh.schedulers.airflow.operators.spark_submit.SQLMeshSparkSubmitOperator`.
 
 **Cluster mode**
 <br><br>

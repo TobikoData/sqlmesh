@@ -1,3 +1,1 @@
 # Release notes
-
-TODO

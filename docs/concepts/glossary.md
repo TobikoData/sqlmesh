@@ -42,14 +42,20 @@ Combining data from various sources (such as from a data warehouse) into one uni
 ## Lineage
 The lineage of your data is a visualization of the life cycle of your data as it flows from data sources downstream to consumption.
 
+## Slowly Changing Dimension (SCD)
+A dimension (in a data warehouse, typically a dataset) containing relatively static data that can change slowly but unpredictably, rather than on a regular schedule. Some examples of typical slowly changing dimensions are places and products.
+
 ## Table
 A table is the visual representation of data stored in rows and columns.
+
+## User-Defined Function (UDF)
+Functions that a user of a database server provides to extend its functionality, in contrast to built-in functions that are already provided. UDFs are typically written to satisfy the particular requirements of the user.
 
 ## View
 A view is the result of a SQL query on a database.
 
 ## Virtual Data Marts
-Term used to describe's SQLMesh's ability to share tables across environments to ensure tables are only built once while maintaining data integrity and environment isolation. See [Plan Application](plans.md#plan-application) for more information. 
+Term used to describe's SQLMesh's ability to share tables across environments to ensure tables are only built once while maintaining data integrity and environment isolation. See [plan application](plans.md#plan-application) for more information. 
 
 ## Virtual Update
-Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Plan's Virtual Update](plans.md#virtual-update) for more information.
+Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.

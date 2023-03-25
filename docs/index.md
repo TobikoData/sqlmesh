@@ -6,20 +6,20 @@
 
 The experience of developing and deploying data pipelines is more uncertain and manual when compared to developing applications. This is partially due to the lack of tooling revolving around the testing and deployment of data pipelines. With DevOps, software engineers are able to seamlessly confirm logic with unit tests, validate systems with containerized environments, and transition to prod with confidence. SQLMesh aims to give data teams the same confidence as their peers.
 
-Here are some challenges that data teams run into, especially when data sizes increase or the number of data users expands
+Here are some challenges that data teams run into, especially when data sizes increase or the number of data users expands:
 
 1. **Data pipelines are fragmented and fragile:** Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream dependencies are usually only detected at run time.
 
-1. **Data quality checks are not sufficient:** The data community has settled on data quality checks as the "solution" for testing data pipelines. Although data quality checks are great for detecting large unexpected data changes, they are expensive to run and have trouble validating exact logic.
+1. **Data quality checks are not sufficient:** The data community has settled on data quality checks as the "solution" for testing data pipelines. Although data quality checks are great for detecting large unexpected data changes, they are expensive to run, and they have trouble validating exact logic.
 
-1. **It's too hard and too costly to build staging environments for data:** Validating changes to data pipelines before deploying to production is an uncertain and sometimes expensive process. Although branches can be deployed to environments, when merged to production, the code is rerun. This is both wasteful and uncertain because the data is regenerated.
+1. **It's too hard and too costly to build staging environments for data:** Validating changes to data pipelines before deploying to production is an uncertain and sometimes expensive process. Although branches can be deployed to environments, when merged to production, the code is re-run. This is wasteful and generates uncertainty because the data is regenerated.
 
 1. **Silos transform data lakes to data swamps:** The difficulty and cost of making changes to core pipelines can lead to duplicate pipelines with minor customizations. The inability to easily make and validate changes causes contributors to follow the "path of least resistence". The proliferation of similar tables leads to additional costs, inconsistencies, and maintenance burden.
 
 ## What is SQLMesh?
-SQLMesh consists of a CLI, Python API, and Web UI to make data pipeline development and deployment easy, efficient, and safe.
+SQLMesh consists of a CLI, a Python API, and a Web UI to make data pipeline development and deployment easy, efficient, and safe.
 
-### Core Principles
+### Core principles
 SQLMesh was built on four core principles:
 
 * Correctness is non-negotiable
@@ -27,20 +27,20 @@ SQLMesh was built on four core principles:
 * Be as efficient and cost effective as possible
 * Integration should be seamless
 
-### Key Features
-* **Automatic DAG generation by parsing SQL**: No need to manually tag dependencies—SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.
-* **Informative change summaries:** Before making changes, SQLMesh will figure out what has changed and show the entire graph of affected jobs.
+### Key features
+* **Automatic DAG generation by parsing SQL**: No need to manually tag dependencies &mdash; SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.
+* **Informative change summaries:** Before making changes, SQLMesh will determine what has changed and show the entire graph of affected jobs.
 * **Easy incremental loads:** Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
 * **CI-Runnable Unit and Integration tests:** Can be easily defined in YAML and run in CI. SQLMesh can optionally transpile your queries to DuckDB so that your tests can be self-contained.
-* **Efficient dev / staging environments:** SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes! Any data computation you run for validation purposes is actually not wasted - with a cheap pointer swap you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
-* **Smart change categorization:** Column level lineage automatically determines whether changes are “breaking” or “non-breaking”, allowing you to correctly categorize changes and skip expensive backfills.
+* **Efficient dev/staging environments:** SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
+* **Smart change categorization:** Column-level lineage automatically determines whether changes are “breaking” or “non-breaking”, allowing you to correctly categorize changes and to skip expensive backfills.
 * **Integrated with Airflow:** You can schedule jobs with our simple built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
 * **Notebook / CLI:** Interact with SQLMesh with whatever tool you’re comfortable with.
-* **Web based IDE (pre-alpha):** Edit, run, and visualize queries in your browser
-* **Github CI/CD bot (pre-alpha):** A bot to tie your code directly to your data
+* **Web based IDE (pre-alpha):** Edit, run, and visualize queries in your browser.
+* **Github CI/CD bot (pre-alpha):** A bot to tie your code directly to your data.
 * **Table/Column level lineage visualizations (pre-alpha):** Quickly understand the full lineage and sequence of transformation of any column.
 
-## Next Steps
+## Next steps
 * [Jump right in with the quickstart](quick_start.md)
 * [Learn more about SQLMesh concepts](concepts/overview.md)
 * [Join our Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1je7o3xhd-C7~GuZTj0a8xz_uQbTJjHg)

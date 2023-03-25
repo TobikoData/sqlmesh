@@ -52,7 +52,7 @@ Options:
   --skip-backfill           Skip the backfill step.
   --forward-only            Create a plan for forward-only changes.
   --no-prompts              Disable interactive prompts for the backfill time
-                            range. Please note that if this flag is set and
+                            range. Note that if this flag is set and
                             there are uncategorized changes, plan creation
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.

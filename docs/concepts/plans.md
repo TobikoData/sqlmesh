@@ -15,7 +15,7 @@ The benefit of having a plan is that all changes can be reviewed and verified be
 * A list of directly modified models and a text diff of changes that have been made.
 * A list of indirectly modified models.
 * Missing data intervals for affected models.
-* A date range which will be affected by the plan application.
+* A date range that will be affected by the plan application.
 
 To create a new plan, run the following command:
 ```bash
@@ -33,15 +33,15 @@ A directly-modified model that is classified as non-breaking will be backfilled,
 ## Plan application
 Once a plan has been created and reviewed, it should then be applied to a target [environment](environments.md) in order for the changes that are part of it to take effect.
 
-Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (see [snapshots](architecture/snapshots.md)) with a unique [fingerprint](architecture/snapshots.md#fingerprints) assigned to it. In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
+Every time a model is changed as part of a plan, a new variant of this model gets created behind the scenes (a [snapshot](architecture/snapshots.md)) with a unique [fingerprint](architecture/snapshots.md#fingerprints) assigned to it. In turn, each model variant gets a separate physical location for data (i.e. table). Data between different variants of the same model is never shared (except for the [forward-only](#forward-only-plans) case).
 
-When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words each environment is a collection of references to model variants and the physical tables associated with them.
+When a plan is applied to an environment, that environment gets associated with a collection of model variants that are part of that plan. In other words, each environment is a collection of references to model variants and the physical tables associated with them.
 
-![Each model variant gets its own physical table while environments only contain references to these tables](plans/model_versioning.png)
+![Each model variant gets its own physical table, while environments only contain references to these tables](plans/model_versioning.png)
 
 *Each model variant gets its own physical table while environments only contain references to these tables.*
 
-This unique approach to understanding and applying changes is what enables SQLMesh's Virtual Data Mart technology. This technology allows SQLMesh to ensure complete isolation between environments, while allowing it to share physical data assets between environments when appropriate and safe to do so. Additionally, since each model change is captured in a separate physical table, reverting to a previous version becomes a simple and quick operation (refer to [Virtual Update](#virtual-update)) as long as its physical table hasn't been garbage collected by the janitor process. SQLMesh makes it easy to be correct and really hard to accidentally and irreversibly break things.
+This unique approach to understanding and applying changes is what enables SQLMesh's virtual data mart technology. This technology allows SQLMesh to ensure complete isolation between environments while allowing it to share physical data assets between environments when appropriate and safe to do so. Additionally, since each model change is captured in a separate physical table, reverting to a previous version becomes a simple and quick operation (refer to [Virtual Update](#virtual-update)) as long as its physical table hasn't been garbage collected by the janitor process. SQLMesh makes it easy to be correct, and really hard to accidentally and irreversibly break things.
 
 ### Backfilling
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
@@ -52,7 +52,7 @@ Despite the fact that backfilling happens incrementally, there is an extra cost 
 Another benefit of the aforementioned approach is that data for a new model version can be fully pre-built while still in a development environment. This means that all changes and their downstream dependencies can be fully previewed before they get promoted to the production environment. Therefore, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.
 
 ## Forward-only plans
-Sometimes the runtime cost associated with rebuilding an entire physical table is too high, and outweighs the benefits a separate table provides. This is when a forward-only plan comes in handy.
+Sometimes the runtime cost associated with rebuilding an entire physical table is too high and outweighs the benefits a separate table provides. This is when a forward-only plan comes in handy.
 
 When a forward-only plan is applied, all of the contained model changes will not get separate physical tables assigned to them. Instead, physical tables of previous model versions are reused. The benefit of such a plan is that no backfilling is required, so there is no runtime overhead and hence no cost. The drawback is that reverting to a previous version is no longer as straightforward, and requires a combination of additional forward-only changes and restatements (refer to [restatement plans](#restatement-plans)).
 
