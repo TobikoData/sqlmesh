@@ -70,15 +70,15 @@ const VARIANT = new Map<ButtonVariant, string>([
   ],
   [
     'success',
-    'bg-success-500 hover:bg-success-600 active:bg-success-400 text-neutral-100',
+    'border-success-500 bg-success-500 hover:bg-success-600 active:bg-success-400 text-neutral-100',
   ],
   [
     'danger',
-    'bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-neutral-100',
+    'border-danger-500 bg-danger-500 hover:bg-danger-600 active:bg-danger-400 text-neutral-100',
   ],
   [
     'warning',
-    'bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-neutral-100',
+    'border-warning-500 bg-warning-500 hover:bg-warning-600 active:bg-warning-400 text-neutral-100',
   ],
   [
     'neutral',
