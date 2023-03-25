@@ -129,10 +129,14 @@ class Plan:
     @property
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
-        return self._start or scheduler.earliest_start_date(
-            snapshot
-            for snapshot in self.snapshots
-            if snapshot.version_get_or_generate() in self._missing_intervals
+        return self._start or (
+            min(
+                start
+                for intervals_per_model in self._missing_intervals.values()
+                for start, _ in intervals_per_model
+            )
+            if self._missing_intervals
+            else yesterday_ds()
         )
 
     @start.setter
