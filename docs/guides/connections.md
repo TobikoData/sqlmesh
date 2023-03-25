@@ -4,34 +4,34 @@
 
 **Note:** The following guide only applies when using the built-in scheduler. Connections are configured differently when using an external scheduler like Airflow. See the [Scheduling guide](scheduling.md) for more details.
 
-In order to deploy models and apply changes to them, a connection to the Data Warehouse must first be configured. This can be done through the `config.yaml` file in your project folder or in the `~/.sqlmesh` one.
+In order to deploy models and apply changes to them, you must configure a connection to the Data Warehouse. This can be done in either the `config.yaml` file in your project folder or the one in `~/.sqlmesh`.
 
-Each configured connection has a unique name associated with it, which can be used to select a specific connection when using CLI. For example:
+Each configured connection has a unique name associated with it, which can be used to select a specific connection when using the CLI. For example:
 ```yaml linenums="1"
 connections:
     local_db:
         type: duckdb
 ```
 
-Now the defined connection can be specified in CLI as follows:
+Now the defined connection can be specified in the `sqlmesh plan` CLI command as follows:
 ```bash
 sqlmesh --connection local_db plan
 ```
 
 ## Default connection
-If no connection name is provided, then the first connection in the order of how connections are defined in the configuration will be picked.
+If no connection name is provided, then the first connection in the `config.yaml` connections specification will be used.
 
-Additionally the default connection can be set in the configuration:
+Additionally, you can set a default connection by specifying the connection name in the `default_connection` key:
 ```yaml linenums="1"
 default_connection: local_db
 ```
 
 ## Test connection
-By default, when running [tests](../concepts/tests.md) SQLMesh uses an in-memory DuckDB database connection. This behavior can be overridden in the configuration:
+By default, when running [tests](../concepts/tests.md) SQLMesh uses an in-memory DuckDB database connection. You can override this behavior by specifying a connection name in the `test_connection` key:
 ```yaml linenums="1"
 test_connection: local_db
 ```
-Or in CLI:
+Or you can specify the test connection in the `sqlmesh plan` CLI command:
 ```bash
 sqlmesh --test-connection local_db plan
 ```
@@ -41,11 +41,11 @@ sqlmesh --test-connection local_db plan
 ### BigQuery
 TBD
 
-See the [configuration reference](../reference/configuration.md#bigquery) for more details.
+See the [engine configuration reference](../integrations/engines.md#bigquery---localbuilt-in-scheduler) for more details.
 
 ### Databricks
 
-The Databricks configuration should be configured as follows:
+A Databricks connection should be configured as follows:
 ```yaml linenums="1"
 connections:
     my_databricks_connection:
@@ -57,11 +57,11 @@ connections:
         concurrent_tasks: [optional, should be greater than 0]
 ```
 
-See the [configuration reference](../reference/configuration.md#databricks) for more details.
+See the [engine configuration reference](../integrations/engines.md#databricks---localbuilt-in-scheduler) for more details.
 
 ### DuckDB
 
-The DuckDB configuration should be configured as follows:
+A DuckDB connection should be configured as follows:
 ```yaml linenums="1"
 connections:
     my_duckdb_connection:
@@ -69,11 +69,11 @@ connections:
         database: [optional, path to the database file]
 ```
 
-See the [configuration reference](../reference/configuration.md#duckdb) for more details.
+See the [engine configuration reference](../reference/configuration.md#duckdb) for more details.
 
 ### Redshift
 
-The Redshift configuration should be configured as follows:
+A Redshift connection should be configured as follows:
 ```yaml linenums="1"
 connections:
     my_redshift_connection:
@@ -100,11 +100,11 @@ connections:
         concurrent_tasks: [optional, should be greater than 0]
 ```
 
-See the [configuration reference](../reference/configuration.md#redshift) for more details.
+See the [engine configuration reference](../integrations/engines.md#redshift---localbuilt-in-scheduler) for more details.
 
 ### Snowflake
 
-The Databricks configuration should be configured as follows:
+A Snowflake connection should be configured as follows:
 ```yaml linenums="1"
 connections:
     my_snowflake_connection:
@@ -118,4 +118,4 @@ connections:
         concurrent_tasks: [optional, should be greater than 0]
 ```
 
-See the [configuration reference](../reference/configuration.md#snowflake) for more details.
+See the [engine configuration reference](../integrations/engines.md#snowflake---localbuilt-in-scheduler) for more details.

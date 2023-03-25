@@ -59,7 +59,7 @@ In contrast to tests, SQLMesh "audits" validate the results of model code applie
 
 You create audits by writing SQL queries that should return 0 rows. For example, an audit query to ensure `your_field` has no `NULL` values would include `WHERE your_field IS NULL`. If any NULLs are detected, the query will return at least one row and the audit will fail.
 
-Audits are flexible - they can be tied to a specific model's contents, or you can use [macros](concepts/macros.md) to create audits usable by multiple models. SQLMesh also includes pre-made audits for common use cases like detecting NULL or duplicated values.
+Audits are flexible - they can be tied to a specific model's contents, or you can use [macros](macros.md) to create audits usable by multiple models. SQLMesh also includes pre-made audits for common use cases like detecting NULL or duplicated values.
 
 You specify which audits should run for a model by including them in the model's metadata properties. 
 

@@ -24,7 +24,7 @@ connections:
 ### Root Level Connection Config
 | Option               | Description                                                                                                         |  Type  | Required |
 |----------------------|---------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `default_connection` | The name of a connection to use by default (Default: A connection defined first in the `connections` option)        | string |    N     |
+| `default_connection` | The name of a connection to use by default (Default: The connection defined first in the `connections` option)        | string |    N     |
 | `test_connection`    | The name of a connection to use when running tests (Default: A DuckDB connection that creates an in-memory database | string |    N     |
 
 ### Shared Connection Config
