@@ -355,3 +355,25 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     assert snapshot_b.version_get_or_generate() in plan._missing_intervals
 
     assert plan.start == to_timestamp("2022-01-01")
+
+
+def test_auto_categorization(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.set_version()
+
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": updated_snapshot}
+    context_diff_mock.added = set()
+    context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
+    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
+
+    state_reader_mock = mocker.Mock()
+
+    Plan(context_diff_mock, dag, state_reader_mock)
+
+    assert updated_snapshot.version == updated_snapshot.fingerprint.to_version()
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
