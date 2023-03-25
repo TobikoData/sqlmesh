@@ -9,6 +9,8 @@ export interface InitialFile extends InitialArtifact, File {
 }
 
 export class ModelFile extends ModelArtifact<InitialFile> {
+  private _content: string = ''
+
   content: string
   extension: string
   is_supported: boolean
@@ -18,11 +20,11 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       (initial as ModelFile)?.isModel
         ? (initial as ModelFile).initial
         : {
-            ...(initial as File),
-            extension: initial?.extension ?? '.sql',
-            is_supported: initial?.is_supported ?? true,
-            content: initial?.content ?? '',
-          },
+          ...(initial as File),
+          extension: initial?.extension ?? '.sql',
+          is_supported: initial?.is_supported ?? true,
+          content: initial?.content ?? '',
+        },
       parent,
     )
 
@@ -40,7 +42,8 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get isChanged(): boolean {
-    return this.content !== this.initial.content
+
+    return this.content !== this._content
   }
 
   get isSQLMeshModel(): boolean {
@@ -52,5 +55,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 
   get isSQLMeshSeed(): boolean {
     return ['.csv'].includes(this.extension) && this.path.startsWith('seeds/')
+  }
+
+  updateContent(newContent: string = ''): void {
+    this._content = newContent
+    this.content = newContent
   }
 }

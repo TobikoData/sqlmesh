@@ -71,7 +71,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   }
 
   return (
-    <div className={clsx('flex flex-col overflow-hidden', className)}>
+    <div className={clsx('flex flex-col overflow-hidden text-prose', className)}>
       <Tab.Group
         onChange={setActiveTabIndex}
         selectedIndex={activeTabIndex < 0 ? activeTab : activeTabIndex}
@@ -92,10 +92,10 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                     isDisabledTabTable(tabName) ||
                       isDisabledTabTerminal(tabName) ||
                       isDisabledTabQueryPreview(tabName)
-                      ? 'text-neutral-400 cursor-not-allowed'
+                      ? 'cursor-not-allowed opacity-50 bg-neutral-10'
                       : selected
-                      ? 'bg-secondary-100 text-secondary-500 cursor-default'
-                      : 'text-neutral-900 hover:bg-light/[0.12] hover:text-neutral-500 cursor-pointer',
+                      ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                      : 'bg-secondary-10 cursor-pointer',
                   )
                 }
               >
@@ -126,15 +126,15 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             )}
           >
             {table != null && (
-              <div className="w-full h-full overflow-hidden overflow-y-auto">
+              <div className="w-full h-full overflow-hidden overflow-y-auto scrollbar scrollbar--horizontal scrollbar--vertical">
                 <table className="w-full h-full">
-                  <thead className="sticky top-0 bg-secondary-100">
+                  <thead className="sticky top-0 bg-theme">
                     {table.getHeaderGroups().map(headerGroup => (
                       <tr key={headerGroup.id}>
                         {headerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="px-2 text-sm text-left border-b-2 border-neutral-100"
+                            className="px-2 text-sm text-left border-b-2 border-neutral-50"
                           >
                             {header.isPlaceholder
                               ? null
@@ -153,7 +153,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {row.getVisibleCells().map(cell => (
                           <td
                             key={cell.id}
-                            className="px-2 py-1 text-sm text-left border-b border-neutral-100"
+                            className="px-2 py-1 text-sm text-left border-b border-neutral-50"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
@@ -164,13 +164,13 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="text-left sticky bottom-0 bg-neutral-100">
+                  <tfoot className="text-left sticky bottom-0 bg-neutral-50">
                     {table.getFooterGroups().map(footerGroup => (
                       <tr key={footerGroup.id}>
                         {footerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="px-1 px-3"
+                            className="px-3"
                           >
                             {header.isPlaceholder
                               ? null
@@ -192,7 +192,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg overflow-auto scrollbar scrollbar--vertical">
+            <pre className="w-full h-full p-4 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs">
               {tabQueryPreviewContent}
             </pre>
           </Tab.Panel>
@@ -201,7 +201,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            <pre className="w-full h-full p-4 bg-secondary-100 rounded-lg text-danger-500 overflow-auto text-xs  scrollbar scrollbar--vertical">
+            <pre className="w-full h-full p-4 bg-primary-10 rounded-lg text-danger-500 overflow-auto text-xs scrollbar scrollbar--horizontal scrollbar--vertical">
               {tabTerminalContent}
             </pre>
           </Tab.Panel>
