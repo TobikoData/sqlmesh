@@ -7,10 +7,10 @@ nav:
     - quick_start.md
   - Guides:
     - guides/projects.md
-    - guides/connections.md
     - guides/models.md
     - guides/testing.md
     - guides/scheduling.md
+    - guides/connections.md
   - Concepts:
     - concepts/overview.md
     - Models:
@@ -42,6 +42,7 @@ nav:
     - integrations/airflow.md
     - integrations/dbt.md
     - integrations/github.md
+    - integrations/engines.md
   - Best practices:
     - best_practices/recommended_workflow.md
   - Resources:

@@ -1,6 +1,6 @@
 # Notebook
 
-SQLMesh supports JupyterLabs and Databricks Notebooks. Magics are loaded automatically and use the variable `context`.
+SQLMesh supports Jupyter and Databricks Notebooks. Magics are loaded automatically and use the variable `context` to locate a SQLMesh project.
 
 ```python
 from sqlmesh import Context
@@ -105,7 +105,7 @@ positional arguments:
 
 ## test
 ```
-  %test [--ls] model [test_name]
+%test [--ls] model [test_name]
 
 Allow the user to list tests for a model, output a specific test, and
 then write their changes back.
