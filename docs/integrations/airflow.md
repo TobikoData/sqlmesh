@@ -28,7 +28,7 @@ The name of the module file can be arbitrary, but we recommend something descrip
 **Note**: The name of the Engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
 
 ## SQLMesh client configuration
-In your SQLMesh repository, create the following configuration:
+In your SQLMesh repository, create the following configuration within config.py:
 ```python linenums="1"
 from sqlmesh.core.config import Config, AirflowSchedulerConfig
 
