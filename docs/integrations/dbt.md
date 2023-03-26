@@ -1,20 +1,21 @@
 # dbt
 
-SQLMesh has native support for importing and running dbt projects. 
+SQLMesh has native support for reading dbt projects. 
 
-**Note:** This featuring is currently under development. You can view the [development backlog](https://github.com/orgs/TobikoData/projects/1/views/3) to see what improvements we've already planned. If you are interested in this feature, we encourage you to try it with your dbt projects and [submit issues](https://github.com/TobikoData/sqlmesh/issues) so we can make it more robust.
+**Note:** This feature is currently under development. You can view the [development backlog](https://github.com/orgs/TobikoData/projects/1/views/3) to see what improvements are already planned. If you are interested in this feature, we encourage you to try it with your dbt projects and [submit issues](https://github.com/TobikoData/sqlmesh/issues) so we can make it more robust.
 
-## Getting Started
-### Importing a dbt project
+## Getting started
+### Reading a dbt project
 
-Create a SQLMesh project from a dbt formatted project by running the `init` command *within the dbt project root directory* and with the `dbt` template option:
+Create a SQLMesh project from an existing dbt project by running the `init` command *within the dbt project root directory* and with the `dbt` template option:
 
 ```bash
 $ sqlmesh init -t dbt
 ```
-SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file by default. The target can be changed at anytime.
 
-#### Setting model backfill start dates
+SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
+
+### Setting model backfill start dates
 
 Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model, or globally in the `dbt_project.yml` file as follows:
 
@@ -25,43 +26,44 @@ Models **require** a start date for backfilling data through use of the `start` 
 
 ### Running SQLMesh
 
-You run SQLMesh as with any SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired. 
+Run SQLMesh as with any SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired. 
 
-You can continue to use your dbt file and project format.
+You continue to use your dbt file and project format.
 
-### Workflow differences between SQLMesh and dbt
+## Workflow differences between SQLMesh and dbt
 
-Please consider the following when importing a dbt project:
+Consider the following when using a dbt project:
 
 * SQLMesh will detect and deploy new or modified seeds as part of running the `plan` command and applying changes - there is no separate seed command. Refer to [seed models](../concepts/models/seed_models.md) for more information.
 * The `plan` command dynamically creates environments, so environments do not need to be hardcoded into your `profiles.yml` file as targets. To get the most out of SQLMesh, point your dbt profile target at the production target, and let SQLMesh handle the rest for you.
-* The term "test" has a different meaning in SQLMesh and dbt: 
-    - dbt "tests" are [audits](../concepts/audits.md) in SQLMesh
-    - SQLMesh "tests" are [unit tests](../concepts/tests.md), which test query logic before applying a SQLMesh plan
-* SQLMesh's incremental models track which intervals have been filled and automatically detect and fill interval gaps. dbt does not support intervals, and their recommended incremental logic is not compatible with SQLMesh, requiring small tweaks to the models (don't worry - dbt can still use the models!).
+* The term "test" has a different meaning in dbt than in SQLMesh: 
+    - dbt "tests" are [audits](../concepts/audits.md) in SQLMesh.
+    - SQLMesh "tests" are [unit tests](../concepts/tests.md), which test query logic before applying a SQLMesh plan.
+* dbt's' recommended incremental logic is not compatible with SQLMesh, so small tweaks to the models are required (don't worry - dbt can still use the models!).
 
 ## How to use SQLMesh incremental models within dbt
 
-SQLMesh's incremental models automatically detect and backfill any missing intervals. dbt's incremental logic does not support intervals, and is not compatible with SQLMesh.
+Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's.
 
-### Mapping dbt incremental to SQLMesh incremental
+SQLMesh automatically detects and offers to backfill missing time intervals for incremental models. dbt's incremental logic does not support intervals and is not compatible with SQLMesh.
+
+This section describes how to implement SQLMesh incremental models in a dbt-formatted project.
+
+### dbt's incremental logic
+dbt's incremental logic is implemented with jinja blocks gated by `{% if is_incremental() %}`. 
+
+Existing uses of these blocks do not need to be removed from the dbt project's models, but SQLMesh will ignore them.
+
+### SQLMesh's incremental logic
+SQLMesh's incremental logic is implemented with a jinja block gated by `{% if sqlmesh is defined %}`.
+
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads: 
 - Using merge (with the sqlmesh [`incremental_by_unique_key` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key)) 
 - Using insert-overwrite/delete+insert (with the sqlmesh [`incremental_by_time_range` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
 
-Incremenatal loading with append is not currently supported and is not recommended since it is not idempotent.
+A model using the insert-overwrite approach must specify the model's time column. The following example jinja block is for an `INCREMENTAL_BY_TIME_RANGE` model kind with a `time_column` named "ds". 
 
-
-#### Merge modifications
-TODO
-
-
-#### Insert-overwrite and delete+insert modifications
-To use the insert-overwrite approach with a model, add to its configuration a `time_column` field containing the name of the model's time column. 
-
-As mentioned in the workflow changes above, a small model tweak is required. In order to maintain backwards compatibility with dbt, SQLMesh will ignore any jinja blocks using `{% if is_incremental() %}`, and will instead ask you define a new jinja block gated by `{% if sqlmesh is defined %}`. 
-
-For example, the jinja block for incremental by time range using a `time_column` named "ds":
+The SQL `WHERE` clause selecting a time interval with the "ds" column goes in a jinja block gated by `{% if sqlmesh is defined %}`:
 
 ```bash
 > {% if sqlmesh is defined %}
@@ -70,13 +72,15 @@ For example, the jinja block for incremental by time range using a `time_column`
 > {% endif %}
 ```
 
+Note that you must use standard jinja macro notation rather than the special SQLMesh interval macros (e.g., `{{ start_ds }}` instead of `@start_ds`).
+
 For more information about how to use different time types or unique keys with incremental loads, refer to [incremental model kinds](../concepts/models/model_kinds.md).
 
-### Unit Tests
+## Unit Tests
 This is the same as sqlmesh unit tests...link to that. Yes, they go in the same folder as dbt tests (audits).
 
 ## Using Airflow
-First, configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
+To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
 
 Then, add the following to `config.py` within the project root directory:
 
@@ -84,8 +88,7 @@ Then, add the following to `config.py` within the project root directory:
 > airflow_config = sqlmesh_config(Path(__file__).parent, scheduler=AirflowSchedulerConfig())
 ```
 
-See the [Airflow configuration documentation](https://airflow.apache.org/docs/apache-airflow/2.1.0/configurations-ref.html) to see all AirflowSchedulerConfig configuration options.
-
+See the [Airflow configuration documentation](https://airflow.apache.org/docs/apache-airflow/2.1.0/configurations-ref.html) for a list of all AirflowSchedulerConfig configuration options.
 
 ## Support dbt jinja methods
 
