@@ -41,7 +41,7 @@ Consider the following when using a dbt project:
     - SQLMesh "tests" are [unit tests](../concepts/tests.md), which test query logic before applying a SQLMesh plan.
 * dbt's' recommended incremental logic is not compatible with SQLMesh, so small tweaks to the models are required (don't worry - dbt can still use the models!).
 
-## How to use SQLMesh incremental models within dbt
+## How to use SQLMesh incremental models with dbt projects
 
 Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's.
 
@@ -55,7 +55,7 @@ dbt's incremental logic is implemented with jinja blocks gated by `{% if is_incr
 Existing uses of these blocks do not need to be removed from the dbt project's models, but SQLMesh will ignore them.
 
 ### SQLMesh's incremental logic
-SQLMesh's incremental logic is implemented with a jinja block gated by `{% if sqlmesh is defined %}`.
+SQLMesh's incremental logic is implemented in dbt projects with jinja blocks gated by `{% if sqlmesh is defined %}`.
 
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads: 
 - Using merge (with the sqlmesh [`incremental_by_unique_key` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key)) 
