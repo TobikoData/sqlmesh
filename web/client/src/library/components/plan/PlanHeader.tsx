@@ -16,11 +16,10 @@ export default function Plan({ error }: { error?: Error }): JSX.Element {
       {environment.isInitial && environment.isDefault && (
         <Banner
           variant={EnumVariant.Warning}
-          headline="Running Default Plan"
-          description="Lorem ipsum dolor sit amet, consectetur adipisicing elit. Tempora
-          expedita totam quis dignissimos veniam officia debitis atque
-          nesciunt, voluptatem eos omnis quidem nihil error, nulla soluta?
-          Saepe voluptates eaque ducimus!"
+          headline="Initializing Prod Environment"
+          description="Prod will be completely backfilled in order to ensure there are no data gaps.
+          After this is applied, it is recommended to validate further changes in a dev environment before
+          deploying to production."
         />
       )}
       {error != null && (
