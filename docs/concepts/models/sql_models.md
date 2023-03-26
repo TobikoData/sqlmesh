@@ -52,7 +52,7 @@ Optional SQL statements can help you prepare the model's `SELECT` statement. You
 The model's `SELECT` statement must be a standalone SQL Statement that explicitly lists out its columns. The result of this query will be used to populate the model table.
 
 ## Automatic dependencies
-SQLMesh parses your SQL, so it has a first class understanding of what you're trying to do. There is no need for you to manually specify dependencies to other models with special tags or commands. For example, given a model with the query as follows:
+SQLMesh parses your SQL, so it has a first-class understanding of what you're trying to do. There is no need for you to manually specify dependencies to other models with special tags or commands. For example, given a model with the query as follows:
 
 ```sql linenums="1"
 SELECT employees.id
@@ -75,9 +75,9 @@ SQLMesh encourages explicit type casting. SQL's type coercion can be tricky to d
 Although `SELECT *` can be convenient, it can be dangerous because a model's result can change due to external factors (for example, the upstream source adding or removing a column). In general, you should always list out every column you need. When selecting from external sources, `SELECT *` is prohibited and will raise an exception.
 
 ## Transpilation
-SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) in order to parse and transpile SQL. Thus, you can write your SQL in any supported dialect and transpile it into another supported dialect. You can also use advanced syntax that may not be available in your engine of choice. For example, `x::int` is equivalent to `CAST(x as INT)`, but is only supported in some dialects. SQLGlot brings you this feature regardless of what engine you're using. Additionally, you won't have to worry about things such as trailing commas, as SQLGlot will remove them at parse time.
+SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) in order to parse and transpile SQL. Therefore, you can write your SQL in any supported dialect and transpile it into another supported dialect. You can also use advanced syntax that may not be available in your engine of choice. For example, `x::int` is equivalent to `CAST(x as INT)`, but is only supported in some dialects. SQLGlot brings you this feature regardless of what engine you're using. Additionally, you won't have to worry about things such as trailing commas, as SQLGlot will remove them at parse time.
 
 ## Macros
 Although SQL is very powerful, it is often required to run SQL queries with dynamic components such as date filters. For example, you may want to change the date ranges in a `between` statement so that you can get the latest batch of data. SQLMesh provides these dates automatically through macro variables.
 
-Additionally, large queries can be difficult to read and maintain. In order to make queries less bloated and repetitive, SQLMesh supports a powerful [macro syntax](../../macros) as well as [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), allowing you to write powerful macros that can make your SQL queries easier to manage.
+Additionally, large queries can be difficult to read and maintain. In order to make queries less bloated and repetitive, SQLMesh supports a powerful [macro syntax](../../macros) as well as [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), allowing you to write macros that can make your SQL queries easier to manage.

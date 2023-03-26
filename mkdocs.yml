@@ -43,8 +43,6 @@ nav:
     - integrations/dbt.md
     - integrations/github.md
     - integrations/engines.md
-  - Best practices:
-    - best_practices/recommended_workflow.md
   - Resources:
     - comparisons.md
     - development.md

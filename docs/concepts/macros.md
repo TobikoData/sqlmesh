@@ -1,6 +1,6 @@
 # Macros
 
-Although SQL is not dynamic, data pipelines need some form of dynamicism to be useful. For example, you may want a SQL query that runs the same logic except for a filter on dates that should change with every invocation.
+Although SQL is not dynamic, data pipelines need some form of dynamicism in order to be useful. For example, you may want a SQL query that runs the same logic except for a filter on dates that should change with every invocation.
 
 ```sql linenums="1"
 SELECT *
@@ -71,7 +71,7 @@ Variables:
     * @latest_millis
 
 ## Jinja
-[Jinja](https://jinja.palletsprojects.com/en/3.1.x/) is a popular templating tool for creating dynamic SQL and **is supported** by SQLMesh, but there are some drawbacks which lead for us to create our own Macro system.
+[Jinja](https://jinja.palletsprojects.com/en/3.1.x/) is a popular templating tool for creating dynamic SQL and is supported by SQLMesh, but there are some drawbacks which lead for us to create our own macro system.
 
 * Jinja is not valid SQL and not parseable.
 ```sql linenums="1"
@@ -80,9 +80,9 @@ SE{{ 'lect' }} x {{ 'AS ' + var }}
 FROM {{ 'table CROSS JOIN z' }}
 ```
 
-* Jinja is verbose and difficult to debug
+* Jinja is verbose and difficult to debug.
 ```sql linenums="1"
-TODO example with multiple for loops with trailing or leading comma
+TBD example with multiple for loops with trailing or leading comma
 ```
 * No concepts of types. Easy to miss quotes.
 

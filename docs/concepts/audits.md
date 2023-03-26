@@ -42,7 +42,7 @@ AUDIT (
 SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
-In the example above we utilized [Macros](macros.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
+In the example above we utilized [macros](macros.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
 
 The generic audit can now be applied to a model by being referenced in its definition:
 ```sql linenums="1"
@@ -56,7 +56,7 @@ MODEL (
 ```
 Notice how `column` and `threshold` parameters have been set at this point. These values will later be propagated into the audit query and returned by the `@column` and `@threshold` macros accordingly.
 
-Please also note that the same audit can be applied more than once to the same model with different sets of parameters.
+Note that the same audit can be applied more than once to the same model with different sets of parameters.
 
 ## Built-in audits
 SQLMesh comes with a suite of built-in generic audits which covers a broad set of common use cases.
@@ -75,7 +75,7 @@ MODEL (
 ```
 
 ### unique_values
-Makes sure that provided columns only contain unique values.
+Ensures that provided columns only contain unique values.
 
 Example:
 ```sql linenums="1"
@@ -101,7 +101,7 @@ MODEL (
 ```
 
 ### number_of_rows
-Ensures that the number of rows in the model's table exceeds the configured threshold. For incremental models this check only applies to a data interval that is being evaluated, and not to the entire table.
+Ensures that the number of rows in the model's table exceeds the configured threshold. For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
 
 Example:
 ```sql linenums="1"

@@ -28,7 +28,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
        sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously and exits once the evaluation is complete. It is the responsibility of users to run this command periodically with a cron job, a CI / CD tool like Jenkins, or via similar means.
+**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously, and will exit once the evaluation is complete. It is the responsibility of users to run this command periodically with a cron job, a CI/CD tool like Jenkins, or in a similar fashion.
 
 
 ## Integrating with Airflow
@@ -110,6 +110,6 @@ Waiting for the plan application DAG 'sqlmesh_plan_application__prod__fb88a0c6_1
 Track plan application progress using link
 ```
 
-Once the command is finished running, the following DAGs will become available within the Airflow UI:
+Once the command runs, the following DAGs will become available within the Airflow UI:
 
 ![Airflow UI after successful plan application](scheduling/airflow_successful_plan_apply.png)
