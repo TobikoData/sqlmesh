@@ -3,13 +3,13 @@
 SQLMesh provides first-class support for Airflow with the following capabilities:
 
 * A Directed Acyclic Graph (DAG) generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
-* Each Plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
+* Each plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
 * The Airflow [Database Backend](https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html) is used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
 ## Airflow cluster configuration
-To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Make sure it is installed with the extras for your engine (if needed). Ex: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras. 
+To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras. 
 
 **Note:** The Airflow Webserver instance(s) must be restarted after installation.
 
@@ -25,7 +25,7 @@ for dag in sqlmesh_airflow.dags:
 ```
 The name of the module file can be arbitrary, but we recommend something descriptive such as `sqlmesh.py` or `sqlmesh_integration.py`.
 
-**Note**: The name of the Engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
+**Note**: The name of the engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
 
 ## SQLMesh client configuration
 In your SQLMesh repository, create the following configuration within config.py:

@@ -4,7 +4,7 @@
 
 ---
 
-Before getting started, ensure that you meet the [prerequsities](../../prerequisites) for using SQLMesh.
+Before getting started, ensure that you meet the [prerequsities](../prerequisites.md) for using SQLMesh.
 
 ---
 
@@ -64,7 +64,7 @@ If using CLI or Notebook, you can open a file in your project for editing by usi
 sqlmesh --path <your-project-path>
 ```
 
-For more details, refer to [CLI](../../api/cli) and [Notebook](../..api/notebook).
+For more details, refer to [CLI](../reference/cli.md) and [Notebook](../reference/notebook.md).
 
 ## Importing a project
 

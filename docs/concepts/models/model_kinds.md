@@ -84,7 +84,7 @@ WHERE
 ### Idempotency
 It is recommended to ensure that queries of models of this kind are [idempotent](../../glossary/#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans). 
 
-Please note, however, that upstream models and tables can impact the extent to which the idempotency property can be guaranteed. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically renders such a model as non-idempotent.
+ Note, however, that upstream models and tables can impact the extent to which the idempotency property can be guaranteed. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically renders such a model as non-idempotent.
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind are materialized using the following strategies:
@@ -107,7 +107,7 @@ This kind signifies that a model should be computed incrementally based on a uni
 * There should be at most one record associated with each unique key.
 * It is appropriate to upsert records, meaning existing records can be overridden by new arrivals when their keys match.
 
-[Slowly Changing Dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension) (SCD) is one example that fits this description well.
+A [Slowly Changing Dimension](../glossary.md#slowly-changing-dimension-scd) (SCD) is one example that fits this description well.
 
 The name of the unique key column must be provided as part of the model definition, as in the following example:
 ```sql linenums="1"
@@ -198,7 +198,7 @@ Other model kinds cause the output of a model query to be materialized and store
 
 **Note:** With this kind, the model's query is evaluated every time the model is referenced in downstream queries. This may incur undesirable compute cost in cases where the model's query is compute-intensive, or when the model is referenced in many downstream queries.
 
-View is the default model kind if kind is not specified.
+View is the default model kind if the kind is not specified.
 
 Example:
 ```sql linenums="1"

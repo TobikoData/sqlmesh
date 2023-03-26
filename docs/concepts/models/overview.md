@@ -83,7 +83,7 @@ The `MODEL` statement takes various properties, which are used for both metadata
 - Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Engines that support partitioning such as Spark and Hive also use it as the partition key. Additional partition key columns can be specified with the `partitioned_by` property below. Time column can have an optional format string. The format should be in the dialect of the model.
 
 ### partitioned_by
-- Partition by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key. Models can also have descriptions associated with them in the form of comments, such as in the following example:
+- Partitioned by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key. Models can also have descriptions associated with them in the form of comments, such as in the following example:
 
 ```sql linenums="1"
 /* Customer revenue computed and stored daily. */
@@ -98,7 +98,7 @@ MODEL (
 Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../../concepts/macros.md).
 
 ## Statements
-Models can have additional statements that run before the main query. This can be useful for loading things such as  [UDFs](https://en.wikipedia.org/wiki/User-defined_function). In general, statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior.
+Models can have additional statements that run before the main query. This can be useful for loading things such as  [UDFs](../glossary.md#user-defined-function-udf). In general, statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior.
 
 ```sql linenums="1"
 MODEL (
@@ -116,7 +116,7 @@ FROM y
 Models that are loaded incrementally require a time column to partition data. A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake. For more information, refer to [time column](../../concepts/models/model_kinds.md#time-column).
 
 ## Advanced usage
-The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer.
+The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer:
 
 ```sql linenums="1"
 -- Orders are partitioned by the di int column

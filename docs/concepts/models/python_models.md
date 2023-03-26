@@ -1,6 +1,6 @@
 # Python models
 
-Although SQL is a powerful tool, there are some use cases that are better handled by Python. For example, pipelines that involve machine learning, interacting with external APIs, and complex business logic that cannot be expressed in SQL. SQLMesh has first class support for models defined in Python; there are no restrictions on what can be done in the Python model implementation as long as it returns a Pandas or a Spark DataFrame instance.
+Although SQL is a powerful tool, there are some use cases that are better handled by Python. For example, pipelines that involve machine learning, interacting with external APIs, and complex business logic that cannot be expressed in SQL. SQLMesh has first-class support for models defined in Python; there are no restrictions on what can be done in the Python model implementation as long as it returns a Pandas or a Spark DataFrame instance.
 
 ## Definition
 
@@ -27,11 +27,9 @@ def execute(
 ) -> pd.DataFrame:
 ```
 
-The `execute` function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators), which is used to capture model's metadata similarly to the `MODEL` statement in [SQL models](#sql_models.md). The function itself takes in an `Execution` context that can be used to run SQL queries and retrieve the current time interval that is being processed, as well as arbitrary key-value arguments passed in at runtime. You can either return a Pandas or a PySpark Dataframe instance.
+The `execute` function is wrapped with the `model` [decorator](https://wiki.python.org/moin/PythonDecorators), which is used to capture model's metadata similarly to the `MODEL` statement in [SQL models](#sql_models.md). The function itself takes in an `Execution` context that can be used to run SQL queries and to retrieve the current time interval that is being processed, as well as arbitrary key-value arguments passed in at runtime. You can either return a Pandas or a PySpark Dataframe instance.
 
-Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The argument `columns` is a dictionary of column name to type.
-
-If the output is too large, it can also be returned in chunks using Python generators.
+Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The argument `columns` is a dictionary of column name to type. If the output is too large, it can also be returned in chunks using Python generators.
 
 ## Execution context
 Python models can do anything you want, but it is strongly recommended for all models to be [idempotent](../../glossary/#idempotency). Python models can easily fetch data from upstream models or even data outside of SQLMesh. Given an execution context, you can fetch a DataFrame with `fetchdf`.

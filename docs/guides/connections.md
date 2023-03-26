@@ -2,9 +2,9 @@
 
 ## Overview
 
-**Note:** The following guide only applies when using the built-in scheduler. Connections are configured differently when using an external scheduler like Airflow. See the [Scheduling guide](scheduling.md) for more details.
+**Note:** The following guide only applies when using the built-in scheduler. Connections are configured differently when using an external scheduler such as Airflow. See the [Scheduling guide](scheduling.md) for more details.
 
-In order to deploy models and apply changes to them, you must configure a connection to the Data Warehouse. This can be done in either the `config.yaml` file in your project folder or the one in `~/.sqlmesh`.
+In order to deploy models and to apply changes to them, you must configure a connection to the Data Warehouse. This can be done in either the `config.yaml` file in your project folder, or the one in `~/.sqlmesh`.
 
 Each configured connection has a unique name associated with it, which can be used to select a specific connection when using the CLI. For example:
 ```yaml linenums="1"
@@ -27,11 +27,11 @@ default_connection: local_db
 ```
 
 ## Test connection
-By default, when running [tests](../concepts/tests.md) SQLMesh uses an in-memory DuckDB database connection. You can override this behavior by specifying a connection name in the `test_connection` key:
+By default, when running [tests](../concepts/tests.md), SQLMesh uses an in-memory DuckDB database connection. You can override this behavior by specifying a connection name in the `test_connection` key:
 ```yaml linenums="1"
 test_connection: local_db
 ```
-Or you can specify the test connection in the `sqlmesh plan` CLI command:
+Or, you can specify the test connection in the `sqlmesh plan` CLI command:
 ```bash
 sqlmesh --test-connection local_db plan
 ```
