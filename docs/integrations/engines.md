@@ -8,7 +8,7 @@ Currently relies on local configuration of `gcloud` CLI to be authenticated in o
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`
 
-In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements it's own hook and operator. 
+In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator. 
 
 To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
 ```
