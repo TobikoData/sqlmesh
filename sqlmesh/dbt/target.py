@@ -31,11 +31,9 @@ class TargetConfig(abc.ABC, PydanticModel):
         threads: The number of threads to run on
     """
 
-    # sqlmesh
-    name: str = ""
-
     # dbt
     type: str
+    name: str = ""
     schema_: str = Field(alias="schema")
     threads: int = 1
     profile_name: t.Optional[str] = None
@@ -76,6 +74,7 @@ class TargetConfig(abc.ABC, PydanticModel):
     def target_jinja(self, profile_name: str) -> AttributeDict:
         fields = self.dict().copy()
         fields["profile_name"] = profile_name
+        fields["target_name"] = self.name
         return AttributeDict(fields)
 
 

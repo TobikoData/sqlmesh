@@ -121,7 +121,7 @@ class PackageLoader:
             nested_config = {}
             fields = {}
             for key, value in data.items():
-                if key.startswith("+") or key in config_fields:
+                if key.startswith("+") or key in config_fields or not isinstance(value, dict):
                     fields[key[1:]] = value
                 else:
                     nested_config[key] = value
