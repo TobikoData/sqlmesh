@@ -48,9 +48,10 @@ class Profile:
             if not project_file.exists():
                 raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
 
+            project_yaml = load_yaml(project_file)
             context.profile_name = context.render(
-                load_yaml(project_file).get("profile", "")
-            ) or context.render(load_yaml(project_file).get("name", ""))
+                project_yaml.get("profile", "")
+            ) or context.render(project_yaml.get("name", ""))
             if not context.profile_name:
                 raise ConfigError(f"{project_file.stem} must include project name.")
 
