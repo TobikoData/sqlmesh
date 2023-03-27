@@ -7,7 +7,7 @@ There are many tools and frameworks in the data ecosystem. This page tries to ma
 ## dbt
 [dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fanstastic tool, it has trouble scaling with data and organizational size.
 
-dbt initially built their product focused on smaller companies with small data. These companies are able to fully refresh their entire warehouse every run, which usually ensures correctness. Fully refreshing your entire warehouse is not cost effective or feasible at many companies. Incremental models in dbt are considered an "advanced" feature and leave a lot of room for error. SQLMesh actively encourages incremental modeling and aims to make it as easy as full refresh.
+dbt initially built their product focused on smaller companies with small data. These companies are able to fully refresh their entire warehouse every run, which usually ensures correctness. Fully refreshing your entire warehouse is not cost effective or feasible at many companies. We've designed SQLMesh to work at any data or organizational scale. This allows data teams of all sizes to compute pipelines correctly without excessives costs or wait times.
 
 dbt has been trying to grow beyond its small scale and simple data transformation foundation but these attempts result in many “advanced” features that are difficult to implement and pushes the burden of accuracy and efficiency onto the users.
 
