@@ -1,23 +1,26 @@
 # Seed models
 
-A seed is a special kind of model, in which data is sourced from a static dataset defined as a CSV file rather than from a SQL or Python implementation defined by a user. The CSV files themselves are also a part of your SQLMesh project.
+A `SEED` is a special kind of model in which data is sourced from a static dataset defined as a CSV file (rather than from a data source accessed via SQL or Python). The CSV files themselves are a part of your SQLMesh project.
 
 Since seeds are also models in SQLMesh, they capitalize on all the same benefits that SQL or Python models provide:
 
-* A physical table gets created in the data warehouse, which reflects the contents of the seed's CSV file.
+* A physical table is created in the data warehouse, which reflects the contents of the seed's CSV file.
 * Seed models can be referenced in downstream models in the same way as other models.
 * Changes to CSV files are captured during [planning](../plans.md#plan-application) and versioned using the same [fingerprinting](../architecture/snapshots.md#fingerprinting) mechanism.
 * [Environment](../environments.md) isolation also applies to seed models.
 
-Seed models are a good fit for static datasets that don't change often or at all. Examples of such datasets include:
+Seed models are a good fit for static datasets that change infrequently or not at all. Examples of such datasets include:
 
 * Names of national holidays and their dates
 * A static list of identifiers that should be excluded
 
 ## Creating a seed model
 
-Similar to [SQL models](sql_models.md), seed models are defined in files with the `.sql` extension as part of the `models/` folder of the SQLMesh project. To indicate that the model is a seed model, the special kind `SEED` should be used in the model definition:
-```sql linenums="1"
+Similar to [SQL models](./sql_models.md), `SEED` models are defined in files with the `.sql` extension in the `models/` directory of the SQLMesh project. 
+
+Use the special kind `SEED` in the `MODEL` definition to indicate that the model is a seed model:
+
+```sql linenums="1" hl_lines="3-5"
 MODEL (
   name test_db.national_holidays,
   kind SEED (
@@ -25,9 +28,9 @@ MODEL (
   )
 );
 ```
-The `path` attribute provided as part of the definition represents a path to the seed's CSV file **relative** to the path of the definition's `.sql` file.
+The `path` attribute contains the path to the seed's CSV file **relative** to the path of the model's `.sql` file.
 
-The physical table with the seed's content gets created using column types inferred by Pandas. The dataset schema can be overridden as part of the model definition:
+The physical table with the seed CSV's content is created using column types inferred by Pandas. Alternatively, you can manually specify the dataset schema as part of the `MODEL` definition:
 ```sql linenums="1" hl_lines="6 7 8 9"
 MODEL (
   name test_db.national_holidays,
@@ -40,21 +43,22 @@ MODEL (
   )
 );
 ```
-**Note:** The dataset schema provided in the definition takes precedence over column names defined in the header of a CSV file. This means that the order in which columns are provided in the model definition must match the order of columns in the CSV file.
+**Note:** The dataset schema provided in the definition takes precedence over column names defined in the header of the CSV file. This means that the order in which columns are provided in the `MODEL` definition must match the order of columns in the CSV file.
 
 ## Example
 
-In this example, we'll use the model definition from the previous section, and assume it's been saved to the `models/national_holidays.sql` file of the SQLMesh project.
+In this example, we use the model definition from the previous section saved in the `models/national_holidays.sql` file of the SQLMesh project.
 
-Add the seed's CSV file with name `national_holidays.csv` to the `models/` folder with the following contents:
+We also add the seed CSV file itself in the `models/` directory as a CSV file named `national_holidays.csv` with the following contents:
+
 ```csv linenums="1"
 name,date
 New Year,2023-01-01
 Christmas,2023-12-25
 ```
 
-When running the `sqlmesh plan` command, the new model is automatically detected:
-```bash
+When we run the `sqlmesh plan` command, the new seed model is automatically detected:
+```bash hl_lines="6-7"
 $ sqlmesh plan
 ======================================================================
 Successfully Ran 0 tests against duckdb
@@ -72,7 +76,9 @@ All model batches have been executed successfully
 test_db.national_holidays ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-After successful plan application, you can now query the table that resulted from model evaluation:
+Applying the plan created a new table `test_db.national_holidays`. 
+
+You can now run a custom query against the table with `sqlmesh fetchdf`:
 ```bash
 $ sqlmesh fetchdf "SELECT * FROM test_db.national_holidays"
 
@@ -81,7 +87,7 @@ $ sqlmesh fetchdf "SELECT * FROM test_db.national_holidays"
 1  Christmas  2023-12-25
 ```
 
-Changes to the CSV files get picked up during the subsequent `sqlmesh plan` command:
+Changes to the seed CSV file get picked up when the `sqlmesh plan` command is run:
 ```bash
 $ sqlmesh plan
 ======================================================================
