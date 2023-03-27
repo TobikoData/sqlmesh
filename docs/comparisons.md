@@ -136,6 +136,6 @@ Although SQLMesh supports Jinja, it does not rely on it and parses/understands S
 Additionally, having a first-class understanding of SQL allows SQLMesh to do some interesting things, like transpilation, column-level lineage, and automatic change categorization.
 
 ### Testing
-dbt calls data quality checks testing. Although data quality checks are extremely valuable, they are not sufficient for creating robust data pipelines. Data qualiy checks are great for detecting upstream data issues and large scale problems like nulls and duplicates. But they are not meant for testing edge cases or business logic.
+dbt calls data quality checks testing. Although data quality checks are extremely valuable, they are not sufficient for creating robust data pipelines. Data quality checks are great for detecting upstream data issues and large scale problems like nulls and duplicates. But they are not meant for testing edge cases or business logic.
 
 [Unit and integration tests](concepts/tests.md) are the tools to use to validate business logic. SQLMesh encourages users to add unit tests to all of their models to ensure changes don't unexpectedly break assumptions. Unit tests are designed to be fast and self contained so that they can run in CI.
