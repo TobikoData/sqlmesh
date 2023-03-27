@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  debounceAsync,
-  includes,
-  isFalse,
-} from '~/utils'
+import { debounceAsync, includes, isFalse } from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -49,12 +45,7 @@ function Plan({
   const client = useQueryClient()
 
   const dispatch = usePlanDispatch()
-  const {
-    auto_apply,
-    hasChanges,
-    hasBackfills,
-    hasVirtualUpdate,
-  } = usePlan()
+  const { auto_apply, hasChanges, hasBackfills, hasVirtualUpdate } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -73,10 +64,9 @@ function Plan({
   const { refetch: planRun } = useApiPlanRun(environment.name, planPayload)
   const { refetch: planApply } = useApiPlanApply(environment.name, applyPayload)
 
-  const debouncedPlanRun = useCallback(
-    debounceAsync(planRun, 1000, true),
-    [planRun]
-  )
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
 
   useEffect(() => {
     if (environment.isInitial && environment.isDefault) {
@@ -103,7 +93,7 @@ function Plan({
       {
         type: EnumPlanActions.External,
         isInitialPlanRun,
-      }
+      },
     ])
 
     if (isInitialPlanRun) {

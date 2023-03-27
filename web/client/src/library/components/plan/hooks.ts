@@ -1,16 +1,20 @@
-import { useMemo } from "react"
-import { type BodyApplyApiCommandsApplyPostCategories, type PlanDates, type PlanOptions } from "~/api/client"
-import { type ModelEnvironment } from "~/models/environment"
-import { isFalse, isStringEmptyOrNil } from "~/utils"
-import { usePlan } from "./context"
+import { useMemo } from 'react'
+import {
+  type BodyApplyApiCommandsApplyPostCategories,
+  type PlanDates,
+  type PlanOptions,
+} from '~/api/client'
+import { type ModelEnvironment } from '~/models/environment'
+import { isFalse, isStringEmptyOrNil } from '~/utils'
+import { usePlan } from './context'
 
 export function usePlanPayload({
   environment,
   isInitialPlanRun,
 }: {
-  environment: ModelEnvironment,
+  environment: ModelEnvironment
   isInitialPlanRun: boolean
-}): { planDates?: PlanDates, planOptions: PlanOptions } {
+}): { planDates?: PlanDates; planOptions: PlanOptions } {
   const {
     start,
     end,
@@ -56,20 +60,22 @@ export function usePlanPayload({
     create_from,
     no_auto_categorization,
     skip_tests,
-    restate_models
+    restate_models,
   ])
 
   return {
     planOptions,
-    planDates
+    planDates,
   }
 }
 
 export function useApplyPayload({
   isInitialPlanRun,
-}: { isInitialPlanRun: boolean }): {
-  planDates?: PlanDates,
-  planOptions: PlanOptions,
+}: {
+  isInitialPlanRun: boolean
+}): {
+  planDates?: PlanDates
+  planOptions: PlanOptions
   categories: BodyApplyApiCommandsApplyPostCategories
 } {
   const {

@@ -77,12 +77,14 @@ export function toDate(value?: string | number): Date | undefined {
 export function toDateFormat(
   date?: Date,
   format: string = 'yyyy-mm-dd',
-  isUTC: boolean = true
+  isUTC: boolean = true,
 ): string {
   if (date == null) return ''
 
   const year = isUTC ? date.getUTCFullYear() : date.getFullYear()
-  const month = toFormatted(isUTC ? date.getUTCMonth() + 1 : date.getMonth() + 1)
+  const month = toFormatted(
+    isUTC ? date.getUTCMonth() + 1 : date.getMonth() + 1,
+  )
   const day = toFormatted(isUTC ? date.getUTCDate() : date.getDate())
   const hour = toFormatted(isUTC ? date.getUTCHours() : date.getHours())
   const minute = toFormatted(isUTC ? date.getUTCMinutes() : date.getMinutes())
@@ -91,7 +93,7 @@ export function toDateFormat(
   const formats: Record<string, string> = {
     'mm/dd/yyyy': `${month}/${day}/${year}`,
     'yyyy-mm-dd': `${year}-${month}-${day}`,
-    'yyyy-mm-dd hh-mm-ss': `${year}-${month}-${day} ${hour}:${minute}:${second}`
+    'yyyy-mm-dd hh-mm-ss': `${year}-${month}-${day} ${hour}:${minute}:${second}`,
   }
 
   return formats[format] ?? date.toDateString()

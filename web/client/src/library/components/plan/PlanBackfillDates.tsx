@@ -2,7 +2,7 @@ import Input from '../input/Input'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 
 export default function PlanBackfillDates({
-  disabled = false
+  disabled = false,
 }: {
   disabled?: boolean
 }): JSX.Element {
