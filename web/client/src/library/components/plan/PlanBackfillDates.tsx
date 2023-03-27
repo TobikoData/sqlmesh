@@ -2,7 +2,7 @@ import Input from '../input/Input'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 
 export default function PlanBackfillDates({
-  disabled = false,
+  disabled = false
 }: {
   disabled?: boolean
 }): JSX.Element {
@@ -13,11 +13,11 @@ export default function PlanBackfillDates({
     <div className="flex w-full flex-wrap md:flex-nowrap">
       <Input
         className="w-full md:w-[50%]"
-        label="Start Date"
+        label="Start Date (UTC)"
         info="The start datetime of the interval"
-        placeholder="01/01/2023"
+        placeholder="2023-12-13"
         disabled={disabled || isInitialPlanRun}
-        value={start ?? ''}
+        value={start}
         onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
           e.stopPropagation()
 
@@ -29,10 +29,10 @@ export default function PlanBackfillDates({
       />
       <Input
         className="w-full md:w-[50%]"
-        label="End Date"
+        label="End Date (UTC)"
         info="The end datetime of the interval"
-        placeholder="02/13/2023"
-        value={end ?? ''}
+        placeholder="2022-12-13"
+        value={end}
         disabled={disabled || isInitialPlanRun}
         onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
           e.stopPropagation()

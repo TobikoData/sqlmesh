@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   debounceAsync,
   includes,
   isFalse,
-  isStringEmptyOrNil,
-  toDate,
-  toDateFormat,
 } from '~/utils'
 import {
   EnumPlanState,
@@ -21,7 +18,6 @@ import {
   apiCancelPlanApply,
 } from '~/api'
 import {
-  type BodyApplyApiCommandsApplyPostCategories,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
 } from '~/api/client'
@@ -33,6 +29,7 @@ import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
+import { useApplyPayload, usePlanPayload } from './hooks'
 
 function Plan({
   environment,
@@ -53,20 +50,10 @@ function Plan({
 
   const dispatch = usePlanDispatch()
   const {
-    start,
-    end,
-    skip_tests,
-    no_gaps,
-    skip_backfill,
-    forward_only,
     auto_apply,
-    no_auto_categorization,
-    restate_models,
     hasChanges,
     hasBackfills,
     hasVirtualUpdate,
-    create_from,
-    change_categorization,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
@@ -80,89 +67,29 @@ function Plan({
   const [isPlanRan, seIsPlanRan] = useState(false)
   const [error, setError] = useState<Error>()
 
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planDates: environment.isDefault
-      ? undefined
-      : {
-          start,
-          end:
-            isInitialPlanRun || isStringEmptyOrNil(restate_models)
-              ? undefined
-              : end,
-        },
-    planOptions: environment.isInitial
-      ? {
-          skip_tests: true,
-        }
-      : environment.isDefault
-      ? {
-          skip_tests,
-        }
-      : {
-          no_gaps,
-          skip_backfill,
-          forward_only,
-          create_from,
-          no_auto_categorization,
-          skip_tests,
-          restate_models,
-        },
-  })
+  const planPayload = usePlanPayload({ environment, isInitialPlanRun })
+  const applyPayload = useApplyPayload({ isInitialPlanRun })
 
-  const { refetch: planApply } = useApiPlanApply(environment.name, {
-    planDates:
-      hasBackfills && isFalse(isInitialPlanRun)
-        ? {
-            start,
-            end,
-          }
-        : undefined,
-    planOptions: {
-      no_gaps,
-      skip_backfill,
-      forward_only,
-      create_from,
-      no_auto_categorization,
-      skip_tests,
-      restate_models,
-    },
-    categories: Array.from(
-      change_categorization.values(),
-    ).reduce<BodyApplyApiCommandsApplyPostCategories>(
-      (acc, { category, change }) => {
-        acc[change.model_name] = category.value
+  const { refetch: planRun } = useApiPlanRun(environment.name, planPayload)
+  const { refetch: planApply } = useApiPlanApply(environment.name, applyPayload)
 
-        return acc
-      },
-      {},
-    ),
-  })
-
-  const [startDate, endDate] = useMemo(() => {
-    const ONE_DAY = 1000 * 60 * 60 * 24
-    const end = isInitialPlanRun
-      ? initialEndDate
-      : toDateFormat(new Date(), 'mm/dd/yyyy')
-    const dateinitialEndDate = toDate(end)
-    const oneDayOffinitialEndDate =
-      dateinitialEndDate == null
-        ? undefined
-        : new Date(dateinitialEndDate.getTime() - ONE_DAY)
-    const start = isInitialPlanRun
-      ? initialStartDate
-      : toDateFormat(oneDayOffinitialEndDate, 'mm/dd/yyyy')
-
-    return [start, end]
-  }, [isInitialPlanRun, initialStartDate, initialEndDate])
-
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
+  const debouncedPlanRun = useCallback(
+    debounceAsync(planRun, 1000, true),
+    [planRun]
+  )
 
   useEffect(() => {
     if (environment.isInitial && environment.isDefault) {
       run()
     }
+
+    dispatch([
+      {
+        type: EnumPlanActions.Dates,
+        start: initialStartDate,
+        end: initialEndDate,
+      },
+    ])
 
     return () => {
       debouncedPlanRun.cancel()
@@ -176,12 +103,7 @@ function Plan({
       {
         type: EnumPlanActions.External,
         isInitialPlanRun,
-      },
-      {
-        type: EnumPlanActions.Dates,
-        start: startDate,
-        end: endDate,
-      },
+      }
     ])
 
     if (isInitialPlanRun) {
@@ -195,7 +117,7 @@ function Plan({
         },
       ])
     }
-  }, [isInitialPlanRun, initialStartDate, initialEndDate])
+  }, [isInitialPlanRun])
 
   useEffect(() => {
     if (
@@ -244,8 +166,8 @@ function Plan({
       },
       {
         type: EnumPlanActions.Dates,
-        start: startDate,
-        end: endDate,
+        start: initialStartDate,
+        end: initialEndDate,
       },
       {
         type: EnumPlanActions.ResetPlanOptions,
@@ -334,11 +256,6 @@ function Plan({
           {
             type: EnumPlanActions.Changes,
             ...data?.changes,
-          },
-          {
-            type: EnumPlanActions.Dates,
-            start: data?.start,
-            end: data?.end,
           },
         ])
 

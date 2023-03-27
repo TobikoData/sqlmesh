@@ -3,21 +3,21 @@ import { EnumSize, type Size } from '~/types/enum'
 import { isTrue } from '~/utils'
 
 export interface PropsInput extends React.HTMLAttributes<HTMLElement> {
-  value: string | number
+  value?: string | number
   type?: string
   label?: string
   info?: string
   placeholder?: string
   size?: Size
   disabled?: boolean
-  onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onInput: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 function Input({
   type = 'text',
   label,
   info,
-  value,
+  value = '',
   placeholder,
   className,
   size = EnumSize.md,
