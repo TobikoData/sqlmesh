@@ -7,7 +7,12 @@ import {
   toDate,
   toDateFormat,
 } from '~/utils'
-import { EnumPlanState, EnumPlanAction, useStorePlan, EnumPlanApplyType } from '~/context/plan'
+import {
+  EnumPlanState,
+  EnumPlanAction,
+  useStorePlan,
+  EnumPlanApplyType,
+} from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import {
   useApiPlanRun,
@@ -79,21 +84,21 @@ function Plan({
     planDates: environment.isDefault
       ? undefined
       : {
-        start,
-        end:
-          isInitialPlanRun || isStringEmptyOrNil(restate_models)
-            ? undefined
-            : end,
-      },
+          start,
+          end:
+            isInitialPlanRun || isStringEmptyOrNil(restate_models)
+              ? undefined
+              : end,
+        },
     planOptions: environment.isInitial
       ? {
-        skip_tests: true,
-      }
+          skip_tests: true,
+        }
       : environment.isDefault
-        ? {
+      ? {
           skip_tests,
         }
-        : {
+      : {
           no_gaps,
           skip_backfill,
           forward_only,
@@ -108,9 +113,9 @@ function Plan({
     planDates:
       hasBackfills && isFalse(isInitialPlanRun)
         ? {
-          start,
-          end,
-        }
+            start,
+            end,
+          }
         : undefined,
     planOptions: {
       no_gaps,

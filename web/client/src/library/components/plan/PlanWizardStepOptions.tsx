@@ -70,7 +70,7 @@ export default function PlanWizardStepOptions({
                             className={clsx(
                               'w-full bg-neutral-100 border-2 rounded-lg py-2 px-3 text-base leading-4',
                               syncronizedEnvironments.length < 2 &&
-                              'opacity-50 cursor-not-allowed',
+                                'opacity-50 cursor-not-allowed',
                               'flex w-full text-prose-lighter bg-theme-lighter border-theme-darker dark:border-theme-lighter dark:text-prose-darker rounded-md',
                               'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
                               'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',

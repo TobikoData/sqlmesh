@@ -56,13 +56,6 @@ import CodeEditor from './CodeEditor'
 import { type PropsComponent } from '~/main'
 import { sqlglotWorker } from './workers'
 
-export const EnumEditorFileStatus = {
-  Edit: 'edit',
-  Editing: 'editing',
-  Saving: 'saving',
-  Saved: 'saved',
-} as const
-
 export const EnumEditorTabs = {
   QueryPreview: 'queryPreview',
   Table: 'table',
@@ -70,7 +63,6 @@ export const EnumEditorTabs = {
 } as const
 
 export type EditorTabs = KeyOf<typeof EnumEditorTabs>
-export type EditorFileStatus = KeyOf<typeof EnumEditorFileStatus>
 
 interface PropsEditor extends React.HTMLAttributes<HTMLElement> {
   environment: ModelEnvironment
@@ -110,9 +102,6 @@ export default function Editor({
   const tabTableContent = useStoreEditor(s => s.tabTableContent)
   const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
 
-  const [fileStatus, setEditorFileStatus] = useState<EditorFileStatus>(
-    EnumEditorFileStatus.Edit,
-  )
   const [isSaved, setIsSaved] = useState(true)
   const [formEvaluate, setFormEvaluate] = useState<FormEvaluate>({
     start: toDateFormat(toDate(Date.now() - DAY)),
@@ -134,37 +123,29 @@ export default function Editor({
   const { data: fileData, refetch: getFileContent } = useApiFileByPath(
     activeFile.path,
   )
+  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
+
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
       setIsSaved(true)
-      setEditorFileStatus(EnumEditorFileStatus.Edit)
 
       if (file == null) return
 
-      activeFile.content = file.content ?? ''
+      activeFile.updateContent(file.content)
 
       setOpenedFiles(openedFiles)
+
+      void debouncedPlanRun()
     },
     onMutate() {
       setIsSaved(false)
-      setEditorFileStatus(EnumEditorFileStatus.Saving)
     },
   })
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 5000), [
-    planRun,
-  ])
-  const debouncedChange = useMemo(
-    () =>
-      debounce(
-        onChange,
-        () => {
-          setEditorFileStatus(EnumEditorFileStatus.Editing)
-        },
-        () => {
-          setEditorFileStatus(EnumEditorFileStatus.Edit)
-        },
-        1000,
-      ),
+
+  const debouncedSaveChange = useMemo(
+    () => debounce(saveChange, 1000, true),
     [activeFile],
   )
 
@@ -197,25 +178,26 @@ export default function Editor({
   }, [handleSqlGlotWorkerMessage])
 
   useEffect(() => {
-    if (activeFile.isSQLMeshModel || activeFile.isSQLMeshSeed) {
-      void debouncedPlanRun()
-    }
-
     return () => {
+      debouncedPlanRun.cancel()
+
       apiCancelPlanRun(client)
     }
-  }, [activeFile.content])
+  }, [])
 
   useEffect(() => {
     if (fileData == null) return
 
-    activeFile.content = fileData.content ?? ''
+    activeFile.updateContent(fileData.content)
 
     setOpenedFiles(openedFiles)
   }, [fileData])
 
   useEffect(() => {
-    if (isFalse(isStringEmptyOrNil(activeFile.path))) {
+    if (
+      isFalse(isStringEmptyOrNil(activeFile.path)) &&
+      isStringEmptyOrNil(activeFile.content)
+    ) {
       void getFileContent()
     }
 
@@ -257,19 +239,19 @@ export default function Editor({
     selectFile(new ModelFile())
   }
 
-  function onChange(value: string): void {
+  function updateFileContent(value: string): void {
     if (activeFile.content === value) return
 
     activeFile.content = value
 
-    if (activeFile.isLocal) {
-      setOpenedFiles(openedFiles)
-    } else {
-      mutationSaveFile.mutate({
-        path: activeFile.path,
-        body: { content: value },
-      })
-    }
+    setOpenedFiles(openedFiles)
+  }
+
+  function saveChange(): void {
+    mutationSaveFile.mutate({
+      path: activeFile.path,
+      body: { content: activeFile.content },
+    })
   }
 
   function sendQuery(): void {
@@ -314,7 +296,10 @@ export default function Editor({
         model: formEvaluate.model,
       })
         .then(updateTabs)
-        .catch(console.log)
+        .catch(error => {
+          bucket.set(EnumEditorTabs.Terminal, error.message)
+          setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
+        })
     }
   }
 
@@ -345,10 +330,6 @@ export default function Editor({
     }
   }
 
-  function cleanUp(): void {
-    setEditorFileStatus(EnumEditorFileStatus.Edit)
-  }
-
   // TODO: remove once we have a better way to determine if a file is a model
   const hasContentActiveFile = isFalse(isStringEmptyOrNil(activeFile.content))
   const shouldEvaluate =
@@ -363,7 +344,7 @@ export default function Editor({
     : [100, 0]
   const sizesMain =
     activeFile.isSQLMeshModel &&
-    [tabTableContent, tabTerminalContent].some(isTrue)
+    [tabTableContent, tabTerminalContent].some(Boolean)
       ? [75, 25]
       : [100, 0]
 
@@ -413,13 +394,15 @@ export default function Editor({
                     <small className="text-xs">
                       {file.isUntitled ? `SQL-${idx + 1}` : file.name}
                     </small>
+                    {file.isChanged && (
+                      <small className="group-hover:hidden text-xs inline-block mx-2 w-2 h-2 bg-warning-500 rounded-full"></small>
+                    )}
                     {openedFiles.size > 1 && (
                       <XCircleIcon
-                        className="inline-block opacity-0 group-hover:opacity-100 text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
+                        className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
-                          cleanUp()
                           closeEditorTab(file)
                         }}
                       />
@@ -442,7 +425,8 @@ export default function Editor({
             <div className="flex flex-col h-full">
               {models != null && (
                 <CodeEditor
-                  onChange={debouncedChange}
+                  onChange={updateFileContent}
+                  saveChange={debouncedSaveChange}
                   models={models}
                   file={activeFile}
                   dialect={dialect}
@@ -641,7 +625,6 @@ export default function Editor({
           <EditorFooter
             activeFile={activeFile}
             isSaved={isSaved}
-            fileStatus={fileStatus}
             dialects={dialects}
             dialect={dialect}
             setDialect={setDialect}
@@ -690,12 +673,10 @@ function EditorFooter({
   activeFile,
   isSaved,
   isValid,
-  fileStatus,
 }: {
   activeFile: ModelFile
   isSaved: boolean
   isValid: boolean
-  fileStatus: string
   dialects: Array<{ dialect_title: string; dialect_name: string }>
   dialect?: string
   setDialect: (dialect?: string) => void
@@ -711,14 +692,9 @@ function EditorFooter({
         <Indicator
           className="mr-2"
           text="Saved"
-          ok={isSaved}
+          ok={isFalse(activeFile.isChanged)}
         />
       )}
-      <Indicator
-        className="mr-2"
-        text="Status"
-        value={fileStatus}
-      />
       <Indicator
         className="mr-2"
         text="Language"

@@ -1,4 +1,4 @@
-import type { File } from '../api/client'
+import type { File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 
@@ -9,9 +9,12 @@ export interface InitialFile extends InitialArtifact, File {
 }
 
 export class ModelFile extends ModelArtifact<InitialFile> {
+  private _content: string = ''
+
   content: string
   extension: string
   is_supported: boolean
+  type?: FileType
 
   constructor(initial?: File | ModelFile, parent?: ModelDirectory) {
     super(
@@ -29,6 +32,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this.extension = initial?.extension ?? this.initial.extension
     this.is_supported = initial?.is_supported ?? this.initial.is_supported
     this.content = initial?.content ?? this.initial.content
+    this.type = initial?.type
   }
 
   get isEmpty(): boolean {
@@ -40,17 +44,15 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get isChanged(): boolean {
-    return this.content !== this.initial.content
+    return this.content !== this._content
   }
 
   get isSQLMeshModel(): boolean {
-    return (
-      ['.sql', '.py'].includes(this.extension) &&
-      this.path.startsWith('models/')
-    )
+    return this.type === 'model'
   }
 
-  get isSQLMeshSeed(): boolean {
-    return ['.csv'].includes(this.extension) && this.path.startsWith('seeds/')
+  updateContent(newContent: string = ''): void {
+    this._content = newContent
+    this.content = newContent
   }
 }

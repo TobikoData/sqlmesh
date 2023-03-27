@@ -1,25 +1,28 @@
+import { isFalse } from '~/utils'
+
 export function debounce(
   fn: (...args: any) => void,
-  before: () => void,
-  after: () => void,
   delay: number = 500,
+  immediate: boolean = false,
 ): (...args: any) => void {
-  let timeoutID: ReturnType<typeof setTimeout>
+  let timeoutID: ReturnType<typeof setTimeout> | undefined
 
   return function callback(...args: any) {
+    const callNow = immediate && timeoutID == null
+
     clearTimeout(timeoutID)
 
-    if (before != null) {
-      before()
-    }
-
     timeoutID = setTimeout(() => {
-      fn(...args)
+      timeoutID = undefined
 
-      if (after != null) {
-        after()
+      if (isFalse(immediate)) {
+        fn(...args)
       }
     }, delay)
+
+    if (callNow) {
+      fn(...args)
+    }
   }
 }
 
