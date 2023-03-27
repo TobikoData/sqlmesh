@@ -163,8 +163,7 @@ export function IDE(): JSX.Element {
             <Plan
               environment={environment}
               isInitialPlanRun={
-                environment?.isDefault == null ||
-                isTrue(environment?.isDefault)
+                environment?.isDefault == null || isTrue(environment?.isDefault)
               }
               disabled={isClosingModal}
               initialStartDate={initialStartDate}

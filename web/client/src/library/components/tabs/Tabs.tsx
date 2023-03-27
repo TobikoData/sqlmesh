@@ -71,7 +71,9 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   }
 
   return (
-    <div className={clsx('flex flex-col overflow-hidden text-prose', className)}>
+    <div
+      className={clsx('flex flex-col overflow-hidden text-prose', className)}
+    >
       <Tab.Group
         onChange={setActiveTabIndex}
         selectedIndex={activeTabIndex < 0 ? activeTab : activeTabIndex}

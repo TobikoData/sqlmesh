@@ -134,7 +134,7 @@ export default function Editor({
       if (file == null) return
 
       activeFile.updateContent(file.content)
-      
+
       setOpenedFiles(openedFiles)
 
       void debouncedPlanRun()
@@ -145,12 +145,7 @@ export default function Editor({
   })
 
   const debouncedSaveChange = useMemo(
-    () =>
-      debounce(
-        saveChange,
-        1000,
-        true
-      ),
+    () => debounce(saveChange, 1000, true),
     [activeFile],
   )
 
@@ -199,7 +194,10 @@ export default function Editor({
   }, [fileData])
 
   useEffect(() => {
-    if (isFalse(isStringEmptyOrNil(activeFile.path)) && isStringEmptyOrNil(activeFile.content)) {
+    if (
+      isFalse(isStringEmptyOrNil(activeFile.path)) &&
+      isStringEmptyOrNil(activeFile.content)
+    ) {
       void getFileContent()
     }
 
@@ -396,7 +394,9 @@ export default function Editor({
                     <small className="text-xs">
                       {file.isUntitled ? `SQL-${idx + 1}` : file.name}
                     </small>
-                    {file.isChanged && <small className="group-hover:hidden text-xs inline-block mx-2 w-2 h-2 bg-warning-500 rounded-full"></small>}
+                    {file.isChanged && (
+                      <small className="group-hover:hidden text-xs inline-block mx-2 w-2 h-2 bg-warning-500 rounded-full"></small>
+                    )}
                     {openedFiles.size > 1 && (
                       <XCircleIcon
                         className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"

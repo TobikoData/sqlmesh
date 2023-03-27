@@ -29,12 +29,12 @@ export function SqlMeshModel(models: Map<string, Model>): Extension {
             from: range.from,
             to: range.to,
             enter({ from, to }) {
-              // In case model name represented in qoutes 
+              // In case model name represented in qoutes
               // like in python files , we need to remove qoutes
               const model = viewUpdate.view.state.doc
                 .sliceString(from, to)
                 .replaceAll('"', '')
-                .replaceAll('\'', '')
+                .replaceAll("'", '')
 
               if (isNil(models.get(model))) return true
 
@@ -125,7 +125,8 @@ function handleClickOnSqlMeshModel(
   if (event.target == null) return
 
   const el = event.target as HTMLElement
-  const modelName = el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
+  const modelName =
+    el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
 
   if (modelName == null) return
 

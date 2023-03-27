@@ -236,7 +236,9 @@ function PlanChangePreviewIndirect({
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
-                    return <Tag  className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
+                    return (
+                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
+                    )
                   })()}
                 </Disclosure.Button>
                 <Disclosure.Panel className="text-sm px-4 mb-4">

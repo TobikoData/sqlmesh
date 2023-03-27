@@ -51,7 +51,7 @@ export default function ActivePlan({
           <Popover.Button
             className={clsx(
               'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
-              getTriggerBgColor(planState)
+              getTriggerBgColor(planState),
             )}
           >
             {plan == null ? 0 : 1}

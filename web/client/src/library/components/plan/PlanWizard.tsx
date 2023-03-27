@@ -216,7 +216,7 @@ export default function PlanWizard({
                     )}
                     {isArrayNotEmpty(modified?.metadata) && (
                       <PlanChangePreview
-                      className="w-full my-2"
+                        className="w-full my-2"
                         headline="Modified Metadata"
                         type={EnumPlanChangeType.Metadata}
                       >
@@ -260,11 +260,11 @@ export default function PlanWizard({
                         <h3
                           className={clsx(
                             planState === EnumPlanState.Cancelled &&
-                            'text-prose',
+                              'text-prose',
                             planState === EnumPlanState.Failed &&
-                            'text-danger-700',
+                              'text-danger-700',
                             planState === EnumPlanState.Finished &&
-                            'text-success-700',
+                              'text-success-700',
                           )}
                         >
                           {backfillStepHeadline}

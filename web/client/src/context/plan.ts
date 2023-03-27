@@ -24,7 +24,7 @@ export const EnumPlanState = {
 
 export const EnumPlanApplyType = {
   Virtual: 'virtual',
-  Backfill: 'backfill'
+  Backfill: 'backfill',
 } as const
 
 export type PlanApplyType = KeyOf<typeof EnumPlanApplyType>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
-import { keymap } from "@codemirror/view"
+import { keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
 import { type Model } from '~/api/client'
@@ -24,7 +24,7 @@ export default function CodeEditor({
   dialect,
   dialects,
   onChange,
-  saveChange
+  saveChange,
 }: {
   file: ModelFile
   models: Map<string, Model>
@@ -35,14 +35,15 @@ export default function CodeEditor({
 }): JSX.Element {
   const { mode } = useColorScheme()
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension(dialects)
-  
+
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
-  
+
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
-  
+
   const extensions = useMemo(() => {
-    const showSqlMeshDialect = file.extension === '.sql' && sqlDialectOptions != null
+    const showSqlMeshDialect =
+      file.extension === '.sql' && sqlDialectOptions != null
 
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
@@ -52,17 +53,19 @@ export default function CodeEditor({
       showSqlMeshDialect && SqlMeshDialect(models, file, sqlDialectOptions),
       file.extension === '.py' && python(),
       file.extension === '.yaml' && StreamLanguage.define(yaml),
-      keymap.of([{
-        mac: 'Cmd-s',
-        win: 'Ctrl-s',
-        linux: 'Ctrl-s',
-        preventDefault: true,
-        run() {
-          saveChange(file.content)
+      keymap.of([
+        {
+          mac: 'Cmd-s',
+          win: 'Ctrl-s',
+          linux: 'Ctrl-s',
+          preventDefault: true,
+          run() {
+            saveChange(file.content)
 
-          return true;
-        }
-      }])
+            return true
+          },
+        },
+      ]),
     ].filter(Boolean) as Extension[]
   }, [file, models, sqlDialectOptions, mode])
 

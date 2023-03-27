@@ -42,7 +42,7 @@ repos:
       - id: prettier
         name: prettier
         files: ^(web/client)
-        entry: prettier --ignore-path web/client/.prettierignore
+        entry: prettier --write --ignore-path web/client/.prettierignore
         exclude: ^(web/client/node_modules)
         require_serial: true
         language: node

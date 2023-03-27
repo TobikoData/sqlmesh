@@ -1,4 +1,4 @@
-import { isFalse } from "~/utils"
+import { isFalse } from '~/utils'
 
 export function debounce(
   fn: (...args: any) => void,
@@ -8,7 +8,7 @@ export function debounce(
   let timeoutID: ReturnType<typeof setTimeout> | undefined
 
   return function callback(...args: any) {
-    const callNow = immediate && timeoutID == null;
+    const callNow = immediate && timeoutID == null
 
     clearTimeout(timeoutID)
 
