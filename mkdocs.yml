@@ -47,8 +47,7 @@ nav:
     - comparisons.md
     - development.md
     - release_notes.md
-  - API:
-    - sqlmesh.html
+  - API: sqlmesh.html
 theme:
   name: material
   logo: sqlmesh.png
