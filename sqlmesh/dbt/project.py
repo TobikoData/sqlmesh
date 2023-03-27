@@ -56,6 +56,10 @@ class Project:
         if not context.project_name:
             raise ConfigError(f"{project_file_path.stem} must include project name.")
 
+        context.profile_name = (
+            context.render(project_yaml.get("profile", "")) or context.project_name
+        )
+
         profile = Profile.load(context)
         context.target = (
             profile.targets[context.target_name]
