@@ -133,7 +133,7 @@ dbt heavily relies on [Jinja](https://jinja.palletsprojects.com/en/3.1.x/). It h
 
 Although SQLMesh supports Jinja, it does not rely on it and parses/understands SQL through [SQLGlot](https://github.com/tobymao/sqlglot). Simple errors can be detected at compile time. You no longer have to wait minutes to see that you've referenced a column incorrectly or missed a comma.
 
-Additionally, having a first-class understanding of SQL allows for SQLMesh to do some interesting things, like transpilation, column-level lineage, and automatic change categorization.
+Additionally, having a first-class understanding of SQL allows SQLMesh to do some interesting things, like transpilation, column-level lineage, and automatic change categorization.
 
 ### Testing
 dbt calls data quality checks testing. Although data quality checks are extremely valuable, they are not sufficient for creating robust data pipelines. Data qualiy checks are great for detecting upstream data issues and large scale problems like nulls and duplicates. But they are not meant for testing edge cases or business logic.
