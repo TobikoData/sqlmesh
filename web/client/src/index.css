@@ -6,19 +6,19 @@
   .scrollbar--horizontal::-webkit-scrollbar {
     height: 0.2rem;
   }
-  
+
   .scrollbar--vertical::-webkit-scrollbar {
     width: 0.2rem;
   }
-  
+
   .scrollbar::-webkit-scrollbar-track {
     background-color: transparent;
   }
-  
+
   .scrollbar::-webkit-scrollbar-thumb {
     background: var(--color-brand);
     border-radius: 1rem;
-  }  
+  }
 }
 
 @layer components {
@@ -277,4 +277,3 @@ html {
     format('opentype');
   font-weight: 900;
 }
-

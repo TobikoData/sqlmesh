@@ -70,7 +70,10 @@ export default function TasksProgress({
   }, [changes])
 
   return (
-    <div className='text-prose' ref={setRefTaskProgress}>
+    <div
+      className="text-prose"
+      ref={setRefTaskProgress}
+    >
       <div className="my-3 mx-4">
         <div className="flex justify-between items-baseline">
           <span className="flex items-center">
@@ -132,13 +135,13 @@ export default function TasksProgress({
                         'font-bold whitespace-nowrap',
                         changesAdded.includes(model_name) && 'text-success-500',
                         changesRemoved.includes(model_name) &&
-                        'text-danger-500',
+                          'text-danger-500',
                         changesModifiedDirect.includes(model_name) &&
-                        'text-secondary-500 dark:text-primary-500',
+                          'text-secondary-500 dark:text-primary-500',
                         changesModifiedIndirect.includes(model_name) &&
-                        'text-warning-500',
+                          'text-warning-500',
                         changesModifiedMetadata.includes(model_name) &&
-                        'text-prose',
+                          'text-prose',
                       )}
                     >
                       {model_name}

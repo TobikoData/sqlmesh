@@ -479,14 +479,12 @@ function SelectEnvironemnt({
                               <span
                                 className={clsx(
                                   'block truncate ml-2',
-                                  env.isSyncronized && 'text-primary-500'
+                                  env.isSyncronized && 'text-primary-500',
                                 )}
                               >
                                 {env.name}
                               </span>
-                              <small className="block ml-2">
-                                ({env.type})
-                              </small>
+                              <small className="block ml-2">({env.type})</small>
                             </span>
                             {env.isDefault && (
                               <span className="flex ml-2">
@@ -703,11 +701,7 @@ function ErrorPreview({
                 )}
               >
                 {headline != null && (
-                  <h4
-                    className={clsx(
-                      'mb-2 font-bold whitespace-nowrap',
-                    )}
-                  >
+                  <h4 className={clsx('mb-2 font-bold whitespace-nowrap')}>
                     {headline}
                   </h4>
                 )}
