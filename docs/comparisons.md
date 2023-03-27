@@ -7,9 +7,11 @@ There are many tools and frameworks in the data ecosystem. This page tries to ma
 ## dbt
 [dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fanstastic tool, it has trouble scaling with data and organizational size.
 
-dbt initially built their product focused on smaller companies with small data. They tried to make data transformation simple by fully refreshing everything every time. However, fully refreshing your entire warehouse is not cost effective or feasible at many companies. We've designed SQLMesh to work at any data or organizational scale. This allows data teams of all sizes to compute pipelines correctly without excessives costs or wait times.
+dbt built their product focused on simple data transformations. By default, it fully refreshes data warehouses by executing templated SQL in the correct order.
 
-dbt has been trying to grow beyond its small scale and simple data transformation foundation but these attempts result in many “advanced” features that are difficult to implement and pushes the burden of accuracy and efficiency onto the users.
+Over time dbt has seen that data transformations are not enough to operate a scalable and robust data product. As a result, advanced features are patched in, such as state management (defer) and incremental loads, to try to address these needs while pushing the burden of correctness onto users with increased complexity. These "advanced" features make up some of the fundamental building blocks of a DataOps framework.
+
+SQLMesh is designed from the ground up to be a robust DataOps framework. Although SQLMesh provides an easy and efficient way to run data transformations, much of the work that went into it was focused on streamlining testing, deployment, and scalability. For example, state management is a first-class concept in SQLMesh and is used to guarantee correctness of incremental loads. SQLMesh makes correctness and efficiency accessible to everyone, not just power users.
 
 SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with minor changes is in development.
 
