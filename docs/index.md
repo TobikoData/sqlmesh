@@ -36,23 +36,23 @@ SQLMesh summarizes the impact of changes and provides automated guardrails empow
 SQLMesh automatically optimizes your workloads by reusing tables and minimizing computation saving you time and money.
 
 ### Key features
+#### Efficient dev/staging environments
+SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
+
 #### Automatic DAG generation by semantically parsing and understanding SQL or Python scripts
 No need to manually tag dependencies &mdash; SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.
 
 #### Informative change summaries
 Before making changes, SQLMesh will determine what has changed and show the entire graph of affected jobs.
 
-#### Easy incremental loads
-Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
-
 #### CI-Runnable Unit and Integration tests
 Can be easily defined in YAML and run in CI. SQLMesh can optionally transpile your queries to DuckDB so that your tests can be self-contained.
 
-#### Efficient dev/staging environments
-SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
-
 #### Smart change categorization
 Column-level lineage automatically determines whether changes are “breaking” or “non-breaking”, allowing you to correctly categorize changes and to skip expensive backfills.
+
+#### Easy incremental loads
+Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
 
 #### Integrated with Airflow
 You can schedule jobs with our simple built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
