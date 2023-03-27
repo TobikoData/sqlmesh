@@ -22,37 +22,35 @@ export function SqlMeshModel(models: Map<string, Model>): Extension {
     class SqlMeshModelView {
       decorations: DecorationSet = Decoration.set([])
       update(viewUpdate: ViewUpdate): void {
-        if (viewUpdate.docChanged || viewUpdate.viewportChanged || viewUpdate.geometryChanged) {
-          const decorations: any[] = []
+        const decorations: any[] = []
 
-          for (const range of viewUpdate.view.visibleRanges) {
-            syntaxTree(viewUpdate.view.state).iterate({
-              from: range.from,
-              to: range.to,
-              enter({ from, to }) {
-                // In case model name represented in qoutes 
-                // like in python files , we need to remove qoutes
-                const model = viewUpdate.view.state.doc
-                  .sliceString(from, to)
-                  .replaceAll('"', '')
-                  .replaceAll('\'', '')
+        for (const range of viewUpdate.view.visibleRanges) {
+          syntaxTree(viewUpdate.view.state).iterate({
+            from: range.from,
+            to: range.to,
+            enter({ from, to }) {
+              // In case model name represented in qoutes 
+              // like in python files , we need to remove qoutes
+              const model = viewUpdate.view.state.doc
+                .sliceString(from, to)
+                .replaceAll('"', '')
+                .replaceAll('\'', '')
 
-                if (isNil(models.get(model))) return true
+              if (isNil(models.get(model))) return true
 
-                const decoration = Decoration.mark({
-                  attributes: {
-                    class: 'sqlmesh-model',
-                    model,
-                  },
-                }).range(from, to)
+              const decoration = Decoration.mark({
+                attributes: {
+                  class: 'sqlmesh-model',
+                  model,
+                },
+              }).range(from, to)
 
-                decorations.push(decoration)
-              },
-            })
-          }
-
-          this.decorations = Decoration.set(decorations)
+              decorations.push(decoration)
+            },
+          })
         }
+
+        this.decorations = Decoration.set(decorations)
       }
     },
     {

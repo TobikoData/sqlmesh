@@ -55,7 +55,7 @@ export default function CodeEditor({
       keymap.of([{
         mac: 'Cmd-s',
         win: 'Ctrl-s',
-        linux: 'Cmd-s',
+        linux: 'Ctrl-s',
         preventDefault: true,
         run() {
           saveChange(file.content)

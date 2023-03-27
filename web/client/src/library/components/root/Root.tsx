@@ -77,7 +77,7 @@ function Main({ children }: { children: React.ReactNode }): JSX.Element {
 function Footer(): JSX.Element {
   return (
     <footer className="px-2 py-1 text-xs flex justify-between">
-      <small className='text-xs'>© {new Date().getFullYear()} <a href="http://https://tobikodata.com/" target="_blank" rel="noopener noreferrer" className='underline'>Tobiko, Inc.</a> All rights reserved.</small>
+      <small className='text-xs'>© {new Date().getFullYear()} <a href="http://https://tobikodata.com/" target="_blank" rel="noopener noreferrer" className='underline'>Tobiko Data, Inc.</a> All rights reserved.</small>
     </footer>
   )
 }
