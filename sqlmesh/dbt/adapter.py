@@ -55,6 +55,10 @@ class BaseAdapter(abc.ABC):
         """Returns the columns in from_relation missing from to_relation."""
 
     @abc.abstractmethod
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        """Renames from_relation to to_relation."""
+
+    @abc.abstractmethod
     def create_schema(self, relation: BaseRelation) -> None:
         """Creates a schema in the target database."""
 
@@ -74,7 +78,7 @@ class BaseAdapter(abc.ABC):
 
     @abc.abstractmethod
     def quote(self, identifier: str) -> str:
-        """Returns a quoted identifeir."""
+        """Returns a quoted identifier."""
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
@@ -113,6 +117,9 @@ class ParsetimeAdapter(BaseAdapter):
         self, from_relation: BaseRelation, to_relation: BaseRelation
     ) -> t.List[Column]:
         return []
+
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        return None
 
     def create_schema(self, relation: BaseRelation) -> None:
         pass
@@ -208,6 +215,14 @@ class RuntimeAdapter(BaseAdapter):
             for col in self.get_columns_in_relation(from_relation)
             if col.name not in target_columns
         ]
+
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
+        if from_relation.identifier is not None and to_relation.identifier is not None:
+            new_name = to_relation.identifier
+            old_table = exp.table_(
+                from_relation.identifier, db=from_relation.schema, catalog=from_relation.database
+            )
+            self.engine_adapter.rename_table(old_table, new_name)
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:

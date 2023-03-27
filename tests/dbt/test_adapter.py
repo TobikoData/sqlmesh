@@ -13,8 +13,10 @@ def test_adapter_relation(sushi_dbt_project: Project):
     assert context.engine_adapter
 
     engine_adapter = context.engine_adapter
+
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("ignored")
+
     engine_adapter.create_table(
         table_name="foo.bar", query_or_columns_to_types={"baz": exp.DataType.build("int")}
     )
@@ -29,6 +31,7 @@ def test_adapter_relation(sushi_dbt_project: Project):
         context.render("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
         == '"foo"."bar"'
     )
+
     assert context.render(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
     ) == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
@@ -51,6 +54,20 @@ def test_adapter_relation(sushi_dbt_project: Project):
             "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_missing_columns(relation, relation) }}"
         )
         == "[]"
+    )
+
+    assert (
+        context.render(
+            """
+        {%- set from = adapter.get_relation(database=None, schema='foo', identifier='bar') -%}
+        {%- set to = adapter.get_relation(database=None, schema='ignored', identifier='ignore') -%}
+        {%- do adapter.rename_relation(from, to) -%}
+        {%- set new_relation = adapter.get_relation(database=None, schema='foo', identifier='ignore') -%}
+        {%- set non_existing = adapter.get_relation(database=None, schema='foo', identifier='bar') -%}
+        {{- non_existing }} {{ new_relation -}}
+        """
+        )
+        == 'None "foo"."ignore"'
     )
 
 
