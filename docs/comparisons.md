@@ -46,7 +46,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Comprehensive Python API`        | ❌ | ✅
 
 ### Environments
-Development and staging environments in DBT are expensive to make and not fully representative of what will go into production.
+Development and staging environments in dbt are expensive to make and not fully representative of what will go into production.
 
 The usual flow for creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even if it does, it's a waste of time and money. SQLMesh is able to provide efficient isolated environments with [Virtual Data Marts](concepts/plans.md#plan-application). Creating a development environment in SQLMesh is free -- you can quickly get a full replica of any other environment with a simple command. Environments in dbt cost compute and storage.
 
