@@ -50,7 +50,7 @@ Development and staging environments in dbt are expensive to make and not fully 
 
 The usual flow for creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even if it does, it's a waste of time and money. SQLMesh is able to provide efficient isolated environments with [Virtual Data Marts](concepts/plans.md#plan-application). Creating a development environment in SQLMesh is free -- you can quickly get a full replica of any other environment with a simple command. Environments in dbt cost compute and storage.
 
-Additionally, SQLMesh ensures that promotion of staging environments to produciton is predictable and consistent. Promotions are simple pointer swaps meaning there is again no wasted compute. There is no concept of promotion in dbt, and queries are all rerun when it's time to deploy something.
+Additionally, SQLMesh ensures that promotion of staging environments to production is predictable and consistent. Promotions are simple pointer swaps meaning there is again no wasted compute. There is no concept of promotion in dbt, and queries are all rerun when it's time to deploy something.
 
 ### Incremental models
 Implementing an incremental model is difficult and error-prone in dbt, because dbt does not keep track of state. Since there is no state in dbt, the user must write subqueries to find missing date boundaries.
