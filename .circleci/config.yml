@@ -24,7 +24,7 @@ jobs:
       - run:
           name: Update API Documentation
           command: |
-            pip install pdoc
+            pip install pdoc sqlmesh
             make api-docs
             git add docs
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
