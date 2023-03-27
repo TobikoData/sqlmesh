@@ -7,6 +7,12 @@ There are many tools and frameworks in the data ecosystem. This page tries to ma
 ## dbt
 [dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fanstastic tool, it has trouble scaling with data and organizational size.
 
+dbt built their product focused on simple data transformations. By default, it fully refreshes data warehouses by executing templated SQL in the correct order.
+
+Over time dbt has seen that data transformations are not enough to operate a scalable and robust data product. As a result, advanced features are patched in, such as state management (defer) and incremental loads, to try to address these needs while pushing the burden of correctness onto users with increased complexity. These "advanced" features make up some of the fundamental building blocks of a DataOps framework.
+
+SQLMesh is designed from the ground up to be a robust DataOps framework. Although SQLMesh provides an easy and efficient way to run data transformations, much of the work that went into it was focused on streamlining testing, deployment, and scalability. For example, state management is a first-class concept in SQLMesh and is used to guarantee correctness of incremental loads. SQLMesh makes correctness and efficiency accessible to everyone, not just power users.
+
 SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with minor changes is in development.
 
 ### Feature comparisons
@@ -41,6 +47,12 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Notebook Support`                | ❌ | ✅
 | `Comprehensive Python API`        | ❌ | ✅
 
+### Environments
+Development and staging environments in dbt are expensive to make and not fully representative of what will go into production.
+
+The usual flow for creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even if it does, it's a waste of time and money. SQLMesh is able to provide efficient isolated environments with [Virtual Data Marts](concepts/plans.md#plan-application). Creating a development environment in SQLMesh is free -- you can quickly get a full replica of any other environment with a simple command. Environments in dbt cost compute and storage.
+
+Additionally, SQLMesh ensures that promotion of staging environments to production is predictable and consistent. Promotions are simple pointer swaps meaning there is again no wasted compute. There is no concept of promotion in dbt, and queries are all rerun when it's time to deploy something.
 
 ### Incremental models
 Implementing an incremental model is difficult and error-prone in dbt, because dbt does not keep track of state. Since there is no state in dbt, the user must write subqueries to find missing date boundaries.
@@ -117,3 +129,15 @@ SQLMesh stores each date interval a model has been run with, so it knows exactly
 The subqueries that look for MAX(date) could have a performance impact on the query. SQLMesh is able to avoid these extra subqueries.
 
 Additionally, dbt expects an incremental model to be able to fully refresh the first time it runs. For some large scale data sets, this is cost prohibitive or infeasible. SQLMesh is able to [batch](../concepts/models/overview#batch_size) up backfills into more manageable chunks.
+
+### SQL understanding
+dbt heavily relies on [Jinja](https://jinja.palletsprojects.com/en/3.1.x/). It has no understanding of SQL and treats all queries as raw strings with no context. This means that simple syntax errors (like a trailing comma) are difficult to debug and require a full run to detect.
+
+Although SQLMesh supports Jinja, it does not rely on it and parses/understands SQL through [SQLGlot](https://github.com/tobymao/sqlglot). Simple errors can be detected at compile time. You no longer have to wait minutes to see that you've referenced a column incorrectly or missed a comma.
+
+Additionally, having a first-class understanding of SQL allows SQLMesh to do some interesting things, like transpilation, column-level lineage, and automatic change categorization.
+
+### Testing
+dbt calls data quality checks testing. Although data quality checks are extremely valuable, they are not sufficient for creating robust data pipelines. Data quality checks are great for detecting upstream data issues and large scale problems like nulls and duplicates. But they are not meant for testing edge cases or business logic.
+
+[Unit and integration tests](concepts/tests.md) are the tools to use to validate business logic. SQLMesh encourages users to add unit tests to all of their models to ensure changes don't unexpectedly break assumptions. Unit tests are designed to be fast and self contained so that they can run in CI.
