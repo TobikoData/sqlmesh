@@ -72,10 +72,10 @@ docs-serve:
 	mkdocs serve
 
 api-docs:
-	pdoc/cli.py -o docs
+	python pdoc/cli.py -o docs
 
 api-docs-serve:
-	pdoc/cli.py
+	python pdoc/cli.py
 
 ui-up:
 	docker-compose up --build -d && $(if $(shell which open), open http://localhost:8001, echo "Open http://localhost:8001 in your browser.")
