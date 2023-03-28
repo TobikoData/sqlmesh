@@ -11,7 +11,7 @@ dbt built their product focused on simple data transformations. By default, it f
 
 Over time dbt has seen that data transformations are not enough to operate a scalable and robust data product. As a result, advanced features are patched in, such as state management (defer) and incremental loads, to try to address these needs while pushing the burden of correctness onto users with increased complexity. These "advanced" features make up some of the fundamental building blocks of a DataOps framework.
 
-In other words, the challenge of implementing these features in dbt falls primarily on **you**: more jinja macro blocks, more manual configuration, and more opportunities for error. We needed an easier, more reliable way, so we built it ourselves: SQLMesh is designed from the ground up to be a robust DataOps framework.
+In other words, the challenge of implementing these features in dbt falls primarily on **you**: more jinja macro blocks, more manual configuration, and more opportunities for error. We needed an easier, more reliable way, so we designed SQLMesh from the ground up to be a robust DataOps framework.
 
 SQLMesh makes correctness and efficiency accessible to everyone, not just power users.
 
