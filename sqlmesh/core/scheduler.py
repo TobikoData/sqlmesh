@@ -373,7 +373,8 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     Args:
         snapshots: Snapshots to find earliest start date.
     Returns:
-        The earliest start date or yesterday if none is found."""
+        The earliest start date or yesterday if none is found.
+    """
     snapshots = list(snapshots)
     if snapshots:
         return min(start_date(snapshot, snapshots) or yesterday() for snapshot in snapshots)
@@ -386,7 +387,8 @@ def latest_end_date(snapshots: t.Iterable[Snapshot]) -> datetime | date:
     Args:
         snapshots: Snapshots to find latest end date.
     Returns:
-        The latest end date or now if none is found."""
+        The latest end date or now if none is found.
+    """
     snapshots = list(snapshots)
     if not any(snapshot.intervals for snapshot in snapshots):
         return now()
