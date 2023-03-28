@@ -13,3 +13,6 @@ Install SQLMesh using `pip`:
 ```bash
 pip install sqlmesh
 ```
+
+## Next steps
+* [Jump right in with the quickstart](quick_start.md)
