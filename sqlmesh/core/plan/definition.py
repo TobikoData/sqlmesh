@@ -161,12 +161,22 @@ class Plan:
     @property
     def end(self) -> TimeLike:
         """Returns the end of the plan or now."""
-        return self._end or now()
+        if not self._end or not self.override_end:
+            if self.missing_intervals:
+                return max(
+                    end
+                    for intervals_per_model in self._missing_intervals.values()
+                    for _, end in intervals_per_model
+                )
+            else:
+                return self._end or now()
+        return self._end
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:
         self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
+        self.override_end = True
         self.__missing_intervals = None
 
     @property
@@ -341,7 +351,7 @@ class Plan:
                 else []
             )
 
-            end = self.end
+            end = self._end or now()
             self.__missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(

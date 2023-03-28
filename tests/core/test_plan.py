@@ -87,7 +87,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     assert plan.end == expected_end
 
     yesterday_ds_mock.assert_called_once()
-    now_ds_mock.assert_called_once()
+    now_ds_mock.call_count == 2
 
 
 def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerFixture):
@@ -377,3 +377,38 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
 
     assert updated_snapshot.version == updated_snapshot.fingerprint.to_version()
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
+
+
+def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        )
+    )
+
+    expected_start = to_datetime("2022-01-01")
+    expected_end = to_datetime("2022-01-03")
+    now = to_datetime("2022-01-30")
+
+    dag = DAG[str]({"a": set()})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a}
+    context_diff_mock.added = {}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+
+    state_reader_mock = mocker.Mock()
+
+    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_ds_mock.return_value = now
+    state_reader_mock.missing_intervals.return_value = {
+        snapshot_a: [(to_timestamp(expected_start), to_timestamp(expected_end))]
+    }
+
+    plan = Plan(context_diff_mock, dag, state_reader_mock, is_dev=True)
+
+    assert plan.start == to_timestamp(expected_start)
+    assert plan.end == to_timestamp(expected_end)
