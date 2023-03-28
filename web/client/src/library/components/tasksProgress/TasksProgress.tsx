@@ -109,7 +109,11 @@ export default function TasksProgress({
             <small className="text-xs">
               <b>Last Update:</b>
               <span className="inline-block ml-1">
-                {toDateFormat(new Date(updated_at), 'yyyy-mm-dd hh-mm-ss')}
+                {toDateFormat(
+                  new Date(updated_at),
+                  'yyyy-mm-dd hh-mm-ss',
+                  false,
+                )}
               </span>
             </small>
           </div>

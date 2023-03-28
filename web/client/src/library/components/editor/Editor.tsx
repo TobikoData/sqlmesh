@@ -464,8 +464,8 @@ export default function Editor({
                         <fieldset className="my-3 px-3">
                           <Input
                             className="w-full mx-0"
-                            label="Start Date"
-                            placeholder="02/11/2023"
+                            label="Start Date (UTC)"
+                            placeholder="2023-12-13"
                             value={formEvaluate.start}
                             onInput={(
                               e: React.ChangeEvent<HTMLInputElement>,
@@ -482,8 +482,8 @@ export default function Editor({
                           />
                           <Input
                             className="w-full mx-0"
-                            label="End Date"
-                            placeholder="02/13/2023"
+                            label="End Date (UTC)"
+                            placeholder="2023-12-13 (UTC)"
                             value={formEvaluate.end}
                             onInput={(
                               e: React.ChangeEvent<HTMLInputElement>,
@@ -500,8 +500,8 @@ export default function Editor({
                           />
                           <Input
                             className="w-full mx-0"
-                            label="Latest Date"
-                            placeholder="02/13/2023"
+                            label="Latest Date (UTC)"
+                            placeholder="2023-12-13"
                             value={formEvaluate.latest}
                             onInput={(
                               e: React.ChangeEvent<HTMLInputElement>,
