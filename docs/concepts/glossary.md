@@ -3,6 +3,9 @@
 ## Abstract Syntax Tree
 A tree representation of the syntactic structure of source code. Each tree node represents a construct that occurs. The tree is abstract because it does not represent every detail appearing in the actual syntax; it also does not have a standard representation.
 
+## Automatic Data Rebasing
+When merging in changes from another branch, SQLMesh automatically reads the history of changes and applies the changes and determines what needs to be rebuilt (if anything). This is done by leveraging the change category of each change to determine the lineage of breaking/non-breaking changes and where there might be overlap.  
+
 ## CI/CD
 An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](tests.md) and [audits](audits.md).
 
@@ -36,11 +39,20 @@ In a full data refresh, a complete dataset is deleted and then entirely overwrit
 ## Idempotency
 The property that, given a particular operation, the same outputs will be produced when given the same inputs no matter how many times the operation is applied.
 
+## Incremental Loads
+Incremental loads are a type of data refresh that only updates the data that has changed since the last refresh. This is significantly faster and more efficient than a full refresh loads. SQLMesh encourages developers to incrementally load when possible by offering easy to use variables and macros to help define your incremental models. See [Model Kinds](models/model_kinds.md) for more information.
+
 ## Integration
 Combining data from various sources (such as from a data warehouse) into one unified view.
 
 ## Lineage
 The lineage of your data is a visualization of the life cycle of your data as it flows from data sources downstream to consumption.
+
+## Plan Summaries
+An upcoming feature that allows users to see a summary of changes applied to a given environment.
+
+## Semantic Understanding
+SQLMesh, by leveraging [SQLGlot](https://github.com/tobymao/sqlglot), understands the full meaning of a SQL model. That means it can not only validate that what is written is valid SQL but also transpile (convert) that SQL into other engine dialects if needed.
 
 ## Slowly Changing Dimension (SCD)
 A dimension (in a data warehouse, typically a dataset) containing relatively static data that can change slowly but unpredictably, rather than on a regular schedule. Some examples of typical slowly changing dimensions are places and products.
@@ -59,3 +71,6 @@ Term used to describes SQLMesh's ability to share tables across environments to 
 
 ## Virtual Update
 Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.
+
+## Virtual Preview
+Term used to describe the ability to create an environment without having to build any additional tables. By comparing the version of models in the repo against what currently exists, SQLMesh can create an environment that exactly represents what is in the repo without by just updating views.
