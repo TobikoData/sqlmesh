@@ -247,6 +247,11 @@ function Plan({
             type: EnumPlanActions.Changes,
             ...data?.changes,
           },
+          {
+            type: EnumPlanActions.Dates,
+            start: data?.start,
+            end: data?.end,
+          },
         ])
 
         seIsPlanRan(true)
