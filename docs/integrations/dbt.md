@@ -72,12 +72,12 @@ The SQL `WHERE` clause selecting a time interval with the "ds" column goes in a 
 > {% endif %}
 ```
 
-Note that you must use standard jinja macro notation rather than the special SQLMesh interval macros (e.g., `{{ start_ds }}` instead of `@start_ds`).
-
 For more information about how to use different time types or unique keys with incremental loads, refer to [incremental model kinds](../concepts/models/model_kinds.md).
 
-## Unit Tests
-This is the same as sqlmesh unit tests...link to that. Yes, they go in the same folder as dbt tests (audits).
+## Tests
+SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
+
+Add SQLMesh [unit tests](../concepts/tests.md) to a dbt project by placing them in the "tests" directory.
 
 ## Using Airflow
 To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
