@@ -389,13 +389,13 @@ def latest_end_date(snapshots: t.Iterable[Snapshot]) -> datetime | date:
     Returns:
         The latest end date or now if none is found.
     """
-    snapshots = list(snapshots)
-    if not any(snapshot.intervals for snapshot in snapshots):
-        return now()
-    if snapshots:
-        end_date, interval = max(
-            (snapshot.intervals[-1][1], snapshot.model.interval_unit()) for snapshot in snapshots
-        )
+    end_date_and_intervals = [
+        (snapshot.intervals[-1][1], snapshot.model.interval_unit())
+        for snapshot in snapshots
+        if snapshot.intervals
+    ]
+    if end_date_and_intervals:
+        end_date, interval = max(end_date_and_intervals)
         if interval == IntervalUnit.DAY:
             return to_date(make_inclusive(end_date, end_date)[1])
         return to_datetime(end_date)

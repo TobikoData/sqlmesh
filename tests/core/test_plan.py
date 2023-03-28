@@ -391,7 +391,8 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     )
 
     expected_start = to_datetime("2022-01-01")
-    expected_end = to_datetime("2022-01-03")
+    end_date = to_datetime("2022-01-03")
+    expected_end = to_date(end_date) - timedelta(days=1)
     now = to_datetime("2022-01-30")
 
     dag = DAG[str]({"a": set()})
@@ -407,10 +408,10 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     now_ds_mock = mocker.patch("sqlmesh.core.scheduler.now")
     now_ds_mock.return_value = now
     state_reader_mock.missing_intervals.return_value = {
-        snapshot_a: [(to_timestamp(expected_start), to_timestamp(expected_end))]
+        snapshot_a: [(to_timestamp(expected_start), to_timestamp(end_date))]
     }
 
     plan = Plan(context_diff_mock, dag, state_reader_mock, is_dev=True)
 
     assert plan.start == to_timestamp(expected_start)
-    assert plan.end == to_date(expected_end) - timedelta(days=1)
+    assert plan.end == expected_end
