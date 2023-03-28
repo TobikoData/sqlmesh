@@ -26,9 +26,9 @@ jobs:
           command: |
             pip install pdoc sqlmesh
             make api-docs
-            git add docs
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
+            git add docs
             git commit -m "CI: Auto-generated documentation" -a | exit 0
       - run:
           name: Deploy API Documentation

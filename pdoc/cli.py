@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+
 from importlib import import_module
 from pathlib import Path
 from unittest import mock
 
 from pdoc.__main__ import cli, parser
 
-# need this import or else import_module doesn't work
+# Need this import or else import_module doesn't work
 import sqlmesh
 
 
