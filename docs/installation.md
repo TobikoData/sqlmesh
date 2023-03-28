@@ -6,7 +6,7 @@ It is recommended, but not required, that you use a virtual environment:
 python -m venv .env
 ```
 ```bash
-source .env/bin/active
+source .env/bin/activate
 ```
 
 Install SQLMesh using `pip`:

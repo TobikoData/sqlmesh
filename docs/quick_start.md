@@ -23,7 +23,7 @@ sqlmesh init
 
 This will create the directories and files that you can use to organize your SQLMesh project code:
 
-- config.py
+- config.yaml
     - The file for project configuration. Refer to [configuration](reference/configuration.md).
 - ./models
     - SQL and Python models. Refer to [models](concepts/models/overview.md).
