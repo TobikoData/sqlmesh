@@ -8,6 +8,7 @@ from sqlmesh.core import scheduler
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
@@ -23,6 +24,7 @@ from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
     now,
+    to_date,
     to_ds,
     to_timestamp,
     validate_date_range,
@@ -139,6 +141,8 @@ class Plan:
     @property
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
+        if not self.override_start and not self._missing_intervals:
+            return scheduler.earliest_start_date(self.snapshots)
         return self._start or (
             min(
                 start
@@ -153,6 +157,7 @@ class Plan:
     def start(self, new_start: TimeLike) -> None:
         self._ensure_valid_date_range(new_start, self._end)
         self.set_start(new_start)
+        self.override_start = True
 
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
@@ -162,14 +167,29 @@ class Plan:
     def end(self) -> TimeLike:
         """Returns the end of the plan or now."""
         if not self._end or not self.override_end:
-            if self.missing_intervals:
-                return max(
-                    end
-                    for intervals_per_model in self._missing_intervals.values()
+            if self._missing_intervals:
+                end, snapshot_version = max(
+                    (end, snapshot_version)
+                    for snapshot_version, intervals_per_model in self._missing_intervals.items()
                     for _, end in intervals_per_model
                 )
+                end_and_interval: t.Tuple[int, t.Optional[IntervalUnit]] = (-1, None)
+                for snapshot in self.snapshots:
+                    missing_interval = self._missing_intervals.get(
+                        snapshot.version_get_or_generate()
+                    )
+                    if missing_interval:
+                        end_and_interval = max(
+                            [
+                                end_and_interval,
+                                (missing_interval[-1][1], snapshot.model.interval_unit()),
+                            ]
+                        )
+                if end_and_interval[1] == IntervalUnit.DAY:
+                    return to_date(make_inclusive(self.start, end)[1])
+                return end_and_interval[0]
             else:
-                return self._end or now()
+                return scheduler.latest_end_date(self.snapshots)
         return self._end
 
     @end.setter

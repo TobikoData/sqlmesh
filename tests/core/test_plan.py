@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -12,7 +14,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
 )
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
 
@@ -60,7 +62,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         )
     )
 
-    expected_start = "2022-01-01"
+    expected_start = to_datetime("2022-01-01")
     expected_end = to_datetime("2022-01-02")
 
     dag = DAG[str]({"a": set()})
@@ -73,10 +75,10 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.definition.yesterday_ds")
+    yesterday_ds_mock = mocker.patch("sqlmesh.core.scheduler.yesterday")
     yesterday_ds_mock.return_value = expected_start
 
-    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_ds_mock = mocker.patch("sqlmesh.core.scheduler.now")
     now_ds_mock.return_value = expected_end
     state_reader_mock.missing_intervals.return_value = {}
 
@@ -402,7 +404,7 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_ds_mock = mocker.patch("sqlmesh.core.scheduler.now")
     now_ds_mock.return_value = now
     state_reader_mock.missing_intervals.return_value = {
         snapshot_a: [(to_timestamp(expected_start), to_timestamp(expected_end))]
@@ -411,4 +413,4 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     plan = Plan(context_diff_mock, dag, state_reader_mock, is_dev=True)
 
     assert plan.start == to_timestamp(expected_start)
-    assert plan.end == to_timestamp(expected_end)
+    assert plan.end == to_date(expected_end) - timedelta(days=1)
