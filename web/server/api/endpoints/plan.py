@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, 
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import make_inclusive, to_ds
+from sqlmesh.utils.date import make_inclusive, to_date, to_ds, to_timestamp
 from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.settings import get_loaded_context
@@ -62,10 +62,15 @@ async def run_plan(
             detail=str(e),
         )
 
+    # TODO: This needs to be removed to support time in the UI
+    # We need to figure out how to communicate dates between the UI and API while maintaining
+    # precision in order to do inclusivity ranges correctly.
+    start, end = make_inclusive(to_timestamp(to_date(plan.start)), to_timestamp(to_date(plan.end)))
+
     payload = models.ContextEnvironment(
         environment=plan.environment.name,
-        start=plan.start,
-        end=plan.end,
+        start=start,
+        end=end,
     )
 
     if plan.context_diff.has_changes:
