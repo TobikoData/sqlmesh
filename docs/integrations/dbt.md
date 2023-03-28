@@ -112,7 +112,7 @@ SQLMesh is continuously adding more dbt features. This is a list of major featur
 * dbt deps 
     - While SQLMesh can read dbt packages, it does not currently support managing those packages. 
     - Continue to use dbt deps and dbt clean to update, add, or remove packages. For more information, refer to the [dbt deps](https://docs.getdbt.com/reference/commands/deps) documentation.
-* dbt tests ("audits" in SQLMesh) (in development)
+* dbt test (in development)
 * dbt docs 
 * dbt snapshots
 
