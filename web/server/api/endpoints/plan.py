@@ -62,6 +62,9 @@ async def run_plan(
             detail=str(e),
         )
 
+    # TODO: This needs to be removed to support time in the UI
+    # We need to figure out how to communicate dates between the UI and API while maintaining
+    # precision in order to do inclusivity ranges correctly.
     start, end = make_inclusive(to_timestamp(to_date(plan.start)), to_timestamp(to_date(plan.end)))
 
     payload = models.ContextEnvironment(
