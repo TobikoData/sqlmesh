@@ -168,11 +168,6 @@ class Plan:
         """Returns the end of the plan or now."""
         if not self._end or not self.override_end:
             if self._missing_intervals:
-                end, snapshot_version = max(
-                    (end, snapshot_version)
-                    for snapshot_version, intervals_per_model in self._missing_intervals.items()
-                    for _, end in intervals_per_model
-                )
                 end_and_interval: t.Tuple[int, t.Optional[IntervalUnit]] = (-1, None)
                 for snapshot in self.snapshots:
                     missing_interval = self._missing_intervals.get(
@@ -186,7 +181,7 @@ class Plan:
                             ]
                         )
                 if end_and_interval[1] == IntervalUnit.DAY:
-                    return to_date(make_inclusive(self.start, end)[1])
+                    return to_date(make_inclusive(self.start, end_and_interval[0])[1])
                 return end_and_interval[0]
             else:
                 return scheduler.latest_end_date(self.snapshots)
