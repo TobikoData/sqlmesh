@@ -351,7 +351,7 @@ class Plan:
                 else []
             )
 
-            end = self.end if self.override_end else now()
+            end = self._end or now()
             self.__missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
