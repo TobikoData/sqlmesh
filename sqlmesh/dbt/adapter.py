@@ -218,11 +218,10 @@ class RuntimeAdapter(BaseAdapter):
 
     def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
         if from_relation.identifier is not None and to_relation.identifier is not None:
-            new_name = to_relation.identifier
             old_table = exp.table_(
                 from_relation.identifier, db=from_relation.schema, catalog=from_relation.database
             )
-            self.engine_adapter.rename_table(old_table, new_name)
+            self.engine_adapter.rename_table(old_table, to_relation.identifier)
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
