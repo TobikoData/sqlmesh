@@ -367,44 +367,6 @@ def start_date(
     return earliest
 
 
-def end_date(
-    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot] | t.Iterable[Snapshot]
-) -> t.Optional[datetime]:
-    """Get the effective/inferred end date for a snapshot.
-
-    Not all snapshots define a start date. In those cases, the model's start date
-    can be inferred from its parent's start date.
-
-    Args:
-        snapshot: snapshot to infer start date.
-        snapshots: a catalog of available snapshots.
-
-    Returns:
-        Start datetime object.
-    """
-
-    if snapshot.model.start:
-        return to_datetime(snapshot.model.start)
-
-    if not isinstance(snapshots, dict):
-        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
-
-    earliest = None
-
-    for parent in snapshot.parents:
-        if parent not in snapshots:
-            continue
-
-        start_dt = start_date(snapshots[parent], snapshots)
-
-        if not earliest:
-            earliest = start_dt
-        elif start_dt:
-            earliest = min(earliest, start_dt)
-
-    return earliest
-
-
 def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     """Get the earliest start date from a collection of snapshots.
 
@@ -424,7 +386,7 @@ def latest_end_date(snapshots: t.Iterable[Snapshot]) -> datetime | date:
     Args:
         snapshots: Snapshots to find latest end date.
     Returns:
-        The earliest start date or now if none is found."""
+        The latest end date or now if none is found."""
     snapshots = list(snapshots)
     if not any(snapshot.intervals for snapshot in snapshots):
         return now()
