@@ -87,7 +87,7 @@ class Plan:
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
-        self._end = end if end or not is_dev else now()
+        self._end = end
         self._apply = apply
         self._dag = dag
         self._state_reader = state_reader
@@ -159,14 +159,28 @@ class Plan:
         self.__missing_intervals = None
 
     @property
+    def _default_end(self) -> TimeLike:
+        return now()
+
+    @property
     def end(self) -> TimeLike:
         """Returns the end of the plan or now."""
-        return self._end or now()
+        if not self._end:
+            if self.missing_intervals:
+                self._end = max(
+                    end
+                    for intervals_per_model in self._missing_intervals.values()
+                    for _, end in intervals_per_model
+                )
+            else:
+                self._end = self._default_end
+        return self._end
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:
         self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
+        self.override_end = True
         self.__missing_intervals = None
 
     @property
@@ -340,8 +354,7 @@ class Plan:
                 if previous_ids
                 else []
             )
-
-            end = self.end
+            end = self.end if self.override_end else self._default_end
             self.__missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
