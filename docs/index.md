@@ -8,17 +8,17 @@ The experience of developing and deploying data pipelines is more uncertain and 
 
 Here are some challenges that data teams run into, especially when data sizes increase or the number of data users expands:
 
-### Data pipelines are fragmented and fragile
-Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream dependencies are usually only detected at run time.
+1. Data pipelines are fragmented and fragile
+    * Data pipelines generally consist of Python or SQL scripts that implicitly depend upon each other through tables. Changes to upstream scripts that break downstream dependencies are usually only detected at run time.
 
-### Data quality checks are not sufficient
-The data community has settled on data quality checks as the "solution" for testing data pipelines. Although data quality checks are great for detecting large unexpected data changes, they are expensive to run, and they have trouble validating exact logic.
+1. Data quality checks are not sufficient
+    * The data community has settled on data quality checks as the "solution" for testing data pipelines. Although data quality checks are great for detecting large unexpected data changes, they are expensive to run, and they have trouble validating exact logic.
 
-### It's too hard and too costly to build staging environments for data
-Validating changes to data pipelines before deploying to production is an uncertain and sometimes expensive process. Although branches can be deployed to environments, when merged to production, the code is re-run. This is wasteful and generates uncertainty because the data is regenerated.
+1. It's too hard and too costly to build staging environments for data
+    * Validating changes to data pipelines before deploying to production is an uncertain and sometimes expensive process. Although branches can be deployed to environments, when merged to production, the code is re-run. This is wasteful and generates uncertainty because the data is regenerated.
 
-### Silos transform data lakes to data swamps
-The difficulty and cost of making changes to core pipelines can lead to duplicate pipelines with minor customizations. The inability to easily make and validate changes causes contributors to follow the "path of least resistence". The proliferation of similar tables leads to additional costs, inconsistencies, and maintenance burden.
+1. Silos transform data lakes to data swamps
+    * The difficulty and cost of making changes to core pipelines can lead to duplicate pipelines with minor customizations. The inability to easily make and validate changes causes contributors to follow the "path of least resistence". The proliferation of similar tables leads to additional costs, inconsistencies, and maintenance burden.
 
 ## What is SQLMesh?
 SQLMesh consists of a CLI, a Python API, and a Web UI to make data pipeline development and deployment easy, efficient, and safe.
@@ -26,48 +26,48 @@ SQLMesh consists of a CLI, a Python API, and a Web UI to make data pipeline deve
 ### Core principles
 SQLMesh was built on three core principles:
 
-#### Correctness is non-negotiable
-Bad data is worse than no data. SQLMesh guarantees that your data will be consistent even in heavily collaborative environments.
+1. Correctness is non-negotiable
+    * Bad data is worse than no data. SQLMesh guarantees that your data will be consistent even in heavily collaborative environments.
 
-#### Change with confidence
-SQLMesh summarizes the impact of changes and provides automated guardrails empowering everyone to safely and quickly contribute.
+1. Change with confidence
+    * SQLMesh summarizes the impact of changes and provides automated guardrails empowering everyone to safely and quickly contribute.
 
-#### Efficiency without complexity
-SQLMesh automatically optimizes your workloads by reusing tables and minimizing computation saving you time and money.
+1. Efficiency without complexity
+    * SQLMesh automatically optimizes your workloads by reusing tables and minimizing computation saving you time and money.
 
 ### Key features
-#### Efficient dev/staging environments
-SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
+* Efficient dev/staging environments
+    * SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
 
-#### Automatic DAG generation by semantically parsing and understanding SQL or Python scripts
-No need to manually tag dependencies &mdash; SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.
+* Automatic DAG generation by semantically parsing and understanding SQL or Python scripts
+    * No need to manually tag dependencies &mdash; SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.
 
-#### Informative change summaries
-Before making changes, SQLMesh will determine what has changed and show the entire graph of affected jobs.
+* Informative change summaries
+    * Before making changes, SQLMesh will determine what has changed and show the entire graph of affected jobs.
 
-#### CI-Runnable Unit and Integration tests
-Can be easily defined in YAML and run in CI. SQLMesh can optionally transpile your queries to DuckDB so that your tests can be self-contained.
+* CI-Runnable Unit and Integration tests
+    * Can be easily defined in YAML and run in CI. SQLMesh can optionally transpile your queries to DuckDB so that your tests can be self-contained.
 
-#### Smart change categorization
-Column-level lineage automatically determines whether changes are “breaking” or “non-breaking”, allowing you to correctly categorize changes and to skip expensive backfills.
+* Smart change categorization
+    * Column-level lineage automatically determines whether changes are “breaking” or “non-breaking”, allowing you to correctly categorize changes and to skip expensive backfills.
 
-#### Easy incremental loads
-Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
+* Easy incremental loads
+    * Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
 
-#### Integrated with Airflow
-You can schedule jobs with our simple built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
+* Integrated with Airflow
+    * You can schedule jobs with our simple built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
 
-#### Notebook / CLI
-Interact with SQLMesh with whatever tool you’re comfortable with.
+* Notebook / CLI
+    * Interact with SQLMesh with whatever tool you’re comfortable with.
 
-#### Web based IDE (in development)
-Edit, run, and visualize queries in your browser.
+* Web based IDE (in development)
+    * Edit, run, and visualize queries in your browser.
 
-#### Github CI/CD bot (in development)
-A bot to tie your code directly to your data.
+* Github CI/CD bot (in development)
+    * A bot to tie your code directly to your data.
 
-#### Table/Column level lineage visualizations (in development)
-Quickly understand the full lineage and sequence of transformation of any column.
+* Table/Column level lineage visualizations (in development)
+    * Quickly understand the full lineage and sequence of transformation of any column.
 
 ## Next steps
 * [Jump right in with the quickstart](quick_start.md)
