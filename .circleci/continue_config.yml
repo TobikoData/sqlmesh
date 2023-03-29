@@ -65,7 +65,7 @@ jobs:
 
   deploy_api_documentation:
     docker:
-      - image: cimg/python:<< parameters.python_version >>
+      - image: cimg/python:3.10
     steps:
       - run:
           name: Update API Documentation
