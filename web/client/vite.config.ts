@@ -8,7 +8,7 @@ export default defineConfig({
     alias: [{ find: '~', replacement: path.resolve(__dirname, './src') }],
   },
   build: {
-    outDir: 'prod',
+    outDir: 'dist',
   },
   plugins: [react()],
   test: {
@@ -20,5 +20,8 @@ export default defineConfig({
     proxy: {
       '/api': 'http://api:8000',
     },
+  },
+  preview: {
+    port: 8005,
   },
 })
