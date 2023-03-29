@@ -114,6 +114,9 @@ export default function Editor({
   >([])
   const [dialect, setDialect] = useState<string>()
   const [isValid, setIsValid] = useState(true)
+  const [dialectCache, setDialectCache] = useState<Map<ModelFile, string>>(
+    new Map(),
+  )
 
   const { refetch: planRun } = useApiPlanRun(environment.name, {
     planOptions: {
@@ -159,7 +162,6 @@ export default function Editor({
 
       if (e.data.topic === 'dialects') {
         setDialects(e.data.payload.dialects ?? [])
-        setDialect(e.data.payload.dialect)
       }
     },
     [activeFile],
@@ -213,13 +215,17 @@ export default function Editor({
     setTabTableContent(bucket.get(EnumEditorTabs.Table))
     setTabTerminalContent(bucket.get(EnumEditorTabs.Terminal))
 
-    const model = models?.get(activeFile.path)?.name
+    const model = models?.get(activeFile.path)
 
     if (model != null) {
       setFormEvaluate(s => ({
         ...s,
-        model,
+        model: model.name,
       }))
+
+      setDialect(model.dialect)
+    } else {
+      setDialect(dialectCache.get(activeFile))
     }
   }, [activeFile])
 
@@ -627,7 +633,12 @@ export default function Editor({
             isSaved={isSaved}
             dialects={dialects}
             dialect={dialect}
-            setDialect={setDialect}
+            setDialect={dialect => {
+              dialectCache.set(activeFile, dialect)
+
+              setDialectCache(new Map(dialectCache))
+              setDialect(dialect)
+            }}
             isValid={isValid}
           />
         </div>
@@ -679,8 +690,12 @@ function EditorFooter({
   isValid: boolean
   dialects: Array<{ dialect_title: string; dialect_name: string }>
   dialect?: string
-  setDialect: (dialect?: string) => void
+  setDialect: (dialect: string) => void
 }): JSX.Element {
+  const dialect_title = useMemo(
+    () => dialects.find(d => d.dialect_name === dialect)?.dialect_title,
+    [dialects, dialect],
+  )
   return (
     <div className="mr-4">
       <Indicator
@@ -700,27 +715,36 @@ function EditorFooter({
         text="Language"
         value={getLanguageByExtension(activeFile.extension)}
       />
-      {activeFile.extension === '.sql' && isArrayNotEmpty(dialects) && (
-        <span className="inline-block mr-2">
-          <small className="font-bold text-xs mr-2">Dialect</small>
-          <select
-            className="text-xs m-0 px-1 py-[0.125rem] bg-neutral-10 rounded"
-            value={dialect}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              setDialect(e.target.value)
-            }}
-          >
-            {dialects.map(dialect => (
-              <option
-                key={dialect.dialect_title}
-                value={dialect.dialect_name}
-              >
-                {dialect.dialect_title}
-              </option>
-            ))}
-          </select>
-        </span>
+      {activeFile.isSQLMeshModel && (
+        <Indicator
+          className="mr-2"
+          text="Dialect"
+          value={dialect_title}
+        />
       )}
+      {activeFile.extension === '.sql' &&
+        isArrayNotEmpty(dialects) &&
+        isFalse(activeFile.isSQLMeshModel) && (
+          <span className="inline-block mr-2">
+            <small className="font-bold text-xs mr-2">Dialect</small>
+            <select
+              className="text-xs m-0 px-1 py-[0.125rem] bg-neutral-10 rounded"
+              value={dialect}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                setDialect(e.target.value)
+              }}
+            >
+              {dialects.map(dialect => (
+                <option
+                  key={dialect.dialect_title}
+                  value={dialect.dialect_name}
+                >
+                  {dialect.dialect_title}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
       {activeFile.isSQLMeshModel && (
         <Indicator
           className="mr-2"

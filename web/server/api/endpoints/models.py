@@ -18,6 +18,7 @@ def get_models(
             path=str(model._path.relative_to(context.path)),
             description=model.description,
             owner=model.owner,
+            dialect=model.dialect,
         )
         for model in context.models.values()
     }
