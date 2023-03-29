@@ -128,7 +128,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             )}
           >
             {table != null && (
-              <div className="w-full h-full overflow-hidden overflow-y-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+              <div className="w-full h-full overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
                 <table className="w-full h-full">
                   <thead className="sticky top-0 bg-theme">
                     {table.getHeaderGroups().map(headerGroup => (
@@ -155,7 +155,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                         {row.getVisibleCells().map(cell => (
                           <td
                             key={cell.id}
-                            className="px-2 py-1 text-sm text-left border-b border-neutral-50"
+                            className="px-2 py-1 text-sm text-left border-b border-neutral-50 whitespace-nowrap"
                           >
                             {flexRender(
                               cell.column.columnDef.cell,
