@@ -94,16 +94,20 @@ See the [Airflow configuration documentation](https://airflow.apache.org/docs/ap
 
 The majority of dbt jinja methods are supported, including:
 
-| Method      | Method                                                                                  | Method       | Method
-| ------      | ------                                                                                  | ------       | ------
-| adapter     | env_var                                                                                 | project_name | target
-| as_bool     | exceptions                                                                              | ref          | this
-| as_native   | from_yaml                                                                               | return       | to_yaml
-| as_number   | is_incremental (ignored, see [above](#insert-overwrite-and-deleteinsert-modifications)) | run_query    | var
-| as_text     | load_result                                                                             | schema       | zip
-| api         | log                                                                                     | set          | 
-| builtins    | modules                                                                                 | source       | 
-| config      | print                                                                                   | statement    | 
+| Method      | Method              | Method       | Method
+| ------      | ------              | ------       | ------
+| adapter (*) | env_var             | project_name | target
+| as_bool     | exceptions          | ref          | this
+| as_native   | from_yaml           | return       | to_yaml
+| as_number   | is_incremental (**) | run_query    | var
+| as_text     | load_result         | schema       | zip
+| api         | log                 | set          |
+| builtins    | modules             | source       |
+| config      | print               | statement    |
+
+\* `adapter.rename_relation` and `adapter.expand_target_column_types` are not currently supported.
+
+\*\* this is ignored, see [above](#insert-overwrite-and-deleteinsert-modifications).
 
 ## Unsupported dbt features
 
@@ -119,4 +123,3 @@ SQLMesh is continuously adding more dbt features. This is a list of major featur
 ## Missing something you need?
 
 Submit an [issue](https://github.com/TobikoData/sqlmesh/issues), and we'll look into it!
-
