@@ -102,7 +102,6 @@ export default function Editor({
   const tabTableContent = useStoreEditor(s => s.tabTableContent)
   const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
 
-  const [isSaved, setIsSaved] = useState(true)
   const [formEvaluate, setFormEvaluate] = useState<FormEvaluate>({
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
@@ -132,8 +131,6 @@ export default function Editor({
 
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess(file: File) {
-      setIsSaved(true)
-
       if (file == null) return
 
       activeFile.updateContent(file.content)
@@ -141,9 +138,6 @@ export default function Editor({
       setOpenedFiles(openedFiles)
 
       void debouncedPlanRun()
-    },
-    onMutate() {
-      setIsSaved(false)
     },
   })
 
@@ -630,13 +624,10 @@ export default function Editor({
         <div className="px-2 flex justify-between items-center min-h-[2rem]">
           <EditorFooter
             activeFile={activeFile}
-            isSaved={isSaved}
             dialects={dialects}
             dialect={dialect}
             setDialect={dialect => {
-              dialectCache.set(activeFile, dialect)
-
-              setDialectCache(new Map(dialectCache))
+              setDialectCache(new Map([...dialectCache, [activeFile, dialect]]))
               setDialect(dialect)
             }}
             isValid={isValid}
@@ -682,11 +673,9 @@ function EditorFooter({
   dialect,
   setDialect,
   activeFile,
-  isSaved,
   isValid,
 }: {
   activeFile: ModelFile
-  isSaved: boolean
   isValid: boolean
   dialects: Array<{ dialect_title: string; dialect_name: string }>
   dialect?: string

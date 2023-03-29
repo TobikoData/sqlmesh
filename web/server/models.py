@@ -169,9 +169,9 @@ class EvaluateInput(BaseModel):
 class Model(BaseModel):
     name: str
     path: str
+    dialect: str
     description: t.Optional[str]
     owner: t.Optional[str]
-    dialect: t.Optional[str]
 
 
 class Models(BaseModel):
