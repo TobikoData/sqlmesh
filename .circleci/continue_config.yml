@@ -87,7 +87,7 @@ jobs:
             git commit -m "CI: Auto-generated documentation" -a
             echo "after git commit $?"
             git status
-            git push
+            git push --set-upstream origin jo/ci_playground
 
   ui_style:
     docker:
