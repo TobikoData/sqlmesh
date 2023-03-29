@@ -80,10 +80,7 @@ JOIN raw.event_dims d
 -- must specify the is_incremental flag because this predicate will fail if the model has never run before
 {% if is_incremental() %}
     -- this filter dynamically scans the current model to find the date boundary
-    AND d.ds >= (SELECT MAX(ds) FROM {{ this }})
-{% endif %}
-{% if is_incremental() %}
-  WHERE e.ds >= (SELECT MAX(ds) FROM {{ this }})
+  WHERE d.ds >= (SELECT MAX(ds) FROM {{ this }})
 {% endif %}
 ```
 
