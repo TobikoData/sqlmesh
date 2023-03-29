@@ -74,20 +74,21 @@ jobs:
           name: Update API Documentation
           command: |
             GITHUB_TOKEN="$GITHUB_TOKEN" \
-            echo "before pip install $?"
+            echo "before pip install"
             pip install pdoc sqlmesh
-            echo "before make api-docs $?"
+            echo "Got code $?. Before make api-docs"
             make api-docs
-            echo "before git configs $?"
+            echo "Got $?. Before git configs"
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
-            echo "before git add $?"
+            echo "Got $?. Before git add docs"
             git add docs
-            echo "before git commit $?"
+            echo "Got $?. Before git commit"
             git commit -m "CI: Auto-generated documentation" -a
-            echo "after git commit $?"
+            echo "Got $?. Before git status, git push"
             git status
             git push --set-upstream origin jo/ci_playground
+            echo "Got $?"
 
   ui_style:
     docker:
