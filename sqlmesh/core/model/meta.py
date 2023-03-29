@@ -61,6 +61,7 @@ class ModelMeta(PydanticModel):
     audits: t.List[AuditReference] = []
 
     _croniter: t.Optional[croniter] = None
+    _interval_unit: t.Optional[IntervalUnit] = None
 
     _model_kind_validator = model_kind_validator
 
@@ -271,14 +272,17 @@ class ModelMeta(PydanticModel):
         Returns:
             The IntervalUnit enum.
         """
-        schedule = croniter(self.cron)
-        samples = [schedule.get_next() for _ in range(sample_size)]
-        min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-        if min_interval >= 86400:
-            return IntervalUnit.DAY
-        elif min_interval >= 3600:
-            return IntervalUnit.HOUR
-        return IntervalUnit.MINUTE
+        if not self._interval_unit:
+            schedule = croniter(self.cron)
+            samples = [schedule.get_next() for _ in range(sample_size)]
+            min_interval = min(b - a for a, b in zip(samples, samples[1:]))
+            if min_interval >= 86400:
+                self._interval_unit = IntervalUnit.DAY
+            elif min_interval >= 3600:
+                self._interval_unit = IntervalUnit.HOUR
+            else:
+                self._interval_unit = IntervalUnit.MINUTE
+        return self._interval_unit
 
     def normalized_cron(self) -> str:
         """Returns the UTC normalized cron based on sampling heuristics.
