@@ -83,7 +83,7 @@ jobs:
             echo "before git add $?"
             git add docs
             echo "before git commit $?"
-            git commit -m "CI: Auto-generated documentation" -a | exit 0
+            git commit -m "CI: Auto-generated documentation" -a
             echo "after git commit $?"
             git status
 
