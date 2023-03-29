@@ -80,11 +80,12 @@ jobs:
             echo "before git configs $?"
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
-            echo "before git add ?$"
+            echo "before git add $?"
             git add docs
             echo "before git commit $?"
             git commit -m "CI: Auto-generated documentation" -a | exit 0
             echo "after git commit $?"
+            git status
 
   ui_style:
     docker:
