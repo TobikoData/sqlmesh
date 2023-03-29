@@ -12,7 +12,6 @@ import {
   type PlanTaskStatus,
 } from '../../../context/plan'
 import {
-  includes,
   isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
@@ -123,10 +122,6 @@ export default function PlanWizard({
     [backfills, change_categorization, activeBackfill],
   )
 
-  const isProgress = includes(
-    [EnumPlanState.Cancelling, EnumPlanState.Applying],
-    planState,
-  )
   const isFinished = planState === EnumPlanState.Finished
   const hasNoChanges = [
     hasChanges,
@@ -308,11 +303,6 @@ export default function PlanWizard({
                               setRefTaskProgress={setRefTaskProgress}
                             />
                           </Suspense>
-                          <form>
-                            <fieldset className="flex w-full">
-                              <Plan.BackfillDates disabled={isProgress} />
-                            </fieldset>
-                          </form>
                         </>
                       )}
                     {hasVirtualUpdate && (
