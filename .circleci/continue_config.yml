@@ -73,6 +73,7 @@ jobs:
       - run:
           name: Update API Documentation
           command: |
+            GITHUB_TOKEN="$GITHUB_TOKEN" \
             echo "before pip install $?"
             pip install pdoc sqlmesh
             echo "before make api-docs $?"
@@ -86,6 +87,7 @@ jobs:
             git commit -m "CI: Auto-generated documentation" -a
             echo "after git commit $?"
             git status
+            git push
 
   ui_style:
     docker:
