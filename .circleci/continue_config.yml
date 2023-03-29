@@ -73,17 +73,18 @@ jobs:
       - run:
           name: Update API Documentation
           command: |
-            echo "before pip install"
+            echo "before pip install $?"
             pip install pdoc sqlmesh
-            echo "before make api-docs"
+            echo "before make api-docs $?"
             make api-docs
-            echo "before git configs"
+            echo "before git configs $?"
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
-            echo "before git add"
+            echo "before git add ?$"
             git add docs
-            echo "before git commit"
+            echo "before git commit $?"
             git commit -m "CI: Auto-generated documentation" -a | exit 0
+            echo "after git commit $?"
 
   ui_style:
     docker:
