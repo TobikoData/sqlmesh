@@ -5,7 +5,22 @@ import react from '@vitejs/plugin-react-swc'
 // https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
-    alias: [{ find: '~', replacement: path.resolve(__dirname, './src') }],
+    alias: [
+      { find: '~', replacement: path.resolve(__dirname, './src') },
+      {
+        find: '@components',
+        replacement: path.resolve(__dirname, './src/library/components'),
+      },
+      { find: '@hooks', replacement: path.resolve(__dirname, './src/hooks') },
+      { find: '@utils', replacement: path.resolve(__dirname, './src/utils') },
+      { find: '@models', replacement: path.resolve(__dirname, './src/models') },
+      { find: '@api', replacement: path.resolve(__dirname, './src/api') },
+      {
+        find: '@context',
+        replacement: path.resolve(__dirname, './src/context'),
+      },
+      { find: '@tests', replacement: path.resolve(__dirname, './src/tests') },
+    ],
   },
   build: {
     outDir: 'dist',

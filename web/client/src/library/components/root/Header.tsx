@@ -1,8 +1,8 @@
 import { MoonIcon, SunIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useColorScheme, EnumColorScheme } from '~/context/theme'
-import LogoTobiko from '../logo/Tobiko'
-import LogoSqlMesh from '../logo/SqlMesh'
+import { useColorScheme, EnumColorScheme } from '@context/theme'
+import LogoTobiko from '@components/logo/Tobiko'
+import LogoSqlMesh from '@components/logo/SqlMesh'
 
 export default function Header(): JSX.Element {
   const { mode, toggleColorScheme } = useColorScheme()
