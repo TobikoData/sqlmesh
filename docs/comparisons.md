@@ -96,7 +96,7 @@ SQLMesh keeps track of which date ranges exist so that the query can be simplifi
 ```sql
 -- sqlmesh incremental
 SELECT *
-FROM raw.events
+FROM raw.events e
 JOIN raw.event_dims d
   -- date ranges are handled automatically by sqlmesh
   ON e.id = d.id AND d.ds BETWEEN @start_ds AND @end_ds
