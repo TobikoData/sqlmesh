@@ -63,6 +63,18 @@ jobs:
           name: Run doc tests
           command: make doc-test
 
+  deploy_api_documentation:
+    steps:
+      - run:
+          name: Update API Documentation
+          command: |
+            pip install pdoc sqlmesh
+            make api-docs
+            git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add docs
+            git commit -m "CI: Auto-generated documentation" -a | exit 0
+
   ui_style:
     docker:
       - image: cimg/python:3.7
@@ -128,6 +140,7 @@ jobs:
 workflows:
   main_pr_core:
     jobs:
+      - deploy_api_documentation
       - style_and_unit_tests:
           matrix:
             parameters:
