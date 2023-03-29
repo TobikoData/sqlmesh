@@ -64,6 +64,8 @@ jobs:
           command: make doc-test
 
   deploy_api_documentation:
+    docker:
+      - image: cimg/python:<< parameters.python_version >>
     steps:
       - run:
           name: Update API Documentation
