@@ -97,12 +97,12 @@ def full_refresh_snapshot(
     mock = mocker.Mock()
     mock.return_value = to_datetime("2022-09-23T00:12:53+00:00")
     monkeypatch.setattr("sqlmesh.utils.date.now", mock)
-    snapshot = make_snapshot(
+    full_refresh_snapshot = make_snapshot(
         full_refresh_model,
         models={parent_model.name: parent_model, full_refresh_model.name: full_refresh_model},
     )
-    snapshot.version = snapshot.fingerprint
-    return snapshot
+    full_refresh_snapshot.version = full_refresh_snapshot.fingerprint
+    return full_refresh_snapshot
 
 
 def test_json(snapshot: Snapshot):
@@ -242,7 +242,7 @@ def test_missing_intervals(snapshot: Snapshot):
     ]
 
 
-def test_full_refresh(
+def test_missing_interval_latest(
     full_refresh_snapshot: Snapshot, monkeypatch: MonkeyPatch, mocker: MockerFixture
 ):
     mock = mocker.Mock()
