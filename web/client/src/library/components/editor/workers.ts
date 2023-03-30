@@ -1,4 +1,4 @@
-const sqlglotWorker = new Worker('./src/library/components/editor/worker.ts', {
+const sqlglotWorker = new Worker(new URL('./worker.ts', import.meta.url), {
   type: 'module',
 })
 
