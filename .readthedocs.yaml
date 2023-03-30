@@ -5,7 +5,7 @@ build:
   tools:
     python: "3.8"
   jobs:
-    pre_build:
+    post_build:
       - make api-docs
 
 mkdocs:
