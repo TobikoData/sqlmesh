@@ -23,6 +23,7 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     make_inclusive,
+    make_inclusive_end,
     now,
     to_date,
     to_ds,
@@ -163,12 +164,21 @@ class Plan:
         self._start = new_start
         self.__missing_intervals = None
 
+    def _get_end_date(self, end_and_units: t.List[t.Tuple[int, IntervalUnit]]) -> TimeLike:
+        if end_and_units:
+            end, unit = max(end_and_units)
+
+            if unit == IntervalUnit.DAY:
+                return to_date(make_inclusive_end(end))
+            return end
+        return now()
+
     @property
     def end(self) -> TimeLike:
         """Returns the end of the plan or now."""
         if not self._end or not self.override_end:
             if self._missing_intervals:
-                end, interval_unit = max(
+                return self._get_end_date(
                     [
                         (end, snapshot.model.interval_unit())
                         for snapshot in self.snapshots
@@ -176,11 +186,13 @@ class Plan:
                         for _, end in self._missing_intervals[snapshot.version_get_or_generate()]
                     ]
                 )
-                if interval_unit == IntervalUnit.DAY:
-                    return to_date(make_inclusive(self.start, end)[1])
-                return end
-            else:
-                return scheduler.latest_end_date(self.snapshots)
+            return self._get_end_date(
+                [
+                    (snapshot.intervals[-1][1], snapshot.model.interval_unit())
+                    for snapshot in self.snapshots
+                    if snapshot.intervals
+                ]
+            )
         return self._end
 
     @end.setter

@@ -232,8 +232,7 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
     Returns:
         A tuple of inclusive datetime objects.
     """
-    start_dt = to_datetime(start)
-    return (start_dt, make_inclusive_end(end))
+    return (to_datetime(start), make_inclusive_end(end))
 
 
 def make_inclusive_end(end: TimeLike) -> datetime:

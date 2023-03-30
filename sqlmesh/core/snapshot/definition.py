@@ -447,9 +447,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
     def _inclusive_exclusive(self, start: TimeLike, end: TimeLike) -> t.Tuple[int, int]:
-        start_dt, end_dt = make_inclusive(start, end)
-        start_ts = to_timestamp(self.model.cron_floor(start_dt))
-        end_ts = to_timestamp(self.model.cron_next(end_dt))
+        start_ts = to_timestamp(self.model.cron_floor(start))
+        end_ts = to_timestamp(self.model.cron_next(make_inclusive_end(end)))
 
         if start_ts >= end_ts:
             raise ValueError("`end` must be >= `start`")
@@ -483,20 +482,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         if self.is_embedded_kind:
             return []
-        start_dt, end_dt = make_inclusive(start, self.model.cron_floor(end))
 
         if self.is_full_kind or self.is_view_kind or self.is_seed_kind:
-            floored_latest = self.model.cron_floor(latest or now())
-            latest_dt = make_inclusive_end(floored_latest)
-            latest_ts = to_timestamp(latest_dt)
-            latest_ts = to_timestamp(self.model.cron_next(latest_ts))
+            latest = latest or now()
+            latest_start, latest_end = self._inclusive_exclusive(latest, latest)
             # if the latest ts is stored in the last interval, nothing is missing
             # else returns the latest ts with the exclusive end ts.
-            if self.intervals and self.intervals[-1][1] >= latest_ts:
+            if self.intervals and self.intervals[-1][1] >= latest_end:
                 return []
-            return [(to_timestamp(floored_latest), latest_ts)]
+            return [(latest_start, latest_end)]
 
         missing = []
+        start_dt, end_dt = make_inclusive(start, self.model.cron_floor(end))
         dates = list(croniter_range(start_dt, end_dt, self.model.normalized_cron()))
         size = len(dates)
 

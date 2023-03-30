@@ -244,7 +244,7 @@ def test_missing_intervals(snapshot: Snapshot):
 
 def test_full_refresh(full_refresh_snapshot: Snapshot):
     full_refresh_snapshot.add_interval("2020-01-01", "2020-01-01")
-    # assert full_refresh_snapshot.missing_intervals("2020-01-01", "2020-01-01", "2020-01-01") == []
+    assert full_refresh_snapshot.missing_intervals("2020-01-01", "2020-01-01", "2020-01-01") == []
     assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-02", "2020-01-02") == [
         (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
     ]
@@ -254,12 +254,12 @@ def test_full_refresh(full_refresh_snapshot: Snapshot):
     assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03", "2020-01-04") == [
         (to_timestamp("2020-01-04"), to_timestamp("2020-01-05"))
     ]
-    # assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03", "2020-01-03 01:00:00") == [
-    #     (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
-    # ]
-    # assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03", "2020-01-03") == [
-    #     (to_timestamp("2020-01-05"), to_timestamp("2020-01-04"))
-    # ]
+    assert full_refresh_snapshot.missing_intervals(
+        "2020-01-02", "2020-01-03", "2020-01-03 01:00:00"
+    ) == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
+    assert full_refresh_snapshot.missing_intervals(
+        "2020-01-02", "2020-01-03", "2020-01-04 23:59:59"
+    ) == [(to_timestamp("2020-01-04"), to_timestamp("2020-01-05"))]
 
 
 def test_remove_intervals(snapshot: Snapshot):

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -18,9 +17,7 @@ from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive,
     now,
-    to_date,
     to_datetime,
     validate_date_range,
     yesterday,
@@ -379,27 +376,6 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     if snapshots:
         return min(start_date(snapshot, snapshots) or yesterday() for snapshot in snapshots)
     return yesterday()
-
-
-def latest_end_date(snapshots: t.Iterable[Snapshot]) -> datetime | date:
-    """Get the latest end date from a collection of snapshots.
-
-    Args:
-        snapshots: Snapshots to find latest end date.
-    Returns:
-        The latest end date or now if none is found.
-    """
-    end_date_and_intervals = [
-        (snapshot.intervals[-1][1], snapshot.model.interval_unit())
-        for snapshot in snapshots
-        if snapshot.intervals
-    ]
-    if end_date_and_intervals:
-        end_date, interval = max(end_date_and_intervals)
-        if interval == IntervalUnit.DAY:
-            return to_date(make_inclusive(end_date, end_date)[1])
-        return to_datetime(end_date)
-    return now()
 
 
 def _batched_intervals(params: SnapshotToBatches) -> SnapshotToBatches:
