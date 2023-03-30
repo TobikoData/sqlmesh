@@ -6,6 +6,7 @@ build:
     python: "3.8"
   jobs:
     pre_build:
+      - pip install -e .
       - make api-docs
 
 mkdocs:
