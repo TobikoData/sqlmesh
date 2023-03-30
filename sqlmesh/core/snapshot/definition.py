@@ -447,7 +447,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def _inclusive_exclusive(self, start: TimeLike, end: TimeLike) -> t.Tuple[int, int]:
         start_ts = to_timestamp(self.model.cron_floor(start))
-        end_ts = to_timestamp(self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end))
+        end_ts = to_timestamp(
+            self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
+        )
 
         if start_ts >= end_ts:
             raise ValueError("`end` must be >= `start`")
