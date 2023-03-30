@@ -4,6 +4,10 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.8"
+  jobs:
+    pre_build:
+      - pip install -e .
+      - make api-docs
 
 mkdocs:
   configuration: mkdocs.yml

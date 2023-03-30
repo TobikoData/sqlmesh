@@ -72,7 +72,7 @@ docs-serve:
 	mkdocs serve
 
 api-docs:
-	python pdoc/cli.py -o docs
+	python pdoc/cli.py -o docs/_readthedocs/html/
 
 api-docs-serve:
 	python pdoc/cli.py
