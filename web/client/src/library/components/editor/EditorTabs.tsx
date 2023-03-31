@@ -110,14 +110,16 @@ function Tab({
             tab.file.isChanged ? 'bg-warning-500' : 'bg-transparent',
           )}
         ></small>
-        <XCircleIcon
-          className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
+        {isClosable && (
+          <XCircleIcon
+            className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-            closeEditorTab(tab)
-          }}
-        />
+              closeEditorTab(tab)
+            }}
+          />
+        )}
       </span>
     </li>
   )

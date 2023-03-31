@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
+import { isTrue } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
 export interface Dialect {
@@ -21,7 +22,6 @@ interface EditorStore {
   addTab: (tab: EditorTab) => void
   closeTab: (id: ID) => void
   createTab: (file?: ModelFile) => EditorTab
-  getNextTab: () => EditorTab
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
@@ -46,7 +46,7 @@ export interface EditorTab {
 
 const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[] }>('tabs')
 
-const initialFile = new ModelFile()
+const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile, true)
 const initialTabs = new Map([[initialFile.id, initialTab]])
 
@@ -86,18 +86,20 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   closeTab(id) {
     const s = get()
 
+    if (isTrue(s.tabs.get(id)?.isInitial)) return
+
+    const tabs = Array.from(get().tabs.values())
+    const indexAt = tabs.findIndex(tab => tab.file.id === id)
+
+    s.tabs.delete(id)
+
     if (id === s.tab.file.id) {
-      s.selectTab(s.getNextTab())
+      s.selectTab(tabs.at(indexAt - 1) as EditorTab)
     }
 
-    get().tabs.delete(id)
-
     set(() => ({
-      tabs: new Map(get().tabs),
+      tabs: new Map(s.tabs),
     }))
-  },
-  getNextTab() {
-    return get().tabs.values().next().value
   },
   createTab,
   previewQuery: undefined,
@@ -115,7 +117,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 }))
 
 function createTab(
-  file: ModelFile = new ModelFile(),
+  file: ModelFile = createLocalFile(),
   isInitial = false,
 ): EditorTab {
   return {
@@ -124,6 +126,15 @@ function createTab(
     isValid: true,
     isSaved: true,
   }
+}
+
+function createLocalFile(): ModelFile {
+  return new ModelFile({
+    name: '',
+    path: '',
+    content:
+      '-- Create arbitrary SQL queries\n-- and execute them against different environments\n\n',
+  })
 }
 
 function getStoredTabsIds(): ID[] {

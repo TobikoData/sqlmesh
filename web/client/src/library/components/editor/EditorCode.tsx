@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
-import { keymap } from '@codemirror/view'
+import { type KeyBinding, keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
 import { type File } from '~/api/client'
@@ -46,6 +46,9 @@ export default function CodeEditor(): JSX.Element {
   const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
+  const closeTab = useStoreEditor(s => s.closeTab)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const createTab = useStoreEditor(s => s.createTab)
 
   const [sqlDialectOptions, setSqlDialectOptions] = useState()
 
@@ -86,6 +89,30 @@ export default function CodeEditor(): JSX.Element {
     ].filter(Boolean) as Extension[]
   }, [tab.file, models, mode, sqlDialectOptions, files, dialectsTitles])
 
+  const keymaps = useMemo(
+    () => [
+      {
+        key: 'Mod-Alt-[',
+        preventDefault: true,
+        run() {
+          selectTab(createTab())
+
+          return true
+        },
+      },
+      {
+        key: 'Mod-Alt-]',
+        preventDefault: true,
+        run() {
+          closeTab(tab.file.id)
+
+          return true
+        },
+      },
+    ],
+    [closeTab, selectTab, createTab, tab.file.id],
+  )
+
   useEffect(() => {
     engine.addEventListener('message', handleEngineWorkerMessage)
 
@@ -112,11 +139,13 @@ export default function CodeEditor(): JSX.Element {
 
   return tab.file.isLocal ? (
     <CodeEditorFileLocal
+      keymaps={keymaps}
       extensions={extensions}
       onChange={updateFileContent}
     />
   ) : (
     <CodeEditorFileRemote
+      keymaps={keymaps}
       extensions={extensions}
       onChange={updateFileContent}
     />
@@ -124,13 +153,22 @@ export default function CodeEditor(): JSX.Element {
 }
 
 function CodeEditorFileLocal({
+  keymaps,
   extensions,
   onChange,
 }: {
+  keymaps: KeyBinding[]
   extensions: Extension[]
   onChange: (value: string) => void
 }): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
+
+  const extensionKeymap = useMemo(() => keymap.of([...keymaps]), [keymaps])
+
+  const extensionsAll = useMemo(
+    () => [...extensions, extensionKeymap],
+    [extensionKeymap, extensions],
+  )
 
   return (
     <CodeMirror
@@ -138,16 +176,18 @@ function CodeEditorFileLocal({
       width="100%"
       className="w-full h-full overflow-auto text-sm font-mono"
       value={tab.file.content}
-      extensions={extensions}
+      extensions={extensionsAll}
       onChange={onChange}
     />
   )
 }
 
 function CodeEditorFileRemote({
+  keymaps,
   extensions,
   onChange,
 }: {
+  keymaps: KeyBinding[]
   extensions: Extension[]
   onChange: (value: string) => void
 }): JSX.Element {
@@ -182,21 +222,28 @@ function CodeEditorFileRemote({
     [tab],
   )
 
-  const keymaps = useMemo(
-    () => [
-      {
-        mac: 'Cmd-s',
-        win: 'Ctrl-s',
-        linux: 'Ctrl-s',
-        preventDefault: true,
-        run() {
-          debouncedSaveChange(tab.file.content)
+  const extensionKeymap = useMemo(
+    () =>
+      keymap.of([
+        ...keymaps,
+        {
+          mac: 'Cmd-s',
+          win: 'Ctrl-s',
+          linux: 'Ctrl-s',
+          preventDefault: true,
+          run() {
+            debouncedSaveChange(tab.file.content)
 
-          return true
+            return true
+          },
         },
-      },
-    ],
-    [tab.file.content, debouncedSaveChange],
+      ]),
+    [debouncedSaveChange, keymaps, tab.file.content],
+  )
+
+  const extensionsAll = useMemo(
+    () => [...extensions, extensionKeymap],
+    [extensionKeymap, extensions],
   )
 
   useEffect(() => {
@@ -273,7 +320,7 @@ function CodeEditorFileRemote({
       width="100%"
       className="w-full h-full overflow-auto text-sm font-mono"
       value={tab.file.content}
-      extensions={[...extensions, keymap.of(keymaps)]}
+      extensions={extensionsAll}
       onChange={onChange}
     />
   )

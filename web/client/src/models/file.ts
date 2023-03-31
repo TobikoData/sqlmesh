@@ -31,7 +31,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 
     this.extension = initial?.extension ?? this.initial.extension
     this.is_supported = initial?.is_supported ?? this.initial.is_supported
-    this.content = initial?.content ?? this.initial.content
+    this._content = this.content = initial?.content ?? this.initial.content
     this.type = initial?.type
   }
 

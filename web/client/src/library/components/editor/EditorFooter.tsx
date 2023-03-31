@@ -1,12 +1,31 @@
 import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
 import { useStoreEditor } from '~/context/editor'
+import { useEffect } from 'react'
+import { isNil } from '~/utils'
 
 export default function EditorFooter(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
   const refreshTab = useStoreEditor(s => s.refreshTab)
+
+  useEffect(() => {
+    if (isNil(tab.dialect) && dialects[0]?.dialect_name != null) {
+      updateTabDialect(dialects[0]?.dialect_name)
+    }
+  }, [])
+
+  function updateTabDialect(dialect: string): void {
+    tab.dialect = dialect
+
+    refreshTab()
+
+    engine.postMessage({
+      topic: 'dialect',
+      payload: tab.dialect,
+    })
+  }
 
   return (
     <div className="mr-4">
@@ -38,17 +57,10 @@ export default function EditorFooter(): JSX.Element {
           text="Dialect"
         >
           <EditorIndicator.Selector
-            value={tab.dialect ?? dialects[0]?.dialect_name}
+            value={tab.dialect}
             options={dialects}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              tab.dialect = e.target.value
-
-              refreshTab()
-
-              engine.postMessage({
-                topic: 'dialect',
-                payload: tab.dialect,
-              })
+              updateTabDialect(e.target.value)
             }}
           >
             {dialect => (
