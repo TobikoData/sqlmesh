@@ -53,7 +53,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 ### Environments
 Development and staging environments in dbt are costly to make and not fully representative of what will go into production.
 
-The standard approach to creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even then it wastes time and money. Let me show you why.
+The standard approach to creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even then it wastes time and money. Here's why:
 
 The first part of running a data transformation system is repeatedly iterating through three steps: create or modify model code, execute the models, evaluate the outputs. Practitioners may repeat these steps many times in a day's work.
 
