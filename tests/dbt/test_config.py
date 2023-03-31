@@ -130,6 +130,7 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
 
 
 def test_model_config_sql_no_config():
+    context = DbtContext()
     assert (
         ModelConfig(
             sql="""{{
@@ -139,28 +140,35 @@ def test_model_config_sql_no_config():
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql.strip()
         == "query"
     )
 
+    context.variables = {"new": "old"}
     assert (
         ModelConfig(
             sql="""{{
   config(
-    materialized='"table"',
+    materialized='table',
     incremental_strategy='delete+insert',
-    post_hook=" '{{ macro_call(this) }}' "
+    post_hook=" '{{ var('new') }}' "
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql.strip()
         == "query"
     )
 
     assert (
         ModelConfig(
-            sql="""before {{config(materialized='table', post_hook=" {{ macro_call(this) }} ")}} after"""
-        ).sql_no_config
+            sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
+        )
+        .render_config(context)
+        .sql.strip()
         == "before  after"
     )
 

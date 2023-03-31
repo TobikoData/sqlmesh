@@ -156,23 +156,56 @@ class ModelConfig(BaseModelConfig):
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
-    @property
-    def sql_no_config(self) -> str:
-        matches = re.findall(r"{{\s*config\(", self.sql)
-        if matches:
-            config_macro_start = self.sql.index(matches[0])
-            cursor = config_macro_start
+    def _sql_extract_config(self) -> t.Tuple[SqlStr, SqlStr]:
+        def match_end(str: str, start: int) -> int:
+            cursor = start
             quote = None
-            while cursor < len(self.sql):
-                if self.sql[cursor] in ('"', "'"):
+            while cursor < len(sql_no_config):
+                if str[cursor] in ('"', "'"):
                     if quote is None:
-                        quote = self.sql[cursor]
-                    elif quote == self.sql[cursor]:
+                        quote = str[cursor]
+                    elif quote == str[cursor]:
                         quote = None
-                if self.sql[cursor : cursor + 2] == "}}" and quote is None:
-                    return "".join([self.sql[:config_macro_start], self.sql[cursor + 2 :]])
+                if str[cursor : cursor + 2] == "}}" and quote is None:
+                    return cursor + 2
                 cursor += 1
-        return self.sql
+            return cursor
+
+        sql_no_config: str = self.sql
+        only_config = ""
+
+        matches = re.findall(r"{{\s*config\s*\(", sql_no_config)
+        for match in matches:
+            start = sql_no_config.find(match)
+            if start == -1:
+                continue
+
+            extracted = sql_no_config[start : match_end(sql_no_config, start)]
+            only_config = "\n".join([only_config, extracted]) if only_config else extracted
+            sql_no_config = sql_no_config.replace(extracted, "").strip()
+
+        return (SqlStr(only_config), SqlStr(sql_no_config))
+
+    def render_config(self: ModelConfig, context: DbtContext) -> ModelConfig:
+        config, sql = self._sql_extract_config()
+        if not config:
+            return super().render_config(context)
+
+        class ConfigCapturer:
+            def __init__(self, model_config: ModelConfig):
+                self.model_config = model_config
+
+            def config(self, *args: t.Any, **kwargs: t.Any) -> str:
+                if args and isinstance(args[0], dict):
+                    self.model_config = self.model_config.update_with(args[0])
+                if kwargs:
+                    self.model_config = self.model_config.update_with(kwargs)
+                return ""
+
+        capturer = ConfigCapturer(self.copy(deep=True))
+        capturer.model_config.sql = sql
+        context.render(config, config=capturer.config)
+        return capturer.model_config.render_config(context)
 
     @property
     def all_sql(self) -> SqlStr:
@@ -181,7 +214,7 @@ class ModelConfig(BaseModelConfig):
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         model_context = self._context_for_dependencies(context, self._dependencies)
-        expressions = d.parse(self.sql_no_config)
+        expressions = d.parse(self.sql)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
 

@@ -143,10 +143,6 @@ def no_log(msg: str, info: bool = False) -> str:
     return ""
 
 
-def config(*args: t.Any, **kwargs: t.Any) -> str:
-    return ""
-
-
 def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     def var(name: str, default: t.Optional[str] = None) -> str:
         return variables.get(name, default)
@@ -252,7 +248,6 @@ def _try_literal_eval(value: str) -> t.Any:
 
 BUILTIN_GLOBALS = {
     "api": Api(),
-    "config": config,
     "env_var": env_var,
     "exceptions": Exceptions(),
     "flags": Flags(),

@@ -190,6 +190,10 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
+    @property
+    def config_info(self) -> AttributeDict[str, t.Any]:
+        return AttributeDict(self.dict())
+
     def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         jinja_macros = model_context.jinja_macros.trim(self._dependencies.macros)
@@ -197,6 +201,7 @@ class BaseModelConfig(GeneralConfig):
             {
                 "this": self.relation_info,
                 "schema": self.table_schema,
+                "config": self.config_info,
                 **model_context.jinja_globals,  # type: ignore
             }
         )
@@ -275,12 +280,12 @@ class ModelSqlRenderer(t.Generic[BMC]):
             jinja_globals={
                 **context.jinja_globals,
                 **date_dict(c.EPOCH, c.EPOCH, c.EPOCH),
-                "config": self._config,
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
                 "this": self.config.relation_info,
                 "schema": self.config.table_schema,
+                "config": self.config.config_info,
             },
             engine_adapter=None,
         )
@@ -340,13 +345,6 @@ class ModelSqlRenderer(t.Generic[BMC]):
             )
         self._captured_dependencies.sources.add(full_name)
         return BaseRelation.create(**self.context.sources[full_name].relation_info)
-
-    def _config(self, *args: t.Any, **kwargs: t.Any) -> str:
-        if args and isinstance(args[0], dict):
-            self._enriched_config = self._enriched_config.update_with(args[0])
-        if kwargs:
-            self._enriched_config = self._enriched_config.update_with(kwargs)
-        return ""
 
     class TrackingAdapter(ParsetimeAdapter):
         def __init__(self, outer_self: ModelSqlRenderer, *args: t.Any, **kwargs: t.Any):
