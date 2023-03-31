@@ -1,7 +1,5 @@
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import Editor from '../editor/Editor'
-import FolderTree from '../folderTree/FolderTree'
 import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
 import { EnumSize, EnumVariant } from '../../../types/enum'
 import {
@@ -23,8 +21,9 @@ import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
 import { Dialog } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { type Model, type ModelsModels } from '~/api/client'
 import ModalSidebar from '../modal/ModalDrawer'
+import Editor from '../editor/Editor'
+import FileTree from '../fileTree/FileTree'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 const Graph = lazy(async () => await import('../graph/Graph'))
@@ -38,6 +37,7 @@ export function IDE(): JSX.Element {
   const addSyncronizedEnvironments = useStoreContext(
     s => s.addSyncronizedEnvironments,
   )
+  const setModels = useStoreContext(s => s.setModels)
 
   const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
@@ -95,6 +95,10 @@ export function IDE(): JSX.Element {
     addSyncronizedEnvironments(Object.values(contextEnvironemnts))
   }, [contextEnvironemnts])
 
+  useEffect(() => {
+    setModels(dataModels?.models)
+  }, [dataModels])
+
   function showGraph(): void {
     setIsGraphOpen(true)
   }
@@ -142,11 +146,8 @@ export function IDE(): JSX.Element {
           snapOffset={0}
           className="flex w-full h-full overflow-hidden"
         >
-          <FolderTree project={project} />
-          <Editor
-            environment={environment}
-            models={toModels(dataModels?.models)}
-          />
+          <FileTree project={project} />
+          <Editor />
         </SplitPane>
       )}
       <ModalSidebar
@@ -188,13 +189,4 @@ export function IDE(): JSX.Element {
       </Modal>
     </>
   )
-}
-
-function toModels(models: ModelsModels = {}): Map<string, Model> {
-  return Object.values(models).reduce((acc, model) => {
-    acc.set(model.name, model)
-    acc.set(model.path, model)
-
-    return acc
-  }, new Map())
 }

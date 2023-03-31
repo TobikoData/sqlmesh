@@ -35,15 +35,13 @@ export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
   })
 }
 
-export function useApiFileByPath(path?: string): UseQueryResult<File> {
+export function useApiFileByPath(path: string): UseQueryResult<File> {
   return useQuery({
     queryKey: [`/api/files`, path],
     queryFn: async ({ signal }) =>
-      path != null &&
-      path !== '' &&
-      (await getFileApiFilesPathGet(path, { signal })),
-    enabled: false,
+      await getFileApiFilesPathGet(path, { signal }),
     cacheTime: 0,
+    enabled: false,
   })
 }
 

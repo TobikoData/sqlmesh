@@ -6,28 +6,33 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { useStoreEditor } from '../../../context/editor'
-import { useStoreFileTree } from '../../../context/fileTree'
 import { isNil, isTrue } from '~/utils'
+import { useStoreEditor } from '~/context/editor'
 
+export const EnumEditorTabs = {
+  QueryPreview: 'queryPreview',
+  Table: 'table',
+  Terminal: 'terminal',
+} as const
+
+export type EditorTabs = KeyOf<typeof EnumEditorTabs>
 const TABS = ['Table', 'Query Preview', 'Terminal Output']
 
-interface PropsTabs extends React.HTMLAttributes<HTMLElement> {}
+export default function EditorPreview(): JSX.Element {
+  const tab = useStoreEditor(s => s.tab)
 
-export default function Tabs({ className }: PropsTabs): JSX.Element {
-  const tabTableContent = useStoreEditor(s => s.tabTableContent)
-  const tabQueryPreviewContent = useStoreEditor(s => s.tabQueryPreviewContent)
-  const tabTerminalContent = useStoreEditor(s => s.tabTerminalContent)
-  const activeFile = useStoreFileTree(s => s.activeFile)
+  const previewTable = useStoreEditor(s => s.previewTable)
+  const previewQuery = useStoreEditor(s => s.previewQuery)
+  const previewConsole = useStoreEditor(s => s.previewConsole)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
 
   const [headers, data] = useMemo(
     () =>
-      tabTableContent == null
+      previewTable == null
         ? [[], []]
-        : [tabTableContent[0] ?? [], tabTableContent[1] ?? []],
-    [tabTableContent],
+        : [previewTable[0] ?? [], previewTable[1] ?? []],
+    [previewTable],
   )
 
   const columns = useMemo(
@@ -41,16 +46,16 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
   const activeTab = useMemo(
     () =>
       [
-        Boolean(tabTableContent),
-        Boolean(tabQueryPreviewContent),
-        Boolean(tabTerminalContent),
+        Boolean(previewTable),
+        Boolean(previewQuery),
+        Boolean(previewConsole),
       ].findIndex(isTrue),
-    [tabTableContent, tabQueryPreviewContent, tabTerminalContent],
+    [previewTable, previewQuery, previewConsole],
   )
 
   useEffect(() => {
     setActiveTabIndex(-1)
-  }, [tabTableContent, tabQueryPreviewContent, tabTerminalContent])
+  }, [previewTable, previewQuery, previewConsole])
 
   const table = useReactTable({
     data,
@@ -58,21 +63,23 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  function isDisabledTabTable(tabName: string): boolean {
-    return tabName === 'Table' && isNil(tabTableContent)
+  function isDisabledPreviewTable(tabName: string): boolean {
+    return tabName === 'Table' && isNil(previewTable)
   }
 
-  function isDisabledTabTerminal(tabName: string): boolean {
-    return tabName === 'Terminal Output' && isNil(tabTerminalContent)
+  function isDisabledPreviewConsole(tabName: string): boolean {
+    return tabName === 'Terminal Output' && isNil(previewConsole)
   }
 
-  function isDisabledTabQueryPreview(tabName: string): boolean {
-    return tabName === 'Query Preview' && isNil(tabQueryPreviewContent)
+  function isDisabledPreviewQuery(tabName: string): boolean {
+    return tabName === 'Query Preview' && isNil(previewQuery)
   }
 
   return (
     <div
-      className={clsx('flex flex-col overflow-hidden text-prose', className)}
+      className={clsx(
+        'flex flex-col text-prose overflow-auto scrollbar scrollbar--vertical',
+      )}
     >
       <Tab.Group
         onChange={setActiveTabIndex}
@@ -84,16 +91,16 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
               <Tab
                 key={tabName}
                 disabled={
-                  isDisabledTabTable(tabName) ||
-                  isDisabledTabTerminal(tabName) ||
-                  isDisabledTabQueryPreview(tabName)
+                  isDisabledPreviewTable(tabName) ||
+                  isDisabledPreviewConsole(tabName) ||
+                  isDisabledPreviewQuery(tabName)
                 }
                 className={({ selected }) =>
                   clsx(
                     'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                    isDisabledTabTable(tabName) ||
-                      isDisabledTabTerminal(tabName) ||
-                      isDisabledTabQueryPreview(tabName)
+                    isDisabledPreviewTable(tabName) ||
+                      isDisabledPreviewConsole(tabName) ||
+                      isDisabledPreviewQuery(tabName)
                       ? 'cursor-not-allowed opacity-50 bg-neutral-10'
                       : selected
                       ? 'bg-secondary-500 text-secondary-100 cursor-default'
@@ -102,19 +109,18 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
                 }
               >
                 {(tabName === 'Table' || tabName === 'Query Preview') &&
-                  activeFile?.content !== tabQueryPreviewContent && (
+                  tab.file.content !== previewQuery && (
                     <span
                       title="Outdated Data. Does not match editor query!"
                       className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-warning-500"
                     ></span>
                   )}
-                {tabName === 'Terminal Output' &&
-                  tabTerminalContent != null && (
-                    <span
-                      title="Outdated Data. Does not match editor query!"
-                      className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
-                    ></span>
-                  )}
+                {tabName === 'Terminal Output' && previewConsole != null && (
+                  <span
+                    title="Outdated Data. Does not match editor query!"
+                    className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
+                  ></span>
+                )}
                 {tabName}
               </Tab>
             ))}
@@ -195,7 +201,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             )}
           >
             <pre className="w-full h-full p-4 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs">
-              {tabQueryPreviewContent}
+              {previewQuery}
             </pre>
           </Tab.Panel>
           <Tab.Panel
@@ -204,7 +210,7 @@ export default function Tabs({ className }: PropsTabs): JSX.Element {
             )}
           >
             <pre className="w-full h-full p-4 bg-primary-10 rounded-lg text-danger-500 overflow-auto text-xs scrollbar scrollbar--horizontal scrollbar--vertical">
-              {tabTerminalContent}
+              {previewConsole}
             </pre>
           </Tab.Panel>
         </Tab.Panels>

@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import {
+  type Model,
+  type ModelsModels,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
   type Environment,
@@ -16,6 +18,8 @@ interface ContextStore {
   environments: Set<ModelEnvironment>
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
+  models: Map<string, Model>
+  setModels: (models?: ModelsModels) => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
   ) => boolean
@@ -41,21 +45,29 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   environments,
   initialStartDate: undefined,
   initialEndDate: undefined,
-  getNextEnvironment(): ModelEnvironment {
+  models: new Map(),
+  setModels(models = {}) {
+    set(() => {
+      return {
+        models: Object.values(models).reduce((acc, model) => {
+          acc.set(model.name, model)
+          acc.set(model.path, model)
+
+          return acc
+        }, new Map()),
+      }
+    })
+  },
+  getNextEnvironment() {
     return get().environments.values().next().value
   },
-  setInitialDates(
-    initialStartDate?: ContextEnvironmentStart,
-    initialEndDate?: ContextEnvironmentEnd,
-  ): void {
+  setInitialDates(initialStartDate?, initialEndDate?) {
     set({
       initialStartDate,
       initialEndDate,
     })
   },
-  isExistingEnvironment(
-    environment: ModelEnvironment | EnvironmentName,
-  ): boolean {
+  isExistingEnvironment(environment) {
     const s = get()
 
     if ((environment as ModelEnvironment).isModel)
@@ -71,7 +83,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
     return hasEnvironment
   },
-  setEnvironment(environment: ModelEnvironment): void {
+  setEnvironment(environment) {
     set(() => {
       ModelEnvironment.save({
         environment,
@@ -82,10 +94,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironment(
-    localEnvironment: EnvironmentName,
-    created_from?: EnvironmentName,
-  ): void {
+  addLocalEnvironment(localEnvironment, created_from?) {
     set(s => {
       if (isStringEmptyOrNil(localEnvironment)) return s
 
@@ -110,7 +119,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  removeLocalEnvironment(localEnvironment: ModelEnvironment) {
+  removeLocalEnvironment(localEnvironment) {
     set(s => {
       s.environments.delete(localEnvironment)
 
@@ -123,7 +132,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addSyncronizedEnvironments(envs: Environment[] = []) {
+  addSyncronizedEnvironments(envs = []) {
     set(s => {
       const environments = Array.from(s.environments)
 
