@@ -9,7 +9,7 @@ export interface Dialect {
 }
 
 interface EditorStore {
-  tabsIds: ID[]
+  storedTabsIds: ID[]
   tabs: Map<ID, EditorTab>
   tab: EditorTab
   engine: Worker
@@ -44,14 +44,14 @@ export interface EditorTab {
   preview?: EditorPreview
 }
 
-const [getTabsIds, setTabsIds] = useLocalStorage<{ ids: ID[] }>('tabs')
+const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[] }>('tabs')
 
 const initialFile = new ModelFile()
 const initialTab: EditorTab = createTab(initialFile, true)
 const initialTabs = new Map([[initialFile.id, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
-  tabsIds: getTabsIds()?.ids ?? [],
+  storedTabsIds: getStoredTabsIds(),
   tab: initialTab,
   tabs: initialTabs,
   engine: sqlglotWorker,
@@ -72,14 +72,14 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   addTab(tab) {
     const tabs = new Map([...get().tabs, [tab.file.id, tab]])
 
-    setTabsIds({
+    setStoredTabs({
       ids: Array.from(tabs.values())
         .filter(tab => tab.file.isRemote)
         .map(tab => tab.file.id),
     })
 
     set(() => ({
-      tabsIds: getTabsIds()?.ids ?? [],
+      tabsIds: getStoredTabsIds(),
       tabs,
     }))
   },
@@ -124,4 +124,8 @@ function createTab(
     isValid: true,
     isSaved: true,
   }
+}
+
+function getStoredTabsIds(): ID[] {
+  return getStoredTabs()?.ids ?? []
 }

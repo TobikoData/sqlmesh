@@ -16,7 +16,7 @@ export default function Editor(): JSX.Element {
   const selectedFile = useStoreFileTree(s => s.selectedFile)
 
   const tab = useStoreEditor(s => s.tab)
-  const tabsIds = useStoreEditor(s => s.tabsIds)
+  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
@@ -64,7 +64,7 @@ export default function Editor(): JSX.Element {
 
   useEffect(() => {
     files.forEach(file => {
-      if (tabsIds.includes(file.id)) {
+      if (storedTabsIds.includes(file.id)) {
         addTab(createTab(file))
       }
     })
