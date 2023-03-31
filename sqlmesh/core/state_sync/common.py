@@ -218,6 +218,8 @@ class CommonStateSyncMixin(StateSync):
     def _ensure_no_gaps(
         self, target_snapshots: t.Iterable[Snapshot], target_environment: Environment
     ) -> None:
+        from sqlmesh.core.scheduler import start_date
+
         target_snapshots_by_name = {s.name: s for s in target_snapshots}
 
         changed_version_prev_snapshots_by_name = {
@@ -257,7 +259,8 @@ class CommonStateSyncMixin(StateSync):
                 and prev_snapshot.intervals
             ):
                 missing_intervals = target_snapshot.missing_intervals(
-                    prev_snapshot.intervals[0][0],
+                    start_date(target_snapshot, target_snapshots_by_name.values())
+                    or prev_snapshot.intervals[0][0],
                     prev_snapshot.intervals[-1][1],
                 )
                 if missing_intervals:

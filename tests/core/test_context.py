@@ -11,6 +11,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
+from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -324,8 +325,8 @@ def test():
 def test_plan_apply(sushi_context) -> None:
     plan = sushi_context.plan(
         "dev",
-        start="2022-01-01",
-        end="2022-01-01",
+        start=yesterday_ds(),
+        end=yesterday_ds(),
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")

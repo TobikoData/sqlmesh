@@ -27,21 +27,36 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
 
-@pytest.fixture()
-def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
-
+def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(context.state_sync, context.snapshot_evaluator)
     plan_evaluator._push(plan)
     plan_evaluator._promote(plan)
 
+
+@pytest.fixture()
+def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
+    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
+    push_plan(context, plan)
+    return context
+
+
+@pytest.fixture()
+def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
+    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
+
+    for model in context.models.values():
+        if model.start:
+            context.upsert_model(model.name, start="2022-01-01")
+
+    plan = context.plan("prod")
+    plan.set_start("1 week ago")
+    push_plan(context, plan)
     return context
 
 
 @pytest.fixture()
 def sushi_context(mocker: MockerFixture) -> Context:
     context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
-
     context.apply(plan)
     return context
 
@@ -61,10 +76,6 @@ def init_and_plan_sushi_context(
     path: str, mocker: MockerFixture, start: TimeLike = "1 week ago"
 ) -> t.Tuple[Context, Plan]:
     sushi_context = Context(path=path, config="test_config")
-
-    for snapshot in sushi_context.snapshots.values():
-        snapshot.set_version()
-
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 

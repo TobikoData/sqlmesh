@@ -781,7 +781,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         model.dialect,
         model.owner,
         model.description,
-        str(to_timestamp(model.start)) if model.start else None,
+        str(model.start) if model.start else None,
         str(model.batch_size) if model.batch_size is not None else None,
     ]
 

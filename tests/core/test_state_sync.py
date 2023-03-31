@@ -432,6 +432,41 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
 
 
+def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    model = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+        start="2022-01-01",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+    )
+
+    snapshot = make_snapshot(model, version="a")
+    snapshot.add_interval("2022-01-01", "2022-01-03")
+    state_sync.push_snapshots([snapshot])
+    promote_snapshots(state_sync, [snapshot], "prod")
+
+    model = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+        start="2022-01-02",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+    )
+
+    snapshot = make_snapshot(model, version="b")
+    snapshot.add_interval("2022-01-03", "2022-01-04")
+    state_sync.push_snapshots([snapshot])
+    with pytest.raises(
+        SQLMeshError,
+        match=r"Detected gaps in snapshot.*",
+    ):
+        promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
+
+    state_sync.add_interval(snapshot, "2022-01-02", "2022-01-03")
+    promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
+
+
 def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
