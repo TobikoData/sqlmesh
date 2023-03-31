@@ -33,6 +33,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Semantic validation`             | ❌ | ✅
 | `Transpilation`                   | ❌ | ✅
 | `Unit tests`                      | ❌ | ✅
+| `Data audits`                     | ✅ | ✅
 | `Column level lineage`            | ❌ | ✅
 | `Accessible incremental models`   | ❌ | ✅
 | `Downstream impact planner`       | ❌ | ✅
@@ -52,7 +53,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 ### Environments
 Development and staging environments in dbt are costly to make and not fully representative of what will go into production.
 
-The standard approach to creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even then it wastes time and money.
+The standard approach to creating a new environment in dbt is to rerun your entire warehouse in a new environment. This may work at small scales, but even then it wastes time and money. Here's why:
 
 The first part of running a data transformation system is repeatedly iterating through three steps: create or modify model code, execute the models, evaluate the outputs. Practitioners may repeat these steps many times in a day's work.
 
@@ -91,7 +92,7 @@ Manually specifying macros to find date boundaries is repetitive and error-prone
 
 The example above shows how incremental models behave differently in dbt depending on whether they have been run before. As models become more complex, the cognitive burden of having two run times, "first time full refresh" vs. "subsequent incremental", increases.
 
-SQLMesh keeps track of which date ranges exist so that the query can be simplified as follows:
+SQLMesh keeps track of which date ranges exist, producing a simplified and efficient query as follows:
 
 ```sql
 -- sqlmesh incremental
@@ -104,11 +105,11 @@ WHERE d.ds BETWEEN @start_ds AND @end_ds
 ```
 
 #### Data leakage
-dbt does not check whether the data inserted into an incremental table should be there or not. This can lead to problems or consistency issues, such as late-arriving data overriding past partitions. These problems are called "data leakage."
+dbt does not check whether the data inserted into an incremental table should be there or not. This can lead to problems and consistency issues, such as late-arriving data overriding past partitions. These problems are called "data leakage."
 
-SQLMesh wraps all queries in a subquery with a time filter under the hood to enforce that the data inserted for a particular batch is as expected.
+SQLMesh wraps all queries in a subquery with a time filter under the hood to enforce that the data inserted for a particular batch is as expected and reproducible everytime.
 
-In addition, dbt only supports the 'insert/overwrite' incremental load pattern for systems that natively support it. SQLMesh enables 'insert/overwrite' on any system, because it is the most robust approach to incremental loading. 'Append' pipelines risk data inaccuracy in the variety of scenarios where your pipelines may run more than once for a given date.
+In addition, dbt only supports the 'insert/overwrite' incremental load pattern for systems that natively support it. SQLMesh enables 'insert/overwrite' on any system, because it is the most robust approach to incremental loading, while 'Append' pipelines risk data inaccuracy in the variety of scenarios where your pipelines may run more than once for a given date.
 
 This example shows the time filtering subquery SQLMesh applies to all queries as a guard against data leakage:
 ```sql
@@ -119,7 +120,7 @@ JOIN raw.event_dims d
   ON e.id = d.id AND d.ds BETWEEN @start_ds AND @end_ds
 WHERE d.ds BETWEEN @start_ds AND @end_ds
 
--- with data leakage guard
+-- with automated data leakage guard
 SELECT *
 FROM (
   SELECT *
@@ -141,6 +142,8 @@ Missing past data: ?, 2022-01-02, 2022-01-03
 Data gap: 2022-01-01, ?, 2022-01-03
 ```
 
+SQLMesh will automatically fill these data gaps on the next run.
+
 #### Performance
 Subqueries that look for MAX(date) could have a performance impact on the primary query. SQLMesh is able to avoid these extra subqueries.
 
@@ -151,9 +154,9 @@ SQLMesh is able to [batch](../concepts/models/overview#batch_size) up backfills 
 ### SQL understanding
 dbt heavily relies on [Jinja](https://jinja.palletsprojects.com/en/3.1.x/). It has no understanding of SQL and treats all queries as raw strings without context. This means that simple syntax errors like trailing commas are difficult to debug and require a full run to detect.
 
-SQLMesh supports Jinja, but it does not rely on it - instead, it parses/understands SQL through [SQLGlot](https://github.com/tobymao/sqlglot). Simple errors can be detected at compile time, so you no longer have to wait minutes to see that you've referenced a column incorrectly or missed a comma.
+SQLMesh supports Jinja, but it does not rely on it - instead, it parses/understands SQL through [SQLGlot](https://github.com/tobymao/sqlglot). Simple errors can be detected at compile time, so you no longer have to wait minutes or even longer to see that you've referenced a column incorrectly or missed a comma.
 
-Additionally, having a first-class understanding of SQL allows SQLMesh to do some interesting and useful things like transpilation, column-level lineage, and automatic change categorization.
+Additionally, having a first-class understanding of SQL supercharges SQLMesh with features such as transpilation, column-level lineage, and automatic change categorization.
 
 ### Testing
 Data quality checks such as detecting NULL values and duplicated rows are extremely valuable for detecting upstream data issues and large scale problems. However, they are not meant for testing edge cases or business logic, and they are not sufficient for creating robust data pipelines.
