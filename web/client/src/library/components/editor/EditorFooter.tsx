@@ -14,7 +14,7 @@ export default function EditorFooter(): JSX.Element {
     if (isNil(tab.dialect) && dialects[0]?.dialect_name != null) {
       updateTabDialect(dialects[0]?.dialect_name)
     }
-  }, [])
+  }, [dialects, tab])
 
   function updateTabDialect(dialect: string): void {
     tab.dialect = dialect
