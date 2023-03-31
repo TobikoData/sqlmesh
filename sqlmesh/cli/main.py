@@ -11,6 +11,7 @@ from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.errors import MissingDependencyError
 
 
 @click.group(no_args_is_help=True)
@@ -306,6 +307,38 @@ def version() -> None:
         print(__version__)
     except ImportError:
         print("Version is not available")
+
+
+@cli.command("ide")
+@click.option(
+    "--host",
+    type=str,
+    help="Bind socket to this host. Default: 127.0.0.1",
+)
+@click.option(
+    "--port",
+    type=int,
+    help="Bind socket to this port. Default: 8000",
+)
+@click.pass_obj
+@error_handler
+def ide(
+    obj: Context,
+    host: t.Optional[str],
+    port: t.Optional[int],
+) -> None:
+    """Start a browser-based SQLMesh IDE."""
+    try:
+        import uvicorn
+    except ModuleNotFoundError as e:
+        raise MissingDependencyError(
+            "Missing IDE dependencies. Run `pip install sqlmesh[web]` to install them."
+        ) from e
+
+    host = host or "127.0.0.1"
+    port = 8000 if port is None else port
+    os.environ["PROJECT_PATH"] = str(obj.path)
+    uvicorn.run("web.server.main:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

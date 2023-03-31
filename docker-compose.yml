@@ -1,5 +1,15 @@
 version: "3.11"
 services:
+  generate-openapi-spec:
+    image: tobiko-api
+    container_name: generate-openapi-spec
+    working_dir: /sqlmesh
+    build:
+      dockerfile: Dockerfile.api
+    command: python web/server/openapi.py
+    volumes:
+      - .:/sqlmesh
+
   app:
     image: tobiko-app
     container_name: tobiko-app
@@ -16,7 +26,7 @@ services:
     networks:
       - tobiko-development
     depends_on:
-      - api
+      - generate-openapi-spec
 
   api:
     image: tobiko-api
