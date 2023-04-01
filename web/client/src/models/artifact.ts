@@ -51,6 +51,10 @@ export class ModelArtifact<
     return this.path === ''
   }
 
+  get isRemote(): boolean {
+    return this.path !== ''
+  }
+
   get withParent(): boolean {
     return Boolean(this.parent?.isModel)
   }

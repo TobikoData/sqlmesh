@@ -15,11 +15,12 @@ import {
   writeFileApiFilesPathPost,
   deleteDirectoryApiDirectoriesPathDelete,
 } from '~/api/client'
-import { useStoreFileTree } from '~/context/fileTree'
 import { ModelDirectory, ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { toUniqueName, getAllFilesInDirectory } from './help'
+import { useStoreEditor } from '~/context/editor'
+import { useStoreFileTree } from '~/context/fileTree'
 import File from './File'
 
 interface PropsDirectory extends WithConfirmation {
@@ -32,10 +33,11 @@ export default function Directory({
   directory,
   setConfirmation,
 }: PropsDirectory): JSX.Element {
-  const activeFile = useStoreFileTree(s => s.activeFile)
-  const openedFiles = useStoreFileTree(s => s.openedFiles)
-  const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
+  const tab = useStoreEditor(s => s.tab)
+  const closeTab = useStoreEditor(s => s.closeTab)
+
   const selectFile = useStoreFileTree(s => s.selectFile)
+  const refreshProject = useStoreFileTree(s => s.refreshProject)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
@@ -50,10 +52,10 @@ export default function Directory({
   }, [])
 
   useEffect(() => {
-    if (isFalse(isOpen) && directory.hasFile(activeFile)) {
+    if (isFalse(isOpen) && directory.hasFile(tab.file)) {
       directory.open()
     }
-  }, [activeFile])
+  }, [tab])
 
   function createDirectory(e: MouseEvent): void {
     e.stopPropagation()
@@ -139,13 +141,13 @@ export default function Directory({
           const files = getAllFilesInDirectory(directory)
 
           files.forEach(file => {
-            openedFiles.delete(file)
+            closeTab(file.id)
           })
         }
 
         directory.parent?.removeDirectory(directory)
 
-        setOpenedFiles(openedFiles)
+        refreshProject()
       })
       .catch(error => {
         // TODO: Show error notification
@@ -194,8 +196,8 @@ export default function Directory({
         setNewName(undefined)
         setIsLoading(false)
 
-        if (directory.hasFile(activeFile)) {
-          selectFile(activeFile)
+        if (directory.hasFile(tab.file)) {
+          selectFile(tab.file)
         }
       })
   }

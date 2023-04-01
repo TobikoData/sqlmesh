@@ -9,10 +9,11 @@ import {
   deleteFileApiFilesPathDelete,
   writeFileApiFilesPathPost,
 } from '~/api/client'
-import { useStoreFileTree } from '~/context/fileTree'
 import { type ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
+import { useStoreEditor } from '~/context/editor'
+import { useStoreFileTree } from '~/context/fileTree'
 
 interface PropsFile extends WithConfirmation {
   file: ModelFile
@@ -24,10 +25,12 @@ export default function File({
   file,
   setConfirmation,
 }: PropsFile): JSX.Element {
-  const activeFile = useStoreFileTree(s => s.activeFile)
-  const openedFiles = useStoreFileTree(s => s.openedFiles)
-  const setOpenedFiles = useStoreFileTree(s => s.setOpenedFiles)
+  const tab = useStoreEditor(s => s.tab)
+  const tabs = useStoreEditor(s => s.tabs)
+  const closeTab = useStoreEditor(s => s.closeTab)
+
   const selectFile = useStoreFileTree(s => s.selectFile)
+  const refreshProject = useStoreFileTree(s => s.refreshProject)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
@@ -40,11 +43,11 @@ export default function File({
     deleteFileApiFilesPathDelete(file.path)
       .then(response => {
         if ((response as unknown as { ok: boolean }).ok) {
-          openedFiles.delete(file)
+          closeTab(file.id)
 
           file.parent?.removeFile(file)
 
-          setOpenedFiles(openedFiles)
+          refreshProject()
         } else {
           // TODO: Show error notification
         }
@@ -95,7 +98,8 @@ export default function File({
       .finally(() => {
         setNewName(undefined)
         setIsLoading(false)
-        setOpenedFiles(openedFiles)
+
+        refreshProject()
       })
   }
 
@@ -107,10 +111,10 @@ export default function File({
         file.is_supported &&
           'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
-        openedFiles.has(file)
+        tabs.has(file.id)
           ? 'text-brand-500'
           : 'text-neutral-500 dark:text-neutral-100',
-        file === activeFile && 'bg-neutral-100 dark:bg-dark-lighter',
+        file === tab.file && 'bg-neutral-100 dark:bg-dark-lighter',
       )}
     >
       <span
@@ -122,7 +126,7 @@ export default function File({
           <DocumentIcon
             className={clsx(
               `inline-block ${CSS_ICON_SIZE} mr-2`,
-              file === activeFile
+              file === tab.file
                 ? 'text-brand-500'
                 : 'text-neutral-500 dark:text-neutral-100',
             )}
@@ -134,7 +138,7 @@ export default function File({
               onClick={(e: MouseEvent) => {
                 e.stopPropagation()
 
-                file.is_supported && file !== activeFile && selectFile(file)
+                file.is_supported && file !== tab.file && selectFile(file)
               }}
               onDoubleClick={(e: MouseEvent) => {
                 e.stopPropagation()
