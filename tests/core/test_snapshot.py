@@ -10,6 +10,8 @@ from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
+    ModelKind,
+    ModelKindName,
     SeedKind,
     SqlModel,
     create_seed_model,
@@ -52,6 +54,20 @@ def model():
 
 
 @pytest.fixture
+def full_refresh_model():
+    return SqlModel(
+        name="fr_model",
+        kind=ModelKind(name=ModelKindName.FULL),
+        owner="owner",
+        dialect="spark",
+        cron="1 0 * * *",
+        batch_size=30,
+        start="2020-01-01",
+        query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+    )
+
+
+@pytest.fixture
 def snapshot(
     model: Model,
     parent_model: Model,
@@ -68,6 +84,25 @@ def snapshot(
     )
     snapshot.version = snapshot.fingerprint
     return snapshot
+
+
+@pytest.fixture
+def full_refresh_snapshot(
+    full_refresh_model: Model,
+    parent_model: Model,
+    monkeypatch: MonkeyPatch,
+    mocker: MockerFixture,
+    make_snapshot,
+):
+    mock = mocker.Mock()
+    mock.return_value = to_datetime("2022-09-23T00:12:53+00:00")
+    monkeypatch.setattr("sqlmesh.utils.date.now", mock)
+    full_refresh_snapshot = make_snapshot(
+        full_refresh_model,
+        models={parent_model.name: parent_model, full_refresh_model.name: full_refresh_model},
+    )
+    full_refresh_snapshot.version = full_refresh_snapshot.fingerprint
+    return full_refresh_snapshot
 
 
 def test_json(snapshot: Snapshot):
@@ -151,11 +186,11 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     ]
     snapshot.add_interval("2019-01-01 00:00:00", "2020-01-31 00:00:01")
     assert snapshot.intervals == [
-        (to_timestamp("2019-01-01"), to_timestamp("2020-02-01")),
+        (to_timestamp("2019-01-01"), to_timestamp("2020-01-31")),
     ]
-    snapshot.add_interval("2018-12-31 23:59:59", "2020-01-31 00:00:01")
+    snapshot.add_interval("2018-12-31 23:59:59", "2020-01-31 12:00:01")
     assert snapshot.intervals == [
-        (to_timestamp("2018-12-31"), to_timestamp("2020-02-01")),
+        (to_timestamp("2018-12-31"), to_timestamp("2020-01-31")),
     ]
 
     new_snapshot = make_snapshot(snapshot.model)
@@ -204,6 +239,34 @@ def test_missing_intervals(snapshot: Snapshot):
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-05 00:00:02") == []
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-07 00:00:02") == [
         (to_timestamp("2020-01-06"), to_timestamp("2020-01-07")),
+    ]
+
+
+def test_missing_interval_latest(
+    full_refresh_snapshot: Snapshot, monkeypatch: MonkeyPatch, mocker: MockerFixture
+):
+    mock = mocker.Mock()
+    mock.return_value = to_datetime("2020-01-05T00:12:53+00:00")
+    monkeypatch.setattr("sqlmesh.core.snapshot.definition.now", mock)
+    full_refresh_snapshot.add_interval("2020-01-01", "2020-01-01")
+    assert full_refresh_snapshot.missing_intervals("2020-01-01", "2020-01-01", "2020-01-01") == []
+    assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-02", "2020-01-02") == [
+        (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
+    ]
+    assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03", "2020-01-03") == [
+        (to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))
+    ]
+    assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03", "2020-01-04") == [
+        (to_timestamp("2020-01-04"), to_timestamp("2020-01-05"))
+    ]
+    assert full_refresh_snapshot.missing_intervals(
+        "2020-01-02", "2020-01-03", "2020-01-03 01:00:00"
+    ) == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
+    assert full_refresh_snapshot.missing_intervals(
+        "2020-01-02", "2020-01-03", "2020-01-04 23:59:59"
+    ) == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
+    assert full_refresh_snapshot.missing_intervals("2020-01-02", "2020-01-03") == [
+        (to_timestamp("2020-01-04"), to_timestamp("2020-01-05"))
     ]
 
 

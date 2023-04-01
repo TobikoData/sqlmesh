@@ -232,11 +232,14 @@ def make_inclusive(start: TimeLike, end: TimeLike) -> Interval:
     Returns:
         A tuple of inclusive datetime objects.
     """
-    start_dt = to_datetime(start)
+    return (to_datetime(start), make_inclusive_end(end))
+
+
+def make_inclusive_end(end: TimeLike) -> datetime:
     end_dt = to_datetime(end)
     if is_date(end):
         end_dt = end_dt + timedelta(days=1)
-    return (start_dt, end_dt - timedelta(milliseconds=1))
+    return end_dt - timedelta(milliseconds=1)
 
 
 def preserve_time_like_kind(input_value: TimeLike, output_value: TimeLike) -> TimeLike:
