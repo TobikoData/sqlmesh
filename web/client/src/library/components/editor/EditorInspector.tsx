@@ -349,7 +349,7 @@ function ModelName({ modelName }: { modelName: string }): JSX.Element {
   return (
     <div className="text-sm font-bold whitespace-nowrap">
       <h3 className="ml-2">Model Name</h3>
-      <p className="mt-1 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10  text-xs rounded">
+      <p className="mt-1 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10 text-xs rounded">
         {modelName}
       </p>
     </div>

@@ -61,7 +61,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   getNextEnvironment() {
     return get().environments.values().next().value
   },
-  setInitialDates(initialStartDate?, initialEndDate?) {
+  setInitialDates(initialStartDate, initialEndDate) {
     set({
       initialStartDate,
       initialEndDate,
@@ -94,7 +94,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addLocalEnvironment(localEnvironment, created_from?) {
+  addLocalEnvironment(localEnvironment, created_from) {
     set(s => {
       if (isStringEmptyOrNil(localEnvironment)) return s
 

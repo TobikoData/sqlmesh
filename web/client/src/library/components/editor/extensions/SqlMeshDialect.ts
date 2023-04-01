@@ -62,19 +62,15 @@ export function useSqlMeshExtension(): [
         sqlglotWorker.removeEventListener('message', handler)
       }
 
-      let tree: any
-
       handler = function getTokensFromSqlGlot(e: MessageEvent): void {
         if (e.data.topic === 'parse') {
-          tree = e.data.payload
+          // TODO: set parsed tree and use it to improve editor autompletion
         }
       }
 
       cache.set('message', handler)
 
       sqlglotWorker.addEventListener('message', handler)
-
-      console.log({ tree })
 
       return new LanguageSupport(lang.language, [
         lang.language.data.of({

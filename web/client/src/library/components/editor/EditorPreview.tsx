@@ -9,14 +9,18 @@ import {
 import { isNil, isTrue } from '~/utils'
 import { useStoreEditor } from '~/context/editor'
 
-export const EnumEditorTabs = {
-  QueryPreview: 'queryPreview',
-  Table: 'table',
-  Terminal: 'terminal',
+export const EnumEditorPreviewTabs = {
+  Query: 'Query',
+  Table: 'Table',
+  Console: 'Console',
 } as const
 
-export type EditorTabs = KeyOf<typeof EnumEditorTabs>
-const TABS = ['Table', 'Query Preview', 'Terminal Output']
+export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
+const TABS: EditorPreviewTabs[] = [
+  EnumEditorPreviewTabs.Table,
+  EnumEditorPreviewTabs.Query,
+  EnumEditorPreviewTabs.Console,
+]
 
 export default function EditorPreview(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -64,15 +68,15 @@ export default function EditorPreview(): JSX.Element {
   })
 
   function isDisabledPreviewTable(tabName: string): boolean {
-    return tabName === 'Table' && isNil(previewTable)
+    return tabName === EnumEditorPreviewTabs.Table && isNil(previewTable)
   }
 
   function isDisabledPreviewConsole(tabName: string): boolean {
-    return tabName === 'Terminal Output' && isNil(previewConsole)
+    return tabName === EnumEditorPreviewTabs.Console && isNil(previewConsole)
   }
 
   function isDisabledPreviewQuery(tabName: string): boolean {
-    return tabName === 'Query Preview' && isNil(previewQuery)
+    return tabName === EnumEditorPreviewTabs.Query && isNil(previewQuery)
   }
 
   return (
@@ -108,19 +112,21 @@ export default function EditorPreview(): JSX.Element {
                   )
                 }
               >
-                {(tabName === 'Table' || tabName === 'Query Preview') &&
+                {(tabName === EnumEditorPreviewTabs.Table ||
+                  tabName === EnumEditorPreviewTabs.Query) &&
                   tab.file.content !== previewQuery && (
                     <span
                       title="Outdated Data. Does not match editor query!"
                       className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-warning-500"
                     ></span>
                   )}
-                {tabName === 'Terminal Output' && previewConsole != null && (
-                  <span
-                    title="Outdated Data. Does not match editor query!"
-                    className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
-                  ></span>
-                )}
+                {tabName === EnumEditorPreviewTabs.Console &&
+                  previewConsole != null && (
+                    <span
+                      title="Outdated Data. Does not match editor query!"
+                      className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
+                    ></span>
+                  )}
                 {tabName}
               </Tab>
             ))}
