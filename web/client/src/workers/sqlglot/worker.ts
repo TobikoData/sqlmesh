@@ -12,6 +12,8 @@ async function loadPyodideAndPackages(): Promise<any[]> {
   await micropip.install('sqlglot')
   const file = await (await fetch('./sqlglot.py')).text()
 
+  global.postMessage({ topic: 'init' })
+
   return Array.from(global.pyodide.runPython(file))
 }
 
@@ -62,5 +64,3 @@ global.onmessage = async (e: MessageEvent) => {
     })
   }
 }
-
-global.postMessage({ topic: 'init' })

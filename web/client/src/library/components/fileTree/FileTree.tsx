@@ -1,6 +1,5 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { ModelDirectory } from '../../../models'
 import { type Directory as DirectoryApi } from '../../../api/client'
 import ModalConfirmation from '../modal/ModalConfirmation'
 import type { Confirmation } from '../modal/ModalConfirmation'
@@ -26,9 +25,9 @@ export default function FolderTree({
   project,
   className,
 }: PropsFolderTree): JSX.Element {
+  const directory = useStoreFileTree(s => s.project)
   const setFiles = useStoreFileTree(s => s.setFiles)
-
-  const directory = useMemo(() => new ModelDirectory(project), [project])
+  const setProject = useStoreFileTree(s => s.setProject)
 
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -38,8 +37,12 @@ export default function FolderTree({
   }, [confirmation])
 
   useEffect(() => {
-    setFiles(directory.allFiles)
+    setFiles(directory?.allFiles ?? [])
   }, [directory])
+
+  useEffect(() => {
+    setProject(project)
+  }, [project])
 
   return (
     <div
@@ -94,10 +97,12 @@ export default function FolderTree({
           </Button>
         </ModalConfirmation.Actions>
       </ModalConfirmation>
-      <Directory
-        directory={directory}
-        setConfirmation={setConfirmation}
-      />
+      {directory != null && (
+        <Directory
+          directory={directory}
+          setConfirmation={setConfirmation}
+        />
+      )}
     </div>
   )
 }

@@ -26,7 +26,7 @@ def get_dialect(name: str = "") -> str:
     tokenizer = dialect.tokenizer_class
     output = {"keywords": "", "types": ""}
 
-    if tokenizer is not None:
+    if tokenizer is not None and dialect.generator_class is not None:
         type_mapping = dialect.generator_class.TYPE_MAPPING
 
         output = {
