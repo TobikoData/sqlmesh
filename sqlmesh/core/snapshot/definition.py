@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.meta import HookCall
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive,
+    is_date,
     now,
     now_timestamp,
     to_datetime,
@@ -446,9 +446,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
     def _inclusive_exclusive(self, start: TimeLike, end: TimeLike) -> t.Tuple[int, int]:
-        start_dt, end_dt = make_inclusive(start, end)
-        start_ts = to_timestamp(self.model.cron_floor(start_dt))
-        end_ts = to_timestamp(self.model.cron_next(end_dt))
+        start_ts = to_timestamp(self.model.cron_floor(start))
+        end_ts = to_timestamp(
+            self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
+        )
 
         if start_ts >= end_ts:
             raise ValueError("`end` must be >= `start`")
@@ -475,6 +476,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
+            latest: The date/time to use for latest (inclusive)
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -482,20 +484,23 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_embedded_kind:
             return []
 
-        start_dt, end_dt = make_inclusive(start, self.model.cron_floor(end))
-
         if self.is_full_kind or self.is_view_kind or self.is_seed_kind:
-            latest_dt = to_datetime(self.model.cron_floor(latest or now()))
-            latest_ts = to_timestamp(latest_dt)
+            latest = latest or now()
+
+            latest_start, latest_end = self._inclusive_exclusive(
+                latest if is_date(latest) else self.model.cron_prev(self.model.cron_floor(latest)),
+                latest,
+            )
             # if the latest ts is stored in the last interval, nothing is missing
             # else returns the latest ts with the exclusive end ts.
-            if self.intervals and self.intervals[-1][1] >= latest_ts:
+            if self.intervals and self.intervals[-1][1] >= latest_end:
                 return []
-            return [(to_timestamp(self.model.cron_prev(latest_dt)), latest_ts)]
+            return [(latest_start, latest_end)]
 
         missing = []
-        dates = list(croniter_range(start_dt, end_dt, self.model.normalized_cron()))
-        size = len(dates)
+        start_dt, end_dt = (to_datetime(ts) for ts in self._inclusive_exclusive(start, end))
+        dates = tuple(croniter_range(start_dt, end_dt, self.model.normalized_cron()))
+        size = len(dates) - 1
 
         for i in range(size):
             current_ts = to_timestamp(dates[i])

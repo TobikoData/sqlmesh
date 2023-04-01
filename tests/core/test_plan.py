@@ -78,7 +78,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     yesterday_ds_mock = mocker.patch("sqlmesh.core.scheduler.yesterday")
     yesterday_ds_mock.return_value = expected_start
 
-    now_ds_mock = mocker.patch("sqlmesh.core.scheduler.now")
+    now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
     now_ds_mock.return_value = expected_end
     state_reader_mock.missing_intervals.return_value = {}
 
