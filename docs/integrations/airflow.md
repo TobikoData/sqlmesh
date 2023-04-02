@@ -29,16 +29,12 @@ The name of the module file can be arbitrary, but we recommend something descrip
 
 ## SQLMesh client configuration
 In your SQLMesh repository, create the following configuration within config.py:
-```python linenums="1"
-from sqlmesh.core.config import Config, AirflowSchedulerConfig
-
-airflow_config = Config(
-    scheduler=AirflowSchedulerConfig(
-        airflow_url="https://<Airflow Webserver Host>:<Airflow Webserver Port>/",
-        username="<Airflow Username>",
-        password="<Airflow Password>",
-    )
-)
+```yaml linenums="1"
+scheduler:
+    type: airflow
+    airflow_url: https://<Airflow Webserver Host>:<Airflow Webserver Port>/
+    username: <Airflow Username>
+    password: <Airflow Password>
 ```
 
 ## Engine support
