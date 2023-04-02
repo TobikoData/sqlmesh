@@ -90,7 +90,7 @@ Then, add the following to `config.py` within the project root directory:
 
 See the [Airflow configuration documentation](https://airflow.apache.org/docs/apache-airflow/2.1.0/configurations-ref.html) for a list of all AirflowSchedulerConfig configuration options.
 
-## Support dbt jinja methods
+## Supported dbt jinja methods
 
 The majority of dbt jinja methods are supported, including:
 
