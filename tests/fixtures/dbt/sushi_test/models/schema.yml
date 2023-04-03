@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: top_waiters
+  - name: waiters
+  - name: waiter_as_customer_by_day
+  - name: waiter_revenue_by_day
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: items
+      - name: orders
+      - name: order_items

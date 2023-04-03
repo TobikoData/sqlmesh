@@ -1,0 +1,20 @@
+sushi:
+  outputs:
+    in_memory:
+      type: duckdb
+      schema: sushi
+    duckdb:
+      type: duckdb
+      path: 'local.duckdb'
+      schema: sushi
+    snowflake:
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      database: sushi
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
+      schema: sushi
+      threads: 1
+      type: snowflake
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
+  target: in_memory

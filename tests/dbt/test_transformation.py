@@ -219,9 +219,9 @@ def test_config_containing_jinja():
 
 
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
-def test_hooks(capsys, sushi_dbt_context: Context, model: str):
-    waiters = sushi_dbt_context.models[model]
-    execution_context = ExecutionContext(sushi_dbt_context.engine_adapter, {}, False)
+def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
+    waiters = sushi_test_dbt_context.models[model]
+    execution_context = ExecutionContext(sushi_test_dbt_context.engine_adapter, {}, False)
     capsys.readouterr()
 
     waiters.run_pre_hooks(execution_context)
