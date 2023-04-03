@@ -1,5 +1,3 @@
-export {}
-
 const global = self as any
 global.importScripts('https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js')
 
