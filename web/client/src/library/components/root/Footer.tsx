@@ -5,7 +5,7 @@ export default function Footer(): JSX.Element {
         © {new Date().getFullYear()}
         &nbsp;
         <a
-          href="http://https://tobikodata.com/"
+          href="https://tobikodata.com/"
           target="_blank"
           rel="noopener noreferrer"
           className="underline"
