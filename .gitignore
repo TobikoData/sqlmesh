@@ -149,7 +149,7 @@ examples/airflow/warehouse
 **/.DS_Store
 **/node_modules
 /web/client/src/api/client.ts
-web/client/prod
+web/client/dist
 
 # Version file
 sqlmesh/_version.py
