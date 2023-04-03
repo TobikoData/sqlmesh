@@ -10,7 +10,7 @@ from pydantic import validator
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit
 from sqlmesh.core.model import (
     Model,
     PythonModel,
@@ -786,21 +786,26 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
-        if audit_name not in audits:
-            continue
+        metadata.append(audit_name)
 
-        audit = audits[audit_name]
-        metadata.extend(
-            [
-                audit.name,
-                audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args)).sql(
-                    identify=True, comments=True
-                ),
-                audit.dialect,
-                str(audit.skip),
-                str(audit.blocking),
-            ]
-        )
+        if audit_name in BUILT_IN_AUDITS:
+            for arg_name, arg_value in audit_args.items():
+                metadata.append(arg_name)
+                metadata.append(arg_value.sql(identify=True, comments=True))
+        elif audit_name in audits:
+            audit = audits[audit_name]
+            metadata.extend(
+                [
+                    audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args)).sql(
+                        identify=True, comments=True
+                    ),
+                    audit.dialect,
+                    str(audit.skip),
+                    str(audit.blocking),
+                ]
+            )
+        else:
+            raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
     # Add comments from the model query.
     for e, _, _ in model.render_query().walk():

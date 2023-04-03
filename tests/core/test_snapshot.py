@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse, parse_one
+from sqlglot import exp, parse, parse_one, to_column
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.model import (
@@ -417,6 +417,16 @@ def test_fingerprint_jinja_macros(model: Model):
     updated_fingerprint = fingerprint_from_model(model, models={})
     assert updated_fingerprint.data_hash != original_fingerprint.data_hash
     assert updated_fingerprint.metadata_hash == original_fingerprint.metadata_hash
+
+
+def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
+    fingerprint = fingerprint_from_model(model, models={})
+
+    model = SqlModel.parse_obj(
+        {**model.dict(), "audits": [("unique_values", {"columns": exp.convert([to_column("a")])})]}
+    )
+    new_fingerprint = fingerprint_from_model(model, models={})
+    assert new_fingerprint != fingerprint
 
 
 def test_stamp(model: Model):
