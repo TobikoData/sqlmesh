@@ -36,7 +36,13 @@ module.exports = {
       },
     ],
   },
-  ignorePatterns: ['src/api/client.ts'],
+  ignorePatterns: [
+    'src/api/client.ts',
+    'test-results',
+    'playwright',
+    'playwright-report',
+    'dist',
+  ],
   settings: {
     react: {
       version: '18.2',
