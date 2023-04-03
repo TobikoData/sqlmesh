@@ -4,7 +4,7 @@ import abc
 import sys
 import typing as t
 
-from pydantic import Field
+from pydantic import Field, root_validator
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -13,6 +13,7 @@ from sqlmesh.core.config.common import (
     http_headers_validator,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.utils.errors import ConfigError
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -89,21 +90,24 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     """Configuration for the Snowflake connection.
 
     Args:
+        account: The Snowflake account name.
         user: The Snowflake username.
         password: The Snowflake password.
-        account: The Snowflake account name.
         warehouse: The optional warehouse name.
         database: The optional database name.
         role: The optional role name.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
+        authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
+                       Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
     """
 
-    user: str
-    password: str
     account: str
+    user: t.Optional[str]
+    password: t.Optional[str]
     warehouse: t.Optional[str]
     database: t.Optional[str]
     role: t.Optional[str]
+    authenticator: t.Optional[str]
 
     concurrent_tasks: int = 4
 
@@ -111,9 +115,20 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
+    @root_validator()
+    def _validate_authenticator(
+        cls, fields: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        auth = fields.get("authenticator")
+        user = fields.get("user")
+        password = fields.get("password")
+        if not auth and (not user or not password):
+            raise ConfigError("User and password must be provided if using default authentication")
+        return fields
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {"user", "password", "account", "warehouse", "database", "role"}
+        return {"user", "password", "account", "warehouse", "database", "role", "authenticator"}
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
