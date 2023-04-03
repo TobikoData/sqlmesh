@@ -244,6 +244,10 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
 def test_invalid_column_reference():
     context = Context(path="examples/sushi")
 
+    # Don't validate / raise when adding a model that uses an external source (i.e. not in the schema)
+    with_external_source = parse("MODEL(name new, kind FULL); SELECT x::INT AS x FROM foo AS foo")
+    context.upsert_model(load_model(with_external_source))
+
     # Referencing column "x" which doesn't exist upstream
     with pytest.raises(ConfigError) as ex:
         bad = parse("MODEL(name bad, kind FULL); SELECT x::INT AS x FROM sushi.customers AS c")

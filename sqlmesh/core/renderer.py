@@ -278,11 +278,17 @@ class QueryRenderer(ExpressionRenderer):
             self._query_cache.clear()
             self.render()
 
-        try:
-            # Checks that used columns are qualified & they exist upstream
-            validate_qualify_columns(next(iter(self._query_cache.values())))
-        except OptimizeError as ex:
-            raise_config_error(f"Invalid model query. {ex}", self._path)
+        query = next(iter(self._query_cache.values()))
+
+        # If there are no external sources selected from in the query ...
+        if all(
+            self._schema.find(table, raise_on_missing=False) for table in query.find_all(exp.Table)
+        ):
+            try:
+                # ... check that all referenced columns are qualified & that they exist upstream.
+                validate_qualify_columns(query)
+            except OptimizeError as ex:
+                raise_config_error(f"Invalid model query. {ex}", self._path)
 
     def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
