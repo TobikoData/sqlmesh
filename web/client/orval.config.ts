@@ -2,7 +2,7 @@ import { defineConfig } from 'orval'
 
 export default defineConfig({
   'sqlmesh-api': {
-    input: 'http://api:8000/openapi.json',
+    input: './openapi.json',
     output: {
       prettier: true,
       target: './src/api/client.ts',

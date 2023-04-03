@@ -1,8 +1,5 @@
-import 'https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js'
-
-export {}
-
 const global = self as any
+global.importScripts('https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js')
 
 async function loadPyodideAndPackages(): Promise<any[]> {
   global.pyodide = await global.loadPyodide()
@@ -10,7 +7,9 @@ async function loadPyodideAndPackages(): Promise<any[]> {
 
   const micropip = global.pyodide.pyimport('micropip')
   await micropip.install('sqlglot')
-  const file = await (await fetch('./sqlglot.py')).text()
+  const file = await (
+    await fetch(new URL('./sqlglot.py', import.meta.url))
+  ).text()
 
   global.postMessage({ topic: 'init' })
 
