@@ -101,4 +101,4 @@ class Profile:
         return (targets, default_target)
 
     def to_sqlmesh(self) -> t.Dict[str, ConnectionConfig]:
-        return {name: target.to_sqlmesh() for name, target in self.targets.items()}
+        return {self.default_target: self.targets[self.default_target].to_sqlmesh()}
