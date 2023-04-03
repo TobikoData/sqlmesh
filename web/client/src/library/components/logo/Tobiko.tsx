@@ -11,6 +11,7 @@ function LogoTobiko({ style, className }: PropsLogoTobiko): JSX.Element {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
+      <title>Tobiko Data logo</title>
       <path
         fillRule="evenodd"
         clipRule="evenodd"

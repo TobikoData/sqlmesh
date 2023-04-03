@@ -9,6 +9,7 @@
     "lint:fix": "eslint --fix .",
     "format": "npm run prettier && npm run lint:fix",
     "test": "vitest",
+    "test:e2e": "playwright test",
     "generate:api": "orval --config ./orval.config.ts"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "zustand": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.32.1",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.4.3",
