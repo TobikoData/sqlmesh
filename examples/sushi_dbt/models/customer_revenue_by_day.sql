@@ -12,8 +12,8 @@ WITH order_total AS (
     oi.order_id AS order_id,
     SUM(oi.quantity * i.price) AS total,
     oi.ds AS ds
-  FROM {{ source('raw', 'order_items') }} AS oi
-  LEFT JOIN {{ source('raw', 'items') }} AS i
+  FROM {{ ref('order_items') }} AS oi
+  LEFT JOIN {{ ref('items') }} AS i
     ON oi.item_id = i.id AND oi.ds = i.ds
 {% if is_incremental() %}
   WHERE
@@ -31,7 +31,7 @@ SELECT
   o.customer_id::INT AS customer_id, /* Customer id */
   SUM(ot.total)::DOUBLE AS revenue, /* Revenue from orders made by this customer */
   o.ds::TEXT AS ds /* Date */
-FROM {{ source('raw', 'orders') }} AS o
+FROM {{ ref('orders') }} AS o
 LEFT JOIN order_total AS ot
   ON o.id = ot.order_id AND o.ds = ot.ds
 {% if is_incremental() %}
