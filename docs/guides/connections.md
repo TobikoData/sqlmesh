@@ -109,7 +109,7 @@ A Snowflake connection should be configured as follows:
 connections:
     my_snowflake_connection:
         type: snowflake
-        user: [required, username]
+        user: [required if not using Okta, username]
         password: [required if using password]
         authenticator: [required if using externalbrowser]
         account: [required, account ID]
