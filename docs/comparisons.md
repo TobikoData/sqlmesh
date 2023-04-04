@@ -95,11 +95,11 @@ The example above shows how incremental models behave differently in dbt dependi
 SQLMesh keeps track of which date ranges exist, producing a simplified and efficient query as follows:
 
 ```sql
--- sqlmesh incremental
+-- SQLMesh incremental
 SELECT *
 FROM raw.events e
 JOIN raw.event_dims d
-  -- date ranges are handled automatically by sqlmesh
+  -- date ranges are handled automatically by SQLMesh
   ON e.id = d.id AND d.ds BETWEEN @start_ds AND @end_ds
 WHERE d.ds BETWEEN @start_ds AND @end_ds
 ```
