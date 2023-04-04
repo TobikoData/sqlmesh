@@ -21,7 +21,7 @@ sushi:
       type: bigquery
       method: service-account
       project: "{{ env_var('BQ_PROJECT', '') }}"
-      dataset: "{{ env_var('BQ_SCHEMA', '') }}"
+      dataset: "{{ env_var('BQ_SCHEMA', 'example') }}"
       threads: 1
       keyfile: "{{ env_var('BQ_KEYFILE', '') }}"
       location: "{{ env_var('BQ_LOCATION', '') }}"
