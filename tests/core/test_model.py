@@ -885,25 +885,13 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
     model2 = load_model(
-        d.parse(
-            """
-        MODEL (name db.model2, kind full);
-
-        SELECT * FROM db.model1 AS model1
-		"""
-        ),
+        d.parse("MODEL (name db.model2, kind full); SELECT * FROM db.model1 AS model1"),
         path=context.path,
         dialect=context.dialect,
     )
 
     model3 = load_model(
-        d.parse(
-            """
-            MODEL(name db.model3, kind full);
-
-            SELECT * FROM db.model2 AS model2
-        """
-        ),
+        d.parse("MODEL(name db.model3, kind full); SELECT * FROM db.model2 AS model2"),
         path=context.path,
         dialect=context.dialect,
     )
@@ -966,6 +954,28 @@ def test_star_expansion(assert_exp_eq) -> None:
         ) AS model2
         """,
     )
+
+    with_external_source = load_model(
+        d.parse("MODEL (name bad1, kind full); SELECT * FROM external"),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        context.upsert_model(with_external_source)
+
+    assert "Can't expand SELECT *" in str(ex)
+
+    with_external_source_in_cte = load_model(
+        d.parse("MODEL (name bad2, kind full); WITH t AS (SELECT * FROM external) SELECT * FROM t"),
+        path=context.path,
+        dialect=context.dialect,
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        context.upsert_model(with_external_source_in_cte)
+
+    assert "Can't expand SELECT *" in str(ex)
 
 
 def test_batch_size_validation():
