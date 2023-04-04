@@ -166,12 +166,19 @@ class EvaluateInput(BaseModel):
     limit: int = 1000
 
 
+class Column(BaseModel):
+    name: str
+    type: str
+    description: t.Optional[str]
+
+
 class Model(BaseModel):
     name: str
     path: str
     dialect: str
     description: t.Optional[str]
     owner: t.Optional[str]
+    columns: t.List[Column]
 
 
 class Models(BaseModel):
