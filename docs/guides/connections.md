@@ -110,7 +110,8 @@ connections:
     my_snowflake_connection:
         type: snowflake
         user: [username]
-        password: [password]
+        password: [required if using password]
+        authenticator: [required if using externalbrowser]
         account: [account ID]
         warehouse: [optional, warehouse name]
         database: [optional, database name]
