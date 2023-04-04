@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.yaml import dumps as dump_yaml
 
 
 class Profile:
@@ -78,11 +79,7 @@ class Profile:
     def _read_profile(
         cls, path: Path, context: DbtContext, target_name: t.Optional[str] = None
     ) -> t.Tuple[str, TargetConfig]:
-        with open(path, "r", encoding="utf-8") as file:
-            source = file.read()
-        contents = load_yaml(context.render(source))
-
-        project_data = contents.get(context.profile_name)
+        project_data = load_yaml(path).get(context.profile_name)
         if not project_data:
             raise ConfigError(f"Profile '{context.profile_name}' not found in profiles.")
 
@@ -100,6 +97,7 @@ class Profile:
                 f"Target '{target_name}' not specified in profiles for '{context.profile_name}'."
             )
 
-        target = TargetConfig.load(target_name, outputs[target_name])
+        target_fields = load_yaml(context.render(dump_yaml(outputs[target_name])))
+        target = TargetConfig.load(target_name, target_fields)
 
         return (target_name, target)
