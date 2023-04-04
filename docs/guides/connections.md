@@ -109,10 +109,10 @@ A Snowflake connection should be configured as follows:
 connections:
     my_snowflake_connection:
         type: snowflake
-        user: [username]
+        user: [required, username]
         password: [required if using password]
         authenticator: [required if using externalbrowser]
-        account: [account ID]
+        account: [required, account ID]
         warehouse: [optional, warehouse name]
         database: [optional, database name]
         role: [optional, user role]
