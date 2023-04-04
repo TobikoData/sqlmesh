@@ -1,8 +1,8 @@
 
-name: 'sushi'
+name: 'customers'
 version: '1.0.0'
 config-version: 2
-profile: 'sushi'
+profile: 'customers'
 
 model-paths: ["models"]
 analysis-paths: ["analyses"]
@@ -16,13 +16,16 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
 models:
-  +start: Jan 1 2022
-  sushi:
-    +materialized: table
+  customers:
+      +materialized: view
 
-seeds:
-  +schema: raw
-
+# The following are only used for testing purposes
 vars:
-  top_waiters:limit: 10
+  some_var: 5
+  some_other_var: 5
+  'customers:customer_id': "bla"

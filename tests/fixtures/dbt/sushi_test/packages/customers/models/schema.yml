@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: customers
+  - name: customer_revenue_by_day
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: items
+      - name: orders
+      - name: order_items
