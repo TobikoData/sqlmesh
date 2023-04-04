@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import sys
 import typing as t
 
 from pydantic import Field
@@ -18,6 +19,11 @@ from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKe
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
+
+if sys.version_info >= (3, 9):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 IncrementalKind = t.Union[t.Type[IncrementalByUniqueKeyKind], t.Type[IncrementalByTimeRangeKind]]
 
@@ -90,7 +96,7 @@ class DuckDbConfig(TargetConfig):
         path: Location of the database file. If not specified, an in memory database is used.
     """
 
-    type: t.Literal["duckdb"] = "duckdb"
+    type: Literal["duckdb"] = "duckdb"
     path: t.Optional[str] = None
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -120,7 +126,7 @@ class SnowflakeConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
-    type: t.Literal["snowflake"] = "snowflake"
+    type: Literal["snowflake"] = "snowflake"
     account: str
     warehouse: str
     database: str
@@ -167,7 +173,7 @@ class PostgresConfig(TargetConfig):
         sslmode: SSL Mode used to connect to the database
     """
 
-    type: t.Literal["postgres"] = "postgres"
+    type: Literal["postgres"] = "postgres"
     host: str
     user: str
     password: str
@@ -205,7 +211,7 @@ class RedshiftConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
-    type: t.Literal["redshift"] = "redshift"
+    type: Literal["redshift"] = "redshift"
     host: str
     user: str
     password: str
@@ -243,7 +249,7 @@ class DatabricksConfig(TargetConfig):
         token: Personal access token
     """
 
-    type: t.Literal["databricks"] = "databricks"
+    type: Literal["databricks"] = "databricks"
     catalog: t.Optional[str] = None
     host: str
     http_path: str
@@ -282,7 +288,7 @@ class BigQueryConfig(TargetConfig):
     """
 
     schema_: str = Field(alias="dataset")
-    type: t.Literal["bigquery"] = "bigquery"
+    type: Literal["bigquery"] = "bigquery"
     method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
     project: t.Optional[str] = None
     location: t.Optional[str] = None
