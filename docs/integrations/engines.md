@@ -182,7 +182,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Snowflake - Local/Built-in Scheduler
 | Option          | Description                        |  Type  | Required |
 |-----------------|------------------------------------|:------:|:--------:|
-| `user`          | The Snowflake username             | string |    Y     |
+| `user`          | The Snowflake username             | string |    N     |
 | `password`      | The Snowflake password             | string |    N     |
 | `authenticator` | The Snowflake authenticator method | string |    N     |
 | `account`       | The Snowflake account name         | string |    Y     |
