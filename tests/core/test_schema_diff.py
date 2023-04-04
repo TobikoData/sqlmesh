@@ -47,14 +47,7 @@ def test_schema_diff_calculate(mocker: MockerFixture):
             "DOUBLE",
             ColumnPosition.create_last(Columns(columns=[("ds", exp.DataType.build("STRING"))])),
         ),
-        SchemaDelta.drop("name", "STRING"),
-        # We don't currently support accurately recreating the column if it has been moved.
-        # We will recreate based on the original position
-        SchemaDelta.add(
-            "name",
-            "INT",
-            ColumnPosition.create_middle(Columns(columns=[("id", exp.DataType.build("INT"))])),
-        ),
+        SchemaDelta.alter_type("name", "INT"),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -81,20 +74,10 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.side_effect = table_columns
 
-    def is_type_transition_allowed(src: exp.DataType, tgt: exp.DataType) -> bool:
-        return src == exp.DataType.build("INT") and tgt == exp.DataType.build("BIGINT")
-
-    calculator = SchemaDiffCalculator(engine_adapter_mock, is_type_transition_allowed)
+    calculator = SchemaDiffCalculator(engine_adapter_mock)
     assert calculator.calculate(apply_to_table_name, schema_from_table_name) == [
         SchemaDelta.alter_type("id", "BIGINT"),
-        SchemaDelta.drop("ds", "STRING"),
-        SchemaDelta.add(
-            "ds",
-            "INT",
-            position=ColumnPosition.create_last(
-                Columns(columns=[("id", exp.DataType.build("BIGINT"))])
-            ),
-        ),
+        SchemaDelta.alter_type("ds", "INT"),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -121,10 +104,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.side_effect = table_columns
 
-    def is_type_transition_allowed(src: exp.DataType, tgt: exp.DataType) -> bool:
-        return src == exp.DataType.build("INT") and tgt == exp.DataType.build("BIGINT")
-
-    calculator = SchemaDiffCalculator(engine_adapter_mock, is_type_transition_allowed)
+    calculator = SchemaDiffCalculator(engine_adapter_mock)
     assert calculator.calculate(apply_to_table_name, schema_from_table_name) == [
         SchemaDelta.add(
             "complex.new_column",
@@ -138,14 +118,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 )
             ),
         ),
-        SchemaDelta.drop("ds", "STRING"),
-        SchemaDelta.add(
-            "ds",
-            "INT",
-            ColumnPosition.create_last(
-                Columns(columns=[("complex", exp.DataType.build("STRUCT"))])
-            ),
-        ),
+        SchemaDelta.alter_type("ds", "INT"),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -154,7 +127,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
 
 
 @pytest.mark.parametrize(
-    "current_struct, new_struct, expected_diff, is_type_transition_allowed",
+    "current_struct, new_struct, expected_diff",
     [
         ###########
         # Add Tests
@@ -164,7 +137,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING, age INT>",
             [],
-            None,
         ),
         # Add root level column at the end
         (
@@ -182,7 +154,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 )
             ],
-            None,
         ),
         # Add root level column at the beginning
         (
@@ -199,7 +170,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 )
             ],
-            None,
         ),
         # Add root level column in the middle
         (
@@ -217,7 +187,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 )
             ],
-            None,
         ),
         # Add columns at the beginning, middle, and end
         (
@@ -254,7 +223,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Add two columns next to each other at the start
         (
@@ -281,7 +249,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         ############
         # Drop Tests
@@ -297,7 +264,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 )
             ],
-            None,
         ),
         # Drop root level column in the middle
         (
@@ -310,7 +276,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 )
             ],
-            None,
         ),
         # Drop root level column at the end
         (
@@ -323,7 +288,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 )
             ],
-            None,
         ),
         # Drop root level column at start, middle, and end
         (
@@ -346,7 +310,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Drop two columns next to each other at the start
         (
@@ -364,7 +327,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         #############
         # Move Tests
@@ -374,21 +336,18 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<name STRING, id INT, age INT>",
             [],
-            None,
         ),
         # Move root level column in the middle
         (
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, age INT, name STRING>",
             [],
-            None,
         ),
         # Move root level column at the end
         (
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<age INT, id INT, name STRING>",
             [],
-            None,
         ),
         ###################
         # Type Change Tests
@@ -404,63 +363,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.ALTER_TYPE,
                 )
             ],
-            (
-                lambda old, new: old == exp.DataType.build("INT")
-                and new == exp.DataType.build("STRING")
-            ),
-        ),
-        # Change root level column that is not allowed
-        (
-            "STRUCT<id INT, name STRING, age INT>",
-            "STRUCT<id STRING, name STRING, age INT>",
-            [
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
-                ),
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                    ),
-                ),
-            ],
-            None,
-        ),
-        # Change one column type that is allowed and one that is not
-        (
-            "STRUCT<id INT, name STRING, age INT>",
-            "STRUCT<id STRING, name INT, age INT>",
-            [
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                ),
-                SchemaDelta(
-                    column_name="name",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
-                ),
-                SchemaDelta(
-                    column_name="name",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns.create("id", "STRING"),
-                    ),
-                ),
-            ],
-            (
-                lambda old, new: old == exp.DataType.build("INT")
-                and new == exp.DataType.build("STRING")
-            ),
         ),
         ############
         # Mix Tests
@@ -487,21 +389,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 ),
                 SchemaDelta(
                     column_name="id",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
-                ),
-                SchemaDelta(
-                    column_name="id",
                     column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                        after=None,
-                    ),
+                    op=SchemaDeltaOp.ALTER_TYPE,
                 ),
             ],
-            None,
         ),
         ##############
         # Struct Tests
@@ -522,7 +413,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Add a column to the end of a struct
         (
@@ -545,7 +435,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Add a column to the middle of a struct
         (
@@ -568,7 +457,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Add two columns at the start of a struct
         (
@@ -601,7 +489,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Remove a column from the start of a struct
         (
@@ -614,7 +501,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Remove a column from the end of a struct
         (
@@ -627,7 +513,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Remove a column from the middle of a struct
         (
@@ -640,7 +525,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Remove two columns from the start of a struct
         (
@@ -658,7 +542,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Change a column type in a struct
         (
@@ -671,38 +554,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.ALTER_TYPE,
                 ),
             ],
-            (
-                lambda current, new: current == exp.DataType.build("INT")
-                and new == exp.DataType.build("TEXT")
-            ),
-        ),
-        # Change a column type in a struct, but not allowed
-        (
-            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
-            "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>",
-            [
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
-                ),
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("TEXT"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_b", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
-                ),
-            ],
-            None,
         ),
         # Add, remove and change a column in a struct
         (
@@ -745,10 +596,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.ALTER_TYPE,
                 ),
             ],
-            (
-                lambda current, new: current == exp.DataType.build("INT")
-                and new == exp.DataType.build("TEXT")
-            ),
         ),
         # Add and remove from outer and nested struct
         (
@@ -797,7 +644,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         #####################
         # Array Struct Tests
@@ -823,7 +669,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
         # Remove column from array of structs
         (
@@ -836,7 +681,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
-            None,
         ),
         # Alter column type in array of structs
         (
@@ -849,10 +693,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     op=SchemaDeltaOp.ALTER_TYPE,
                 ),
             ],
-            (
-                lambda current, new: current == exp.DataType.build("INT")
-                and new == exp.DataType.build("TEXT")
-            ),
         ),
         # Add an array of primitives
         (
@@ -870,7 +710,6 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     ),
                 ),
             ],
-            None,
         ),
     ],
 )
@@ -878,13 +717,11 @@ def test_struct_diff(
     current_struct,
     new_struct,
     expected_diff: t.List[SchemaDelta],
-    is_type_transition_allowed: t.Optional[t.Callable[[exp.DataType, exp.DataType], bool]],
 ):
     assert (
         struct_diff(
             parse_one(current_struct) if isinstance(current_struct, str) else current_struct,
             parse_one(new_struct) if isinstance(new_struct, str) else new_struct,
-            is_type_transition_allowed=is_type_transition_allowed,
         )
         == expected_diff
     )
@@ -921,10 +758,5 @@ def test_schema_diff_calculate_duckdb(duck_conn):
             "DOUBLE",
             position=ColumnPosition.create_last(after=Columns.create("ds", "VARCHAR")),
         ),
-        SchemaDelta.drop("name", "VARCHAR"),
-        SchemaDelta.add(
-            "name",
-            "INTEGER",
-            position=ColumnPosition.create_middle(after=Columns.create("id", "INTEGER")),
-        ),
+        SchemaDelta.alter_type("name", "INTEGER"),
     ]

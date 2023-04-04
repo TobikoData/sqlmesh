@@ -15,7 +15,6 @@ if t.TYPE_CHECKING:
 class SchemaDeltaOp(Enum):
     ADD = auto()
     DROP = auto()
-    MOVE = auto()
     ALTER_TYPE = auto()
 
 
@@ -141,7 +140,6 @@ def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
 def struct_diff(
     current_struct: exp.DataType,
     new_struct: exp.DataType,
-    is_type_transition_allowed: t.Optional[t.Callable[[exp.DataType, exp.DataType], bool]] = None,
     parent_columns: t.Optional[Columns] = None,
 ) -> t.List[SchemaDelta]:
     def get_matching_kwarg(
@@ -166,31 +164,7 @@ def struct_diff(
             return ".".join([parents.sql(), name])
         return name
 
-    def transition_type(
-        current_type: exp.DataType,
-        new_type: exp.DataType,
-        parent_columns: Columns,
-        is_type_transition_allowed: t.Optional[
-            t.Callable[[exp.DataType, exp.DataType], bool]
-        ] = None,
-    ) -> t.List[SchemaDelta]:
-        if is_type_transition_allowed and is_type_transition_allowed(current_type, new_type):
-            return [SchemaDelta.alter_type(get_column_name(current_name, parent_columns), new_type)]
-        else:
-            current_struct_post_drop = current_struct.copy()
-            current_struct_post_drop.expressions.pop(current_pos)
-            col_pos_post_drop = ColumnPosition.create(
-                current_pos, current_struct_post_drop.expressions, parent_columns
-            )
-            return [
-                SchemaDelta.drop(get_column_name(current_name, parent_columns), current_type),
-                SchemaDelta.add(
-                    get_column_name(new_name, parent_columns), new_type, col_pos_post_drop
-                ),
-            ]
-
     parent_columns = parent_columns or Columns(columns=[])
-    is_type_transition_allowed = is_type_transition_allowed or (lambda src, tgt: False)
     operations = []
     # Resolve all drop columns
     pop_offset = 0
@@ -233,7 +207,6 @@ def struct_diff(
                 struct_diff(
                     current_type,
                     new_type,
-                    is_type_transition_allowed,
                     parent_columns.add(current_name, current_type),
                 )
             )
@@ -251,22 +224,18 @@ def struct_diff(
                     struct_diff(
                         current_array_type,
                         new_array_type,
-                        is_type_transition_allowed,
                         parent_columns.add(current_name, current_type),
                     )
                 )
             else:
-                operations.extend(
-                    transition_type(
-                        current_array_type,
-                        new_array_type,
-                        parent_columns,
-                        is_type_transition_allowed,
+                operations.append(
+                    SchemaDelta.alter_type(
+                        get_column_name(current_name, parent_columns), new_array_type
                     )
                 )
         else:
-            operations.extend(
-                transition_type(current_type, new_type, parent_columns, is_type_transition_allowed)
+            operations.append(
+                SchemaDelta.alter_type(get_column_name(current_name, parent_columns), new_type)
             )
         current_struct.expressions.pop(current_pos)
         current_struct.expressions.insert(current_pos, new_kwarg)
@@ -278,20 +247,13 @@ class SchemaDiffCalculator:
 
     Args:
         engine_adapter: The engine adapter.
-        is_type_transition_allowed: The predicate which accepts the source type and the target type
-            and returns True if the transition from source to target is allowed and False otherwise.
-            Default: no type transitions are allowed.
     """
 
     def __init__(
         self,
         engine_adapter: EngineAdapter,
-        is_type_transition_allowed: t.Optional[
-            t.Callable[[exp.DataType, exp.DataType], bool]
-        ] = None,
     ):
         self.engine_adapter = engine_adapter
-        self.is_type_transition_allowed = is_type_transition_allowed or (lambda src, tgt: False)
 
     def calculate(self, current_table: str, new_table: str) -> t.List[SchemaDelta]:
         """Calculates a list of schema deltas between the two tables, applying which in order to the first table
@@ -321,6 +283,4 @@ class SchemaDiffCalculator:
 
         current_struct = dict_to_struct(self.engine_adapter.columns(current_table))
         new_struct = dict_to_struct(self.engine_adapter.columns(new_table))
-        return struct_diff(
-            current_struct, new_struct, self.is_type_transition_allowed, Columns.empty()
-        )
+        return struct_diff(current_struct, new_struct, Columns.empty())
