@@ -4,7 +4,7 @@ import abc
 import sys
 import typing as t
 
-from pydantic import Field
+from pydantic import Field, root_validator
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -287,9 +287,10 @@ class BigQueryConfig(TargetConfig):
         scopes: The BigQuery scopes
     """
 
-    schema_: str = Field(alias="dataset")
     type: Literal["bigquery"] = "bigquery"
     method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
+    schema_: t.Optional[str] = Field(None, alias="schema")  # type: ignore
+    dataset: t.Optional[str] = None
     project: t.Optional[str] = None
     location: t.Optional[str] = None
     keyfile: t.Optional[str] = None
@@ -304,6 +305,15 @@ class BigQueryConfig(TargetConfig):
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/drive",
     )
+
+    @root_validator
+    def validate_schema(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["schema_"] = values.get("schema_") or values.get("dataset")
+        if not values["schema_"]:
+            raise ConfigError("Either schema or dataset must be set")
+        return values
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"

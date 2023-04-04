@@ -10,6 +10,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
+    BigQueryConfig,
     DatabricksConfig,
     DuckDbConfig,
     PostgresConfig,
@@ -356,3 +357,63 @@ def test_databricks_config():
         "outputs",
         "dev",
     )
+
+
+def test_bigquery_config():
+    _test_warehouse_config(
+        """
+        dbt-bigquery:
+          target: dev
+          outputs:
+            dev:
+              type: bigquery
+              method: oauth
+              project: your-project
+              dataset: your-dataset
+              threads: 1
+              location: US
+              keyfile: /path/to/keyfile.json
+        """,
+        BigQueryConfig,
+        "dbt-bigquery",
+        "outputs",
+        "dev",
+    )
+    _test_warehouse_config(
+        """
+        dbt-bigquery:
+          target: dev
+          outputs:
+            dev:
+              type: bigquery
+              method: oauth
+              project: your-project
+              schema: your-dataset
+              threads: 1
+              location: US
+              keyfile: /path/to/keyfile.json
+        """,
+        BigQueryConfig,
+        "dbt-bigquery",
+        "outputs",
+        "dev",
+    )
+    with pytest.raises(ConfigError):
+        _test_warehouse_config(
+            """
+            dbt-bigquery:
+              target: dev
+              outputs:
+                dev:
+                  type: bigquery
+                  method: oauth
+                  project: your-project
+                  threads: 1
+                  location: US
+                  keyfile: /path/to/keyfile.json
+            """,
+            BigQueryConfig,
+            "dbt-bigquery",
+            "outputs",
+            "dev",
+        )
