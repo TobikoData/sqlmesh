@@ -27,9 +27,9 @@ local_config = Config(
 )
 
 
-airflow_config = Config(scheduler=AirflowSchedulerConfig())
+airflow_config = Config(**{"scheduler": AirflowSchedulerConfig()})
 
 
 airflow_config_docker = Config(
-    scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+    **{"scheduler": AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/")},
 )

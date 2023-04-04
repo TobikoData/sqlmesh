@@ -21,11 +21,6 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
 
-@pytest.fixture
-def sushi_dbt_project() -> Project:
-    return Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
-
-
 @pytest.mark.parametrize(
     "current, new, expected",
     [
@@ -64,24 +59,24 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_config(sushi_dbt_project: Project):
-    assert set(sushi_dbt_project.packages["sushi"].models) == {
+def test_model_config(sushi_test_project: Project):
+    assert set(sushi_test_project.packages["sushi"].models) == {
         "waiters",
         "top_waiters",
         "waiter_revenue_by_day",
         "waiter_as_customer_by_day",
     }
 
-    assert set(sushi_dbt_project.packages["customers"].models) == {
+    assert set(sushi_test_project.packages["customers"].models) == {
         "customers",
         "customer_revenue_by_day",
     }
 
-    customer_revenue_by_day_config = sushi_dbt_project.packages["customers"].models[
+    customer_revenue_by_day_config = sushi_test_project.packages["customers"].models[
         "customer_revenue_by_day"
     ]
 
-    context = sushi_dbt_project.context
+    context = sushi_test_project.context
     context.sources = {
         "raw.order_items": SourceConfig(target_schema="raw", name="order_items"),
         "raw.items": SourceConfig(target_schema="raw", name="items"),
@@ -102,7 +97,7 @@ def test_model_config(sushi_dbt_project: Project):
     assert rendered.model_name == "sushi.customer_revenue_by_day"
 
 
-def test_to_sqlmesh_fields(sushi_dbt_project: Project):
+def test_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
         alias="model",
         target_schema="schema",
@@ -171,7 +166,7 @@ query"""
     )
 
 
-def test_variables(assert_exp_eq, sushi_dbt_project):
+def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
     model_variables = {"foo"}
@@ -179,7 +174,7 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
     model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
     model_config._dependencies = Dependencies(variables=model_variables)
 
-    context = sushi_dbt_project.context
+    context = sushi_test_project.context
     context.variables = defined_variables
 
     kwargs = {"context": context}
@@ -217,12 +212,12 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
         "customers:customer_id": "customer_id",
     }
 
-    assert sushi_dbt_project.packages["sushi"].variables == expected_sushi_variables
-    assert sushi_dbt_project.packages["customers"].variables == expected_customer_variables
+    assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
+    assert sushi_test_project.packages["customers"].variables == expected_customer_variables
 
 
-def test_source_config(sushi_dbt_project: Project):
-    source_configs = sushi_dbt_project.packages["sushi"].sources
+def test_source_config(sushi_test_project: Project):
+    source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
         "raw.items",
         "raw.orders",
@@ -241,13 +236,13 @@ def test_source_config(sushi_dbt_project: Project):
     assert source_configs["raw.order_items"].source_name == "raw.order_items"
 
 
-def test_seed_config(sushi_dbt_project: Project):
-    seed_configs = sushi_dbt_project.packages["sushi"].seeds
+def test_seed_config(sushi_test_project: Project):
+    seed_configs = sushi_test_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
     raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
-        "path": Path(sushi_dbt_project.context.project_root, "seeds/waiter_names.csv"),
+        "path": Path(sushi_test_project.context.project_root, "seeds/waiter_names.csv"),
         "target_schema": "sushi",
     }
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}

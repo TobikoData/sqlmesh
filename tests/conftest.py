@@ -48,9 +48,19 @@ def sushi_context(mocker: MockerFixture) -> Context:
 
 @pytest.fixture()
 def sushi_dbt_context(mocker: MockerFixture) -> Context:
-    from examples.sushi_dbt.seed_sources import init_raw_schema
-
     context, plan = init_and_plan_sushi_context("examples/sushi_dbt", mocker, "Jan 1 2022")
+
+    context.apply(plan)
+    return context
+
+
+@pytest.fixture()
+def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
+    from tests.fixtures.dbt.sushi_test.seed_sources import init_raw_schema
+
+    context, plan = init_and_plan_sushi_context(
+        "tests/fixtures/dbt/sushi_test", mocker, "Jan 1 2022"
+    )
     init_raw_schema(context.engine_adapter)
 
     context.apply(plan)

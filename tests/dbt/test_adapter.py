@@ -8,8 +8,8 @@ from sqlmesh.dbt.project import Project
 from sqlmesh.utils.errors import ConfigError
 
 
-def test_adapter_relation(sushi_dbt_project: Project):
-    context = sushi_dbt_project.context
+def test_adapter_relation(sushi_test_project: Project):
+    context = sushi_test_project.context
     assert context.engine_adapter
 
     engine_adapter = context.engine_adapter
@@ -54,8 +54,8 @@ def test_adapter_relation(sushi_dbt_project: Project):
     )
 
 
-def test_adapter_dispatch(sushi_dbt_project: Project):
-    context = sushi_dbt_project.context
+def test_adapter_dispatch(sushi_test_project: Project):
+    context = sushi_test_project.context
     assert context.render("{{ adapter.dispatch('current_engine', 'customers')() }}") == "duckdb"
 
     assert context.engine_adapter
