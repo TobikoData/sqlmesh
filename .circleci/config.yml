@@ -89,11 +89,14 @@ workflows:
       - gh-release:
           <<: *on_tag_filter
       - generate-openapi-spec:
+          <<: *on_tag_filter
           requires:
             - gh-release
       - ide-build:
+          <<: *on_tag_filter
           requires:
             - generate-openapi-spec
       - publish:
+          <<: *on_tag_filter
           requires:
             - ide-build
