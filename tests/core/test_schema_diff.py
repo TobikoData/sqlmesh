@@ -11,8 +11,8 @@ from sqlmesh.core.schema_diff import (
     Columns,
     SchemaDelta,
     SchemaDeltaOp,
-    SchemaDiffCalculator,
     struct_diff,
+    table_diff,
 )
 
 
@@ -39,8 +39,7 @@ def test_schema_diff_calculate(mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.side_effect = table_columns
 
-    calculator = SchemaDiffCalculator(engine_adapter_mock)
-    assert calculator.calculate(apply_to_table_name, schema_from_table_name) == [
+    assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
         SchemaDelta.drop("price", "DOUBLE"),
         SchemaDelta.add(
             "new_column",
@@ -74,8 +73,7 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.side_effect = table_columns
 
-    calculator = SchemaDiffCalculator(engine_adapter_mock)
-    assert calculator.calculate(apply_to_table_name, schema_from_table_name) == [
+    assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
         SchemaDelta.alter_type("id", "BIGINT"),
         SchemaDelta.alter_type("ds", "INT"),
     ]
@@ -104,8 +102,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.side_effect = table_columns
 
-    calculator = SchemaDiffCalculator(engine_adapter_mock)
-    assert calculator.calculate(apply_to_table_name, schema_from_table_name) == [
+    assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
         SchemaDelta.add(
             "complex.new_column",
             "DOUBLE",
@@ -750,8 +747,7 @@ def test_schema_diff_calculate_duckdb(duck_conn):
         },
     )
 
-    calculator = SchemaDiffCalculator(engine_adapter)
-    assert calculator.calculate("apply_to_table", "schema_from_table") == [
+    assert table_diff("apply_to_table", "schema_from_table", engine_adapter) == [
         SchemaDelta.drop("price", "DOUBLE"),
         SchemaDelta.add(
             "new_column",

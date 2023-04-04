@@ -242,45 +242,17 @@ def struct_diff(
     return operations
 
 
-class SchemaDiffCalculator:
-    """Calculates the difference between table schemas.
+def table_diff(
+    current_table: str, new_table: str, engine_adapter: EngineAdapter
+) -> t.List[SchemaDelta]:
+    def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
+        return exp.DataType(
+            this=exp.DataType.Type.STRUCT,
+            expressions=[
+                exp.StructKwarg(this=k, expression=exp.DataType.build(v)) for k, v in value.items()
+            ],
+        )
 
-    Args:
-        engine_adapter: The engine adapter.
-    """
-
-    def __init__(
-        self,
-        engine_adapter: EngineAdapter,
-    ):
-        self.engine_adapter = engine_adapter
-
-    def calculate(self, current_table: str, new_table: str) -> t.List[SchemaDelta]:
-        """Calculates a list of schema deltas between the two tables, applying which in order to the first table
-        brings its schema in correspondence with the schema of the second table.
-
-        Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
-
-        Additionally, the implementation currently doesn't differentiate between regular columns and partition ones.
-        It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
-
-        Args:
-            current_table: The table that has the existing structure that is to be changed
-            new_table: The table that has the desired structure
-
-        Returns:
-            The list of deltas.
-        """
-
-        def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
-            return exp.DataType(
-                this=exp.DataType.Type.STRUCT,
-                expressions=[
-                    exp.StructKwarg(this=k, expression=exp.DataType.build(v))
-                    for k, v in value.items()
-                ],
-            )
-
-        current_struct = dict_to_struct(self.engine_adapter.columns(current_table))
-        new_struct = dict_to_struct(self.engine_adapter.columns(new_table))
-        return struct_diff(current_struct, new_struct, Columns.empty())
+    current_struct = dict_to_struct(engine_adapter.columns(current_table))
+    new_struct = dict_to_struct(engine_adapter.columns(new_table))
+    return struct_diff(current_struct, new_struct, Columns.empty())

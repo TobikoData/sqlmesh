@@ -208,10 +208,8 @@ def test_promote_model_info(mocker: MockerFixture):
 def test_migrate(mocker: MockerFixture, make_snapshot):
     adapter_mock = mocker.Mock()
 
-    schema_diff_calculator_mock = mocker.patch(
-        "sqlmesh.core.schema_diff.SchemaDiffCalculator.calculate"
-    )
-    schema_diff_calculator_mock.return_value = [
+    table_diff_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.table_diff")
+    table_diff_mock.return_value = [
         SchemaDelta.drop("b", "STRING"),
         SchemaDelta.add("a", "INT"),
     ]

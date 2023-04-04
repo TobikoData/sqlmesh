@@ -30,7 +30,7 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.core.schema_diff import SchemaDiffCalculator
+from sqlmesh.core.schema_diff import table_diff
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
@@ -58,7 +58,6 @@ class SnapshotEvaluator:
     def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
-        self._schema_diff_calculator = SchemaDiffCalculator(self.adapter)
 
     def evaluate(
         self,
@@ -400,7 +399,7 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
 
-        schema_deltas = self._schema_diff_calculator.calculate(target_table_name, tmp_table_name)
+        schema_deltas = table_diff(target_table_name, tmp_table_name, self.adapter)
         if not schema_deltas:
             return
 
