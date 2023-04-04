@@ -59,3 +59,4 @@ RUN mkdir /opt/sqlmesh/sqlmesh
 RUN chown -R airflow /opt/sqlmesh
 USER airflow
 RUN cd /opt/sqlmesh && pip install -e .
+RUN pip install dbt-core

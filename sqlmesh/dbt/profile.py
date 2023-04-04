@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.core.config.connection import ConnectionConfig
 from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
@@ -19,21 +18,21 @@ class Profile:
     def __init__(
         self,
         path: Path,
-        targets: t.Dict[str, TargetConfig],
-        default_target: str,
+        target_name: str,
+        target: TargetConfig,
     ):
         """
         Args:
             path: Path to the profile file
-            targets: Dict of targets defined for the project
-            default_target: Name of the default target for the proejct
+            target_name: Name of the target loaded
+            target: TargetConfig for target_name
         """
         self.path = path
-        self.targets = targets
-        self.default_target = default_target
+        self.target_name = target_name
+        self.target = target
 
     @classmethod
-    def load(cls, context: DbtContext) -> Profile:
+    def load(cls, context: DbtContext, target_name: t.Optional[str] = None) -> Profile:
         """
         Loads the profile for the specified project
 
@@ -59,8 +58,8 @@ class Profile:
         if not profile_filepath:
             raise ConfigError(f"{cls.PROFILE_FILE} not found.")
 
-        targets, default_target = cls._read_profile(profile_filepath, context)
-        return Profile(profile_filepath, targets, default_target)
+        target_name, target = cls._read_profile(profile_filepath, context, target_name)
+        return Profile(profile_filepath, target_name, target)
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
@@ -77,8 +76,8 @@ class Profile:
 
     @classmethod
     def _read_profile(
-        cls, path: Path, context: DbtContext
-    ) -> t.Tuple[t.Dict[str, TargetConfig], str]:
+        cls, path: Path, context: DbtContext, target_name: t.Optional[str] = None
+    ) -> t.Tuple[str, TargetConfig]:
         with open(path, "r", encoding="utf-8") as file:
             source = file.read()
         contents = load_yaml(context.render(source))
@@ -91,14 +90,16 @@ class Profile:
         if not outputs:
             raise ConfigError(f"No outputs exist in profiles for '{context.profile_name}'.")
 
-        targets = {name: TargetConfig.load(name, output) for name, output in outputs.items()}
-        default_target = context.render(project_data.get("target"))
-        if default_target not in targets:
+        if not target_name:
+            if "target" not in project_data:
+                raise ConfigError(f"No target specified for '{context.profile_name}'.")
+            target_name = context.render(project_data.get("target"))
+
+        if target_name not in outputs:
             raise ConfigError(
-                f"Default target '{default_target}' not specified in profiles for '{context.profile_name}'."
+                f"Target '{target_name}' not specified in profiles for '{context.profile_name}'."
             )
 
-        return (targets, default_target)
+        target = TargetConfig.load(target_name, outputs[target_name])
 
-    def to_sqlmesh(self) -> t.Dict[str, ConnectionConfig]:
-        return {self.default_target: self.targets[self.default_target].to_sqlmesh()}
+        return (target_name, target)
