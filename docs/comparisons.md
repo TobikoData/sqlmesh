@@ -75,8 +75,8 @@ Since there is no state in dbt, users must write and maintain subqueries to find
 ```sql
 -- dbt incremental
 SELECT *
-FROM raw.events e
-JOIN raw.event_dims d
+FROM {{ ref(raw.events) }} e
+JOIN {{ ref(raw.event_dims) }} d
   ON e.id = d.id
 -- must specify the is_incremental flag because this predicate will fail if the model has never run before
 {% if is_incremental() %}
