@@ -7,6 +7,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
+from sqlmesh.core.schema_diff import SchemaDelta
 
 
 def test_create_view(mocker: MockerFixture):
@@ -60,10 +61,10 @@ def test_columns(mocker: MockerFixture):
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert adapter.columns("test_table") == {
-        "id": "int",
-        "name": "string",
-        "price": "double",
-        "ds": "string",
+        "id": exp.DataType.build("int"),
+        "name": exp.DataType.build("string"),
+        "price": exp.DataType.build("double"),
+        "ds": exp.DataType.build("string"),
     }
 
     cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
@@ -209,8 +210,12 @@ def test_alter_table(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.alter_table(
         "test_table",
-        {"a": "INT", "b": "TEXT"},
-        ["c", "d"],
+        operations=[
+            SchemaDelta.drop("c"),
+            SchemaDelta.drop("d"),
+            SchemaDelta.add("a", exp.DataType.build("INT")),
+            SchemaDelta.add("b", exp.DataType.build("TEXT")),
+        ],
     )
 
     cursor_mock.begin.assert_called_once()

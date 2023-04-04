@@ -3,6 +3,9 @@ from __future__ import annotations
 import typing as t
 from enum import Enum, auto
 
+from sqlglot import exp
+from sqlglot.helper import seq_get
+
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -12,29 +15,262 @@ if t.TYPE_CHECKING:
 class SchemaDeltaOp(Enum):
     ADD = auto()
     DROP = auto()
+    MOVE = auto()
     ALTER_TYPE = auto()
+
+
+class Columns(PydanticModel):
+    columns: t.List[t.Tuple[str, exp.DataType]]
+
+    @classmethod
+    def create(cls, column_name: str, column_type: t.Union[str, exp.DataType]) -> Columns:
+        return cls(columns=[(column_name, exp.DataType.build(column_type))])
+
+    @classmethod
+    def empty(cls) -> Columns:
+        return cls(columns=[])
+
+    def add(self, name: str, type: exp.DataType) -> Columns:
+        # We don't need the full struct kwargs, just the fact it was a struct
+        if type.this == exp.DataType.Type.STRUCT:
+            type = exp.DataType.build("STRUCT")
+        if type.this == exp.DataType.Type.ARRAY:
+            type = exp.DataType.build("ARRAY")
+        return Columns(columns=self.columns + [(name, type)])
+
+    @property
+    def contains_struct(self) -> bool:
+        return any(c[1] == exp.DataType.Type.STRUCT for c in self.columns)
+
+    @property
+    def contains_array(self) -> bool:
+        return any(c[1] == exp.DataType.Type.ARRAY for c in self.columns)
+
+    @property
+    def has_columns(self) -> bool:
+        return len(self.columns) > 0
+
+    def sql(self, array_suffix: t.Optional[str] = None) -> str:
+        return ".".join(
+            [
+                c[0]
+                if c[1] != exp.DataType.Type.ARRAY
+                else f"{c[0]}{array_suffix if array_suffix else ''}"
+                for c in self.columns
+            ]
+        )
+
+
+class ColumnPosition(PydanticModel):
+    is_first: bool
+    is_last: bool
+    after: t.Optional[Columns] = None
+
+    @classmethod
+    def create_first(cls) -> ColumnPosition:
+        return cls(is_first=True, is_last=False, after=None)
+
+    @classmethod
+    def create_last(cls, after: t.Optional[Columns] = None) -> ColumnPosition:
+        return cls(is_first=False, is_last=True, after=after)
+
+    @classmethod
+    def create_middle(cls, after: Columns) -> ColumnPosition:
+        return cls(is_first=False, is_last=False, after=after)
+
+    @classmethod
+    def create(
+        cls, pos: int, current_kwargs: t.List[exp.StructKwarg], parent_cols: Columns
+    ) -> ColumnPosition:
+        is_first = pos == 0
+        is_last = pos == len(current_kwargs)
+        after = None
+        if not is_first:
+            prior_kwarg = current_kwargs[pos - 1]
+            after = parent_cols.add(*_get_name_and_type(prior_kwarg))
+        return cls(is_first=is_first, is_last=is_last, after=after)
 
 
 class SchemaDelta(PydanticModel):
     column_name: str
-    column_type: str
+    column_type: exp.DataType
     op: SchemaDeltaOp
+    add_position: t.Optional[t.Union[str, ColumnPosition]] = None
 
     @classmethod
-    def add(cls, column_name: str, column_type: str) -> SchemaDelta:
-        return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.ADD)
+    def add(
+        cls,
+        column_name: str,
+        column_type: t.Union[str, exp.DataType],
+        position: ColumnPosition = ColumnPosition.create_last(),
+    ) -> SchemaDelta:
+        return cls(
+            column_name=column_name,
+            column_type=exp.DataType.build(column_type),
+            op=SchemaDeltaOp.ADD,
+            add_position=position,
+        )
 
     @classmethod
-    def drop(cls, column_name: str, column_type: str) -> SchemaDelta:
+    def drop(
+        cls, column_name: str, column_type: t.Optional[t.Union[str, exp.DataType]] = None
+    ) -> SchemaDelta:
+        column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
         return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP)
 
     @classmethod
-    def alter_type(cls, column_name: str, column_type: str) -> SchemaDelta:
+    def alter_type(cls, column_name: str, column_type: t.Union[str, exp.DataType]) -> SchemaDelta:
         return cls(
             column_name=column_name,
-            column_type=column_type,
+            column_type=exp.DataType.build(column_type),
             op=SchemaDeltaOp.ALTER_TYPE,
         )
+
+    @property
+    def column_def(self) -> exp.ColumnDef:
+        return exp.ColumnDef(
+            this=exp.to_identifier(self.column_name),
+            kind=self.column_type,
+        )
+
+
+def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
+    return struct.alias_or_name, struct.expression
+
+
+def struct_diff(
+    current_struct: exp.DataType,
+    new_struct: exp.DataType,
+    is_type_transition_allowed: t.Optional[t.Callable[[exp.DataType, exp.DataType], bool]] = None,
+    parent_columns: t.Optional[Columns] = None,
+) -> t.List[SchemaDelta]:
+    def get_matching_kwarg(
+        current_kwarg: exp.StructKwarg, new_struct: exp.DataType, current_pos: int
+    ) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
+        current_name, current_type = _get_name_and_type(current_kwarg)
+        # First check if we have the same column in the same position to get O(1) complexity
+        new_kwarg = seq_get(new_struct.expressions, current_pos)
+        if new_kwarg:
+            new_name, new_type = _get_name_and_type(new_kwarg)
+            if current_name == new_name:
+                return current_pos, new_kwarg
+        # If not, check if we have the same column in a all positions to get O(n) complexity
+        for i, new_kwarg in enumerate(new_struct.expressions):
+            new_name, new_type = _get_name_and_type(new_kwarg)
+            if current_name == new_name:
+                return i, new_kwarg
+        return None, None
+
+    def get_column_name(name: str, parents: Columns) -> str:
+        if parents.has_columns:
+            return ".".join([parents.sql(), name])
+        return name
+
+    def transition_type(
+        current_type: exp.DataType,
+        new_type: exp.DataType,
+        parent_columns: Columns,
+        is_type_transition_allowed: t.Optional[
+            t.Callable[[exp.DataType, exp.DataType], bool]
+        ] = None,
+    ) -> t.List[SchemaDelta]:
+        if is_type_transition_allowed and is_type_transition_allowed(current_type, new_type):
+            return [SchemaDelta.alter_type(get_column_name(current_name, parent_columns), new_type)]
+        else:
+            current_struct_post_drop = current_struct.copy()
+            current_struct_post_drop.expressions.pop(current_pos)
+            col_pos_post_drop = ColumnPosition.create(
+                current_pos, current_struct_post_drop.expressions, parent_columns
+            )
+            return [
+                SchemaDelta.drop(get_column_name(current_name, parent_columns), current_type),
+                SchemaDelta.add(
+                    get_column_name(new_name, parent_columns), new_type, col_pos_post_drop
+                ),
+            ]
+
+    parent_columns = parent_columns or Columns(columns=[])
+    is_type_transition_allowed = is_type_transition_allowed or (lambda src, tgt: False)
+    operations = []
+    # Resolve all drop columns
+    pop_offset = 0
+    for current_pos, current_kwarg in enumerate(current_struct.expressions[:]):
+        new_pos, _ = get_matching_kwarg(current_kwarg, new_struct, current_pos)
+        if new_pos is None:
+            operations.append(
+                SchemaDelta.drop(
+                    get_column_name(current_kwarg.alias_or_name, parent_columns),
+                    current_kwarg.expression,
+                )
+            )
+            current_struct.expressions.pop(current_pos - pop_offset)
+            pop_offset += 1
+    # Resolve all add columns
+    for new_pos, new_kwarg in enumerate(new_struct.expressions):
+        possible_current_pos, _ = get_matching_kwarg(new_kwarg, current_struct, new_pos)
+        if possible_current_pos is None:
+            col_pos = ColumnPosition.create(new_pos, current_struct.expressions, parent_columns)
+            operations.append(
+                SchemaDelta.add(
+                    get_column_name(new_kwarg.alias_or_name, parent_columns),
+                    new_kwarg.expression,
+                    col_pos,
+                )
+            )
+            current_struct.expressions.insert(new_pos, new_kwarg)
+    # Resolve all column type changes
+    for current_pos, current_kwarg in enumerate(current_struct.expressions):
+        new_pos, new_kwarg = get_matching_kwarg(current_kwarg, new_struct, current_pos)
+        new_name, new_type = _get_name_and_type(new_kwarg)
+        current_name, current_type = _get_name_and_type(current_kwarg)
+        if new_type == current_type:
+            continue
+        elif (
+            new_type.this == exp.DataType.Type.STRUCT
+            and current_type.this == exp.DataType.Type.STRUCT
+        ):
+            operations.extend(
+                struct_diff(
+                    current_type,
+                    new_type,
+                    is_type_transition_allowed,
+                    parent_columns.add(current_name, current_type),
+                )
+            )
+        elif (
+            new_type.this == exp.DataType.Type.ARRAY
+            and current_type.this == exp.DataType.Type.ARRAY
+        ):
+            new_array_type = new_type.expressions[0]
+            current_array_type = current_type.expressions[0]
+            if (
+                new_array_type.this == exp.DataType.Type.STRUCT
+                and current_array_type.this == exp.DataType.Type.STRUCT
+            ):
+                operations.extend(
+                    struct_diff(
+                        current_array_type,
+                        new_array_type,
+                        is_type_transition_allowed,
+                        parent_columns.add(current_name, current_type),
+                    )
+                )
+            else:
+                operations.extend(
+                    transition_type(
+                        current_array_type,
+                        new_array_type,
+                        parent_columns,
+                        is_type_transition_allowed,
+                    )
+                )
+        else:
+            operations.extend(
+                transition_type(current_type, new_type, parent_columns, is_type_transition_allowed)
+            )
+        current_struct.expressions.pop(current_pos)
+        current_struct.expressions.insert(current_pos, new_kwarg)
+    return operations
 
 
 class SchemaDiffCalculator:
@@ -50,47 +286,41 @@ class SchemaDiffCalculator:
     def __init__(
         self,
         engine_adapter: EngineAdapter,
-        is_type_transition_allowed: t.Optional[t.Callable[[str, str], bool]] = None,
+        is_type_transition_allowed: t.Optional[
+            t.Callable[[exp.DataType, exp.DataType], bool]
+        ] = None,
     ):
         self.engine_adapter = engine_adapter
         self.is_type_transition_allowed = is_type_transition_allowed or (lambda src, tgt: False)
 
-    def calculate(self, apply_to_table: str, schema_from_table: str) -> t.List[SchemaDelta]:
+    def calculate(self, current_table: str, new_table: str) -> t.List[SchemaDelta]:
         """Calculates a list of schema deltas between the two tables, applying which in order to the first table
         brings its schema in correspondence with the schema of the second table.
 
         Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
 
-        Additionally the implementation currently doesn't differentiate between regular columns and partition ones.
+        Additionally, the implementation currently doesn't differentiate between regular columns and partition ones.
         It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
 
         Args:
-            apply_to_table: The name of the table to which deltas will be applied.
-            schema_from_table: The schema of this table will be used for comparison.
+            current_table: The table that has the existing structure that is to be changed
+            new_table: The table that has the desired structure
 
         Returns:
             The list of deltas.
         """
-        to_schema = self.engine_adapter.columns(apply_to_table)
-        from_schema = self.engine_adapter.columns(schema_from_table)
 
-        result = []
+        def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
+            return exp.DataType(
+                this=exp.DataType.Type.STRUCT,
+                expressions=[
+                    exp.StructKwarg(this=k, expression=exp.DataType.build(v))
+                    for k, v in value.items()
+                ],
+            )
 
-        for to_column_name, to_column_type in to_schema.items():
-            from_column_type = from_schema.get(to_column_name)
-            from_column_type = from_column_type.upper() if from_column_type else None
-            if from_column_type != to_column_type.upper():
-                if from_column_type and self.is_type_transition_allowed(
-                    to_column_type, from_column_type
-                ):
-                    result.append(SchemaDelta.alter_type(to_column_name, from_column_type))
-                else:
-                    result.append(SchemaDelta.drop(to_column_name, to_column_type))
-                    if from_column_type:
-                        result.append(SchemaDelta.add(to_column_name, from_column_type))
-
-        for from_column_name, from_column_type in from_schema.items():
-            if from_column_name not in to_schema:
-                result.append(SchemaDelta.add(from_column_name, from_column_type))
-
-        return result
+        current_struct = dict_to_struct(self.engine_adapter.columns(current_table))
+        new_struct = dict_to_struct(self.engine_adapter.columns(new_table))
+        return struct_diff(
+            current_struct, new_struct, self.is_type_transition_allowed, Columns.empty()
+        )

@@ -14,7 +14,7 @@ import logging
 import typing as t
 
 import pandas as pd
-from sqlglot import Dialect, exp, parse_one
+from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
@@ -29,6 +29,7 @@ from sqlmesh.core.engine_adapter._typing import (
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
+from sqlmesh.core.schema_diff import SchemaDelta, SchemaDeltaOp
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
@@ -291,25 +292,19 @@ class EngineAdapter:
     def alter_table(
         self,
         table_name: TableName,
-        added_columns: t.Dict[str, str],
-        dropped_columns: t.Sequence[str],
+        operations: t.List[SchemaDelta],
     ) -> None:
         with self.transaction(TransactionType.DDL):
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
-
-            for column_name in dropped_columns:
-                drop_column = exp.Drop(this=exp.column(column_name), kind="COLUMN")
-                alter_table.set("actions", [drop_column])
-
-                self.execute(alter_table)
-
-            for column_name, column_type in added_columns.items():
-                add_column = exp.ColumnDef(
-                    this=exp.to_identifier(column_name),
-                    kind=parse_one(column_type, into=exp.DataType),  # type: ignore
-                )
-                alter_table.set("actions", [add_column])
-
+            for operation in operations:
+                alter_table = exp.AlterTable(this=exp.to_table(table_name))
+                if operation.op == SchemaDeltaOp.ADD:
+                    alter_table.set("actions", [operation.column_def])
+                elif operation.op == SchemaDeltaOp.DROP:
+                    drop_column = exp.Drop(this=exp.column(operation.column_name), kind="COLUMN")
+                    alter_table.set("actions", [drop_column])
+                else:
+                    raise ValueError(f"Unsupported operation: {operation.op}")
+                # Add support for more operations
                 self.execute(alter_table)
 
     def create_view(
@@ -390,12 +385,12 @@ class EngineAdapter:
             exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
         )
 
-    def columns(self, table_name: TableName) -> t.Dict[str, str]:
+    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
-            t[0]: t[1]
+            t[0]: exp.DataType.build(t[1])
             for t in itertools.takewhile(
                 lambda t: not t[0].startswith("#"),
                 describe_output,

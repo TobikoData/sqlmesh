@@ -230,8 +230,10 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     adapter_mock.alter_table.assert_called_once_with(
         snapshot.table_name(),
-        {"a": "INT"},
-        ["b"],
+        [
+            SchemaDelta.drop("b", "STRING"),
+            SchemaDelta.add("a", "INT"),
+        ],
     )
 
 
