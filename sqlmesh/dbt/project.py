@@ -60,12 +60,8 @@ class Project:
             context.render(project_yaml.get("profile", "")) or context.project_name
         )
 
-        profile = Profile.load(context)
-        context.target = (
-            profile.targets[context.target_name]
-            if context.target_name
-            else profile.targets[profile.default_target]
-        )
+        profile = Profile.load(context, context.target_name)
+        context.target = profile.target
 
         packages = {}
         root_loader = PackageLoader(context, ProjectConfig())

@@ -24,7 +24,7 @@ def init_raw_schema(conn: EngineAdapter) -> None:
 
 
 profile = Profile.load(DbtContext(project_root=Path(__file__).parent))
-connection_config = profile.to_sqlmesh()[profile.default_target]
+connection_config = profile.target.to_sqlmesh()
 if not isinstance(connection_config, DuckDBConnectionConfig):
     raise ConfigError(
         f"Only duckdb supported. The CSV files in {str(DATA_DIR)} must be manually loaded into your target"
