@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import sys
 import typing as t
+from enum import Enum
 
 from pydantic import Field, root_validator
 
@@ -336,12 +337,32 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         return {}
 
 
+class BigQueryConnectionMethod(str, Enum):
+    OAUTH = "oauth"
+    OAUTH_SECRETS = "oauth-secrets"
+    SERVICE_ACCOUNT = "service-account"
+    SERVICE_ACCOUNT_JSON = "service-account-json"
+
+
 class BigQueryConnectionConfig(_ConnectionConfig):
     """
     BigQuery Connection Configuration.
-
-    TODO: Need to update to support all the different authentication options
     """
+
+    method: BigQueryConnectionMethod = BigQueryConnectionMethod.OAUTH
+
+    project: t.Optional[str] = None
+    location: t.Optional[str] = None
+    # Keyfile Auth
+    keyfile: t.Optional[str] = None
+    keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
+    # Oath Secret Auth
+    token: t.Optional[str] = None
+    refresh_token: t.Optional[str] = None
+    client_id: t.Optional[str] = None
+    client_secret: t.Optional[str] = None
+    token_uri: t.Optional[str] = None
+    scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
 
     concurrent_tasks: int = 4
 
@@ -354,6 +375,45 @@ class BigQueryConnectionConfig(_ConnectionConfig):
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
         return engine_adapter.BigQueryEngineAdapter
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        """The static connection kwargs for this connection"""
+        import google.auth
+        from google.api_core import client_info
+        from google.oauth2 import credentials, service_account
+
+        if self.method == BigQueryConnectionMethod.OAUTH:
+            creds, _ = google.auth.default(scopes=self.scopes)
+        elif self.method == BigQueryConnectionMethod.SERVICE_ACCOUNT:
+            creds = service_account.Credentials.from_service_account_file(
+                self.keyfile, scopes=self.scopes
+            )
+        elif self.method == BigQueryConnectionMethod.SERVICE_ACCOUNT_JSON:
+            creds = service_account.Credentials.from_service_account_info(
+                self.keyfile_json, scopes=self.scopes
+            )
+        elif self.method == BigQueryConnectionMethod.OAUTH_SECRETS:
+            creds = credentials.Credentials(
+                token=self.token,
+                refresh_token=self.refresh_token,
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                token_uri=self.token_uri,
+                scopes=self.scopes,
+            )
+        else:
+            raise ConfigError("Invalid BigQuery Connection Method")
+        client = google.cloud.bigquery.Client(
+            project=self.project,
+            credentials=creds,
+            location=self.location,
+            client_info=client_info.ClientInfo(user_agent="sqlmesh"),
+        )
+
+        return {
+            "client": client,
+        }
 
     @property
     def _connection_factory(self) -> t.Callable:
