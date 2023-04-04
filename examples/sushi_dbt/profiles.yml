@@ -17,4 +17,12 @@ sushi:
       type: snowflake
       user: "{{ env_var('SNOWFLAKE_USER', '') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
+    bigquery:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('BQ_PROJECT', '') }}"
+      dataset: "{{ env_var('BQ_SCHEMA', '') }}"
+      threads: 1
+      keyfile: "{{ env_var('BQ_KEYFILE', '') }}"
+      location: "{{ env_var('BQ_LOCATION', '') }}"
   target: in_memory
