@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime
 
+from sqlmesh._version import __version_tuple__
+
 SQLMESH = "sqlmesh"
 
 PROD = "prod"
@@ -32,3 +34,5 @@ EPOCH = datetime.date(1970, 1, 1)
 
 DEFAULT_MAX_LIMIT = 1000
 """The default maximum row limit that is used when evaluating a model."""
+
+SQLMESH_VERSION = __version_tuple__[0:3]

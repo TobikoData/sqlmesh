@@ -130,6 +130,57 @@ class CommonStateSyncMixin(StateSync):
         return table_infos, [existing_table_infos[name] for name in missing_models]
 
     @transactional()
+    def migrate(self) -> None:
+        all_snapshots = self._get_snapshots(lock_for_update=True, validate_sqlmesh_version=False)
+        environments = self.get_environments()
+        snapshots_by_version = defaultdict(list)
+
+        for snapshot in all_snapshots.values():
+            snapshots_by_version[(snapshot.name, snapshot.version)].append(snapshot)
+
+        new_snapshots = set()
+        # TODO
+        new_environments = []
+
+        for environment in environments:
+            snapshots = []
+            models = {}
+            audits = {}
+            cache: t.Dict[str, SnapshotFingerprint] = {}
+
+            for info in environment.snapshots:
+                snapshot = all_snapshots[info.snapshot_id]
+                snapshots.append(snapshot)
+                model = snapshot.model
+                models[model.name] = model
+                for audit in snapshot.audits:
+                    audits[audit.name] = audit
+
+            for snapshot in snapshots:
+                model = snapshot.model
+                snapshot = Snapshot.from_model(
+                    snapshot.model,
+                    physical_schema=snapshot.physical_schema,
+                    models=models,
+                    ttl=snapshot.ttl,
+                    version=snapshot.version,
+                    audits=audits,
+                    cache=cache,
+                )
+
+                if snapshot in new_snapshots:
+                    continue
+
+                for other in snapshots_by_version[(snapshot.name, snapshot.version)]:
+                    if snapshot is not other:
+                        snapshot.merge_intervals(other)
+
+                new_snapshots.add(snapshot)
+
+        self.delete_snapshots(all_snapshots.values())
+        self._push_snapshots(new_snapshots, overwrite=True)
+
+    @transactional()
     def delete_expired_snapshots(self) -> t.List[Snapshot]:
         current_time = now()
 
@@ -286,12 +337,14 @@ class CommonStateSyncMixin(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
+        validate_sqlmesh_version: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
 
         Args:
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
+            validate_sqlmesh_version: Check if the snapshot version is compatible with the running version.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.

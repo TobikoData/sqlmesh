@@ -273,6 +273,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         change_category: User specified change category indicating which models require backfill from model changes made in this snapshot.
         unpaused_ts: The timestamp which indicates when this snapshot was unpaused. Unpaused means that
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
+        sqlmesh_version: The version of SQLMesh that was used to build this snapshot.
     """
 
     name: str
@@ -291,9 +292,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
+    sqlmesh_version: t.Tuple[int, int, int] = c.SQLMESH_VERSION
 
     @validator("ttl")
-    @classmethod
     def _time_delta_must_be_positive(cls, v: str) -> str:
         current_time = now()
         if to_datetime(v, current_time) < current_time:
@@ -400,6 +401,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             updated_ts=created_ts,
             ttl=ttl,
             version=version,
+            sqlmesh_version=c.SQLMESH_VERSION,
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -575,6 +577,30 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
+
+    @property
+    def needs_migration(self) -> t.Optional[bool]:
+        """Helper method to check if the snapshot was created by an incompatible version."""
+        # this can be deleted in beta, only happens before sqlmesh_version existed
+        if "sqlmesh_version" not in self.__fields_set__:
+            return True
+
+        stored = self.sqlmesh_version[0:2]
+        running = c.SQLMESH_VERSION[0:2]
+        # stored snapshot is ahead of what is running
+        if stored > running:
+            return None
+        return stored < running
+
+    def validate_sqlmesh_version(self) -> None:
+        if self.needs_migration is None:
+            raise SQLMeshError(
+                f"{self.sqlmesh_version} detected but you are running {c.SQLMESH_VERSION}. Update SQLMesh by running `pip install --update sqlmesh`"
+            )
+        if self.needs_migration is True:
+            raise SQLMeshError(
+                f"A snapshot created by an older version of SQLMesh was found. Run a migration or downgrade SQLMesh."
+            )
 
     @property
     def table_info(self) -> SnapshotTableInfo:

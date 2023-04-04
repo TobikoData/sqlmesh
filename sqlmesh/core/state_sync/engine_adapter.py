@@ -271,12 +271,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
+        validate_sqlmesh_version: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
         Args:
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
+            validate_sqlmesh_version: Check if the snapshot version is compatible with the running version.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
@@ -295,6 +297,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for row in self.engine_adapter.fetchall(query, ignore_unsupported_errors=True):
             snapshot = Snapshot.parse_raw(row[0])
             snapshot_id = snapshot.snapshot_id
+            if validate_sqlmesh_version:
+                snapshot.validate_sqlmesh_version()
             if snapshot_id in snapshots:
                 other = duplicates.get(snapshot_id, snapshots[snapshot_id])
                 duplicates[snapshot_id] = (
@@ -338,7 +342,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             query = query.lock(copy=False)
 
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
-        return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
+        return [Snapshot.parse_raw(row[0]) for row in snapshot_rows]
 
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
