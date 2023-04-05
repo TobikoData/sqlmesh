@@ -46,7 +46,9 @@ def test_schema_diff_calculate(mocker: MockerFixture):
             "DOUBLE",
             ColumnPosition.create_last(Columns(columns=[("ds", exp.DataType.build("STRING"))])),
         ),
-        SchemaDelta.alter_type("name", "INT"),
+        SchemaDelta.alter_type(
+            "name", "INT", ColumnPosition.create_middle(after=Columns.create("id", "INT"))
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -74,8 +76,10 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     engine_adapter_mock.columns.side_effect = table_columns
 
     assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
-        SchemaDelta.alter_type("id", "BIGINT"),
-        SchemaDelta.alter_type("ds", "INT"),
+        SchemaDelta.alter_type("id", "BIGINT", ColumnPosition.create_first()),
+        SchemaDelta.alter_type(
+            "ds", "INT", ColumnPosition.create_last(Columns.create("id", "BIGINT"))
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -115,7 +119,9 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 )
             ),
         ),
-        SchemaDelta.alter_type("ds", "INT"),
+        SchemaDelta.alter_type(
+            "ds", "INT", ColumnPosition.create_last(Columns.create("complex", "STRUCT"))
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -358,6 +364,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="id",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_first(),
                 )
             ],
         ),
@@ -388,6 +395,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="id",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_first(),
                 ),
             ],
         ),
@@ -549,6 +557,14 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_last(
+                        after=Columns(
+                            columns=[
+                                ("info", exp.DataType.build("STRUCT")),
+                                ("col_b", exp.DataType.build("INT")),
+                            ]
+                        )
+                    ),
                 ),
             ],
         ),
@@ -591,6 +607,14 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_last(
+                        after=Columns(
+                            columns=[
+                                ("info", exp.DataType.build("STRUCT")),
+                                ("col_e", exp.DataType.build("INT")),
+                            ]
+                        )
+                    ),
                 ),
             ],
         ),
@@ -688,6 +712,14 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="infos.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_last(
+                        after=Columns(
+                            columns=[
+                                ("infos", exp.DataType.build("ARRAY")),
+                                ("col_b", exp.DataType.build("INT")),
+                            ]
+                        )
+                    ),
                 ),
             ],
         ),
@@ -754,5 +786,7 @@ def test_schema_diff_calculate_duckdb(duck_conn):
             "DOUBLE",
             position=ColumnPosition.create_last(after=Columns.create("ds", "VARCHAR")),
         ),
-        SchemaDelta.alter_type("name", "INTEGER"),
+        SchemaDelta.alter_type(
+            "name", "INTEGER", ColumnPosition.create_middle(after=Columns.create("id", "INTEGER"))
+        ),
     ]

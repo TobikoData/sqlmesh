@@ -79,10 +79,14 @@ class ColumnPosition(PydanticModel):
 
     @classmethod
     def create(
-        cls, pos: int, current_kwargs: t.List[exp.StructKwarg], parent_cols: Columns
+        cls,
+        pos: int,
+        current_kwargs: t.List[exp.StructKwarg],
+        parent_cols: Columns,
+        replacing_col: bool = False,
     ) -> ColumnPosition:
         is_first = pos == 0
-        is_last = pos == len(current_kwargs)
+        is_last = pos == len(current_kwargs) - int(replacing_col)
         after = None
         if not is_first:
             prior_kwarg = current_kwargs[pos - 1]
@@ -118,11 +122,14 @@ class SchemaDelta(PydanticModel):
         return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP)
 
     @classmethod
-    def alter_type(cls, column_name: str, column_type: t.Union[str, exp.DataType]) -> SchemaDelta:
+    def alter_type(
+        cls, column_name: str, column_type: t.Union[str, exp.DataType], position: ColumnPosition
+    ) -> SchemaDelta:
         return cls(
             column_name=column_name,
             column_type=exp.DataType.build(column_type),
             op=SchemaDeltaOp.ALTER_TYPE,
+            add_position=position,
         )
 
     @property
@@ -163,6 +170,12 @@ def struct_diff(
         if parents.has_columns:
             return ".".join([parents.sql(), name])
         return name
+
+    def get_alter_op(
+        pos: int, struct: exp.DataType, parent_columns: Columns, name: str, new_type: exp.DataType
+    ) -> SchemaDelta:
+        col_pos = ColumnPosition.create(pos, struct.expressions, parent_columns, replacing_col=True)
+        return SchemaDelta.alter_type(get_column_name(name, parent_columns), new_type, col_pos)
 
     parent_columns = parent_columns or Columns(columns=[])
     operations = []
@@ -229,13 +242,13 @@ def struct_diff(
                 )
             else:
                 operations.append(
-                    SchemaDelta.alter_type(
-                        get_column_name(current_name, parent_columns), new_array_type
+                    get_alter_op(
+                        current_pos, current_struct, parent_columns, current_name, new_array_type
                     )
                 )
         else:
             operations.append(
-                SchemaDelta.alter_type(get_column_name(current_name, parent_columns), new_type)
+                get_alter_op(current_pos, current_struct, parent_columns, current_name, new_type)
             )
         current_struct.expressions.pop(current_pos)
         current_struct.expressions.insert(current_pos, new_kwarg)
