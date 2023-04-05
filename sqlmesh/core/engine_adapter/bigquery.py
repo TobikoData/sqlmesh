@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.shared import (
     TransactionType,
 )
 from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.schema_diff import DiffConfig
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -34,25 +35,20 @@ class BigQueryEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
-    # DIFF_CONFIG = DiffConfig(
-    #     compatible_types={
-    #         exp.DataType.build("INT64"): {  # Add SQLGlot support
-    #             exp.DataType.build("NUMERIC"),
-    #             exp.DataType.build("BIGNUMERIC"),  # Add SQLGlot support
-    #             exp.DataType.build("FLOAT64"),  # Add SQLGlot support
-    #         },
-    #         exp.DataType.build("NUMERIC"): {
-    #             exp.DataType.build("BIGNUMERIC"),
-    #             exp.DataType.build("FLOAT64"),
-    #         },
-    #         exp.DataType.build("BIGNUMERIC"): {
-    #             exp.DataType.build("FLOAT64"),
-    #         },
-    #         exp.DataType.build("DATE"): {
-    #             exp.DataType.build("DATETIME"),
-    #         }
-    #     }
-    # )
+    DIFF_CONFIG = DiffConfig(
+        compatible_types={
+            exp.DataType.build("INT64", dialect=DIALECT): {
+                exp.DataType.build("NUMERIC", dialect=DIALECT),
+                exp.DataType.build("FLOAT64", dialect=DIALECT),
+            },
+            exp.DataType.build("NUMERIC", dialect=DIALECT): {
+                exp.DataType.build("FLOAT64", dialect=DIALECT),
+            },
+            exp.DataType.build("DATE", dialect=DIALECT): {
+                exp.DataType.build("DATETIME", dialect=DIALECT),
+            },
+        }
+    )
 
     @property
     def client(self) -> BigQueryClient:
@@ -77,7 +73,10 @@ class BigQueryEngineAdapter(EngineAdapter):
     def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         table = self._get_table(table_name)
-        return {field.name: exp.DataType.build(field.field_type) for field in table.schema}
+        return {
+            field.name: exp.DataType.build(field.field_type, dialect=self.dialect)
+            for field in table.schema
+        }
 
     def __load_pandas_to_temp_table(
         self,

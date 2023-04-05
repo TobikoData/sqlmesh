@@ -271,7 +271,7 @@ def test_create_table_properties(mocker: MockerFixture):
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER a""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
-                """ALTER TABLE test_table ALTER COLUMN e SET DATA TYPE TEXT""",
+                """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
             ],
         ),
         (
@@ -310,7 +310,7 @@ def test_create_table_properties(mocker: MockerFixture):
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
                 """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER nested_a""",
                 """ALTER TABLE "test_table" ADD COLUMN "array.element.array_b" INT AFTER array_a""",
-                """ALTER TABLE test_table ALTER COLUMN e SET DATA TYPE TEXT""",
+                """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
             ],
         ),
     ],

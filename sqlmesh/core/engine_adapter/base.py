@@ -14,7 +14,7 @@ import logging
 import typing as t
 
 import pandas as pd
-from sqlglot import Dialect, exp
+from sqlglot import Dialect, exp, parse_one
 from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
@@ -295,7 +295,7 @@ class EngineAdapter:
         table_name: TableName,
         operations: t.List[SchemaDelta],
     ) -> None:
-        def get_add_statement(operation: SchemaDelta) -> str:
+        def get_add_statement(operation: SchemaDelta) -> exp.AlterTable:
             if not self.DIFF_CONFIG.support_struct_add and operation.parents.has_columns:
                 raise SQLMeshError(
                     "Attempting to do an alter statement to add a column to a struct. "
@@ -305,9 +305,9 @@ class EngineAdapter:
                 )
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
             alter_table.set("actions", [operation.column_def(self.DIFF_CONFIG.array_suffix)])
-            sql = self._to_sql(alter_table)
             if self.DIFF_CONFIG.support_positional_add:
                 # Hack in positional support since it is not currently supported in SQLGlot
+                sql = self._to_sql(alter_table)
                 if operation.add_position and operation.add_position.is_first:
                     sql = sql + " FIRST"
                 elif (
@@ -316,19 +316,27 @@ class EngineAdapter:
                     and operation.add_position.after
                 ):
                     sql = sql + f" AFTER {operation.add_position.after}"
-            return sql
+                return parse_one(sql, read=self.dialect)  # type: ignore
+            return alter_table
 
-        def get_drop_statement(operation: SchemaDelta) -> str:
+        def get_drop_statement(operation: SchemaDelta) -> exp.AlterTable:
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
             drop_column = exp.Drop(
                 this=operation.column(self.DIFF_CONFIG.array_suffix), kind="COLUMN"
             )
             alter_table.set("actions", [drop_column])
-            return self._to_sql(alter_table)
+            return alter_table
 
-        def get_alter_statement(operation: SchemaDelta) -> str:
-            # Hack until SQLGlot support
-            return f"ALTER TABLE {table_name} ALTER COLUMN {operation.column(self.DIFF_CONFIG.array_suffix).sql()} SET DATA TYPE {operation.column_type}"
+        def get_alter_statement(operation: SchemaDelta) -> exp.AlterTable:
+            return exp.AlterTable(
+                this=exp.to_table(table_name),
+                actions=[
+                    exp.AlterColumn(
+                        this=operation.column(self.DIFF_CONFIG.array_suffix),
+                        dtype=operation.column_type,
+                    )
+                ],
+            )
 
         statements = []
         for operation in operations:
@@ -434,7 +442,7 @@ class EngineAdapter:
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
-            t[0]: exp.DataType.build(t[1])
+            t[0]: exp.DataType.build(t[1], dialect=self.dialect)
             for t in itertools.takewhile(
                 lambda t: not t[0].startswith("#"),
                 describe_output,
