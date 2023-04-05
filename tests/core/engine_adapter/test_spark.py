@@ -6,6 +6,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.core.schema_diff import SchemaDelta
 
 
 def test_create_table_properties(mocker: MockerFixture):
@@ -40,31 +41,35 @@ def test_alter_table(mocker: MockerFixture):
 
     adapter.alter_table(
         "test_table",
-        {"a": "INT", "b": "STRING"},
-        ["c", "d"],
+        operations=[
+            SchemaDelta.drop("c"),
+            SchemaDelta.drop("d"),
+            SchemaDelta.add("a", "INT"),
+            SchemaDelta.add("b", "STRING"),
+        ],
     )
 
     adapter.alter_table(
         "test_table",
-        {"e": "DOUBLE"},
-        [],
+        operations=[SchemaDelta.add("e", "DOUBLE")],
     )
 
     adapter.alter_table(
         "test_table",
-        {},
-        ["f"],
+        operations=[SchemaDelta.drop("f")],
     )
 
     cursor_mock.execute.assert_has_calls(
         [
             # 1st call.
-            call("""ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)"""),
-            call("""ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `c`"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `d`"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `a` INT"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `b` STRING"""),
             # 2nd call.
-            call("""ALTER TABLE `test_table` ADD COLUMNS (`e` DOUBLE)"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `e` DOUBLE"""),
             # 3d call.
-            call("""ALTER TABLE `test_table` DROP COLUMNS (`f`)"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `f`"""),
         ]
     )
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -73,37 +73,6 @@ class BaseSparkEngineAdapter(EngineAdapter):
             columns_to_types,
             partitioned_by=primary_key,
         )
-
-    def alter_table(
-        self,
-        table_name: TableName,
-        added_columns: t.Dict[str, str],
-        dropped_columns: t.Sequence[str],
-    ) -> None:
-        alter_table = exp.AlterTable(this=exp.to_table(table_name))
-
-        if dropped_columns:
-            drop_columns = exp.Drop(
-                this=exp.Schema(
-                    expressions=[exp.to_identifier(column_name) for column_name in dropped_columns]
-                ),
-                kind="COLUMNS",
-            )
-            alter_table.set("actions", [drop_columns])
-            self.execute(alter_table)
-
-        if added_columns:
-            add_columns = exp.Schema(
-                expressions=[
-                    exp.ColumnDef(
-                        this=exp.to_identifier(column_name),
-                        kind=parse_one(column_type, into=exp.DataType),  # type: ignore
-                    )
-                    for column_name, column_type in added_columns.items()
-                ],
-            )
-            alter_table.set("actions", [add_columns])
-            self.execute(alter_table)
 
     def _create_table_properties(
         self,
