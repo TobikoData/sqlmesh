@@ -142,7 +142,7 @@ def test_model_config_sql_no_config():
 query"""
         )
         .render_config(context)
-        .sql.strip()
+        .sql_no_config.strip()
         == "query"
     )
 
@@ -159,7 +159,7 @@ query"""
 query"""
         )
         .render_config(context)
-        .sql.strip()
+        .sql_no_config.strip()
         == "query"
     )
 
@@ -168,7 +168,7 @@ query"""
             sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
         )
         .render_config(context)
-        .sql.strip()
+        .sql_no_config.strip()
         == "before  after"
     )
 

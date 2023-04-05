@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import RelationType
+from jinja2 import nodes
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
@@ -26,7 +27,8 @@ from sqlmesh.dbt.common import DbtContext, GeneralConfig, SqlStr
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.jinja import ENVIRONMENT as JINJA_ENVIRONMENT
 from sqlmesh.utils.jinja import MacroReference, extract_macro_references
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -272,8 +274,10 @@ class ModelSqlRenderer(t.Generic[BMC]):
         self.config = config
 
         self._captured_dependencies: Dependencies = Dependencies()
+        self._captured_config: t.Optional[str] = None
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: BMC = config.copy()
+        self._parsed_sql: t.Optional[nodes.Template] = None
 
         self._jinja_globals = create_builtin_globals(
             jinja_macros=context.jinja_macros,
@@ -285,7 +289,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
                 "source": self._source,
                 "this": self.config.relation_info,
                 "schema": self.config.table_schema,
-                "config": self.config.config_info,
+                "config": lambda *args, **kwargs: "",
             },
             engine_adapter=None,
         )
@@ -301,21 +305,51 @@ class ModelSqlRenderer(t.Generic[BMC]):
     @property
     def enriched_config(self) -> BMC:
         if self._rendered_sql is None:
+            self._enriched_config = self._update_with_sql_config(self._enriched_config)
             self.render()
             self._enriched_config._dependencies = self._enriched_config._dependencies.union(
                 self._captured_dependencies
             )
         return self._enriched_config
 
+    @property
+    def parsed_sql(self) -> nodes.Template:
+        if self._parsed_sql is None:
+            self._parsed_sql = JINJA_ENVIRONMENT.parse(self.config.all_sql)
+        return self._parsed_sql
+
     def render(self) -> str:
         if self._rendered_sql is None:
             registry = self.context.jinja_macros
             self._rendered_sql = (
                 registry.build_environment(**self._jinja_globals)
-                .from_string(self.config.all_sql)
+                .from_string(self.parsed_sql)
                 .render()
             )
         return self._rendered_sql
+
+    def _update_with_sql_config(self, config: BMC) -> BMC:
+        def _extract_value(node: t.Any) -> t.Any:
+            if not isinstance(node, nodes.Node):
+                return node
+            if isinstance(node, nodes.Const):
+                return _extract_value(node.value)
+            if isinstance(node, nodes.List):
+                return [_extract_value(val) for val in node.items]
+            if isinstance(node, nodes.Dict):
+                return {_extract_value(pair.key): _extract_value(pair.value) for pair in node.items}
+            if isinstance(node, nodes.Tuple):
+                return tuple(_extract_value(val) for val in node.items)
+            raise SQLMeshError(f"Unable to extract node type '{type(node)}'.")
+
+        for call in self.parsed_sql.find_all(nodes.Call):
+            if not isinstance(call.node, nodes.Name) or call.node.name != "config":
+                continue
+            config = config.update_with(
+                {kwarg.key: _extract_value(kwarg.value) for kwarg in call.kwargs}
+            )
+
+        return config
 
     def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> BaseRelation:
         if package_name in self.context.models:
