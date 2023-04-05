@@ -155,6 +155,18 @@ class SchemaDelta(PydanticModel):
             current_type=exp.DataType.build(current_type),
         )
 
+    @property
+    def is_add(self) -> bool:
+        return self.op.is_add
+
+    @property
+    def is_drop(self) -> bool:
+        return self.op.is_drop
+
+    @property
+    def is_alter_type(self) -> bool:
+        return self.op.is_alter_type
+
     def full_column_path(self, array_suffix: t.Optional[str] = None) -> str:
         return self.parents.add(self.column_name, self.column_type).sql(array_suffix)
 
@@ -172,7 +184,7 @@ def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
     return struct.alias_or_name, struct.expression
 
 
-class DiffConfig(PydanticModel):
+class SchemaDiffConfig(PydanticModel):
     support_positional_add: bool = False
     support_struct_add: bool = False
     array_suffix: str = ""
@@ -282,10 +294,7 @@ def struct_diff(
         current_name, current_type = _get_name_and_type(current_kwarg)
         if new_type == current_type:
             continue
-        elif (
-            new_type.this == exp.DataType.Type.STRUCT
-            and current_type.this == exp.DataType.Type.STRUCT
-        ):
+        elif new_type.this == current_type.this == exp.DataType.Type.STRUCT:
             operations.extend(
                 struct_diff(
                     current_type,
@@ -293,16 +302,10 @@ def struct_diff(
                     parent_columns.add(current_name, current_type),
                 )
             )
-        elif (
-            new_type.this == exp.DataType.Type.ARRAY
-            and current_type.this == exp.DataType.Type.ARRAY
-        ):
+        elif new_type.this == current_type.this == exp.DataType.Type.ARRAY:
             new_array_type = new_type.expressions[0]
             current_array_type = current_type.expressions[0]
-            if (
-                new_array_type.this == exp.DataType.Type.STRUCT
-                and current_array_type.this == exp.DataType.Type.STRUCT
-            ):
+            if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
                 operations.extend(
                     struct_diff(
                         current_array_type,
@@ -361,9 +364,7 @@ def table_diff(
     def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
         return exp.DataType(
             this=exp.DataType.Type.STRUCT,
-            expressions=[
-                exp.StructKwarg(this=k, expression=exp.DataType.build(v)) for k, v in value.items()
-            ],
+            expressions=[exp.StructKwarg(this=k, expression=v) for k, v in value.items()],
         )
 
     current_struct = dict_to_struct(engine_adapter.columns(current_table))

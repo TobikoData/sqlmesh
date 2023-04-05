@@ -11,9 +11,9 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.schema_diff import (
     ColumnPosition,
-    DiffConfig,
     ParentColumns,
     SchemaDelta,
+    SchemaDiffConfig,
 )
 
 
@@ -213,7 +213,7 @@ def test_create_table_properties(mocker: MockerFixture):
     "diff_config, operations, expected",
     [
         (
-            DiffConfig(),
+            SchemaDiffConfig(),
             [
                 SchemaDelta.drop("c"),
                 SchemaDelta.drop("d"),
@@ -233,7 +233,7 @@ def test_create_table_properties(mocker: MockerFixture):
             ],
         ),
         (
-            DiffConfig(support_positional_add=True),
+            SchemaDiffConfig(support_positional_add=True),
             [
                 SchemaDelta.drop("c"),
                 SchemaDelta.drop("d"),
@@ -253,7 +253,7 @@ def test_create_table_properties(mocker: MockerFixture):
             ],
         ),
         (
-            DiffConfig(
+            SchemaDiffConfig(
                 support_positional_add=True,
                 compatible_types={exp.DataType.build("INT"): {exp.DataType.build("TEXT")}},
             ),
@@ -275,7 +275,7 @@ def test_create_table_properties(mocker: MockerFixture):
             ],
         ),
         (
-            DiffConfig(
+            SchemaDiffConfig(
                 support_positional_add=True,
                 compatible_types={exp.DataType.build("INT"): {exp.DataType.build("TEXT")}},
                 support_struct_add=True,
@@ -317,7 +317,7 @@ def test_create_table_properties(mocker: MockerFixture):
 )
 def test_alter_table(
     mocker: MockerFixture,
-    diff_config: DiffConfig,
+    diff_config: SchemaDiffConfig,
     operations: t.List[SchemaDelta],
     expected: t.List[str],
 ):
@@ -326,7 +326,7 @@ def test_alter_table(
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")
-    adapter.DIFF_CONFIG = diff_config
+    adapter.SCHEMA_DIFF_CONFIG = diff_config
     adapter.alter_table(
         "test_table",
         operations=operations,

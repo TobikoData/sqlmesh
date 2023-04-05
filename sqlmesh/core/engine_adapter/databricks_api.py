@@ -6,7 +6,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_spark import BaseSparkEngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.core.schema_diff import DiffConfig
+from sqlmesh.core.schema_diff import SchemaDiffConfig
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -14,7 +14,7 @@ if t.TYPE_CHECKING:
 
 class DatabricksSQLEngineAdapter(BaseSparkEngineAdapter):
     DIALECT = "databricks"
-    DIFF_CONFIG = DiffConfig(
+    SCHEMA_DIFF_CONFIG = SchemaDiffConfig(
         support_positional_add=True,
         support_struct_add=True,
         array_suffix=".element",

@@ -20,20 +20,20 @@ def test_schema_diff_calculate(mocker: MockerFixture):
     apply_to_table_name = "apply_to_table"
     schema_from_table_name = "schema_from_table"
 
-    def table_columns(table_name: str) -> t.Dict[str, str]:
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == apply_to_table_name:
             return {
-                "id": "INT",
-                "name": "STRING",
-                "price": "DOUBLE",
-                "ds": "STRING",
+                "id": exp.DataType.build("INT"),
+                "name": exp.DataType.build("STRING"),
+                "price": exp.DataType.build("DOUBLE"),
+                "ds": exp.DataType.build("STRING"),
             }
         else:
             return {
-                "name": "INT",
-                "id": "INT",
-                "ds": "STRING",
-                "new_column": "DOUBLE",
+                "name": exp.DataType.build("INT"),
+                "id": exp.DataType.build("INT"),
+                "ds": exp.DataType.build("STRING"),
+                "new_column": exp.DataType.build("DOUBLE"),
             }
 
     engine_adapter_mock = mocker.Mock()
@@ -58,16 +58,16 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     apply_to_table_name = "apply_to_table"
     schema_from_table_name = "schema_from_table"
 
-    def table_columns(table_name: str) -> t.Dict[str, str]:
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == apply_to_table_name:
             return {
-                "id": "INT",
-                "ds": "STRING",
+                "id": exp.DataType.build("INT"),
+                "ds": exp.DataType.build("STRING"),
             }
         else:
             return {
-                "id": "BIGINT",
-                "ds": "INT",
+                "id": exp.DataType.build("BIGINT"),
+                "ds": exp.DataType.build("INT"),
             }
 
     engine_adapter_mock = mocker.Mock()
@@ -87,16 +87,16 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
     apply_to_table_name = "apply_to_table"
     schema_from_table_name = "schema_from_table"
 
-    def table_columns(table_name: str) -> t.Dict[str, str]:
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
         if table_name == apply_to_table_name:
             return {
-                "complex": "STRUCT<id: INT, name: STRING>",
-                "ds": "STRING",
+                "complex": exp.DataType.build("STRUCT<id: INT, name: STRING>"),
+                "ds": exp.DataType.build("STRING"),
             }
         else:
             return {
-                "complex": "STRUCT<id: INT, new_column: DOUBLE, name: STRING>",
-                "ds": "INT",
+                "complex": exp.DataType.build("STRUCT<id: INT, new_column: DOUBLE, name: STRING>"),
+                "ds": exp.DataType.build("INT"),
             }
 
     engine_adapter_mock = mocker.Mock()
