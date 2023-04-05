@@ -274,7 +274,6 @@ class ModelSqlRenderer(t.Generic[BMC]):
         self.config = config
 
         self._captured_dependencies: Dependencies = Dependencies()
-        self._captured_config: t.Optional[str] = None
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: BMC = config.copy()
         self._parsed_sql: t.Optional[nodes.Template] = None
@@ -284,12 +283,12 @@ class ModelSqlRenderer(t.Generic[BMC]):
             jinja_globals={
                 **context.jinja_globals,
                 **date_dict(c.EPOCH, c.EPOCH, c.EPOCH),
+                "config": lambda *args, **kwargs: "",
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
                 "this": self.config.relation_info,
                 "schema": self.config.table_schema,
-                "config": lambda *args, **kwargs: "",
             },
             engine_adapter=None,
         )
