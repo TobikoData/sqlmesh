@@ -28,7 +28,6 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import ENVIRONMENT as JINJA_ENVIRONMENT
 from sqlmesh.utils.jinja import MacroReference, extract_macro_references
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -300,6 +299,8 @@ class ModelSqlRenderer(t.Generic[BMC]):
             dialect=context.engine_adapter.dialect if context.engine_adapter else "",
         )
 
+        self.jinja_env = self.context.jinja_macros.build_environment(**self._jinja_globals)
+
     @property
     def enriched_config(self) -> BMC:
         if self._rendered_sql is None:
@@ -313,22 +314,15 @@ class ModelSqlRenderer(t.Generic[BMC]):
     @property
     def parsed_jinja(self) -> nodes.Template:
         if self._parsed_jinja is None:
-            self._parsed_jinja = JINJA_ENVIRONMENT.parse(self.config.all_sql)
+            self._parsed_jinja = self.jinja_env.parse(self.config.all_sql)
         return self._parsed_jinja
 
     def render(self) -> str:
         if self._rendered_sql is None:
-            registry = self.context.jinja_macros
-            self._rendered_sql = (
-                registry.build_environment(**self._jinja_globals)
-                .from_string(self.parsed_jinja)
-                .render()
-            )
+            self._rendered_sql = self.jinja_env.from_string(self.parsed_jinja).render()
         return self._rendered_sql
 
     def _update_with_sql_config(self, config: BMC) -> BMC:
-        environment = self.context.jinja_macros.build_environment(**self._jinja_globals)
-
         def _extract_value(node: t.Any) -> t.Any:
             if not isinstance(node, nodes.Node):
                 return node
@@ -341,7 +335,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
             if isinstance(node, nodes.Tuple):
                 return tuple(_extract_value(val) for val in node.items)
             if isinstance(node, nodes.Call):
-                return environment.from_string(nodes.Template([nodes.Output([node])])).render()
+                return self.jinja_env.from_string(nodes.Template([nodes.Output([node])])).render()
             raise SQLMeshError(f"Unable to extract node type '{type(node)}'.")
 
         for call in self.parsed_jinja.find_all(nodes.Call):
