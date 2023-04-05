@@ -9,7 +9,12 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
-from sqlmesh.core.schema_diff import ColumnPosition, Columns, DiffConfig, SchemaDelta
+from sqlmesh.core.schema_diff import (
+    ColumnPosition,
+    DiffConfig,
+    ParentColumns,
+    SchemaDelta,
+)
 
 
 def test_create_view(mocker: MockerFixture):
@@ -287,13 +292,13 @@ def test_create_table_properties(mocker: MockerFixture):
                     "nested_b",
                     "INT",
                     ColumnPosition.create_middle("nested_a"),
-                    Columns.create(("nested", "STRUCT")),
+                    ParentColumns.create(("nested", "STRUCT")),
                 ),
                 SchemaDelta.add(
                     "array_b",
                     "INT",
                     ColumnPosition.create_middle("array_a"),
-                    Columns.create(("array", "ARRAY")),
+                    ParentColumns.create(("array", "ARRAY")),
                 ),
                 # Alter is supported
                 SchemaDelta.alter_type("e", "TEXT", "INT"),

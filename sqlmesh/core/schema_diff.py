@@ -30,11 +30,11 @@ class SchemaDeltaOp(Enum):
         return self == SchemaDeltaOp.ALTER_TYPE
 
 
-class Columns(PydanticModel):
+class ParentColumns(PydanticModel):
     columns: t.List[t.Tuple[str, exp.DataType]]
 
     @classmethod
-    def create(cls, *columns_and_types: t.Tuple[str, t.Union[str, exp.DataType]]) -> Columns:
+    def create(cls, *columns_and_types: t.Tuple[str, t.Union[str, exp.DataType]]) -> ParentColumns:
         columns_and_data_types = [
             (column_name, exp.DataType.build(column_type))
             for column_name, column_type in columns_and_types
@@ -42,34 +42,20 @@ class Columns(PydanticModel):
         return cls(columns=columns_and_data_types)
 
     @classmethod
-    def empty(cls) -> Columns:
+    def empty(cls) -> ParentColumns:
         return cls(columns=[])
 
-    def add(self, name: str, type: exp.DataType) -> Columns:
-        # We don't need the full struct kwargs, just the fact it was a struct
+    def add(self, name: str, type: exp.DataType) -> ParentColumns:
+        # We don't need the full information for rested types, just the fact that they are nested
         if type.this == exp.DataType.Type.STRUCT:
             type = exp.DataType.build("STRUCT")
         if type.this == exp.DataType.Type.ARRAY:
             type = exp.DataType.build("ARRAY")
-        return Columns(columns=self.columns + [(name, type)])
-
-    @property
-    def contains_struct(self) -> bool:
-        return any(c[1] == exp.DataType.Type.STRUCT for c in self.columns)
-
-    @property
-    def contains_array(self) -> bool:
-        return any(c[1] == exp.DataType.Type.ARRAY for c in self.columns)
+        return ParentColumns(columns=self.columns + [(name, type)])
 
     @property
     def has_columns(self) -> bool:
         return len(self.columns) > 0
-
-    @property
-    def last_column_name(self) -> t.Optional[str]:
-        if not self.has_columns:
-            return None
-        return self.columns[-1][0]
 
     def sql(self, array_suffix: t.Optional[str] = None) -> str:
         return ".".join(
@@ -119,7 +105,7 @@ class SchemaDelta(PydanticModel):
     column_name: str
     column_type: exp.DataType
     op: SchemaDeltaOp
-    parents: Columns = Columns.empty()
+    parents: ParentColumns = ParentColumns.empty()
     add_position: t.Optional[ColumnPosition] = None
     current_type: t.Optional[exp.DataType] = None
 
@@ -129,7 +115,7 @@ class SchemaDelta(PydanticModel):
         column_name: str,
         column_type: t.Union[str, exp.DataType],
         position: ColumnPosition = ColumnPosition.create_last(),
-        parents: Columns = Columns.empty(),
+        parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
         return cls(
             column_name=column_name,
@@ -144,7 +130,7 @@ class SchemaDelta(PydanticModel):
         cls,
         column_name: str,
         column_type: t.Optional[t.Union[str, exp.DataType]] = None,
-        parents: Columns = Columns.empty(),
+        parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
         column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
         return cls(
@@ -158,7 +144,7 @@ class SchemaDelta(PydanticModel):
         column_type: t.Union[str, exp.DataType],
         current_type: t.Union[str, exp.DataType],
         position: ColumnPosition = ColumnPosition.create_last(),
-        parents: Columns = Columns.empty(),
+        parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
         return cls(
             column_name=column_name,
@@ -203,9 +189,26 @@ class DiffConfig(PydanticModel):
 def struct_diff(
     current_struct: exp.DataType,
     new_struct: exp.DataType,
-    parent_columns: t.Optional[Columns] = None,
-    diff_config: t.Optional[DiffConfig] = None,
+    parent_columns: t.Optional[ParentColumns] = None,
 ) -> t.List[SchemaDelta]:
+    """
+    Calculates a list of schema deltas between the two tables, applying which in order to the first table
+    brings its schema in correspondence with the schema of the second table.
+
+    Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
+
+    Additionally the implementation currently doesn't differentiate between regular columns and partition ones.
+    It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
+
+    Args:
+        current_struct: The name of the table to which deltas will be applied.
+        new_struct: The schema of this table will be used for comparison.
+        parent_columns: If the struct is nested, the ordered parent columns that lead to the struct
+
+    Returns:
+        The list of deltas.
+    """
+
     def get_matching_kwarg(
         current_kwarg: exp.StructKwarg, new_struct: exp.DataType, current_pos: int
     ) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
@@ -223,7 +226,7 @@ def struct_diff(
                 return i, new_kwarg
         return None, None
 
-    def get_column_name(name: str, parents: Columns) -> str:
+    def get_column_name(name: str, parents: ParentColumns) -> str:
         if parents.has_columns:
             return ".".join([parents.sql(), name])
         return name
@@ -231,7 +234,7 @@ def struct_diff(
     def get_alter_op(
         pos: int,
         struct: exp.DataType,
-        parent_columns: Columns,
+        parent_columns: ParentColumns,
         name: str,
         new_type: exp.DataType,
         current_type: t.Union[str, exp.DataType],
@@ -241,7 +244,8 @@ def struct_diff(
             get_column_name(name, parent_columns), new_type, current_type, col_pos, parent_columns
         )
 
-    parent_columns = parent_columns or Columns(columns=[])
+    current_struct = current_struct.copy()
+    parent_columns = parent_columns or ParentColumns(columns=[])
     operations = []
     # Resolve all drop columns
     pop_offset = 0
@@ -336,6 +340,24 @@ def struct_diff(
 def table_diff(
     current_table: str, new_table: str, engine_adapter: EngineAdapter
 ) -> t.List[SchemaDelta]:
+    """
+    Calculates a list of schema deltas between the two tables, applying which in order to the first table
+    brings its schema in correspondence with the schema of the second table.
+
+    Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
+
+    Additionally the implementation currently doesn't differentiate between regular columns and partition ones.
+    It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
+
+    Args:
+        current_table: The name of the table to which deltas will be applied.
+        new_table: The schema of this table will be used for comparison.
+        engine_adapter: The engine adapter to use to get current table schema.
+
+    Returns:
+        The list of deltas.
+    """
+
     def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
         return exp.DataType(
             this=exp.DataType.Type.STRUCT,
@@ -346,4 +368,4 @@ def table_diff(
 
     current_struct = dict_to_struct(engine_adapter.columns(current_table))
     new_struct = dict_to_struct(engine_adapter.columns(new_table))
-    return struct_diff(current_struct, new_struct, Columns.empty())
+    return struct_diff(current_struct, new_struct, ParentColumns.empty())
