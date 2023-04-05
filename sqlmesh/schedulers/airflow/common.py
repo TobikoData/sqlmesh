@@ -89,6 +89,11 @@ class SnapshotIdsResponse(PydanticModel):
     snapshot_ids: t.List[SnapshotId]
 
 
+class VersionsResponse(PydanticModel):
+    migration_version: int
+    sqlglot_version: str
+
+
 def snapshot_key(snapshot: SnapshotIdLike) -> str:
     return snapshot_key_from_name_identifier(snapshot.name, snapshot.identifier)
 

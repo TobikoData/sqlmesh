@@ -27,6 +27,7 @@ DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
 PLANS_PATH = f"{common.SQLMESH_API_BASE_PATH}/plans"
 ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
 SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
+VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 
 
 class AirflowClient:
@@ -105,6 +106,10 @@ class AirflowClient:
     def get_environments(self) -> t.List[Environment]:
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
+
+    def get_versions(self) -> t.Tuple[int, str]:
+        response = common.VersionsResponse.parse_obj(self._get(VERSIONS_PATH))
+        return (response.migration_version, response.sqlglot_version)
 
     def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
         url = f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}/{dag_run_id}"

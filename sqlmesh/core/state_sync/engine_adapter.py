@@ -19,7 +19,9 @@ import contextlib
 import json
 import logging
 import typing as t
+from collections import defaultdict
 
+from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
 from sqlmesh.core.dialect import select_from_values
@@ -27,11 +29,12 @@ from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
+    SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
     SnapshotNameVersionLike,
 )
-from sqlmesh.core.state_sync.base import StateSync
+from sqlmesh.core.state_sync.base import MIGRATION_VERSION, StateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -58,6 +61,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter = engine_adapter
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
+        self.migrations_table = f"{schema}._migrations"
 
     @property
     def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
@@ -80,6 +84,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "expiration_ts": exp.DataType.build("bigint"),
         }
 
+    @property
+    def migration_columns_to_types(self) -> t.Dict[str, exp.DataType]:
+        return {
+            "migration_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+        }
+
     @transactional(transaction_type=TransactionType.DDL)
     def init_schema(self) -> None:
         """Creates the schema and table to store state."""
@@ -100,6 +111,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.environment_columns_to_types,
             primary_key=("name",),
         )
+
+        self.engine_adapter.create_state_table(
+            self.migrations_table,
+            self.migration_columns_to_types,
+        )
+        self._update_migration_version()
 
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
@@ -154,6 +171,20 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             contains_json=True,
         )
 
+    @transactional()
+    def _update_migration_version(self) -> None:
+        self.engine_adapter.delete_from(self.migrations_table, "TRUE")
+
+        self.engine_adapter.insert_append(
+            self.migrations_table,
+            next(
+                select_from_values(
+                    [(MIGRATION_VERSION, SQLGLOT_VERSION)],
+                    columns_to_types=self.migration_columns_to_types,
+                )
+            ),
+        )
+
     def delete_expired_environments(self) -> t.List[Environment]:
         now_ts = now_timestamp()
         filter_expr = exp.LTE(
@@ -196,6 +227,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Resets the state store to the state when it was first initialized."""
         self.engine_adapter.drop_table(self.snapshots_table)
         self.engine_adapter.drop_table(self.environments_table)
+        self.engine_adapter.drop_table(self.migrations_table)
         self.init_schema()
 
     def _update_environment(self, environment: Environment) -> None:
@@ -340,6 +372,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
+    def _get_versions(self, lock_for_update: bool = False) -> t.Optional[t.Tuple[int, str]]:
+        query = exp.select(*self.migration_columns_to_types).from_(self.migrations_table)
+
+        if lock_for_update:
+            query.lock(copy=False)
+
+        return t.cast(t.Optional[t.Tuple[int, str]], self.engine_adapter.fetchone(query))
+
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
     ) -> t.Optional[Environment]:
@@ -368,6 +408,68 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         env = self._environment_from_row(row)
         return env
+
+    @transactional()
+    def migrate(self) -> None:
+        super().migrate()
+
+    @transactional()
+    def _migrate_rows(self) -> None:
+        all_snapshots = self._get_snapshots(lock_for_update=True)
+        environments = self.get_environments()
+        snapshots_by_version = defaultdict(list)
+
+        for snapshot in all_snapshots.values():
+            snapshots_by_version[(snapshot.name, snapshot.version)].append(snapshot)
+
+        new_snapshots = set()
+
+        for environment in environments:
+            snapshots = []
+            models = {}
+            audits = {}
+            cache: t.Dict[str, SnapshotFingerprint] = {}
+
+            for info in environment.snapshots:
+                snapshot = all_snapshots[info.snapshot_id]
+                snapshots.append(snapshot)
+                model = snapshot.model
+                models[model.name] = model
+                for audit in snapshot.audits:
+                    audits[audit.name] = audit
+
+            environment.snapshots.clear()
+
+            for snapshot in snapshots:
+                model = snapshot.model
+                snapshot = Snapshot.from_model(
+                    snapshot.model,
+                    physical_schema=snapshot.physical_schema,
+                    models=models,
+                    ttl=snapshot.ttl,
+                    version=snapshot.version,
+                    audits=audits,
+                    cache=cache,
+                )
+
+                environment.snapshots.append(snapshot.table_info)
+
+                if snapshot in new_snapshots:
+                    continue
+
+                for other in snapshots_by_version[(snapshot.name, snapshot.version)]:
+                    if snapshot is not other:
+                        snapshot.merge_intervals(other)
+
+                new_snapshots.add(snapshot)
+
+        if all_snapshots:
+            self.delete_snapshots(all_snapshots.values())
+        if new_snapshots:
+            self._push_snapshots(new_snapshots, overwrite=True)
+
+        for environment in environments:
+            self._update_environment(environment)
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]

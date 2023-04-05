@@ -3,6 +3,8 @@ from __future__ import annotations
 import abc
 import typing as t
 
+from sqlglot import __version__ as SQLGLOT_VERSION
+
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
@@ -14,8 +16,27 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
+from sqlmesh.utils import optional_import
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
+
+MIGRATIONS = []
+MIGRATION_VERSION = 0
+
+while True:
+    migration = optional_import(f"sqlmesh.migrations._{MIGRATION_VERSION:04}")
+    MIGRATION_VERSION += 1
+
+    if migration:
+        MIGRATIONS.append(migration)
+    else:
+        MIGRATION_VERSION -= 1
+        break
+
+
+def major_minor(version: str) -> t.Tuple[int, int]:
+    """Returns a tuple of just the major.minor for a version string (major.minor.patch)."""
+    return t.cast(t.Tuple[int, int], tuple(int(part) for part in version.split(".")[0:2]))
 
 
 class StateReader(abc.ABC):
@@ -168,6 +189,60 @@ class StateReader(abc.ABC):
                 missing[snapshot] = intervals
         return missing
 
+    def get_versions(self, validate: bool = True) -> t.Optional[t.Tuple[int, str]]:
+        """Get the current versions of SQLMesh and libraries.
+
+        Args:
+            validate: Whether or not to raise error if the running version is ahead of state.
+
+        Returns:
+            The row containing version information.
+        """
+        row = self._get_versions()
+
+        def raise_error(
+            lib: str, local: str | int, remote: str | int, migrate: bool = False
+        ) -> None:
+            if migrate:
+                raise SQLMeshError(
+                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). Please run a migration."
+                )
+            raise SQLMeshError(
+                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). Please upgrade {lib}."
+            )
+
+        if row:
+            migration_version, sqlglot_version = row
+
+            if MIGRATION_VERSION < migration_version:
+                raise_error("SQLMesh", MIGRATION_VERSION, migration_version)
+
+            if major_minor(SQLGLOT_VERSION) < major_minor(sqlglot_version):
+                raise_error("SQLGlot", SQLGLOT_VERSION, sqlglot_version)
+
+        if validate:
+            if not row:
+                raise SQLMeshError(f"Your schema is out of date and you need to run a migration.")
+
+            if MIGRATION_VERSION > migration_version:
+                raise_error("SQLMesh", MIGRATION_VERSION, migration_version, migrate=True)
+
+            if major_minor(SQLGLOT_VERSION) > major_minor(sqlglot_version):
+                raise_error("SQLGlot", SQLGLOT_VERSION, sqlglot_version, migrate=True)
+
+        return row
+
+    @abc.abstractmethod
+    def _get_versions(self, lock_for_update: bool = False) -> t.Optional[t.Tuple[int, str]]:
+        """Queries the store to get the current versions of SQLMesh and deps.
+
+        Args:
+            lock_for_update: Whether or not the usage of this method plans to update the row.
+
+        Returns:
+            The row representing the migration version.
+        """
+
 
 class StateSync(StateReader, abc.ABC):
     """Abstract base class for snapshot and environment state management."""
@@ -291,3 +366,33 @@ class StateSync(StateReader, abc.ABC):
             unpaused_dt: The datetime object which indicates when target snapshots
                 were unpaused.
         """
+
+    def migrate(self) -> None:
+        """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
+        row = self.get_versions(validate=False)
+
+        if row:
+            migration_version, sqlglot_version = row
+            remote_sqlglot_version = major_minor(sqlglot_version)
+            migrations = MIGRATIONS[migration_version:]
+        else:
+            remote_sqlglot_version = major_minor(SQLGLOT_VERSION)
+            migrations = MIGRATIONS
+            self.init_schema()
+
+        if not migrations and major_minor(SQLGLOT_VERSION) == remote_sqlglot_version:
+            return
+
+        for migration in migrations:
+            migration.migrate(self)
+
+        self._migrate_rows()
+        self._update_migration_version()
+
+    @abc.abstractmethod
+    def _migrate_rows(self) -> None:
+        """Migrate all rows in the state sync, including snapshots and environments."""
+
+    @abc.abstractmethod
+    def _update_migration_version(self) -> None:
+        """Update the migration versions to the latest running versions."""

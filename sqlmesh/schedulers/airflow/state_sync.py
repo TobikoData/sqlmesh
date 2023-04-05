@@ -109,3 +109,14 @@ class HttpStateReader(StateReader):
         raise NotImplementedError(
             "Getting snapshots by model names is not supported by the Airflow HTTP State Sync"
         )
+
+    def _get_versions(self, lock_for_update: bool = False) -> t.Optional[t.Tuple[int, str]]:
+        """Queries the store to get the migration.
+
+        Args:
+            lock_for_update: Whether or not the usage of this method plans to update the row.
+
+        Returns:
+            The row representing the migration version.
+        """
+        return self._client.get_versions()
