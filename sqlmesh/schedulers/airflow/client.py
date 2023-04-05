@@ -11,6 +11,7 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotNameVersion
+from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.errors import (
@@ -107,9 +108,8 @@ class AirflowClient:
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
-    def get_versions(self) -> t.Tuple[int, str]:
-        response = common.VersionsResponse.parse_obj(self._get(VERSIONS_PATH))
-        return (response.migration_version, response.sqlglot_version)
+    def get_versions(self) -> Versions:
+        return Versions.parse_obj(self._get(VERSIONS_PATH))
 
     def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
         url = f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}/{dag_run_id}"

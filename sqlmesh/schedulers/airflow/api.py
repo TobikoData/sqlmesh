@@ -96,12 +96,7 @@ def get_versions() -> Response:
     with util.scoped_state_sync() as state_sync:
         versions = state_sync.get_versions()
         assert versions
-    return _success(
-        common.VersionsResponse(
-            migration_version=versions[0],
-            sqlglot_version=versions[1],
-        )
-    )
+    return _success(versions)
 
 
 T = t.TypeVar("T", bound=PydanticModel)
