@@ -6,6 +6,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_spark import BaseSparkEngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.schema_diff import DiffConfig
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
@@ -13,6 +14,11 @@ if t.TYPE_CHECKING:
 
 class DatabricksSQLEngineAdapter(BaseSparkEngineAdapter):
     DIALECT = "databricks"
+    DIFF_CONFIG = DiffConfig(
+        support_positional_add=True,
+        support_struct_add=True,
+        array_suffix=".element",
+    )
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """

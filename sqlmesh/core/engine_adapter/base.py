@@ -29,7 +29,7 @@ from sqlmesh.core.engine_adapter._typing import (
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
-from sqlmesh.core.schema_diff import SchemaDelta, SchemaDeltaOp
+from sqlmesh.core.schema_diff import DiffConfig, SchemaDelta
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
@@ -60,6 +60,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    DIFF_CONFIG = DiffConfig()
 
     def __init__(
         self,
@@ -294,18 +295,61 @@ class EngineAdapter:
         table_name: TableName,
         operations: t.List[SchemaDelta],
     ) -> None:
-        with self.transaction(TransactionType.DDL):
-            for operation in operations:
-                alter_table = exp.AlterTable(this=exp.to_table(table_name))
-                if operation.op == SchemaDeltaOp.ADD:
-                    alter_table.set("actions", [operation.column_def])
-                elif operation.op == SchemaDeltaOp.DROP:
-                    drop_column = exp.Drop(this=exp.column(operation.column_name), kind="COLUMN")
-                    alter_table.set("actions", [drop_column])
+        def get_add_statement(operation: SchemaDelta) -> str:
+            if not self.DIFF_CONFIG.support_struct_add and operation.parents.has_columns:
+                raise SQLMeshError(
+                    "Attempting to do an alter statement to add a column to a struct. "
+                    "This is not supported by your target engine."
+                    f"Table: {table_name}, "
+                    f"Column: {operation.full_column_path(self.DIFF_CONFIG.array_suffix)}"
+                )
+            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            alter_table.set("actions", [operation.column_def(self.DIFF_CONFIG.array_suffix)])
+            sql = self._to_sql(alter_table)
+            if self.DIFF_CONFIG.support_positional_add:
+                # Hack in positional support since it is not currently supported in SQLGlot
+                if operation.add_position and operation.add_position.is_first:
+                    sql = sql + " FIRST"
+                elif (
+                    operation.add_position
+                    and not operation.add_position.is_last
+                    and operation.add_position.after
+                ):
+                    sql = sql + f" AFTER {operation.add_position.after}"
+            return sql
+
+        def get_drop_statement(operation: SchemaDelta) -> str:
+            alter_table = exp.AlterTable(this=exp.to_table(table_name))
+            drop_column = exp.Drop(
+                this=operation.column(self.DIFF_CONFIG.array_suffix), kind="COLUMN"
+            )
+            alter_table.set("actions", [drop_column])
+            return self._to_sql(alter_table)
+
+        def get_alter_statement(operation: SchemaDelta) -> str:
+            # Hack until SQLGlot support
+            return f"ALTER TABLE {table_name} ALTER COLUMN {operation.column(self.DIFF_CONFIG.array_suffix).sql()} SET DATA TYPE {operation.column_type}"
+
+        statements = []
+        for operation in operations:
+            if operation.op.is_add:
+                statements.append(get_add_statement(operation))
+            elif operation.op.is_drop:
+                statements.append(get_drop_statement(operation))
+            elif operation.op.is_alter_type:
+                assert operation.current_type is not None
+                if self.DIFF_CONFIG.is_compatible_type(
+                    operation.current_type, operation.column_type
+                ):
+                    statements.append(get_alter_statement(operation))
                 else:
-                    raise ValueError(f"Unsupported operation: {operation.op}")
-                # Add support for more operations
-                self.execute(alter_table)
+                    statements.append(get_drop_statement(operation))
+                    statements.append(get_add_statement(operation))
+            else:
+                raise ValueError(f"Unsupported operation: {operation.op}")
+        with self.transaction(TransactionType.DDL):
+            for statement in statements:
+                self.execute(statement)
 
     def create_view(
         self,

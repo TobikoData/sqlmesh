@@ -17,13 +17,29 @@ class SchemaDeltaOp(Enum):
     DROP = auto()
     ALTER_TYPE = auto()
 
+    @property
+    def is_add(self) -> bool:
+        return self == SchemaDeltaOp.ADD
+
+    @property
+    def is_drop(self) -> bool:
+        return self == SchemaDeltaOp.DROP
+
+    @property
+    def is_alter_type(self) -> bool:
+        return self == SchemaDeltaOp.ALTER_TYPE
+
 
 class Columns(PydanticModel):
     columns: t.List[t.Tuple[str, exp.DataType]]
 
     @classmethod
-    def create(cls, column_name: str, column_type: t.Union[str, exp.DataType]) -> Columns:
-        return cls(columns=[(column_name, exp.DataType.build(column_type))])
+    def create(cls, *columns_and_types: t.Tuple[str, t.Union[str, exp.DataType]]) -> Columns:
+        columns_and_data_types = [
+            (column_name, exp.DataType.build(column_type))
+            for column_name, column_type in columns_and_types
+        ]
+        return cls(columns=columns_and_data_types)
 
     @classmethod
     def empty(cls) -> Columns:
@@ -49,11 +65,17 @@ class Columns(PydanticModel):
     def has_columns(self) -> bool:
         return len(self.columns) > 0
 
+    @property
+    def last_column_name(self) -> t.Optional[str]:
+        if not self.has_columns:
+            return None
+        return self.columns[-1][0]
+
     def sql(self, array_suffix: t.Optional[str] = None) -> str:
         return ".".join(
             [
                 c[0]
-                if c[1] != exp.DataType.Type.ARRAY
+                if c[1].this != exp.DataType.Type.ARRAY
                 else f"{c[0]}{array_suffix if array_suffix else ''}"
                 for c in self.columns
             ]
@@ -63,18 +85,18 @@ class Columns(PydanticModel):
 class ColumnPosition(PydanticModel):
     is_first: bool
     is_last: bool
-    after: t.Optional[Columns] = None
+    after: t.Optional[str] = None
 
     @classmethod
     def create_first(cls) -> ColumnPosition:
         return cls(is_first=True, is_last=False, after=None)
 
     @classmethod
-    def create_last(cls, after: t.Optional[Columns] = None) -> ColumnPosition:
+    def create_last(cls, after: t.Optional[str] = None) -> ColumnPosition:
         return cls(is_first=False, is_last=True, after=after)
 
     @classmethod
-    def create_middle(cls, after: Columns) -> ColumnPosition:
+    def create_middle(cls, after: str) -> ColumnPosition:
         return cls(is_first=False, is_last=False, after=after)
 
     @classmethod
@@ -82,7 +104,6 @@ class ColumnPosition(PydanticModel):
         cls,
         pos: int,
         current_kwargs: t.List[exp.StructKwarg],
-        parent_cols: Columns,
         replacing_col: bool = False,
     ) -> ColumnPosition:
         is_first = pos == 0
@@ -90,7 +111,7 @@ class ColumnPosition(PydanticModel):
         after = None
         if not is_first:
             prior_kwarg = current_kwargs[pos - 1]
-            after = parent_cols.add(*_get_name_and_type(prior_kwarg))
+            after, _ = _get_name_and_type(prior_kwarg)
         return cls(is_first=is_first, is_last=is_last, after=after)
 
 
@@ -98,7 +119,9 @@ class SchemaDelta(PydanticModel):
     column_name: str
     column_type: exp.DataType
     op: SchemaDeltaOp
-    add_position: t.Optional[t.Union[str, ColumnPosition]] = None
+    parents: Columns = Columns.empty()
+    add_position: t.Optional[ColumnPosition] = None
+    current_type: t.Optional[exp.DataType] = None
 
     @classmethod
     def add(
@@ -106,36 +129,55 @@ class SchemaDelta(PydanticModel):
         column_name: str,
         column_type: t.Union[str, exp.DataType],
         position: ColumnPosition = ColumnPosition.create_last(),
+        parents: Columns = Columns.empty(),
     ) -> SchemaDelta:
         return cls(
             column_name=column_name,
             column_type=exp.DataType.build(column_type),
             op=SchemaDeltaOp.ADD,
+            parents=parents,
             add_position=position,
         )
 
     @classmethod
     def drop(
-        cls, column_name: str, column_type: t.Optional[t.Union[str, exp.DataType]] = None
+        cls,
+        column_name: str,
+        column_type: t.Optional[t.Union[str, exp.DataType]] = None,
+        parents: Columns = Columns.empty(),
     ) -> SchemaDelta:
         column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
-        return cls(column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP)
+        return cls(
+            column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP, parents=parents
+        )
 
     @classmethod
     def alter_type(
-        cls, column_name: str, column_type: t.Union[str, exp.DataType], position: ColumnPosition
+        cls,
+        column_name: str,
+        column_type: t.Union[str, exp.DataType],
+        current_type: t.Union[str, exp.DataType],
+        position: ColumnPosition = ColumnPosition.create_last(),
+        parents: Columns = Columns.empty(),
     ) -> SchemaDelta:
         return cls(
             column_name=column_name,
             column_type=exp.DataType.build(column_type),
             op=SchemaDeltaOp.ALTER_TYPE,
+            parents=parents,
             add_position=position,
+            current_type=exp.DataType.build(current_type),
         )
 
-    @property
-    def column_def(self) -> exp.ColumnDef:
+    def full_column_path(self, array_suffix: t.Optional[str] = None) -> str:
+        return self.parents.add(self.column_name, self.column_type).sql(array_suffix)
+
+    def column(self, array_suffix: t.Optional[str] = None) -> exp.Column:
+        return exp.column(self.full_column_path(array_suffix))
+
+    def column_def(self, array_suffix: t.Optional[str] = None) -> exp.ColumnDef:
         return exp.ColumnDef(
-            this=exp.to_identifier(self.column_name),
+            this=exp.to_identifier(self.full_column_path(array_suffix)),
             kind=self.column_type,
         )
 
@@ -144,10 +186,25 @@ def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
     return struct.alias_or_name, struct.expression
 
 
+class DiffConfig(PydanticModel):
+    support_positional_add: bool = False
+    support_struct_add: bool = False
+    array_suffix: str = ""
+    compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
+
+    def is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
+        if current_type == new_type:
+            return True
+        if current_type in self.compatible_types:
+            return new_type in self.compatible_types[current_type]
+        return False
+
+
 def struct_diff(
     current_struct: exp.DataType,
     new_struct: exp.DataType,
     parent_columns: t.Optional[Columns] = None,
+    diff_config: t.Optional[DiffConfig] = None,
 ) -> t.List[SchemaDelta]:
     def get_matching_kwarg(
         current_kwarg: exp.StructKwarg, new_struct: exp.DataType, current_pos: int
@@ -172,10 +229,17 @@ def struct_diff(
         return name
 
     def get_alter_op(
-        pos: int, struct: exp.DataType, parent_columns: Columns, name: str, new_type: exp.DataType
+        pos: int,
+        struct: exp.DataType,
+        parent_columns: Columns,
+        name: str,
+        new_type: exp.DataType,
+        current_type: t.Union[str, exp.DataType],
     ) -> SchemaDelta:
-        col_pos = ColumnPosition.create(pos, struct.expressions, parent_columns, replacing_col=True)
-        return SchemaDelta.alter_type(get_column_name(name, parent_columns), new_type, col_pos)
+        col_pos = ColumnPosition.create(pos, struct.expressions, replacing_col=True)
+        return SchemaDelta.alter_type(
+            get_column_name(name, parent_columns), new_type, current_type, col_pos, parent_columns
+        )
 
     parent_columns = parent_columns or Columns(columns=[])
     operations = []
@@ -188,6 +252,7 @@ def struct_diff(
                 SchemaDelta.drop(
                     get_column_name(current_kwarg.alias_or_name, parent_columns),
                     current_kwarg.expression,
+                    parent_columns,
                 )
             )
             current_struct.expressions.pop(current_pos - pop_offset)
@@ -196,12 +261,13 @@ def struct_diff(
     for new_pos, new_kwarg in enumerate(new_struct.expressions):
         possible_current_pos, _ = get_matching_kwarg(new_kwarg, current_struct, new_pos)
         if possible_current_pos is None:
-            col_pos = ColumnPosition.create(new_pos, current_struct.expressions, parent_columns)
+            col_pos = ColumnPosition.create(new_pos, current_struct.expressions)
             operations.append(
                 SchemaDelta.add(
                     get_column_name(new_kwarg.alias_or_name, parent_columns),
                     new_kwarg.expression,
                     col_pos,
+                    parent_columns,
                 )
             )
             current_struct.expressions.insert(new_pos, new_kwarg)
@@ -243,12 +309,24 @@ def struct_diff(
             else:
                 operations.append(
                     get_alter_op(
-                        current_pos, current_struct, parent_columns, current_name, new_array_type
+                        current_pos,
+                        current_struct,
+                        parent_columns,
+                        current_name,
+                        new_array_type,
+                        current_array_type,
                     )
                 )
         else:
             operations.append(
-                get_alter_op(current_pos, current_struct, parent_columns, current_name, new_type)
+                get_alter_op(
+                    current_pos,
+                    current_struct,
+                    parent_columns,
+                    current_name,
+                    new_type,
+                    current_type,
+                )
             )
         current_struct.expressions.pop(current_pos)
         current_struct.expressions.insert(current_pos, new_kwarg)

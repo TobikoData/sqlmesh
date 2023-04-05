@@ -44,11 +44,9 @@ def test_schema_diff_calculate(mocker: MockerFixture):
         SchemaDelta.add(
             "new_column",
             "DOUBLE",
-            ColumnPosition.create_last(Columns(columns=[("ds", exp.DataType.build("STRING"))])),
+            ColumnPosition.create_last("ds"),
         ),
-        SchemaDelta.alter_type(
-            "name", "INT", ColumnPosition.create_middle(after=Columns.create("id", "INT"))
-        ),
+        SchemaDelta.alter_type("name", "INT", "STRING", ColumnPosition.create_middle("id")),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -76,10 +74,8 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     engine_adapter_mock.columns.side_effect = table_columns
 
     assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
-        SchemaDelta.alter_type("id", "BIGINT", ColumnPosition.create_first()),
-        SchemaDelta.alter_type(
-            "ds", "INT", ColumnPosition.create_last(Columns.create("id", "BIGINT"))
-        ),
+        SchemaDelta.alter_type("id", "BIGINT", "INT", ColumnPosition.create_first()),
+        SchemaDelta.alter_type("ds", "INT", "STRING", ColumnPosition.create_last("id")),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -110,18 +106,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
         SchemaDelta.add(
             "complex.new_column",
             "DOUBLE",
-            ColumnPosition.create_middle(
-                Columns(
-                    columns=[
-                        ("complex", exp.DataType.build("STRUCT")),
-                        ("id", exp.DataType.build("INT")),
-                    ]
-                )
-            ),
+            ColumnPosition.create_middle("id"),
+            parents=Columns.create(("complex", "STRUCT")),
         ),
-        SchemaDelta.alter_type(
-            "ds", "INT", ColumnPosition.create_last(Columns.create("complex", "STRUCT"))
-        ),
+        SchemaDelta.alter_type("ds", "INT", "STRING", ColumnPosition.create_last("complex")),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -150,11 +138,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns.create("age", "INT"),
-                    ),
+                    add_position=ColumnPosition.create_last(after="age"),
                 )
             ],
         ),
@@ -167,10 +151,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                    ),
+                    add_position=ColumnPosition.create_first(),
                 )
             ],
         ),
@@ -183,11 +164,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns.create("id", "INT"),
-                    ),
+                    add_position=ColumnPosition.create_middle(after="id"),
                 )
             ],
         ),
@@ -200,30 +177,19 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                    ),
+                    add_position=ColumnPosition.create_first(),
                 ),
                 SchemaDelta(
                     column_name="address2",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns.create("id", "INT"),
-                    ),
+                    add_position=ColumnPosition.create_middle(after="id"),
                 ),
                 SchemaDelta(
                     column_name="address3",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns.create("age", "INT"),
-                    ),
+                    add_position=ColumnPosition.create_last(after="age"),
                 ),
             ],
         ),
@@ -236,20 +202,13 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                    ),
+                    add_position=ColumnPosition.create_first(),
                 ),
                 SchemaDelta(
                     column_name="address2",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns.create("address", "STRING"),
-                    ),
+                    add_position=ColumnPosition.create_middle(after="address"),
                 ),
             ],
         ),
@@ -365,6 +324,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ALTER_TYPE,
                     add_position=ColumnPosition.create_first(),
+                    current_type=exp.DataType.build("INT"),
                 )
             ],
         ),
@@ -385,17 +345,14 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="address",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns.create("age", "INT"),
-                    ),
+                    add_position=ColumnPosition.create_last(after="age"),
                 ),
                 SchemaDelta(
                     column_name="id",
                     column_type=exp.DataType.build("STRING"),
                     op=SchemaDeltaOp.ALTER_TYPE,
                     add_position=ColumnPosition.create_first(),
+                    current_type=exp.DataType.build("INT"),
                 ),
             ],
         ),
@@ -411,11 +368,8 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                        after=None,
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_first(),
                 ),
             ],
         ),
@@ -428,16 +382,8 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_c", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_last(after="col_c"),
                 ),
             ],
         ),
@@ -450,16 +396,8 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_a", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_middle(after="col_a"),
                 ),
             ],
         ),
@@ -472,26 +410,15 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                        after=None,
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_first(),
                 ),
                 SchemaDelta(
                     column_name="info.col_e",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_d", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_middle(after="col_d"),
                 ),
             ],
         ),
@@ -503,6 +430,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 SchemaDelta(
                     column_name="info.col_a",
                     column_type=exp.DataType.build("INT"),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
@@ -515,6 +443,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 SchemaDelta(
                     column_name="info.col_c",
                     column_type=exp.DataType.build("INT"),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
@@ -527,6 +456,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 SchemaDelta(
                     column_name="info.col_b",
                     column_type=exp.DataType.build("INT"),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
@@ -539,11 +469,13 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 SchemaDelta(
                     column_name="info.col_a",
                     column_type=exp.DataType.build("INT"),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                     op=SchemaDeltaOp.DROP,
                 ),
                 SchemaDelta(
                     column_name="info.col_b",
                     column_type=exp.DataType.build("INT"),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                     op=SchemaDeltaOp.DROP,
                 ),
             ],
@@ -557,14 +489,9 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_last(
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_b", exp.DataType.build("INT")),
-                            ]
-                        )
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_last(after="col_b"),
+                    current_type=exp.DataType.build("INT"),
                 ),
             ],
         ),
@@ -577,44 +504,29 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_a",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.DROP,
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
                 ),
                 SchemaDelta(
                     column_name="info.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=True,
-                        is_last=False,
-                        after=None,
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_first(),
                 ),
                 SchemaDelta(
                     column_name="info.col_e",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_b", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_middle(after="col_b"),
                 ),
                 SchemaDelta(
                     column_name="info.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_last(
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("col_e", exp.DataType.build("INT")),
-                            ]
-                        )
-                    ),
+                    parents=Columns.create(("info", exp.DataType.build("STRUCT"))),
+                    add_position=ColumnPosition.create_last(after="col_e"),
+                    current_type=exp.DataType.build("INT"),
                 ),
             ],
         ),
@@ -627,42 +539,27 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="info.col_b",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.DROP,
+                    parents=Columns.create(("info", "STRUCT")),
                 ),
                 SchemaDelta(
                     column_name="info.col_c",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("nested_info", exp.DataType.build("STRUCT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", "STRUCT")),
+                    add_position=ColumnPosition.create_last("nested_info"),
                 ),
                 SchemaDelta(
                     column_name="info.nested_info.nest_col_b",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.DROP,
+                    parents=Columns.create(("info", "STRUCT"), ("nested_info", "STRUCT")),
                 ),
                 SchemaDelta(
                     column_name="info.nested_info.col_c",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns(
-                            columns=[
-                                ("info", exp.DataType.build("STRUCT")),
-                                ("nested_info", exp.DataType.build("STRUCT")),
-                                ("nest_col_a", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("info", "STRUCT"), ("nested_info", "STRUCT")),
+                    add_position=ColumnPosition.create_last("nest_col_a"),
                 ),
             ],
         ),
@@ -678,16 +575,8 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="infos.col_d",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=False,
-                        after=Columns(
-                            columns=[
-                                ("infos", exp.DataType.build("ARRAY")),
-                                ("col_b", exp.DataType.build("INT")),
-                            ]
-                        ),
-                    ),
+                    parents=Columns.create(("infos", "ARRAY")),
+                    add_position=ColumnPosition.create_middle("col_b"),
                 ),
             ],
         ),
@@ -700,6 +589,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="infos.col_b",
                     column_type=exp.DataType.build("INT"),
                     op=SchemaDeltaOp.DROP,
+                    parents=Columns.create(("infos", "ARRAY")),
                 ),
             ],
         ),
@@ -712,14 +602,9 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="infos.col_c",
                     column_type=exp.DataType.build("TEXT"),
                     op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_last(
-                        after=Columns(
-                            columns=[
-                                ("infos", exp.DataType.build("ARRAY")),
-                                ("col_b", exp.DataType.build("INT")),
-                            ]
-                        )
-                    ),
+                    parents=Columns.create(("infos", "ARRAY")),
+                    add_position=ColumnPosition.create_last("col_b"),
+                    current_type=exp.DataType.build("INT"),
                 ),
             ],
         ),
@@ -732,11 +617,7 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                     column_name="values",
                     column_type=exp.DataType.build("ARRAY<INT>"),
                     op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition(
-                        is_first=False,
-                        is_last=True,
-                        after=Columns.create("infos", "ARRAY"),
-                    ),
+                    add_position=ColumnPosition.create_last("infos"),
                 ),
             ],
         ),
@@ -784,9 +665,9 @@ def test_schema_diff_calculate_duckdb(duck_conn):
         SchemaDelta.add(
             "new_column",
             "DOUBLE",
-            position=ColumnPosition.create_last(after=Columns.create("ds", "VARCHAR")),
+            position=ColumnPosition.create_last("ds"),
         ),
         SchemaDelta.alter_type(
-            "name", "INTEGER", ColumnPosition.create_middle(after=Columns.create("id", "INTEGER"))
+            "name", "INTEGER", "VARCHAR", ColumnPosition.create_middle(after="id")
         ),
     ]
