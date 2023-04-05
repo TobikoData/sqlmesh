@@ -212,6 +212,15 @@ def test_config_containing_jinja():
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
 
 
+def test_config_containing_method():
+    context = DbtContext()
+    context.jinja_macros.global_objs.update({"get_table_name": lambda: "foo"})
+    model = ModelConfig(sql="{{ config(alias=get_table_name()) }} SELECT 1 FROM a")
+
+    rendered = model.render_config(context)
+    assert rendered.alias == "foo"
+
+
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
 def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     waiters = sushi_test_dbt_context.models[model]

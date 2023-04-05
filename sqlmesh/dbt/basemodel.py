@@ -192,8 +192,7 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
-    @property
-    def config_info(self) -> AttributeDict[str, t.Any]:
+    def attribute_dict(self) -> AttributeDict[str, t.Any]:
         return AttributeDict(self.dict())
 
     def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
@@ -203,7 +202,7 @@ class BaseModelConfig(GeneralConfig):
             {
                 "this": self.relation_info,
                 "schema": self.table_schema,
-                "config": self.config_info,
+                "config": self.attribute_dict(),
                 **model_context.jinja_globals,  # type: ignore
             }
         )
@@ -276,7 +275,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
         self._captured_dependencies: Dependencies = Dependencies()
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: BMC = config.copy()
-        self._parsed_sql: t.Optional[nodes.Template] = None
+        self._parsed_jinja: t.Optional[nodes.Template] = None
 
         self._jinja_globals = create_builtin_globals(
             jinja_macros=context.jinja_macros,
@@ -312,22 +311,24 @@ class ModelSqlRenderer(t.Generic[BMC]):
         return self._enriched_config
 
     @property
-    def parsed_sql(self) -> nodes.Template:
-        if self._parsed_sql is None:
-            self._parsed_sql = JINJA_ENVIRONMENT.parse(self.config.all_sql)
-        return self._parsed_sql
+    def parsed_jinja(self) -> nodes.Template:
+        if self._parsed_jinja is None:
+            self._parsed_jinja = JINJA_ENVIRONMENT.parse(self.config.all_sql)
+        return self._parsed_jinja
 
     def render(self) -> str:
         if self._rendered_sql is None:
             registry = self.context.jinja_macros
             self._rendered_sql = (
                 registry.build_environment(**self._jinja_globals)
-                .from_string(self.parsed_sql)
+                .from_string(self.parsed_jinja)
                 .render()
             )
         return self._rendered_sql
 
     def _update_with_sql_config(self, config: BMC) -> BMC:
+        environment = self.context.jinja_macros.build_environment(**self._jinja_globals)
+
         def _extract_value(node: t.Any) -> t.Any:
             if not isinstance(node, nodes.Node):
                 return node
@@ -339,9 +340,11 @@ class ModelSqlRenderer(t.Generic[BMC]):
                 return {_extract_value(pair.key): _extract_value(pair.value) for pair in node.items}
             if isinstance(node, nodes.Tuple):
                 return tuple(_extract_value(val) for val in node.items)
+            if isinstance(node, nodes.Call):
+                return environment.from_string(nodes.Template([nodes.Output([node])])).render()
             raise SQLMeshError(f"Unable to extract node type '{type(node)}'.")
 
-        for call in self.parsed_sql.find_all(nodes.Call):
+        for call in self.parsed_jinja.find_all(nodes.Call):
             if not isinstance(call.node, nodes.Name) or call.node.name != "config":
                 continue
             config = config.update_with(
