@@ -112,7 +112,6 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
         cron="@hourly",
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
-        batch_size=2,
     )
     context = DbtContext(project_name="Foo")
     context.target = DuckDbConfig(schema="foo")
@@ -128,7 +127,6 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
     assert model.owner == "Sally"
-    assert model.batch_size == 2
 
 
 def test_model_config_sql_no_config():
