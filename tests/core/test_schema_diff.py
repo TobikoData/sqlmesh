@@ -621,6 +621,26 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
                 ),
             ],
         ),
+        # Precision VARCHAR is a no-op with no changes
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(120)>",
+            [],
+        ),
+        # Change the precision bits of a VARCHAR
+        (
+            "STRUCT<id INT, address VARCHAR(120)>",
+            "STRUCT<id INT, address VARCHAR(100)>",
+            [
+                SchemaDelta(
+                    column_name="address",
+                    column_type=exp.DataType.build("VARCHAR(100)"),
+                    op=SchemaDeltaOp.ALTER_TYPE,
+                    add_position=ColumnPosition.create_last("id"),
+                    current_type=exp.DataType.build("VARCHAR(120)"),
+                ),
+            ],
+        ),
     ],
 )
 def test_struct_diff(

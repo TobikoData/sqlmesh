@@ -14,7 +14,7 @@ import logging
 import typing as t
 
 import pandas as pd
-from sqlglot import Dialect, exp, parse_one
+from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
@@ -304,19 +304,11 @@ class EngineAdapter:
                     f"Column: {operation.full_column_path(self.SCHEMA_DIFF_CONFIG.array_suffix)}"
                 )
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
-            alter_table.set("actions", [operation.column_def(self.SCHEMA_DIFF_CONFIG.array_suffix)])
+            column = operation.column_def(self.SCHEMA_DIFF_CONFIG.array_suffix)
             if self.SCHEMA_DIFF_CONFIG.support_positional_add:
-                # Hack in positional support since it is not currently supported in SQLGlot
-                sql = self._to_sql(alter_table)
-                if operation.add_position and operation.add_position.is_first:
-                    sql = sql + " FIRST"
-                elif (
-                    operation.add_position
-                    and not operation.add_position.is_last
-                    and operation.add_position.after
-                ):
-                    sql = sql + f" AFTER {operation.add_position.after}"
-                return parse_one(sql, read=self.dialect)  # type: ignore
+                assert operation.add_position is not None
+                column.set("position", operation.add_position.sqlglot_col_position)
+            alter_table.set("actions", [column])
             return alter_table
 
         def get_drop_statement(operation: SchemaDelta) -> exp.AlterTable:

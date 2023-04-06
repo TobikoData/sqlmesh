@@ -100,6 +100,16 @@ class ColumnPosition(PydanticModel):
             after, _ = _get_name_and_type(prior_kwarg)
         return cls(is_first=is_first, is_last=is_last, after=after)
 
+    @property
+    def sqlglot_col_position(self) -> t.Optional[exp.ColumnPosition]:
+        column = exp.column(self.after) if self.after and not self.is_last else None
+        position = None
+        if self.is_first:
+            position = "FIRST"
+        elif column and not self.is_last:
+            position = "AFTER"
+        return exp.ColumnPosition(this=column, position=position)
+
 
 class SchemaDelta(PydanticModel):
     column_name: str

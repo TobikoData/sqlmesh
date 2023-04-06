@@ -222,6 +222,7 @@ def test_create_table_properties(mocker: MockerFixture):
                 SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
                 # Alter is converted to drop/add
                 SchemaDelta.alter_type("e", "TEXT", "INT"),
+                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
@@ -230,6 +231,8 @@ def test_create_table_properties(mocker: MockerFixture):
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT""",
                 """ALTER TABLE "test_table" DROP COLUMN "e\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
+                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
             ],
         ),
         (
@@ -242,14 +245,17 @@ def test_create_table_properties(mocker: MockerFixture):
                 SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
                 # Alter is converted to drop/add
                 SchemaDelta.alter_type("e", "TEXT", "INT"),
+                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER a""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
                 """ALTER TABLE "test_table" DROP COLUMN "e\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
+                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
             ],
         ),
         (
@@ -265,13 +271,16 @@ def test_create_table_properties(mocker: MockerFixture):
                 SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
                 # Alter is supported
                 SchemaDelta.alter_type("e", "TEXT", "INT"),
+                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER a""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
                 """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
+                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
             ],
         ),
         (
@@ -306,10 +315,10 @@ def test_create_table_properties(mocker: MockerFixture):
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER a""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
-                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER nested_a""",
-                """ALTER TABLE "test_table" ADD COLUMN "array.element.array_b" INT AFTER array_a""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER "nested_a\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array.element.array_b" INT AFTER "array_a\"""",
                 """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
             ],
         ),
