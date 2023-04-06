@@ -72,8 +72,6 @@ async def run_plan(
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
-        context.snapshots.get
-
         payload.backfills = [
             models.ContextEnvironmentBackfill(
                 model_name=interval.snapshot_name,
