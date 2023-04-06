@@ -46,7 +46,7 @@ export default function File({
     deleteFileApiFilesPathDelete(file.path)
       .then(response => {
         if ((response as unknown as { ok: boolean }).ok) {
-          closeTab(file.id)
+          closeTab(file)
 
           file.parent?.removeFile(file)
 
@@ -114,7 +114,7 @@ export default function File({
         file.is_supported &&
           'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
-        tabs.has(file.id)
+        tabs.has(file)
           ? 'text-brand-500'
           : 'text-neutral-500 dark:text-neutral-100',
         file === selectedFile && 'bg-neutral-100 dark:bg-dark-lighter',

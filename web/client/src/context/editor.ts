@@ -11,7 +11,7 @@ export interface Dialect {
 
 interface EditorStore {
   storedTabsIds: ID[]
-  tabs: Map<ID, EditorTab>
+  tabs: Map<ModelFile, EditorTab>
   tab: EditorTab
   engine: Worker
   dialects: Dialect[]
@@ -20,7 +20,7 @@ interface EditorStore {
   previewConsole?: string
   selectTab: (tab: EditorTab) => void
   addTab: (tab: EditorTab) => void
-  closeTab: (id: ID) => void
+  closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
@@ -48,7 +48,7 @@ const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[] }>('tabs')
 
 const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile, true)
-const initialTabs = new Map([[initialFile.id, initialTab]])
+const initialTabs = new Map([[initialFile, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
   storedTabsIds: getStoredTabsIds(),
@@ -70,7 +70,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     get().addTab(tab)
   },
   addTab(tab) {
-    const tabs = new Map([...get().tabs, [tab.file.id, tab]])
+    const tabs = new Map([...get().tabs, [tab.file, tab]])
 
     setStoredTabs({
       ids: Array.from(tabs.values())
@@ -83,17 +83,17 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
       tabs,
     }))
   },
-  closeTab(id) {
+  closeTab(file) {
     const s = get()
 
-    if (isTrue(s.tabs.get(id)?.isInitial)) return
+    if (isTrue(s.tabs.get(file)?.isInitial)) return
 
     const tabs = Array.from(get().tabs.values())
-    const indexAt = tabs.findIndex(tab => tab.file.id === id)
+    const indexAt = tabs.findIndex(tab => tab.file === file)
 
-    s.tabs.delete(id)
+    s.tabs.delete(file)
 
-    if (id === s.tab.file.id) {
+    if (file.id === s.tab.file.id) {
       s.selectTab(tabs.at(indexAt - 1) as EditorTab)
     }
 

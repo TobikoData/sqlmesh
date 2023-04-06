@@ -140,7 +140,7 @@ export default function Directory({
           const files = getAllFilesInDirectory(directory)
 
           files.forEach(file => {
-            closeTab(file.id)
+            closeTab(file)
           })
         }
 
