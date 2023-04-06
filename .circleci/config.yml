@@ -19,6 +19,8 @@ jobs:
     resource_class: small
     steps:
       - checkout
+      - attach_workspace:
+          at: web/client
       - run:
           name: Publish Python package
           command: make publish
