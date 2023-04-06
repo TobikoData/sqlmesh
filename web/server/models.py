@@ -146,6 +146,7 @@ class ContextEnvironmentChanges(BaseModel):
 
 class ContextEnvironmentBackfill(BaseModel):
     model_name: str
+    view_name: str
     interval: t.Tuple[str, str]
     batches: int
 

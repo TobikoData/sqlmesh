@@ -72,9 +72,16 @@ async def run_plan(
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
+        context.snapshots.get
+
         payload.backfills = [
             models.ContextEnvironmentBackfill(
                 model_name=interval.snapshot_name,
+                view_name=context.snapshots[
+                    interval.snapshot_name
+                ].qualified_view_name.for_environment(plan.environment.name)
+                if interval.snapshot_name in context.snapshots
+                else None,
                 interval=[
                     [to_ds(t) for t in make_inclusive(start, end)]
                     for start, end in interval.merged_intervals
