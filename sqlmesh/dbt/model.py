@@ -76,6 +76,10 @@ class ModelConfig(BaseModelConfig):
     # redshift
     bind: t.Optional[bool] = None
 
+    # Private fields
+    _sql_config: t.Optional[SqlStr] = None
+    _sql_no_config: t.Optional[SqlStr] = None
+
     @validator(
         "unique_key",
         "cluster_by",
@@ -157,7 +161,20 @@ class ModelConfig(BaseModelConfig):
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
-    def sql_no_config(self) -> str:
+    def sql_no_config(self) -> SqlStr:
+        if self._sql_no_config is None:
+            self._sql_no_config = SqlStr("")
+            self._extract_sql_config()
+        return self._sql_no_config
+
+    @property
+    def sql_config(self) -> SqlStr:
+        if self._sql_config is None:
+            self._sql_config = SqlStr("")
+            self._extract_sql_config()
+        return self._sql_config
+
+    def _extract_sql_config(self) -> None:
         def jinja_end(sql: str, start: int) -> int:
             cursor = start
             quote = None
@@ -172,19 +189,17 @@ class ModelConfig(BaseModelConfig):
                 cursor += 1
             return cursor
 
-        sql_no_config: str = self.sql
-        matches = re.findall(r"{{\s*config\s*\(", sql_no_config)
+        self._sql_no_config = self.sql
+        matches = re.findall(r"{{\s*config\s*\(", self._sql_no_config)
         for match in matches:
-            start = sql_no_config.find(match)
+            start = self._sql_no_config.find(match)
             if start == -1:
                 continue
-            sql_no_config = "".join([self.sql[:start], self.sql[jinja_end(sql_no_config, start) :]])
-
-        return sql_no_config
-
-    @property
-    def all_sql(self) -> SqlStr:
-        return SqlStr(";\n".join(self.pre_hook + [self.sql] + self.post_hook))
+            extracted = self._sql_no_config[start : jinja_end(self._sql_no_config, start)]
+            self._sql_config = SqlStr(
+                "\n".join([self._sql_config, extracted]) if self._sql_config else extracted
+            )
+            self._sql_no_config = SqlStr(self._sql_no_config.replace(extracted, "").strip())
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""

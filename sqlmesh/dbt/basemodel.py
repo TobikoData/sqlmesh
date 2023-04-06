@@ -8,6 +8,7 @@ from pathlib import Path
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import RelationType
 from jinja2 import nodes
+from jinja2.exceptions import UndefinedError
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
@@ -27,7 +28,7 @@ from sqlmesh.dbt.common import DbtContext, GeneralConfig, SqlStr
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference, extract_macro_references
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -141,7 +142,19 @@ class BaseModelConfig(GeneralConfig):
 
     @property
     def all_sql(self) -> SqlStr:
+        return SqlStr("\n".join([self.hook_sql, self.sql_no_config]))
+
+    @property
+    def sql_no_config(self) -> SqlStr:
         return SqlStr("")
+
+    @property
+    def sql_config(self) -> SqlStr:
+        return SqlStr("")
+
+    @property
+    def hook_sql(self) -> SqlStr:
+        return SqlStr("\n".join(self.pre_hook + self.post_hook))
 
     @property
     def table_schema(self) -> str:
@@ -225,7 +238,6 @@ class BaseModelConfig(GeneralConfig):
 
     def render_config(self: BMC, context: DbtContext) -> BMC:
         rendered = super().render_config(context)
-        rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.all_sql))
         rendered = ModelSqlRenderer(context, rendered).enriched_config
 
         rendered_dependencies = rendered._dependencies
@@ -274,7 +286,6 @@ class ModelSqlRenderer(t.Generic[BMC]):
         self._captured_dependencies: Dependencies = Dependencies()
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: BMC = config.copy()
-        self._parsed_jinja: t.Optional[nodes.Template] = None
 
         self._jinja_globals = create_builtin_globals(
             jinja_macros=context.jinja_macros,
@@ -305,21 +316,23 @@ class ModelSqlRenderer(t.Generic[BMC]):
     def enriched_config(self) -> BMC:
         if self._rendered_sql is None:
             self._enriched_config = self._update_with_sql_config(self._enriched_config)
+            self._enriched_config._dependencies = Dependencies(
+                macros=extract_macro_references(self._enriched_config.all_sql)
+            )
             self.render()
             self._enriched_config._dependencies = self._enriched_config._dependencies.union(
                 self._captured_dependencies
             )
         return self._enriched_config
 
-    @property
-    def parsed_jinja(self) -> nodes.Template:
-        if self._parsed_jinja is None:
-            self._parsed_jinja = self.jinja_env.parse(self.config.all_sql)
-        return self._parsed_jinja
-
     def render(self) -> str:
         if self._rendered_sql is None:
-            self._rendered_sql = self.jinja_env.from_string(self.parsed_jinja).render()
+            try:
+                self._rendered_sql = self.jinja_env.from_string(
+                    self._enriched_config.all_sql
+                ).render()
+            except UndefinedError as e:
+                raise ConfigError(e.message)
         return self._rendered_sql
 
     def _update_with_sql_config(self, config: BMC) -> BMC:
@@ -328,17 +341,18 @@ class ModelSqlRenderer(t.Generic[BMC]):
                 return node
             if isinstance(node, nodes.Const):
                 return _extract_value(node.value)
+            if isinstance(node, nodes.TemplateData):
+                return _extract_value(node.data)
             if isinstance(node, nodes.List):
                 return [_extract_value(val) for val in node.items]
             if isinstance(node, nodes.Dict):
                 return {_extract_value(pair.key): _extract_value(pair.value) for pair in node.items}
             if isinstance(node, nodes.Tuple):
                 return tuple(_extract_value(val) for val in node.items)
-            if isinstance(node, nodes.Call):
-                return self.jinja_env.from_string(nodes.Template([nodes.Output([node])])).render()
-            raise SQLMeshError(f"Unable to extract node type '{type(node)}'.")
 
-        for call in self.parsed_jinja.find_all(nodes.Call):
+            return self.jinja_env.from_string(nodes.Template([nodes.Output([node])])).render()
+
+        for call in self.jinja_env.parse(self._enriched_config.sql_config).find_all(nodes.Call):
             if not isinstance(call.node, nodes.Name) or call.node.name != "config":
                 continue
             config = config.update_with(
