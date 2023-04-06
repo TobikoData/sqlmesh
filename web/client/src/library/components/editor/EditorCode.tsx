@@ -104,13 +104,13 @@ export default function CodeEditor(): JSX.Element {
         key: 'Mod-Alt-]',
         preventDefault: true,
         run() {
-          closeTab(tab.file.id)
+          closeTab(tab.file)
 
           return true
         },
       },
     ],
-    [closeTab, selectTab, createTab, tab.file.id],
+    [closeTab, selectTab, createTab, tab.file],
   )
 
   useEffect(() => {
