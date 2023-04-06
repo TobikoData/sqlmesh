@@ -40,7 +40,9 @@ class Console(abc.ABC):
     with them when their input is needed"""
 
     @abc.abstractmethod
-    def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
+    def start_snapshot_progress(
+        self, snapshot: Snapshot, total_batches: int, environment: str
+    ) -> None:
         """Indicates that a new load progress has begun."""
 
     @abc.abstractmethod
@@ -138,11 +140,13 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
+    def start_snapshot_progress(
+        self, snapshot: Snapshot, total_batches: int, environment: str
+    ) -> None:
         """Indicates that a new load progress has begun."""
         if not self.evaluation_progress:
             self.evaluation_progress = Progress(
-                TextColumn("[bold blue]{task.fields[snapshot_name]}", justify="right"),
+                TextColumn("[bold blue]{task.fields[view_name]}", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -153,10 +157,11 @@ class TerminalConsole(Console):
             )
             self.evaluation_progress.start()
             self.evaluation_tasks = {}
-        self.evaluation_tasks[snapshot_name] = (
+        view_name = snapshot.qualified_view_name.for_environment(environment)
+        self.evaluation_tasks[snapshot.name] = (
             self.evaluation_progress.add_task(
-                f"Running {snapshot_name}...",
-                snapshot_name=snapshot_name,
+                f"Running {view_name}...",
+                view_name=view_name,
                 total=total_batches,
             ),
             total_batches,
