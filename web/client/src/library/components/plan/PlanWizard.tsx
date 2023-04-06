@@ -35,9 +35,9 @@ import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
 
 export default function PlanWizard({
-  setRefTaskProgress,
+  setRefTasksOverview,
 }: {
-  setRefTaskProgress: RefObject<HTMLDivElement>
+  setRefTasksOverview: RefObject<HTMLDivElement>
 }): JSX.Element {
   const [subscribe] = useChannelEvents()
 
@@ -340,7 +340,7 @@ export default function PlanWizard({
                           >
                             <TasksOverview
                               tasks={tasks}
-                              setRefTaskProgress={setRefTaskProgress}
+                              setRefTasksOverview={setRefTasksOverview}
                             >
                               {({ total, completed, models }) => (
                                 <>
@@ -355,17 +355,19 @@ export default function PlanWizard({
                                     }
                                     updatedAt={activeBackfill?.updated_at}
                                   />
-                                  <TasksOverview.Details
-                                    models={models}
-                                    changes={{
-                                      modified,
-                                      added,
-                                      removed,
-                                    }}
-                                    showBatches={hasBackfills}
-                                    showVirtualUpdate={hasVirtualUpdate}
-                                    showProgress={true}
-                                  />
+                                  {models != null && (
+                                    <TasksOverview.Details
+                                      models={models}
+                                      changes={{
+                                        modified,
+                                        added,
+                                        removed,
+                                      }}
+                                      showBatches={hasBackfills}
+                                      showVirtualUpdate={hasVirtualUpdate}
+                                      showProgress={true}
+                                    />
+                                  )}
                                 </>
                               )}
                             </TasksOverview>

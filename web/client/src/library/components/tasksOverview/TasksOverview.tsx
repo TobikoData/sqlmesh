@@ -16,9 +16,9 @@ import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 
 interface PropsTasks {
   tasks: PlanTasks
-  setRefTaskProgress?: RefObject<HTMLDivElement>
+  setRefTasksOverview?: RefObject<HTMLDivElement>
   children: (options: {
-    models: Array<[string, PlanTaskStatus]>
+    models?: Array<[string, PlanTaskStatus]>
     completed: number
     total: number
   }) => JSX.Element
@@ -26,7 +26,7 @@ interface PropsTasks {
 
 const TasksOverview = function TasksOverview({
   children,
-  setRefTaskProgress,
+  setRefTasksOverview,
   tasks,
 }: PropsTasks): JSX.Element {
   const { models, taskCompleted, taskTotal } = useMemo(() => {
@@ -46,7 +46,7 @@ const TasksOverview = function TasksOverview({
   return (
     <div
       className="text-prose"
-      ref={setRefTaskProgress}
+      ref={setRefTasksOverview}
     >
       {children({
         models,

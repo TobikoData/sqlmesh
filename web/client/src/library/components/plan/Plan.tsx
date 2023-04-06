@@ -279,7 +279,7 @@ function Plan({
       <Plan.Header error={error} />
       <Divider />
       <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <Plan.Wizard setRefTaskProgress={elTaskProgress} />
+        <Plan.Wizard setRefTasksOverview={elTaskProgress} />
       </div>
       <Divider />
       <Plan.Actions
