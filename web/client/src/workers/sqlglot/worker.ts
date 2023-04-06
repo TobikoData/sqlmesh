@@ -1,5 +1,7 @@
 declare function importScripts(...urls: string[]): void
 
+importScripts('https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js')
+
 const scope = self as any
 
 async function loadPyodideAndPackages(): Promise<any[]> {
