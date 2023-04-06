@@ -35,7 +35,7 @@ setup(
         "hyperscript",
         "jinja2",
         "pandas",
-        "pydantic",
+        "pydantic>=1.9.1,<2.0.0",
         "requests",
         "rich",
         "ruamel.yaml",
