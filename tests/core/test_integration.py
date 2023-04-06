@@ -224,6 +224,7 @@ def change_model_kind(context: Context, kind: ModelKindName):
     if kind in (ModelKindName.VIEW, ModelKindName.EMBEDDED, ModelKindName.FULL):
         context.upsert_model(
             "sushi.items",
+            batch_size=None,
             partitioned_by=[],
             audits=[],
         )
