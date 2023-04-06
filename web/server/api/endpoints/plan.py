@@ -68,7 +68,7 @@ async def run_plan(
         end=plan.end,
     )
 
-    if plan.context_diff.has_changes:
+    if plan.context_diff.has_changes or plan.requires_backfill:
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 

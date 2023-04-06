@@ -133,7 +133,7 @@ function Plan({
     } else {
       setPlanAction(EnumPlanAction.Apply)
     }
-  }, [planState, isPlanRan, hasChanges, hasBackfills])
+  }, [planState, isPlanRan, hasChanges, hasBackfills, hasVirtualUpdate])
 
   useEffect(() => {
     if (activePlan == null) return
