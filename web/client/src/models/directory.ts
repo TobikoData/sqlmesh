@@ -93,6 +93,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     return !this.isOpen && this.allDirectories.every(d => d.isCollapsed)
   }
 
+  get isModels(): boolean {
+    return this.path.startsWith('models')
+  }
+
   open(): void {
     this._isOpen = true
 
