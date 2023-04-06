@@ -7,7 +7,7 @@ import click
 DEFAULT_CONFIG = """connections:
     local:
         type: duckdb
-        database: db.duckdb
+        database: db.db
 
 default_connection: local
 """
