@@ -5,7 +5,6 @@ MODEL (
   cron '@daily',
   owner jen,
   start '2022-06-01 00:00:00+00:00',
-  batch_size 200
 );
 
 SELECT

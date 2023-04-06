@@ -234,9 +234,12 @@ class ModelMeta(PydanticModel):
     @root_validator
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         kind = values.get("kind")
-        if kind and not kind.is_materialized:
-            if values.get("partitioned_by_"):
-                raise ValueError(f"partitioned_by field cannot be set for {kind} models")
+        if kind:
+            if not kind.is_materialized:
+                if values.get("partitioned_by_"):
+                    raise ValueError(f"partitioned_by field cannot be set for {kind} models")
+            if values.get("batch_size") and not kind.supports_batch_size:
+                raise ValueError(f"batch_size field cannot be set for {kind} models")
         return values
 
     @property
