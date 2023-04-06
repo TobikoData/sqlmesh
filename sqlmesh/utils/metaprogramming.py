@@ -33,6 +33,9 @@ def _is_relative_to(path: t.Optional[Path | str], other: t.Optional[Path | str])
     if isinstance(other, str):
         other = Path(other)
 
+    if "site-packages" in str(path):
+        return False
+
     try:
         path.absolute().relative_to(other.absolute())
         return True
