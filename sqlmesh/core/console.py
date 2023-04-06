@@ -41,7 +41,7 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def start_snapshot_progress(
-        self, snapshot_name: Snapshot, total_batches: int, environment: str
+        self, snapshot: Snapshot, total_batches: int, environment: str
     ) -> None:
         """Indicates that a new load progress has begun."""
 
