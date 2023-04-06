@@ -97,7 +97,7 @@ export default function Directory({
 
     setIsLoading(true)
 
-    const extension = '.py'
+    const extension = directory.isModels ? '.sql' : '.py'
     const name = toUniqueName('new_file', extension)
 
     writeFileApiFilesPathPost(`${directory.path}/${name}`, { content: '' })
@@ -109,7 +109,6 @@ export default function Directory({
         }
 
         directory.addFile(new ModelFile(created, directory))
-
         directory.open()
       })
       .catch(error => {
@@ -141,7 +140,7 @@ export default function Directory({
           const files = getAllFilesInDirectory(directory)
 
           files.forEach(file => {
-            closeTab(file.id)
+            closeTab(file)
           })
         }
 

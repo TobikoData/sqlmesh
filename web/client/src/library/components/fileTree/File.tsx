@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react'
+import { useState, type MouseEvent, useEffect } from 'react'
 import {
   DocumentIcon,
   XCircleIcon,
@@ -19,8 +19,6 @@ interface PropsFile extends WithConfirmation {
   file: ModelFile
 }
 
-const CSS_ICON_SIZE = 'w-4 h-4'
-
 export default function File({
   file,
   setConfirmation,
@@ -29,11 +27,16 @@ export default function File({
   const tabs = useStoreEditor(s => s.tabs)
   const closeTab = useStoreEditor(s => s.closeTab)
 
+  const selectedFile = useStoreFileTree(s => s.selectedFile)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const refreshProject = useStoreFileTree(s => s.refreshProject)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
+
+  useEffect(() => {
+    selectFile(tab.file)
+  }, [tab])
 
   function remove(): void {
     if (isLoading) return
@@ -43,7 +46,7 @@ export default function File({
     deleteFileApiFilesPathDelete(file.path)
       .then(response => {
         if ((response as unknown as { ok: boolean }).ok) {
-          closeTab(file.id)
+          closeTab(file)
 
           file.parent?.removeFile(file)
 
@@ -107,14 +110,14 @@ export default function File({
     <span
       className={clsx(
         'whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex rounded-md',
-        'hover:bg-neutral-100 dark:hover:bg-dark-lighter  ',
+        'hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         file.is_supported &&
           'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
-        tabs.has(file.id)
+        tabs.has(file)
           ? 'text-brand-500'
           : 'text-neutral-500 dark:text-neutral-100',
-        file === tab.file && 'bg-neutral-100 dark:bg-dark-lighter',
+        file === selectedFile && 'bg-neutral-100 dark:bg-dark-lighter',
       )}
     >
       <span
@@ -125,8 +128,8 @@ export default function File({
         <div className="flex items-center">
           <DocumentIcon
             className={clsx(
-              `inline-block ${CSS_ICON_SIZE} mr-2`,
-              file === tab.file
+              `inline-block w-4 h-4 mr-2`,
+              file === selectedFile
                 ? 'text-brand-500'
                 : 'text-neutral-500 dark:text-neutral-100',
             )}
@@ -134,62 +137,111 @@ export default function File({
         </div>
         {isStringEmptyOrNil(newName) ? (
           <>
-            <span
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
-
-                file.is_supported && file !== tab.file && selectFile(file)
-              }}
-              onDoubleClick={(e: MouseEvent) => {
-                e.stopPropagation()
-
-                setNewName(file.name)
-              }}
-              className={clsx(
-                'w-full overflow-hidden overflow-ellipsis cursor-default',
-                !file.is_supported && 'opacity-50 cursor-not-allowed',
-              )}
-            >
-              {file.name}
-            </span>
-            <span
-              className="flex items-center invisible group-hover/file:visible min-w-8"
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
-
-                removeWithConfirmation()
-              }}
-            >
-              <XCircleIcon
-                className={`inline-block ${CSS_ICON_SIZE} ml-2 text-danger-500 cursor-pointer`}
-              />
-            </span>
+            <FileName
+              file={file}
+              setNewName={setNewName}
+            />
+            <FileActions removeWithConfirmation={removeWithConfirmation} />
           </>
         ) : (
-          <div className="w-full flex items-center">
-            <input
-              type="text"
-              className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
-              value={newName === '' ? file.name : newName}
-              onInput={(e: any) => {
-                e.stopPropagation()
-
-                setNewName(e.target.value)
-              }}
-            />
-            <div className="flex">
-              <CheckCircleIcon
-                className={`inline-block ${CSS_ICON_SIZE} ml-2 text-success-500 cursor-pointer`}
-                onClick={(e: MouseEvent) => {
-                  e.stopPropagation()
-
-                  rename()
-                }}
-              />
-            </div>
-          </div>
+          <FileRename
+            file={file}
+            newName={newName}
+            setNewName={setNewName}
+            rename={rename}
+          />
         )}
       </span>
+    </span>
+  )
+}
+
+function FileName({
+  file,
+  setNewName,
+}: {
+  file: ModelFile
+  setNewName: (name: string) => void
+}): JSX.Element {
+  const selectedFile = useStoreFileTree(s => s.selectedFile)
+  const selectFile = useStoreFileTree(s => s.selectFile)
+
+  return (
+    <span
+      onClick={(e: MouseEvent) => {
+        e.stopPropagation()
+
+        file.is_supported && file !== selectedFile && selectFile(file)
+      }}
+      onDoubleClick={(e: MouseEvent) => {
+        e.stopPropagation()
+
+        setNewName(file.name)
+      }}
+      className={clsx(
+        'w-full overflow-hidden overflow-ellipsis cursor-default',
+        !file.is_supported && 'opacity-50 cursor-not-allowed',
+      )}
+    >
+      {file.name}
+    </span>
+  )
+}
+
+function FileRename({
+  file,
+  newName,
+  setNewName,
+  rename,
+}: {
+  file: ModelFile
+  newName?: string
+  setNewName: (name: string) => void
+  rename: () => void
+}): JSX.Element {
+  return (
+    <div className="w-full flex items-center">
+      <input
+        type="text"
+        className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
+        value={newName === '' ? file.name : newName}
+        onInput={(e: any) => {
+          e.stopPropagation()
+
+          setNewName(e.target.value)
+        }}
+      />
+      <div className="flex">
+        <CheckCircleIcon
+          className={`inline-block w-4 h-4 ml-2 text-success-500 cursor-pointer`}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            rename()
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function FileActions({
+  removeWithConfirmation,
+}: {
+  removeWithConfirmation: () => void
+}): JSX.Element {
+  return (
+    <span
+      className="flex items-center invisible group-hover/file:visible min-w-8"
+      onClick={(e: MouseEvent) => {
+        e.stopPropagation()
+
+        removeWithConfirmation()
+      }}
+    >
+      <XCircleIcon
+        className={`inline-block w-4 h-4 ml-2 text-danger-500 cursor-pointer`}
+      />
     </span>
   )
 }

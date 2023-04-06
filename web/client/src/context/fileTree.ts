@@ -8,8 +8,8 @@ interface FileTreeStore {
   selectedFile?: ModelFile
   selectFile: (selectedFile: ModelFile) => void
   setFiles: (files: ModelFile[]) => void
-  refreshProject: () => void
   setProject: (project?: Directory) => void
+  refreshProject: () => void
 }
 
 export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
