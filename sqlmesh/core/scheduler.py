@@ -4,6 +4,7 @@ import logging
 import typing as t
 from datetime import datetime
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -138,25 +139,25 @@ class Scheduler:
 
     def run(
         self,
+        environment: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        is_dev: bool = False,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
         Args:
+            environment: The environment the user is targeting when applying their change.
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
-            is_dev: Indicates whether the evaluation happens in the development mode and temporary
-                tables / table clones should be used where applicable.
 
         Returns:
             True if the execution was successful and False otherwise.
         """
         validate_date_range(start, end)
 
+        is_dev = environment != c.PROD
         latest = latest or now()
         batches = self.batches(start, end, latest, is_dev=is_dev)
         dag = self._dag(batches)
@@ -167,7 +168,7 @@ class Scheduler:
                 continue
             visited.add(snapshot)
             intervals = batches[snapshot]
-            self.console.start_snapshot_progress(snapshot.name, len(intervals))
+            self.console.start_snapshot_progress(snapshot, len(intervals), environment)
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest

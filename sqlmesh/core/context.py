@@ -405,7 +405,8 @@ class Context(BaseContext):
             latest: The latest time used for non incremental datasets.
             skip_janitor: Whether to skip the jantitor task.
         """
-        self.scheduler(environment=environment or c.PROD).run(start, end, latest)
+        environment = environment or c.PROD
+        self.scheduler(environment=environment).run(environment, start, end, latest)
 
         if not skip_janitor:
             self._run_janitor()
