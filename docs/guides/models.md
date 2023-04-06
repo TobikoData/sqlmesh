@@ -91,9 +91,13 @@ Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the begi
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 
 Apply - Backfill Tables [y/n]: y
 
+sqlmesh_example__dev.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+
 All model batches have been executed successfully
 
-sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+The target environment has been updated successfully
 ```
 
 For more information, refer to [plans](../concepts/plans.md).
@@ -220,7 +224,7 @@ To delete a model:
 
         All model batches have been executed successfully
 
-        sqlmesh_example.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+        sqlmesh_example__dev.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
         ```
 
     **Note:** If you have other files that reference the model you wish to delete, an error message will note the file(s) containing the reference. You will need to also delete these files in order to apply the change.

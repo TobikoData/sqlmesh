@@ -399,13 +399,14 @@ class Context(BaseContext):
         """Run the entire dag through the scheduler.
 
         Args:
-            environment: The target environment to source model snapshots from. Default: prod.
+            environment: The target environment to source model snapshots from and virtually update. Default: prod.
             start: The start of the interval to render.
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
-            skip_janitor: Whether to skip the jantitor task.
+            skip_janitor: Whether to skip the janitor task.
         """
-        self.scheduler(environment=environment or c.PROD).run(start, end, latest)
+        environment = environment or c.PROD
+        self.scheduler(environment=environment).run(environment, start, end, latest)
 
         if not skip_janitor:
             self._run_janitor()
