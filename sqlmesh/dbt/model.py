@@ -77,7 +77,7 @@ class ModelConfig(BaseModelConfig):
     bind: t.Optional[bool] = None
 
     # Private fields
-    _sql_config: t.Optional[SqlStr] = None
+    _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
 
     @validator(
@@ -168,11 +168,11 @@ class ModelConfig(BaseModelConfig):
         return self._sql_no_config
 
     @property
-    def sql_config(self) -> SqlStr:
-        if self._sql_config is None:
-            self._sql_config = SqlStr("")
+    def sql_embedded_config(self) -> SqlStr:
+        if self._sql_embedded_config is None:
+            self._sql_embedded_config = SqlStr("")
             self._extract_sql_config()
-        return self._sql_config
+        return self._sql_embedded_config
 
     def _extract_sql_config(self) -> None:
         def jinja_end(sql: str, start: int) -> int:
@@ -196,8 +196,10 @@ class ModelConfig(BaseModelConfig):
             if start == -1:
                 continue
             extracted = self._sql_no_config[start : jinja_end(self._sql_no_config, start)]
-            self._sql_config = SqlStr(
-                "\n".join([self._sql_config, extracted]) if self._sql_config else extracted
+            self._sql_embedded_config = SqlStr(
+                "\n".join([self._sql_embedded_config, extracted])
+                if self._sql_embedded_config
+                else extracted
             )
             self._sql_no_config = SqlStr(self._sql_no_config.replace(extracted, "").strip())
 

@@ -142,19 +142,15 @@ class BaseModelConfig(GeneralConfig):
 
     @property
     def all_sql(self) -> SqlStr:
-        return SqlStr("\n".join([self.hook_sql, self.sql_no_config]))
+        return SqlStr("\n".join(self.pre_hook + [self.sql_no_config] + self.post_hook))
 
     @property
     def sql_no_config(self) -> SqlStr:
         return SqlStr("")
 
     @property
-    def sql_config(self) -> SqlStr:
+    def sql_embedded_config(self) -> SqlStr:
         return SqlStr("")
-
-    @property
-    def hook_sql(self) -> SqlStr:
-        return SqlStr("\n".join(self.pre_hook + self.post_hook))
 
     @property
     def table_schema(self) -> str:
@@ -352,7 +348,9 @@ class ModelSqlRenderer(t.Generic[BMC]):
 
             return self.jinja_env.from_string(nodes.Template([nodes.Output([node])])).render()
 
-        for call in self.jinja_env.parse(self._enriched_config.sql_config).find_all(nodes.Call):
+        for call in self.jinja_env.parse(self._enriched_config.sql_embedded_config).find_all(
+            nodes.Call
+        ):
             if not isinstance(call.node, nodes.Name) or call.node.name != "config":
                 continue
             config = config.update_with(
