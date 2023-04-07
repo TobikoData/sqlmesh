@@ -76,6 +76,10 @@ class ModelConfig(BaseModelConfig):
     # redshift
     bind: t.Optional[bool] = None
 
+    # Private fields
+    _sql_embedded_config: t.Optional[SqlStr] = None
+    _sql_no_config: t.Optional[SqlStr] = None
+
     @validator(
         "unique_key",
         "cluster_by",
@@ -157,26 +161,47 @@ class ModelConfig(BaseModelConfig):
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
-    def sql_no_config(self) -> str:
-        matches = re.findall(r"{{\s*config\(", self.sql)
-        if matches:
-            config_macro_start = self.sql.index(matches[0])
-            cursor = config_macro_start
-            quote = None
-            while cursor < len(self.sql):
-                if self.sql[cursor] in ('"', "'"):
-                    if quote is None:
-                        quote = self.sql[cursor]
-                    elif quote == self.sql[cursor]:
-                        quote = None
-                if self.sql[cursor : cursor + 2] == "}}" and quote is None:
-                    return "".join([self.sql[:config_macro_start], self.sql[cursor + 2 :]])
-                cursor += 1
-        return self.sql
+    def sql_no_config(self) -> SqlStr:
+        if self._sql_no_config is None:
+            self._sql_no_config = SqlStr("")
+            self._extract_sql_config()
+        return self._sql_no_config
 
     @property
-    def all_sql(self) -> SqlStr:
-        return SqlStr(";\n".join(self.pre_hook + [self.sql] + self.post_hook))
+    def sql_embedded_config(self) -> SqlStr:
+        if self._sql_embedded_config is None:
+            self._sql_embedded_config = SqlStr("")
+            self._extract_sql_config()
+        return self._sql_embedded_config
+
+    def _extract_sql_config(self) -> None:
+        def jinja_end(sql: str, start: int) -> int:
+            cursor = start
+            quote = None
+            while cursor < len(sql):
+                if sql[cursor] in ('"', "'"):
+                    if quote is None:
+                        quote = sql[cursor]
+                    elif quote == sql[cursor]:
+                        quote = None
+                if sql[cursor : cursor + 2] == "}}" and quote is None:
+                    return cursor + 2
+                cursor += 1
+            return cursor
+
+        self._sql_no_config = self.sql
+        matches = re.findall(r"{{\s*config\s*\(", self._sql_no_config)
+        for match in matches:
+            start = self._sql_no_config.find(match)
+            if start == -1:
+                continue
+            extracted = self._sql_no_config[start : jinja_end(self._sql_no_config, start)]
+            self._sql_embedded_config = SqlStr(
+                "\n".join([self._sql_embedded_config, extracted])
+                if self._sql_embedded_config
+                else extracted
+            )
+            self._sql_no_config = SqlStr(self._sql_no_config.replace(extracted, "").strip())
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""

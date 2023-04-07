@@ -190,6 +190,7 @@ class DbtConfig(PydanticModel):
     class Config:
         extra = "allow"
         allow_mutation = True
+        validate_assignment = True
 
 
 class GeneralConfig(DbtConfig, BaseConfig):
@@ -285,7 +286,9 @@ class GeneralConfig(DbtConfig, BaseConfig):
 
         rendered = self.copy(deep=True)
         for name in rendered.__fields__:
-            setattr(rendered, name, render_value(getattr(rendered, name)))
+            value = getattr(rendered, name)
+            if value is not None:
+                setattr(rendered, name, render_value(value))
 
         return rendered
 
