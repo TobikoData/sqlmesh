@@ -343,7 +343,6 @@ def test_alter_table(
 
     cursor_mock.begin.assert_called_once()
     cursor_mock.commit.assert_called_once()
-    print(cursor_mock.execute.call_args_list)
     cursor_mock.execute.assert_has_calls([call(x) for x in expected])
 
 

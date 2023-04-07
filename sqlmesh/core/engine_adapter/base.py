@@ -295,6 +295,13 @@ class EngineAdapter:
         table_name: TableName,
         operations: t.List[SchemaDelta],
     ) -> None:
+        """
+        Performs the series of alter table operations on the table sequentially. The expectation is that the
+        operations are in the correct order to be applied to the table. Currently operations are not batched
+        to avoid potential issues with one operation referring to the position of another operation. If performance
+        is a concern we can research if these can be safely batched and then batch up adds/drops together.
+        """
+
         def get_add_statement(operation: SchemaDelta) -> exp.AlterTable:
             if not self.SCHEMA_DIFF_CONFIG.support_struct_add and operation.parents.has_columns:
                 raise SQLMeshError(
@@ -306,8 +313,8 @@ class EngineAdapter:
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
             column = operation.column_def(self.SCHEMA_DIFF_CONFIG.array_suffix)
             if self.SCHEMA_DIFF_CONFIG.support_positional_add:
-                assert operation.add_position is not None
-                column.set("position", operation.add_position.sqlglot_col_position)
+                assert operation.add_position
+                column.set("position", operation.add_position.col_position_node)
             alter_table.set("actions", [column])
             return alter_table
 
@@ -337,7 +344,7 @@ class EngineAdapter:
             elif operation.is_drop:
                 statements.append(get_drop_statement(operation))
             elif operation.is_alter_type:
-                assert operation.current_type is not None
+                assert operation.current_type
                 if self.SCHEMA_DIFF_CONFIG.is_compatible_type(
                     operation.current_type, operation.column_type
                 ):
@@ -434,8 +441,8 @@ class EngineAdapter:
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
-            t[0]: exp.DataType.build(t[1], dialect=self.dialect)
-            for t in itertools.takewhile(
+            column_name: exp.DataType.build(column_type, dialect=self.dialect)
+            for column_name, column_type, *_ in itertools.takewhile(
                 lambda t: not t[0].startswith("#"),
                 describe_output,
             )

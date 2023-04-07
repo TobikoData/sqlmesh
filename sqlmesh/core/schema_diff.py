@@ -60,10 +60,10 @@ class ParentColumns(PydanticModel):
     def sql(self, array_suffix: t.Optional[str] = None) -> str:
         return ".".join(
             [
-                c[0]
-                if c[1].this != exp.DataType.Type.ARRAY
-                else f"{c[0]}{array_suffix if array_suffix else ''}"
-                for c in self.columns
+                column_name
+                if not column_type.is_type(exp.DataType.Type.ARRAY)
+                else f"{column_name}{array_suffix if array_suffix else ''}"
+                for column_name, column_type in self.columns
             ]
         )
 
@@ -101,7 +101,7 @@ class ColumnPosition(PydanticModel):
         return cls(is_first=is_first, is_last=is_last, after=after)
 
     @property
-    def sqlglot_col_position(self) -> t.Optional[exp.ColumnPosition]:
+    def col_position_node(self) -> t.Optional[exp.ColumnPosition]:
         column = exp.column(self.after) if self.after and not self.is_last else None
         position = None
         if self.is_first:
@@ -271,7 +271,7 @@ def struct_diff(
     operations = []
     # Resolve all drop columns
     pop_offset = 0
-    for current_pos, current_kwarg in enumerate(current_struct.expressions[:]):
+    for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
         new_pos, _ = get_matching_kwarg(current_kwarg, new_struct, current_pos)
         if new_pos is None:
             operations.append(
