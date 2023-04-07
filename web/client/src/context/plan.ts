@@ -34,6 +34,7 @@ export type PlanAction = KeyOf<typeof EnumPlanAction>
 export interface PlanTaskStatus {
   total: number
   completed: number
+  view_name: string
   start?: number
   end?: number
   interval?: [string, string]
