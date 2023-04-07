@@ -85,7 +85,7 @@ export async function getNodesAndEdges({
   const layout = await elk.layout(graph)
   const nodes: GraphNode[] = []
 
-  layout.children?.forEach((node, idx: number) => {
+  layout.children?.forEach(node => {
     const output = nodesMap[node.id]
 
     if (output == null) return
@@ -99,8 +99,8 @@ export async function getNodesAndEdges({
     }
 
     output.position = {
-      x: node.x == null ? 0 : -node.x,
-      y: node.y == null ? 0 : -node.y,
+      x: node.x == null ? 0 : -node.x * 2,
+      y: node.y == null ? 0 : -node.y * 1.5,
     }
 
     nodes.push(output)
