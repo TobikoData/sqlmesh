@@ -51,6 +51,7 @@ export default function PlanWizard({
     removed,
     virtualUpdateDescription,
     skip_backfill,
+    skip_tests,
     change_categorization,
     hasVirtualUpdate,
   } = usePlan()
@@ -186,7 +187,9 @@ export default function PlanWizard({
                 Running Tests ...
               </PlanWizardStepMessage>
             ) : testsReport == null ? (
-              <PlanWizardStepMessage>No Tests</PlanWizardStepMessage>
+              <PlanWizardStepMessage>
+                {skip_tests ? 'Tests Skipped' : 'No Tests'}
+              </PlanWizardStepMessage>
             ) : (
               <Banner
                 variant={
