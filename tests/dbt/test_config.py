@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
@@ -130,6 +129,7 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
 
 
 def test_model_config_sql_no_config():
+    context = DbtContext()
     assert (
         ModelConfig(
             sql="""{{
@@ -139,28 +139,35 @@ def test_model_config_sql_no_config():
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "query"
     )
 
+    context.variables = {"new": "old"}
     assert (
         ModelConfig(
             sql="""{{
   config(
-    materialized='"table"',
+    materialized='table',
     incremental_strategy='delete+insert',
-    post_hook=" '{{ macro_call(this) }}' "
+    post_hook=" '{{ var('new') }}' "
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "query"
     )
 
     assert (
         ModelConfig(
-            sql="""before {{config(materialized='table', post_hook=" {{ macro_call(this) }} ")}} after"""
-        ).sql_no_config
+            sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "before  after"
     )
 
@@ -168,35 +175,36 @@ query"""
 def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
-    model_variables = {"foo"}
-
-    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
-    model_config._dependencies = Dependencies(variables=model_variables)
 
     context = sushi_test_project.context
     context.variables = defined_variables
 
+    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
+
     kwargs = {"context": context}
 
     with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
-        model_config = model_config.render_config(context)
+        rendered = model_config.render_config(context)
         model_config.to_sqlmesh(**kwargs)
 
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
     context.variables = defined_variables
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
     context.variables = defined_variables
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {

@@ -212,6 +212,32 @@ def test_config_containing_jinja():
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
 
 
+def test_config_containing_missing_dependency():
+    context = DbtContext()
+    model = ModelConfig(sql="{{ config(pre_hook=\"{{ print(ref('bar')) }}\") }} SELECT 1 FROM a")
+    with pytest.raises(ConfigError, match="'bar' was not found"):
+        model.render_config(context)
+
+    model = ModelConfig(sql='{{ config(pre_hook="{{ get_table_name() }}") }} SELECT 1 FROM a')
+    with pytest.raises(ConfigError, match="get_table_name"):
+        model.render_config(context)
+
+    model = ModelConfig(sql="{{ config(alias='{{ get_table_name() }}') }} SELECT 1 FROM a")
+    rendered = model.render_config(context)
+    assert rendered.alias == "{{ get_table_name() }}"
+    assert "get_table_name" not in [macro.name for macro in rendered._dependencies.macros]
+
+
+def test_config_containing_method():
+    context = DbtContext()
+    context.jinja_macros.global_objs.update({"get_table_name": lambda: "foo"})
+    model = ModelConfig(sql="{{ config(alias=get_table_name()) }} SELECT 1 FROM a")
+
+    rendered = model.render_config(context)
+    assert rendered.alias == "foo"
+    assert "get_table_name" not in [macro.name for macro in rendered._dependencies.macros]
+
+
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
 def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     waiters = sushi_test_dbt_context.models[model]

@@ -123,4 +123,9 @@ class BaseConfig(PydanticModel):
             else:
                 updated_fields[field] = getattr(other, field)
 
-        return self.copy(update=updated_fields)
+        # Assign each field to trigger assignment validators
+        updated = self.copy()
+        for field, value in updated_fields.items():
+            setattr(updated, field, value)
+
+        return updated
