@@ -21,6 +21,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import ModalSidebar from '../modal/ModalDrawer'
 import Editor from '../editor/Editor'
 import FileTree from '../fileTree/FileTree'
+import { type Models } from '@api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
 
@@ -62,6 +63,7 @@ export function IDE(): JSX.Element {
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
+    const unsubscribeModels = subscribe('models', updateModels)
 
     void debouncedGetEnvironemnts()
     void debouncedGetFiles()
@@ -77,6 +79,7 @@ export function IDE(): JSX.Element {
       apiCancelGetEnvironments(client)
 
       unsubscribeTasks?.()
+      unsubscribeModels?.()
     }
   }, [])
 
@@ -100,6 +103,11 @@ export function IDE(): JSX.Element {
 
   function closeModal(): void {
     setIsClosingModal(true)
+  }
+
+  function updateModels(data?: Models): void {
+    console.log('updateModels', data)
+    setModels(data?.models)
   }
 
   return (
