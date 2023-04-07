@@ -1,4 +1,4 @@
-import ELK from 'elkjs/lib/elk-api'
+import ELK from 'elkjs/lib/elk.bundled.js'
 import { MarkerType } from 'reactflow'
 import { isArrayNotEmpty } from '../../../utils'
 
@@ -48,9 +48,7 @@ interface GraphOptions {
   algorithm?: string
 }
 
-const elk = new ELK({
-  workerUrl: '/node_modules/elkjs/lib/elk-worker.min.js',
-})
+const elk = new ELK()
 
 const ALGORITHM_LAYERED = 'layered'
 
@@ -87,7 +85,7 @@ export async function getNodesAndEdges({
   const layout = await elk.layout(graph)
   const nodes: GraphNode[] = []
 
-  layout.children?.forEach((node, idx: number) => {
+  layout.children?.forEach(node => {
     const output = nodesMap[node.id]
 
     if (output == null) return
@@ -101,8 +99,8 @@ export async function getNodesAndEdges({
     }
 
     output.position = {
-      x: node.x == null ? 0 : -node.x,
-      y: node.y == null ? 0 : -node.y,
+      x: node.x == null ? 0 : -node.x * 2,
+      y: node.y == null ? 0 : -node.y * 1.5,
     }
 
     nodes.push(output)
