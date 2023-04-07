@@ -1,4 +1,4 @@
-import ELK from 'elkjs/lib/elk-api'
+import ELK from 'elkjs/lib/elk.bundled.js'
 import { MarkerType } from 'reactflow'
 import { isArrayNotEmpty } from '../../../utils'
 
@@ -48,9 +48,7 @@ interface GraphOptions {
   algorithm?: string
 }
 
-const elk = new ELK({
-  workerUrl: '/node_modules/elkjs/lib/elk-worker.min.js',
-})
+const elk = new ELK()
 
 const ALGORITHM_LAYERED = 'layered'
 
