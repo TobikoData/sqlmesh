@@ -99,6 +99,7 @@ export default function PlanWizard({
           completed: 0,
           total: task.batches,
           interval: taskInterval,
+          view_name: task.view_name,
         }
         const choices = categories[taskModelName]
 

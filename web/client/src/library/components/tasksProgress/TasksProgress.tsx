@@ -148,7 +148,7 @@ export default function TasksProgress({
                           'text-prose',
                       )}
                     >
-                      {model_name}
+                      {task.view_name}
                     </span>
                   </span>
                   <span className="flex items-center">

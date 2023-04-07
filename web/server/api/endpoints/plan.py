@@ -75,6 +75,11 @@ async def run_plan(
         payload.backfills = [
             models.ContextEnvironmentBackfill(
                 model_name=interval.snapshot_name,
+                view_name=plan.context_diff.snapshots[
+                    interval.snapshot_name
+                ].qualified_view_name.for_environment(plan.environment.name)
+                if interval.snapshot_name in plan.context_diff.snapshots
+                else interval.snapshot_name,
                 interval=[
                     [to_ds(t) for t in make_inclusive(start, end)]
                     for start, end in interval.merged_intervals
