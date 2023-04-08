@@ -26,7 +26,7 @@ make docs-serve
 ```
 Run ide:
 ```bash
-make web-serve
+make ui-up
 ```
 (Optional) Use pre-commit to automatically run linters/formatters:
 ```bash
