@@ -60,7 +60,7 @@ jobs:
   ide-build:
     docker:
       - image: cimg/node:19.8
-    resource_class: small
+    resource_class: medium
     steps:
       - checkout
       - attach_workspace:
