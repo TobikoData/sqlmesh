@@ -352,17 +352,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        query = exp.select("*").from_(self.versions_table)
-
-        if lock_for_update:
-            query.lock(copy=False)
-
-        try:
-            row = self.engine_adapter.fetchdf(query).iloc[0].to_dict()
-        except Exception:
+        if not self.engine_adapter.table_exists(self.versions_table):
             return Versions(schema_version=0, sqlglot_version="0.0.0")
 
-        return Versions.parse_obj(row)
+        query = exp.select("*").from_(self.versions_table)
+        if lock_for_update:
+            query.lock(copy=False)
+        row = self.engine_adapter.fetchone(query)
+        return Versions(schema_version=row[0], sqlglot_version=row[1])
 
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
