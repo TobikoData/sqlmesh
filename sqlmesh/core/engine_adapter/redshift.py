@@ -117,8 +117,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, EngineAdapter):
         if not isinstance(query_or_df, pd.DataFrame):
             with self.transaction():
                 self.drop_table(table_name, exists=True)
-                self.ctas(table_name, query_or_df, columns_to_types)
-                return
+                return self.ctas(table_name, query_or_df, columns_to_types)
         if not columns_to_types:
             raise ValueError("columns_to_types must be provided for dataframes")
         target_table = exp.to_table(table_name)

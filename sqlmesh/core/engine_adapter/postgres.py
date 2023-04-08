@@ -40,12 +40,11 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter, EngineAdapterWithIndexSup
         block reads until the insert is done. I'm not certain about this though.
         """
         if not self.table_exists(table_name):
-            self.ctas(table_name, query_or_df, columns_to_types, exists=False)
-            return
+            return self.ctas(table_name, query_or_df, columns_to_types, exists=False)
         with self.transaction(TransactionType.DDL):
             sql = f"TRUNCATE {exp.to_table(table_name).sql(identify=True, dialect=self.dialect)}"
             self.execute(sql)
-            self.insert_append(table_name, query_or_df, columns_to_types)
+            return self.insert_append(table_name, query_or_df, columns_to_types)
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a Pandas DataFrame from a SQL query."""
