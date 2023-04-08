@@ -60,6 +60,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    SUPPORTS_INDEXES = False
     SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
@@ -110,27 +111,10 @@ class EngineAdapter:
         if isinstance(query_or_df, pd.DataFrame):
             if not columns_to_types:
                 raise ValueError("columns_to_types must be provided for dataframes")
-            expression = next(
-                self._pandas_to_sql(
-                    query_or_df,
-                    alias=table.alias_or_name,
-                    columns_to_types=columns_to_types,
-                )
-            )
-            create = exp.Create(
-                this=table,
-                kind="TABLE",
-                replace=True,
-                expression=expression,
-            )
+            return self._create_table_from_df(table, query_or_df, columns_to_types, replace=True)
         else:
-            create = exp.Create(
-                this=table,
-                kind="TABLE",
-                replace=True,
-                expression=query_or_df,
-            )
-        self.execute(create)
+            query_or_df = t.cast(Query, query_or_df)
+            return self._create_table_from_query(table, query_or_df, replace=True)
 
     def create_index(
         self,
@@ -139,7 +123,7 @@ class EngineAdapter:
         columns: t.Tuple[str, ...],
         exists: bool = True,
     ) -> None:
-        """Creates a new index for the given table.
+        """Creates a new index for the given table if supported
 
         Args:
             table_name: The name of the target table.
@@ -147,36 +131,65 @@ class EngineAdapter:
             columns: The list of columns that constitute the index.
             exists: Indicates whether to include the IF NOT EXISTS check.
         """
+        if not self.SUPPORTS_INDEXES:
+            return
+        expression = exp.Create(
+            this=exp.Index(
+                this=exp.to_identifier(index_name),
+                table=exp.to_table(table_name),
+                columns=exp.Tuple(
+                    expressions=[exp.to_column(c) for c in columns],
+                ),
+            ),
+            kind="INDEX",
+            exists=exists,
+        )
+        self.execute(expression)
 
     def create_table(
         self,
         table_name: TableName,
-        query_or_columns_to_types: Query | t.Dict[str, exp.DataType],
+        columns_to_types: t.Dict[str, exp.DataType],
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         **kwargs: t.Any,
     ) -> None:
-        """Create a table using a DDL statement or a CTAS.
-
-        If a query is passed in instead of column type map, CREATE TABLE AS will be used.
+        """Create a table using a DDL statement
 
         Args:
             table_name: The name of the table to create. Can be fully qualified or just table name.
-            query_or_columns_to_types: A query or mapping between the column name and its data type.
+            columns_to_types: A mapping between the column name and its data type.
             primary_key: Determines the table primary key.
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        if isinstance(query_or_columns_to_types, dict):
-            expression = self._create_table_from_columns(
-                table_name, query_or_columns_to_types, primary_key, exists, **kwargs
-            )
+        self._create_table_from_columns(table_name, columns_to_types, primary_key, exists, **kwargs)
+
+    def ctas(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        exists: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        """Create a table using a CTAS statement
+
+        Args:
+            table_name: The name of the table to create. Can be fully qualified or just table name.
+            query_or_df: The SQL query to run or a dataframe for the CTAS.
+            columns_to_types: A mapping between the column name and its data type. Required if using a DataFrame.
+            exists: Indicates whether to include the IF NOT EXISTS check.
+            kwargs: Optional create table properties.
+        """
+        if isinstance(query_or_df, QUERY_TYPES):
+            query_or_df = t.cast(Query, query_or_df)
+            self._create_table_from_query(table_name, query_or_df, exists, **kwargs)
         else:
-            expression = self._create_table_from_query(
-                table_name, query_or_columns_to_types, exists, **kwargs
-            )
-        if expression is not None:
-            self.execute(expression)
+            if not columns_to_types:
+                raise SQLMeshError("Must provide a column type map to do a CTAS with a DataFrame.")
+            query_or_df = t.cast(pd.DataFrame, query_or_df)
+            self._create_table_from_df(table_name, query_or_df, columns_to_types, exists, **kwargs)
 
     def create_state_table(
         self,
@@ -204,7 +217,7 @@ class EngineAdapter:
         primary_key: t.Optional[t.Tuple[str, ...]] = None,
         exists: bool = True,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Create]:
+    ) -> None:
         """
         Create a table using a DDL statement.
 
@@ -214,48 +227,79 @@ class EngineAdapter:
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        properties = self._create_table_properties(**kwargs)
-        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
+        table = exp.to_table(table_name)
+        primary_key_expression = (
+            [exp.Anonymous(this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key])]
+            if primary_key and self.SUPPORTS_INDEXES
+            else []
+        )
         schema = exp.Schema(
-            this=schema,
+            this=table,
             expressions=[
                 exp.ColumnDef(this=exp.to_identifier(column), kind=kind)
                 for column, kind in columns_to_types.items()
-            ],
+            ]
+            + primary_key_expression,
         )
-        return exp.Create(
-            this=schema,
-            kind="TABLE",
-            exists=exists,
-            properties=properties,
-            expression=None,
-        )
+        self._create_table(schema, None, exists=exists, **kwargs)
 
     def _create_table_from_query(
         self,
         table_name: TableName,
         query: Query,
         exists: bool = True,
+        replace: bool = False,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Create]:
-        """
-        Create a table using a DDL statement.
+    ) -> None:
+        table = exp.to_table(table_name)
+        self._create_table(table, query, exists=exists, replace=replace, **kwargs)
 
-        Args:
-            table_name: The name of the table to create. Can be fully qualified or just table name.
-            query: The query to use for creating the table
-            exists: Indicates whether to include the IF NOT EXISTS check.
-            kwargs: Optional create table properties.
-        """
-        properties = self._create_table_properties(**kwargs)
-        schema: t.Optional[exp.Schema | exp.Table] = exp.to_table(table_name)
-        return exp.Create(
-            this=schema,
-            kind="TABLE",
-            exists=exists,
-            properties=properties,
-            expression=query,
+    def _create_table_from_df(
+        self,
+        table_name: TableName,
+        df: DF,
+        columns_to_types: t.Dict[str, exp.DataType],
+        exists: bool = True,
+        replace: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        table = exp.to_table(table_name)
+        if not columns_to_types:
+            raise ValueError("columns_to_types must be provided for dataframes")
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("df must be a pandas DataFrame")
+        expression = next(
+            self._pandas_to_sql(
+                df,
+                alias=table.alias_or_name,
+                columns_to_types=columns_to_types,
+            )
         )
+        self._create_table(table_name, expression, exists=exists, replace=replace, **kwargs)
+
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        properties: t.Optional[exp.Properties] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        exists = False if replace else exists
+        if not isinstance(table_name_or_schema, exp.Schema):
+            table_name_or_schema = exp.to_table(table_name_or_schema)
+        if not properties and kwargs:
+            properties = self._create_table_properties(**kwargs)
+        create = exp.Create(
+            this=table_name_or_schema,
+            kind="TABLE",
+            replace=replace,
+            exists=exists,
+            expression=expression,
+            properties=properties,
+        )
+        self.execute(create)
 
     def create_table_like(
         self,
@@ -280,14 +324,14 @@ class EngineAdapter:
         )
         self.execute(create_expression)
 
-    def drop_table(self, table_name: str, exists: bool = True) -> None:
+    def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.
 
         Args:
             table_name: The name of the table to drop.
             exists: If exists, defaults to True.
         """
-        drop_expression = exp.Drop(this=table_name, kind="TABLE", exists=exists)
+        drop_expression = exp.Drop(this=exp.to_table(table_name), kind="TABLE", exists=exists)
         self.execute(drop_expression)
 
     def alter_table(
@@ -751,43 +795,4 @@ class EngineAdapter:
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
-    def create_index(
-        self,
-        table_name: TableName,
-        index_name: str,
-        columns: t.Tuple[str, ...],
-        exists: bool = True,
-    ) -> None:
-        expression = exp.Create(
-            this=exp.Index(
-                this=exp.to_identifier(index_name),
-                table=exp.to_table(table_name),
-                columns=exp.Tuple(
-                    expressions=[exp.to_column(c) for c in columns],
-                ),
-            ),
-            kind="INDEX",
-            exists=exists,
-        )
-        self.execute(expression)
-
-    def _create_table_from_columns(
-        self,
-        table_name: TableName,
-        columns_to_types: t.Dict[str, exp.DataType],
-        primary_key: t.Optional[t.Tuple[str, ...]] = None,
-        exists: bool = True,
-        **kwargs: t.Any,
-    ) -> t.Optional[exp.Create]:
-        expression = super()._create_table_from_columns(
-            table_name, columns_to_types, primary_key, exists, **kwargs
-        )
-        if expression is None or primary_key is None:
-            return expression
-
-        schema = expression.this
-        schema.append(
-            "expressions",
-            exp.Anonymous(this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key]),
-        )
-        return expression
+    SUPPORTS_INDEXES = True

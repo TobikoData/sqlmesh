@@ -516,15 +516,56 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class PostgresConnectionConfig(_ConnectionConfig):
+    host: str
+    user: str
+    password: str
+    port: int
+    database: str
+    keepalives_idle: int = 0
+    connect_timeout: int = 10
+    role: t.Optional[str] = None
+    sslmode: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+
+    type_: Literal["postgres"] = Field(alias="type", default="postgres")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+            "keepalives_idle",
+            "connect_timeout",
+            "role",
+            "sslmode",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.PostgresEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from psycopg2 import connect
+
+        return connect
+
+
 ConnectionConfig = Annotated[
     t.Union[
-        DuckDBConnectionConfig,
-        SnowflakeConnectionConfig,
+        BigQueryConnectionConfig,
         DatabricksSQLConnectionConfig,
         DatabricksSparkSessionConnectionConfig,
         DatabricksConnectionConfig,
-        BigQueryConnectionConfig,
+        DuckDBConnectionConfig,
+        PostgresConnectionConfig,
         RedshiftConnectionConfig,
+        SnowflakeConnectionConfig,
     ],
     Field(discriminator="type_"),
 ]

@@ -127,7 +127,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_table.assert_called_once_with(
         snapshot.table_name(),
-        query_or_columns_to_types={"a": exp.DataType.build("int")},
+        columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=["a"],
         partition_interval_unit=IntervalUnit.DAY,

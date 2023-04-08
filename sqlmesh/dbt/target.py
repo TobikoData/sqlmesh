@@ -12,6 +12,7 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
+    PostgresConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
 )
@@ -181,8 +182,8 @@ class PostgresConfig(TargetConfig):
     dbname: str
     keepalives_idle: int = 0
     connect_timeout: int = 10
-    retries: int = 1
-    search_path: t.Optional[str] = None
+    retries: int = 1  # Currently Unsupported by SQLMesh
+    search_path: t.Optional[str] = None  # Currently Unsupported by SQLMesh
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
@@ -190,7 +191,18 @@ class PostgresConfig(TargetConfig):
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        raise ConfigError("PostgreSQL is not supported by SQLMesh yet.")
+        return PostgresConnectionConfig(
+            host=self.host,
+            user=self.user,
+            password=self.password,
+            port=self.port,
+            database=self.schema_,
+            keepalives_idle=self.keepalives_idle,
+            concurrent_tasks=self.threads,
+            connect_timeout=self.connect_timeout,
+            role=self.role,
+            sslmode=self.sslmode,
+        )
 
 
 class RedshiftConfig(TargetConfig):

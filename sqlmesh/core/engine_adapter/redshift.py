@@ -8,15 +8,15 @@ from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
-from sqlmesh.core.engine_adapter.postgres import PostgresBaseEngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
-class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
+class RedshiftEngineAdapter(BasePostgresEngineAdapter, EngineAdapter):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
 
@@ -68,8 +68,9 @@ class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
         table_name: TableName,
         query: Query,
         exists: bool = True,
+        replace: bool = False,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Create]:
+    ) -> None:
         """
         Redshift doesn't support `CREATE TABLE IF NOT EXISTS AS...` but does support `CREATE TABLE AS...` so
         we check if the exists check exists and if not then we can use the base implementation. Otherwise we
@@ -79,8 +80,8 @@ class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
         if not exists:
             return super()._create_table_from_query(table_name, query, exists, **kwargs)
         if self.table_exists(table_name):
-            return None
-        return self._create_table_from_query(table_name, query, exists=False, **kwargs)
+            return
+        super()._create_table_from_query(table_name, query, exists=False, **kwargs)
 
     @classmethod
     def _pandas_to_sql(
@@ -106,7 +107,7 @@ class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         """
-        Redshift doesn't support `CREATE OR REPLACE TABLE...` with `VALUES` expression so we need to specially
+        Redshift doesn't support `CREATE OR REPLACE TABLE...` and it also doesn't support `VALUES` expression so we need to specially
         handle DataFrame replacements.
 
         If the table doesn't exist then we just create it and load it with insert statements
@@ -114,7 +115,10 @@ class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
         if not isinstance(query_or_df, pd.DataFrame):
-            return super().replace_query(table_name, query_or_df, columns_to_types)
+            with self.transaction():
+                self.drop_table(table_name, exists=True)
+                self.ctas(table_name, query_or_df, columns_to_types)
+                return
         if not columns_to_types:
             raise ValueError("columns_to_types must be provided for dataframes")
         target_table = exp.to_table(table_name)
@@ -144,35 +148,3 @@ class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]
-
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
-        """
-        Returns all the data objects that exist in the given schema and optionally catalog.
-        """
-        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
-        query = f"""
-            SELECT
-                {catalog_name} AS catalog_name,
-                tablename AS name,
-                schemaname AS schema_name,
-                'TABLE' AS type
-            FROM pg_tables
-            WHERE schemaname ILIKE '{schema_name}'
-            UNION ALL
-            SELECT
-                {catalog_name} AS catalog_name,
-                viewname AS name,
-                schemaname AS schema_name,
-                'VIEW' AS type
-            FROM pg_views
-            WHERE schemaname ILIKE '{schema_name}'
-        """
-        df = self.fetchdf(query)
-        return [
-            DataObject(
-                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=row.type  # type: ignore
-            )
-            for row in df.itertuples()
-        ]
