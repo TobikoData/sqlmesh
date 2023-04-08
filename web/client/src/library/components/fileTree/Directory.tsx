@@ -52,7 +52,7 @@ export default function Directory({
   }, [])
 
   useEffect(() => {
-    if (isFalse(isOpen) && directory.hasFile(tab.file)) {
+    if (isFalse(isOpen) && tab != null && directory.hasFile(tab.file)) {
       directory.open()
     }
   }, [tab])
@@ -195,7 +195,7 @@ export default function Directory({
         setNewName(undefined)
         setIsLoading(false)
 
-        if (directory.hasFile(tab.file)) {
+        if (tab != null && directory.hasFile(tab.file)) {
           selectFile(tab.file)
         }
       })

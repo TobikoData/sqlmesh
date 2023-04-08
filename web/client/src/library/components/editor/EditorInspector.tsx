@@ -20,7 +20,7 @@ import { isFalse, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
-import { useStoreEditor } from '~/context/editor'
+import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { getTableDataFromArrowStreamResult } from './help'
 
 interface FormModel {
@@ -38,24 +38,29 @@ interface FormArbitrarySql {
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
 
-export default function EditorInspector(): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
-
+export default function EditorInspector({
+  tab,
+}: {
+  tab: EditorTab
+}): JSX.Element {
   return (
     <div
       className={clsx(
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel ? <InspectorModel /> : <InspectorSql />}
+      {tab.file.isSQLMeshModel ? (
+        <InspectorModel tab={tab} />
+      ) : (
+        <InspectorSql tab={tab} />
+      )}
     </div>
   )
 }
 
-function InspectorModel(): JSX.Element {
+function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
-  const tab = useStoreEditor(s => s.tab)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
@@ -225,8 +230,7 @@ function InspectorModel(): JSX.Element {
   )
 }
 
-function InspectorSql(): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
+function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)

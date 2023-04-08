@@ -7,7 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { isNil, isTrue } from '~/utils'
-import { useStoreEditor } from '~/context/editor'
+import { type EditorTab, useStoreEditor } from '~/context/editor'
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -22,9 +22,11 @@ const TABS: EditorPreviewTabs[] = [
   EnumEditorPreviewTabs.Console,
 ]
 
-export default function EditorPreview(): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
-
+export default function EditorPreview({
+  tab,
+}: {
+  tab: EditorTab
+}): JSX.Element {
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
@@ -114,7 +116,7 @@ export default function EditorPreview(): JSX.Element {
               >
                 {(tabName === EnumEditorPreviewTabs.Table ||
                   tabName === EnumEditorPreviewTabs.Query) &&
-                  tab.file.content !== previewQuery && (
+                  tab?.file.content !== previewQuery && (
                     <span
                       title="Outdated Data. Does not match editor query!"
                       className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-warning-500"
