@@ -101,24 +101,25 @@ export default function Editor(): JSX.Element {
   }
 
   return (
-    <SplitPane
-      sizes={sizesCodeEditorAndPreview}
-      direction="vertical"
-      minSize={0}
-      snapOffset={0}
-    >
-      <div className="flex flex-col overflow-hidden">
-        {isReadyEngine && (
-          <>
-            <EditorTabs />
-            <Divider />
-            {tab == null ? (
-              <div className="flex justify-center items-center w-full h-full">
-                <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
-                  <h2 className="text-3xl">Select File or Add New SQL Tab</h2>
-                </div>
-              </div>
-            ) : (
+    <div className="w-full h-full flex flex-col overflow-hidden">
+      <EditorTabs />
+      <Divider />
+      {tab == null ? (
+        <div className="flex justify-center items-center w-full h-full">
+          <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
+            <h2 className="text-3xl">Select File or Add New SQL Tab</h2>
+          </div>
+        </div>
+      ) : (
+        <SplitPane
+          className="h-full w-full"
+          sizes={sizesCodeEditorAndPreview}
+          direction="vertical"
+          minSize={0}
+          snapOffset={0}
+        >
+          <div className="flex flex-col overflow-hidden">
+            {isReadyEngine && (
               <>
                 <div className="flex flex-col h-full overflow-hidden">
                   <SplitPane
@@ -141,10 +142,12 @@ export default function Editor(): JSX.Element {
                 </div>
               </>
             )}
-          </>
-        )}
-      </div>
-      <div className="w-full">{tab != null && <EditorPreview tab={tab} />}</div>
-    </SplitPane>
+          </div>
+          <div className="w-full">
+            {tab != null && <EditorPreview tab={tab} />}
+          </div>
+        </SplitPane>
+      )}
+    </div>
   )
 }
