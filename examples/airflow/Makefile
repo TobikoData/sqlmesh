@@ -14,6 +14,9 @@ decorate-docker-compose: install-requirements download-docker-compose
 download-cli:
 	curl -LfO 'https://airflow.apache.org/docs/apache-airflow/$(AIRFLOW_VERSION)/airflow.sh' && chmod +x airflow.sh
 
+package-sqlmesh:
+	make -C ../../ package
+
 init-folders:
 	mkdir -p ./dags ./logs ./plugins ./warehouse
 
@@ -32,7 +35,7 @@ provision-metastore-tables: build-airflow-image decorate-docker-compose create-m
 init-airflow: decorate-docker-compose
 	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up airflow-init
 
-init: decorate-docker-compose download-cli init-folders build-airflow-image init-airflow provision-metastore-tables
+init: decorate-docker-compose download-cli package-sqlmesh init-folders build-airflow-image init-airflow provision-metastore-tables
 
 run: build-airflow-image
 	export AIRFLOW_IMAGE_NAME=$(AIRFLOW_IMAGE_NAME) AIRFLOW_UID=$(AIRFLOW_UID) && docker-compose up -d
