@@ -11,6 +11,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
+from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -217,7 +218,8 @@ def test_render(sushi_context, assert_exp_eq):
 def test_diff(sushi_context: Context, mocker: MockerFixture):
     mock_console = mocker.Mock()
     sushi_context.console = mock_console
-    sushi_context.run(start="2022-01-01", end="2022-01-01", latest="2022-01-01")
+    yesterday = yesterday_ds()
+    sushi_context.run(start=yesterday, end=yesterday, latest=yesterday)
 
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator
@@ -324,8 +326,8 @@ def test():
 def test_plan_apply(sushi_context) -> None:
     plan = sushi_context.plan(
         "dev",
-        start="2022-01-01",
-        end="2022-01-01",
+        start=yesterday_ds(),
+        end=yesterday_ds(),
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")

@@ -17,7 +17,7 @@ WAITERS = list(range(0, 10))
     "sushi.orders",
     description="Table of sushi orders.",
     kind=IncrementalByTimeRangeKind(time_column="ds"),
-    start="2022-01-01",
+    start="3 months ago",
     cron="@daily",
     batch_size=30,
     columns={
