@@ -89,6 +89,16 @@ def get_snapshots() -> Response:
         return _success(common.SnapshotsResponse(snapshots=snapshots))
 
 
+@sqlmesh_api_v1.get("/versions")
+@csrf.exempt
+@check_authentication
+def get_versions() -> Response:
+    with util.scoped_state_sync() as state_sync:
+        versions = state_sync.get_versions()
+        assert versions
+    return _success(versions)
+
+
 T = t.TypeVar("T", bound=PydanticModel)
 
 

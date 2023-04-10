@@ -322,7 +322,9 @@ class Context(BaseContext):
                 raise ConfigError(
                     "The operation is not supported when using a read-only state sync"
                 )
-            self._state_sync.init_schema()
+
+            if self._state_sync.get_versions(validate=False).schema_version == 0:
+                self._state_sync.migrate()
         return self._state_sync
 
     @property
@@ -806,6 +808,13 @@ class Context(BaseContext):
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
         self.console.log_status_update("Done.")
+
+    def migrate(self) -> None:
+        """Migrates SQLMesh to the current running version.
+
+        Please contact your SQLMesh administrator before doing this.
+        """
+        self.state_sync.migrate()
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""

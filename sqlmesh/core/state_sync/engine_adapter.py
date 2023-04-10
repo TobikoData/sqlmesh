@@ -20,6 +20,7 @@ import json
 import logging
 import typing as t
 
+from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
 from sqlmesh.core.dialect import select_from_values
@@ -31,7 +32,7 @@ from sqlmesh.core.snapshot import (
     SnapshotIdLike,
     SnapshotNameVersionLike,
 )
-from sqlmesh.core.state_sync.base import StateSync
+from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -55,9 +56,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         engine_adapter: EngineAdapter,
         schema: str,
     ):
+        self.schema = schema
         self.engine_adapter = engine_adapter
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
+        self.versions_table = f"{schema}._versions"
 
     @property
     def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
@@ -80,26 +83,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "expiration_ts": exp.DataType.build("bigint"),
         }
 
-    @transactional(transaction_type=TransactionType.DDL)
-    def init_schema(self) -> None:
-        """Creates the schema and table to store state."""
-        self.engine_adapter.create_schema(self.snapshots_table)
-
-        self.engine_adapter.create_state_table(
-            self.snapshots_table,
-            self.snapshot_columns_to_types,
-            primary_key=("name", "identifier"),
-        )
-
-        self.engine_adapter.create_index(
-            self.snapshots_table, "name_version_idx", ("name", "version")
-        )
-
-        self.engine_adapter.create_state_table(
-            self.environments_table,
-            self.environment_columns_to_types,
-            primary_key=("name",),
-        )
+    @property
+    def version_columns_to_types(self) -> t.Dict[str, exp.DataType]:
+        return {
+            "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+        }
 
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
@@ -154,6 +143,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             contains_json=True,
         )
 
+    def _update_versions(
+        self,
+        schema_version: int = SCHEMA_VERSION,
+        sqlglot_version: str = SQLGLOT_VERSION,
+    ) -> None:
+        self.engine_adapter.delete_from(self.versions_table, "TRUE")
+
+        self.engine_adapter.insert_append(
+            self.versions_table,
+            next(
+                select_from_values(
+                    [(schema_version, sqlglot_version)],
+                    columns_to_types=self.version_columns_to_types,
+                )
+            ),
+        )
+
     def delete_expired_environments(self) -> t.List[Environment]:
         now_ts = now_timestamp()
         filter_expr = exp.LTE(
@@ -196,7 +202,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Resets the state store to the state when it was first initialized."""
         self.engine_adapter.drop_table(self.snapshots_table)
         self.engine_adapter.drop_table(self.environments_table)
-        self.init_schema()
+        self.engine_adapter.drop_table(self.versions_table)
+        self.migrate()
 
     def _update_environment(self, environment: Environment) -> None:
         self.engine_adapter.delete_from(
@@ -271,6 +278,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
+        validate_versions: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
@@ -281,6 +289,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
+        if validate_versions:
+            self.get_versions()
+
         query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
@@ -340,6 +351,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
+    def _get_versions(self, lock_for_update: bool = False) -> Versions:
+        if not self.engine_adapter.table_exists(self.versions_table):
+            return Versions(schema_version=0, sqlglot_version="0.0.0")
+
+        query = exp.select("*").from_(self.versions_table)
+        if lock_for_update:
+            query.lock(copy=False)
+        row = self.engine_adapter.fetchone(query)
+        return Versions(schema_version=row[0], sqlglot_version=row[1])
+
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
     ) -> t.Optional[Environment]:
@@ -368,6 +389,93 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         env = self._environment_from_row(row)
         return env
+
+    @transactional()
+    def migrate(self) -> None:
+        super().migrate()
+
+    def _migrate_rows(self) -> None:
+        all_snapshots = self._get_snapshots(lock_for_update=True, validate_versions=False)
+        environments = self.get_environments()
+
+        snapshot_mapping = {}
+        cache: t.Dict[SnapshotId, t.Dict] = {}
+
+        for snapshot in all_snapshots.values():
+            seen = set()
+            queue = {snapshot.snapshot_id}
+            env: t.Dict[str, t.Dict] = {
+                "models": {},
+                "audits": {},
+            }
+
+            while queue:
+                snapshot_id = queue.pop()
+
+                if snapshot_id in seen:
+                    continue
+
+                seen.add(snapshot_id)
+
+                s = all_snapshots.get(snapshot_id)
+
+                if not s:
+                    continue
+
+                queue.update(s.parents)
+                cached_env = cache.get(snapshot_id)
+
+                if cached_env:
+                    env["models"].update(cached_env["models"])
+                    env["audits"].update(cached_env["audits"])
+                else:
+                    env["models"][s.name] = s.model
+
+                    for audit in s.audits:
+                        env["audits"][audit.name] = audit
+
+            cache[snapshot_id] = env
+
+            new_snapshot = Snapshot.from_model(
+                snapshot.model,
+                physical_schema=snapshot.physical_schema,
+                models=env["models"],
+                ttl=snapshot.ttl,
+                version=snapshot.version,
+                audits=env["audits"],
+            )
+
+            if new_snapshot == snapshot or new_snapshot in all_snapshots:
+                logger.debug(f"{snapshot.snapshot_id} is unchaged")
+                continue
+
+            new_snapshot.merge_intervals(snapshot)
+            snapshot_mapping[snapshot.snapshot_id] = new_snapshot
+            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}")
+
+        if not snapshot_mapping:
+            logger.debug("No changes to snapshots detected.")
+            return
+
+        self.delete_snapshots(snapshot_mapping)
+        self._push_snapshots(snapshot_mapping.values())
+
+        updated_environments = []
+
+        for environment in environments:
+            snapshots = [
+                snapshot_mapping[info.snapshot_id].table_info
+                if info.snapshot_id in snapshot_mapping
+                else info
+                for info in environment.snapshots
+            ]
+
+            if snapshots != environment.snapshots:
+                environment.snapshots = snapshots
+                updated_environments.append(environment)
+
+        for environment in environments:
+            self._update_environment(environment)
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]

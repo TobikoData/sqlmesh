@@ -8,7 +8,7 @@ from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.postgres import PostgresBaseEngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject
 
 if t.TYPE_CHECKING:
@@ -16,7 +16,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
-class RedshiftEngineAdapter(EngineAdapter):
+class RedshiftEngineAdapter(PostgresBaseEngineAdapter):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
 
@@ -144,32 +144,6 @@ class RedshiftEngineAdapter(EngineAdapter):
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]
-
-    def table_exists(self, table_name: TableName) -> bool:
-        """
-        Redshift doesn't support describe so I'm using what the redshift cursor does to check if a table
-        exists. We don't use this directly because we still want all execution to go through our execute method
-
-        Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
-        """
-        table = exp.to_table(table_name)
-
-        # Redshift doesn't support catalog
-        if table.args.get("catalog"):
-            return False
-
-        q: str = (
-            f"SELECT 1 FROM information_schema.tables WHERE table_name = '{table.alias_or_name}'"
-        )
-        database_name = table.args.get("db")
-        if database_name:
-            q += f" AND table_schema = '{database_name}'"
-
-        self.execute(q)
-
-        result = self.cursor.fetchone()
-
-        return result[0] == 1 if result is not None else False
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
