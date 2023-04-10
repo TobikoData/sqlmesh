@@ -14,7 +14,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
-from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
+from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -432,6 +432,41 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
 
 
+def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    model = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+        start="2022-01-01",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+    )
+
+    snapshot = make_snapshot(model, version="a")
+    snapshot.add_interval("2022-01-01", "2022-01-03")
+    state_sync.push_snapshots([snapshot])
+    promote_snapshots(state_sync, [snapshot], "prod")
+
+    model = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+        start="2022-01-02",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+    )
+
+    snapshot = make_snapshot(model, version="b")
+    snapshot.add_interval("2022-01-03", "2022-01-04")
+    state_sync.push_snapshots([snapshot])
+    with pytest.raises(
+        SQLMeshError,
+        match=r"Detected gaps in snapshot.*",
+    ):
+        promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
+
+    state_sync.add_interval(snapshot, "2022-01-02", "2022-01-03")
+    promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
+
+
 def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
@@ -472,10 +507,12 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
 def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:
     sushi_context = sushi_context_pre_scheduling
     state_sync = sushi_context.state_reader
-    missing = state_sync.missing_intervals("prod", "2022-01-01", "2022-01-07", latest="2022-01-07")
+    start = to_ds("1 week ago")
+    end = to_ds("yesterday")
+    missing = state_sync.missing_intervals("prod", start, end, latest=end)
     assert missing
     assert missing == sushi_context.state_reader.missing_intervals(
-        sushi_context.snapshots.values(), "2022-01-01", "2022-01-07", "2022-01-07"
+        sushi_context.snapshots.values(), start, end, end
     )
 
 
