@@ -32,6 +32,11 @@ def optional_import(name: str) -> t.Optional[types.ModuleType]:
     return module
 
 
+def major_minor(version: str) -> t.Tuple[int, int]:
+    """Returns a tuple of just the major.minor for a version string (major.minor.patch)."""
+    return t.cast(t.Tuple[int, int], tuple(int(part) for part in version.split(".")[0:2]))
+
+
 def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) -> t.List[T]:
     return list({by(i): None for i in iterable})
 

@@ -1,7 +1,9 @@
 import typing as t
 
+import pandas as pd
 import pytest
-from sqlglot import parse_one
+from pytest_mock.plugin import MockerFixture
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
@@ -14,6 +16,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
+from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -24,7 +27,7 @@ def state_sync(duck_conn):
         create_engine_adapter(lambda: duck_conn, "duckdb"),
         "sqlmesh",
     )
-    state_sync.init_schema()
+    state_sync.migrate()
     return state_sync
 
 
@@ -63,6 +66,10 @@ def promote_snapshots(
         previous_plan_id="test_plan_id",
     )
     return state_sync.promote(env, no_gaps=no_gaps)
+
+
+def delete_versions(state_sync: EngineAdapterStateSync) -> None:
+    state_sync.engine_adapter.drop_table(state_sync.versions_table)
 
 
 def test_push_snapshots(
@@ -546,3 +553,118 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
     assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
     assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
+
+
+def test_get_version(state_sync: EngineAdapterStateSync) -> None:
+    # fresh install should not raise
+    assert state_sync.get_versions() == Versions(
+        schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION
+    )
+
+    # old install does not have this table / row
+    delete_versions(state_sync)
+
+    with pytest.raises(
+        SQLMeshError,
+        match=r"SQLMesh \(local\) is using version '1' which is ahead of '0'",
+    ):
+        state_sync.get_versions()
+
+    state_sync.migrate()
+
+    # migration version is behind, always raise
+    state_sync._update_versions(schema_version=SCHEMA_VERSION + 1)
+    error = rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is behind '{SCHEMA_VERSION + 1}'"
+
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions()
+
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions(validate=False)
+
+    # migration version is ahead, only raise when validate is true
+    state_sync._update_versions(schema_version=SCHEMA_VERSION - 1)
+    with pytest.raises(
+        SQLMeshError,
+        match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '{SCHEMA_VERSION - 1}'",
+    ):
+        state_sync.get_versions()
+    state_sync.get_versions(validate=False)
+
+    # patch version sqlglot doesn't matter
+    major, minor, patch = SQLGLOT_VERSION.split(".")
+    sqlglot_version = f"{major}.{minor}.{int(patch) + 1}"
+    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    state_sync.get_versions(validate=False)
+
+    # sqlmesh version is behind, always raise
+    sqlglot_version = f"{major}.{int(minor) + 1}.{patch}"
+    error = rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is behind '{sqlglot_version}'"
+    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions(validate=False)
+
+    # sqlmesh version is ahead, only raise with validate is true
+    sqlglot_version = f"{major}.{int(minor) - 1}.{patch}"
+    error = rf"SQLGlot \(local\) is using version '{SQLGLOT_VERSION}' which is ahead of '{sqlglot_version}'"
+    state_sync._update_versions(sqlglot_version=sqlglot_version)
+    with pytest.raises(SQLMeshError, match=error):
+        state_sync.get_versions()
+    state_sync.get_versions(validate=False)
+
+
+def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
+    mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._migrate_rows")
+    state_sync.migrate()
+    mock.assert_not_called()
+
+    delete_versions(state_sync)
+    state_sync.migrate()
+    mock.assert_called_once()
+    assert state_sync.get_versions() == Versions(
+        schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION
+    )
+
+
+def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
+    delete_versions(state_sync)
+
+    state_sync.engine_adapter.replace_query(
+        "sqlmesh._snapshots",
+        pd.read_json("tests/fixtures/migrations/snapshots.json"),
+        columns_to_types={
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "snapshot": exp.DataType.build("text"),
+        },
+    )
+
+    state_sync.engine_adapter.replace_query(
+        "sqlmesh._environments",
+        pd.read_json("tests/fixtures/migrations/environments.json"),
+        columns_to_types={
+            "name": exp.DataType.build("text"),
+            "snapshots": exp.DataType.build("text"),
+            "start_at": exp.DataType.build("text"),
+            "end_at": exp.DataType.build("text"),
+            "plan_id": exp.DataType.build("text"),
+            "previous_plan_id": exp.DataType.build("text"),
+            "expiration_ts": exp.DataType.build("bigint"),
+        },
+    )
+
+    old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
+    old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
+
+    state_sync.migrate()
+
+    new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
+    new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
+
+    assert len(old_snapshots) == len(new_snapshots)
+    assert len(old_environments) == len(new_environments)
+
+    assert not state_sync.missing_intervals("staging")
+    assert not state_sync.missing_intervals("dev")
+    assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 9

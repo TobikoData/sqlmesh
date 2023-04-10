@@ -13,6 +13,6 @@ implies, it only allows for read-only operations on snapshots and environment st
 The provided `sqlmesh.core.state_sync.EngineAdapterStateSync` leverages an existing engine
 adapter to read and write state to the underlying data store.
 """
-from sqlmesh.core.state_sync.base import StateReader, StateSync
+from sqlmesh.core.state_sync.base import StateReader, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
 from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync

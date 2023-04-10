@@ -191,7 +191,7 @@ def test_table_exists_db_table(mocker: MockerFixture):
     assert adapter.table_exists(table_name=exp.to_table("some_db.some_table"))
 
     cursor_mock.execute.assert_called_once_with(
-        "SELECT 1 FROM information_schema.tables WHERE table_name = 'some_table' AND table_schema = 'some_db'"
+        """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'some_table' AND "table_schema" = 'some_db'"""
     )
 
 
@@ -205,5 +205,5 @@ def test_table_exists_table_only(mocker: MockerFixture):
     assert not adapter.table_exists(table_name=exp.to_table("some_table"))
 
     cursor_mock.execute.assert_called_once_with(
-        "SELECT 1 FROM information_schema.tables WHERE table_name = 'some_table'"
+        """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'some_table'"""
     )
