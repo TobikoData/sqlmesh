@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import typing as t
-import uuid
 
-import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.base import (
+    EngineAdapter,
+    EngineAdapterWithIndexSupport,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -26,7 +27,7 @@ class PostgresBaseEngineAdapter(EngineAdapter):
         if table.args.get("catalog"):
             return False
 
-        query = exp.select(1).from_("information_schema.tables")
+        query = exp.select("1").from_("information_schema.tables")
         where = exp.condition(f"table_name = '{table.alias_or_name}'")
 
         schema = table.text("db")

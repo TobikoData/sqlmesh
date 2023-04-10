@@ -446,12 +446,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
             if new_snapshot == snapshot or new_snapshot in all_snapshots:
+                logger.debug(f"{snapshot.snapshot_id} is unchaged")
                 continue
 
             new_snapshot.merge_intervals(snapshot)
             snapshot_mapping[snapshot.snapshot_id] = new_snapshot
+            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}")
 
         if not snapshot_mapping:
+            logger.debug("No changes to snapshots detected.")
             return
 
         self.delete_snapshots(snapshot_mapping)

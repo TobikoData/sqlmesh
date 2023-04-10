@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import importlib
+import logging
 import pkgutil
 import typing as t
 
@@ -23,6 +24,8 @@ from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
 
 
 class Versions(PydanticModel):
@@ -368,6 +371,7 @@ class StateSync(StateReader, abc.ABC):
             return
 
         for migration in migrations:
+            logger.info(f"Applying migration {migration}")
             migration.migrate(self)
 
         self._migrate_rows()
