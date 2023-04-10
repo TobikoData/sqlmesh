@@ -1,7 +1,14 @@
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { type RefObject, Suspense, useCallback, useMemo } from 'react'
+import {
+  type RefObject,
+  Suspense,
+  useCallback,
+  useMemo,
+  useEffect,
+  useState,
+} from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import {
@@ -23,12 +30,17 @@ import { EnumPlanChangeType, usePlan } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
+import { useChannelEvents } from '@api/channels'
+import { EnumVariant } from '~/types/enum'
+import Banner from '@components/banner/Banner'
 
 export default function PlanWizard({
   setRefTaskProgress,
 }: {
   setRefTaskProgress: RefObject<HTMLDivElement>
 }): JSX.Element {
+  const [subscribe] = useChannelEvents()
+
   const {
     backfills,
     hasChanges,
@@ -39,6 +51,7 @@ export default function PlanWizard({
     removed,
     virtualUpdateDescription,
     skip_backfill,
+    skip_tests,
     change_categorization,
     hasVirtualUpdate,
   } = usePlan()
@@ -47,6 +60,12 @@ export default function PlanWizard({
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
+
+  const [testsReport, setTestsReport] = useState<{
+    ok: boolean
+    time: number
+    message: string
+  }>()
 
   const categories = useMemo(
     () =>
@@ -99,6 +118,7 @@ export default function PlanWizard({
           completed: 0,
           total: task.batches,
           interval: taskInterval,
+          view_name: task.view_name,
         }
         const choices = categories[taskModelName]
 
@@ -121,6 +141,14 @@ export default function PlanWizard({
         : filterBackfillsTasks(backfills),
     [backfills, change_categorization, activeBackfill],
   )
+
+  useEffect(() => {
+    const unsubscribeTasks = subscribe('tests', setTestsReport)
+
+    return () => {
+      unsubscribeTasks?.()
+    }
+  }, [])
 
   const isFinished = planState === EnumPlanState.Finished
   const hasNoChanges = [
@@ -150,6 +178,28 @@ export default function PlanWizard({
         <Plan.StepOptions className="w-full" />
       ) : (
         <>
+          <PlanWizardStep
+            headline="Tests"
+            description="Report"
+            disabled={environment == null}
+          >
+            {planAction === EnumPlanAction.Running ? (
+              <PlanWizardStepMessage hasSpinner>
+                Running Tests ...
+              </PlanWizardStepMessage>
+            ) : testsReport == null ? (
+              <PlanWizardStepMessage>
+                {skip_tests ? 'Tests Skipped' : 'No Tests'}
+              </PlanWizardStepMessage>
+            ) : (
+              <Banner
+                variant={
+                  testsReport.ok ? EnumVariant.Success : EnumVariant.Danger
+                }
+                description={testsReport.message}
+              />
+            )}
+          </PlanWizardStep>
           <PlanWizardStep
             headline="Models"
             description="Review Changes"

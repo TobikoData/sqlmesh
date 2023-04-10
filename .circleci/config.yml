@@ -16,8 +16,11 @@ jobs:
   publish:
     docker:
       - image: cimg/python:3.10
+    resource_class: small
     steps:
       - checkout
+      - attach_workspace:
+          at: web/client
       - run:
           name: Publish Python package
           command: make publish
@@ -25,6 +28,7 @@ jobs:
   gh-release:
     docker:
       - image: cimg/node:16.14
+    resource_class: small
     steps:
       - run:
           name: Create release on GitHub
@@ -35,6 +39,42 @@ jobs:
             REPO_NAME="$CIRCLE_PROJECT_REPONAME" \
             CONTINUE_ON_ERROR="false" \
             npx https://github.com/TobikoData/circleci-gh-conventional-release
+
+  generate-openapi-spec:
+    docker:
+      - image: cimg/python:3.11
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Generate OpenAPI spec
+          command: python web/server/openapi.py
+      - persist_to_workspace:
+          root: web/client
+          paths:
+            - openapi.json
+
+  ide-build:
+    docker:
+      - image: cimg/node:19.8
+    resource_class: medium
+    steps:
+      - checkout
+      - attach_workspace:
+          at: web/client
+      - run:
+          name: Install packages
+          command: npm --prefix web/client ci
+      - run:
+          name: Build IDE
+          command: npm --prefix web/client run build
+      - persist_to_workspace:
+          root: web/client
+          paths:
+            - dist
 
 workflows:
   setup-workflow:
@@ -50,7 +90,15 @@ workflows:
     jobs:
       - gh-release:
           <<: *on_tag_filter
-      - publish:
+      - generate-openapi-spec:
           <<: *on_tag_filter
           requires:
             - gh-release
+      - ide-build:
+          <<: *on_tag_filter
+          requires:
+            - generate-openapi-spec
+      - publish:
+          <<: *on_tag_filter
+          requires:
+            - ide-build

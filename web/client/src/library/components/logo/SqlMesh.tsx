@@ -28,9 +28,10 @@ function LogoSqlMesh({
       style={style}
       className={className}
       viewBox="0 0 240 72"
-      fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      fill="none"
     >
+      <title>SQLMesh logo</title>
       <path
         d="M60 41V33.2222C60 20.9492 49.2548 11 36 11C22.7452 11 12 20.9492 12 33.2222V41"
         stroke={strokeDarker}

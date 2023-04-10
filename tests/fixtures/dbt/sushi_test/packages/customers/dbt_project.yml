@@ -1,0 +1,31 @@
+
+name: 'customers'
+version: '1.0.0'
+config-version: 2
+profile: 'customers'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+
+# Configuring models
+# Full documentation: https://docs.getdbt.com/docs/configuring-models
+
+models:
+  customers:
+      +materialized: view
+
+# The following are only used for testing purposes
+vars:
+  some_var: 5
+  some_other_var: 5
+  'customers:customer_id': "bla"

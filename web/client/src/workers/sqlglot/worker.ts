@@ -1,25 +1,30 @@
-import 'https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js'
+declare function importScripts(...urls: string[]): void
 
-export {}
+importScripts('https://cdn.jsdelivr.net/pyodide/v0.22.1/full/pyodide.js')
 
-const global = self as any
+const scope = self as any
 
 async function loadPyodideAndPackages(): Promise<any[]> {
-  global.pyodide = await global.loadPyodide()
-  await global.pyodide.loadPackage('micropip')
+  scope.pyodide = await scope.loadPyodide()
 
-  const micropip = global.pyodide.pyimport('micropip')
+  await scope.pyodide.loadPackage('micropip')
+
+  const micropip = scope.pyodide.pyimport('micropip')
+
   await micropip.install('sqlglot')
-  const file = await (await fetch('./sqlglot.py')).text()
 
-  global.postMessage({ topic: 'init' })
+  const file = await (
+    await fetch(new URL('./sqlglot.py', import.meta.url))
+  ).text()
 
-  return Array.from(global.pyodide.runPython(file))
+  scope.postMessage({ topic: 'init' })
+
+  return Array.from(scope.pyodide.runPython(file))
 }
 
 const pyodideReadyPromise = loadPyodideAndPackages()
 
-global.onmessage = async (e: MessageEvent) => {
+scope.onmessage = async (e: MessageEvent) => {
   const [parse, get_dialect, dialects] = await pyodideReadyPromise
 
   if (e.data.topic === 'parse') {
@@ -34,7 +39,7 @@ global.onmessage = async (e: MessageEvent) => {
       }
     }
 
-    global.postMessage({
+    scope.postMessage({
       topic: 'parse',
       payload,
     })
@@ -45,7 +50,7 @@ global.onmessage = async (e: MessageEvent) => {
       get_dialect(e.data.payload),
     )
 
-    global.postMessage({
+    scope.postMessage({
       topic: 'dialect',
       payload: {
         types: `${types} `.toLowerCase(),
@@ -55,7 +60,7 @@ global.onmessage = async (e: MessageEvent) => {
   }
 
   if (e.data.topic === 'dialects') {
-    global.postMessage({
+    scope.postMessage({
       topic: 'dialects',
       payload: {
         dialects: JSON.parse(dialects),

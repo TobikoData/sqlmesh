@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from sqlmesh.core.context import Context
-from web.server.models import Model, Models
+from web.server.models import Column, Model, Models
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -19,6 +19,12 @@ def get_models(
             description=model.description,
             owner=model.owner,
             dialect=model.dialect,
+            columns=[
+                Column(
+                    name=name, type=str(data_type), description=model.column_descriptions.get(name)
+                )
+                for name, data_type in model.columns_to_types.items()
+            ],
         )
         for model in context.models.values()
     }

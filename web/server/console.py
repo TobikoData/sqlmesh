@@ -6,6 +6,7 @@ import typing as t
 import unittest
 
 from sqlmesh.core.console import TerminalConsole
+from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server.sse import Event
@@ -14,7 +15,7 @@ from web.server.sse import Event
 class ApiConsole(TerminalConsole):
     def __init__(self) -> None:
         super().__init__()
-        self.current_task_status: t.Dict[str, t.Dict[str, int]] = {}
+        self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
     def _make_event(
@@ -33,12 +34,16 @@ class ApiConsole(TerminalConsole):
             data=json.dumps(payload),
         )
 
-    def start_snapshot_progress(self, snapshot_name: str, total_batches: int) -> None:
+    def start_snapshot_progress(
+        self, snapshot: Snapshot, total_batches: int, environment: str
+    ) -> None:
         """Indicates that a new load progress has begun."""
-        self.current_task_status[snapshot_name] = {
+        view_name = snapshot.qualified_view_name.for_environment(environment)
+        self.current_task_status[snapshot.name] = {
             "completed": 0,
             "total": total_batches,
             "start": now_timestamp(),
+            "view_name": view_name,
         }
 
     def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:

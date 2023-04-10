@@ -484,19 +484,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_embedded_kind:
             return []
 
-        if self.is_full_kind or self.is_view_kind or self.is_seed_kind:
-            latest = latest or now()
-
-            latest_start, latest_end = self._inclusive_exclusive(
-                latest if is_date(latest) else self.model.cron_prev(self.model.cron_floor(latest)),
-                latest,
-            )
-            # if the latest ts is stored in the last interval, nothing is missing
-            # else returns the latest ts with the exclusive end ts.
-            if self.intervals and self.intervals[-1][1] >= latest_end:
-                return []
-            return [(latest_start, latest_end)]
-
         missing = []
         start_dt, end_dt = (to_datetime(ts) for ts in self._inclusive_exclusive(start, end))
         dates = tuple(croniter_range(start_dt, end_dt, self.model.normalized_cron()))

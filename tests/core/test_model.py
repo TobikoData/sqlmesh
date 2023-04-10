@@ -966,3 +966,25 @@ def test_star_expansion(assert_exp_eq) -> None:
         ) AS model2
         """,
     )
+
+
+def test_batch_size_validation():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            ),
+            columns (
+              id double,
+              alias varchar
+            ),
+            batch_size 100,
+        );
+    """
+    )
+
+    with pytest.raises(ConfigError) as ex:
+        load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))

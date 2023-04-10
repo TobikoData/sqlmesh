@@ -1,7 +1,7 @@
 .PHONY: docs
 
 install-dev:
-	pip install -e ".[dev,web]"
+	pip3 install -e ".[dev,web]"
 
 install-pre-commit:
 	pre-commit install
@@ -31,10 +31,10 @@ it-test-docker: core-it-test airflow-it-test-docker-with-env
 test: unit-test it-test doc-test
 
 package:
-	pip install wheel && python setup.py sdist bdist_wheel
+	pip3 install wheel && python3 setup.py sdist bdist_wheel
 
 publish: package
-	pip install twine && python -m twine upload dist/*
+	pip3 install twine && python3 -m twine upload dist/*
 
 develop:
 	python3 setup.py develop

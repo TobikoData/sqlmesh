@@ -81,7 +81,7 @@ function Tab({
   const closeTab = useStoreEditor(s => s.closeTab)
 
   function closeEditorTab(tab: EditorTab): void {
-    closeTab(tab.file.id)
+    closeTab(tab.file)
   }
 
   return (

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import abc
+import sys
 import typing as t
 
-from pydantic import Field
+from pydantic import Field, root_validator
 
-from sqlmesh.core.config import (
+from sqlmesh.core.config.connection import (
+    BigQueryConnectionConfig,
+    BigQueryConnectionMethod,
     ConnectionConfig,
     DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
@@ -16,6 +19,11 @@ from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKe
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
+
+if sys.version_info >= (3, 9):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 IncrementalKind = t.Union[t.Type[IncrementalByUniqueKeyKind], t.Type[IncrementalByTimeRangeKind]]
 
@@ -60,6 +68,8 @@ class TargetConfig(abc.ABC, PydanticModel):
             return RedshiftConfig(name=name, **data)
         elif db_type == "snowflake":
             return SnowflakeConfig(name=name, **data)
+        elif db_type == "bigquery":
+            return BigQueryConfig(name=name, **data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -86,7 +96,7 @@ class DuckDbConfig(TargetConfig):
         path: Location of the database file. If not specified, an in memory database is used.
     """
 
-    type: str = "duckdb"
+    type: Literal["duckdb"] = "duckdb"
     path: t.Optional[str] = None
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -116,7 +126,7 @@ class SnowflakeConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
-    type: str = "snowflake"
+    type: Literal["snowflake"] = "snowflake"
     account: str
     warehouse: str
     database: str
@@ -163,7 +173,7 @@ class PostgresConfig(TargetConfig):
         sslmode: SSL Mode used to connect to the database
     """
 
-    type: str = "postgres"
+    type: Literal["postgres"] = "postgres"
     host: str
     user: str
     password: str
@@ -201,7 +211,7 @@ class RedshiftConfig(TargetConfig):
     """
 
     # TODO add other forms of authentication
-    type: str = "redshift"
+    type: Literal["redshift"] = "redshift"
     host: str
     user: str
     password: str
@@ -239,7 +249,7 @@ class DatabricksConfig(TargetConfig):
         token: Personal access token
     """
 
-    type: str = "databricks"
+    type: Literal["databricks"] = "databricks"
     catalog: t.Optional[str] = None
     host: str
     http_path: str
@@ -254,4 +264,72 @@ class DatabricksConfig(TargetConfig):
             http_path=self.http_path,
             access_token=self.token,
             concurrent_tasks=self.threads,
+        )
+
+
+class BigQueryConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the BigQuery target
+
+    Args:
+        schema_: Overrides
+        type: The type of the target (bigquery)
+        method: The BigQuery authentication method to use
+        project: The BigQuery project to connect to
+        location: The BigQuery location to connect to
+        keyfile: The path to the BigQuery keyfile
+        keyfile_json: The BigQuery keyfile as a JSON string
+        token: The BigQuery token
+        refresh_token: The BigQuery refresh token
+        client_id: The BigQuery client ID
+        client_secret: The BigQuery client secret
+        token_uri: The BigQuery token URI
+        scopes: The BigQuery scopes
+    """
+
+    type: Literal["bigquery"] = "bigquery"
+    method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
+    schema_: t.Optional[str] = Field(None, alias="schema")  # type: ignore
+    dataset: t.Optional[str] = None
+    project: t.Optional[str] = None
+    location: t.Optional[str] = None
+    keyfile: t.Optional[str] = None
+    keyfile_json: t.Optional[t.Dict[str, t.Any]] = None
+    token: t.Optional[str] = None
+    refresh_token: t.Optional[str] = None
+    client_id: t.Optional[str] = None
+    client_secret: t.Optional[str] = None
+    token_uri: t.Optional[str] = None
+    scopes: t.Tuple[str, ...] = (
+        "https://www.googleapis.com/auth/bigquery",
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/drive",
+    )
+
+    @root_validator
+    def validate_schema(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["schema_"] = values.get("schema_") or values.get("dataset")
+        if not values["schema_"]:
+            raise ConfigError("Either schema or dataset must be set")
+        return values
+
+    def default_incremental_strategy(self, kind: IncrementalKind) -> str:
+        return "merge"
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return BigQueryConnectionConfig(
+            method=self.method,
+            project=self.project,
+            location=self.location,
+            concurrent_tasks=self.threads,
+            keyfile=self.keyfile,
+            keyfile_json=self.keyfile_json,
+            token=self.token,
+            refresh_token=self.refresh_token,
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            token_uri=self.token_uri,
+            scopes=self.scopes,
         )

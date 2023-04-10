@@ -7,6 +7,8 @@ from pathlib import Path
 
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import RelationType
+from jinja2 import nodes
+from jinja2.exceptions import UndefinedError
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
@@ -140,6 +142,14 @@ class BaseModelConfig(GeneralConfig):
 
     @property
     def all_sql(self) -> SqlStr:
+        return SqlStr("\n".join(self.pre_hook + [self.sql_no_config] + self.post_hook))
+
+    @property
+    def sql_no_config(self) -> SqlStr:
+        return SqlStr("")
+
+    @property
+    def sql_embedded_config(self) -> SqlStr:
         return SqlStr("")
 
     @property
@@ -190,6 +200,9 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
+    def attribute_dict(self) -> AttributeDict[str, t.Any]:
+        return AttributeDict(self.dict())
+
     def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         jinja_macros = model_context.jinja_macros.trim(self._dependencies.macros)
@@ -197,6 +210,7 @@ class BaseModelConfig(GeneralConfig):
             {
                 "this": self.relation_info,
                 "schema": self.table_schema,
+                "config": self.attribute_dict(),
                 **model_context.jinja_globals,  # type: ignore
             }
         )
@@ -220,7 +234,6 @@ class BaseModelConfig(GeneralConfig):
 
     def render_config(self: BMC, context: DbtContext) -> BMC:
         rendered = super().render_config(context)
-        rendered._dependencies = Dependencies(macros=extract_macro_references(rendered.all_sql))
         rendered = ModelSqlRenderer(context, rendered).enriched_config
 
         rendered_dependencies = rendered._dependencies
@@ -275,7 +288,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
             jinja_globals={
                 **context.jinja_globals,
                 **date_dict(c.EPOCH, c.EPOCH, c.EPOCH),
-                "config": self._config,
+                "config": lambda *args, **kwargs: "",
                 "ref": self._ref,
                 "var": self._var,
                 "source": self._source,
@@ -293,9 +306,15 @@ class ModelSqlRenderer(t.Generic[BMC]):
             dialect=context.engine_adapter.dialect if context.engine_adapter else "",
         )
 
+        self.jinja_env = self.context.jinja_macros.build_environment(**self._jinja_globals)
+
     @property
     def enriched_config(self) -> BMC:
         if self._rendered_sql is None:
+            self._enriched_config = self._update_with_sql_config(self._enriched_config)
+            self._enriched_config._dependencies = Dependencies(
+                macros=extract_macro_references(self._enriched_config.all_sql)
+            )
             self.render()
             self._enriched_config._dependencies = self._enriched_config._dependencies.union(
                 self._captured_dependencies
@@ -304,13 +323,41 @@ class ModelSqlRenderer(t.Generic[BMC]):
 
     def render(self) -> str:
         if self._rendered_sql is None:
-            registry = self.context.jinja_macros
-            self._rendered_sql = (
-                registry.build_environment(**self._jinja_globals)
-                .from_string(self.config.all_sql)
-                .render()
-            )
+            try:
+                self._rendered_sql = self.jinja_env.from_string(
+                    self._enriched_config.all_sql
+                ).render()
+            except UndefinedError as e:
+                raise ConfigError(e.message)
         return self._rendered_sql
+
+    def _update_with_sql_config(self, config: BMC) -> BMC:
+        def _extract_value(node: t.Any) -> t.Any:
+            if not isinstance(node, nodes.Node):
+                return node
+            if isinstance(node, nodes.Const):
+                return _extract_value(node.value)
+            if isinstance(node, nodes.TemplateData):
+                return _extract_value(node.data)
+            if isinstance(node, nodes.List):
+                return [_extract_value(val) for val in node.items]
+            if isinstance(node, nodes.Dict):
+                return {_extract_value(pair.key): _extract_value(pair.value) for pair in node.items}
+            if isinstance(node, nodes.Tuple):
+                return tuple(_extract_value(val) for val in node.items)
+
+            return self.jinja_env.from_string(nodes.Template([nodes.Output([node])])).render()
+
+        for call in self.jinja_env.parse(self._enriched_config.sql_embedded_config).find_all(
+            nodes.Call
+        ):
+            if not isinstance(call.node, nodes.Name) or call.node.name != "config":
+                continue
+            config = config.update_with(
+                {kwarg.key: _extract_value(kwarg.value) for kwarg in call.kwargs}
+            )
+
+        return config
 
     def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> BaseRelation:
         if package_name in self.context.models:
@@ -340,13 +387,6 @@ class ModelSqlRenderer(t.Generic[BMC]):
             )
         self._captured_dependencies.sources.add(full_name)
         return BaseRelation.create(**self.context.sources[full_name].relation_info)
-
-    def _config(self, *args: t.Any, **kwargs: t.Any) -> str:
-        if args and isinstance(args[0], dict):
-            self._enriched_config = self._enriched_config.update_with(args[0])
-        if kwargs:
-            self._enriched_config = self._enriched_config.update_with(kwargs)
-        return ""
 
     class TrackingAdapter(ParsetimeAdapter):
         def __init__(self, outer_self: ModelSqlRenderer, *args: t.Any, **kwargs: t.Any):

@@ -2,8 +2,19 @@
 
 # BigQuery
 ## BigQuery - Local/Built-in Scheduler
-Currently relies on local configuration of `gcloud` CLI to be authenticated in order to connect. 
-[Github issue to expand supported methods](https://github.com/TobikoData/sqlmesh/issues/270).
+| Option          | Description                                                                                   |  Type  | Required |
+|-----------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
+| `method`        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json` | string |    N     |
+| `project`       | The name of the GCP project                                                                   | string |    N     |
+| `location`      | The location of for the datasets (can be regional or multi-regional)                          | string |    Y     |
+| `keyfile`       | Path to the keyfile to be used with service-account method                                    | string |    Y     |
+| `keyfile_json`  | Keyfile information provided inline (not recommended)                                         |  dict  |    N     |
+| `token`         | Oath secret auth token                                                                        | string |    N     |
+| `refresh_token` | Oath secret auth refresh_token                                                                | string |    N     |
+| `client_id`     | Oath secret auth client_id                                                                    | string |    N     |
+| `client_secret` | Oath secret auth client_secret                                                                | string |    N     |
+| `token_uri`     | Oath secret auth token_uri                                                                    | string |    N     |
+| `scopes`        | Oath secret auth scopes                                                                       |  list  |    N     |
 
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`
@@ -180,14 +191,15 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Snowflake
 ## Snowflake - Local/Built-in Scheduler
-| Option      | Description                  |  Type  | Required |
-|-------------|------------------------------|:------:|:--------:|
-| `user`      | The Snowflake username       | string |    Y     |
-| `password`  | The Snowflake password       | string |    Y     |
-| `account`   | The Snowflake account name   | string |    Y     |
-| `warehouse` | The Snowflake warehouse name | string |    N     |
-| `database`  | The Snowflake database name  | string |    N     |
-| `role`      | The Snowflake role name      | string |    N     |
+| Option          | Description                        |  Type  | Required |
+|-----------------|------------------------------------|:------:|:--------:|
+| `user`          | The Snowflake username             | string |    N     |
+| `password`      | The Snowflake password             | string |    N     |
+| `authenticator` | The Snowflake authenticator method | string |    N     |
+| `account`       | The Snowflake account name         | string |    Y     |
+| `warehouse`     | The Snowflake warehouse name       | string |    N     |
+| `database`      | The Snowflake database name        | string |    N     |
+| `role`          | The Snowflake role name            | string |    N     |
 
 ## Snowflake - Airflow Scheduler
 **Engine Name:** `snowflake`

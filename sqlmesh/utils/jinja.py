@@ -121,7 +121,7 @@ def call_name(node: nodes.Expr) -> t.Tuple[str, ...]:
 
 
 def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> str:
-    return ENVIRONMENT.from_string(query).render(methods)
+    return ENVIRONMENT.from_string(query).render(methods or {})
 
 
 def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[t.Tuple[str, ...]]:

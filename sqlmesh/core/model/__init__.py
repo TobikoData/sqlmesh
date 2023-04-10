@@ -19,3 +19,4 @@ from sqlmesh.core.model.kind import (
     TimeColumn,
 )
 from sqlmesh.core.model.meta import ModelMeta
+from sqlmesh.core.model.seed import Seed

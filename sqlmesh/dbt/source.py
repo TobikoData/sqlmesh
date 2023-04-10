@@ -50,6 +50,9 @@ class SourceConfig(GeneralConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
+        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
+            return v
+
         return yaml_to_columns(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {

@@ -31,7 +31,7 @@ To create a project from the command line, follow these steps:
     ```
 
     ```bash
-    source .env/bin/active
+    source .env/bin/activate
     ```
 
     ```bash

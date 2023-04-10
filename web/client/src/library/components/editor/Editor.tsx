@@ -77,7 +77,7 @@ export default function Editor(): JSX.Element {
   }, [tab])
 
   useEffect(() => {
-    if (selectedFile == null) return
+    if (selectedFile == null || tab.file === selectedFile) return
 
     selectTab(createTab(selectedFile))
   }, [selectedFile])

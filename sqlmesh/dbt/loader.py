@@ -22,8 +22,8 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
     profile = Profile.load(context)
 
     return Config(
-        default_connection=profile.default_target,
-        connections=profile.to_sqlmesh(),
+        default_connection=profile.target_name,
+        connections={profile.target_name: profile.target.to_sqlmesh()},
         loader=DbtLoader,
         **kwargs,
     )

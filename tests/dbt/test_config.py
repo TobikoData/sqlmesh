@@ -4,12 +4,12 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.common import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
+    BigQueryConfig,
     DatabricksConfig,
     DuckDbConfig,
     PostgresConfig,
@@ -19,11 +19,6 @@ from sqlmesh.dbt.target import (
 )
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
-
-
-@pytest.fixture
-def sushi_dbt_project() -> Project:
-    return Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
 
 
 @pytest.mark.parametrize(
@@ -64,24 +59,24 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_config(sushi_dbt_project: Project):
-    assert set(sushi_dbt_project.packages["sushi"].models) == {
+def test_model_config(sushi_test_project: Project):
+    assert set(sushi_test_project.packages["sushi"].models) == {
         "waiters",
         "top_waiters",
         "waiter_revenue_by_day",
         "waiter_as_customer_by_day",
     }
 
-    assert set(sushi_dbt_project.packages["customers"].models) == {
+    assert set(sushi_test_project.packages["customers"].models) == {
         "customers",
         "customer_revenue_by_day",
     }
 
-    customer_revenue_by_day_config = sushi_dbt_project.packages["customers"].models[
+    customer_revenue_by_day_config = sushi_test_project.packages["customers"].models[
         "customer_revenue_by_day"
     ]
 
-    context = sushi_dbt_project.context
+    context = sushi_test_project.context
     context.sources = {
         "raw.order_items": SourceConfig(target_schema="raw", name="order_items"),
         "raw.items": SourceConfig(target_schema="raw", name="items"),
@@ -102,7 +97,7 @@ def test_model_config(sushi_dbt_project: Project):
     assert rendered.model_name == "sushi.customer_revenue_by_day"
 
 
-def test_to_sqlmesh_fields(sushi_dbt_project: Project):
+def test_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
         alias="model",
         target_schema="schema",
@@ -116,7 +111,6 @@ def test_to_sqlmesh_fields(sushi_dbt_project: Project):
         cron="@hourly",
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
-        batch_size=2,
     )
     context = DbtContext(project_name="Foo")
     context.target = DuckDbConfig(schema="foo")
@@ -132,10 +126,10 @@ def test_to_sqlmesh_fields(sushi_dbt_project: Project):
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
     assert model.owner == "Sally"
-    assert model.batch_size == 2
 
 
 def test_model_config_sql_no_config():
+    context = DbtContext()
     assert (
         ModelConfig(
             sql="""{{
@@ -145,64 +139,72 @@ def test_model_config_sql_no_config():
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "query"
     )
 
+    context.variables = {"new": "old"}
     assert (
         ModelConfig(
             sql="""{{
   config(
-    materialized='"table"',
+    materialized='table',
     incremental_strategy='delete+insert',
-    post_hook=" '{{ macro_call(this) }}' "
+    post_hook=" '{{ var('new') }}' "
   )
 }}
 query"""
-        ).sql_no_config.strip()
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "query"
     )
 
     assert (
         ModelConfig(
-            sql="""before {{config(materialized='table', post_hook=" {{ macro_call(this) }} ")}} after"""
-        ).sql_no_config
+            sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
+        )
+        .render_config(context)
+        .sql_no_config.strip()
         == "before  after"
     )
 
 
-def test_variables(assert_exp_eq, sushi_dbt_project):
+def test_variables(assert_exp_eq, sushi_test_project):
     # Case 1: using an undefined variable without a default value
     defined_variables = {}
-    model_variables = {"foo"}
+
+    context = sushi_test_project.context
+    context.variables = defined_variables
 
     model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
-    model_config._dependencies = Dependencies(variables=model_variables)
-
-    context = sushi_dbt_project.context
-    context.variables = defined_variables
 
     kwargs = {"context": context}
 
     with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
-        model_config = model_config.render_config(context)
+        rendered = model_config.render_config(context)
         model_config.to_sqlmesh(**kwargs)
 
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
     context.variables = defined_variables
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
     context.variables = defined_variables
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
+    rendered = model_config.render_config(context)
+    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
@@ -217,12 +219,12 @@ def test_variables(assert_exp_eq, sushi_dbt_project):
         "customers:customer_id": "customer_id",
     }
 
-    assert sushi_dbt_project.packages["sushi"].variables == expected_sushi_variables
-    assert sushi_dbt_project.packages["customers"].variables == expected_customer_variables
+    assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
+    assert sushi_test_project.packages["customers"].variables == expected_customer_variables
 
 
-def test_source_config(sushi_dbt_project: Project):
-    source_configs = sushi_dbt_project.packages["sushi"].sources
+def test_source_config(sushi_test_project: Project):
+    source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
         "raw.items",
         "raw.orders",
@@ -241,13 +243,13 @@ def test_source_config(sushi_dbt_project: Project):
     assert source_configs["raw.order_items"].source_name == "raw.order_items"
 
 
-def test_seed_config(sushi_dbt_project: Project):
-    seed_configs = sushi_dbt_project.packages["sushi"].seeds
+def test_seed_config(sushi_test_project: Project):
+    seed_configs = sushi_test_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
     raw_items_seed = seed_configs["waiter_names"]
 
     expected_config = {
-        "path": Path(sushi_dbt_project.context.project_root, "seeds/waiter_names.csv"),
+        "path": Path(sushi_test_project.context.project_root, "seeds/waiter_names.csv"),
         "target_schema": "sushi",
     }
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
@@ -361,3 +363,63 @@ def test_databricks_config():
         "outputs",
         "dev",
     )
+
+
+def test_bigquery_config():
+    _test_warehouse_config(
+        """
+        dbt-bigquery:
+          target: dev
+          outputs:
+            dev:
+              type: bigquery
+              method: oauth
+              project: your-project
+              dataset: your-dataset
+              threads: 1
+              location: US
+              keyfile: /path/to/keyfile.json
+        """,
+        BigQueryConfig,
+        "dbt-bigquery",
+        "outputs",
+        "dev",
+    )
+    _test_warehouse_config(
+        """
+        dbt-bigquery:
+          target: dev
+          outputs:
+            dev:
+              type: bigquery
+              method: oauth
+              project: your-project
+              schema: your-dataset
+              threads: 1
+              location: US
+              keyfile: /path/to/keyfile.json
+        """,
+        BigQueryConfig,
+        "dbt-bigquery",
+        "outputs",
+        "dev",
+    )
+    with pytest.raises(ConfigError):
+        _test_warehouse_config(
+            """
+            dbt-bigquery:
+              target: dev
+              outputs:
+                dev:
+                  type: bigquery
+                  method: oauth
+                  project: your-project
+                  threads: 1
+                  location: US
+                  keyfile: /path/to/keyfile.json
+            """,
+            BigQueryConfig,
+            "dbt-bigquery",
+            "outputs",
+            "dev",
+        )

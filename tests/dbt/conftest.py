@@ -10,8 +10,8 @@ from sqlmesh.dbt.project import Project
 
 
 @pytest.fixture()
-def sushi_dbt_project(mocker: MockerFixture) -> Project:
-    project = Project.load(DbtContext(project_root=Path("examples/sushi_dbt")))
+def sushi_test_project(mocker: MockerFixture) -> Project:
+    project = Project.load(DbtContext(project_root=Path("tests/fixtures/dbt/sushi_test")))
     for package_name, package in project.packages.items():
         project.context.jinja_macros.add_macros(
             package.macros,

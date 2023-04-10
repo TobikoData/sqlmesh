@@ -1,4 +1,4 @@
-from sqlglot import expressions as exp
+from sqlglot import exp
 
 from sqlmesh.core.macros import MacroEvaluator, macro
 
