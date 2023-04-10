@@ -46,7 +46,7 @@ class ParentColumns(PydanticModel):
         return cls(columns=[])
 
     def add(self, name: str, type: exp.DataType) -> ParentColumns:
-        # We don't need the full information for rested types, just the fact that they are nested
+        # We don't need the full information for nested types, just the fact that they are nested
         if type.this == exp.DataType.Type.STRUCT:
             type = exp.DataType.build("STRUCT")
         if type.this == exp.DataType.Type.ARRAY:
@@ -101,7 +101,7 @@ class ColumnPosition(PydanticModel):
         return cls(is_first=is_first, is_last=is_last, after=after)
 
     @property
-    def col_position_node(self) -> t.Optional[exp.ColumnPosition]:
+    def column_position_node(self) -> t.Optional[exp.ColumnPosition]:
         column = exp.column(self.after) if self.after and not self.is_last else None
         position = None
         if self.is_first:
@@ -208,6 +208,44 @@ class SchemaDiffConfig(PydanticModel):
         return False
 
 
+def _get_matching_kwarg(
+    current_kwarg: exp.StructKwarg, new_struct: exp.DataType, current_pos: int
+) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
+    current_name, current_type = _get_name_and_type(current_kwarg)
+    # First check if we have the same column in the same position to get O(1) complexity
+    new_kwarg = seq_get(new_struct.expressions, current_pos)
+    if new_kwarg:
+        new_name, new_type = _get_name_and_type(new_kwarg)
+        if current_name == new_name:
+            return current_pos, new_kwarg
+    # If not, check if we have the same column in all positions with O(n) complexity
+    for i, new_kwarg in enumerate(new_struct.expressions):
+        new_name, new_type = _get_name_and_type(new_kwarg)
+        if current_name == new_name:
+            return i, new_kwarg
+    return None, None
+
+
+def _get_column_name(name: str, parents: ParentColumns) -> str:
+    if parents.has_columns:
+        return ".".join([parents.sql(), name])
+    return name
+
+
+def _get_alter_op(
+    pos: int,
+    struct: exp.DataType,
+    parent_columns: ParentColumns,
+    name: str,
+    new_type: exp.DataType,
+    current_type: t.Union[str, exp.DataType],
+) -> SchemaDelta:
+    col_pos = ColumnPosition.create(pos, struct.expressions, replacing_col=True)
+    return SchemaDelta.alter_type(
+        _get_column_name(name, parent_columns), new_type, current_type, col_pos, parent_columns
+    )
+
+
 def struct_diff(
     current_struct: exp.DataType,
     new_struct: exp.DataType,
@@ -230,53 +268,17 @@ def struct_diff(
     Returns:
         The list of deltas.
     """
-
-    def get_matching_kwarg(
-        current_kwarg: exp.StructKwarg, new_struct: exp.DataType, current_pos: int
-    ) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
-        current_name, current_type = _get_name_and_type(current_kwarg)
-        # First check if we have the same column in the same position to get O(1) complexity
-        new_kwarg = seq_get(new_struct.expressions, current_pos)
-        if new_kwarg:
-            new_name, new_type = _get_name_and_type(new_kwarg)
-            if current_name == new_name:
-                return current_pos, new_kwarg
-        # If not, check if we have the same column in a all positions to get O(n) complexity
-        for i, new_kwarg in enumerate(new_struct.expressions):
-            new_name, new_type = _get_name_and_type(new_kwarg)
-            if current_name == new_name:
-                return i, new_kwarg
-        return None, None
-
-    def get_column_name(name: str, parents: ParentColumns) -> str:
-        if parents.has_columns:
-            return ".".join([parents.sql(), name])
-        return name
-
-    def get_alter_op(
-        pos: int,
-        struct: exp.DataType,
-        parent_columns: ParentColumns,
-        name: str,
-        new_type: exp.DataType,
-        current_type: t.Union[str, exp.DataType],
-    ) -> SchemaDelta:
-        col_pos = ColumnPosition.create(pos, struct.expressions, replacing_col=True)
-        return SchemaDelta.alter_type(
-            get_column_name(name, parent_columns), new_type, current_type, col_pos, parent_columns
-        )
-
     current_struct = current_struct.copy()
     parent_columns = parent_columns or ParentColumns(columns=[])
     operations = []
     # Resolve all drop columns
     pop_offset = 0
     for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
-        new_pos, _ = get_matching_kwarg(current_kwarg, new_struct, current_pos)
+        new_pos, _ = _get_matching_kwarg(current_kwarg, new_struct, current_pos)
         if new_pos is None:
             operations.append(
                 SchemaDelta.drop(
-                    get_column_name(current_kwarg.alias_or_name, parent_columns),
+                    _get_column_name(current_kwarg.alias_or_name, parent_columns),
                     current_kwarg.expression,
                     parent_columns,
                 )
@@ -285,12 +287,12 @@ def struct_diff(
             pop_offset += 1
     # Resolve all add columns
     for new_pos, new_kwarg in enumerate(new_struct.expressions):
-        possible_current_pos, _ = get_matching_kwarg(new_kwarg, current_struct, new_pos)
+        possible_current_pos, _ = _get_matching_kwarg(new_kwarg, current_struct, new_pos)
         if possible_current_pos is None:
             col_pos = ColumnPosition.create(new_pos, current_struct.expressions)
             operations.append(
                 SchemaDelta.add(
-                    get_column_name(new_kwarg.alias_or_name, parent_columns),
+                    _get_column_name(new_kwarg.alias_or_name, parent_columns),
                     new_kwarg.expression,
                     col_pos,
                     parent_columns,
@@ -299,7 +301,7 @@ def struct_diff(
             current_struct.expressions.insert(new_pos, new_kwarg)
     # Resolve all column type changes
     for current_pos, current_kwarg in enumerate(current_struct.expressions):
-        new_pos, new_kwarg = get_matching_kwarg(current_kwarg, new_struct, current_pos)
+        new_pos, new_kwarg = _get_matching_kwarg(current_kwarg, new_struct, current_pos)
         new_name, new_type = _get_name_and_type(new_kwarg)
         current_name, current_type = _get_name_and_type(current_kwarg)
         if new_type == current_type:
@@ -325,7 +327,7 @@ def struct_diff(
                 )
             else:
                 operations.append(
-                    get_alter_op(
+                    _get_alter_op(
                         current_pos,
                         current_struct,
                         parent_columns,
@@ -336,7 +338,7 @@ def struct_diff(
                 )
         else:
             operations.append(
-                get_alter_op(
+                _get_alter_op(
                     current_pos,
                     current_struct,
                     parent_columns,

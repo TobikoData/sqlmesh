@@ -314,7 +314,7 @@ class EngineAdapter:
             column = operation.column_def(self.SCHEMA_DIFF_CONFIG.array_suffix)
             if self.SCHEMA_DIFF_CONFIG.support_positional_add:
                 assert operation.add_position
-                column.set("position", operation.add_position.col_position_node)
+                column.set("position", operation.add_position.column_position_node)
             alter_table.set("actions", [column])
             return alter_table
 

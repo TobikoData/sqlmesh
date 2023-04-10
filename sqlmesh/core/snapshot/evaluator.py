@@ -403,6 +403,7 @@ class SnapshotEvaluator:
         if not schema_deltas:
             return
 
+        logger.info(f"Altering table '{target_table_name}'")
         self.adapter.alter_table(target_table_name, schema_deltas)
 
     def _promote_snapshot(
