@@ -218,7 +218,8 @@ def test_render(sushi_context, assert_exp_eq):
 def test_diff(sushi_context: Context, mocker: MockerFixture):
     mock_console = mocker.Mock()
     sushi_context.console = mock_console
-    sushi_context.run(start="2022-01-01", end="2022-01-01", latest="2022-01-01")
+    yesterday = yesterday_ds()
+    sushi_context.run(start=yesterday, end=yesterday, latest=yesterday)
 
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator

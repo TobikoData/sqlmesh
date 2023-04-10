@@ -14,7 +14,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
-from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
+from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -507,10 +507,12 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
 def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:
     sushi_context = sushi_context_pre_scheduling
     state_sync = sushi_context.state_reader
-    missing = state_sync.missing_intervals("prod", "2022-01-01", "2022-01-07", latest="2022-01-07")
+    start = to_ds("1 week ago")
+    end = to_ds("yesterday")
+    missing = state_sync.missing_intervals("prod", start, end, latest=end)
     assert missing
     assert missing == sushi_context.state_reader.missing_intervals(
-        sushi_context.snapshots.values(), "2022-01-01", "2022-01-07", "2022-01-07"
+        sushi_context.snapshots.values(), start, end, end
     )
 
 
