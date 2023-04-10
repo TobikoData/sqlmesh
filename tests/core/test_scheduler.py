@@ -9,19 +9,17 @@ from sqlmesh.utils.date import to_datetime
 
 
 @pytest.fixture
-def scheduler(sushi_context_pre_scheduling: Context) -> Scheduler:
-    return sushi_context_pre_scheduling.scheduler()
+def scheduler(sushi_context_fixed_date: Context) -> Scheduler:
+    return sushi_context_fixed_date.scheduler()
 
 
 @pytest.fixture
-def orders(sushi_context_pre_scheduling: Context) -> Snapshot:
-    return sushi_context_pre_scheduling.snapshots["sushi.orders"]
+def orders(sushi_context_fixed_date: Context) -> Snapshot:
+    return sushi_context_fixed_date.snapshots["sushi.orders"]
 
 
-def test_interval_params(
-    scheduler: Scheduler, sushi_context_pre_scheduling: Context, orders: Snapshot
-):
-    waiter_revenue = sushi_context_pre_scheduling.snapshots["sushi.waiter_revenue_by_day"]
+def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context, orders: Snapshot):
+    waiter_revenue = sushi_context_fixed_date.snapshots["sushi.waiter_revenue_by_day"]
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
     assert scheduler._interval_params([orders, waiter_revenue], start_ds, end_ds) == {
@@ -53,8 +51,8 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     }
 
 
-def test_interval_params_missing(scheduler: Scheduler, sushi_context_pre_scheduling: Context):
-    waiters = sushi_context_pre_scheduling.snapshots["sushi.waiter_as_customer_by_day"]
+def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date: Context):
+    waiters = sushi_context_fixed_date.snapshots["sushi.waiter_as_customer_by_day"]
 
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
@@ -66,34 +64,34 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_pre_schedul
 
 
 def test_multi_version_snapshots(
-    sushi_context_pre_scheduling: Context, scheduler: Scheduler, make_snapshot
+    sushi_context_fixed_date: Context, scheduler: Scheduler, make_snapshot
 ):
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    model = sushi_context_pre_scheduling.models["sushi.waiter_as_customer_by_day"]
+    model = sushi_context_fixed_date.models["sushi.waiter_as_customer_by_day"]
 
     items_a = make_snapshot(
         model,
-        models=sushi_context_pre_scheduling.models,
+        models=sushi_context_fixed_date.models,
         version="1",
     )
     items_a.fingerprint = SnapshotFingerprint(data_hash="data", metadata_hash="metadata")
     items_a.add_interval("2022-01-10", "2022-01-15")
-    sushi_context_pre_scheduling.state_sync.push_snapshots([items_a])
+    sushi_context_fixed_date.state_sync.push_snapshots([items_a])
 
-    model = sushi_context_pre_scheduling.upsert_model(
+    model = sushi_context_fixed_date.upsert_model(
         model,
         query=parse_one("SELECT 1::INT, '2022-01-01'::TEXT AS ds"),
     )
 
     items_b = make_snapshot(
         model,
-        models=sushi_context_pre_scheduling.models,
+        models=sushi_context_fixed_date.models,
         version="1",
     )
     items_b.add_interval("2022-01-20", "2022-01-25")
-    sushi_context_pre_scheduling.state_sync.push_snapshots([items_b])
+    sushi_context_fixed_date.state_sync.push_snapshots([items_b])
 
     interval_params = scheduler._interval_params([items_a], start_ds, end_ds)
     assert len(interval_params) == 1
@@ -113,9 +111,9 @@ def test_multi_version_snapshots(
     ]
 
 
-def test_run(sushi_context_pre_scheduling: Context, scheduler: Scheduler):
-    adapter = sushi_context_pre_scheduling.engine_adapter
-    snapshot = sushi_context_pre_scheduling.snapshots["sushi.items"]
+def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
+    adapter = sushi_context_fixed_date.engine_adapter
+    snapshot = sushi_context_fixed_date.snapshots["sushi.items"]
     scheduler.run(
         c.PROD,
         "2022-01-01",
