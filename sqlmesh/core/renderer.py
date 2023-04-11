@@ -9,6 +9,7 @@ from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
+from sqlglot.optimizer.lower_identities import lower_identities
 from sqlglot.optimizer.pushdown_projections import pushdown_projections
 from sqlglot.optimizer.qualify_columns import qualify_columns, validate_qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
@@ -28,6 +29,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
 
 RENDER_OPTIMIZER_RULES = (
+    lower_identities,
     qualify_tables,
     qualify_columns,
     expand_laterals,
@@ -280,10 +282,15 @@ class QueryRenderer(ExpressionRenderer):
 
         query = next(iter(self._query_cache.values()))
 
+        validate = True
+        for table in query.find_all(exp.Table):
+            columns = self._schema.find(table, raise_on_missing=False)
+            if not columns or "*" in columns:
+                validate = False
+                break
+
         # If there are no external sources selected from in the query ...
-        if all(
-            self._schema.find(table, raise_on_missing=False) for table in query.find_all(exp.Table)
-        ):
+        if validate:
             try:
                 # ... check that all referenced columns are qualified & that they exist upstream.
                 validate_qualify_columns(query)

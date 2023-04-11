@@ -243,7 +243,6 @@ class BaseModelConfig(GeneralConfig):
                 rendered._dependencies = rendered._dependencies.union(
                     model.render_config(context)._dependencies
                 )
-                rendered._dependencies.refs.discard(dependency)
 
         return rendered
 
