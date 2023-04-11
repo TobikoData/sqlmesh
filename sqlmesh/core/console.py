@@ -338,7 +338,9 @@ class TerminalConsole(Console):
             return
         backfill = Tree("[bold]Models needing backfill (missing dates):")
         for missing in plan.missing_intervals:
-            backfill.add(f"{missing.snapshot_name}: {missing.format_missing_range()}")
+            snapshot = plan.context_diff.snapshots[missing.snapshot_name]
+            view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
+            backfill.add(f"{view_name}: {missing.format_missing_range()}")
         self._print(backfill)
 
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
