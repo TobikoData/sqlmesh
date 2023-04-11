@@ -35,7 +35,7 @@ export default function File({
   const [newName, setNewName] = useState<string>()
 
   useEffect(() => {
-    selectFile(tab.file)
+    selectFile(tab?.file)
   }, [tab])
 
   function remove(): void {

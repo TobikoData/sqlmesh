@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
-import { isTrue } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
 export interface Dialect {
@@ -12,13 +11,14 @@ export interface Dialect {
 interface EditorStore {
   storedTabsIds: ID[]
   tabs: Map<ModelFile, EditorTab>
-  tab: EditorTab
+  tab?: EditorTab
   engine: Worker
   dialects: Dialect[]
   previewQuery?: string
   previewTable?: any[]
   previewConsole?: string
-  selectTab: (tab: EditorTab) => void
+  selectTab: (tab?: EditorTab) => void
+  updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
@@ -39,7 +39,6 @@ export interface EditorTab {
   file: ModelFile
   isValid: boolean
   isSaved: boolean
-  isInitial: boolean
   dialect?: string
   preview?: EditorPreview
 }
@@ -47,7 +46,7 @@ export interface EditorTab {
 const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[] }>('tabs')
 
 const initialFile = createLocalFile()
-const initialTab: EditorTab = createTab(initialFile, true)
+const initialTab: EditorTab = createTab(initialFile)
 const initialTabs = new Map([[initialFile, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
@@ -56,8 +55,24 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   tabs: initialTabs,
   engine: sqlglotWorker,
   dialects: [],
+  previewQuery: undefined,
+  previewTable: undefined,
+  previewConsole: undefined,
+  updateStoredTabsIds() {
+    setStoredTabs({
+      ids: Array.from(get().tabs.values())
+        .filter(tab => tab.file.isRemote)
+        .map(tab => tab.file.id),
+    })
+
+    set(() => ({
+      storedTabsIds: getStoredTabsIds(),
+    }))
+  },
   refreshTab() {
-    get().selectTab({ ...get().tab })
+    const tab = get().tab
+
+    tab != null && get().selectTab({ ...tab })
   },
   setDialects(dialects) {
     set(() => ({
@@ -67,44 +82,44 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   selectTab(tab) {
     set(() => ({ tab }))
 
+    if (tab == null) return
+
     get().addTab(tab)
   },
   addTab(tab) {
-    const tabs = new Map([...get().tabs, [tab.file, tab]])
+    const s = get()
 
-    setStoredTabs({
-      ids: Array.from(tabs.values())
-        .filter(tab => tab.file.isRemote)
-        .map(tab => tab.file.id),
-    })
+    s.tabs.set(tab.file, tab)
+
+    const tabs = new Map(s.tabs)
 
     set(() => ({
-      tabsIds: getStoredTabsIds(),
       tabs,
     }))
+
+    s.updateStoredTabsIds()
   },
   closeTab(file) {
     const s = get()
 
-    if (isTrue(s.tabs.get(file)?.isInitial)) return
-
-    const tabs = Array.from(get().tabs.values())
-    const indexAt = tabs.findIndex(tab => tab.file === file)
-
     s.tabs.delete(file)
 
-    if (file.id === s.tab.file.id) {
+    if (s.tabs.size === 0) {
+      s.selectTab(undefined)
+    } else if (file.id === s.tab?.file.id) {
+      const tabs = Array.from(s.tabs.values())
+      const indexAt = tabs.findIndex(tab => tab.file === file)
+
       s.selectTab(tabs.at(indexAt - 1) as EditorTab)
     }
 
     set(() => ({
       tabs: new Map(s.tabs),
     }))
+
+    s.updateStoredTabsIds()
   },
   createTab,
-  previewQuery: undefined,
-  previewTable: undefined,
-  previewConsole: undefined,
   setPreviewQuery(previewQuery) {
     set(() => ({ previewQuery }))
   },
@@ -116,13 +131,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
 }))
 
-function createTab(
-  file: ModelFile = createLocalFile(),
-  isInitial = false,
-): EditorTab {
+function createTab(file: ModelFile = createLocalFile()): EditorTab {
   return {
     file,
-    isInitial,
     isValid: true,
     isSaved: true,
   }

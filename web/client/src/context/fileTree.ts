@@ -6,7 +6,7 @@ interface FileTreeStore {
   project?: ModelDirectory
   files: Map<ID, ModelFile>
   selectedFile?: ModelFile
-  selectFile: (selectedFile: ModelFile) => void
+  selectFile: (selectedFile?: ModelFile) => void
   setFiles: (files: ModelFile[]) => void
   setProject: (project?: Directory) => void
   refreshProject: () => void
