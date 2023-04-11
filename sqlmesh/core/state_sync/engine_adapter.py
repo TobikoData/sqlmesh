@@ -469,14 +469,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
             if new_snapshot == snapshot:
-                logger.debug(f"{new_snapshot.snapshot_id} is unchanged")
+                logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
                 continue
             if new_snapshot.snapshot_id in all_snapshots:
-                logger.debug(f"{new_snapshot.snapshot_id} exists")
+                logger.debug(f"{new_snapshot.snapshot_id} exists.")
                 continue
 
             snapshot_mapping[snapshot.snapshot_id] = new_snapshot
-            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}")
+            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}.")
 
         if not snapshot_mapping:
             logger.debug("No changes to snapshots detected.")
