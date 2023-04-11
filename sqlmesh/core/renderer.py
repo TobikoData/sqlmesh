@@ -291,7 +291,7 @@ class QueryRenderer(ExpressionRenderer):
 
         if validate:
             try:
-               # Check that all columns in query are qualified (i.e. they were found upstream)
+                # Check that all columns in query are qualified (i.e. they were found upstream)
                 validate_qualify_columns(query)
             except OptimizeError as ex:
                 raise_config_error(f"Invalid model query. {ex}", self._path)
