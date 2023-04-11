@@ -252,6 +252,10 @@ class Plan:
         )
 
     @property
+    def environment_name(self) -> str:
+        return self.context_diff.environment
+
+    @property
     def restatements(self) -> t.Set[str]:
         return self._restatements
 
