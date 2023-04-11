@@ -89,6 +89,9 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     version: str
     change_category: t.Optional[SnapshotChangeCategory]
 
+    def snapshot_id(self, name: str) -> SnapshotId:
+        return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
+
     @property
     def data_version(self) -> SnapshotDataVersion:
         return self
