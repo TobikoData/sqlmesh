@@ -1,11 +1,10 @@
 import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
-import { useStoreEditor } from '~/context/editor'
+import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useEffect } from 'react'
 import { isNil } from '~/utils'
 
-export default function EditorFooter(): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
+export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
   const refreshTab = useStoreEditor(s => s.refreshTab)

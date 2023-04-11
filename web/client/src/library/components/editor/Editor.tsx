@@ -77,13 +77,14 @@ export default function Editor(): JSX.Element {
   }, [tab])
 
   useEffect(() => {
-    if (selectedFile == null || tab.file === selectedFile) return
+    if (selectedFile == null || tab?.file === selectedFile) return
 
     selectTab(createTab(selectedFile))
   }, [selectedFile])
 
   function getSizesCodeEditorAndPreview(): [number, number] {
     const showPreview =
+      tab != null &&
       (tab.file.isSQLMeshModel || tab.file.isLocal) &&
       [previewTable, previewConsole].some(Boolean)
 
@@ -92,6 +93,7 @@ export default function Editor(): JSX.Element {
 
   function getSizesCodeEditorAndInspector(): [number, number] {
     const showInspector =
+      tab != null &&
       (tab.file.isSQLMeshModel || tab.file.isLocal) &&
       isFalse(isStringEmptyOrNil(tab.file.content))
 
@@ -99,42 +101,53 @@ export default function Editor(): JSX.Element {
   }
 
   return (
-    <SplitPane
-      sizes={sizesCodeEditorAndPreview}
-      direction="vertical"
-      minSize={0}
-      snapOffset={0}
-    >
-      <div className="flex flex-col overflow-hidden">
-        {isReadyEngine && (
-          <>
-            <EditorTabs />
-            <Divider />
-            <div className="flex flex-col h-full overflow-hidden">
-              <SplitPane
-                className="flex h-full"
-                sizes={sizesCodeEditorAndInspector}
-                minSize={0}
-                snapOffset={0}
-              >
-                <div className="flex flex-col h-full">
-                  <CodeEditor />
+    <div className="w-full h-full flex flex-col overflow-hidden">
+      <EditorTabs />
+      <Divider />
+      {tab == null ? (
+        <div className="flex justify-center items-center w-full h-full">
+          <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
+            <h2 className="text-3xl">Select File or Add New SQL Tab</h2>
+          </div>
+        </div>
+      ) : (
+        <SplitPane
+          className="h-full w-full"
+          sizes={sizesCodeEditorAndPreview}
+          direction="vertical"
+          minSize={0}
+          snapOffset={0}
+        >
+          <div className="flex flex-col overflow-hidden">
+            {isReadyEngine && (
+              <>
+                <div className="flex flex-col h-full overflow-hidden">
+                  <SplitPane
+                    className="flex h-full"
+                    sizes={sizesCodeEditorAndInspector}
+                    minSize={0}
+                    snapOffset={0}
+                  >
+                    <div className="flex flex-col h-full">
+                      <CodeEditor tab={tab} />
+                    </div>
+                    <div className="flex flex-col h-full">
+                      <EditorInspector tab={tab} />
+                    </div>
+                  </SplitPane>
                 </div>
-                <div className="flex flex-col h-full">
-                  <EditorInspector />
+                <Divider />
+                <div className="px-2 flex justify-between items-center min-h-[2rem]">
+                  <EditorFooter tab={tab} />
                 </div>
-              </SplitPane>
-            </div>
-            <Divider />
-            <div className="px-2 flex justify-between items-center min-h-[2rem]">
-              <EditorFooter />
-            </div>
-          </>
-        )}
-      </div>
-      <div className="w-full">
-        <EditorPreview />
-      </div>
-    </SplitPane>
+              </>
+            )}
+          </div>
+          <div className="w-full">
+            {tab != null && <EditorPreview tab={tab} />}
+          </div>
+        </SplitPane>
+      )}
+    </div>
   )
 }

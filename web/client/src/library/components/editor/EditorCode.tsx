@@ -31,9 +31,9 @@ import {
 } from '~/utils'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
-import { useStoreEditor } from '~/context/editor'
+import { type EditorTab, useStoreEditor } from '~/context/editor'
 
-export default function CodeEditor(): JSX.Element {
+export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const { mode } = useColorScheme()
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
 
@@ -42,7 +42,6 @@ export default function CodeEditor(): JSX.Element {
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
-  const tab = useStoreEditor(s => s.tab)
   const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -141,12 +140,14 @@ export default function CodeEditor(): JSX.Element {
     <CodeEditorFileLocal
       keymaps={keymaps}
       extensions={extensions}
+      tab={tab}
       onChange={updateFileContent}
     />
   ) : (
     <CodeEditorFileRemote
       keymaps={keymaps}
       extensions={extensions}
+      tab={tab}
       onChange={updateFileContent}
     />
   )
@@ -155,14 +156,14 @@ export default function CodeEditor(): JSX.Element {
 function CodeEditorFileLocal({
   keymaps,
   extensions,
+  tab,
   onChange,
 }: {
   keymaps: KeyBinding[]
   extensions: Extension[]
+  tab: EditorTab
   onChange: (value: string) => void
 }): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
-
   const extensionKeymap = useMemo(() => keymap.of([...keymaps]), [keymaps])
 
   const extensionsAll = useMemo(
@@ -185,10 +186,12 @@ function CodeEditorFileLocal({
 function CodeEditorFileRemote({
   keymaps,
   extensions,
+  tab,
   onChange,
 }: {
   keymaps: KeyBinding[]
   extensions: Extension[]
+  tab: EditorTab
   onChange: (value: string) => void
 }): JSX.Element {
   const client = useQueryClient()
@@ -196,7 +199,6 @@ function CodeEditorFileRemote({
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
 
-  const tab = useStoreEditor(s => s.tab)
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
