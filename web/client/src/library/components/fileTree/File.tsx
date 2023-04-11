@@ -171,7 +171,9 @@ function FileName({
       onClick={(e: MouseEvent) => {
         e.stopPropagation()
 
-        file.is_supported && file !== selectedFile && selectFile(file)
+        if (isFalse(file.is_supported) || file === selectedFile) return
+
+        selectFile(file)
       }}
       onDoubleClick={(e: MouseEvent) => {
         e.stopPropagation()

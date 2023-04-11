@@ -1,5 +1,7 @@
+import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
-import { useEffect, useState, lazy, useCallback } from 'react'
+import { useEffect, type MouseEvent, useState, lazy, useCallback } from 'react'
+import { EnumSize, EnumVariant } from '../../../types/enum'
 import {
   useApiFiles,
   useApiEnvironments,
@@ -7,12 +9,15 @@ import {
   apiCancelFiles,
   useApiModels,
   apiCancelModels,
+  useApiDag,
+  apiCancelDag,
 } from '../../../api'
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import { isArrayEmpty, isFalse, isTrue, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
+import Modal from '../modal/Modal'
 import PlanProvider from '../plan/context'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
@@ -21,9 +26,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import ModalSidebar from '../modal/ModalDrawer'
 import Editor from '../editor/Editor'
 import FileTree from '../fileTree/FileTree'
-import { type Models } from '@api/client'
 
 const Plan = lazy(async () => await import('../plan/Plan'))
+const Graph = lazy(async () => await import('../graph/Graph'))
 
 export function IDE(): JSX.Element {
   const client = useQueryClient()
@@ -35,16 +40,19 @@ export function IDE(): JSX.Element {
     s => s.addSyncronizedEnvironments,
   )
   const setModels = useStoreContext(s => s.setModels)
+  const setLineage = useStoreContext(s => s.setLineage)
 
   const activePlan = useStorePlan(s => s.activePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
+  const [isGraphOpen, setIsGraphOpen] = useState(false)
   const [isPlanOpen, setIsPlanOpen] = useState(false)
   const [isClosingModal, setIsClosingModal] = useState(false)
 
   const [subscribe] = useChannelEvents()
 
+  const { data: dataDag, refetch: getDag } = useApiDag()
   const { data: dataModels, refetch: getModels } = useApiModels()
   const { data: project, refetch: getFiles } = useApiFiles()
   const { data: contextEnvironemnts, refetch: getEnvironments } =
@@ -60,26 +68,34 @@ export function IDE(): JSX.Element {
   const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
     getModels,
   ])
+  const debouncedGetDag = useCallback(debounceAsync(getDag, 1000, true), [
+    getModels,
+  ])
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
-    const unsubscribeModels = subscribe('models', updateModels)
+    const unsubscribeModels = subscribe('models', setModels)
+    const unsubscribeLineage = subscribe('lineage', setLineage)
 
     void debouncedGetEnvironemnts()
     void debouncedGetFiles()
     void debouncedGetModels()
+    void debouncedGetDag()
 
     return () => {
       debouncedGetEnvironemnts.cancel()
       debouncedGetFiles.cancel()
       debouncedGetModels.cancel()
+      debouncedGetDag.cancel()
 
       apiCancelModels(client)
       apiCancelFiles(client)
       apiCancelGetEnvironments(client)
+      apiCancelDag(client)
 
       unsubscribeTasks?.()
       unsubscribeModels?.()
+      unsubscribeLineage?.()
     }
   }, [])
 
@@ -97,17 +113,20 @@ export function IDE(): JSX.Element {
     setModels(dataModels)
   }, [dataModels])
 
+  useEffect(() => {
+    setLineage(dataDag)
+  }, [dataDag])
+
+  function showGraph(): void {
+    setIsGraphOpen(true)
+  }
+
   function showRunPlan(): void {
     setIsPlanOpen(true)
   }
 
   function closeModal(): void {
     setIsClosingModal(true)
-  }
-
-  function updateModels(data?: Models): void {
-    console.log('updateModels', data)
-    setModels(data?.models)
   }
 
   return (
@@ -120,6 +139,18 @@ export function IDE(): JSX.Element {
           </h3>
         </div>
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
+          <Button
+            className="mr-4"
+            variant={EnumVariant.Neutral}
+            size={EnumSize.sm}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              showGraph()
+            }}
+          >
+            Graph
+          </Button>
           <RunPlan showRunPlan={showRunPlan} />
           {activePlan != null && <ActivePlan plan={activePlan} />}
         </div>
@@ -142,6 +173,7 @@ export function IDE(): JSX.Element {
         afterLeave={() => {
           setPlanAction(EnumPlanAction.None)
           setIsClosingModal(false)
+          setIsGraphOpen(false)
           setIsPlanOpen(false)
         }}
       >
@@ -160,6 +192,19 @@ export function IDE(): JSX.Element {
           </PlanProvider>
         </Dialog.Panel>
       </ModalSidebar>
+      <Modal
+        show={isGraphOpen && isFalse(isClosingModal)}
+        afterLeave={() => {
+          setPlanAction(EnumPlanAction.None)
+          setIsClosingModal(false)
+          setIsGraphOpen(false)
+          setIsPlanOpen(false)
+        }}
+      >
+        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-theme text-left align-middle shadow-xl transition-all">
+          {<Graph closeGraph={closeModal} />}
+        </Dialog.Panel>
+      </Modal>
     </>
   )
 }

@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
+  type DagApiCommandsDagGet200,
   type GetEnvironmentsApiEnvironmentsGet200,
   type BodyWriteFileApiFilesPathPost,
   type PlanDates,
@@ -16,42 +17,21 @@ import {
   type PlanOptions,
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
+  dagApiCommandsDagGet,
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
   runPlanApiPlanPost,
   applyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
-  getModelsApiModelsGet,
+  handleGetModelsApiModelsGet,
   type Model,
-  type ModelLineageApiLineageModelNameGet200,
-  modelLineageApiLineageModelNameGet,
-  type ColumnLineageApiLineageModelNameColumnNameGet200,
-  columnLineageApiLineageModelNameColumnNameGet,
 } from './client'
 
-export function useApiModelLineage(
-  modelName: string,
-): UseQueryResult<ModelLineageApiLineageModelNameGet200> {
+export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
   return useQuery({
-    queryKey: [`/api/lineage`, modelName],
-    queryFn: async ({ signal }) =>
-      await modelLineageApiLineageModelNameGet(modelName, { signal }),
-    cacheTime: 0,
-    enabled: false,
-  })
-}
-
-export function useApiColumnLineage(
-  model: string,
-  column: string,
-): UseQueryResult<ColumnLineageApiLineageModelNameColumnNameGet200> {
-  return useQuery({
-    queryKey: [`/api/lineage`, model, column],
-    queryFn: async ({ signal }) =>
-      await columnLineageApiLineageModelNameColumnNameGet(model, column, {
-        signal,
-      }),
+    queryKey: ['/api/commands/dag'],
+    queryFn: async ({ signal }) => await dagApiCommandsDagGet({ signal }),
     cacheTime: 0,
     enabled: false,
   })
@@ -70,7 +50,8 @@ export function useApiFileByPath(path: string): UseQueryResult<File> {
 export function useApiModels(): UseQueryResult<Model[]> {
   return useQuery({
     queryKey: ['/api/models'],
-    queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
+    queryFn: async ({ signal }) =>
+      await handleGetModelsApiModelsGet({ signal }),
     cacheTime: 0,
     enabled: false,
   })
@@ -181,8 +162,8 @@ export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   return await cancelPlanApiPlanCancelPost()
 }
 
-export function apiCancelLineage(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/lineage'] })
+export function apiCancelDag(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/dag'] })
 }
 
 export function apiCancelPlanRun(client: QueryClient): void {

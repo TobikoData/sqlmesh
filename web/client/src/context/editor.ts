@@ -35,6 +35,7 @@ interface EditorStore {
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
   closeTab: (file: ModelFile) => void
+  removeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
@@ -122,6 +123,15 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     }))
 
     s.updateStoredTabsIds()
+  },
+  removeTab(file) {
+    const s = get()
+
+    s.tabs.delete(file)
+
+    set(() => ({
+      tabs: new Map(s.tabs),
+    }))
   },
   closeTab(file) {
     const s = get()

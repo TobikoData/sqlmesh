@@ -18,6 +18,9 @@ interface ContextStore {
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, Model>
+  lineage?: Record<string, string[]>
+  graph?: Record<string, { upstream: string[]; downstream: string[] }>
+  setLineage: (lineage?: Record<string, string[]>) => void
   setModels: (models?: Model[]) => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
@@ -45,6 +48,33 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  lineage: undefined,
+  setLineage(lineage) {
+    const graph: Record<string, { upstream: string[]; downstream: string[] }> =
+      {}
+
+    for (const modelName in lineage) {
+      const upstream = lineage[modelName] ?? []
+
+      graph[modelName] = {
+        upstream,
+        downstream: [],
+      }
+    }
+
+    for (const modelName in graph) {
+      const { upstream = [] } = graph[modelName] ?? {}
+
+      upstream.forEach(upstreamModelName => {
+        graph[upstreamModelName]?.downstream.push(modelName)
+      })
+    }
+
+    set({
+      graph,
+      lineage,
+    })
+  },
   setModels(models = []) {
     set(() => ({
       models: models.reduce((acc, model) => {

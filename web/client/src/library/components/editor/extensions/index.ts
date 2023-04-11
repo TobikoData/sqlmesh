@@ -11,7 +11,7 @@ import {
 } from '@codemirror/view'
 import { type Model } from '~/api/client'
 import { type ModelFile } from '~/models'
-import { isNil } from '~/utils'
+import { isArrayEmpty, isNil } from '~/utils'
 
 import { useSqlMeshExtension } from './SqlMeshDialect'
 
@@ -49,7 +49,12 @@ export function events(
   })
 }
 
-export function HoverTooltip(models: Map<string, Model>): Extension {
+export function HoverTooltip(
+  models: Map<string, Model>,
+  graph: Record<string, { upstream: string[]; downstream: string[] }>,
+  files: Map<ID, ModelFile>,
+  selectFile: (file: ModelFile) => void,
+): Extension {
   return hoverTooltip(
     (view: EditorView, pos: number, side: number): Tooltip | null => {
       const { from, to, text } = view.state.doc.lineAt(pos)
@@ -74,19 +79,41 @@ export function HoverTooltip(models: Map<string, Model>): Extension {
         above: true,
         create() {
           const dom = document.createElement('div')
-          const template = `
-          <div class="flex items-center">
-            <span>Model Name:</span>
-            <span class="px-2 py-1 inline-block ml-1 bg-alternative-100 text-alternative-500 rounded">${model.name}</span>
-          </div>
-        `
 
+          dom.addEventListener('click', handleClick)
+
+          const template = `
+            <div>
+              <div class="flex items-center">
+                <span>Model Name:</span>
+                <span class="px-2 py-1 inline-block ml-1 bg-alternative-100 text-alternative-500 rounded text-secondary-500 dark:text-primary-500">${model.name
+            }</span>
+              </div>
+              ${getModelDependenciesListHTML(
+              'Children Models',
+              graph[model.name]?.upstream,
+            )}
+              ${getModelDependenciesListHTML(
+              'Parent Models',
+              graph[model.name]?.downstream,
+            )}
+            </div>
+          `
           dom.className =
             'text-xs font-bold px-3 py-3 bg-white border-2 border-secondary-100 rounded outline-none shadow-lg mb-2'
 
           dom.innerHTML = template
 
-          return { dom }
+          return {
+            dom,
+            destroy() {
+              dom.removeEventListener('click', handleClick)
+            },
+          }
+
+          function handleClick(event: MouseEvent): void {
+            handleClickOnSqlMeshModel(event, models, files, selectFile)
+          }
         },
       }
     },
@@ -127,6 +154,30 @@ function getDecorations(
   }
 
   return Decoration.set(decorations)
+}
+
+function getModelDependenciesListHTML(
+  title: string,
+  dependencies?: string[],
+): string {
+  if (dependencies == null || isArrayEmpty(dependencies)) return ''
+
+  const list = dependencies.map(
+    modelName => `<li  class='px-2 mb-1'>
+    <span model="${modelName}" class='text-secondary-500 dark:text-primary-500 inline-block pb-0.5 border-b cursor-pointer'>
+      ${modelName}
+    </span>
+  </li>`,
+  )
+
+  return `
+    <div class='my-2'>
+      <h3>${title}</h3>
+      <ul>
+        ${list?.join('')}
+      </ul>
+    </div>
+  `
 }
 
 function handleClickOnSqlMeshModel(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
@@ -16,13 +16,7 @@ import {
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
 
-import {
-  apiCancelFiles,
-  apiCancelPlanRun,
-  useApiFileByPath,
-  useApiPlanRun,
-  useMutationApiSaveFile,
-} from '~/api'
+import { apiCancelFiles, useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
   debounceSync,
@@ -38,11 +32,11 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
 
   const models = useStoreContext(s => s.models)
+  const graph = useStoreContext(s => s.graph)
 
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
-  const tabs = useStoreEditor(s => s.tabs)
   const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -50,18 +44,19 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
 
+  const [sqlDialectOptions, setSqlDialectOptions] = useState()
+
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
-      const t = tabs.get(tab.file)
-
-      if (t == null) return
-
       if (e.data.topic === 'parse') {
-        t.isValid = e.data.payload?.type !== 'error' || tab.file.content === ''
+        tab.isValid =
+          e.data.payload?.type !== 'error' || tab.file.content === ''
+
+        refreshTab()
       }
 
       if (e.data.topic === 'dialect') {
-        t.dialectOptions = e.data.payload
+        setSqlDialectOptions(e.data.payload)
       }
     },
     [tab.file],
@@ -73,18 +68,20 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const extensions = useMemo(() => {
+    const showSqlMeshDialect =
+      tab.file.extension === '.sql' && sqlDialectOptions != null
+
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      HoverTooltip(models),
+      graph != null && HoverTooltip(models, graph, files, selectFile),
       events(models, files, selectFile),
       SqlMeshModel(models),
       tab.file.extension === '.py' && python(),
       tab.file.extension === '.yaml' && StreamLanguage.define(yaml),
-      tab.file.extension === '.sql' &&
-        tab.dialectOptions != null &&
-        SqlMeshDialect(models, tab.file, tab.dialectOptions, dialectsTitles),
+      showSqlMeshDialect &&
+        SqlMeshDialect(models, tab.file, sqlDialectOptions, dialectsTitles),
     ].filter(Boolean) as Extension[]
-  }, [tab.file, tab.dialectOptions, models, mode, files, dialectsTitles])
+  }, [tab.file, models, mode, sqlDialectOptions, files, dialectsTitles, graph])
 
   const keymaps = useMemo(
     () => [
@@ -195,7 +192,6 @@ function CodeEditorFileRemote({
   const client = useQueryClient()
 
   const models = useStoreContext(s => s.models)
-  const environment = useStoreContext(s => s.environment)
 
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -206,16 +202,6 @@ function CodeEditorFileRemote({
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess: saveChangeSuccess,
   })
-
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
-
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
 
   const debouncedSaveChange = useCallback(
     debounceSync(saveChange, 1000, true),
@@ -248,10 +234,8 @@ function CodeEditorFileRemote({
 
   useEffect(() => {
     return () => {
-      debouncedPlanRun.cancel()
       debouncedGetFileContent.cancel()
 
-      apiCancelPlanRun(client)
       apiCancelFiles(client)
     }
   }, [])
@@ -310,8 +294,6 @@ function CodeEditorFileRemote({
     tab.isSaved = true
 
     refreshTab()
-
-    void debouncedPlanRun()
   }
 
   return (

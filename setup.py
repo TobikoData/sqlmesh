@@ -96,10 +96,10 @@ setup(
             "snowflake-connector-python[pandas]",
         ],
         "web": [
-            "fastapi==0.95.0",
-            "hyperscript==0.0.1",
+            "fastapi==0.95.1",
             "pyarrow==11.0.0",
             "uvicorn==0.21.1",
+            "watchfiles==0.19.0",
         ],
     },
     classifiers=[

@@ -53,6 +53,7 @@ export default function RunPlan({
 
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
+  const models = useStoreContext(s => s.models)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
 
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -123,6 +124,12 @@ export default function RunPlan({
   useEffect(() => {
     setInitialDates(plan?.start, plan?.end)
   }, [plan])
+
+  useEffect(() => {
+    if (models.size > 0) {
+      void debouncedPlanRun()
+    }
+  }, [models])
 
   function startPlan(): void {
     setActivePlan(undefined)
