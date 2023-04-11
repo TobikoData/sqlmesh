@@ -289,10 +289,9 @@ class QueryRenderer(ExpressionRenderer):
                 validate = False
                 break
 
-        # If there are no external sources selected from in the query ...
         if validate:
             try:
-                # ... check that all referenced columns are qualified & that they exist upstream.
+               # Check that all columns in query are qualified (i.e. they were found upstream)
                 validate_qualify_columns(query)
             except OptimizeError as ex:
                 raise_config_error(f"Invalid model query. {ex}", self._path)
