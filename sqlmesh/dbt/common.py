@@ -68,7 +68,7 @@ class DbtContext:
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, str] = field(default_factory=dict)
 
-    _target: TargetConfig = TargetConfig()
+    _target: TargetConfig = field(default_factory=TargetConfig)
 
     _jinja_environment: t.Optional[Environment] = None
 

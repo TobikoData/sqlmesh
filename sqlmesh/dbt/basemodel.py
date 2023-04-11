@@ -12,7 +12,6 @@ from jinja2.exceptions import UndefinedError
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
-import sqlmesh.dbt.builtin
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
@@ -276,6 +275,8 @@ class BaseModelConfig(GeneralConfig):
 
 class ModelSqlRenderer(t.Generic[BMC]):
     def __init__(self, context: DbtContext, config: BMC):
+        from sqlmesh.dbt.builtin import create_builtin_globals
+
         self.context = context
         self.config = config
 
@@ -283,7 +284,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
         self._rendered_sql: t.Optional[str] = None
         self._enriched_config: BMC = config.copy()
 
-        self._jinja_globals = sqlmesh.dbt.builtin.create_builtin_globals(
+        self._jinja_globals = create_builtin_globals(
             jinja_macros=context.jinja_macros,
             jinja_globals={
                 **context.jinja_globals,
