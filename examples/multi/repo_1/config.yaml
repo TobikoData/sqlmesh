@@ -1,0 +1,8 @@
+project: a
+
+connections:
+    local:
+        type: duckdb
+        database: db.db
+
+default_connection: local

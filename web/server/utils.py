@@ -41,7 +41,9 @@ def validate_path(
     except ValueError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
-    if any(full_path.match(pattern) for pattern in context.ignore_patterns):
+    if any(
+        full_path.match(pattern) for pattern in context.config_for_path(Path(path)).ignore_patterns
+    ):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
     return path

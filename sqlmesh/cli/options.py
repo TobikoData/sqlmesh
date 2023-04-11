@@ -4,10 +4,12 @@ import os
 
 import click
 
-path = click.option(
-    "--path",
-    default=os.getcwd(),
-    help="Path to the models directory.",
+paths = click.option(
+    "-p",
+    "--paths",
+    multiple=True,
+    default=[os.getcwd()],
+    help="Path(s) to the SQLMesh config/project.",
 )
 
 config = click.option(

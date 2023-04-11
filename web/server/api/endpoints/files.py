@@ -23,16 +23,10 @@ def get_files(
     path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.Directory:
     """Get all project files."""
-    if context:
-        ignore_patterns = context.ignore_patterns
-        hook_directory_path = context.hook_directory_path.relative_to(context.path)
-        macro_directory_path = context.macro_directory_path.relative_to(context.path)
-        test_directory_path = context.test_directory_path.relative_to(context.path)
-    else:
-        ignore_patterns = c.IGNORE_PATTERNS
-        hook_directory_path = Path("hooks")
-        macro_directory_path = Path("macros")
-        test_directory_path = Path("tests")
+    ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
+    hook_directory_path = Path(c.HOOKS)
+    macro_directory_path = Path(c.MACROS)
+    test_directory_path = Path(c.TESTS)
 
     def walk_path(
         path: str | Path,

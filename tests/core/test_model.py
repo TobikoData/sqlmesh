@@ -880,8 +880,6 @@ def test_star_expansion(assert_exp_eq) -> None:
             ) AS t (id, item_id, ds)
         """
         ),
-        path=context.path,
-        dialect=context.dialect,
     )
 
     model2 = load_model(
@@ -892,8 +890,6 @@ def test_star_expansion(assert_exp_eq) -> None:
         SELECT * FROM db.model1 AS model1
 		"""
         ),
-        path=context.path,
-        dialect=context.dialect,
     )
 
     model3 = load_model(
@@ -904,8 +900,6 @@ def test_star_expansion(assert_exp_eq) -> None:
             SELECT * FROM db.model2 AS model2
         """
         ),
-        path=context.path,
-        dialect=context.dialect,
     )
 
     context.upsert_model(model1)

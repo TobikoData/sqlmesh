@@ -24,6 +24,7 @@ from copy import deepcopy
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
@@ -61,7 +62,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def __init__(
         self,
         engine_adapter: EngineAdapter,
-        schema: str,
+        schema: str = c.SQLMESH,
     ):
         self.schema = schema
         self.engine_adapter = engine_adapter

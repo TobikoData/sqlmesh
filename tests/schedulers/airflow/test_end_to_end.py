@@ -22,7 +22,7 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
     start = yesterday_ds()
 
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
-    context = Context(path="./examples/sushi", config=airflow_config)
+    context = Context(paths="./examples/sushi", config=airflow_config)
 
     context.plan(
         environment="test_dev",

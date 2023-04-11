@@ -56,6 +56,7 @@ from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
@@ -65,7 +66,7 @@ from sqlmesh.core.snapshot import (
     to_table_mapping,
 )
 from sqlmesh.core.state_sync import StateReader, StateSync
-from sqlmesh.core.test import run_all_model_tests, run_model_tests
+from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
@@ -171,10 +172,7 @@ class Context(BaseContext):
     Args:
         engine_adapter: The default engine adapter to use.
         notification_targets: The notification target to use. Defaults to what is defined in config.
-        dialect: Default dialect of the sql in models.
-        physical_schema: The schema used to store physical materialized tables.
-        snapshot_ttl: Duration before unpromoted snapshots are removed.
-        path: The directory containing SQLMesh files.
+        paths: The directories containing SQLMesh files.
         config: A Config object or the name of a Config object in config.py.
         connection: The name of the connection. If not specified the first connection as it appears
             in configuration will be used.
@@ -191,10 +189,7 @@ class Context(BaseContext):
         engine_adapter: t.Optional[EngineAdapter] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
-        dialect: str = "",
-        physical_schema: str = "",
-        snapshot_ttl: str = "",
-        path: str = "",
+        paths: t.Union[str, t.Iterable[str]] = "",
         config: t.Optional[t.Union[Config, str]] = None,
         connection: t.Optional[str] = None,
         test_connection: t.Optional[str] = None,
@@ -205,22 +200,28 @@ class Context(BaseContext):
         users: t.Optional[t.List[User]] = None,
     ):
         self.console = console or get_console()
-        self.path = Path(path).absolute()
-        if not self.path.is_dir():
-            raise ConfigError(f"{path} is not a directory")
 
-        self.config = self._load_config(config or "config")
+        self._sqlmesh_path = Path.home() / ".sqlmesh"
 
-        self.physical_schema = physical_schema or self.config.physical_schema or "sqlmesh"
-        self.snapshot_ttl = snapshot_ttl or self.config.snapshot_ttl or c.DEFAULT_SNAPSHOT_TTL
+        self.configs = self._load_configs(
+            config or "config",
+            [
+                Path(path).absolute()
+                for path in ([paths] if isinstance(paths, str) else list(paths))
+            ],
+        )
+
         self.dag: DAG[str] = DAG()
-
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
+        self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+        self._scheduler = self.config.scheduler
         self.connection = connection
+        self.environment_ttl = self.config.environment_ttl
+        self.auto_categorize_changes = self.config.auto_categorize_changes
         connection_config = self.config.get_connection(connection)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
@@ -232,19 +233,13 @@ class Context(BaseContext):
         )
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
-        self.dialect = dialect or self.config.model_defaults.dialect or self._engine_adapter.dialect
-
         self.snapshot_evaluator = SnapshotEvaluator(
             self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks
         )
 
-        self.notification_targets = self.config.notification_targets + (notification_targets or [])
-
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
         self._state_reader: t.Optional[StateReader] = None
-
-        self.users = self.config.users + (users or [])
 
         self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
@@ -278,7 +273,7 @@ class Context(BaseContext):
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
-        update_model_schemas(self.dialect, self.dag, self._models)
+        update_model_schemas(self.dag, self._models)
 
         return model
 
@@ -315,9 +310,7 @@ class Context(BaseContext):
     @property
     def state_sync(self) -> StateSync:
         if not self._state_sync:
-            self._state_sync = self._provided_state_sync or self.config.scheduler.create_state_sync(
-                self
-            )
+            self._state_sync = self._provided_state_sync or self._scheduler.create_state_sync(self)
             if not self._state_sync:
                 raise ConfigError(
                     "The operation is not supported when using a read-only state sync"
@@ -333,44 +326,12 @@ class Context(BaseContext):
             try:
                 self._state_reader = self.state_sync
             except ConfigError:
-                self._state_reader = self.config.scheduler.create_state_reader(self)
+                self._state_reader = self._scheduler.create_state_reader(self)
             if not self._state_reader:
                 raise ConfigError(
                     "Invalid configuration: neither State Sync nor Reader has been configured"
                 )
         return self._state_reader
-
-    @property
-    def sqlmesh_path(self) -> Path:
-        """Path to the SQLMesh home directory."""
-        return Path.home() / ".sqlmesh"
-
-    @property
-    def models_directory_path(self) -> Path:
-        """Path to the directory where the models are defined"""
-        return self.path / "models"
-
-    @property
-    def macro_directory_path(self) -> Path:
-        """Path to the directory where macros are defined"""
-        return self.path / "macros"
-
-    @property
-    def hook_directory_path(self) -> Path:
-        """Path to the directory where hooks are defined"""
-        return self.path / "hooks"
-
-    @property
-    def test_directory_path(self) -> Path:
-        return self.path / "tests"
-
-    @property
-    def audits_directory_path(self) -> Path:
-        return self.path / "audits"
-
-    @property
-    def ignore_patterns(self) -> t.List[str]:
-        return c.IGNORE_PATTERNS + self.config.ignore_patterns
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
@@ -379,7 +340,7 @@ class Context(BaseContext):
 
     def load(self) -> Context:
         """Load all files in the context's path."""
-        with sys_path(self.path):
+        with sys_path(*self.configs):
             project = self._loader.load(self)
             self._hooks = project.hooks
             self._macros = project.macros
@@ -417,6 +378,20 @@ class Context(BaseContext):
         """Returns a model with the given name or None if a model with such name doesn't exist."""
         return self._models.get(name)
 
+    def config_for_path(self, path: Path) -> Config:
+        for config_path, config in self.configs.items():
+            try:
+                path.relative_to(config_path)
+                return config
+            except ValueError:
+                pass
+        return self.config
+
+    def config_for_model(self, model: str | Model) -> Config:
+        return self.config_for_path(
+            (model if isinstance(model, _Model) else self._models[model])._path
+        )
+
     @property
     def models(self) -> MappingProxyType[str, Model]:
         """Returns all registered models in this context."""
@@ -439,32 +414,59 @@ class Context(BaseContext):
         If one of the snapshots has been previosly stored in the persisted state, the stored
         instance will be returned.
         """
-        local_snapshots = self.local_snapshots
-
-        stored_snapshots = self.state_reader.get_snapshots(
-            [s.snapshot_id for s in local_snapshots.values()]
+        prod = self.state_reader.get_environment(c.PROD)
+        remote_snapshots = (
+            {
+                snapshot.name: snapshot
+                for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
+            }
+            if prod
+            else {}
         )
 
-        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in local_snapshots.items()}
-
-    @property
-    def local_snapshots(self) -> t.Dict[str, Snapshot]:
-        """Generates and returns snapshots based on models registered in this context without reconciling them
-        with the persisted state.
-        """
-        local_snapshots = {}
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-        for model in self._models.values():
+        models = self._models.copy()
+        audits = self._audits.copy()
+        projects = {config.project for config in self.configs.values()}
+
+        for name, snapshot in remote_snapshots.items():
+            if name not in models and snapshot.project not in projects:
+                models[name] = snapshot.model
+
+                for audit in snapshot.audits:
+                    if name not in audits:
+                        audits[name] = audit
+
+        snapshots = {}
+
+        for model in models.values():
+            if model.name in remote_snapshots:
+                snapshot = remote_snapshots[model.name]
+                physical_schema = snapshot.physical_schema
+                ttl = snapshot.ttl
+                project = snapshot.project
+            else:
+                config = self.config_for_model(model)
+                physical_schema = config.physical_schema
+                ttl = config.snapshot_ttl
+                project = config.project
+
             snapshot = Snapshot.from_model(
                 model,
-                physical_schema=self.physical_schema,
-                models=self._models,
-                ttl=self.snapshot_ttl,
-                audits=self._audits,
+                models=models,
+                audits=audits,
                 cache=fingerprint_cache,
+                physical_schema=physical_schema,
+                ttl=ttl,
+                project=project,
             )
-            local_snapshots[model.name] = snapshot
-        return local_snapshots
+            snapshots[model.name] = snapshot
+
+        stored_snapshots = self.state_reader.get_snapshots(
+            [s.snapshot_id for s in snapshots.values() if not s.version]
+        )
+
+        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 
     def render(
         self,
@@ -561,7 +563,9 @@ class Context(BaseContext):
             if not model.is_sql:
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
-                expressions = parse(file.read(), default_dialect=self.dialect)
+                expressions = parse(
+                    file.read(), default_dialect=self.config_for_model(model).dialect
+                )
                 file.seek(0)
                 file.write(format_model_expressions(expressions, model.dialect))
                 file.truncate()
@@ -628,7 +632,6 @@ class Context(BaseContext):
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
-            dag=self.dag,
             state_reader=self.state_reader,
             start=start,
             end=end,
@@ -638,8 +641,8 @@ class Context(BaseContext):
             skip_backfill=skip_backfill,
             is_dev=environment != c.PROD,
             forward_only=forward_only,
-            environment_ttl=self.config.environment_ttl,
-            categorizer_config=self.config.auto_categorize_changes,
+            environment_ttl=self.environment_ttl,
+            categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
         )
 
@@ -663,7 +666,7 @@ class Context(BaseContext):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-        self.config.scheduler.create_plan_evaluator(self).evaluate(plan)
+        self._scheduler.create_plan_evaluator(self).evaluate(plan)
 
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.
@@ -738,24 +741,33 @@ class Context(BaseContext):
     ) -> unittest.result.TestResult:
         """Discover and run model tests"""
         verbosity = 2 if verbose else 1
+
         try:
             if tests:
                 result = run_model_tests(
                     tests=tests,
-                    snapshots=self.local_snapshots,
+                    models=self._models,
                     engine_adapter=self._test_engine_adapter,
                     verbosity=verbosity,
                     patterns=match_patterns,
-                    ignore_patterns=self.ignore_patterns,
                 )
             else:
-                result = run_all_model_tests(
-                    path=self.test_directory_path,
-                    snapshots=self.local_snapshots,
+                test_meta = []
+
+                for path, config in self.configs.items():
+                    test_meta.extend(
+                        get_all_model_tests(
+                            path / c.TESTS,
+                            patterns=match_patterns,
+                            ignore_patterns=config.ignore_patterns,
+                        )
+                    )
+
+                result = run_tests(
+                    test_meta,
+                    models=self._models,
                     engine_adapter=self._test_engine_adapter,
                     verbosity=verbosity,
-                    patterns=match_patterns,
-                    ignore_patterns=self.ignore_patterns,
                 )
         finally:
             self._test_engine_adapter.close()
@@ -864,21 +876,27 @@ class Context(BaseContext):
     ) -> ContextDiff:
         environment = Environment.normalize_name(environment)
         return ContextDiff.create(
-            environment, snapshots or self.snapshots, create_from or c.PROD, self.state_reader
+            environment,
+            snapshots=snapshots or self.snapshots,
+            create_from=create_from or c.PROD,
+            state_reader=self.state_reader,
         )
 
-    def _load_config(self, config: t.Union[str, Config]) -> Config:
+    def _load_configs(
+        self, config: t.Union[str, Config], paths: t.List[Path]
+    ) -> t.Dict[Path, Config]:
         if isinstance(config, Config):
-            return config
+            return {path: config for path in paths}
 
-        lookup_paths = [
-            self.sqlmesh_path / "config.yml",
-            self.sqlmesh_path / "config.yaml",
-            self.path / "config.py",
-            self.path / "config.yml",
-            self.path / "config.yaml",
-        ]
-        return load_config_from_paths(*lookup_paths, config_name=config)
+        lookup_paths = [self._sqlmesh_path / "config.yml", self._sqlmesh_path / "config.yaml"]
+
+        return {
+            path: load_config_from_paths(
+                *(lookup_paths + [path / "config.py", path / "config.yml", path / "config.yaml"]),
+                config_name=config,
+            )
+            for path in paths
+        }
 
     def _add_model_to_dag(self, model: Model) -> None:
         self.dag.graph[model.name] = set()

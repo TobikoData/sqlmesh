@@ -17,14 +17,14 @@ from tests.utils.test_filesystem import create_temp_file
 
 
 def test_global_config():
-    context = Context(path="examples/sushi")
-    assert context.dialect == "duckdb"
-    assert context.physical_schema == "sqlmesh"
+    context = Context(paths="examples/sushi")
+    assert context.config.dialect is None
+    assert context.config.physical_schema == "sqlmesh"
 
 
 def test_named_config():
-    context = Context(path="examples/sushi", config="local_config")
-    assert context.dialect == "duckdb"
+    context = Context(paths="examples/sushi", config="local_config")
+    assert len(context.config.connections) == 1
 
 
 def test_invalid_named_config():
@@ -32,39 +32,27 @@ def test_invalid_named_config():
         ConfigError,
         match="Config 'blah' was not found.",
     ):
-        Context(path="examples/sushi", config="blah")
+        Context(paths="examples/sushi", config="blah")
 
 
 def test_missing_named_config():
     with pytest.raises(ConfigError, match=r"Config 'imaginary_config' was not found."):
-        Context(path="examples/sushi", config="imaginary_config")
-
-
-def test_config_precedence():
-    context = Context(path="examples/sushi", dialect="spark", physical_schema="test")
-    assert context.dialect == "spark"
-    assert context.physical_schema == "test"
-
-    # Context parameters take precedence over config
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev")
-    context = Context(path="examples/sushi", dialect="spark", physical_schema="test", config=config)
-    assert context.dialect == "spark"
-    assert context.physical_schema == "test"
+        Context(paths="examples/sushi", config="imaginary_config")
 
 
 def test_config_parameter():
     config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev")
-    context = Context(path="examples/sushi", config=config)
-    assert context.dialect == "presto"
-    assert context.physical_schema == "dev"
+    context = Context(paths="examples/sushi", config=config)
+    assert context.config.dialect == "presto"
+    assert context.config.physical_schema == "dev"
 
 
 def test_config_not_found():
     with pytest.raises(
         ConfigError,
-        match=r"^nonexistent/directory is not a directory.*",
+        match=r".*config could not be found.*",
     ):
-        Context(path="nonexistent/directory", config="local_config")
+        Context(paths="nonexistent/directory", config="local_config")
 
 
 def test_custom_macros(sushi_context):
@@ -164,7 +152,7 @@ def test_render(sushi_context, assert_exp_eq):
     )
 
     # unpushed render still works
-    unpushed = Context(path="examples/sushi")
+    unpushed = Context(paths="examples/sushi")
     assert_exp_eq(
         unpushed.render(snapshot.name),
         f"""
@@ -227,7 +215,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator._promote(
         Plan(
             context_diff=sushi_context._context_diff("prod"),
-            dag=sushi_context.dag,
             state_reader=sushi_context.state_reader,
         )
     )
@@ -316,8 +303,10 @@ def test():
     return "test"
 """,
     )
-    config = Config(ignore_patterns=["models/ignore/*.sql", "macro_ignore.py"])
-    context = Context(path=str(tmpdir), config=config)
+    config = Config(
+        ignore_patterns=["models/ignore/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
+    )
+    context = Context(paths=str(tmpdir), config=config)
 
     assert ["db.actual_test"] == list(context.models)
     assert "test" == list(context.macros)[-1]

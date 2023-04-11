@@ -19,7 +19,7 @@ pytest_plugins = ["tests.common_fixtures"]
 
 @pytest.fixture
 def context(tmpdir) -> Context:
-    return Context(path=str(tmpdir))
+    return Context(paths=str(tmpdir))
 
 
 @pytest.fixture
@@ -35,14 +35,14 @@ def push_plan(context: Context, plan: Plan) -> None:
 
 @pytest.fixture()
 def sushi_context_pre_scheduling(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
+    context, plan = init_and_plan_context("examples/sushi", mocker)
     push_plan(context, plan)
     return context
 
 
 @pytest.fixture()
 def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
+    context, plan = init_and_plan_context("examples/sushi", mocker)
 
     for model in context.models.values():
         if model.start:
@@ -56,14 +56,14 @@ def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
 
 @pytest.fixture()
 def sushi_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context("examples/sushi", mocker)
+    context, plan = init_and_plan_context("examples/sushi", mocker)
     context.apply(plan)
     return context
 
 
 @pytest.fixture()
 def sushi_dbt_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_sushi_context("examples/sushi_dbt", mocker, "Jan 1 2022")
+    context, plan = init_and_plan_context("examples/sushi_dbt", mocker, "Jan 1 2022")
 
     context.apply(plan)
     return context
@@ -73,19 +73,17 @@ def sushi_dbt_context(mocker: MockerFixture) -> Context:
 def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
     from tests.fixtures.dbt.sushi_test.seed_sources import init_raw_schema
 
-    context, plan = init_and_plan_sushi_context(
-        "tests/fixtures/dbt/sushi_test", mocker, "Jan 1 2022"
-    )
+    context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test", mocker, "Jan 1 2022")
     init_raw_schema(context.engine_adapter)
 
     context.apply(plan)
     return context
 
 
-def init_and_plan_sushi_context(
-    path: str, mocker: MockerFixture, start: TimeLike = "1 week ago"
+def init_and_plan_context(
+    paths: str | t.List[str], mocker: MockerFixture, start: TimeLike = "1 week ago"
 ) -> t.Tuple[Context, Plan]:
-    sushi_context = Context(path=path, config="test_config")
+    sushi_context = Context(paths=paths, config="test_config")
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 

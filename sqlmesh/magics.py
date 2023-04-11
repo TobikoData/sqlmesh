@@ -8,6 +8,7 @@ from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 from ruamel.yaml import YAML
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
@@ -46,11 +47,14 @@ class SQLMeshMagics(Magics):
         )
 
     @magic_arguments()
-    @argument("path", type=str, help="The path to the SQLMesh project.")
+    @argument(
+        "--paths", "-p", type=str, nargs="+", default="", help="The path to the SQLMesh project."
+    )
     @line_magic
-    def context(self, path: str) -> None:
+    def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
-        self._shell.user_ns["context"] = Context(path=path)
+        args = parse_argstring(self.context, line)
+        self._shell.user_ns["context"] = Context(paths=args.paths)
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -68,13 +72,14 @@ class SQLMeshMagics(Magics):
             raise SQLMeshError(f"Cannot find {model}")
 
         if sql:
+            config = self._context.config_for_model(model)
             loaded = load_model(
-                parse(sql, default_dialect=self._context.dialect),
+                parse(sql, default_dialect=config.dialect),
                 macros=self._context._macros,
                 hooks=self._context._hooks,
                 path=model._path,
-                dialect=self._context.dialect,
-                time_column_format=self._context.config.time_column_format,
+                dialect=config.dialect,
+                time_column_format=config.time_column_format,
             )
 
             if loaded.name == args.model:
@@ -119,12 +124,18 @@ class SQLMeshMagics(Magics):
         if not args.test_name and not args.ls:
             raise MagicError("Must provide either test name or `--ls` to list tests")
 
-        model_test_metadatas = get_all_model_tests(
-            self._context.test_directory_path,
-            ignore_patterns=self._context.ignore_patterns,
-        )
+        test_meta = []
+
+        for path, config in self._context.configs.items():
+            test_meta.extend(
+                get_all_model_tests(
+                    path / c.TESTS,
+                    ignore_patterns=config.ignore_patterns,
+                )
+            )
+
         tests: t.Dict[str, t.Dict[str, ModelTestMetadata]] = defaultdict(dict)
-        for model_test_metadata in model_test_metadatas:
+        for model_test_metadata in test_meta:
             model = model_test_metadata.body.get("model")
             if not model:
                 self._context.console.log_error(

@@ -32,7 +32,7 @@ config = Config()
 
 @pytest.fixture
 def project_context(project_tmp_path: Path) -> Context:
-    context = Context(path=str(project_tmp_path), console=api_console)
+    context = Context(paths=str(project_tmp_path), console=api_console)
 
     def get_loaded_context_override() -> Context:
         return context

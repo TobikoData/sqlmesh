@@ -610,7 +610,8 @@ def test_revert_after_downstream_change(sushi_context: Context):
 @pytest.mark.core_integration
 def test_auto_categorization(sushi_context: Context):
     environment = "dev"
-    sushi_context.config.auto_categorize_changes.sql = AutoCategorizationMode.FULL
+    for config in sushi_context.configs.values():
+        config.auto_categorize_changes.sql = AutoCategorizationMode.FULL
     initial_add(sushi_context, environment)
 
     version = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version
@@ -623,6 +624,26 @@ def test_auto_categorization(sushi_context: Context):
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].change_category is None
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint != fingerprint
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version == version
+
+
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_multi(mocker):
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"])
+    context.state_sync.reset()
+    plan = context.plan()
+    assert len(plan.new_snapshots) == 4
+    context.apply(plan)
+
+    context = Context(paths=["examples/multi/repo_1"])
+    model = context.models["bronze.a"]
+    model.query.select("'c' AS c", copy=False)
+    plan = context.plan()
+    assert set(snapshot.name for snapshot in plan.directly_modified) == {"bronze.a"}
+    assert list(plan.indirectly_modified.values())[0] == {"bronze.b", "silver.c", "silver.d"}
+    assert len(plan.missing_intervals) == 1
+    context.apply(plan)
+    validate_apply_basics(context, c.PROD, plan.snapshots)
 
 
 def initial_add(context: Context, environment: str):
