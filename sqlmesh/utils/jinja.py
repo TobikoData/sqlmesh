@@ -211,14 +211,15 @@ class JinjaMacroRegistry(PydanticModel):
         Returns:
             The macro as a Python callable or None if not found.
         """
+        global_vars = self._create_builtin_globals(kwargs)
         if reference.package is not None and reference.name not in self.packages.get(
             reference.package, {}
         ):
-            return None
+            global_package = global_vars.get(reference.package, {})
+            return global_package.get(reference.name)
         if reference.package is None and reference.name not in self.root_macros:
-            return None
+            return global_vars.get(reference.name)
 
-        global_vars = self._create_builtin_globals(kwargs)
         return self._make_callable(reference.name, reference.package, {}, global_vars)
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
