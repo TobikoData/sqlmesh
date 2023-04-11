@@ -18,12 +18,7 @@ router = APIRouter()
 def _get_table(node: Node) -> str:
     """Get a node's table/source"""
     if isinstance(node.expression, exp.Table):
-        return (
-            f"{node.expression.db}.{node.expression.this}"
-            if node.expression.db
-            else str(node.expression.this)
-        )
-
+        return exp.table_name(node.expression)
     else:
         return node.alias
 
@@ -34,7 +29,7 @@ def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     for node in downstream:
         column: exp.Column = parse_one(node.name)
         table = _get_table(node)
-        graph[table].append(str(column.this))
+        graph[table].append(column.name)
     return graph
 
 
@@ -66,6 +61,6 @@ async def column_lineage(
         else:
             table = _get_table(node)
             node_column: exp.Column = parse_one(node.name)
-            column_name = str(node_column.this)
+            column_name = node_column.name
         graph[table] = {column_name: _process_downstream(node.downstream)}
     return graph
