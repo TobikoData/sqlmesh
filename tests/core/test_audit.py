@@ -217,3 +217,14 @@ def test_number_of_rows_audit(model: Model):
         rendered_query.sql()
         == """SELECT 1 AS "1" FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 HAVING COUNT(*) <= 0 LIMIT 0 + 1"""
     )
+
+
+def test_forall_audit(model: Model):
+    rendered_query_a = builtin.forall_audit.render_query(
+        model,
+        criteria=[parse_one("a >= b"), parse_one("c + d - e < 1.0")],
+    )
+    assert (
+        rendered_query_a.sql()
+        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE NOT (_q_0.a >= _q_0.b) OR NOT (_q_0.c + _q_0.d - _q_0.e < 1.0)"
+    )

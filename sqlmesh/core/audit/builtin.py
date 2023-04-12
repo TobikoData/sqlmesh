@@ -60,3 +60,16 @@ LIMIT @threshold + 1
 HAVING COUNT(*) <= @threshold
     """,
 )
+
+
+forall_audit = Audit(
+    name="forall",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @criteria,
+  (l, r) -> NOT(@SQL(l)) OR NOT(@SQL(r))
+)
+    """,
+)
