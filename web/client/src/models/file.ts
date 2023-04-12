@@ -61,5 +61,5 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 function getFileType(path?: string): FileType | undefined {
   if (path == null || isStringEmptyOrNil(path)) return
 
-  if (path.startsWith('models')) return 'model'
+  if (path.startsWith('models')) return FileType.model
 }
