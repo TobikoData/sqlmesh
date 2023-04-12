@@ -68,7 +68,7 @@ class DbtContext:
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, str] = field(default_factory=dict)
 
-    _target: t.Optional[TargetConfig] = None
+    _target: TargetConfig = field(default_factory=TargetConfig)
 
     _jinja_environment: t.Optional[Environment] = None
 
@@ -140,8 +140,6 @@ class DbtContext:
 
     @property
     def target(self) -> TargetConfig:
-        if not self._target:
-            raise ConfigError(f"Target not set for {self.project_name}")
         return self._target
 
     @target.setter

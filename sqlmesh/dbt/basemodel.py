@@ -17,7 +17,6 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.adapter import ParsetimeAdapter
-from sqlmesh.dbt.builtin import create_builtin_globals
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -276,6 +275,8 @@ class BaseModelConfig(GeneralConfig):
 
 class ModelSqlRenderer(t.Generic[BMC]):
     def __init__(self, context: DbtContext, config: BMC):
+        from sqlmesh.dbt.builtin import create_builtin_globals
+
         self.context = context
         self.config = config
 

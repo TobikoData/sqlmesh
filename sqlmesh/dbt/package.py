@@ -48,9 +48,9 @@ class Package(PydanticModel):
 class PackageLoader:
     """Loader for DBT packages"""
 
-    def __init__(self, context: DbtContext, overrides: ProjectConfig):
+    def __init__(self, context: DbtContext, overrides: t.Optional[ProjectConfig] = None):
         self._context = context.copy()
-        self._overrides = overrides
+        self._overrides = overrides or ProjectConfig()
         self._config_paths: t.Set[Path] = set()
         self.project_config = ProjectConfig()
 

@@ -40,9 +40,9 @@ class TargetConfig(abc.ABC, PydanticModel):
     """
 
     # dbt
-    type: str
+    type: str = ""
     name: str = ""
-    schema_: str = Field(alias="schema")
+    schema_: str = Field(default="", alias="schema")
     threads: int = 1
     profile_name: t.Optional[str] = None
 

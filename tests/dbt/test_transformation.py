@@ -5,6 +5,7 @@ import pytest
 from dbt.exceptions import CompilationError
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.config.connection import DuckDBConnectionConfig
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -12,6 +13,7 @@ from sqlmesh.core.model import (
     ModelKind,
     ModelKindName,
 )
+from sqlmesh.dbt.builtin import create_builtin_globals
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -426,3 +428,26 @@ def test_zip(sushi_test_project: Project):
     assert context.render("{{ zip_strict([1, 2], ['a', 'b']) }}") == "[(1, 'a'), (2, 'b')]"
     with pytest.raises(TypeError):
         context.render("{{ zip_strict(12, ['a', 'b']) }}")
+
+
+def test_dbt_namespace():
+    context = DbtContext()
+    jinja_globals = create_builtin_globals(
+        jinja_macros=context.jinja_macros,
+        jinja_globals={},
+        engine_adapter=DuckDBConnectionConfig().create_engine_adapter(),
+    )
+    jinja_env = context.jinja_macros.build_environment(**jinja_globals)
+
+    assert (
+        jinja_env.from_string("{{ dbt.replace('original sentence', 'original', 'updated') }}")
+        .render()
+        .strip()
+        == """replace(
+        original sentence,
+        original,
+        updated
+    )"""
+    )
+
+    assert jinja_env.from_string("{{ dbt.hash('col')}}").render() == "md5(cast(col as TEXT))"
