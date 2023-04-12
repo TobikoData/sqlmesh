@@ -222,10 +222,12 @@ class Audit(AuditMeta, frozen=True):
 class AuditResult(PydanticModel):
     audit: Audit
     """The audit this result is for."""
-    count: int
-    """The number of records returned by the audit query."""
-    query: exp.Expression
-    """The rendered query used by the audit."""
+    count: t.Optional[int]
+    """The number of records returned by the audit query. This could be None if the audit was skipped."""
+    query: t.Optional[exp.Expression]
+    """The rendered query used by the audit. This could be None if the audit was skipped."""
+    skipped: bool = False
+    """Whether this audit was skipped or not."""
 
 
 def _raise_config_error(msg: str, path: pathlib.Path) -> None:

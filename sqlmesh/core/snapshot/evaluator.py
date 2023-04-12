@@ -314,6 +314,9 @@ class SnapshotEvaluator:
         results = []
         for audit_name, audit_args in snapshot.model.audits:
             audit = audits_by_name[audit_name]
+            if audit.skip:
+                results.append(AuditResult(audit=audit, skipped=True))
+                continue
             query = audit.render_query(
                 snapshot,
                 start=start,
