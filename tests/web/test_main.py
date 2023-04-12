@@ -469,3 +469,18 @@ def test_get_environments(project_context: Context) -> None:
             "expiration_ts": None,
         }
     }
+
+
+def test_get_lineage(web_sushi_context: Context) -> None:
+    response = client.get(
+        "/api/lineage", params={"model": "sushi.top_waiters", "column": "revenue"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "sushi.top_waiters": {"revenue": {"sushi.waiter_revenue_by_day": ["revenue"]}},
+        "sushi.waiter_revenue_by_day": {
+            "revenue": {"sushi.items": ["price"], "sushi.order_items": ["quantity"]}
+        },
+        "sushi.items": {"price": {}},
+        "sushi.order_items": {"quantity": {}},
+    }

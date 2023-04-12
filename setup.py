@@ -43,7 +43,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=11.4.4",
+        "sqlglot>=11.5.3",
     ],
     extras_require={
         "dev": [
@@ -76,10 +76,10 @@ setup(
             "types-requests==2.28.8",
         ],
         "web": [
-            "fastapi==0.89.1",
+            "fastapi==0.95.0",
             "hyperscript==0.0.1",
             "pyarrow==11.0.0",
-            "uvicorn==0.20.0",
+            "uvicorn==0.21.1",
         ],
         "snowflake": [
             "snowflake-connector-python[pandas]",
