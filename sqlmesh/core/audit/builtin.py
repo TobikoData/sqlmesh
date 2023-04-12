@@ -69,7 +69,7 @@ SELECT *
 FROM @this_model
 WHERE @REDUCE(
   @criteria,
-  (l, r) -> NOT(@SQL(l)) OR NOT(@SQL(r))
+  (l, r) -> NOT (l) OR NOT (r)
 )
     """,
 )
