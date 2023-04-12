@@ -7,7 +7,7 @@ from sqlglot.dialects.dialect import Dialect, DialectType
 dialects = json.dumps(
     [
         {
-            "dialect_title": "SqlGlot" if dialect == "" else dialect_class.__name__,
+            "dialect_title": "SQLGlot" if dialect == "" else dialect_class.__name__,
             "dialect_name": dialect,
         }
         for dialect, dialect_class in Dialect.classes.items()

@@ -47,7 +47,7 @@ export default function FolderTree({
   return (
     <div
       className={clsx(
-        'py-2 px-1 overflow-hidden overflow-y-auto text-sm',
+        'py-2 px-1 overflow-hidden overflow-y-auto text-sm scrollbar scrollbar--vertical',
         className,
       )}
     >

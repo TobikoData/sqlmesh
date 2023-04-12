@@ -163,10 +163,11 @@ export function debounceAsync<T = any>(
   let timeoutIdLeading: ReturnType<typeof setTimeout> | undefined
   let timeoutIdTrailing: ReturnType<typeof setTimeout> | undefined
 
+  clearTimeout(timeoutIdLeading)
+
   async function callback(...args: any): Promise<T> {
     const callNow = immediate && timeoutIdLeading == null
 
-    clearTimeout(timeoutIdLeading)
     clearTimeout(timeoutIdTrailing)
 
     const promise = new Promise<T>((resolve, reject) => {

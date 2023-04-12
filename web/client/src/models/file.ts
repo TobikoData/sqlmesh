@@ -1,6 +1,7 @@
 import type { File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
+import { isStringEmptyOrNil } from '@utils/index'
 
 export interface InitialFile extends InitialArtifact, File {
   content: string
@@ -32,7 +33,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this.extension = initial?.extension ?? this.initial.extension
     this.is_supported = initial?.is_supported ?? this.initial.is_supported
     this._content = this.content = initial?.content ?? this.initial.content
-    this.type = initial?.type
+    this.type = initial?.type ?? getFileType(initial?.path)
   }
 
   get isEmpty(): boolean {
@@ -55,4 +56,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this._content = newContent
     this.content = newContent
   }
+}
+
+function getFileType(path?: string): FileType | undefined {
+  if (path == null || isStringEmptyOrNil(path)) return
+
+  if (path.startsWith('models')) return 'model'
 }
