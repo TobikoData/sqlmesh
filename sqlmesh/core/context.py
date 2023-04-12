@@ -786,6 +786,7 @@ class Context(BaseContext):
         num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
+        skipped_count = 0
         for snapshot in snapshots:
             for audit_result in self.snapshot_evaluator.audit(
                 snapshot=snapshot,
@@ -794,13 +795,19 @@ class Context(BaseContext):
                 snapshots=self.snapshots,
                 raise_exception=False,
             ):
-                if audit_result.count:
+                if audit_result.skipped:
+                    self.console.log_status_update(f"{audit_result.audit.name} SKIPPED.")
+                    skipped_count += 1
+                elif audit_result.count:
                     errors.append(audit_result)
                     self.console.log_status_update(f"{audit_result.audit.name} FAIL.")
                 else:
                     self.console.log_status_update(f"{audit_result.audit.name} PASS.")
 
-        self.console.log_status_update(f"\nFinished with {len(errors)} audit error(s).")
+        self.console.log_status_update(
+            f"\nFinished with {len(errors)} audit error{'' if len(errors) == 1 else 's'} "
+            f"and {skipped_count} audit{'' if skipped_count == 1 else 's'} skipped."
+        )
         for error in errors:
             self.console.log_status_update(
                 f"\nFailure in audit {error.audit.name} ({error.audit._path})."
