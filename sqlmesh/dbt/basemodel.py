@@ -23,7 +23,8 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
     yaml_to_columns,
 )
-from sqlmesh.dbt.common import DbtContext, GeneralConfig, SqlStr
+from sqlmesh.dbt.common import GeneralConfig, SqlStr
+from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict

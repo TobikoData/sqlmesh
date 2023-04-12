@@ -3,13 +3,8 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import (
-    PROJECT_FILENAME,
-    BaseConfig,
-    DbtContext,
-    SqlStr,
-    load_yaml,
-)
+from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, SqlStr, load_yaml
+from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig

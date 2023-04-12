@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pytest_mock.plugin import MockerFixture
 
-from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.dbt.project import Project
 
 

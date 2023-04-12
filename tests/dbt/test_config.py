@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
