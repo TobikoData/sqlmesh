@@ -106,7 +106,7 @@ function getDecorations(
       to: range.to,
       enter({ from, to }) {
         // In case model name represented in qoutes
-        // like in python files , we need to remove qoutes
+        // like in python files, we need to remove qoutes
         const model = view.state.doc
           .sliceString(from, to)
           .replaceAll('"', '')
