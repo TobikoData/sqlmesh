@@ -5,7 +5,7 @@ import traceback
 import typing as t
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlglot import exp, parse_one
+from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -27,9 +27,9 @@ def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(list)
     for node in downstream:
-        column: exp.Column = parse_one(node.name)
+        column = exp.to_column(node.name).name
         table = _get_table(node)
-        graph[table].append(column.name)
+        graph[table].append(column)
     return graph
 
 
@@ -56,11 +56,8 @@ async def column_lineage(
     graph = {}
     table = model
     for i, node in enumerate(node.walk()):
-        if i == 0:
-            column_name = column
-        else:
+        if i > 0:
             table = _get_table(node)
-            node_column: exp.Column = parse_one(node.name)
-            column_name = node_column.name
-        graph[table] = {column_name: _process_downstream(node.downstream)}
+            column = exp.to_column(node.name).name
+        graph[table] = {column: _process_downstream(node.downstream)}
     return graph
