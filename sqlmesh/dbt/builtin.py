@@ -250,7 +250,7 @@ def _try_literal_eval(value: str) -> t.Any:
         return value
 
 
-def _dbt_macros_registry() -> JinjaMacroRegistry:
+def _dbt_macro_registry() -> JinjaMacroRegistry:
     registry = JinjaMacroRegistry()
 
     try:
@@ -270,7 +270,7 @@ def _dbt_macros_registry() -> JinjaMacroRegistry:
     return registry
 
 
-DBT_MACRO_REGISTRY = _dbt_macros_registry()
+DBT_MACRO_REGISTRY = _dbt_macro_registry()
 
 BUILTIN_GLOBALS = {
     "api": Api(),
