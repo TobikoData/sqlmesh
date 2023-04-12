@@ -270,6 +270,8 @@ def _dbt_macros_registry() -> JinjaMacroRegistry:
     return registry
 
 
+DBT_MACRO_REGISTRY = _dbt_macros_registry()
+
 BUILTIN_GLOBALS = {
     "api": Api(),
     "env_var": env_var,
@@ -367,9 +369,9 @@ def create_builtin_globals(
 
     builtin_globals.update(jinja_globals)
     if "dbt" not in builtin_globals:
-        builtin_globals["dbt"] = (
-            _dbt_macros_registry().build_environment(**builtin_globals).globals.get("dbt", {})
-        )
+        builtin_globals["dbt"] = DBT_MACRO_REGISTRY.build_environment(
+            **builtin_globals
+        ).globals.get("dbt", {})
 
     return builtin_globals
 
