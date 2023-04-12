@@ -113,6 +113,22 @@ MODEL (
 );
 ```
 
+### forall
+Ensures that a set of arbitrary boolean expressions are upheld (evaluate to `true`) for all rows in the model. For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
+
+Example:
+```sql linenums="1"
+MODEL (
+  name sushi.items,
+  audits (
+    forall(criteria=[
+      price >= 0,
+      LENGTH(name) > 0
+    ])
+  )
+);
+```
+
 ## Running audits
 ### The CLI audit command
 
