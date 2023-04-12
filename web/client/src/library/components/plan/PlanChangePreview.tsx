@@ -18,6 +18,7 @@ import {
   usePlanDispatch,
   type PlanChangeType,
 } from './context'
+import { isArrayNotEmpty } from '@utils/index'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
@@ -33,7 +34,7 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 w-full overflow-auto ',
+        'flex flex-col rounded-md p-4 overflow-auto',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
@@ -164,7 +165,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
   return (
     <RadioGroup
       className={clsx(
-        'flex flex-col mt-2 ',
+        'flex flex-col mt-2',
         planState === EnumPlanState.Finished
           ? 'opacity-50 cursor-not-allowed'
           : 'cursor-pointer',
@@ -228,28 +229,32 @@ function PlanChangePreviewIndirect({
           key={change.model_name}
           className="text-warning-700 dark:text-warning-500"
         >
-          <Disclosure>
-            {({ open }) => (
-              <>
-                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
-                  <PlanChangePreviewTitle model_name={change.model_name} />
-                  {(() => {
-                    const Tag = open ? MinusCircleIcon : PlusCircleIcon
+          {isArrayNotEmpty(change.direct) ? (
+            <Disclosure>
+              {({ open }) => (
+                <>
+                  <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
+                    <PlanChangePreviewTitle model_name={change.model_name} />
+                    {(() => {
+                      const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
-                    return (
-                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
-                    )
-                  })()}
-                </Disclosure.Button>
-                <Disclosure.Panel className="text-sm px-4 mb-4">
-                  <PlanChangePreviewRelations
-                    type="direct"
-                    models={change.direct ?? []}
-                  />
-                </Disclosure.Panel>
-              </>
-            )}
-          </Disclosure>
+                      return (
+                        <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
+                      )
+                    })()}
+                  </Disclosure.Button>
+                  <Disclosure.Panel className="text-sm px-4 mb-4">
+                    <PlanChangePreviewRelations
+                      type="direct"
+                      models={change.direct ?? []}
+                    />
+                  </Disclosure.Panel>
+                </>
+              )}
+            </Disclosure>
+          ) : (
+            <PlanChangePreviewTitle model_name={change.model_name} />
+          )}
         </li>
       ))}
     </ul>

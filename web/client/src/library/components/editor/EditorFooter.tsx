@@ -73,7 +73,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           </EditorIndicator.Selector>
         </EditorIndicator>
       )}
-      {tab.file.isSQLMeshModel && tab.dialect != null && (
+      {tab.file.isSQLMeshModel && tab.dialect != null && tab.dialect !== '' && (
         <EditorIndicator
           className="mr-2"
           text="Dialect"

@@ -112,7 +112,7 @@ export default function Editor(): JSX.Element {
         </div>
       ) : (
         <SplitPane
-          className="h-full w-full"
+          className="h-full w-full overflow-hidden"
           sizes={sizesCodeEditorAndPreview}
           direction="vertical"
           minSize={0}
