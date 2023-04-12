@@ -21,36 +21,14 @@ export function SqlMeshModel(models: Map<string, Model>): Extension {
   return ViewPlugin.fromClass(
     class SqlMeshModelView {
       decorations: DecorationSet = Decoration.set([])
+      constructor(readonly view: EditorView) {
+        this.decorations = getDecorations(models, view)
+      }
+
       update(viewUpdate: ViewUpdate): void {
-        const decorations: any[] = []
-
-        for (const range of viewUpdate.view.visibleRanges) {
-          syntaxTree(viewUpdate.view.state).iterate({
-            from: range.from,
-            to: range.to,
-            enter({ from, to }) {
-              // In case model name represented in qoutes
-              // like in python files , we need to remove qoutes
-              const model = viewUpdate.view.state.doc
-                .sliceString(from, to)
-                .replaceAll('"', '')
-                .replaceAll("'", '')
-
-              if (isNil(models.get(model))) return true
-
-              const decoration = Decoration.mark({
-                attributes: {
-                  class: 'sqlmesh-model',
-                  model,
-                },
-              }).range(from, to)
-
-              decorations.push(decoration)
-            },
-          })
+        if (viewUpdate.docChanged) {
+          this.decorations = getDecorations(models, viewUpdate.view)
         }
-
-        this.decorations = Decoration.set(decorations)
       }
     },
     {
@@ -114,6 +92,41 @@ export function HoverTooltip(models: Map<string, Model>): Extension {
     },
     { hoverTime: 50 },
   )
+}
+
+function getDecorations(
+  models: Map<string, Model>,
+  view: EditorView,
+): DecorationSet {
+  const decorations: any = []
+
+  for (const range of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from: range.from,
+      to: range.to,
+      enter({ from, to }) {
+        // In case model name represented in qoutes
+        // like in python files, we need to remove qoutes
+        const model = view.state.doc
+          .sliceString(from, to)
+          .replaceAll('"', '')
+          .replaceAll("'", '')
+
+        if (isNil(models.get(model))) return true
+
+        const decoration = Decoration.mark({
+          attributes: {
+            class: 'sqlmesh-model',
+            model,
+          },
+        }).range(from, to)
+
+        decorations.push(decoration)
+      },
+    })
+  }
+
+  return Decoration.set(decorations)
 }
 
 function handleClickOnSqlMeshModel(
