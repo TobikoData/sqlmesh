@@ -115,6 +115,7 @@ class SchemaDelta(PydanticModel):
     column_name: str
     column_type: exp.DataType
     op: SchemaDeltaOp
+    expected_table_struct: exp.DataType = exp.DataType.build("STRUCT")
     parents: ParentColumns = ParentColumns.empty()
     add_position: t.Optional[ColumnPosition] = None
     current_type: t.Optional[exp.DataType] = None
@@ -124,6 +125,7 @@ class SchemaDelta(PydanticModel):
         cls,
         column_name: str,
         column_type: t.Union[str, exp.DataType],
+        expected_table_struct: t.Union[str, exp.DataType],
         position: ColumnPosition = ColumnPosition.create_last(),
         parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
@@ -133,18 +135,24 @@ class SchemaDelta(PydanticModel):
             op=SchemaDeltaOp.ADD,
             parents=parents,
             add_position=position,
+            expected_table_struct=exp.DataType.build(expected_table_struct),
         )
 
     @classmethod
     def drop(
         cls,
         column_name: str,
+        expected_table_struct: t.Union[str, exp.DataType],
         column_type: t.Optional[t.Union[str, exp.DataType]] = None,
         parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
         column_type = exp.DataType.build(column_type) if column_type else exp.DataType.build("INT")
         return cls(
-            column_name=column_name, column_type=column_type, op=SchemaDeltaOp.DROP, parents=parents
+            column_name=column_name,
+            column_type=column_type,
+            op=SchemaDeltaOp.DROP,
+            parents=parents,
+            expected_table_struct=exp.DataType.build(expected_table_struct),
         )
 
     @classmethod
@@ -153,6 +161,7 @@ class SchemaDelta(PydanticModel):
         column_name: str,
         column_type: t.Union[str, exp.DataType],
         current_type: t.Union[str, exp.DataType],
+        expected_table_struct: t.Union[str, exp.DataType],
         position: ColumnPosition = ColumnPosition.create_last(),
         parents: ParentColumns = ParentColumns.empty(),
     ) -> SchemaDelta:
@@ -163,6 +172,7 @@ class SchemaDelta(PydanticModel):
             parents=parents,
             add_position=position,
             current_type=exp.DataType.build(current_type),
+            expected_table_struct=exp.DataType.build(expected_table_struct),
         )
 
     @property
@@ -239,17 +249,27 @@ def _get_alter_op(
     name: str,
     new_type: exp.DataType,
     current_type: t.Union[str, exp.DataType],
+    root_struct: exp.DataType,
+    new_kwarg: exp.StructKwarg,
 ) -> SchemaDelta:
     col_pos = ColumnPosition.create(pos, struct.expressions, replacing_col=True)
+    struct.expressions.pop(pos)
+    struct.expressions.insert(pos, new_kwarg)
     return SchemaDelta.alter_type(
-        _get_column_name(name, parent_columns), new_type, current_type, col_pos, parent_columns
+        _get_column_name(name, parent_columns),
+        new_type,
+        current_type,
+        root_struct.copy(),
+        col_pos,
+        parent_columns,
     )
 
 
 def struct_diff(
     current_struct: exp.DataType,
     new_struct: exp.DataType,
-    parent_columns: t.Optional[ParentColumns] = None,
+    parent_columns: ParentColumns = ParentColumns.empty(),
+    root_struct: t.Optional[exp.DataType] = None,
 ) -> t.List[SchemaDelta]:
     """
     Calculates a list of schema deltas between the two tables, applying which in order to the first table
@@ -268,37 +288,38 @@ def struct_diff(
     Returns:
         The list of deltas.
     """
-    current_struct = current_struct.copy()
-    parent_columns = parent_columns or ParentColumns(columns=[])
+    root_struct = root_struct or current_struct
     operations = []
     # Resolve all drop columns
     pop_offset = 0
     for current_pos, current_kwarg in enumerate(current_struct.expressions.copy()):
         new_pos, _ = _get_matching_kwarg(current_kwarg, new_struct, current_pos)
         if new_pos is None:
+            current_struct.expressions.pop(current_pos - pop_offset)
             operations.append(
                 SchemaDelta.drop(
                     _get_column_name(current_kwarg.alias_or_name, parent_columns),
+                    root_struct.copy(),
                     current_kwarg.expression,
                     parent_columns,
                 )
             )
-            current_struct.expressions.pop(current_pos - pop_offset)
             pop_offset += 1
     # Resolve all add columns
     for new_pos, new_kwarg in enumerate(new_struct.expressions):
         possible_current_pos, _ = _get_matching_kwarg(new_kwarg, current_struct, new_pos)
         if possible_current_pos is None:
             col_pos = ColumnPosition.create(new_pos, current_struct.expressions)
+            current_struct.expressions.insert(new_pos, new_kwarg)
             operations.append(
                 SchemaDelta.add(
                     _get_column_name(new_kwarg.alias_or_name, parent_columns),
                     new_kwarg.expression,
+                    root_struct.copy(),
                     col_pos,
                     parent_columns,
                 )
             )
-            current_struct.expressions.insert(new_pos, new_kwarg)
     # Resolve all column type changes
     for current_pos, current_kwarg in enumerate(current_struct.expressions):
         new_pos, new_kwarg = _get_matching_kwarg(current_kwarg, new_struct, current_pos)
@@ -312,6 +333,7 @@ def struct_diff(
                     current_type,
                     new_type,
                     parent_columns.add(current_name, current_type),
+                    root_struct,
                 )
             )
         elif new_type.this == current_type.this == exp.DataType.Type.ARRAY:
@@ -323,6 +345,7 @@ def struct_diff(
                         current_array_type,
                         new_array_type,
                         parent_columns.add(current_name, current_type),
+                        root_struct,
                     )
                 )
             else:
@@ -334,6 +357,8 @@ def struct_diff(
                         current_name,
                         new_array_type,
                         current_array_type,
+                        root_struct,
+                        new_kwarg,
                     )
                 )
         else:
@@ -345,10 +370,10 @@ def struct_diff(
                     current_name,
                     new_type,
                     current_type,
+                    root_struct,
+                    new_kwarg,
                 )
             )
-        current_struct.expressions.pop(current_pos)
-        current_struct.expressions.insert(current_pos, new_kwarg)
     return operations
 
 
@@ -376,9 +401,12 @@ def table_diff(
     def dict_to_struct(value: t.Dict[str, exp.DataType]) -> exp.DataType:
         return exp.DataType(
             this=exp.DataType.Type.STRUCT,
-            expressions=[exp.StructKwarg(this=k, expression=v) for k, v in value.items()],
+            expressions=[
+                exp.StructKwarg(this=exp.to_identifier(k), expression=v) for k, v in value.items()
+            ],
+            nested=True,
         )
 
     current_struct = dict_to_struct(engine_adapter.columns(current_table))
     new_struct = dict_to_struct(engine_adapter.columns(new_table))
-    return struct_diff(current_struct, new_struct, ParentColumns.empty())
+    return struct_diff(current_struct, new_struct)

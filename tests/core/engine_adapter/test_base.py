@@ -215,20 +215,34 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             SchemaDiffConfig(),
             [
-                SchemaDelta.drop("c"),
-                SchemaDelta.drop("d"),
+                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
+                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
                 # Positions are ignored
-                SchemaDelta.add("e", "INT", ColumnPosition.create_middle("a")),
-                SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
+                SchemaDelta.add(
+                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
+                ),
+                SchemaDelta.add(
+                    "f",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
+                    ColumnPosition.create_first(),
+                ),
                 # Alter is converted to drop/add
-                SchemaDelta.alter_type("e", "TEXT", "INT"),
-                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
+                SchemaDelta.alter_type(
+                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
+                ),
+                SchemaDelta.alter_type(
+                    "f",
+                    "VARCHAR(120)",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
+                ),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" INT""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" TEXT""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)""",
                 """ALTER TABLE "test_table" DROP COLUMN "e\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
                 """ALTER TABLE "test_table" DROP COLUMN "f\"""",
@@ -238,20 +252,34 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             SchemaDiffConfig(support_positional_add=True),
             [
-                SchemaDelta.drop("c"),
-                SchemaDelta.drop("d"),
+                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
+                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
                 # Positions are implemented
-                SchemaDelta.add("e", "INT", ColumnPosition.create_middle("a")),
-                SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
+                SchemaDelta.add(
+                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
+                ),
+                SchemaDelta.add(
+                    "f",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
+                    ColumnPosition.create_first(),
+                ),
                 # Alter is converted to drop/add
-                SchemaDelta.alter_type("e", "TEXT", "INT"),
-                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
+                SchemaDelta.alter_type(
+                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
+                ),
+                SchemaDelta.alter_type(
+                    "f",
+                    "VARCHAR(120)",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
+                ),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
                 """ALTER TABLE "test_table" DROP COLUMN "e\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
                 """ALTER TABLE "test_table" DROP COLUMN "f\"""",
@@ -264,20 +292,34 @@ def test_create_table_properties(mocker: MockerFixture):
                 compatible_types={exp.DataType.build("INT"): {exp.DataType.build("TEXT")}},
             ),
             [
-                SchemaDelta.drop("c"),
-                SchemaDelta.drop("d"),
-                # Positions are ignored
-                SchemaDelta.add("e", "INT", ColumnPosition.create_middle("a")),
-                SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
+                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
+                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
+                # Positions are implemented
+                SchemaDelta.add(
+                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
+                ),
+                SchemaDelta.add(
+                    "f",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
+                    ColumnPosition.create_first(),
+                ),
                 # Alter is supported
-                SchemaDelta.alter_type("e", "TEXT", "INT"),
-                SchemaDelta.alter_type("f", "VARCHAR(120)", "VARCHAR(100)"),
+                SchemaDelta.alter_type(
+                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
+                ),
+                SchemaDelta.alter_type(
+                    "f",
+                    "VARCHAR(120)",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
+                ),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
                 """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
                 """ALTER TABLE "test_table" DROP COLUMN "f\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
@@ -291,34 +333,57 @@ def test_create_table_properties(mocker: MockerFixture):
                 array_suffix=".element",
             ),
             [
-                SchemaDelta.drop("c"),
-                SchemaDelta.drop("d"),
-                # Positions are ignored
-                SchemaDelta.add("e", "INT", ColumnPosition.create_middle("a")),
-                SchemaDelta.add("f", "TEXT", ColumnPosition.create_first()),
+                SchemaDelta.drop(
+                    "c",
+                    "STRUCT<a: INT, b: TEXT, d: INT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
+                ),
+                SchemaDelta.drop(
+                    "d",
+                    "STRUCT<a: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
+                ),
+                # Positions are implemented
+                SchemaDelta.add(
+                    "e",
+                    "INT",
+                    "STRUCT<a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
+                    ColumnPosition.create_middle("a"),
+                ),
+                SchemaDelta.add(
+                    "f",
+                    "VARCHAR(100)",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
+                    ColumnPosition.create_first(),
+                ),
                 # Struct add is supported
                 SchemaDelta.add(
                     "nested_b",
                     "INT",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
                     ColumnPosition.create_middle("nested_a"),
                     ParentColumns.create(("nested", "STRUCT")),
                 ),
                 SchemaDelta.add(
                     "array_b",
                     "INT",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_b: INT, array_c:INT>>>",
                     ColumnPosition.create_middle("array_a"),
-                    ParentColumns.create(("array", "ARRAY")),
+                    ParentColumns.create(("array_col", "ARRAY")),
                 ),
                 # Alter is supported
-                SchemaDelta.alter_type("e", "TEXT", "INT"),
+                SchemaDelta.alter_type(
+                    "e",
+                    "TEXT",
+                    "INT",
+                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_b: INT, array_c:INT>>>",
+                ),
             ],
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" TEXT FIRST""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
                 """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER "nested_a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "array.element.array_b" INT AFTER "array_a\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT AFTER "array_a\"""",
                 """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
             ],
         ),
@@ -343,6 +408,7 @@ def test_alter_table(
 
     cursor_mock.begin.assert_called_once()
     cursor_mock.commit.assert_called_once()
+    print(cursor_mock.execute.call_args_list)
     cursor_mock.execute.assert_has_calls([call(x) for x in expected])
 
 

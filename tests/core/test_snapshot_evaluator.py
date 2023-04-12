@@ -210,8 +210,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     table_diff_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.table_diff")
     table_diff_mock.return_value = [
-        SchemaDelta.drop("b", "STRING"),
-        SchemaDelta.add("a", "INT"),
+        SchemaDelta.drop("b", "STRUCT<c: STRING>", "STRING"),
+        SchemaDelta.add("a", "INT", "STRUCT<c: STRING, a: INT>"),
     ]
 
     evaluator = SnapshotEvaluator(adapter_mock)
@@ -220,7 +220,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
-        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
 
@@ -229,8 +229,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     adapter_mock.alter_table.assert_called_once_with(
         snapshot.table_name(),
         [
-            SchemaDelta.drop("b", "STRING"),
-            SchemaDelta.add("a", "INT"),
+            SchemaDelta.drop("b", "STRUCT<c: STRING>", "STRING"),
+            SchemaDelta.add("a", "INT", "STRUCT<c: STRING, a: INT>"),
         ],
     )
 

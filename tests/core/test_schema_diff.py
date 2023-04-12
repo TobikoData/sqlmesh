@@ -3,14 +3,13 @@ from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.schema_diff import (
     ColumnPosition,
     ParentColumns,
     SchemaDelta,
-    SchemaDeltaOp,
     struct_diff,
     table_diff,
 )
@@ -40,13 +39,24 @@ def test_schema_diff_calculate(mocker: MockerFixture):
     engine_adapter_mock.columns.side_effect = table_columns
 
     assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
-        SchemaDelta.drop("price", "DOUBLE"),
+        SchemaDelta.drop(
+            "price",
+            "STRUCT<id: INT, name: TEXT, ds: TEXT>",
+            "DOUBLE",
+        ),
         SchemaDelta.add(
             "new_column",
             "DOUBLE",
+            "STRUCT<id: INT, name: TEXT, ds: TEXT, new_column: DOUBLE>",
             ColumnPosition.create_last("ds"),
         ),
-        SchemaDelta.alter_type("name", "INT", "STRING", ColumnPosition.create_middle("id")),
+        SchemaDelta.alter_type(
+            "name",
+            "INT",
+            "STRING",
+            "STRUCT<id: INT, name: INT, ds: TEXT, new_column: DOUBLE>",
+            ColumnPosition.create_middle("id"),
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -74,8 +84,12 @@ def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
     engine_adapter_mock.columns.side_effect = table_columns
 
     assert table_diff(apply_to_table_name, schema_from_table_name, engine_adapter_mock) == [
-        SchemaDelta.alter_type("id", "BIGINT", "INT", ColumnPosition.create_first()),
-        SchemaDelta.alter_type("ds", "INT", "STRING", ColumnPosition.create_last("id")),
+        SchemaDelta.alter_type(
+            "id", "BIGINT", "INT", "STRUCT<id: BIGINT, ds: STRING>", ColumnPosition.create_first()
+        ),
+        SchemaDelta.alter_type(
+            "ds", "INT", "STRING", "STRUCT<id: BIGINT, ds: INT>", ColumnPosition.create_last("id")
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -106,10 +120,17 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
         SchemaDelta.add(
             "complex.new_column",
             "DOUBLE",
+            "STRUCT<complex: STRUCT<id: INT, new_column: DOUBLE, name: STRING>, ds: STRING>",
             ColumnPosition.create_middle("id"),
             parents=ParentColumns.create(("complex", "STRUCT")),
         ),
-        SchemaDelta.alter_type("ds", "INT", "STRING", ColumnPosition.create_last("complex")),
+        SchemaDelta.alter_type(
+            "ds",
+            "INT",
+            "STRING",
+            "STRUCT<complex: STRUCT<id: INT, new_column: DOUBLE, name: STRING>, ds: INT>",
+            ColumnPosition.create_last("complex"),
+        ),
     ]
 
     engine_adapter_mock.columns.assert_has_calls(
@@ -120,9 +141,9 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
 @pytest.mark.parametrize(
     "current_struct, new_struct, expected_diff",
     [
-        ###########
-        # Add Tests
-        ###########
+        # ###########
+        # # Add Tests
+        # ###########
         # No diff
         (
             "STRUCT<id INT, name STRING, age INT>",
@@ -134,11 +155,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING, age INT, address STRING>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_last(after="age"),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    "STRUCT<id INT, name STRING, age INT, address STRING>",
+                    position=ColumnPosition.create_last(after="age"),
                 )
             ],
         ),
@@ -147,11 +168,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, id INT, name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                    position=ColumnPosition.create_first(),
                 )
             ],
         ),
@@ -160,11 +181,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, address STRING, name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_middle(after="id"),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    expected_table_struct="STRUCT<id INT, address STRING, name STRING, age INT>",
+                    position=ColumnPosition.create_middle(after="id"),
                 )
             ],
         ),
@@ -173,23 +194,23 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT, address3 STRING>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                    position=ColumnPosition.create_first(),
                 ),
-                SchemaDelta(
-                    column_name="address2",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_middle(after="id"),
+                SchemaDelta.add(
+                    "address2",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT>",
+                    position=ColumnPosition.create_middle(after="id"),
                 ),
-                SchemaDelta(
-                    column_name="address3",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_last(after="age"),
+                SchemaDelta.add(
+                    "address3",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, id INT, address2 STRING, name STRING, age INT, address3 STRING>",
+                    position=ColumnPosition.create_last(after="age"),
                 ),
             ],
         ),
@@ -198,17 +219,17 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, id INT, name STRING, age INT>",
+                    position=ColumnPosition.create_first(),
                 ),
-                SchemaDelta(
-                    column_name="address2",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_middle(after="address"),
+                SchemaDelta.add(
+                    "address2",
+                    "STRING",
+                    expected_table_struct="STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
+                    position=ColumnPosition.create_middle(after="address"),
                 ),
             ],
         ),
@@ -220,10 +241,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "id",
+                    "STRUCT<name STRING, age INT>",
+                    "INT",
                 )
             ],
         ),
@@ -232,10 +253,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, age INT>",
             [
-                SchemaDelta(
-                    column_name="name",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "name",
+                    "STRUCT<id INT, age INT>",
+                    "STRING",
                 )
             ],
         ),
@@ -244,10 +265,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING>",
             [
-                SchemaDelta(
-                    column_name="age",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "age",
+                    "STRUCT<id INT, name STRING>",
+                    "INT",
                 )
             ],
         ),
@@ -256,20 +277,20 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, middle STRING, address STRING, age INT>",
             "STRUCT<name STRING, address STRING>",
             [
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "id",
+                    "STRUCT<name STRING, middle STRING, address STRING, age INT>",
+                    "INT",
                 ),
-                SchemaDelta(
-                    column_name="middle",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "middle",
+                    "STRUCT<name STRING, address STRING, age INT>",
+                    "STRING",
                 ),
-                SchemaDelta(
-                    column_name="age",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "age",
+                    "STRUCT<name STRING, address STRING>",
+                    "INT",
                 ),
             ],
         ),
@@ -278,15 +299,15 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<address STRING, address2 STRING, id INT, name STRING, age INT>",
             "STRUCT<id INT, name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "address",
+                    "STRUCT<address2 STRING, id INT, name STRING, age INT>",
+                    "STRING",
                 ),
-                SchemaDelta(
-                    column_name="address2",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "address2",
+                    "STRUCT<id INT, name STRING, age INT>",
+                    "STRING",
                 ),
             ],
         ),
@@ -319,12 +340,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id STRING, name STRING, age INT>",
             [
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_first(),
-                    current_type=exp.DataType.build("INT"),
+                SchemaDelta.alter_type(
+                    "id",
+                    "STRING",
+                    current_type="INT",
+                    expected_table_struct="STRUCT<id STRING, name STRING, age INT>",
+                    position=ColumnPosition.create_first(),
                 )
             ],
         ),
@@ -336,23 +357,23 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, name STRING, age INT>",
             "STRUCT<id STRING, age INT, address STRING>",
             [
-                SchemaDelta(
-                    column_name="name",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "name",
+                    "STRUCT<id INT, age INT>",
+                    "STRING",
                 ),
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_last(after="age"),
+                SchemaDelta.add(
+                    "address",
+                    "STRING",
+                    expected_table_struct="STRUCT<id INT, age INT, address STRING>",
+                    position=ColumnPosition.create_last(after="age"),
                 ),
-                SchemaDelta(
-                    column_name="id",
-                    column_type=exp.DataType.build("STRING"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_first(),
-                    current_type=exp.DataType.build("INT"),
+                SchemaDelta.alter_type(
+                    "id",
+                    "STRING",
+                    current_type="INT",
+                    expected_table_struct="STRUCT<id STRING, age INT, address STRING>",
+                    position=ColumnPosition.create_first(),
                 ),
             ],
         ),
@@ -364,12 +385,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "info.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
+                    position=ColumnPosition.create_first(),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -378,12 +399,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_last(after="col_c"),
+                SchemaDelta.add(
+                    "info.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT, col_d INT>>",
+                    position=ColumnPosition.create_last(after="col_c"),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -392,12 +413,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_d INT, col_b INT, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_middle(after="col_a"),
+                SchemaDelta.add(
+                    "info.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_d INT, col_b INT, col_c INT>>",
+                    position=ColumnPosition.create_middle(after="col_a"),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -406,19 +427,19 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_e INT, col_a INT, col_b INT, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "info.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_a INT, col_b INT, col_c INT>>",
+                    position=ColumnPosition.create_first(),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
-                SchemaDelta(
-                    column_name="info.col_e",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_middle(after="col_d"),
+                SchemaDelta.add(
+                    "info.col_e",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_e INT, col_a INT, col_b INT, col_c INT>>",
+                    position=ColumnPosition.create_middle(after="col_d"),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -427,11 +448,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_a",
-                    column_type=exp.DataType.build("INT"),
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_a",
+                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -440,11 +461,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("INT"),
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_c",
+                    "STRUCT<id INT, info STRUCT<col_a INT, col_b INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -453,11 +474,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_b",
-                    column_type=exp.DataType.build("INT"),
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_b",
+                    "STRUCT<id INT, info STRUCT<col_a INT, col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -466,17 +487,17 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_a",
-                    column_type=exp.DataType.build("INT"),
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_a",
+                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
-                SchemaDelta(
-                    column_name="info.col_b",
-                    column_type=exp.DataType.build("INT"),
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_b",
+                    "STRUCT<id INT, info STRUCT<col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
             ],
         ),
@@ -485,12 +506,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("TEXT"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_last(after="col_b"),
+                SchemaDelta.alter_type(
+                    "info.col_c",
+                    "TEXT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c TEXT>>",
+                    position=ColumnPosition.create_last(after="col_b"),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                     current_type=exp.DataType.build("INT"),
                 ),
             ],
@@ -500,32 +521,32 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, col_c INT>>",
             "STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c TEXT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_a",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
+                SchemaDelta.drop(
+                    "info.col_a",
+                    "STRUCT<id INT, info STRUCT<col_b INT, col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
-                SchemaDelta(
-                    column_name="info.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_first(),
+                SchemaDelta.add(
+                    "info.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_c INT>>",
+                    position=ColumnPosition.create_first(),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                 ),
-                SchemaDelta(
-                    column_name="info.col_e",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_middle(after="col_b"),
+                SchemaDelta.add(
+                    "info.col_e",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c INT>>",
+                    parents=ParentColumns.create(("info", "STRUCT")),
+                    position=ColumnPosition.create_middle(after="col_b"),
                 ),
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("TEXT"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                    parents=ParentColumns.create(("info", exp.DataType.build("STRUCT"))),
-                    add_position=ColumnPosition.create_last(after="col_e"),
+                SchemaDelta.alter_type(
+                    "info.col_c",
+                    "TEXT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_d INT, col_b INT, col_e INT, col_c TEXT>>",
+                    position=ColumnPosition.create_last(after="col_e"),
+                    parents=ParentColumns.create(("info", "STRUCT")),
                     current_type=exp.DataType.build("INT"),
                 ),
             ],
@@ -535,31 +556,34 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, info STRUCT<col_a INT, col_b INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>>>",
             "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, col_c INT>, col_c INT>>",
             [
-                SchemaDelta(
-                    column_name="info.col_b",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "info.col_b",
+                    "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>>>",
+                    "INT",
                     parents=ParentColumns.create(("info", "STRUCT")),
                 ),
-                SchemaDelta(
-                    column_name="info.col_c",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
+                SchemaDelta.add(
+                    "info.col_c",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, nest_col_b INT>, col_c INT>>",
+                    position=ColumnPosition.create_last("nested_info"),
                     parents=ParentColumns.create(("info", "STRUCT")),
-                    add_position=ColumnPosition.create_last("nested_info"),
                 ),
-                SchemaDelta(
-                    column_name="info.nested_info.nest_col_b",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
-                    parents=ParentColumns.create(("info", "STRUCT"), ("nested_info", "STRUCT")),
+                SchemaDelta.drop(
+                    "info.nested_info.nest_col_b",
+                    "STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT>, col_c INT>>",
+                    "INT",
+                    parents=ParentColumns.create(
+                        ("info", "STRUCT"),
+                        ("nested_info", "STRUCT"),
+                    ),
                 ),
-                SchemaDelta(
-                    column_name="info.nested_info.col_c",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
+                SchemaDelta.add(
+                    "info.nested_info.col_c",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, info STRUCT<col_a INT, nested_info STRUCT<nest_col_a INT, col_c INT>, col_c INT>>",
+                    position=ColumnPosition.create_last("nest_col_a"),
                     parents=ParentColumns.create(("info", "STRUCT"), ("nested_info", "STRUCT")),
-                    add_position=ColumnPosition.create_last("nest_col_a"),
                 ),
             ],
         ),
@@ -571,12 +595,12 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_d INT, col_c INT>>>",
             [
-                SchemaDelta(
-                    column_name="infos.col_d",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.ADD,
+                SchemaDelta.add(
+                    "infos.col_d",
+                    "INT",
+                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_d INT, col_c INT>>>",
+                    position=ColumnPosition.create_middle("col_b"),
                     parents=ParentColumns.create(("infos", "ARRAY")),
-                    add_position=ColumnPosition.create_middle("col_b"),
                 ),
             ],
         ),
@@ -585,10 +609,10 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_c INT>>>",
             [
-                SchemaDelta(
-                    column_name="infos.col_b",
-                    column_type=exp.DataType.build("INT"),
-                    op=SchemaDeltaOp.DROP,
+                SchemaDelta.drop(
+                    "infos.col_b",
+                    "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_c INT>>>",
+                    "INT",
                     parents=ParentColumns.create(("infos", "ARRAY")),
                 ),
             ],
@@ -598,13 +622,13 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c TEXT>>>",
             [
-                SchemaDelta(
-                    column_name="infos.col_c",
-                    column_type=exp.DataType.build("TEXT"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
+                SchemaDelta.alter_type(
+                    "infos.col_c",
+                    "TEXT",
+                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c TEXT>>>",
+                    position=ColumnPosition.create_last("col_b"),
                     parents=ParentColumns.create(("infos", "ARRAY")),
-                    add_position=ColumnPosition.create_last("col_b"),
-                    current_type=exp.DataType.build("INT"),
+                    current_type="INT",
                 ),
             ],
         ),
@@ -613,11 +637,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>>",
             "STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, values ARRAY<INT>>",
             [
-                SchemaDelta(
-                    column_name="values",
-                    column_type=exp.DataType.build("ARRAY<INT>"),
-                    op=SchemaDeltaOp.ADD,
-                    add_position=ColumnPosition.create_last("infos"),
+                SchemaDelta.add(
+                    "values",
+                    "ARRAY<INT>",
+                    expected_table_struct="STRUCT<id INT, infos ARRAY<STRUCT<col_a INT, col_b INT, col_c INT>>, values ARRAY<INT>>",
+                    position=ColumnPosition.create_last("infos"),
                 ),
             ],
         ),
@@ -632,11 +656,11 @@ def test_schema_diff_struct_add_column(mocker: MockerFixture):
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(100)>",
             [
-                SchemaDelta(
-                    column_name="address",
-                    column_type=exp.DataType.build("VARCHAR(100)"),
-                    op=SchemaDeltaOp.ALTER_TYPE,
-                    add_position=ColumnPosition.create_last("id"),
+                SchemaDelta.alter_type(
+                    "address",
+                    "VARCHAR(100)",
+                    expected_table_struct="STRUCT<id INT, address VARCHAR(100)>",
+                    position=ColumnPosition.create_last("id"),
                     current_type=exp.DataType.build("VARCHAR(120)"),
                 ),
             ],
@@ -650,8 +674,8 @@ def test_struct_diff(
 ):
     assert (
         struct_diff(
-            parse_one(current_struct) if isinstance(current_struct, str) else current_struct,
-            parse_one(new_struct) if isinstance(new_struct, str) else new_struct,
+            exp.DataType.build(current_struct),
+            exp.DataType.build(new_struct),
         )
         == expected_diff
     )
@@ -681,13 +705,18 @@ def test_schema_diff_calculate_duckdb(duck_conn):
     )
 
     assert table_diff("apply_to_table", "schema_from_table", engine_adapter) == [
-        SchemaDelta.drop("price", "DOUBLE"),
+        SchemaDelta.drop("price", "STRUCT<id INT, name VARCHAR, ds VARCHAR>", "DOUBLE"),
         SchemaDelta.add(
             "new_column",
             "DOUBLE",
+            expected_table_struct="STRUCT<id INT, name VARCHAR, ds VARCHAR, new_column DOUBLE>",
             position=ColumnPosition.create_last("ds"),
         ),
         SchemaDelta.alter_type(
-            "name", "INTEGER", "VARCHAR", ColumnPosition.create_middle(after="id")
+            "name",
+            "INTEGER",
+            "VARCHAR",
+            expected_table_struct="STRUCT<id INT, name INTEGER, ds VARCHAR, new_column DOUBLE>",
+            position=ColumnPosition.create_middle(after="id"),
         ),
     ]

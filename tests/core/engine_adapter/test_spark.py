@@ -42,21 +42,23 @@ def test_alter_table(mocker: MockerFixture):
     adapter.alter_table(
         "test_table",
         operations=[
-            SchemaDelta.drop("c"),
-            SchemaDelta.drop("d"),
-            SchemaDelta.add("a", "INT"),
-            SchemaDelta.add("b", "STRING"),
+            SchemaDelta.drop("c", "STRUCT<d: INT, e: INT, f: INT>"),
+            SchemaDelta.drop("d", "STRUCT<e: INT, f: INT>"),
+            SchemaDelta.add("a", "INT", "STRUCT<e: INT, f: INT, a: INT>"),
+            SchemaDelta.add("b", "STRING", "STRUCT<e: INT, f: INT, a: INT, b: STRING>"),
         ],
     )
 
     adapter.alter_table(
         "test_table",
-        operations=[SchemaDelta.add("e", "DOUBLE")],
+        operations=[
+            SchemaDelta.add("e", "DOUBLE", "STRUCT<e: INT, f: INT, a: INT, b: STRING, e: DOUBLE>")
+        ],
     )
 
     adapter.alter_table(
         "test_table",
-        operations=[SchemaDelta.drop("f")],
+        operations=[SchemaDelta.drop("f", "STRUCT<e: INT, a: INT, b: STRING, e: DOUBLE>")],
     )
 
     cursor_mock.execute.assert_has_calls(
