@@ -115,6 +115,7 @@ class Plan:
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
         self._ensure_no_forward_only_new_models()
+        self._ensure_no_broken_references()
 
         directly_indirectly_modified = self._build_directly_and_indirectly_modified()
         self.directly_modified = directly_indirectly_modified[0]
@@ -539,6 +540,14 @@ class Plan:
     def _ensure_no_forward_only_new_models(self) -> None:
         if self.forward_only and self.context_diff.added:
             raise PlanError("New models can't be added as part of the forward-only plan.")
+
+    def _ensure_no_broken_references(self) -> None:
+        for snapshot in self.context_diff.snapshots.values():
+            broken_references = self.context_diff.removed & snapshot.model.depends_on
+            if broken_references:
+                raise PlanError(
+                    f"Removed models {broken_references} are referenced in model '{snapshot.name}'. Please remove broken references before proceeding."
+                )
 
 
 class PlanStatus(str, Enum):
