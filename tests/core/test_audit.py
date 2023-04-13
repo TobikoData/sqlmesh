@@ -235,5 +235,5 @@ def test_forall_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE (NOT (_q_0.a >= _q_0.b)) OR (NOT (_q_0.c + _q_0.d - _q_0.e < 1.0))"
+        == "SELECT * FROM (SELECT * FROM db.test_model AS test_model WHERE test_model.ds <= '1970-01-01' AND test_model.ds >= '1970-01-01') AS _q_0 WHERE NOT (_q_0.a >= _q_0.b) OR NOT (_q_0.c + _q_0.d - _q_0.e < 1.0)"
     )

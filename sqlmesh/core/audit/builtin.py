@@ -72,7 +72,7 @@ WHERE @REDUCE(
     @criteria,
     c -> NOT (c)
   ),
-  (l, r) -> (l) OR (r)
+  (l, r) -> l OR r
 )
     """,
 )
