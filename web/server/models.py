@@ -182,10 +182,6 @@ class Model(BaseModel):
     columns: t.List[Column]
 
 
-class Models(BaseModel):
-    models: t.Dict[str, Model]
-
-
 class RenderInput(BaseModel):
     model: str
     start: t.Optional[TimeLike] = None

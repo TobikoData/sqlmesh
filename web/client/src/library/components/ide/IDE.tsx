@@ -96,7 +96,7 @@ export function IDE(): JSX.Element {
   }, [contextEnvironemnts])
 
   useEffect(() => {
-    setModels(dataModels?.models)
+    setModels(dataModels)
   }, [dataModels])
 
   function showGraph(): void {

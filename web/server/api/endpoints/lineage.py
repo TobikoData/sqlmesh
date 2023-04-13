@@ -6,7 +6,7 @@ from sqlglot import exp
 from sqlglot.lineage import Node, lineage
 
 from sqlmesh.core.context import Context
-from web.server.api.endpoints.models import get_models
+from web.server.api.endpoints.models import get_models_and_columns
 
 Lineage = t.NewType("Lineage", t.Dict[str, t.Dict[str, t.Dict[str, t.List[str]]]])
 
@@ -55,7 +55,7 @@ def _add_column_to_graph(
 
 def _get_nodes(context: Context) -> t.Dict[str, t.Dict[str, Node]]:
     """Get a mapping of model names to column names to lineage nodes"""
-    models = get_models(context)
+    models = get_models_and_columns(context)
     nodes: t.Dict[str, t.Dict[str, Node]] = {model.name: {} for model in models}
 
     for model in models:
