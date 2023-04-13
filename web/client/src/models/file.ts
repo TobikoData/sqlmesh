@@ -1,4 +1,4 @@
-import type { File, FileType } from '../api/client'
+import { type File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { isStringEmptyOrNil } from '@utils/index'
