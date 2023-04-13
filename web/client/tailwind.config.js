@@ -3,11 +3,6 @@ module.exports = {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: ['class', '[mode="dark"]'],
   theme: {
-    extend: {
-      boxShadow: {
-        border: 'inset 0 0 0 1px',
-      },
-    },
     colors: {
       prose: {
         DEFAULT: 'var(--color-text)',

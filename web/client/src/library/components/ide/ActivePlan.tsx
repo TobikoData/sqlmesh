@@ -1,7 +1,7 @@
 import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { lazy, Fragment, type MouseEvent } from 'react'
+import { Fragment, type MouseEvent } from 'react'
 import { apiCancelPlanApply } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
@@ -14,10 +14,7 @@ import {
 } from '~/context/plan'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
-
-const TasksProgress = lazy(
-  async () => await import('../tasksProgress/TasksProgress'),
-)
+import TasksOverview from '../tasksOverview/TasksOverview'
 
 export default function ActivePlan({
   plan,
@@ -67,15 +64,33 @@ export default function ActivePlan({
           >
             <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
               <div className="overflow-hidden rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5">
-                <TasksProgress
-                  environment={environment}
-                  tasks={plan.tasks}
-                  updated_at={plan.updated_at}
-                  headline="Most Recent Plan"
-                  showBatches={plan.type !== EnumPlanApplyType.Virtual}
-                  showVirtualUpdate={plan.type === EnumPlanApplyType.Virtual}
-                  planState={planState}
-                />
+                <TasksOverview tasks={plan.tasks}>
+                  {({ total, completed, models }) => (
+                    <>
+                      <TasksOverview.Summary
+                        environment={environment.name}
+                        planState={planState}
+                        headline="Most Recent Plan"
+                        completed={completed}
+                        total={total}
+                        updateType={
+                          plan.type === EnumPlanApplyType.Virtual
+                            ? 'Virtual'
+                            : 'Backfill'
+                        }
+                        updatedAt={plan.updated_at}
+                      />
+                      <TasksOverview.Details
+                        models={models}
+                        showBatches={plan.type !== EnumPlanApplyType.Virtual}
+                        showVirtualUpdate={
+                          plan.type === EnumPlanApplyType.Virtual
+                        }
+                        showProgress={true}
+                      />
+                    </>
+                  )}
+                </TasksOverview>
                 <div className="my-4 px-4">
                   {planState === EnumPlanState.Applying && (
                     <Button

@@ -25,7 +25,6 @@ import {
   isObjectNotEmpty,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
-import TasksProgress from '../tasksProgress/TasksProgress'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
@@ -33,11 +32,12 @@ import PlanChangePreview from './PlanChangePreview'
 import { useChannelEvents } from '@api/channels'
 import { EnumVariant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
+import TasksOverview from '../tasksOverview/TasksOverview'
 
 export default function PlanWizard({
-  setRefTaskProgress,
+  setRefTasksOverview,
 }: {
-  setRefTaskProgress: RefObject<HTMLDivElement>
+  setRefTasksOverview: RefObject<HTMLDivElement>
 }): JSX.Element {
   const [subscribe] = useChannelEvents()
 
@@ -338,20 +338,39 @@ export default function PlanWizard({
                           <Suspense
                             fallback={<Spinner className="w-4 h-4 mr-2" />}
                           >
-                            <TasksProgress
-                              environment={environment}
+                            <TasksOverview
                               tasks={tasks}
-                              changes={{
-                                modified,
-                                added,
-                                removed,
-                              }}
-                              updated_at={activeBackfill?.updated_at}
-                              showBatches={hasBackfills}
-                              showVirtualUpdate={hasVirtualUpdate}
-                              planState={planState}
-                              setRefTaskProgress={setRefTaskProgress}
-                            />
+                              setRefTasksOverview={setRefTasksOverview}
+                            >
+                              {({ total, completed, models }) => (
+                                <>
+                                  <TasksOverview.Summary
+                                    environment={environment.name}
+                                    planState={planState}
+                                    headline="Target Environment"
+                                    completed={completed}
+                                    total={total}
+                                    updateType={
+                                      hasVirtualUpdate ? 'Virtual' : 'Backfill'
+                                    }
+                                    updatedAt={activeBackfill?.updated_at}
+                                  />
+                                  {models != null && (
+                                    <TasksOverview.Details
+                                      models={models}
+                                      changes={{
+                                        modified,
+                                        added,
+                                        removed,
+                                      }}
+                                      showBatches={hasBackfills}
+                                      showVirtualUpdate={hasVirtualUpdate}
+                                      showProgress={true}
+                                    />
+                                  )}
+                                </>
+                              )}
+                            </TasksOverview>
                           </Suspense>
                         </>
                       )}
