@@ -8,7 +8,9 @@
     "prettier": "prettier --write .",
     "lint:fix": "eslint --fix .",
     "format": "npm run prettier && npm run lint:fix",
-    "test": "vitest",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest --watch=false",
+    "test:unit:watch": "vitest --watch=true",
     "test:e2e": "playwright test",
     "generate:api": "orval --config ./orval.config.ts"
   },
