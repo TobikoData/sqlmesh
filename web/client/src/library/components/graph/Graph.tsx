@@ -21,8 +21,13 @@ import ReactFlow, {
 import { Button } from '../button/Button'
 import { useApiDag } from '../../../api'
 import 'reactflow/dist/base.css'
-import { getNodesAndEdges, createGraphLayout, createGraph } from './help'
-import { isFalse, isNil } from '../../../utils'
+import {
+  getNodesAndEdges,
+  createGraphLayout,
+  createGraph,
+  toNodeOrEdgeId,
+} from './help'
+import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
@@ -30,7 +35,11 @@ import { useStoreLineage } from '@context/lineage'
 import clsx from 'clsx'
 import { type Column } from '@api/client'
 
-export default function Graph({ closeGraph }: any): JSX.Element {
+export default function Graph({
+  closeGraph,
+}: {
+  closeGraph?: () => void
+}): JSX.Element {
   const models = useStoreContext(s => s.models)
 
   const setColumns = useStoreLineage(s => s.setColumns)
@@ -46,7 +55,7 @@ export default function Graph({ closeGraph }: any): JSX.Element {
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
   const nodesAndEdges = useMemo(
-    () => (data == null ? undefined : getNodesAndEdges({ data, models })),
+    () => (data == null ? undefined : getNodesAndEdges({ data })),
     [data, models],
   )
   const lineage = useMemo(
@@ -56,9 +65,16 @@ export default function Graph({ closeGraph }: any): JSX.Element {
         : createGraph({
             nodesMap: nodesAndEdges.nodesMap,
             edges: nodesAndEdges.edges,
+            models,
           }),
     [nodesAndEdges],
   )
+
+  useEffect(() => {
+    return () => {
+      setColumns(undefined)
+    }
+  }, [])
 
   useEffect(() => {
     setColumns(nodesAndEdges?.columns)
@@ -128,23 +144,25 @@ export default function Graph({ closeGraph }: any): JSX.Element {
         nodeTypes={nodeTypes}
         fitView
       >
-        <Panel
-          position="top-right"
-          className="flex"
-        >
-          <Button
-            size={EnumSize.sm}
-            variant={EnumVariant.Neutral}
-            className="mx-0 ml-4"
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              closeGraph()
-            }}
+        {closeGraph != null && (
+          <Panel
+            position="top-right"
+            className="flex"
           >
-            Close
-          </Button>
-        </Panel>
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Neutral}
+              className="mx-0 ml-4"
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation()
+
+                closeGraph()
+              }}
+            >
+              Close
+            </Button>
+          </Panel>
+        )}
         <Controls className="!bg-primary-20 p-2 rounded-md !border-none !shadow-none" />
         <Background
           variant={BackgroundVariant.Dots}
@@ -184,7 +202,7 @@ function ModelNode({
       from: string[] = [],
       type: string,
     ): void {
-      const edges = from.map(id => `${type}_${id}`)
+      const edges = from.map(id => toNodeOrEdgeId(type, id))
 
       if (isActive) {
         removeActiveEdges([edgeId].concat(edges))
@@ -202,8 +220,8 @@ function ModelNode({
     if (showColumns) return [columns, []]
 
     columns.forEach(column => {
-      const sourceId = `source_${id}_${column.name}`
-      const targetId = `target_${id}_${column.name}`
+      const sourceId = toNodeOrEdgeId('source', id, column.name)
+      const targetId = toNodeOrEdgeId('target', id, column.name)
 
       if (hasActiveEdge(sourceId) || hasActiveEdge(targetId)) {
         visible.push(column)
@@ -324,9 +342,9 @@ function ModelColumn({
     type: string,
   ) => void
 }): JSX.Element {
-  const columnId = `${id}_${column.name}`
-  const sourceId = `source_${columnId}`
-  const targetId = `target_${columnId}`
+  const columnId = toNodeOrEdgeId(id, column.name)
+  const sourceId = toNodeOrEdgeId('source', columnId)
+  const targetId = toNodeOrEdgeId('target', columnId)
 
   const columns = useStoreLineage(s => s.columns)
 
@@ -339,20 +357,47 @@ function ModelColumn({
         isActive && 'bg-secondary-10 dark:bg-primary-900',
         className,
       )}
-      onClick={() => {
-        setIsActive(!isActive)
+      onClick={
+        columns?.[columnId] != null
+          ? () => {
+              setIsActive(!isActive)
 
-        toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
-        toggleEdgeById(isActive, targetId, columns?.[columnId]?.outs, 'target')
-      }}
+              toggleEdgeById(
+                isActive,
+                sourceId,
+                columns?.[columnId]?.ins,
+                'source',
+              )
+              toggleEdgeById(
+                isActive,
+                targetId,
+                columns?.[columnId]?.outs,
+                'target',
+              )
+            }
+          : undefined
+      }
     >
       <ModelNodeHandles
         id={columnId}
-        sourcePosition={sourcePosition}
-        targetPosition={targetPosition}
+        targetPosition={
+          isArrayNotEmpty(columns?.[columnId]?.outs)
+            ? targetPosition
+            : undefined
+        }
+        sourcePosition={
+          isArrayNotEmpty(columns?.[columnId]?.ins) ? sourcePosition : undefined
+        }
       >
         <div className="flex w-full justify-between">
-          <div className="mr-3 text-neutral-600 dark:text-neutral-100">
+          <div
+            className={clsx(
+              'mr-3 ',
+              columns?.[columnId] != null
+                ? 'font-bold text-secondary-500 dark:text-primary-500'
+                : 'text-neutral-600 dark:text-neutral-100',
+            )}
+          >
             {column.name}
           </div>
           <div className="text-neutral-400 dark:text-neutral-300">
@@ -390,7 +435,7 @@ function ModelNodeHandles({
       {targetPosition === Position.Right && (
         <Handle
           type="target"
-          id={id != null ? `target_${id}` : undefined}
+          id={id != null ? toNodeOrEdgeId('target', id) : undefined}
           position={Position.Right}
           isConnectable={false}
           className="w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500"
@@ -400,7 +445,7 @@ function ModelNodeHandles({
       {sourcePosition === Position.Left && (
         <Handle
           type="source"
-          id={id != null ? `source_${id}` : undefined}
+          id={id != null ? toNodeOrEdgeId('source', id) : undefined}
           position={Position.Left}
           isConnectable={false}
           className={clsx(

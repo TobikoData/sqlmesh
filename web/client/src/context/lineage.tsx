@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 
 interface LineageStore {
-  columns?: Record<string, { ins: string[]; outs: string[] }>
   activeEdges: Map<string, number>
+  columns?: Record<string, { ins: string[]; outs: string[] }>
   hasActiveEdge: (edge: string) => boolean
   addActiveEdges: (edges: string[]) => void
   removeActiveEdges: (edges: string[]) => void
@@ -12,6 +12,7 @@ interface LineageStore {
 }
 export const useStoreLineage = create<LineageStore>((set, get) => ({
   columns: undefined,
+  dag: undefined,
   activeEdges: new Map(),
   addActiveEdges(edges) {
     const { activeEdges } = get()

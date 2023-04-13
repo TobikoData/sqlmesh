@@ -1,6 +1,6 @@
-import ELK, { type ElkNode } from 'elkjs/lib/elk-api'
+import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { isArrayNotEmpty, isNil } from '../../../utils'
-import { type Model } from '@api/client'
+import { type DagApiCommandsDagGet200, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 
 interface GraphNodeData {
@@ -8,23 +8,22 @@ interface GraphNodeData {
   [key: string]: any
 }
 
-interface GraphOptions {
-  data: Record<string, string[]>
-  models: Map<string, Model>
-}
-
 const elk = new ELK()
 
-const NODE_WIDTH = 256
-const NODE_HEIGHT = 128
+const NODE_WIDTH = 172
+const NODE_HEIGHT = 32
 
-export function getNodesAndEdges({ data, models }: GraphOptions): {
+export function getNodesAndEdges({ data }: { data: DagApiCommandsDagGet200 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>
   columns: Record<string, { ins: string[]; outs: string[] }>
 } {
-  const targets = new Set(Object.values(data).flat())
+  const targets = new Set(
+    Object.values(data)
+      .map(item => item.models)
+      .flat(),
+  )
   const modelNames = Object.keys(data)
   const nodesMap: Record<string, Node> = modelNames.reduce(
     (acc, label) => Object.assign(acc, { [label]: toGraphNode({ label }) }),
@@ -33,26 +32,41 @@ export function getNodesAndEdges({ data, models }: GraphOptions): {
   const edges: Edge[] = []
   const columns: Record<string, { ins: string[]; outs: string[] }> = {}
 
-  modelNames.forEach(source => {
-    const columnsSource = models.get(source)?.columns ?? []
+  for (const modelSource of modelNames) {
+    const dag = data[modelSource]
 
-    data[source]?.forEach(target => {
-      const columnsTarget = models.get(target)?.columns ?? []
+    if (dag == null) continue
 
-      edges.push(toGraphEdge(source, target))
+    const modelsTarget = dag.models
+    const columnsLineage = dag.columns
 
-      columnsSource?.forEach(columnSource => {
-        const sourceId = `${source}_${columnSource.name}`
+    modelsTarget.forEach(modelTarget => {
+      edges.push(toGraphEdge(modelSource, modelTarget))
+    })
 
-        if (columns[sourceId] == null) {
-          columns[sourceId] = {
-            ins: [],
-            outs: [],
-          }
+    if (columnsLineage == null) continue
+
+    for (const columnSource in columnsLineage) {
+      const sourceId = toNodeOrEdgeId(modelSource, columnSource)
+
+      if (columns[sourceId] == null) {
+        columns[sourceId] = {
+          ins: [],
+          outs: [],
         }
+      }
 
-        columnsTarget?.forEach(columnTarget => {
-          const targetId = `${target}_${columnTarget.name}`
+      const modelsTarget = columnsLineage[columnSource]
+
+      if (modelsTarget == null) continue
+
+      for (const modelTarget in modelsTarget) {
+        const columnsTarget = modelsTarget[modelTarget]
+
+        if (columnsTarget == null) continue
+
+        for (const columnTarget of columnsTarget) {
+          const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
 
           if (columns[targetId] == null) {
             columns[targetId] = {
@@ -66,23 +80,23 @@ export function getNodesAndEdges({ data, models }: GraphOptions): {
 
           edges.push(
             toGraphEdge(
-              source,
-              target,
-              `source_${source}_${columnSource.name}`,
-              `target_${target}_${columnTarget.name}`,
+              modelSource,
+              modelTarget,
+              toNodeOrEdgeId('source', modelSource, columnSource),
+              toNodeOrEdgeId('target', modelTarget, columnTarget),
               true,
               {
-                target,
-                source,
+                target: modelTarget,
+                source: modelSource,
                 columnSource,
                 columnTarget,
               },
             ),
           )
-        })
-      })
-    })
-  })
+        }
+      }
+    }
+  }
 
   return { targets, edges, nodesMap, columns }
 }
@@ -90,9 +104,11 @@ export function getNodesAndEdges({ data, models }: GraphOptions): {
 export function createGraph({
   nodesMap,
   edges = [],
+  models,
 }: {
   nodesMap: Record<string, Node>
   edges: Edge[]
+  models: Map<string, Model>
 }): ElkNode {
   return {
     id: 'root',
@@ -100,7 +116,7 @@ export function createGraph({
     children: Object.values(nodesMap).map(node => ({
       id: node.id,
       width: NODE_WIDTH,
-      height: NODE_HEIGHT,
+      height: NODE_HEIGHT + 32 * (models.get(node.id)?.columns?.length ?? 0),
     })),
     edges: edges.map(edge => ({
       id: edge.id,
@@ -117,7 +133,7 @@ export async function createGraphLayout({
   targets,
   lineage,
 }: {
-  data: Record<string, string[]>
+  data: DagApiCommandsDagGet200
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>
@@ -131,7 +147,7 @@ export async function createGraphLayout({
 
     if (output == null) return
 
-    if (isArrayNotEmpty(data[node.id])) {
+    if (isArrayNotEmpty(data[node.id]?.models)) {
       output.sourcePosition = Position.Left
     }
 
@@ -141,7 +157,7 @@ export async function createGraphLayout({
 
     output.position = {
       x: node.x == null ? 0 : -node.x * 2,
-      y: node.y == null ? 0 : -node.y * 1.5,
+      y: node.y == null ? 0 : -node.y * 1.25,
     }
 
     nodes.push(output)
@@ -178,11 +194,8 @@ function toGraphEdge<TData = any>(
   hidden: boolean = false,
   data?: TData,
 ): Edge<TData> {
-  const id = `${source}_${target}${sourceHandle != null ? `_${sourceHandle}` : ''
-    }${targetHandle != null ? `_${targetHandle}` : ''}`
-
   const output: Edge = {
-    id,
+    id: toNodeOrEdgeId(source, target, sourceHandle, targetHandle),
     source,
     target,
     hidden,
@@ -205,4 +218,8 @@ function toGraphEdge<TData = any>(
   }
 
   return output
+}
+
+export function toNodeOrEdgeId(...args: Array<string | undefined>): string {
+  return args.filter(Boolean).join('__')
 }
