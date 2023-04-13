@@ -374,9 +374,10 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
         The earliest start date or yesterday if none is found.
     """
     snapshots = list(snapshots)
+    earliest = to_datetime(yesterday().date())
     if snapshots:
-        return min(start_date(snapshot, snapshots) or yesterday() for snapshot in snapshots)
-    return yesterday()
+        return min(start_date(snapshot, snapshots) or earliest for snapshot in snapshots)
+    return earliest
 
 
 def _batched_intervals(params: SnapshotToBatches) -> SnapshotToBatches:
