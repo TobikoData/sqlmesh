@@ -80,14 +80,16 @@ export default function ActivePlan({
                         }
                         updatedAt={plan.updated_at}
                       />
-                      <TasksOverview.Details
-                        models={models}
-                        showBatches={plan.type !== EnumPlanApplyType.Virtual}
-                        showVirtualUpdate={
-                          plan.type === EnumPlanApplyType.Virtual
-                        }
-                        showProgress={true}
-                      />
+                      {models != null && (
+                        <TasksOverview.Details
+                          models={models}
+                          showBatches={plan.type !== EnumPlanApplyType.Virtual}
+                          showVirtualUpdate={
+                            plan.type === EnumPlanApplyType.Virtual
+                          }
+                          showProgress={true}
+                        />
+                      )}
                     </>
                   )}
                 </TasksOverview>
