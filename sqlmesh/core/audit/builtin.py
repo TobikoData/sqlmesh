@@ -68,8 +68,11 @@ forall_audit = Audit(
 SELECT *
 FROM @this_model
 WHERE @REDUCE(
-  @criteria,
-  (l, r) -> NOT (l) OR NOT (r)
+  @EACH(
+    @criteria,
+    c -> NOT (c)
+  ),
+  (l, r) -> (l) OR (r)
 )
     """,
 )
