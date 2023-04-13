@@ -217,6 +217,11 @@ class PlanOptions(BaseModel):
         return v
 
 
+class DAG(BaseModel):
+    models: t.List[str]
+    columns: t.Optional[t.Dict[str, t.Dict[str, t.List[str]]]] = None
+
+
 class Query(BaseModel):
     sql: str
 

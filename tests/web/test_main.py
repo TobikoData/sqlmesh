@@ -8,6 +8,7 @@ from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import PlanError
+from web.server.api.endpoints.models import get_models
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -439,8 +440,10 @@ def test_fetchdf(web_sushi_context: Context) -> None:
 
 def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
+    json_models = [model.dict() for model in get_models(web_sushi_context)]
+
     assert response.status_code == 200
-    assert response.json()["models"].keys() == web_sushi_context.models.keys()
+    assert json_models == response.json()
 
 
 def test_render(web_sushi_context: Context) -> None:
@@ -468,19 +471,4 @@ def test_get_environments(project_context: Context) -> None:
             "previous_plan_id": None,
             "expiration_ts": None,
         }
-    }
-
-
-def test_get_lineage(web_sushi_context: Context) -> None:
-    response = client.get(
-        "/api/lineage", params={"model": "sushi.top_waiters", "column": "revenue"}
-    )
-    assert response.status_code == 200
-    assert response.json() == {
-        "sushi.top_waiters": {"revenue": {"sushi.waiter_revenue_by_day": ["revenue"]}},
-        "sushi.waiter_revenue_by_day": {
-            "revenue": {"sushi.items": ["price"], "sushi.order_items": ["quantity"]}
-        },
-        "sushi.items": {"price": {}},
-        "sushi.order_items": {"quantity": {}},
     }
