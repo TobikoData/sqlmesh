@@ -58,6 +58,20 @@ Notice how `column` and `threshold` parameters have been set at this point. Thes
 
 Note that the same audit can be applied more than once to the same model with different sets of parameters.
 
+### Naming
+Note that it is recommended to avoid using SQL keywords when naming audit parameters.
+When an audit uses a SQL keyword, it can be necessary to use quotes when using it.
+For example, assuming that `my_audit` uses a `values` parameter, invoking it will require quotes:
+
+```sql linenums="1"
+MODEL (
+  name sushi.items,
+  audits(
+    my_audit(column=a, "values"=[1,2,3])
+  )
+)
+```
+
 ## Built-in audits
 SQLMesh comes with a suite of built-in generic audits which covers a broad set of common use cases.
 
@@ -95,7 +109,7 @@ Example:
 MODEL (
   name sushi.items,
   audits (
-    accepted_values(column=name, values=['Hamachi', 'Unagi', 'Sake'])
+    accepted_values(column=name, is_in=['Hamachi', 'Unagi', 'Sake'])
   )
 );
 ```

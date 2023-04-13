@@ -200,7 +200,7 @@ def test_accepted_values_audit(model: Model):
     rendered_query = builtin.accepted_values_audit.render_query(
         model,
         column=exp.to_column("a"),
-        values=["value_a", "value_b"],
+        is_in=["value_a", "value_b"],
     )
     assert (
         rendered_query.sql()

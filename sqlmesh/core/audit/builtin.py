@@ -46,7 +46,7 @@ accepted_values_audit = Audit(
     query="""
 SELECT *
 FROM @this_model
-WHERE @column NOT IN @values
+WHERE @column NOT IN @is_in
 """,
 )
 
