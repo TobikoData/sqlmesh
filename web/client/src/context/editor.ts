@@ -40,6 +40,10 @@ export interface EditorTab {
   isValid: boolean
   isSaved: boolean
   dialect?: string
+  dialectOptions?: {
+    keywords: string
+    types: string
+  }
   preview?: EditorPreview
 }
 

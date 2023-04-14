@@ -9,6 +9,8 @@ import {
   apiCancelFiles,
   useApiModels,
   apiCancelModels,
+  useApiDag,
+  apiCancelDag,
 } from '../../../api'
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
@@ -46,9 +48,11 @@ export function IDE(): JSX.Element {
   const [isGraphOpen, setIsGraphOpen] = useState(false)
   const [isPlanOpen, setIsPlanOpen] = useState(false)
   const [isClosingModal, setIsClosingModal] = useState(false)
+  const [dag, setDag] = useState<any>()
 
   const [subscribe] = useChannelEvents()
 
+  const { data: dataDag, refetch: getDag } = useApiDag()
   const { data: dataModels, refetch: getModels } = useApiModels()
   const { data: project, refetch: getFiles } = useApiFiles()
   const { data: contextEnvironemnts, refetch: getEnvironments } =
@@ -64,6 +68,9 @@ export function IDE(): JSX.Element {
   const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
     getModels,
   ])
+  const debouncedGetDag = useCallback(debounceAsync(getDag, 1000, true), [
+    getModels,
+  ])
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
@@ -71,6 +78,7 @@ export function IDE(): JSX.Element {
     void debouncedGetEnvironemnts()
     void debouncedGetFiles()
     void debouncedGetModels()
+    void debouncedGetDag()
 
     return () => {
       debouncedGetEnvironemnts.cancel()
@@ -80,6 +88,7 @@ export function IDE(): JSX.Element {
       apiCancelModels(client)
       apiCancelFiles(client)
       apiCancelGetEnvironments(client)
+      apiCancelDag(client)
 
       unsubscribeTasks?.()
     }
@@ -98,6 +107,10 @@ export function IDE(): JSX.Element {
   useEffect(() => {
     setModels(dataModels)
   }, [dataModels])
+
+  useEffect(() => {
+    setDag(dataDag)
+  }, [dataDag])
 
   function showGraph(): void {
     setIsGraphOpen(true)
@@ -183,8 +196,13 @@ export function IDE(): JSX.Element {
           setIsPlanOpen(false)
         }}
       >
-        <Dialog.Panel className="w-full transform overflow-hidden rounded-2xl bg-theme text-left align-middle shadow-xl transition-all">
-          {<Graph closeGraph={closeModal} />}
+        <Dialog.Panel className="w-full h-[90vh] transform overflow-hidden rounded-2xl bg-theme text-left align-middle shadow-xl transition-all">
+          {
+            <Graph
+              closeGraph={closeModal}
+              dag={dag}
+            />
+          }
         </Dialog.Panel>
       </Modal>
     </>

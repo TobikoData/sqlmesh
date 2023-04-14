@@ -1,10 +1,12 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
-import { isArrayNotEmpty, isNil } from '../../../utils'
-import { type DagApiCommandsDagGet200, type Model } from '@api/client'
+import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
+import { type Dag, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 
-interface GraphNodeData {
+export interface GraphNodeData {
   label: string
+  isHighlighted: boolean
+  isInteractive: boolean
   [key: string]: any
 }
 
@@ -13,7 +15,13 @@ const elk = new ELK()
 const NODE_WIDTH = 172
 const NODE_HEIGHT = 32
 
-export function getNodesAndEdges({ data }: { data: DagApiCommandsDagGet200 }): {
+export function getNodesAndEdges({
+  data,
+  highlightedNodes,
+}: {
+  data: Record<string, Dag>
+  highlightedNodes: string[]
+}): {
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>
@@ -26,7 +34,16 @@ export function getNodesAndEdges({ data }: { data: DagApiCommandsDagGet200 }): {
   )
   const modelNames = Object.keys(data)
   const nodesMap: Record<string, Node> = modelNames.reduce(
-    (acc, label) => Object.assign(acc, { [label]: toGraphNode({ label }) }),
+    (acc, label) =>
+      Object.assign(acc, {
+        [label]: toGraphNode({
+          label,
+          isHighlighted: highlightedNodes.includes(label),
+          isInteractive:
+            isArrayNotEmpty(highlightedNodes) &&
+            isFalse(highlightedNodes.includes(label)),
+        }),
+      }),
     {},
   )
   const edges: Edge[] = []
@@ -133,7 +150,7 @@ export async function createGraphLayout({
   targets,
   lineage,
 }: {
-  data: DagApiCommandsDagGet200
+  data: Record<string, Dag>
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>

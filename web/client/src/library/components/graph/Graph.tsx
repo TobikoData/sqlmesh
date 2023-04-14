@@ -19,34 +19,37 @@ import ReactFlow, {
   type Node,
 } from 'reactflow'
 import { Button } from '../button/Button'
-import { useApiDag } from '../../../api'
 import 'reactflow/dist/base.css'
 import {
   getNodesAndEdges,
   createGraphLayout,
   createGraph,
   toNodeOrEdgeId,
+  type GraphNodeData,
 } from './help'
-import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
+import { isArrayNotEmpty, isFalse, isNil, isTrue } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import { useStoreLineage } from '@context/lineage'
 import clsx from 'clsx'
-import { type Column } from '@api/client'
+import { type Dag, type Column } from '@api/client'
+import { useStoreFileTree } from '@context/fileTree'
 
 export default function Graph({
+  dag,
   closeGraph,
+  highlightedNodes = [],
 }: {
   closeGraph?: () => void
+  dag: Record<string, Dag>
+  highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
   const setColumns = useStoreLineage(s => s.setColumns)
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
-
-  const { data } = useApiDag()
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -55,8 +58,11 @@ export default function Graph({
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
   const nodesAndEdges = useMemo(
-    () => (data == null ? undefined : getNodesAndEdges({ data })),
-    [data, models],
+    () =>
+      dag == null
+        ? undefined
+        : getNodesAndEdges({ data: dag, highlightedNodes }),
+    [dag, models],
   )
   const lineage = useMemo(
     () =>
@@ -81,7 +87,7 @@ export default function Graph({
   }, [nodesAndEdges?.columns])
 
   useEffect(() => {
-    if (isNil(data)) return
+    if (isNil(dag)) return
 
     let active = true
 
@@ -94,10 +100,10 @@ export default function Graph({
     async function load(): Promise<void> {
       setGraph(undefined)
 
-      if (data == null || nodesAndEdges == null || lineage == null) return
+      if (dag == null || nodesAndEdges == null || lineage == null) return
 
       const graph = await createGraphLayout({
-        data,
+        data: dag,
         lineage,
         ...nodesAndEdges,
       })
@@ -106,7 +112,7 @@ export default function Graph({
 
       setGraph(graph)
     }
-  }, [data, nodesAndEdges, lineage])
+  }, [dag, nodesAndEdges, lineage])
 
   useEffect(() => {
     if (graph == null) return
@@ -134,7 +140,7 @@ export default function Graph({
   }
 
   return (
-    <div className="px-2 py-1 w-full h-[90vh]">
+    <div className="px-2 py-1 w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -163,7 +169,7 @@ export default function Graph({
             </Button>
           </Panel>
         )}
-        <Controls className="!bg-primary-20 p-2 rounded-md !border-none !shadow-none" />
+        <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
           variant={BackgroundVariant.Dots}
           gap={16}
@@ -179,11 +185,14 @@ function ModelNode({
   data,
   sourcePosition,
   targetPosition,
-}: NodeProps): JSX.Element {
+}: NodeProps & { data: GraphNodeData }): JSX.Element {
   const COLUMS_LIMIT_DEFAULT = 5
   const COLUMS_LIMIT_COLLAPSED = 2
 
   const models = useStoreContext(s => s.models)
+
+  const files = useStoreFileTree(s => s.files)
+  const selectFile = useStoreFileTree(s => s.selectFile)
 
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
@@ -244,7 +253,8 @@ function ModelNode({
   return (
     <div
       className={clsx(
-        'text-xs border-1 border-secondary-20 font-semibold text-secondary-500 dark:text-primary-100 rounded-md shadow-lg dark:border-primary-10',
+        'text-xs  font-semibold text-secondary-500 dark:text-primary-100 rounded-xl shadow-lg',
+        isTrue(data.isHighlighted) && 'border-4 border-brand-500',
       )}
     >
       <div className="drag-handle">
@@ -255,7 +265,27 @@ function ModelNode({
           targetPosition={targetPosition}
           isLeading={true}
         >
-          {data.label}
+          <span
+            className={clsx(
+              'inline-block',
+              isTrue(data.isInteractive) && 'cursor-pointer hover:underline',
+            )}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              const model = models.get(id)
+
+              if (isFalse(data.isInteractive) || model == null) return
+
+              const file = files.get(model.path)
+
+              if (file == null) return
+
+              selectFile(file)
+            }}
+          >
+            {data.label}
+          </span>
         </ModelNodeHandles>
       </div>
       <ModelColumns
@@ -291,7 +321,9 @@ function ModelNode({
             className="w-full"
             size={EnumSize.xs}
             variant={EnumVariant.Neutral}
-            onClick={() => {
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
               setShowColumns(prev => !prev)
             }}
           >
@@ -454,7 +486,9 @@ function ModelNodeHandles({
               : 'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
           )}
         >
-          {isLeading && <ArrowRightCircleIcon className="w-5" />}
+          {isLeading && (
+            <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
+          )}
         </Handle>
       )}
     </div>

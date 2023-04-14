@@ -25,13 +25,29 @@ import {
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
   getModelsApiModelsGet,
-  type Models,
+  type Model,
+  modelColumnLineageApiLineageModelNameGet,
+  type ModelColumnLineageApiLineageModelNameGet200,
 } from './client'
 
 export function useApiDag(): UseQueryResult<DagApiCommandsDagGet200> {
   return useQuery({
     queryKey: ['/api/commands/dag'],
     queryFn: async ({ signal }) => await dagApiCommandsDagGet({ signal }),
+    cacheTime: 0,
+    enabled: false,
+  })
+}
+
+export function useApiModelLineage(
+  modelName: string,
+): UseQueryResult<ModelColumnLineageApiLineageModelNameGet200> {
+  return useQuery({
+    queryKey: [`/api/lineage/${modelName}`],
+    queryFn: async ({ signal }) =>
+      await modelColumnLineageApiLineageModelNameGet(modelName, { signal }),
+    cacheTime: 0,
+    enabled: false,
   })
 }
 
@@ -45,7 +61,7 @@ export function useApiFileByPath(path: string): UseQueryResult<File> {
   })
 }
 
-export function useApiModels(): UseQueryResult<Models> {
+export function useApiModels(): UseQueryResult<Model[]> {
   return useQuery({
     queryKey: ['/api/models'],
     queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
@@ -157,6 +173,14 @@ export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
 
   return await cancelPlanApiPlanCancelPost()
+}
+
+export function apiCancelDag(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/dag'] })
+}
+
+export function apiCancelLineage(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/lineage'] })
 }
 
 export function apiCancelPlanRun(client: QueryClient): void {

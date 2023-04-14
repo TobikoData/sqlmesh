@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
@@ -42,6 +42,7 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
+  const tabs = useStoreEditor(s => s.tabs)
   const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
@@ -49,19 +50,18 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
 
-  const [sqlDialectOptions, setSqlDialectOptions] = useState()
-
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
-      if (e.data.topic === 'parse') {
-        tab.isValid =
-          e.data.payload?.type !== 'error' || tab.file.content === ''
+      const t = tabs.get(tab.file)
 
-        refreshTab()
+      if (t == null) return
+
+      if (e.data.topic === 'parse') {
+        t.isValid = e.data.payload?.type !== 'error' || tab.file.content === ''
       }
 
       if (e.data.topic === 'dialect') {
-        setSqlDialectOptions(e.data.payload)
+        t.dialectOptions = e.data.payload
       }
     },
     [tab.file],
@@ -73,9 +73,6 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const extensions = useMemo(() => {
-    const showSqlMeshDialect =
-      tab.file.extension === '.sql' && sqlDialectOptions != null
-
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
       HoverTooltip(models),
@@ -83,10 +80,11 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
       SqlMeshModel(models),
       tab.file.extension === '.py' && python(),
       tab.file.extension === '.yaml' && StreamLanguage.define(yaml),
-      showSqlMeshDialect &&
-        SqlMeshDialect(models, tab.file, sqlDialectOptions, dialectsTitles),
+      tab.file.extension === '.sql' &&
+        tab.dialectOptions != null &&
+        SqlMeshDialect(models, tab.file, tab.dialectOptions, dialectsTitles),
     ].filter(Boolean) as Extension[]
-  }, [tab.file, models, mode, sqlDialectOptions, files, dialectsTitles])
+  }, [tab.file, tab.dialectOptions, models, mode, files, dialectsTitles])
 
   const keymaps = useMemo(
     () => [
