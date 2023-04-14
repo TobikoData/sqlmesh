@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview -- --open=false",
     "prettier": "prettier --write .",
     "lint:fix": "eslint --fix .",
     "format": "npm run prettier && npm run lint:fix",
