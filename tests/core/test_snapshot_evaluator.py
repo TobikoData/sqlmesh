@@ -8,7 +8,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse, parse_one
 
 from sqlmesh.core.context import ExecutionContext
-from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
     load_model,
 )
 from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDelta
+from sqlmesh.core.schema_diff import TableAlterColumn, TableAlterOperation
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -206,15 +206,20 @@ def test_promote_model_info(mocker: MockerFixture):
 
 
 def test_migrate(mocker: MockerFixture, make_snapshot):
-    adapter_mock = mocker.Mock()
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
 
-    table_diff_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.table_diff")
+    table_diff_mock = mocker.patch("sqlmesh.core.schema_diff.TableStructureResolver.get_operations")
     table_diff_mock.return_value = [
-        SchemaDelta.drop("b", "STRUCT<c: STRING>", "STRING"),
-        SchemaDelta.add("a", "INT", "STRUCT<c: STRING, a: INT>"),
+        TableAlterOperation.drop(TableAlterColumn.primitive("b"), "STRUCT<c: STRING>", "STRING"),
+        TableAlterOperation.add(
+            TableAlterColumn.primitive("a"), "INT", "STRUCT<c: STRING, a: INT>"
+        ),
     ]
 
-    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator = SnapshotEvaluator(adapter)
 
     model = SqlModel(
         name="test_schema.test_model",
@@ -226,12 +231,13 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     evaluator.migrate([snapshot])
 
-    adapter_mock.alter_table.assert_called_once_with(
-        snapshot.table_name(),
+    cursor_mock.execute.assert_has_calls(
         [
-            SchemaDelta.drop("b", "STRUCT<c: STRING>", "STRING"),
-            SchemaDelta.add("a", "INT", "STRUCT<c: STRING, a: INT>"),
-        ],
+            call("""ALTER TABLE "physical_schema"."test_schema__test_model__1" DROP COLUMN "b\""""),
+            call(
+                """ALTER TABLE "physical_schema"."test_schema__test_model__1" ADD COLUMN "a" INT"""
+            ),
+        ]
     )
 
 

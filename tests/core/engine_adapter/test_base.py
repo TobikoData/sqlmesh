@@ -9,12 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
-from sqlmesh.core.schema_diff import (
-    ColumnPosition,
-    ParentColumns,
-    SchemaDelta,
-    SchemaDiffConfig,
-)
+from sqlmesh.core.schema_diff import TableAlterOperation, TableStructureResolver
 
 
 def test_create_view(mocker: MockerFixture):
@@ -210,189 +205,314 @@ def test_create_table_properties(mocker: MockerFixture):
 
 
 @pytest.mark.parametrize(
-    "diff_config, operations, expected",
+    "table_alter_resolver_config, current_table, target_table, expected_final_structure, expected",
     [
         (
-            SchemaDiffConfig(),
-            [
-                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
-                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
-                # Positions are ignored
-                SchemaDelta.add(
-                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
-                ),
-                SchemaDelta.add(
-                    "f",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
-                    ColumnPosition.create_first(),
-                ),
-                # Alter is converted to drop/add
-                SchemaDelta.alter_type(
-                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
-                ),
-                SchemaDelta.alter_type(
-                    "f",
-                    "VARCHAR(120)",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
-                ),
-            ],
-            [
-                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
-                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)""",
-                """ALTER TABLE "test_table" DROP COLUMN "e\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
-                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
-            ],
-        ),
-        (
-            SchemaDiffConfig(support_positional_add=True),
-            [
-                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
-                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
-                # Positions are implemented
-                SchemaDelta.add(
-                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
-                ),
-                SchemaDelta.add(
-                    "f",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
-                    ColumnPosition.create_first(),
-                ),
-                # Alter is converted to drop/add
-                SchemaDelta.alter_type(
-                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
-                ),
-                SchemaDelta.alter_type(
-                    "f",
-                    "VARCHAR(120)",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
-                ),
-            ],
+            {
+                "support_positional_add": True,
+                "support_struct_add_drop": True,
+                "array_suffix": ".element",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "c": "INT",
+                "d": "INT",
+                "nested": "STRUCT<nested_a INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT>>",
+            },
+            {
+                "f": "VARCHAR(100)",
+                "a": "INT",
+                "e": "TEXT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            {
+                "f": "VARCHAR(100)",
+                "a": "INT",
+                "e": "TEXT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
             [
                 """ALTER TABLE "test_table" DROP COLUMN "c\"""",
                 """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
-                """ALTER TABLE "test_table" DROP COLUMN "e\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
-                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
-            ],
-        ),
-        (
-            SchemaDiffConfig(
-                support_positional_add=True,
-                compatible_types={exp.DataType.build("INT"): {exp.DataType.build("TEXT")}},
-            ),
-            [
-                SchemaDelta.drop("c", "STRUCT<a: INT, b: TEXT, d: INT>"),
-                SchemaDelta.drop("d", "STRUCT<a: INT, b: TEXT>"),
-                # Positions are implemented
-                SchemaDelta.add(
-                    "e", "INT", "STRUCT<a: INT, e: INT, b: TEXT>", ColumnPosition.create_middle("a")
-                ),
-                SchemaDelta.add(
-                    "f",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT>",
-                    ColumnPosition.create_first(),
-                ),
-                # Alter is supported
-                SchemaDelta.alter_type(
-                    "e", "TEXT", "INT", "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>"
-                ),
-                SchemaDelta.alter_type(
-                    "f",
-                    "VARCHAR(120)",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT>",
-                ),
-            ],
-            [
-                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
-                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
-                """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
-                """ALTER TABLE "test_table" DROP COLUMN "f\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(120)""",
-            ],
-        ),
-        (
-            SchemaDiffConfig(
-                support_positional_add=True,
-                compatible_types={exp.DataType.build("INT"): {exp.DataType.build("TEXT")}},
-                support_struct_add=True,
-                array_suffix=".element",
-            ),
-            [
-                SchemaDelta.drop(
-                    "c",
-                    "STRUCT<a: INT, b: TEXT, d: INT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
-                ),
-                SchemaDelta.drop(
-                    "d",
-                    "STRUCT<a: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
-                ),
-                # Positions are implemented
-                SchemaDelta.add(
-                    "e",
-                    "INT",
-                    "STRUCT<a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
-                    ColumnPosition.create_middle("a"),
-                ),
-                SchemaDelta.add(
-                    "f",
-                    "VARCHAR(100)",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
-                    ColumnPosition.create_first(),
-                ),
-                # Struct add is supported
-                SchemaDelta.add(
-                    "nested_b",
-                    "INT",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_c:INT>>>",
-                    ColumnPosition.create_middle("nested_a"),
-                    ParentColumns.create(("nested", "STRUCT")),
-                ),
-                SchemaDelta.add(
-                    "array_b",
-                    "INT",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: INT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_b: INT, array_c:INT>>>",
-                    ColumnPosition.create_middle("array_a"),
-                    ParentColumns.create(("array_col", "ARRAY")),
-                ),
-                # Alter is supported
-                SchemaDelta.alter_type(
-                    "e",
-                    "TEXT",
-                    "INT",
-                    "STRUCT<f: VARCHAR(100), a: INT, e: TEXT, b: TEXT, nested: STRUCT<nested_a: INT, nested_b: INT, nested_c: INT>, array_col: ARRAY<STRUCT<array_a: INT, array_b: INT, array_c:INT>>>",
-                ),
-            ],
-            [
-                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
-                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "e" INT AFTER "a\"""",
-                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT AFTER "a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER "nested_a\"""",
                 """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT AFTER "array_a\"""",
-                """ALTER TABLE "test_table" ALTER COLUMN "e" TYPE TEXT""",
+            ],
+        ),
+        (
+            {
+                "support_struct_add_drop": True,
+                "array_suffix": ".element",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "c": "INT",
+                "d": "INT",
+                "nested": "STRUCT<nested_a INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT>>",
+            },
+            {
+                "f": "VARCHAR(100)",
+                "a": "INT",
+                "e": "TEXT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_c INT, nested_b INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, array_b INT>>",
+                "f": "VARCHAR(100)",
+                "e": "TEXT",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
+                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT""",
+            ],
+        ),
+        (
+            {
+                "array_suffix": ".element",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "c": "INT",
+                "d": "INT",
+                "nested": "STRUCT<nested_a INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT>>",
+            },
+            {
+                "f": "VARCHAR(100)",
+                "a": "INT",
+                "e": "TEXT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "f": "VARCHAR(100)",
+                "e": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
+                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
+                """ALTER TABLE "test_table" DROP COLUMN "nested\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_c" INT>""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_c" INT>>""",
+            ],
+        ),
+        (
+            {
+                "array_suffix": ".element",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "c": "INT",
+                "d": "INT",
+                "nested": "STRUCT<nested_a INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT>>",
+            },
+            {
+                "f": "VARCHAR(100)",
+                "a": "INT",
+                "e": "TEXT",
+                "b": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            {
+                "a": "INT",
+                "b": "TEXT",
+                "f": "VARCHAR(100)",
+                "e": "TEXT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "c\"""",
+                """ALTER TABLE "test_table" DROP COLUMN "d\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)""",
+                """ALTER TABLE "test_table" ADD COLUMN "e" TEXT""",
+                """ALTER TABLE "test_table" DROP COLUMN "nested\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_c" INT>""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_c" INT>>""",
+            ],
+        ),
+        # Test multiple operations on a column with positional and nested features enabled
+        (
+            {
+                "support_positional_add": True,
+                "support_struct_add_drop": True,
+                "array_suffix": ".element",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, array_e INT>>",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "nested.nested_c\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT AFTER "nested_a\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_d" INT AFTER "nested_b\"""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col.element.array_c\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT AFTER "array_a\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_d" INT AFTER "array_b\"""",
+            ],
+        ),
+        # Test multiple operations on a column with positional and nested features enabled and that when adding
+        # last we don't include position since it is not needed
+        (
+            {
+                "support_positional_add": True,
+                "support_struct_add_drop": True,
+                "array_suffix": ".element",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_c INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT>>",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT>>",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT>>",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "nested.nested_c\"""",
+                # Position is not included since we are adding to last so we don't need to specify position
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_d" INT""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col.element.array_c\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_d" INT""",
+            ],
+        ),
+        # Test multiple operations on a column with positional and no nested features enabled
+        (
+            {
+                "support_positional_add": True,
+                "array_suffix": ".element",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, array_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+                "col_c": "INT",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "nested\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_d" INT, "nested_e" INT> FIRST""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_d" INT, "array_e" INT>> AFTER "nested\"""",
+            ],
+        ),
+        # Test multiple operations on a column with no positional and nested features enabled
+        (
+            {
+                "support_struct_add_drop": True,
+                "array_suffix": ".element",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, nested_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, nested_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_e INT, nested_b INT, nested_d INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, nested_e INT, array_b INT, array_d INT>>",
+                "col_c": "INT",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "nested.nested_c\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_b" INT""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested.nested_d" INT""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col.element.array_c\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_b" INT""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col.element.array_d" INT""",
+            ],
+        ),
+        # Test multiple operations on a column with no positional or nested features enabled
+        (
+            {
+                "array_suffix": ".element",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, array_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+                "col_c": "INT",
+            },
+            {
+                "col_c": "INT",
+                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
+                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+            },
+            [
+                """ALTER TABLE "test_table" DROP COLUMN "nested\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_d" INT, "nested_e" INT>""",
+                """ALTER TABLE "test_table" DROP COLUMN "array_col\"""",
+                """ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_d" INT, "array_e" INT>>""",
             ],
         ),
     ],
 )
 def test_alter_table(
     mocker: MockerFixture,
-    diff_config: SchemaDiffConfig,
-    operations: t.List[SchemaDelta],
+    table_alter_resolver_config: t.Dict[str, t.Any],
+    current_table: t.Dict[str, str],
+    target_table: t.Dict[str, str],
+    expected_final_structure: t.Dict[str, str],
     expected: t.List[str],
 ):
     connection_mock = mocker.NonCallableMock()
@@ -400,15 +520,42 @@ def test_alter_table(
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")
-    adapter.SCHEMA_DIFF_CONFIG = diff_config
+    table_structure_resolver = TableStructureResolver(**table_alter_resolver_config)
+    original_get_operations = table_structure_resolver.get_operations
+
+    def get_operations(
+        current_table: t.Union[str, exp.Table],
+        new_table: t.Union[str, exp.Table],
+        engine_adapter: EngineAdapter,
+    ) -> t.List[TableAlterOperation]:
+        operations = original_get_operations(current_table_name, target_table_name, adapter)
+        assert (
+            operations[-1].expected_table_struct.sql()
+            == TableStructureResolver._dict_to_struct(expected_final_structure).sql()
+        )
+        return operations
+
+    mocker.patch.object(TableStructureResolver, "get_operations", side_effect=get_operations)
+    adapter.TABLE_STRUCTURE_RESOLVER = table_structure_resolver
+
+    current_table_name = "test_table"
+    target_table_name = "target_table"
+
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {k: exp.DataType.build(v) for k, v in current_table.items()}
+        else:
+            return {k: exp.DataType.build(v) for k, v in target_table.items()}
+
+    adapter.columns = table_columns
+
     adapter.alter_table(
-        "test_table",
-        operations=operations,
+        current_table_name,
+        target_table_name,
     )
 
     cursor_mock.begin.assert_called_once()
     cursor_mock.commit.assert_called_once()
-    print(cursor_mock.execute.call_args_list)
     cursor_mock.execute.assert_has_calls([call(x) for x in expected])
 
 

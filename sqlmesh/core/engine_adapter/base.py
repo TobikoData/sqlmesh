@@ -29,7 +29,7 @@ from sqlmesh.core.engine_adapter._typing import (
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
-from sqlmesh.core.schema_diff import SchemaDelta, SchemaDiffConfig
+from sqlmesh.core.schema_diff import TableStructureResolver
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
@@ -60,7 +60,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
-    SCHEMA_DIFF_CONFIG = SchemaDiffConfig()
+    TABLE_STRUCTURE_RESOLVER = TableStructureResolver()
 
     def __init__(
         self,
@@ -292,71 +292,21 @@ class EngineAdapter:
 
     def alter_table(
         self,
-        table_name: TableName,
-        operations: t.List[SchemaDelta],
+        current_table_name: TableName,
+        target_table_name: TableName,
     ) -> None:
         """
-        Performs the series of alter table operations on the table sequentially. The expectation is that the
-        operations are in the correct order to be applied to the table. Currently operations are not batched
-        to avoid potential issues with one operation referring to the position of another operation. If performance
-        is a concern we can research if these can be safely batched and then batch up adds/drops together.
+        Performs the required alter statements to change the current table into the structure of the target table.
         """
-
-        def get_add_statement(operation: SchemaDelta) -> exp.AlterTable:
-            if not self.SCHEMA_DIFF_CONFIG.support_struct_add and operation.parents.has_columns:
-                raise SQLMeshError(
-                    "Attempting to do an alter statement to add a column to a struct. "
-                    "This is not supported by your target engine."
-                    f"Table: {table_name}, "
-                    f"Column: {operation.full_column_path(self.SCHEMA_DIFF_CONFIG.array_suffix)}"
-                )
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
-            column = operation.column_def(self.SCHEMA_DIFF_CONFIG.array_suffix)
-            if self.SCHEMA_DIFF_CONFIG.support_positional_add:
-                assert operation.add_position
-                column.set("position", operation.add_position.column_position_node)
-            alter_table.set("actions", [column])
-            return alter_table
-
-        def get_drop_statement(operation: SchemaDelta) -> exp.AlterTable:
-            alter_table = exp.AlterTable(this=exp.to_table(table_name))
-            drop_column = exp.Drop(
-                this=operation.column(self.SCHEMA_DIFF_CONFIG.array_suffix), kind="COLUMN"
-            )
-            alter_table.set("actions", [drop_column])
-            return alter_table
-
-        def get_alter_statement(operation: SchemaDelta) -> exp.AlterTable:
-            return exp.AlterTable(
-                this=exp.to_table(table_name),
-                actions=[
-                    exp.AlterColumn(
-                        this=operation.column(self.SCHEMA_DIFF_CONFIG.array_suffix),
-                        dtype=operation.column_type,
-                    )
-                ],
-            )
-
-        statements = []
-        for operation in operations:
-            if operation.is_add:
-                statements.append(get_add_statement(operation))
-            elif operation.is_drop:
-                statements.append(get_drop_statement(operation))
-            elif operation.is_alter_type:
-                assert operation.current_type
-                if self.SCHEMA_DIFF_CONFIG.is_compatible_type(
-                    operation.current_type, operation.column_type
-                ):
-                    statements.append(get_alter_statement(operation))
-                else:
-                    statements.append(get_drop_statement(operation))
-                    statements.append(get_add_statement(operation))
-            else:
-                raise ValueError(f"Unsupported operation: {operation.op}")
         with self.transaction(TransactionType.DDL):
-            for statement in statements:
-                self.execute(statement)
+            for operation in self.TABLE_STRUCTURE_RESOLVER.get_operations(
+                current_table_name, target_table_name, self
+            ):
+                self.execute(
+                    operation.expression(
+                        current_table_name, self.TABLE_STRUCTURE_RESOLVER.array_suffix
+                    )
+                )
 
     def create_view(
         self,
