@@ -17,7 +17,7 @@ def test_schema_diff_calculate():
     alter_expressions = SchemaDiffer(
         **{
             "support_positional_add": False,
-            "support_struct_add_drop": False,
+            "support_nested_operations": False,
             "array_suffix": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
@@ -50,7 +50,7 @@ def test_schema_diff_calculate_type_transitions():
     alter_expressions = SchemaDiffer(
         **{
             "support_positional_add": False,
-            "support_struct_add_drop": False,
+            "support_nested_operations": False,
             "array_suffix": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
@@ -332,7 +332,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.first(),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Add a column to the end of a struct
         (
@@ -349,7 +349,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.last(after="col_c"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Add a column to the middle of a struct
         (
@@ -366,7 +366,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.middle(after="col_a"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Add two columns at the start of a struct
         (
@@ -392,7 +392,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.middle(after="col_d"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Remove a column from the start of a struct
         (
@@ -408,7 +408,7 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Remove a column from the end of a struct
         (
@@ -424,7 +424,7 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Remove a column from the middle of a struct
         (
@@ -440,7 +440,7 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Remove two columns from the start of a struct
         (
@@ -464,7 +464,7 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Change a column type in a struct
         (
@@ -484,7 +484,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_struct_add_drop=True,
+                support_nested_operations=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -534,7 +534,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_struct_add_drop=True,
+                support_nested_operations=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -582,7 +582,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.last("nest_col_a"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # #####################
         # # Array Struct Tests
@@ -602,7 +602,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.middle("col_b"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Remove column from array of structs
         (
@@ -618,7 +618,7 @@ def test_schema_diff_calculate_type_transitions():
                     "INT",
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Alter column type in array of structs
         (
@@ -638,7 +638,7 @@ def test_schema_diff_calculate_type_transitions():
             ],
             dict(
                 support_positional_add=True,
-                support_struct_add_drop=True,
+                support_nested_operations=True,
                 compatible_types={
                     exp.DataType.build("INT"): {exp.DataType.build("TEXT")},
                 },
@@ -658,7 +658,7 @@ def test_schema_diff_calculate_type_transitions():
                     position=TableAlterColumnPosition.last("infos"),
                 ),
             ],
-            dict(support_positional_add=True, support_struct_add_drop=True),
+            dict(support_positional_add=True, support_nested_operations=True),
         ),
         # Precision VARCHAR is a no-op with no changes
         (
@@ -667,28 +667,26 @@ def test_schema_diff_calculate_type_transitions():
             [],
             {},
         ),
-        # TODO: Support precision changes
         # Change the precision bits of a VARCHAR
         (
             "STRUCT<id INT, address VARCHAR(120)>",
             "STRUCT<id INT, address VARCHAR(100)>",
             [
-                TableAlterOperation.alter_type(
-                    [
-                        TableAlterColumn.primitive("address"),
-                    ],
+                TableAlterOperation.drop(
+                    TableAlterColumn.primitive("address"),
+                    "STRUCT<id INT>",
+                    "VARCHAR(120)",
+                ),
+                TableAlterOperation.add(
+                    TableAlterColumn.primitive("address"),
                     "VARCHAR(100)",
                     expected_table_struct="STRUCT<id INT, address VARCHAR(100)>",
                     position=TableAlterColumnPosition.last("id"),
-                    current_type=exp.DataType.build("VARCHAR(120)"),
                 ),
             ],
             dict(
                 support_positional_add=True,
-                support_struct_add_drop=True,
-                compatible_types={
-                    exp.DataType.build("VARCHAR(120)"): {exp.DataType.build("VARCHAR(100)")},
-                },
+                support_nested_operations=True,
             ),
         ),
     ],

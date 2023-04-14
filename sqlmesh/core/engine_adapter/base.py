@@ -62,7 +62,7 @@ class EngineAdapter:
     ESCAPE_JSON = False
     STRUCT_DIFFER_PROPERTIES = {
         "support_positional_add": False,
-        "support_struct_add_drop": False,
+        "support_nested_operations": False,
         "array_suffix": "",
         "compatible_types": {},
     }

@@ -210,7 +210,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_positional_add": True,
-                "support_struct_add_drop": True,
+                "support_nested_operations": True,
                 "array_suffix": ".element",
             },
             {
@@ -248,7 +248,7 @@ def test_create_table_properties(mocker: MockerFixture):
         ),
         (
             {
-                "support_struct_add_drop": True,
+                "support_nested_operations": True,
                 "array_suffix": ".element",
             },
             {
@@ -366,7 +366,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_positional_add": True,
-                "support_struct_add_drop": True,
+                "support_nested_operations": True,
                 "array_suffix": ".element",
             },
             {
@@ -395,7 +395,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_positional_add": True,
-                "support_struct_add_drop": True,
+                "support_nested_operations": True,
                 "array_suffix": ".element",
             },
             {
@@ -451,7 +451,7 @@ def test_create_table_properties(mocker: MockerFixture):
         # Test multiple operations on a column with no positional and nested features enabled
         (
             {
-                "support_struct_add_drop": True,
+                "support_nested_operations": True,
                 "array_suffix": ".element",
             },
             {

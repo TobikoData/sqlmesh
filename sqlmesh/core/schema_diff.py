@@ -241,8 +241,25 @@ class TableAlterOperation(PydanticModel):
 
 
 class SchemaDiffer(PydanticModel):
+    """
+    Compares a source schema against a target schema and returns a list of alter statements to have the source
+    match the structure of target. Some engines have constraints on the types of operations that can be performed
+    therefore the final structure may not match the target exactly but it will be as close as possible. Two potential
+    differences that can happen:
+    1. Column order can be different if the engine doesn't support positional additions. Another reason for difference
+    is if a column is just moved since we don't currently support fixing moves.
+    2. Nested operations will be represented using a drop/add of the root column if the engine doesn't support nested
+    operations. As a result historical data is lost.
+    3. Column type changes will be reflected but it can be done through a drop/add if the change is not a compatible
+    change. As a result historical data is lost.
+
+    Potential future improvements:
+    1. Support precision changes on columns like VARCHAR and DECIMAL. Each engine has different rules on what is allowed
+    2. Support column moves. Databricks Delta supports moves and would allow exact matches.
+    """
+
     support_positional_add: bool
-    support_struct_add_drop: bool
+    support_nested_operations: bool
     array_suffix: str
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]]
 
@@ -296,30 +313,13 @@ class SchemaDiffer(PydanticModel):
     ) -> t.List[TableAlterOperation]:
         columns = ensure_list(columns)
         operations = []
-        root_column = columns[0]
-        is_nested = len(columns) > 1
-        is_supported_drop = (
-            root_column.is_primitive
-            or root_column.is_array_of_primitive
-            or not is_nested
-            or self.support_struct_add_drop
-        )
-        if not is_supported_drop:
-            columns = [root_column]
-            struct = root_struct
-            column_pos, column_kwarg = self._get_matching_kwarg(root_column.name, root_struct, pos)
-        else:
-            column_pos, column_kwarg = self._get_matching_kwarg(columns[-1].name, struct, pos)
+        column_pos, column_kwarg = self._get_matching_kwarg(columns[-1].name, struct, pos)
         assert column_pos is not None
         assert column_kwarg
         struct.expressions.pop(column_pos)
         operations.append(
             TableAlterOperation.drop(columns, root_struct.copy(), column_kwarg.expression)
         )
-        if not is_supported_drop:
-            operations.extend(
-                self._add_operation([root_column], column_pos, column_kwarg, struct, root_struct)
-            )
         return operations
 
     def _resolve_drop_operation(
@@ -390,29 +390,24 @@ class SchemaDiffer(PydanticModel):
         new_kwarg: exp.StructKwarg,
     ) -> t.List[TableAlterOperation]:
         current_type = exp.DataType.build(current_type)
-        if (
-            new_type.this == current_type.this == exp.DataType.Type.STRUCT
-            and self.support_struct_add_drop
-        ):
-            return self._get_operations(
-                columns,
-                current_type,
-                new_type,
-                root_struct,
-            )
-        if (
-            new_type.this == current_type.this == exp.DataType.Type.ARRAY
-            and self.support_struct_add_drop
-        ):
-            new_array_type = new_type.expressions[0]
-            current_array_type = current_type.expressions[0]
-            if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
+        if self.support_nested_operations:
+            if new_type.this == current_type.this == exp.DataType.Type.STRUCT:
                 return self._get_operations(
                     columns,
-                    current_array_type,
-                    new_array_type,
+                    current_type,
+                    new_type,
                     root_struct,
                 )
+            if new_type.this == current_type.this == exp.DataType.Type.ARRAY:
+                new_array_type = new_type.expressions[0]
+                current_array_type = current_type.expressions[0]
+                if new_array_type.this == current_array_type.this == exp.DataType.Type.STRUCT:
+                    return self._get_operations(
+                        columns,
+                        current_array_type,
+                        new_array_type,
+                        root_struct,
+                    )
         if self._is_compatible_type(current_type, new_type):
             struct.expressions.pop(pos)
             struct.expressions.insert(pos, new_kwarg)

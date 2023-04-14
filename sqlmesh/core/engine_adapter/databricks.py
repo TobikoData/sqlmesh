@@ -7,6 +7,6 @@ class DatabricksSparkSessionEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     STRUCT_DIFFER_PROPERTIES = {
         "support_positional_add": True,
-        "support_struct_add_drop": True,
+        "support_nested_operations": True,
         "array_suffix": ".element",
     }
