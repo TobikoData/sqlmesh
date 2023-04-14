@@ -296,7 +296,7 @@ class TableStructureResolver(PydanticModel):
             column_pos, column_kwarg = self._get_matching_kwarg(root_column.name, root_struct, pos)
         else:
             column_pos, column_kwarg = self._get_matching_kwarg(columns[-1].name, struct, pos)
-        assert column_pos
+        assert column_pos is not None
         assert column_kwarg
         struct.expressions.pop(column_pos)
         operations.append(
