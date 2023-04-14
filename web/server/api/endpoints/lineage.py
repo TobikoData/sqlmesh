@@ -14,6 +14,7 @@ from web.server.api.endpoints.models import (
     get_model_with_columns,
     get_models_with_columns,
 )
+from web.server.models import DAG
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -56,10 +57,32 @@ async def column_lineage(
 async def model_column_lineage(
     model_name: str,
     context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, t.Dict[str, t.Dict[str, t.List[str]]]]:
+) -> t.Dict[str, DAG]:
     """Get a model's column lineage"""
+    columns = get_column_lineage(context, model_name)
+    models = (
+        set(key for column in columns[model_name].values() for key in column.keys())
+        if model_name in columns
+        else set()
+    )
 
-    return get_column_lineage(context, model_name)
+    models.add(model_name)
+
+    for model in context.dag.graph[model_name]:
+        models.add(model)
+
+    return {
+        name: DAG(
+            models=list(model_names)
+            if name == model_name
+            else [model_name]
+            if model_name in model_names
+            else [],
+            columns=columns[model_name] if name == model_name and model_name in columns else None,
+        )
+        for name, model_names in context.dag.graph.items()
+        if name in models or model_name in model_names
+    }
 
 
 def get_column_lineage(context: Context, model_name: t.Optional[str] = None) -> Lineage:
