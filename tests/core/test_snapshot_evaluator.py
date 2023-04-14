@@ -8,7 +8,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse, parse_one
 
 from sqlmesh.core.context import ExecutionContext
-from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -18,7 +18,6 @@ from sqlmesh.core.model import (
     load_model,
 )
 from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.schema_diff import SchemaDelta
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -206,32 +205,46 @@ def test_promote_model_info(mocker: MockerFixture):
 
 
 def test_migrate(mocker: MockerFixture, make_snapshot):
-    adapter_mock = mocker.Mock()
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
 
-    schema_diff_calculator_mock = mocker.patch(
-        "sqlmesh.core.schema_diff.SchemaDiffCalculator.calculate"
-    )
-    schema_diff_calculator_mock.return_value = [
-        SchemaDelta.drop("b", "STRING"),
-        SchemaDelta.add("a", "INT"),
-    ]
+    current_table = "physical_schema.test_schema__test_model__1"
 
-    evaluator = SnapshotEvaluator(adapter_mock)
+    def columns(table_name: t.Union[str, exp.Table]) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "b": exp.DataType.build("int"),
+            }
+        else:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+
+    adapter.columns = columns  # type: ignore
+
+    evaluator = SnapshotEvaluator(adapter)
 
     model = SqlModel(
         name="test_schema.test_model",
         kind=IncrementalByTimeRangeKind(time_column="a"),
         storage_format="parquet",
-        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
 
     evaluator.migrate([snapshot])
 
-    adapter_mock.alter_table.assert_called_once_with(
-        snapshot.table_name(),
-        {"a": "INT"},
-        ["b"],
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("""ALTER TABLE "physical_schema"."test_schema__test_model__1" DROP COLUMN "b\""""),
+            call(
+                """ALTER TABLE "physical_schema"."test_schema__test_model__1" ADD COLUMN "a" INT"""
+            ),
+        ]
     )
 
 

@@ -31,7 +31,7 @@ def test_adapter_relation(sushi_test_project: Project):
     )
     assert context.render(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
-    ) == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
+    ) == str([Column.from_description(name="baz", raw_data_type="INT")])
 
     assert context.render("{{ adapter.list_relations(database=None, schema='foo')|length }}") == "2"
 
@@ -43,7 +43,7 @@ def test_adapter_relation(sushi_test_project: Project):
         {{ adapter.get_missing_columns(from, to) -}}
         """
         )
-        == str([Column.from_description(name="baz", raw_data_type="INTEGER")])
+        == str([Column.from_description(name="baz", raw_data_type="INT")])
     )
 
     assert (

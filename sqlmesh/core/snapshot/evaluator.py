@@ -30,7 +30,6 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.core.schema_diff import SchemaDeltaOp, SchemaDiffCalculator
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
@@ -58,7 +57,6 @@ class SnapshotEvaluator:
     def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
-        self._schema_diff_calculator = SchemaDiffCalculator(self.adapter)
 
     def evaluate(
         self,
@@ -400,27 +398,8 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
 
-        schema_deltas = self._schema_diff_calculator.calculate(target_table_name, tmp_table_name)
-        if not schema_deltas:
-            return
-
-        added_columns = {}
-        dropped_columns = []
-        for delta in schema_deltas:
-            if delta.op == SchemaDeltaOp.ADD:
-                added_columns[delta.column_name] = delta.column_type
-            elif delta.op == SchemaDeltaOp.DROP:
-                dropped_columns.append(delta.column_name)
-            else:
-                raise ConfigError(f"Unsupported schema delta operation: {delta.op}")
-
-        logger.info(
-            "Altering table '%s'. Added columns: %s; dropped columns: %s",
-            target_table_name,
-            added_columns,
-            dropped_columns,
-        )
-        self.adapter.alter_table(target_table_name, added_columns, dropped_columns)
+        logger.info(f"Altering table '{target_table_name}'")
+        self.adapter.alter_table(target_table_name, tmp_table_name)
 
     def _promote_snapshot(
         self,

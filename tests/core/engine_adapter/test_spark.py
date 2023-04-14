@@ -1,4 +1,5 @@
 # type: ignore
+import typing as t
 from unittest.mock import call
 
 from pytest_mock.plugin import MockerFixture
@@ -37,34 +38,41 @@ def test_alter_table(mocker: MockerFixture):
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = SparkEngineAdapter(lambda: connection_mock)
+    current_table_name = "test_table"
+    target_table_name = "test_table__1"
 
-    adapter.alter_table(
-        "test_table",
-        {"a": "INT", "b": "STRING"},
-        ["c", "d"],
-    )
+    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table_name:
+            return {
+                "id": exp.DataType.build("INT"),
+                "a": exp.DataType.build("INT"),
+                "b": exp.DataType.build("STRING"),
+                "complex": exp.DataType.build("STRUCT<complex_a: INT, complex_b: STRING>"),
+                "ds": exp.DataType.build("STRING"),
+            }
+        else:
+            return {
+                "id": exp.DataType.build("BIGINT"),
+                "a": exp.DataType.build("STRING"),
+                "complex": exp.DataType.build("STRUCT<complex_a: INT>"),
+                "ds": exp.DataType.build("INT"),
+            }
 
-    adapter.alter_table(
-        "test_table",
-        {"e": "DOUBLE"},
-        [],
-    )
+    adapter.columns = table_columns
 
-    adapter.alter_table(
-        "test_table",
-        {},
-        ["f"],
-    )
+    adapter.alter_table(current_table_name, target_table_name)
 
     cursor_mock.execute.assert_has_calls(
         [
-            # 1st call.
-            call("""ALTER TABLE `test_table` DROP COLUMNS (`c`, `d`)"""),
-            call("""ALTER TABLE `test_table` ADD COLUMNS (`a` INT, `b` STRING)"""),
-            # 2nd call.
-            call("""ALTER TABLE `test_table` ADD COLUMNS (`e` DOUBLE)"""),
-            # 3d call.
-            call("""ALTER TABLE `test_table` DROP COLUMNS (`f`)"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `b`"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `id`"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `id` LONG"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `a`"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `a` STRING"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `complex`"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `complex` STRUCT<`complex_a`: INT>"""),
+            call("""ALTER TABLE `test_table` DROP COLUMN `ds`"""),
+            call("""ALTER TABLE `test_table` ADD COLUMN `ds` INT"""),
         ]
     )
 
