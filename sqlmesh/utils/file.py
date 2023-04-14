@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-import fsspec
+import fsspec  # type: ignore
 
 POLLING_INTERVAL = 1.0
 
@@ -56,12 +56,8 @@ class FileTransactionHandler:
         output = {}
         for lock in (
             lock_info
-            for lock_info in self._fs.ls(
-                self._get_base_lock_path(), refresh=True, detail=True
-            )
-            if os.path.basename(lock_info["name"]).startswith(
-                os.path.basename(self.lock_prefix)
-            )
+            for lock_info in self._fs.ls(self._get_base_lock_path(), refresh=True, detail=True)
+            if os.path.basename(lock_info["name"]).startswith(os.path.basename(self.lock_prefix))
         ):
             mtime = self.mtime_dispatch[self._fs.protocol](lock)
             if datetime.now() - mtime > self._lock_timeout:
@@ -117,7 +113,7 @@ class FileTransactionHandler:
         wait_time = 0.0
         self._fs.touch(self.lock_path)
         locks = self._get_locks()
-        active_lock = min(locks, key=locks.get)
+        active_lock = min(locks, key=locks.get)  # type: ignore
         while active_lock != os.path.basename(self.lock_path):
             if not blocking:
                 return False
@@ -126,7 +122,7 @@ class FileTransactionHandler:
             time.sleep(POLLING_INTERVAL)
             wait_time += POLLING_INTERVAL
             locks = self._get_locks()
-            active_lock = min(locks, key=locks.get)
+            active_lock = min(locks, key=locks.get)  # type: ignore
         print(f"Acquired lock {self.lock_path} after {wait_time} seconds.")
         self._is_locked = True
         return True
