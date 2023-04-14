@@ -8,6 +8,7 @@ from uuid import uuid4
 import fsspec  # type: ignore
 
 POLLING_INTERVAL = 1.0
+LOCK_TTL_SECONDS = 60.0
 
 
 class FileTransactionHandler:
@@ -33,7 +34,6 @@ class FileTransactionHandler:
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
         self._lock_id = uuid4()
-        self._lock_timeout = timedelta(minutes=1)
 
     @property
     def lock_prefix(self) -> str:
@@ -51,8 +51,8 @@ class FileTransactionHandler:
             return os.path.abspath(os.path.dirname(self.lock_path))
         return self.lock_prefix
 
-    def _get_locks(self) -> t.Dict[str, datetime]:
-        """Gets a map of lock paths to their last modified times."""
+    def _sync_locks(self) -> t.Dict[str, datetime]:
+        """Gets a map of lock paths to their last modified times and removes stale locks."""
         output = {}
         for lock in (
             lock_info
@@ -60,7 +60,7 @@ class FileTransactionHandler:
             if os.path.basename(lock_info["name"]).startswith(os.path.basename(self.lock_prefix))
         ):
             mtime = self.mtime_dispatch[self._fs.protocol](lock)
-            if datetime.now() - mtime > self._lock_timeout:
+            if datetime.now() - mtime > timedelta(seconds=LOCK_TTL_SECONDS):
                 # Handle stale locks
                 self._fs.rm(lock["name"])
                 print(f"Removed stale lock {lock['name']}")
@@ -112,7 +112,7 @@ class FileTransactionHandler:
             return True
         wait_time = 0.0
         self._fs.touch(self.lock_path)
-        locks = self._get_locks()
+        locks = self._sync_locks()
         active_lock = min(locks, key=locks.get)  # type: ignore
         while active_lock != os.path.basename(self.lock_path):
             if not blocking:
@@ -121,7 +121,7 @@ class FileTransactionHandler:
                 return False
             time.sleep(POLLING_INTERVAL)
             wait_time += POLLING_INTERVAL
-            locks = self._get_locks()
+            locks = self._sync_locks()
             active_lock = min(locks, key=locks.get)  # type: ignore
         print(f"Acquired lock {self.lock_path} after {wait_time} seconds.")
         self._is_locked = True
