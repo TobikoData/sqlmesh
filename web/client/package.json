@@ -11,7 +11,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest --watch=false",
     "test:unit:watch": "vitest --watch=true",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright install && playwright test",
     "generate:api": "orval --config ./orval.config.ts"
   },
   "dependencies": {
