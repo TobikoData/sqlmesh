@@ -163,7 +163,7 @@ def generate_ref(refs: t.Dict[str, t.Any]) -> t.Callable:
         if relation_info is None:
             return relation_info
 
-        return BaseRelation.create(**relation_info, quote_policy=quote_policy())
+        return BaseRelation.create(**relation_info)
 
     return ref
 
@@ -174,7 +174,7 @@ def generate_source(sources: t.Dict[str, t.Any]) -> t.Callable:
         if relation_info is None:
             return relation_info
 
-        return BaseRelation.create(**relation_info, quote_policy=quote_policy())
+        return BaseRelation.create(**relation_info)
 
     return source
 
@@ -312,7 +312,7 @@ def create_builtin_globals(
     this = jinja_globals.pop("this", None)
     if this is not None:
         if not isinstance(this, BaseRelation):
-            builtin_globals["this"] = BaseRelation.create(**this, quote_policy=quote_policy())
+            builtin_globals["this"] = BaseRelation.create(**this)
         else:
             builtin_globals["this"] = this
 

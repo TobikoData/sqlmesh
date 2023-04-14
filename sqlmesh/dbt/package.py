@@ -3,7 +3,13 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import PROJECT_FILENAME, BaseConfig, SqlStr, load_yaml
+from sqlmesh.dbt.common import (
+    PROJECT_FILENAME,
+    BaseConfig,
+    QuotingConfig,
+    SqlStr,
+    load_yaml,
+)
 from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -129,18 +135,23 @@ class PackageLoader:
 
             return scoped_configs
 
+        if "quoting" in yaml:
+            quoting = QuotingConfig(**yaml["quoting"])
+        else:
+            quoting = self._context.target.quoting
+
         scope = ()
         self.project_config.source_config = load_config(
-            yaml.get("sources", {}), SourceConfig(), scope
+            yaml.get("sources", {}), SourceConfig(quoting=quoting), scope
         )
         self.project_config.seed_config = load_config(
             yaml.get("seeds", {}),
-            SeedConfig(target_schema=self._context.target.schema_),
+            SeedConfig(target_schema=self._context.target.schema_, quoting=quoting),
             scope,
         )
         self.project_config.model_config = load_config(
             yaml.get("models", {}),
-            ModelConfig(target_schema=self._context.target.schema_),
+            ModelConfig(target_schema=self._context.target.schema_, quoting=quoting),
             scope,
         )
 

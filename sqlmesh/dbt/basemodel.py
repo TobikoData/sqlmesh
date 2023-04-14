@@ -23,7 +23,7 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
     yaml_to_columns,
 )
-from sqlmesh.dbt.common import GeneralConfig, SqlStr
+from sqlmesh.dbt.common import GeneralConfig, QuotingConfig, SqlStr
 from sqlmesh.dbt.dbtcontext import DbtContext
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
@@ -89,6 +89,7 @@ class BaseModelConfig(GeneralConfig):
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         columns: Column information for the model
+        quoting: Which portions of the qualified name (database, schema, identifier) to quote when resolving the ref() method
     """
 
     # sqlmesh fields
@@ -109,6 +110,7 @@ class BaseModelConfig(GeneralConfig):
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
+    quoting: QuotingConfig = Field(default_factory=QuotingConfig)
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[SqlStr]:
@@ -197,6 +199,7 @@ class BaseModelConfig(GeneralConfig):
                 "schema": self.table_schema,
                 "identifier": self.table_name,
                 "type": relation_type.value,
+                "quote_policy": AttributeDict(self.quoting.dict()),
             }
         )
 

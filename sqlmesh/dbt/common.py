@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from pydantic import validator
+from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
@@ -54,6 +54,12 @@ class DbtConfig(BaseConfig):
         extra = "allow"
         allow_mutation = True
         validate_assignment = True
+
+
+class QuotingConfig(DbtConfig):
+    database: bool = True
+    schema_: bool = Field(True, alias="schema")
+    identifier: bool = True
 
 
 class GeneralConfig(DbtConfig):
