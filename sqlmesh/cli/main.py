@@ -342,5 +342,13 @@ def ide(
     uvicorn.run("web.server.main:app", host=host, port=port, log_level="info")
 
 
+@cli.command("migrate")
+@click.pass_context
+@error_handler
+def migrate(ctx: click.Context) -> None:
+    """Migrate SQLMesh to the current running version."""
+    ctx.obj.migrate()
+
+
 if __name__ == "__main__":
     cli()

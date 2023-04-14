@@ -777,7 +777,6 @@ class EngineAdapter:
             "dialect": self.dialect,
             "pretty": False,
             "comments": False,
-            "identify": True,
             **self.DEFAULT_SQL_GEN_KWARGS,
             **self.sql_gen_kwargs,
             **kwargs,

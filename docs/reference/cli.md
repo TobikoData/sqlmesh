@@ -18,6 +18,7 @@ Commands:
   fetchdf   Runs a sql query and displays the results.
   format    Format all models in a given directory.
   init      Create a new SQLMesh repository.
+  migrate   Migrate SQLMesh to the current running version.
   plan      Plan a migration of the current context's models with the...
   render    Renders a model's query, optionally expanding referenced models.
   run       Evaluates the DAG of models using the built-in scheduler.
@@ -168,4 +169,13 @@ Usage: sqlmesh dag [OPTIONS]
 Options:
   --file TEXT  The file to which the dag image should be written.
   --help       Show this message and exit.
+```
+
+## migrate
+```
+Usage: sqlmesh migrate
+
+  Migrates SQLMesh to the current running version.
+  
+  Please contact your SQLMesh administrator before doing this.
 ```

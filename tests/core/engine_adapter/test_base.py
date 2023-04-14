@@ -23,8 +23,8 @@ def test_create_view(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-            call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
+            call("CREATE OR REPLACE VIEW test_view AS SELECT a FROM tbl"),
+            call("CREATE VIEW test_view AS SELECT a FROM tbl"),
         ]
     )
 
@@ -40,8 +40,8 @@ def test_create_schema(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call('CREATE SCHEMA IF NOT EXISTS "test_schema"'),
-            call('CREATE SCHEMA "test_schema"'),
+            call("CREATE SCHEMA IF NOT EXISTS test_schema"),
+            call("CREATE SCHEMA test_schema"),
         ]
     )
 
@@ -69,7 +69,7 @@ def test_columns(mocker: MockerFixture):
         "ds": exp.DataType.build("string"),
     }
 
-    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
+    cursor_mock.execute.assert_called_once_with("DESCRIBE test_table")
 
 
 def test_table_exists(mocker: MockerFixture):
@@ -80,7 +80,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        'DESCRIBE "test_table"',
+        "DESCRIBE test_table",
     )
 
     cursor_mock = mocker.Mock()
@@ -90,7 +90,7 @@ def test_table_exists(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert not adapter.table_exists("test_table")
     cursor_mock.execute.assert_called_once_with(
-        'DESCRIBE "test_table"',
+        "DESCRIBE test_table",
     )
 
 
@@ -112,8 +112,8 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("DELETE FROM \"test_table\" WHERE \"b\" BETWEEN '2022-01-01' AND '2022-01-02'"),
-            call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
+            call("DELETE FROM test_table WHERE b BETWEEN '2022-01-01' AND '2022-01-02'"),
+            call("INSERT INTO test_table (a) SELECT a FROM tbl"),
         ]
     )
 
@@ -130,9 +130,7 @@ def test_insert_append_query(mocker: MockerFixture):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
-        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'
-    )
+    cursor_mock.execute.assert_called_once_with("INSERT INTO test_table (a) SELECT a FROM tbl")
 
 
 def test_insert_append_pandas(mocker: MockerFixture):
@@ -157,7 +155,7 @@ def test_insert_append_pandas(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS "t"("a", "b")'
+                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS t(a, b)"
             ),
         ]
     )
@@ -177,7 +175,7 @@ def test_create_table(mocker: MockerFixture):
     adapter.create_table("test_table", columns_to_types)
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT)"
     )
 
 
@@ -200,7 +198,7 @@ def test_create_table_properties(mocker: MockerFixture):
     )
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT)"
     )
 
 
@@ -569,9 +567,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
-        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
+        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
     )
 
     cursor_mock.reset_mock()
@@ -582,9 +580,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
-        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id AND __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts "
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
+        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
     )
 
 
@@ -597,7 +595,7 @@ def test_replace_query(mocker: MockerFixture):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
+        "CREATE OR REPLACE TABLE test_table AS SELECT a FROM tbl"
     )
 
 
@@ -611,7 +609,7 @@ def test_replace_query_pandas(mocker: MockerFixture):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS "test_table"("a", "b")'
+        "CREATE OR REPLACE TABLE test_table AS SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS test_table(a, b)"
     )
 
 
@@ -624,7 +622,7 @@ def test_create_table_like(mocker: MockerFixture):
     adapter.create_table_like("target_table", "source_table")
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
+        "CREATE TABLE IF NOT EXISTS target_table LIKE source_table"
     )
 
 
@@ -642,7 +640,7 @@ def test_create_table_primary_key(mocker: MockerFixture):
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT, PRIMARY KEY ("cola", "colb"))'
+        'CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT, PRIMARY KEY (cola, colb))'
     )
 
 
@@ -655,7 +653,7 @@ def test_create_index(mocker: MockerFixture):
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
+        "CREATE INDEX IF NOT EXISTS test_index ON test_table (cola, colb)"
     )
 
 
@@ -667,4 +665,4 @@ def test_rename_table(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.rename_table("old_table", "new_table")
 
-    cursor_mock.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')
+    cursor_mock.execute.assert_called_once_with("ALTER TABLE old_table RENAME TO new_table")

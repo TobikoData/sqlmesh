@@ -358,6 +358,11 @@ class SQLMeshMagics(Magics):
         dag = self._context.get_dag()
         self.display(HTML(dag.pipe().decode("utf-8")))
 
+    @magic_arguments()
+    def migrate(self) -> None:
+        """Migrate SQLMesh to the current running version."""
+        self._context.migrate()
+
     @property
     def _shell(self) -> t.Any:
         # Make mypy happy.
