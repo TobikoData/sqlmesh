@@ -22,7 +22,7 @@ commands:
             or:
               - << pipeline.parameters.common >>
               - << pipeline.parameters.python >>
-              - equal: [ main, << pipeline.git.branch >> ]
+              - equal: [main, << pipeline.git.branch >>]
           steps:
             - run: circleci-agent step halt
   halt_unless_client:
@@ -32,7 +32,7 @@ commands:
             or:
               - << pipeline.parameters.common >>
               - << pipeline.parameters.client >>
-              - equal: [ main, << pipeline.git.branch >> ]
+              - equal: [main, << pipeline.git.branch >>]
           steps:
             - run: circleci-agent step halt
 
@@ -100,6 +100,9 @@ jobs:
       - run:
           name: Install packages
           command: npm --prefix web/client ci
+      - run:
+          name: Install Playwright Browsers
+          command: npm --prefix web/client run playwright:install
       - save_cache:
           key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
           paths:
@@ -151,7 +154,8 @@ workflows:
       - style_and_unit_tests:
           matrix:
             parameters:
-              python_version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+              python_version:
+                ["3.7", "3.8", "3.9", "3.10", "3.11"]
       - core_integration_tests
       - airflow_integration_tests:
           requires:
