@@ -194,7 +194,9 @@ class RuntimeAdapter(BaseAdapter):
         from dbt.adapters.base.column import Column
 
         return [
-            Column.from_description(name=name, raw_data_type=dtype)
+            Column.from_description(
+                name=name, raw_data_type=dtype.sql(dialect=self.engine_adapter.dialect)
+            )
             for name, dtype in self.engine_adapter.columns(table_name=relation.render()).items()
         ]
 
