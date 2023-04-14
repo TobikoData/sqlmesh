@@ -9,7 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
-from sqlmesh.core.schema_diff import TableAlterOperation, TableStructureResolver
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 
 
 def test_create_view(mocker: MockerFixture):
@@ -520,23 +520,23 @@ def test_alter_table(
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")
-    table_structure_resolver = TableStructureResolver(**table_alter_resolver_config)
-    original_get_operations = table_structure_resolver.get_operations
+    adapter.STRUCT_DIFFER_PROPERTIES = {
+        **adapter.STRUCT_DIFFER_PROPERTIES,
+        **table_alter_resolver_config,
+    }
+    original_from_structs = SchemaDiffer(**adapter.STRUCT_DIFFER_PROPERTIES)._from_structs
 
-    def get_operations(
-        current_table: t.Union[str, exp.Table],
-        new_table: t.Union[str, exp.Table],
-        engine_adapter: EngineAdapter,
+    def _from_structs(
+        current_struct: exp.DataType, new_struct: exp.DataType
     ) -> t.List[TableAlterOperation]:
-        operations = original_get_operations(current_table_name, target_table_name, adapter)
+        operations = original_from_structs(current_struct, new_struct)
         assert (
             operations[-1].expected_table_struct.sql()
-            == TableStructureResolver._dict_to_struct(expected_final_structure).sql()
+            == SchemaDiffer._dict_to_struct(expected_final_structure).sql()
         )
         return operations
 
-    mocker.patch.object(TableStructureResolver, "get_operations", side_effect=get_operations)
-    adapter.TABLE_STRUCTURE_RESOLVER = table_structure_resolver
+    mocker.patch.object(SchemaDiffer, "_from_structs", side_effect=_from_structs)
 
     current_table_name = "test_table"
     target_table_name = "target_table"

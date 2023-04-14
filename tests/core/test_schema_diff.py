@@ -1,174 +1,78 @@
 import typing as t
-from unittest.mock import call
 
 import pytest
-from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.schema_diff import (
+    SchemaDiffer,
     TableAlterColumn,
     TableAlterColumnPosition,
     TableAlterOperation,
-    TableStructureResolver,
 )
 
 
-def test_schema_diff_calculate(mocker: MockerFixture):
-    apply_to_table_name = "apply_to_table"
-    schema_from_table_name = "schema_from_table"
-
-    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
-        if table_name == apply_to_table_name:
-            return {
-                "id": exp.DataType.build("INT"),
-                "name": exp.DataType.build("STRING"),
-                "price": exp.DataType.build("DOUBLE"),
-                "ds": exp.DataType.build("STRING"),
-            }
-        else:
-            return {
-                "name": exp.DataType.build("INT"),
-                "id": exp.DataType.build("INT"),
-                "ds": exp.DataType.build("STRING"),
-                "new_column": exp.DataType.build("DOUBLE"),
-            }
-
-    engine_adapter_mock = mocker.Mock()
-    engine_adapter_mock.columns.side_effect = table_columns
-    table_structure_resolver = TableStructureResolver(
-        compatible_types={
-            exp.DataType.build("STRING"): {exp.DataType.build("INT")},
+def test_schema_diff_calculate():
+    alter_expressions = SchemaDiffer(
+        **{
+            "support_positional_add": False,
+            "support_struct_add_drop": False,
+            "array_suffix": "",
+            "compatible_types": {
+                exp.DataType.build("STRING"): {exp.DataType.build("INT")},
+            },
         }
+    ).compare_columns(
+        "apply_to_table",
+        {
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            "price": exp.DataType.build("DOUBLE"),
+            "ds": exp.DataType.build("STRING"),
+        },
+        {
+            "name": exp.DataType.build("INT"),
+            "id": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+            "new_column": exp.DataType.build("DOUBLE"),
+        },
     )
-    engine_adapter_mock.TABLE_STRUCTURE_RESOLVER = table_structure_resolver
 
-    assert table_structure_resolver.get_operations(
-        apply_to_table_name, schema_from_table_name, engine_adapter_mock
-    ) == [
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("price"),
-            "STRUCT<id: INT, name: TEXT, ds: TEXT>",
-            "DOUBLE",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("new_column"),
-            "DOUBLE",
-            "STRUCT<id: INT, name: TEXT, ds: TEXT, new_column: DOUBLE>",
-        ),
-        TableAlterOperation.alter_type(
-            TableAlterColumn.primitive("name"),
-            "INT",
-            "STRING",
-            "STRUCT<id: INT, name: INT, ds: TEXT, new_column: DOUBLE>",
-        ),
+    assert [x.sql() for x in alter_expressions] == [
+        """ALTER TABLE apply_to_table DROP COLUMN price""",
+        """ALTER TABLE apply_to_table ADD COLUMN new_column DOUBLE""",
+        """ALTER TABLE apply_to_table ALTER COLUMN name TYPE INT""",
     ]
 
-    engine_adapter_mock.columns.assert_has_calls(
-        [call(apply_to_table_name), call(schema_from_table_name)]
+
+def test_schema_diff_calculate_type_transitions():
+    alter_expressions = SchemaDiffer(
+        **{
+            "support_positional_add": False,
+            "support_struct_add_drop": False,
+            "array_suffix": "",
+            "compatible_types": {
+                exp.DataType.build("STRING"): {exp.DataType.build("INT")},
+            },
+        }
+    ).compare_columns(
+        "apply_to_table",
+        {
+            "id": exp.DataType.build("INT"),
+            "ds": exp.DataType.build("STRING"),
+        },
+        {
+            "id": exp.DataType.build("BIGINT"),
+            "ds": exp.DataType.build("INT"),
+        },
     )
 
-
-def test_schema_diff_calculate_type_transitions(mocker: MockerFixture):
-    apply_to_table_name = "apply_to_table"
-    schema_from_table_name = "schema_from_table"
-
-    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
-        if table_name == apply_to_table_name:
-            return {
-                "id": exp.DataType.build("INT"),
-                "ds": exp.DataType.build("STRING"),
-            }
-        else:
-            return {
-                "id": exp.DataType.build("BIGINT"),
-                "ds": exp.DataType.build("INT"),
-            }
-
-    engine_adapter_mock = mocker.Mock()
-    engine_adapter_mock.columns.side_effect = table_columns
-    table_structure_resolver = TableStructureResolver()
-    engine_adapter_mock.TABLE_STRUCTURE_RESOLVER = table_structure_resolver
-
-    assert table_structure_resolver.get_operations(
-        apply_to_table_name, schema_from_table_name, engine_adapter_mock
-    ) == [
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("id"),
-            "STRUCT<ds: TEXT>",
-            "INT",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("id"),
-            "BIGINT",
-            "STRUCT<ds: STRING, id: BIGINT>",
-        ),
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("ds"),
-            "STRUCT<id: BIGINT>",
-            "STRING",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("ds"),
-            "INT",
-            "STRUCT<id: BIGINT, ds: INT>",
-        ),
+    assert [x.sql() for x in alter_expressions] == [
+        """ALTER TABLE apply_to_table DROP COLUMN id""",
+        """ALTER TABLE apply_to_table ADD COLUMN id BIGINT""",
+        """ALTER TABLE apply_to_table ALTER COLUMN ds TYPE INT""",
     ]
-
-    engine_adapter_mock.columns.assert_has_calls(
-        [call(apply_to_table_name), call(schema_from_table_name)]
-    )
-
-
-def test_schema_diff_struct_add_column(mocker: MockerFixture):
-    apply_to_table_name = "apply_to_table"
-    schema_from_table_name = "schema_from_table"
-
-    def table_columns(table_name: str) -> t.Dict[str, exp.DataType]:
-        if table_name == apply_to_table_name:
-            return {
-                "complex": exp.DataType.build("STRUCT<id: INT, name: STRING>"),
-                "ds": exp.DataType.build("STRING"),
-            }
-        else:
-            return {
-                "complex": exp.DataType.build("STRUCT<id: INT, new_column: DOUBLE, name: STRING>"),
-                "ds": exp.DataType.build("INT"),
-            }
-
-    engine_adapter_mock = mocker.Mock()
-    engine_adapter_mock.columns.side_effect = table_columns
-    table_structure_resolver = TableStructureResolver()
-    engine_adapter_mock.TABLE_STRUCTURE_RESOLVER = table_structure_resolver
-
-    assert table_structure_resolver.get_operations(
-        apply_to_table_name, schema_from_table_name, engine_adapter_mock
-    ) == [
-        TableAlterOperation.drop(
-            TableAlterColumn.struct("complex"),
-            "STRUCT<ds: STRING>",
-            "STRUCT<id: INT, name: STRING>",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.struct("complex"),
-            "STRUCT<id: INT, new_column: DOUBLE, name: STRING>",
-            "STRUCT<ds: STRING, complex: STRUCT<id: INT, new_column: DOUBLE, name: STRING>>",
-        ),
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("ds"),
-            "STRUCT<complex: STRUCT<id: INT, new_column: DOUBLE, name: STRING>>",
-            "STRING",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("ds"),
-            "INT",
-            "STRUCT<complex: STRUCT<id: INT, new_column: DOUBLE, name: STRING>, ds: INT>",
-        ),
-    ]
-
-    engine_adapter_mock.columns.assert_has_calls(
-        [call(apply_to_table_name), call(schema_from_table_name)]
-    )
 
 
 @pytest.mark.parametrize(
@@ -795,7 +699,11 @@ def test_struct_diff(
     expected_diff: t.List[TableAlterOperation],
     config: t.Dict[str, t.Any],
 ):
-    resolver = TableStructureResolver(**config)
+    config = {
+        **EngineAdapter.STRUCT_DIFFER_PROPERTIES,
+        **config,
+    }
+    resolver = SchemaDiffer(**config)
     operations = resolver._from_structs(
         exp.DataType.build(current_struct), exp.DataType.build(new_struct)
     )
@@ -825,27 +733,10 @@ def test_schema_diff_calculate_duckdb(duck_conn):
         },
     )
 
-    assert engine_adapter.TABLE_STRUCTURE_RESOLVER.get_operations(
-        "apply_to_table", "schema_from_table", engine_adapter
-    ) == [
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("price"),
-            "STRUCT<id INT, name VARCHAR, ds VARCHAR>",
-            "DOUBLE",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("new_column"),
-            "DOUBLE",
-            expected_table_struct="STRUCT<id INT, name VARCHAR, ds VARCHAR, new_column DOUBLE>",
-        ),
-        TableAlterOperation.drop(
-            TableAlterColumn.primitive("name"),
-            "STRUCT<id INT, ds VARCHAR, new_column DOUBLE>",
-            "VARCHAR",
-        ),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("name"),
-            "INTEGER",
-            expected_table_struct="STRUCT<id INT, ds VARCHAR, new_column DOUBLE, name INTEGER>",
-        ),
-    ]
+    engine_adapter.alter_table("apply_to_table", "schema_from_table")
+    assert engine_adapter.columns("apply_to_table") == {
+        "id": exp.DataType.build("int"),
+        "ds": exp.DataType.build("varchar"),
+        "new_column": exp.DataType.build("double"),
+        "name": exp.DataType.build("int"),
+    }

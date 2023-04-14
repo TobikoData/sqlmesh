@@ -18,7 +18,6 @@ from sqlmesh.core.model import (
     load_model,
 )
 from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.schema_diff import TableAlterColumn, TableAlterOperation
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -211,13 +210,21 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
 
-    table_diff_mock = mocker.patch("sqlmesh.core.schema_diff.TableStructureResolver.get_operations")
-    table_diff_mock.return_value = [
-        TableAlterOperation.drop(TableAlterColumn.primitive("b"), "STRUCT<c: STRING>", "STRING"),
-        TableAlterOperation.add(
-            TableAlterColumn.primitive("a"), "INT", "STRUCT<c: STRING, a: INT>"
-        ),
-    ]
+    current_table = "physical_schema.test_schema__test_model__1"
+
+    def columns(table_name: t.Union[str, exp.Table]) -> t.Dict[str, exp.DataType]:
+        if table_name == current_table:
+            return {
+                "c": exp.DataType.build("int"),
+                "b": exp.DataType.build("int"),
+            }
+        else:
+            return {
+                "c": exp.DataType.build("int"),
+                "a": exp.DataType.build("int"),
+            }
+
+    adapter.columns = columns  # type: ignore
 
     evaluator = SnapshotEvaluator(adapter)
 

@@ -8,7 +8,6 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.core.schema_diff import TableStructureResolver
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -16,8 +15,6 @@ if t.TYPE_CHECKING:
 
 class DuckDBEngineAdapter(EngineAdapter):
     DIALECT = "duckdb"
-    # TODO: DuckDB does support changing column types but I didn't find a list of compatible conversions
-    SCHEMA_DIFF_CONFIG = TableStructureResolver()
 
     def _insert_append_pandas_df(
         self,

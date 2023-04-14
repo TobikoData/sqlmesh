@@ -15,7 +15,6 @@ from sqlmesh.core.engine_adapter.shared import (
     TransactionType,
 )
 from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.schema_diff import TableStructureResolver
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -35,8 +34,8 @@ class BigQueryEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
-    SCHEMA_DIFF_CONFIG = TableStructureResolver(
-        compatible_types={
+    STRUCT_DIFFER_PROPERTIES = {
+        "compatible_types": {
             exp.DataType.build("INT64", dialect=DIALECT): {
                 exp.DataType.build("NUMERIC", dialect=DIALECT),
                 exp.DataType.build("FLOAT64", dialect=DIALECT),
@@ -47,8 +46,8 @@ class BigQueryEngineAdapter(EngineAdapter):
             exp.DataType.build("DATE", dialect=DIALECT): {
                 exp.DataType.build("DATETIME", dialect=DIALECT),
             },
-        }
-    )
+        },
+    }
 
     @property
     def client(self) -> BigQueryClient:

@@ -29,7 +29,7 @@ from sqlmesh.core.engine_adapter._typing import (
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
-from sqlmesh.core.schema_diff import TableStructureResolver
+from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
@@ -60,7 +60,12 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
-    TABLE_STRUCTURE_RESOLVER = TableStructureResolver()
+    STRUCT_DIFFER_PROPERTIES = {
+        "support_positional_add": False,
+        "support_struct_add_drop": False,
+        "array_suffix": "",
+        "compatible_types": {},
+    }
 
     def __init__(
         self,
@@ -299,14 +304,12 @@ class EngineAdapter:
         Performs the required alter statements to change the current table into the structure of the target table.
         """
         with self.transaction(TransactionType.DDL):
-            for operation in self.TABLE_STRUCTURE_RESOLVER.get_operations(
-                current_table_name, target_table_name, self
+            for alter_expression in SchemaDiffer(**self.STRUCT_DIFFER_PROPERTIES).compare_columns(
+                current_table_name,
+                self.columns(current_table_name),
+                self.columns(target_table_name),
             ):
-                self.execute(
-                    operation.expression(
-                        current_table_name, self.TABLE_STRUCTURE_RESOLVER.array_suffix
-                    )
-                )
+                self.execute(alter_expression)
 
     def create_view(
         self,

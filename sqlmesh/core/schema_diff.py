@@ -8,9 +8,6 @@ from sqlglot.helper import ensure_list, seq_get
 
 from sqlmesh.utils.pydantic import PydanticModel
 
-if t.TYPE_CHECKING:
-    from sqlmesh.core.engine_adapter import EngineAdapter
-
 
 class TableAlterOperationType(Enum):
     ADD = auto()
@@ -216,7 +213,7 @@ class TableAlterOperation(PydanticModel):
             kind=self.column_type,
         )
 
-    def expression(self, table_name: t.Union[str, exp.Table], array_suffix: str) -> exp.Expression:
+    def expression(self, table_name: t.Union[str, exp.Table], array_suffix: str) -> exp.AlterTable:
         if self.is_alter_type:
             return exp.AlterTable(
                 this=exp.to_table(table_name),
@@ -243,11 +240,28 @@ class TableAlterOperation(PydanticModel):
             raise ValueError(f"Unknown operation {self.op}")
 
 
-class TableStructureResolver(PydanticModel):
-    support_positional_add: bool = False
-    support_struct_add_drop: bool = False
-    array_suffix: str = ""
-    compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
+class SchemaDiffer(PydanticModel):
+    support_positional_add: bool
+    support_struct_add_drop: bool
+    array_suffix: str
+    compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]]
+
+    @classmethod
+    def _dict_to_struct(cls, value: t.Dict[str, exp.DataType]) -> exp.DataType:
+        return exp.DataType(
+            this=exp.DataType.Type.STRUCT,
+            expressions=[
+                exp.StructKwarg(this=exp.to_identifier(k), expression=v) for k, v in value.items()
+            ],
+            nested=True,
+        )
+
+    def _is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
+        if current_type == new_type:
+            return True
+        if current_type in self.compatible_types:
+            return new_type in self.compatible_types[current_type]
+        return False
 
     def _get_matching_kwarg(
         self,
@@ -399,7 +413,7 @@ class TableStructureResolver(PydanticModel):
                     new_array_type,
                     root_struct,
                 )
-        if self.is_compatible_type(current_type, new_type):
+        if self._is_compatible_type(current_type, new_type):
             struct.expressions.pop(pos)
             struct.expressions.insert(pos, new_kwarg)
             col_pos = (
@@ -476,49 +490,42 @@ class TableStructureResolver(PydanticModel):
     ) -> t.List[TableAlterOperation]:
         return self._get_operations([], current_struct, new_struct, current_struct)
 
-    @classmethod
-    def _dict_to_struct(cls, value: t.Dict[str, exp.DataType]) -> exp.DataType:
-        return exp.DataType(
-            this=exp.DataType.Type.STRUCT,
-            expressions=[
-                exp.StructKwarg(this=exp.to_identifier(k), expression=v) for k, v in value.items()
-            ],
-            nested=True,
-        )
-
-    def get_operations(
-        self,
-        current_table: t.Union[str, exp.Table],
-        new_table: t.Union[str, exp.Table],
-        engine_adapter: EngineAdapter,
-    ) -> t.List[TableAlterOperation]:
+    def compare_structs(
+        self, table_name: t.Union[str, exp.Table], current: exp.DataType, new: exp.DataType
+    ) -> t.List[exp.AlterTable]:
         """
-        Calculates a list of schema deltas between the two tables, applying which in order to the first table
-        brings its schema in correspondence with the schema of the second table.
-
-        Changes in positions of otherwise unchanged columns are currently ignored and are not reflected in the output.
-
-        Additionally the implementation currently doesn't differentiate between regular columns and partition ones.
-        It's a responsibility of a caller to determine whether a returned operation is allowed on partition columns or not.
+        Compares two schemas represented as structs.
 
         Args:
-            current_table: The name of the table to which deltas will be applied.
-            new_table: The schema of this table will be used for comparison.
-            engine_adapter: The engine adapter to use to get current table schema.
+            current: The current schema.
+            new: The new schema.
 
         Returns:
-            The list of deltas.
+            The list of table alter operations.
         """
-        current_struct = self._dict_to_struct(engine_adapter.columns(current_table))
-        new_struct = self._dict_to_struct(engine_adapter.columns(new_table))
-        return self._from_structs(current_struct, new_struct)
+        return [
+            op.expression(table_name, self.array_suffix) for op in self._from_structs(current, new)
+        ]
 
-    def is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
-        if current_type == new_type:
-            return True
-        if current_type in self.compatible_types:
-            return new_type in self.compatible_types[current_type]
-        return False
+    def compare_columns(
+        self,
+        table_name: t.Union[str, exp.Table],
+        current: t.Dict[str, exp.DataType],
+        new: t.Dict[str, exp.DataType],
+    ) -> t.List[exp.AlterTable]:
+        """
+        Compares two schemas represented as dictionaries of column names and types.
+
+        Args:
+            current: The current schema.
+            new: The new schema.
+
+        Returns:
+            The list of schema deltas.
+        """
+        return self.compare_structs(
+            table_name, self._dict_to_struct(current), self._dict_to_struct(new)
+        )
 
 
 def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
