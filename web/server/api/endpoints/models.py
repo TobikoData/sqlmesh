@@ -15,23 +15,24 @@ def get_models(
 ) -> t.List[Model]:
     """Get a mapping of model names to model metadata"""
 
-    return get_models_and_columns(context)
+    return get_models_with_columns(context)
 
 
-def get_models_and_columns(context: Context) -> t.List[Model]:
-    return [
-        Model(
-            name=model.name,
-            path=str(model._path.relative_to(context.path)),
-            description=model.description,
-            owner=model.owner,
-            dialect=model.dialect,
-            columns=[
-                Column(
-                    name=name, type=str(data_type), description=model.column_descriptions.get(name)
-                )
-                for name, data_type in model.columns_to_types.items()
-            ],
-        )
-        for model in context.models.values()
-    ]
+def get_models_with_columns(context: Context) -> t.List[Model]:
+    return [get_model_with_columns(context, model.name) for model in context.models.values()]
+
+
+def get_model_with_columns(context: Context, model_name: str) -> Model:
+    model = context.models[model_name]
+
+    return Model(
+        name=model.name,
+        path=str(model._path.relative_to(context.path)),
+        description=model.description,
+        owner=model.owner,
+        dialect=model.dialect,
+        columns=[
+            Column(name=name, type=str(data_type), description=model.column_descriptions.get(name))
+            for name, data_type in model.columns_to_types.items()
+        ],
+    )

@@ -8,7 +8,7 @@ from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import PlanError
-from web.server.api.endpoints.models import get_models_and_columns
+from web.server.api.endpoints.models import get_models_with_columns
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -440,7 +440,7 @@ def test_fetchdf(web_sushi_context: Context) -> None:
 
 def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
-    json_models = [model.dict() for model in get_models_and_columns(web_sushi_context)]
+    json_models = [model.dict() for model in get_models_with_columns(web_sushi_context)]
 
     assert response.status_code == 200
     assert json_models == response.json()
