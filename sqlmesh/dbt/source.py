@@ -23,7 +23,7 @@ class SourceConfig(GeneralConfig):
         overrides: Override a source defined in the specified package
         freshness: Dictionary specifying maximum time, since the most recent record, to consider the source fresh
         loaded_at_field: Column name or expression that returns a timestamp indicating freshness
-        quoting: Which portions of the qualified name (database, schema, identifier) to quote when resolving the source() method
+        quoting: Define which components of the qualified name (database, schema, identifier) to quote when resolving the source() method
         external: Dictionary of metadata properties specific to sources that point to external tables
         columns: Columns within the source
     """

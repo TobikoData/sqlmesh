@@ -89,7 +89,7 @@ class BaseModelConfig(GeneralConfig):
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         columns: Column information for the model
-        quoting: Which portions of the qualified name (database, schema, identifier) to quote when resolving the ref() method
+        quoting: Define which components of the qualified name (database, schema, identifier) to quote when resolving the ref() method
     """
 
     # sqlmesh fields
