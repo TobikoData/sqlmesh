@@ -205,7 +205,7 @@ def test_create_table_properties(mocker: MockerFixture):
 
 
 @pytest.mark.parametrize(
-    "table_alter_resolver_config, current_table, target_table, expected_final_structure, expected",
+    "schema_differ_config, current_table, target_table, expected_final_structure, expected",
     [
         (
             {
@@ -509,7 +509,7 @@ def test_create_table_properties(mocker: MockerFixture):
 )
 def test_alter_table(
     mocker: MockerFixture,
-    table_alter_resolver_config: t.Dict[str, t.Any],
+    schema_differ_config: t.Dict[str, t.Any],
     current_table: t.Dict[str, str],
     target_table: t.Dict[str, str],
     expected_final_structure: t.Dict[str, str],
@@ -520,11 +520,8 @@ def test_alter_table(
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")
-    adapter.STRUCT_DIFFER_PROPERTIES = {
-        **adapter.STRUCT_DIFFER_PROPERTIES,
-        **table_alter_resolver_config,
-    }
-    original_from_structs = SchemaDiffer(**adapter.STRUCT_DIFFER_PROPERTIES)._from_structs
+    adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
+    original_from_structs = adapter.SCHEMA_DIFFER._from_structs
 
     def _from_structs(
         current_struct: exp.DataType, new_struct: exp.DataType

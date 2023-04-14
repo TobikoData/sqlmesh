@@ -60,12 +60,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
-    STRUCT_DIFFER_PROPERTIES = {
-        "support_positional_add": False,
-        "support_nested_operations": False,
-        "array_suffix": "",
-        "compatible_types": {},
-    }
+    SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
         self,
@@ -304,7 +299,7 @@ class EngineAdapter:
         Performs the required alter statements to change the current table into the structure of the target table.
         """
         with self.transaction(TransactionType.DDL):
-            for alter_expression in SchemaDiffer(**self.STRUCT_DIFFER_PROPERTIES).compare_columns(
+            for alter_expression in self.SCHEMA_DIFFER.compare_columns(
                 current_table_name,
                 self.columns(current_table_name),
                 self.columns(target_table_name),

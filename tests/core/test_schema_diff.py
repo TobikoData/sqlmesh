@@ -4,7 +4,6 @@ import pytest
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.schema_diff import (
     SchemaDiffer,
     TableAlterColumn,
@@ -698,7 +697,6 @@ def test_struct_diff(
     config: t.Dict[str, t.Any],
 ):
     config = {
-        **EngineAdapter.STRUCT_DIFFER_PROPERTIES,
         **config,
     }
     resolver = SchemaDiffer(**config)

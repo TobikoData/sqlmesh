@@ -258,10 +258,10 @@ class SchemaDiffer(PydanticModel):
     2. Support column moves. Databricks Delta supports moves and would allow exact matches.
     """
 
-    support_positional_add: bool
-    support_nested_operations: bool
-    array_suffix: str
-    compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]]
+    support_positional_add: bool = False
+    support_nested_operations: bool = False
+    array_suffix: str = ""
+    compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
     @classmethod
     def _dict_to_struct(cls, value: t.Dict[str, exp.DataType]) -> exp.DataType:
