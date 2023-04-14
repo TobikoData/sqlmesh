@@ -12,7 +12,7 @@ if t.TYPE_CHECKING:
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
-    def columns(self, table_name: TableName) -> t.Dict[str, str]:
+    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         table = exp.to_table(table_name)
         sql = (
@@ -22,7 +22,10 @@ class BasePostgresEngineAdapter(EngineAdapter):
         )
         self.execute(sql)
         resp = self.cursor.fetchall()
-        return {column_name: data_type for column_name, data_type in resp}
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            for column_name, data_type in resp
+        }
 
     def table_exists(self, table_name: TableName) -> bool:
         """
