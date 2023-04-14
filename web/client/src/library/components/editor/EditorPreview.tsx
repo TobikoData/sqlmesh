@@ -82,11 +82,7 @@ export default function EditorPreview({
   }
 
   return (
-    <div
-      className={clsx(
-        'flex flex-col text-prose overflow-auto scrollbar scrollbar--vertical',
-      )}
-    >
+    <div className={clsx('flex flex-col text-prose w-full h-full')}>
       <Tab.Group
         onChange={setActiveTabIndex}
         selectedIndex={activeTabIndex < 0 ? activeTab : activeTabIndex}
@@ -137,7 +133,7 @@ export default function EditorPreview({
         <Tab.Panels className="w-full overflow-hidden">
           <Tab.Panel
             className={clsx(
-              'w-full h-full overflow-hidden pt-4 relative pl-2',
+              'w-full h-full pt-4 relative px-2',
               'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
             )}
           >
