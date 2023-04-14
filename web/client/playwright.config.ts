@@ -55,5 +55,6 @@ export default defineConfig({
     command: 'npm run build && npm run preview',
     url: URL,
     reuseExistingServer: process.env.CI == null,
+    timeout: 120000, // Two minutes
   },
 })
