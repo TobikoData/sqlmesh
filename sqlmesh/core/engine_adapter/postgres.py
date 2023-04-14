@@ -6,7 +6,6 @@ import typing as t
 from pandas.io.sql import read_sql_query
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
 
@@ -17,8 +16,9 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class PostgresEngineAdapter(BasePostgresEngineAdapter, EngineAdapterWithIndexSupport):
+class PostgresEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "postgres"
+    SUPPORTS_INDEXES = True
 
     @property
     def cursor(self) -> t.Any:

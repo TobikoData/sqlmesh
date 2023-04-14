@@ -8,7 +8,6 @@ from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
-from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
 if t.TYPE_CHECKING:
@@ -16,7 +15,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
-class RedshiftEngineAdapter(BasePostgresEngineAdapter, EngineAdapter):
+class RedshiftEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
 
