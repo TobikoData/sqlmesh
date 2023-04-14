@@ -76,7 +76,7 @@ jobs:
             python --version --version >> pre-commit-cache-key.txt
       - restore_cache:
           keys:
-          - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+            - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
       - run:
           name: Install pre-commit
           command: pip install pre-commit
@@ -87,6 +87,26 @@ jobs:
           key: v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
           paths:
             - ~/.cache/pre-commit
+
+  ui_test:
+    docker:
+      - image: cimg/node:19.8
+    resource_class: medium
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+      - run:
+          name: Install packages
+          command: npm --prefix web/client ci
+      - save_cache:
+          key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+          paths:
+            - /root/.npm
+      - run:
+          name: Run tests
+          command: npm --prefix web/client run test
 
   core_integration_tests:
     docker:
@@ -144,3 +164,4 @@ workflows:
   main_pr_web_client:
     jobs:
       - ui_style
+      - ui_test
