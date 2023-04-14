@@ -17,16 +17,11 @@ class FileTransactionHandler:
             path: The path to lock. It should follow the format of a table name.
                 Something like snapshots/version=<ver>/<snapshot_id>
         """
+        self.path = path
         # TODO: pass in a filesystem, naturally
         self._fs: fsspec.AbstractFileSystem = fsspec.filesystem("file")
-        self._path = path
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
-
-    @property
-    def path(self) -> str:
-        """The key which represents a path to a file."""
-        return self._path
 
     @property
     def lock_path(self) -> str:
@@ -37,16 +32,18 @@ class FileTransactionHandler:
         """Reads data from the file."""
         if self._fs.exists(self.path):
             if not self._is_locked:
-                ... # TODO: do whatever we think is right here
+                # TODO: do whatever we think is right here
+                # if a file is read without a lock, we should probably
+                # denote it as a read-only transaction
+                ... 
             content = self._fs.cat(self.path)
-            self._original_contents = content[:]
+            self._original_contents = content.copy()
             return content
         return None
     
     def write(self, content: bytes) -> None:
         """Writes data within the transaction."""
         if not self._is_locked:
-            # TODO: do whatever we think is right here
             raise RuntimeError("Cannot write to a file without a lock.")
         self._fs.pipe(self.path, content)
 
@@ -89,13 +86,10 @@ class FileTransactionHandler:
             wait_time += 1
             if timeout > 0 and wait_time > timeout:
                 return False
-        self._fs.pipe(self.lock_path, json.dumps(
-            # Add more fields here if needed.
-            {"gid": str(lock_id)},
-        ))
+        self._fs.pipe(self.lock_path, lock_id.bytes)
         self._jitter()
-        lock_content = json.loads(self._fs.cat(self.lock_path))
-        acquired = lock_content["gid"] == str(lock_id)
+        lock_content = self._fs.cat(self.lock_path)
+        acquired = lock_content == lock_id.bytes
         if not acquired:
             # This indicates contention from a concurrent process.
             # Retrying will now result in a wait.
@@ -105,9 +99,10 @@ class FileTransactionHandler:
 
     def release_lock(self) -> None:
         """Releases a lock on a key."""
-        self._fs.rm(self.lock_path)
-        self._is_locked = False
-        self._original_contents = None
+        if self._is_locked:
+            self._fs.rm(self.lock_path)
+            self._is_locked = False
+            self._original_contents = None
 
     @contextmanager
     def read_with_lock(self, timeout: float = 30.0) -> t.Iterator[t.Optional[bytes]]:
