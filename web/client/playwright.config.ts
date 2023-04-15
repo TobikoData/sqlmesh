@@ -50,9 +50,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run build && npm run preview',
+    command: 'npm run preview',
     url: URL,
     reuseExistingServer: process.env.CI == null,
-    timeout: 120000, // Two minutes
+    timeout: 60 * 1000 * 10, // Ten minutes
   },
 })

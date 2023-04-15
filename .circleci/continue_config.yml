@@ -108,6 +108,9 @@ jobs:
           paths:
             - /root/.npm
       - run:
+          name: Build client
+          command: npm --prefix web/client run build
+      - run:
           name: Run tests
           command: npm --prefix web/client run test
 
