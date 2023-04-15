@@ -21,7 +21,7 @@ class FileTransactionHandler:
         "file": lambda f: datetime.fromtimestamp(f["mtime"]),
     }
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, fs: fsspec.AbstractFileSystem) -> None:
         """Creates a new FileTransactionHandler.
 
         Args:
@@ -29,8 +29,7 @@ class FileTransactionHandler:
                 Something like snapshots/version=<ver>/<snapshot_id>
         """
         self.path = path
-        # TODO: pass in a filesystem, naturally
-        self._fs: fsspec.AbstractFileSystem = fsspec.filesystem("file")
+        self._fs = fs
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
         self._lock_id = uuid4()
@@ -45,25 +44,20 @@ class FileTransactionHandler:
         """The path to the lock file."""
         return self.lock_prefix + str(self._lock_id)
 
-    def _get_base_lock_path(self) -> str:
-        """Gets the base lock path for a list command."""
-        if self._fs.protocol == "file":
-            return os.path.abspath(os.path.dirname(self.lock_path))
-        return self.lock_prefix
-
     def _sync_locks(self) -> t.Dict[str, datetime]:
         """Gets a map of lock paths to their last modified times and removes stale locks."""
         output = {}
         for lock in (
             lock_info
-            for lock_info in self._fs.ls(self._get_base_lock_path(), refresh=True, detail=True)
+            for lock_info in self._fs.glob(
+                self.lock_prefix + "*", refresh=True, detail=True
+            ).values()
             if os.path.basename(lock_info["name"]).startswith(os.path.basename(self.lock_prefix))
         ):
             mtime = self.mtime_dispatch[self._fs.protocol](lock)
             if datetime.now() - mtime > timedelta(seconds=LOCK_TTL_SECONDS):
-                # Handle stale locks
+                # Manage stale locks
                 self._fs.rm(lock["name"])
-                print(f"Removed stale lock {lock['name']}")
                 continue
             output[os.path.basename(lock["name"])] = mtime
         return output
@@ -72,7 +66,6 @@ class FileTransactionHandler:
         """Reads data from the file."""
         if self._fs.exists(self.path):
             content: bytes = self._fs.cat(self.path)
-            self._original_contents = content[:]  # copy the bytes
             return content
         return None
 
@@ -113,17 +106,25 @@ class FileTransactionHandler:
         wait_time = 0.0
         self._fs.touch(self.lock_path)
         locks = self._sync_locks()
+        if not locks:
+            self._original_contents = self.read()
+            self._is_locked = True
+            return True
         active_lock = min(locks, key=locks.get)  # type: ignore
         while active_lock != os.path.basename(self.lock_path):
             if not blocking:
+                self._fs.rm(self.lock_path)
                 return False
             if timeout > 0 and wait_time > timeout:
+                self._fs.rm(self.lock_path)
                 return False
             time.sleep(POLLING_INTERVAL)
             wait_time += POLLING_INTERVAL
             locks = self._sync_locks()
+            if not locks:
+                break
             active_lock = min(locks, key=locks.get)  # type: ignore
-        print(f"Acquired lock {self.lock_path} after {wait_time} seconds.")
+        self._original_contents = self.read()
         self._is_locked = True
         return True
 
