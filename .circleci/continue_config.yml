@@ -90,7 +90,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: node:18
+      - image: node:19
     resource_class: medium
     steps:
       - checkout
