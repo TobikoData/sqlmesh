@@ -3,6 +3,7 @@ import time
 import typing as t
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from threading import get_ident
 from uuid import uuid4
 
 import fsspec  # type: ignore
@@ -32,7 +33,7 @@ class FileTransactionHandler:
         self._fs = fs
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
-        self._lock_id = uuid4()
+        self._lock_id = uuid4().hex + str(get_ident())
 
     @property
     def lock_prefix(self) -> str:
