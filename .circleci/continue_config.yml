@@ -90,7 +90,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: node:19
+      - image: node:18
     resource_class: medium
     steps:
       - checkout
@@ -107,9 +107,6 @@ jobs:
           key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
           paths:
             - /root/.npm
-      - run:
-          name: Build client
-          command: npm --prefix web/client run build
       - run:
           name: Run tests
           command: npm --prefix web/client run test
