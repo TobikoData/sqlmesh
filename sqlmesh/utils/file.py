@@ -106,10 +106,6 @@ class FileTransactionHandler:
         wait_time = 0.0
         self._fs.touch(self.lock_path)
         locks = self._sync_locks()
-        if not locks:
-            self._original_contents = self.read()
-            self._is_locked = True
-            return True
         active_lock = min(locks, key=locks.get)  # type: ignore
         while active_lock != os.path.basename(self.lock_path):
             if not blocking:
