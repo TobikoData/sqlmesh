@@ -2,7 +2,7 @@ import time
 from tempfile import NamedTemporaryFile
 from threading import Thread
 
-import fsspec
+import fsspec  # type: ignore
 import pytest
 
 from sqlmesh.utils.file import FileTransactionHandler
@@ -19,7 +19,7 @@ def test_file_transaction_with_content(fs: fsspec.AbstractFileSystem):
         f.write(b"test 1")
         f.flush()
         file = FileTransactionHandler(f.name, fs)
-        
+
         # Test that we cannot write without a lock
         with pytest.raises(RuntimeError):
             file.write(b"test 2")
@@ -36,6 +36,7 @@ def test_file_transaction_with_content(fs: fsspec.AbstractFileSystem):
         assert file._original_contents == b"test 1"
         file.release_lock()
 
+
 def test_file_transaction_no_content(fs: fsspec.AbstractFileSystem):
     with NamedTemporaryFile() as f:
         file = FileTransactionHandler(f.name, fs)
@@ -51,6 +52,7 @@ def test_file_transaction_no_content(fs: fsspec.AbstractFileSystem):
         file.rollback()
         assert file.read() == b""
         file.release_lock()
+
 
 def test_file_transaction_multiple_writers(fs: fsspec.AbstractFileSystem):
     with NamedTemporaryFile() as f:
@@ -79,13 +81,14 @@ def test_file_transaction_multiple_writers(fs: fsspec.AbstractFileSystem):
         assert writer_3.read() == b"test 2"
         writer_2.release_lock()
 
+
 def test_file_transaction_concurrent_writers():
     fs = fsspec.filesystem("file")
     with NamedTemporaryFile() as f:
         writer_1 = FileTransactionHandler(f.name, fs)
         writer_2 = FileTransactionHandler(f.name, fs)
         writer_3 = FileTransactionHandler(f.name, fs)
-        
+
         # Test lock acquisition timeout
         writer_1.acquire_lock()
         lock_acquire_timeout = 5.0
@@ -121,7 +124,7 @@ def test_file_transaction_concurrent_writers():
         assert not writer_1.acquire_lock(blocking=False)
         with pytest.raises(RuntimeError):
             writer_1.write(b"this won't work")
-        
+
         # Write new contents
         writer_2.write(b"test 2")
         assert writer_1.read() == b"test 2"
