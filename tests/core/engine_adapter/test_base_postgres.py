@@ -1,5 +1,6 @@
 # type: ignore
 from pytest_mock.plugin import MockerFixture
+from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
@@ -16,7 +17,7 @@ def test_columns(mocker: MockerFixture):
     cursor_mock.execute.assert_called_once_with(
         """SELECT "column_name", "data_type" FROM "information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
     )
-    assert resp == {"col": "INT"}
+    assert resp == {"col": exp.DataType.build("INT")}
 
 
 def test_table_exists(mocker: MockerFixture):
