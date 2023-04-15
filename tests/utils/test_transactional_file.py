@@ -5,7 +5,7 @@ from threading import Thread
 import fsspec  # type: ignore
 import pytest
 
-from sqlmesh.utils.file import FileTransactionHandler
+from sqlmesh.utils.transactional_file import TransactionalFile
 
 
 @pytest.fixture(scope="session")
@@ -18,7 +18,7 @@ def test_file_transaction_with_content(fs: fsspec.AbstractFileSystem):
         # Seed the file with some content
         f.write(b"test 1")
         f.flush()
-        file = FileTransactionHandler(f.name, fs)
+        file = TransactionalFile(f.name, fs)
 
         # Test that we cannot write without a lock
         with pytest.raises(RuntimeError):
@@ -39,7 +39,7 @@ def test_file_transaction_with_content(fs: fsspec.AbstractFileSystem):
 
 def test_file_transaction_no_content(fs: fsspec.AbstractFileSystem):
     with NamedTemporaryFile() as f:
-        file = FileTransactionHandler(f.name, fs)
+        file = TransactionalFile(f.name, fs)
         with pytest.raises(RuntimeError):
             file.write(b"test 1")
         file.acquire_lock()
@@ -56,9 +56,9 @@ def test_file_transaction_no_content(fs: fsspec.AbstractFileSystem):
 
 def test_file_transaction_multiple_writers(fs: fsspec.AbstractFileSystem):
     with NamedTemporaryFile() as f:
-        writer_1 = FileTransactionHandler(f.name, fs)
-        writer_2 = FileTransactionHandler(f.name, fs)
-        writer_3 = FileTransactionHandler(f.name, fs)
+        writer_1 = TransactionalFile(f.name, fs)
+        writer_2 = TransactionalFile(f.name, fs)
+        writer_3 = TransactionalFile(f.name, fs)
         writer_1.acquire_lock()
 
         # Test that we cannot acquire a lock if it is already held
@@ -85,13 +85,13 @@ def test_file_transaction_multiple_writers(fs: fsspec.AbstractFileSystem):
 def test_file_transaction_concurrent_writers():
     fs = fsspec.filesystem("file")
     with NamedTemporaryFile() as f:
-        writer_1 = FileTransactionHandler(f.name, fs)
-        writer_2 = FileTransactionHandler(f.name, fs)
-        writer_3 = FileTransactionHandler(f.name, fs)
+        writer_1 = TransactionalFile(f.name, fs)
+        writer_2 = TransactionalFile(f.name, fs)
+        writer_3 = TransactionalFile(f.name, fs)
 
         # Test lock acquisition timeout
         writer_1.acquire_lock()
-        lock_acquire_timeout = 5.0
+        lock_acquire_timeout = 2.0
         job1 = Thread(target=writer_2.acquire_lock, args=(True, lock_acquire_timeout), daemon=True)
         job1.start()
         t1 = time.time()
@@ -99,6 +99,7 @@ def test_file_transaction_concurrent_writers():
         t2 = time.time()
         assert t2 - t1 <= lock_acquire_timeout + 1.5
         assert not writer_2._is_locked
+
         # Other writers cannot acquire lock
         assert not writer_3.acquire_lock(blocking=False)
         # Multiple readers OK
@@ -121,6 +122,7 @@ def test_file_transaction_concurrent_writers():
         job2.start()
 
         # Writer 1 cannot acquire lock or write
+        time.sleep(0.1)
         assert not writer_1.acquire_lock(blocking=False)
         with pytest.raises(RuntimeError):
             writer_1.write(b"this won't work")
@@ -132,4 +134,5 @@ def test_file_transaction_concurrent_writers():
         # Release lock and ensure writer 3 acquires it by joining + writing
         writer_2.release_lock()
         job2.join()
+        time.sleep(0.1)
         writer_3.write(b"test 3")

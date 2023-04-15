@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib
+import random
 import re
+import string
 import sys
+import time
 import traceback
 import types
 import typing as t
@@ -43,6 +46,19 @@ def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) ->
 
 def random_id() -> str:
     return uuid.uuid4().hex
+
+
+def time_uuid(k: int = 4) -> str:
+    """Generate a time based random id.
+
+    Args:
+        k: The length of the suffix after the timestamp.
+
+    Returns:
+        A time sortable uuid.
+    """
+    suffix = "".join(random.choices(string.ascii_lowercase, k=k))
+    return f"{time.time_ns()}{suffix}"
 
 
 class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
