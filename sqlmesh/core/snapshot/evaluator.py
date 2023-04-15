@@ -337,7 +337,7 @@ class SnapshotEvaluator:
         return results
 
     @contextmanager
-    def concurrent_context(self) -> t.Generator[None, None, None]:
+    def concurrent_context(self) -> t.Iterator[None]:
         try:
             yield
         finally:

@@ -1,4 +1,5 @@
 import random
+import string
 import time
 import typing as t
 from contextlib import contextmanager
@@ -6,10 +7,21 @@ from datetime import datetime, timedelta
 
 import fsspec
 
-from sqlmesh.utils import time_uuid
-
 POLLING_INTERVAL = 0.5
 LOCK_TTL_SECONDS = 60.0
+
+
+def lock_id(k: int = 4) -> str:
+    """Generate a time based random id.
+
+    Args:
+        k: The length of the suffix after the timestamp.
+
+    Returns:
+        A time sortable uuid.
+    """
+    suffix = "".join(random.choices(string.ascii_lowercase, k=k))
+    return f"{time.time_ns()}{suffix}"
 
 
 class TransactionalFile:
@@ -31,7 +43,7 @@ class TransactionalFile:
         """
         self.path = path
         self.lock_prefix = f"{self.path}.lock"
-        self.lock_path = f"{self.lock_prefix}.{time_uuid()}"
+        self.lock_path = f"{self.lock_prefix}.{lock_id()}"
         self._fs = fs
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
@@ -97,7 +109,7 @@ class TransactionalFile:
 
         self._fs.touch(self.lock_path)
         locks = self._sync_locks()
-        active_lock = min(locks, key=locks.get)  # type: ignore
+        _, active_lock = min(locks.values())
         start = time.time()
 
         while active_lock != self.lock_path:
@@ -108,9 +120,10 @@ class TransactionalFile:
             time.sleep(random.random() + POLLING_INTERVAL)
             locks = self._sync_locks()
             if self.lock_path not in locks:
-                return False
+                self._fs.touch(self.lock_path)
+                locks = self._sync_locks()
 
-            active_lock = min(locks, key=locks.get)  # type: ignore
+            _, active_lock = min(locks.values())  # type: ignore
 
         self._original_contents = self.read()
         self._is_locked = True
@@ -128,9 +141,7 @@ class TransactionalFile:
             self._original_contents = None
 
     @contextmanager
-    def read_with_lock(
-        self, timeout: float = LOCK_TTL_SECONDS + 1
-    ) -> t.Iterator[t.Optional[bytes]]:
+    def lock(self, timeout: float = LOCK_TTL_SECONDS + 1) -> t.Iterator[None]:
         """A context manager that acquires and releases a lock on a path.
 
         This is a convenience method for acquiring a lock and reading the contents of
@@ -150,7 +161,7 @@ class TransactionalFile:
         if not self.acquire_lock(timeout=timeout):
             raise RuntimeError("Could not acquire lock.")
         try:
-            yield self.read()
+            yield
         except Exception:
             self.rollback()
             raise
