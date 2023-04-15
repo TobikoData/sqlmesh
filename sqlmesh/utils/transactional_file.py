@@ -1,18 +1,30 @@
-import os
+import random
+import string
 import time
 import typing as t
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from threading import get_ident
-from uuid import uuid4
 
-import fsspec  # type: ignore
+import fsspec
 
-POLLING_INTERVAL = 1.0
+POLLING_INTERVAL = 0.5
 LOCK_TTL_SECONDS = 60.0
 
 
-class FileTransactionHandler:
+def lock_id(k: int = 4) -> str:
+    """Generate a time based random id.
+
+    Args:
+        k: The length of the suffix after the timestamp.
+
+    Returns:
+        A time sortable uuid.
+    """
+    suffix = "".join(random.choices(string.ascii_lowercase, k=k))
+    return f"{time.time_ns()}{suffix}"
+
+
+class TransactionalFile:
     """A transaction handler which wraps a file path."""
 
     mtime_dispatch = {
@@ -26,48 +38,37 @@ class FileTransactionHandler:
         """Creates a new FileTransactionHandler.
 
         Args:
-            path: The path to lock. It should follow the format of a table name.
-                Something like snapshots/version=<ver>/<snapshot_id>
+            path: The path to lock.
+            fs: The fsspec file system.
         """
         self.path = path
+        self.lock_prefix = f"{self.path}.lock"
+        self.lock_path = f"{self.lock_prefix}.{lock_id()}"
         self._fs = fs
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
-        self._lock_id = uuid4().hex + str(get_ident())
 
-    @property
-    def lock_prefix(self) -> str:
-        """The prefix for the lock file."""
-        return f"{self.path}.lock."
-
-    @property
-    def lock_path(self) -> str:
-        """The path to the lock file."""
-        return self.lock_prefix + str(self._lock_id)
-
-    def _sync_locks(self) -> t.Dict[str, datetime]:
+    def _sync_locks(self) -> t.Dict[str, t.Tuple[float, str]]:
         """Gets a map of lock paths to their last modified times and removes stale locks."""
         output = {}
-        for lock in (
-            lock_info
-            for lock_info in self._fs.glob(
-                self.lock_prefix + "*", refresh=True, detail=True
-            ).values()
-            if os.path.basename(lock_info["name"]).startswith(os.path.basename(self.lock_prefix))
-        ):
+        now = datetime.now()
+
+        for lock in self._fs.glob(self.lock_prefix + ".*", refresh=True, detail=True).values():
             mtime = self.mtime_dispatch[self._fs.protocol](lock)
-            if datetime.now() - mtime > timedelta(seconds=LOCK_TTL_SECONDS):
+            name = lock["name"]
+            if now - mtime > timedelta(seconds=LOCK_TTL_SECONDS):
                 # Manage stale locks
-                self._fs.rm(lock["name"])
+                self._fs.rm(name)
                 continue
-            output[os.path.basename(lock["name"])] = mtime
+            # this creates a sortable key
+            # the mtime of the file, followed by the name, which is also time sortable
+            output[name] = (mtime.timestamp(), name)
         return output
 
     def read(self) -> t.Optional[bytes]:
         """Reads data from the file."""
         if self._fs.exists(self.path):
-            content: bytes = self._fs.cat(self.path)
-            return content
+            return self._fs.cat(self.path)
         return None
 
     def write(self, content: bytes) -> None:
@@ -78,6 +79,8 @@ class FileTransactionHandler:
 
     def rollback(self) -> None:
         """Rolls back the transaction."""
+        if not self._is_locked:
+            raise RuntimeError("Cannot rollback a file without a lock.")
         if self._original_contents is not None:
             self._fs.pipe(self.path, self._original_contents)
 
@@ -102,27 +105,29 @@ class FileTransactionHandler:
         not (for example if the timeout expired).
         """
         if self._is_locked:
-            # Make this idempotent for a single instance.
             return True
-        wait_time = 0.0
+
         self._fs.touch(self.lock_path)
         locks = self._sync_locks()
-        active_lock = min(locks, key=locks.get)  # type: ignore
-        while active_lock != os.path.basename(self.lock_path):
-            if not blocking:
+        _, active_lock = min(locks.values())
+        start = time.time()
+
+        while active_lock != self.lock_path:
+            if not blocking or (timeout > 0 and time.time() - start > timeout):
                 self._fs.rm(self.lock_path)
                 return False
-            if timeout > 0 and wait_time > timeout:
-                self._fs.rm(self.lock_path)
-                return False
-            time.sleep(POLLING_INTERVAL)
-            wait_time += POLLING_INTERVAL
+
+            time.sleep(random.random() + POLLING_INTERVAL)
             locks = self._sync_locks()
-            if not locks:
-                break
-            active_lock = min(locks, key=locks.get)  # type: ignore
+            if self.lock_path not in locks:
+                self._fs.touch(self.lock_path)
+                locks = self._sync_locks()
+
+            _, active_lock = min(locks.values())  # type: ignore
+
         self._original_contents = self.read()
         self._is_locked = True
+
         return True
 
     def release_lock(self) -> None:
@@ -136,7 +141,7 @@ class FileTransactionHandler:
             self._original_contents = None
 
     @contextmanager
-    def read_with_lock(self, timeout: float = 61.0) -> t.Iterator[t.Optional[bytes]]:
+    def lock(self, timeout: float = LOCK_TTL_SECONDS + 1) -> t.Iterator[None]:
         """A context manager that acquires and releases a lock on a path.
 
         This is a convenience method for acquiring a lock and reading the contents of
@@ -156,7 +161,7 @@ class FileTransactionHandler:
         if not self.acquire_lock(timeout=timeout):
             raise RuntimeError("Could not acquire lock.")
         try:
-            yield self.read()
+            yield
         except Exception:
             self.rollback()
             raise
