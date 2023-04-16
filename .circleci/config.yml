@@ -40,31 +40,12 @@ jobs:
             CONTINUE_ON_ERROR="false" \
             npx https://github.com/TobikoData/circleci-gh-conventional-release
 
-  generate-openapi-spec:
-    docker:
-      - image: cimg/python:3.11
-    resource_class: small
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: make install-dev
-      - run:
-          name: Generate OpenAPI spec
-          command: python web/server/openapi.py
-      - persist_to_workspace:
-          root: web/client
-          paths:
-            - openapi.json
-
   ide-build:
     docker:
       - image: cimg/node:19.8
     resource_class: medium
     steps:
       - checkout
-      - attach_workspace:
-          at: web/client
       - run:
           name: Install packages
           command: npm --prefix web/client ci
@@ -90,14 +71,10 @@ workflows:
     jobs:
       - gh-release:
           <<: *on_tag_filter
-      - generate-openapi-spec:
-          <<: *on_tag_filter
-          requires:
-            - gh-release
       - ide-build:
           <<: *on_tag_filter
           requires:
-            - generate-openapi-spec
+            - gh-release
       - publish:
           <<: *on_tag_filter
           requires:
