@@ -32,11 +32,14 @@ export default defineConfig({
     setupFiles: ['./src/tests/setup.ts'],
     exclude: ['**/node_modules/**', './tests'],
   },
-  server: {
-    proxy: {
-      '/api': 'http://api:8000',
-    },
-  },
+  server:
+    process.env.NODE_ENV === 'testing'
+      ? {}
+      : {
+          proxy: {
+            '/api': 'http://api:8000',
+          },
+        },
   preview: {
     port: 8005,
   },

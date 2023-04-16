@@ -22,7 +22,7 @@ commands:
             or:
               - << pipeline.parameters.common >>
               - << pipeline.parameters.python >>
-              - equal: [ main, << pipeline.git.branch >> ]
+              - equal: [main, << pipeline.git.branch >>]
           steps:
             - run: circleci-agent step halt
   halt_unless_client:
@@ -32,7 +32,7 @@ commands:
             or:
               - << pipeline.parameters.common >>
               - << pipeline.parameters.client >>
-              - equal: [ main, << pipeline.git.branch >> ]
+              - equal: [main, << pipeline.git.branch >>]
           steps:
             - run: circleci-agent step halt
 
@@ -76,7 +76,7 @@ jobs:
             python --version --version >> pre-commit-cache-key.txt
       - restore_cache:
           keys:
-          - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
+            - v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
       - run:
           name: Install pre-commit
           command: pip install pre-commit
@@ -87,6 +87,29 @@ jobs:
           key: v1-pc-cache-{{ checksum "pre-commit-cache-key.txt" }}
           paths:
             - ~/.cache/pre-commit
+
+  ui_test:
+    docker:
+      - image: node:18
+    resource_class: medium
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+      - run:
+          name: Install packages
+          command: npm --prefix web/client ci
+      - run:
+          name: Install Playwright Browsers
+          command: npm --prefix web/client run playwright:install
+      - save_cache:
+          key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
+          paths:
+            - /root/.npm
+      - run:
+          name: Run tests
+          command: npm --prefix web/client run test
 
   core_integration_tests:
     docker:
@@ -131,7 +154,8 @@ workflows:
       - style_and_unit_tests:
           matrix:
             parameters:
-              python_version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+              python_version:
+                ["3.7", "3.8", "3.9", "3.10", "3.11"]
       - core_integration_tests
       - airflow_integration_tests:
           requires:
@@ -144,3 +168,4 @@ workflows:
   main_pr_web_client:
     jobs:
       - ui_style
+      - ui_test

@@ -4,14 +4,15 @@
   "scripts": {
     "dev": "npm run generate:api && vite",
     "build": "npm run generate:api && tsc && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview -- --open=false",
     "prettier": "prettier --write .",
     "lint:fix": "eslint --fix .",
     "format": "npm run prettier && npm run lint:fix",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "vitest --watch=false",
-    "test:unit:watch": "vitest --watch=true",
-    "test:e2e": "playwright test",
+    "test:unit:watch": "NODE_ENV=development vitest --watch=true",
+    "test:unit": "NODE_ENV=testing vitest --watch=false",
+    "test:e2e": "NODE_ENV=testing playwright test",
+    "playwright:install": "playwright install --with-deps",
     "generate:api": "orval --config ./orval.config.ts"
   },
   "dependencies": {
