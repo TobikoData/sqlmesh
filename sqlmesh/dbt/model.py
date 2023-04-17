@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import SqlStr
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 

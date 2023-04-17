@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
 from sqlmesh.dbt.common import SqlStr
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 
 
 class SeedConfig(BaseModelConfig):

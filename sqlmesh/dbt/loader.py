@@ -10,7 +10,7 @@ from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.basemodel import BaseModelConfig
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.utils import UniqueKeyDict

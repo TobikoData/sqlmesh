@@ -15,7 +15,7 @@ from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.package import PackageLoader
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError

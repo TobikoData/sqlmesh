@@ -19,7 +19,7 @@ from sqlmesh.dbt.column import (
     column_descriptions_to_sqlmesh,
     column_types_to_sqlmesh,
 )
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig

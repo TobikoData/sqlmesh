@@ -11,7 +11,7 @@ from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
-    from sqlmesh.dbt.dbtcontext import DbtContext
+    from sqlmesh.dbt.context import DbtContext
 
 
 T = t.TypeVar("T", bound="GeneralConfig")

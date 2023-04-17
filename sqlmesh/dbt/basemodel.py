@@ -24,7 +24,7 @@ from sqlmesh.dbt.column import (
     yaml_to_columns,
 )
 from sqlmesh.dbt.common import GeneralConfig, QuotingConfig, SqlStr
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.date import date_dict

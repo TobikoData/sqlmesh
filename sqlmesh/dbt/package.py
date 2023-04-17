@@ -10,7 +10,7 @@ from sqlmesh.dbt.common import (
     SqlStr,
     load_yaml,
 )
-from sqlmesh.dbt.dbtcontext import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
