@@ -97,6 +97,30 @@
         }
       }
     },
+    "/api/commands/dag": {
+      "get": {
+        "summary": "Dag",
+        "operationId": "dag_api_commands_dag_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Dag Api Commands Dag Get",
+                  "type": "object",
+                  "additionalProperties": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/commands/render": {
       "post": {
         "summary": "Render",
@@ -414,23 +438,23 @@
         }
       }
     },
-    "/api/lineage/{model_name}/{column_name}": {
+    "/api/lineage/": {
       "get": {
         "summary": "Column Lineage",
         "description": "Get a column's lineage",
-        "operationId": "column_lineage_api_lineage__model_name___column_name__get",
+        "operationId": "column_lineage_api_lineage__get",
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Column Name", "type": "string" },
-            "name": "column_name",
-            "in": "path"
+            "schema": { "title": "Column", "type": "string" },
+            "name": "column",
+            "in": "query"
           },
           {
             "required": true,
-            "schema": { "title": "Model Name", "type": "string" },
-            "name": "model_name",
-            "in": "path"
+            "schema": { "title": "Model", "type": "string" },
+            "name": "model",
+            "in": "query"
           }
         ],
         "responses": {
@@ -439,54 +463,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get",
+                  "title": "Response Column Lineage Api Lineage  Get",
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "#/components/schemas/LineageColumn"
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                      }
                     }
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/lineage/{model_name}": {
-      "get": {
-        "summary": "Model Lineage",
-        "description": "Get a model's lineage",
-        "operationId": "model_lineage_api_lineage__model_name__get",
-        "parameters": [
-          {
-            "required": true,
-            "schema": { "title": "Model Name", "type": "string" },
-            "name": "model_name",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Model Lineage Api Lineage  Model Name  Get",
-                  "type": "object",
-                  "additionalProperties": {
-                    "uniqueItems": true,
-                    "type": "array",
-                    "items": { "type": "string" }
                   }
                 }
               }
@@ -505,16 +492,16 @@
     },
     "/api/models": {
       "get": {
-        "summary": "Get Models",
+        "summary": "Handle Get Models",
         "description": "Get a mapping of model names to model metadata",
-        "operationId": "get_models_api_models_get",
+        "operationId": "handle_get_models_api_models_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Models Api Models Get",
+                  "title": "Response Handle Get Models Api Models Get",
                   "type": "array",
                   "items": { "$ref": "#/components/schemas/Model" }
                 }
@@ -933,21 +920,6 @@
             "title": "Detail",
             "type": "array",
             "items": { "$ref": "#/components/schemas/ValidationError" }
-          }
-        }
-      },
-      "LineageColumn": {
-        "title": "LineageColumn",
-        "type": "object",
-        "properties": {
-          "source": { "title": "Source", "type": "string" },
-          "models": {
-            "title": "Models",
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": { "type": "string" }
-            }
           }
         }
       },
