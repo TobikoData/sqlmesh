@@ -64,15 +64,15 @@ def test_alter_table(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE `test_table` DROP COLUMN `b`"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `id`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `id` LONG"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `a`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `a` STRING"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `complex`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `complex` STRUCT<`complex_a`: INT>"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `ds`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `ds` INT"""),
+            call("""ALTER TABLE test_table DROP COLUMN b"""),
+            call("""ALTER TABLE test_table DROP COLUMN id"""),
+            call("""ALTER TABLE test_table ADD COLUMN id LONG"""),
+            call("""ALTER TABLE test_table DROP COLUMN a"""),
+            call("""ALTER TABLE test_table ADD COLUMN a STRING"""),
+            call("""ALTER TABLE test_table DROP COLUMN complex"""),
+            call("""ALTER TABLE test_table ADD COLUMN complex STRUCT<complex_a: INT>"""),
+            call("""ALTER TABLE test_table DROP COLUMN ds"""),
+            call("""ALTER TABLE test_table ADD COLUMN ds INT"""),
         ]
     )
 
