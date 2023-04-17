@@ -742,7 +742,7 @@ class Context(BaseContext):
             if tests:
                 result = run_model_tests(
                     tests=tests,
-                    snapshots=self.local_snapshots,
+                    models=self._models,
                     engine_adapter=self._test_engine_adapter,
                     verbosity=verbosity,
                     patterns=match_patterns,
@@ -751,7 +751,7 @@ class Context(BaseContext):
             else:
                 result = run_all_model_tests(
                     path=self.test_directory_path,
-                    snapshots=self.local_snapshots,
+                    models=self._models,
                     engine_adapter=self._test_engine_adapter,
                     verbosity=verbosity,
                     patterns=match_patterns,

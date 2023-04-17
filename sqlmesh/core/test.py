@@ -11,7 +11,7 @@ import ruamel
 from sqlglot import Expression, exp, parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.core.model import Model
 from sqlmesh.utils import unique
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -42,7 +42,7 @@ class ModelTest(unittest.TestCase):
         self,
         body: t.Dict[str, t.Any],
         test_name: str,
-        snapshots: t.Dict[str, Snapshot],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         path: t.Optional[pathlib.Path],
     ) -> None:
@@ -51,7 +51,7 @@ class ModelTest(unittest.TestCase):
         Args:
             body: A dictionary that contains test metadata like inputs and outputs.
             test_name: The name of the test.
-            snapshots: All snapshots to use for expansion and mapping of physical locations.
+            models: All models to use for expansion and mapping of physical locations.
             engine_adapter: The engine adapter to use.
             path: An optional path to the test definition yaml file
         """
@@ -68,19 +68,19 @@ class ModelTest(unittest.TestCase):
             self._raise_error("Incomplete test, missing outputs")
 
         self.model_name = body["model"]
-        if self.model_name not in snapshots:
+        if self.model_name not in models:
             self._raise_error(f"Model '{self.model_name}' was not found")
 
-        self.snapshot = snapshots[self.model_name]
+        self.model = models[self.model_name]
 
         inputs = self.body.get("inputs", {})
-        for snapshot_id in self.snapshot.parents:
-            if snapshot_id.name not in inputs:
-                self._raise_error(f"Incomplete test, missing input for table {snapshot_id.name}")
+        for depends_on in self.model.depends_on:
+            if depends_on not in inputs:
+                self._raise_error(f"Incomplete test, missing input for table {depends_on}")
 
-        self.query = self.snapshot.model.render_query(**self.body.get("vars", {}))
+        self.query = self.model.render_query(**self.body.get("vars", {}))
         # For tests we just use the model name for the table reference and we don't want to expand
-        mapping = {name: _test_fixture_name(name) for name in snapshots}
+        mapping = {name: _test_fixture_name(name) for name in models}
         if mapping:
             self.query = exp.replace_tables(self.query, mapping)
 
@@ -91,7 +91,6 @@ class ModelTest(unittest.TestCase):
     def setUp(self) -> None:
         """Load all input tables"""
         inputs = {name: table["rows"] for name, table in self.body.get("inputs", {}).items()}
-        self.engine_adapter.create_schema(self.snapshot.physical_schema)
         for table, rows in inputs.items():
             df = pd.DataFrame.from_records(rows)  # noqa
             columns_to_types: t.Dict[str, exp.DataType] = {}
@@ -245,7 +244,7 @@ def filter_tests_by_patterns(
 
 def run_tests(
     model_test_metadata: t.List[ModelTestMetadata],
-    snapshots: t.Dict[str, Snapshot],
+    models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
     verbosity: int = 1,
 ) -> unittest.result.TestResult:
@@ -253,7 +252,7 @@ def run_tests(
 
     Args:
         model_test_metadata: A list of ModelTestMetadata named tuples.
-        snapshots: All snapshots to use for expansion and mapping of physical locations.
+        models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         patterns: A list of patterns to match against.
         verbosity: The verbosity level.
@@ -262,7 +261,7 @@ def run_tests(
         ModelTest(
             body=metadata.body,
             test_name=metadata.test_name,
-            snapshots=snapshots,
+            models=models,
             engine_adapter=engine_adapter,
             path=metadata.path,
         )
@@ -284,7 +283,7 @@ def get_all_model_tests(
 
 def run_all_model_tests(
     path: pathlib.Path,
-    snapshots: t.Dict[str, Snapshot],
+    models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
     verbosity: int = 1,
     patterns: t.Optional[t.List[str]] = None,
@@ -294,19 +293,19 @@ def run_all_model_tests(
 
     Args:
         path: A path to search for tests.
-        snapshots: All snapshots to use for expansion and mapping of physical locations.
+        models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         verbosity: The verbosity level.
         patterns: A list of patterns to match against.
         ignore_patterns: An optional list of patterns to ignore.
     """
     model_tests = get_all_model_tests(path, patterns, ignore_patterns)
-    return run_tests(model_tests, snapshots, engine_adapter, verbosity)
+    return run_tests(model_tests, models, engine_adapter, verbosity)
 
 
 def run_model_tests(
     tests: t.List[str],
-    snapshots: t.Dict[str, Snapshot],
+    models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
     verbosity: int = 1,
     patterns: t.Optional[t.List[str]] = None,
@@ -316,7 +315,7 @@ def run_model_tests(
 
     Args
         tests: A list of tests to run, e.g. [tests/test_orders.yaml::test_single_order]
-        snapshots: All snapshots to use for expansion and mapping of physical locations.
+        models: All models to use for expansion and mapping of physical locations.
         engine_adapter: The engine adapter to use.
         patterns: A list of patterns to match against.
         verbosity: The verbosity level.
@@ -336,7 +335,7 @@ def run_model_tests(
                 loaded_tests.extend(load_model_test_file(path).values())
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
-    return run_tests(loaded_tests, snapshots, engine_adapter, verbosity)
+    return run_tests(loaded_tests, models, engine_adapter, verbosity)
 
 
 def _test_fixture_name(name: str) -> str:
