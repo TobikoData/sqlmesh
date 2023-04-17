@@ -55,6 +55,7 @@ Variations of this approach can be seen in dbt’s [state](https://docs.getdbt.c
 This approach, though clearly an improvement, still has several shortcomings:
 - Users are not informed about the **indirect** impact their changes have on downstream datasets, so they are forced to rely on their judgment and choose to either recompute the entire dependency graph (correctness) or recompute modified datasets only (efficiency). Anything in between requires careful manual intervention on the user’s part, which is error-prone and doesn’t scale to large dependency graphs.
 - Existing datasets can be reused when creating new development environments, but not when deploying changes to production. As mentioned earlier, this leads to changes being recomputed all over again without any guarantee of yielding the same results. Meanwhile, existing production data and deployed code remain out of sync for the duration of the recomputation.
+- State is discarded once the changes are deployed to production, making it impossible to reuse previously built datasets when reverting applied changes.
 
 I will demonstrate that there doesn’t have to be a tradeoff between correctness and efficiency. Both can be achieved without compromising either.
 
