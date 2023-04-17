@@ -86,17 +86,18 @@ export function HoverTooltip(
             <div>
               <div class="flex items-center">
                 <span>Model Name:</span>
-                <span class="px-2 py-1 inline-block ml-1 bg-alternative-100 text-alternative-500 rounded text-secondary-500 dark:text-primary-500">${model.name
-            }</span>
+                <span class="px-2 py-1 inline-block ml-1 bg-alternative-100 text-alternative-500 rounded text-secondary-500 dark:text-primary-500">${
+                  model.name
+                }</span>
               </div>
               ${getModelDependenciesListHTML(
-              'Children Models',
-              graph[model.name]?.upstream,
-            )}
+                'Children Models',
+                graph[model.name]?.upstream,
+              )}
               ${getModelDependenciesListHTML(
-              'Parent Models',
-              graph[model.name]?.downstream,
-            )}
+                'Parent Models',
+                graph[model.name]?.downstream,
+              )}
             </div>
           `
           dom.className =
