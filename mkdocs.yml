@@ -12,6 +12,7 @@ nav:
     - guides/scheduling.md
     - guides/connections.md
     - guides/multi_repo.md
+    - guides/migrations.md
   - Concepts:
     - concepts/overview.md
     - Models:
