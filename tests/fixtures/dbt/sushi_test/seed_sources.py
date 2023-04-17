@@ -3,7 +3,7 @@ from pathlib import Path
 
 from sqlmesh.core.config import DuckDBConnectionConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
 

@@ -2,9 +2,10 @@ import typing as t
 from pathlib import Path
 
 import pytest
+from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
@@ -256,6 +257,20 @@ def test_seed_config(sushi_test_project: Project):
     assert actual_config == expected_config
 
     assert raw_items_seed.model_name == "sushi.waiter_names"
+
+
+def test_quoting():
+    model = ModelConfig(alias="bar", schema="foo")
+    assert str(BaseRelation.create(**model.relation_info)) == '"foo"."bar"'
+
+    model.quoting.identifier = False
+    assert str(BaseRelation.create(**model.relation_info)) == '"foo".bar'
+
+    source = SourceConfig(identifier="bar", schema="foo")
+    assert str(BaseRelation.create(**source.relation_info)) == '"foo"."bar"'
+
+    source.quoting.schema_ = False
+    assert str(BaseRelation.create(**source.relation_info)) == 'foo."bar"'
 
 
 def _test_warehouse_config(config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str):

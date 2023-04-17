@@ -183,8 +183,13 @@ class JinjaMacroRegistry(PydanticModel):
 
     @validator("global_objs", pre=True)
     def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
+        def _attribute_dict(val: t.Dict[str, t.Any]) -> AttributeDict:
+            return AttributeDict(
+                {k: _attribute_dict(v) if isinstance(v, dict) else v for k, v in val.items()}
+            )
+
         if isinstance(value, t.Dict):
-            return {k: AttributeDict(v) if isinstance(v, dict) else v for k, v in value.items()}
+            return _attribute_dict(value)
         return value
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:

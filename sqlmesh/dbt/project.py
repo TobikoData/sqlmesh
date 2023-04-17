@@ -3,7 +3,8 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import PROJECT_FILENAME, DbtContext, load_yaml
+from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError

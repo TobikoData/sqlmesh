@@ -16,6 +16,7 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
 )
 from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
+from sqlmesh.dbt.common import QuotingConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -87,6 +88,10 @@ class TargetConfig(abc.ABC, PydanticModel):
         fields["target_name"] = self.name
         return AttributeDict(fields)
 
+    @property
+    def quoting(self) -> QuotingConfig:
+        return QuotingConfig()
+
 
 class DuckDbConfig(TargetConfig):
     """
@@ -153,6 +158,10 @@ class SnowflakeConfig(TargetConfig):
             role=self.role,
             concurrent_tasks=self.threads,
         )
+
+    @property
+    def quoting(self) -> QuotingConfig:
+        return QuotingConfig(database=False, schema=False, identifier=False)
 
 
 class PostgresConfig(TargetConfig):
