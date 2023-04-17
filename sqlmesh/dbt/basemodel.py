@@ -259,15 +259,27 @@ class BaseModelConfig(GeneralConfig):
     ) -> DbtContext:
         model_context = context.copy()
 
-        model_context.sources = {
-            name: value for name, value in context.sources.items() if name in dependencies.sources
-        }
-        model_context.seeds = {
-            name: value for name, value in context.seeds.items() if name in dependencies.refs
-        }
-        model_context.models = {
-            name: value for name, value in context.models.items() if name in dependencies.refs
-        }
+        models = {}
+        seeds = {}
+        sources = {}
+
+        for ref in self._dependencies.refs:
+            if ref in context.seeds:
+                seeds[ref] = context.seeds[ref]
+            elif ref in context.models:
+                models[ref] = context.models[ref]
+            else:
+                raise ConfigError(f"Model '{ref}' was not found for model '{self.table_name}'.")
+
+        for source in self._dependencies.sources:
+            if source in context.sources:
+                sources[source] = context.sources[source]
+            else:
+                raise ConfigError(f"Source '{source}' was not found for model '{self.table_name}'.")
+
+        model_context.sources = sources
+        model_context.seeds = seeds
+        model_context.models = models
         model_context.variables = {
             name: value
             for name, value in context.variables.items()
@@ -365,16 +377,8 @@ class ModelSqlRenderer(t.Generic[BMC]):
         return config
 
     def _ref(self, package_name: str, model_name: t.Optional[str] = None) -> BaseRelation:
-        if package_name in self.context.models:
-            relation = BaseRelation.create(**self.context.models[package_name].relation_info)
-        elif package_name in self.context.seeds:
-            relation = BaseRelation.create(**self.context.seeds[package_name].relation_info)
-        else:
-            raise ConfigError(
-                f"Model '{package_name}' was not found for model '{self.config.table_name}'."
-            )
         self._captured_dependencies.refs.add(package_name)
-        return relation
+        return BaseRelation.create()
 
     def _var(self, name: str, default: t.Optional[str] = None) -> t.Any:
         if default is None and name not in self.context.variables:
@@ -386,12 +390,8 @@ class ModelSqlRenderer(t.Generic[BMC]):
 
     def _source(self, source_name: str, table_name: str) -> BaseRelation:
         full_name = ".".join([source_name, table_name])
-        if full_name not in self.context.sources:
-            raise ConfigError(
-                f"Source '{full_name}' was not found for model '{self.config.table_name}'."
-            )
         self._captured_dependencies.sources.add(full_name)
-        return BaseRelation.create(**self.context.sources[full_name].relation_info)
+        return BaseRelation.create()
 
     class TrackingAdapter(ParsetimeAdapter):
         def __init__(self, outer_self: ModelSqlRenderer, *args: t.Any, **kwargs: t.Any):

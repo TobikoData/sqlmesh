@@ -56,9 +56,6 @@ class DbtLoader(Loader):
         context = project.context.copy()
 
         for package_name, package in project.packages.items():
-            context.add_sources(package.sources)
-            context.add_seeds(package.seeds)
-            context.add_models(package.models)
             context.jinja_macros.add_macros(
                 package.macros,
                 package=package_name if package_name != context.project_name else None,
