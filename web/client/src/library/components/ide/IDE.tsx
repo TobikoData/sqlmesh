@@ -69,7 +69,7 @@ export function IDE(): JSX.Element {
     getModels,
   ])
   const debouncedGetDag = useCallback(debounceAsync(getDag, 1000, true), [
-    getModels,
+    getDag,
   ])
 
   useEffect(() => {
