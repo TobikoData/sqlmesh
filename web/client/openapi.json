@@ -109,11 +109,7 @@
                 "schema": {
                   "title": "Response Dag Api Commands Dag Get",
                   "type": "object",
-                  "additionalProperties": {
-                    "uniqueItems": true,
-                    "type": "array",
-                    "items": { "type": "string" }
-                  }
+                  "additionalProperties": { "$ref": "#/components/schemas/DAG" }
                 }
               }
             }
@@ -438,11 +434,11 @@
         }
       }
     },
-    "/api/lineage/": {
+    "/api/lineage": {
       "get": {
         "summary": "Column Lineage",
         "description": "Get a column's lineage",
-        "operationId": "column_lineage_api_lineage__get",
+        "operationId": "column_lineage_api_lineage_get",
         "parameters": [
           {
             "required": true,
@@ -463,7 +459,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Column Lineage Api Lineage  Get",
+                  "title": "Response Column Lineage Api Lineage Get",
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",
@@ -490,6 +486,43 @@
         }
       }
     },
+    "/api/lineage/{model_name}": {
+      "get": {
+        "summary": "Model Column Lineage",
+        "description": "Get a model's column lineage",
+        "operationId": "model_column_lineage_api_lineage__model_name__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "title": "Model Name", "type": "string" },
+            "name": "model_name",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Model Column Lineage Api Lineage  Model Name  Get",
+                  "type": "object",
+                  "additionalProperties": { "$ref": "#/components/schemas/DAG" }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/models": {
       "get": {
         "summary": "Get Models",
@@ -500,7 +533,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Models" }
+                "schema": {
+                  "title": "Response Get Models Api Models Get",
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Model" }
+                }
               }
             }
           }
@@ -783,6 +820,29 @@
           "modified": { "$ref": "#/components/schemas/ModelsDiff" }
         }
       },
+      "DAG": {
+        "title": "DAG",
+        "required": ["models"],
+        "type": "object",
+        "properties": {
+          "models": {
+            "title": "Models",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "columns": {
+            "title": "Columns",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
       "Directory": {
         "title": "Directory",
         "required": ["name", "path"],
@@ -933,18 +993,6 @@
             "title": "Columns",
             "type": "array",
             "items": { "$ref": "#/components/schemas/Column" }
-          }
-        }
-      },
-      "Models": {
-        "title": "Models",
-        "required": ["models"],
-        "type": "object",
-        "properties": {
-          "models": {
-            "title": "Models",
-            "type": "object",
-            "additionalProperties": { "$ref": "#/components/schemas/Model" }
           }
         }
       },
