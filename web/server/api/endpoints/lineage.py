@@ -89,9 +89,11 @@ def get_column_lineage(context: Context, model_name: t.Optional[str] = None) -> 
     lineage: t.Any = dict()
     nodes = _get_nodes(context, model_name)
 
+    print(nodes)
+
     for model_name in nodes:
-        table = model_name
         for column_name in nodes[model_name]:
+            table = model_name
             column = column_name
             node = nodes[model_name][column_name]
 
@@ -99,6 +101,7 @@ def get_column_lineage(context: Context, model_name: t.Optional[str] = None) -> 
                 continue
 
             for i, node in enumerate(node.walk()):
+                print("No child model", node.expression)
                 if i > 0:
                     table, column = _get_model_and_column(node)
                 if not table:
@@ -125,18 +128,34 @@ def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     return graph
 
 
-def _walk_node(lineage: t.Any, node: Node, node_model: str, node_column: str) -> None:
-    """Walk a node and add it to the lineage graph"""
+temp_columns: t.Dict[str, str] = {}
 
+
+def _walk_node(
+    lineage: t.Any,
+    node: Node,
+    node_model: str,
+    node_column: str,
+) -> None:
+    """Walk a node and add it to the lineage graph"""
+    if node_column in temp_columns:
+        node_column = temp_columns[node_column]
     for child_node in node.downstream:
         child_model, child_column = _get_model_and_column(child_node)
+        if not child_column:
+            continue
         if not child_model:
+            temp_columns[child_column] = node_column
             continue
         _add_column_to_graph(lineage, node_model, node_column, child_model, child_column)
 
 
 def _add_column_to_graph(
-    lineage: t.Any, model: str, column: str, child_model: str, child_column: str
+    lineage: t.Any,
+    model: str,
+    column: str,
+    child_model: t.Optional[str] = None,
+    child_column: t.Optional[str] = None,
 ) -> None:
     """Add a column to the lineage graph"""
     if not model in lineage:
@@ -145,10 +164,10 @@ def _add_column_to_graph(
     if not column in lineage[model]:
         lineage[model][column] = {}
 
-    if not child_model in lineage[model][column]:
+    if child_model is not None and not child_model in lineage[model][column]:
         lineage[model][column][child_model] = []
 
-    if not child_column in lineage[model][column][child_model]:
+    if child_column is not None and not child_column in lineage[model][column][child_model]:
         lineage[model][column][child_model].append(child_column)
 
 
@@ -168,10 +187,10 @@ def _get_nodes(
             nodes[model.name][column.name] = lineage(
                 column=column.name,
                 sql=context.models[model.name].render_query(),
-                sources={
-                    model: context.models[model].render_query()
-                    for model in context.dag.upstream(model.name)
-                },
+                # sources={
+                #     model: context.models[model].render_query()
+                #     for model in context.dag.upstream(model.name)
+                # },
             )
     return nodes
 
