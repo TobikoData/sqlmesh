@@ -7,8 +7,8 @@ from pydantic import Field, validator
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
-from sqlmesh.dbt.common import GeneralConfig
-from sqlmesh.utils.conversions import ensure_bool
+from sqlmesh.dbt.common import GeneralConfig, QuotingConfig
+from sqlmesh.utils import AttributeDict
 
 
 class SourceConfig(GeneralConfig):
@@ -23,7 +23,7 @@ class SourceConfig(GeneralConfig):
         overrides: Override a source defined in the specified package
         freshness: Dictionary specifying maximum time, since the most recent record, to consider the source fresh
         loaded_at_field: Column name or expression that returns a timestamp indicating freshness
-        quoting: Dictionary of what to quote (database, schema, identifier) when resolving the source() method
+        quoting: Define which components of the qualified name (database, schema, identifier) to quote when resolving the source() method
         external: Dictionary of metadata properties specific to sources that point to external tables
         columns: Columns within the source
     """
@@ -40,13 +40,9 @@ class SourceConfig(GeneralConfig):
     overrides: t.Optional[str] = None
     freshness: t.Optional[t.Dict[str, t.Any]] = {}
     loaded_at_field: t.Optional[str] = None
-    quoting: t.Optional[t.Dict[str, bool]] = {}
+    quoting: QuotingConfig = Field(default_factory=QuotingConfig)
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
-
-    @validator("quoting", pre=True)
-    def _validate_quoting(cls, v: t.Dict[str, t.Any]) -> t.Dict[str, bool]:
-        return {key: ensure_bool(val) for key, val in v.items()}
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
@@ -69,10 +65,13 @@ class SourceConfig(GeneralConfig):
         return ".".join(part for part in (self.schema_, self.table_name) if part)
 
     @property
-    def relation_info(self) -> t.Dict[str, t.Any]:
-        return {
-            "database": self.database,
-            "schema": self.schema_,
-            "identifier": self.table_name,
-            "type": RelationType.External.value,
-        }
+    def relation_info(self) -> AttributeDict:
+        return AttributeDict(
+            {
+                "database": self.database,
+                "schema": self.schema_,
+                "identifier": self.table_name,
+                "type": RelationType.External.value,
+                "quote_policy": AttributeDict(self.quoting.dict()),
+            }
+        )

@@ -19,7 +19,7 @@ from sqlmesh.dbt.column import (
     column_descriptions_to_sqlmesh,
     column_types_to_sqlmesh,
 )
-from sqlmesh.dbt.common import DbtContext
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
@@ -210,7 +210,7 @@ def test_config_containing_jinja():
 
     sqlmesh_model = rendered.to_sqlmesh(context)
     assert str(sqlmesh_model.query) == model.sql
-    assert str(sqlmesh_model.render_query()) == "SELECT * FROM raw.baz AS baz"
+    assert str(sqlmesh_model.render_query()) == 'SELECT * FROM "raw"."baz" AS baz'
     assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
 
 
