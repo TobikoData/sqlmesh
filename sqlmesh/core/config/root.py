@@ -28,6 +28,7 @@ class Config(BaseConfig):
         notification_targets: The notification targets to use.
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
         physical_schema: The default schema used to store materialized tables.
+        project: The project name of this config. Used for multi-repo setups.
         snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
         environment_ttl: The period of time that a development environment should exist before being deleted.
         ignore_patterns: Files that match glob patterns specified in this list are ignored when scanning the project folder.
@@ -46,10 +47,11 @@ class Config(BaseConfig):
     )
     scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     notification_targets: t.List[NotificationTarget] = []
-    physical_schema: str = ""
+    physical_schema: str = c.SQLMESH
+    project: str = ""
     snapshot_ttl: str = c.DEFAULT_SNAPSHOT_TTL
     environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL
-    ignore_patterns: t.List[str] = []
+    ignore_patterns: t.List[str] = c.IGNORE_PATTERNS
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     users: t.List[User] = []
@@ -111,3 +113,7 @@ class Config(BaseConfig):
         if isinstance(self.test_connection_, str):
             return self.get_connection(self.test_connection_)
         return self.test_connection_
+
+    @property
+    def dialect(self) -> t.Optional[str]:
+        return self.model_defaults.dialect

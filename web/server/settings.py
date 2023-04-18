@@ -28,14 +28,14 @@ def get_settings() -> Settings:
 
 
 @lru_cache()
-def _get_context(path: str, config: str) -> Context:
+def _get_context(path: str | Path, config: str) -> Context:
     from web.server.main import api_console
 
-    return Context(path=path, config=config, console=api_console, load=False)
+    return Context(paths=str(path), config=config, console=api_console, load=False)
 
 
 @lru_cache()
-def _get_loaded_context(path: str, config: str) -> Context:
+def _get_loaded_context(path: str | Path, config: str) -> Context:
     context = _get_context(path, config)
     context.load()
     return context

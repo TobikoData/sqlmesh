@@ -103,20 +103,21 @@ class registry_decorator:
 
 
 @contextmanager
-def sys_path(path: Path) -> t.Generator[None, None, None]:
+def sys_path(*paths: Path) -> t.Generator[None, None, None]:
     """A context manager to temporarily add a path to 'sys.path'."""
-    path_str = str(path.absolute())
+    inserted = set()
 
-    if path_str in sys.path:
-        inserted = False
-    else:
-        sys.path.insert(0, path_str)
-        inserted = True
+    for path in paths:
+        path_str = str(path.absolute())
+
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+            inserted.add(path_str)
 
     try:
         yield
     finally:
-        if inserted:
+        for path_str in inserted:
             sys.path.remove(path_str)
 
 

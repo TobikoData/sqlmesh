@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import importlib
+import itertools
 import linecache
 import os
 import sys
@@ -13,6 +14,7 @@ from pathlib import Path
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.hooks import HookRegistry, hook
@@ -24,11 +26,12 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.config import Config
     from sqlmesh.core.context import Context
 
 
-def update_model_schemas(dialect: str, dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
-    schema = MappingSchema(dialect=dialect)
+def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
+    schema = MappingSchema()
     for name in dag.sorted():
         model = models.get(name)
 
@@ -80,7 +83,7 @@ class Loader(abc.ABC):
         models = self._load_models(macros, hooks)
         for model in models.values():
             self._add_model_to_dag(model)
-        update_model_schemas(self._context.dialect, self._dag, models)
+        update_model_schemas(self._dag, models)
 
         audits = self._load_audits()
 
@@ -132,11 +135,13 @@ class SqlMeshLoader(Loader):
         standard_hooks = hook.get_registry()
         standard_macros = macro.get_registry()
 
-        for path in tuple(self._glob_path(self._context.macro_directory_path, ".py")) + tuple(
-            self._glob_path(self._context.hook_directory_path, ".py")
-        ):
-            if self._import_python_file(path.relative_to(self._context.path)):
-                self._track_file(path)
+        for context_path, config in self._context.configs.items():
+            for path in itertools.chain(
+                self._glob_paths(context_path / c.MACROS, config=config, extension=".py"),
+                self._glob_paths(context_path / c.HOOKS, config=config, extension=".py"),
+            ):
+                if self._import_python_file(path, context_path):
+                    self._track_file(path)
 
         hooks = hook.get_registry()
         macros = macro.get_registry()
@@ -161,28 +166,31 @@ class SqlMeshLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
-        for path in self._glob_path(self._context.models_directory_path, ".sql"):
-            self._track_file(path)
-            with open(path, "r", encoding="utf-8") as file:
-                try:
-                    expressions = parse(file.read(), default_dialect=self._context.dialect)
-                except SqlglotError as ex:
-                    raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}")
-                model = load_model(
-                    expressions,
-                    defaults=self._context.config.model_defaults.dict(),
-                    macros=macros,
-                    hooks=hooks,
-                    path=Path(path).absolute(),
-                    module_path=self._context.path,
-                    dialect=self._context.dialect,
-                    time_column_format=self._context.config.time_column_format,
-                )
-                models[model.name] = model
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
+                self._track_file(path)
+                with open(path, "r", encoding="utf-8") as file:
+                    try:
+                        expressions = parse(
+                            file.read(), default_dialect=config.model_defaults.dialect
+                        )
+                    except SqlglotError as ex:
+                        raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}")
+                    model = load_model(
+                        expressions,
+                        defaults=config.model_defaults.dict(),
+                        macros=macros,
+                        hooks=hooks,
+                        path=Path(path).absolute(),
+                        module_path=context_path,
+                        dialect=config.model_defaults.dialect,
+                        time_column_format=config.time_column_format,
+                    )
+                    models[model.name] = model
 
-                if isinstance(model, SeedModel):
-                    seed_path = model.seed_path
-                    self._track_file(seed_path)
+                    if isinstance(model, SeedModel):
+                        seed_path = model.seed_path
+                        self._track_file(seed_path)
 
         return models
 
@@ -193,39 +201,42 @@ class SqlMeshLoader(Loader):
         registry.clear()
         registered: t.Set[str] = set()
 
-        for path in self._glob_path(self._context.models_directory_path, ".py"):
-            self._track_file(path)
-            self._import_python_file(path.relative_to(self._context.path))
-            new = registry.keys() - registered
-            registered |= new
-            for name in new:
-                model = registry[name].model(
-                    path=path,
-                    module_path=self._context.path,
-                    defaults=self._context.config.model_defaults.dict(),
-                    time_column_format=self._context.config.time_column_format,
-                )
-                models[model.name] = model
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".py"):
+                self._track_file(path)
+                self._import_python_file(path, context_path)
+                new = registry.keys() - registered
+                registered |= new
+                for name in new:
+                    model = registry[name].model(
+                        path=path,
+                        module_path=context_path,
+                        defaults=config.model_defaults.dict(),
+                        time_column_format=config.time_column_format,
+                    )
+                    models[model.name] = model
 
         return models
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
-        for path in self._glob_path(self._context.audits_directory_path, ".sql"):
-            self._track_file(path)
-            with open(path, "r", encoding="utf-8") as file:
-                expressions = parse(file.read(), default_dialect=self._context.dialect)
-                audits = Audit.load_multiple(
-                    expressions=expressions,
-                    path=path,
-                    dialect=self._context.dialect,
-                )
-                for audit in audits:
-                    audits_by_name[audit.name] = audit
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(context_path / c.AUDITS, config=config, extension=".sql"):
+                self._track_file(path)
+                with open(path, "r", encoding="utf-8") as file:
+                    expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
+                    audits = Audit.load_multiple(
+                        expressions=expressions,
+                        path=path,
+                        dialect=config.model_defaults.dialect,
+                    )
+                    for audit in audits:
+                        audits_by_name[audit.name] = audit
         return audits_by_name
 
-    def _import_python_file(self, relative_path: Path) -> types.ModuleType:
+    def _import_python_file(self, file: Path, context_path: Path) -> types.ModuleType:
+        relative_path = file.relative_to(context_path)
         module_name = str(relative_path.with_suffix("")).replace(os.path.sep, ".")
         # remove the entire module hierarchy in case they were already loaded
         parts = module_name.split(".")
@@ -234,20 +245,22 @@ class SqlMeshLoader(Loader):
 
         return importlib.import_module(module_name)
 
-    def _glob_path(self, path: Path, file_extension: str) -> t.Generator[Path, None, None]:
+    def _glob_paths(
+        self, path: Path, config: Config, extension: str
+    ) -> t.Generator[Path, None, None]:
         """
         Globs the provided path for the file extension but also removes any filepaths that match an ignore
         pattern either set in constants or provided in config
 
         Args:
             path: The filepath to glob
-            file_extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
+            extension: The extension to check for in that path (checks recursively in zero or more subdirectories)
 
         Returns:
             Matched paths that are not ignored
         """
-        for filepath in path.glob(f"**/*{file_extension}"):
-            for ignore_pattern in self._context.ignore_patterns:
+        for filepath in path.glob(f"**/*{extension}"):
+            for ignore_pattern in config.ignore_patterns:
                 if filepath.match(ignore_pattern):
                     break
             else:

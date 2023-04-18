@@ -15,7 +15,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 
 
 @click.group(no_args_is_help=True)
-@opt.path
+@opt.paths
 @opt.config
 @click.option(
     "--connection",
@@ -31,7 +31,7 @@ from sqlmesh.utils.errors import MissingDependencyError
 @error_handler
 def cli(
     ctx: click.Context,
-    path: str,
+    paths: t.List[str],
     config: t.Optional[str] = None,
     connection: t.Optional[str] = None,
     test_connection: t.Optional[str] = None,
@@ -40,17 +40,18 @@ def cli(
     if ctx.invoked_subcommand == "version":
         return
 
-    path = os.path.abspath(path)
-    if ctx.invoked_subcommand == "init":
-        ctx.obj = path
-        return
+    if len(paths) == 1:
+        path = os.path.abspath(paths[0])
+        if ctx.invoked_subcommand == "init":
+            ctx.obj = path
+            return
 
     # Delegates the execution of the --help option to the corresponding subcommand
     if "--help" in sys.argv:
         return
 
     context = Context(
-        path=path,
+        paths=paths,
         config=config,
         connection=connection,
         test_connection=test_connection,
@@ -58,7 +59,7 @@ def cli(
 
     if not context.models:
         raise click.ClickException(
-            f"`{path}` doesn't seem to have any models... cd into the proper directory or specify the path with --path."
+            f"`{paths}` doesn't seem to have any models... cd into the proper directory or specify the path(s) with --paths."
         )
 
     ctx.obj = context
