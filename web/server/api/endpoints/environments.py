@@ -11,7 +11,9 @@ router = APIRouter()
 
 
 @router.get("")
-def get_environments(context: Context = Depends(get_loaded_context)) -> t.Dict[str, Environment]:
+async def get_environments(
+    context: Context = Depends(get_loaded_context),
+) -> t.Dict[str, Environment]:
     """Get the environments"""
     environments = {env.name: env for env in context.state_reader.get_environments()}
     if c.PROD not in environments:
