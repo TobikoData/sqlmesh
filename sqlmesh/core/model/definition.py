@@ -619,7 +619,7 @@ class SqlModel(_Model):
 
         if self._columns_to_types is None:
             self._columns_to_types = {
-                expression.alias_or_name: expression.type
+                expression.alias_or_name: expression.type or exp.DataType.build("unknown")
                 for expression in self._query_renderer.render().expressions
             }
 

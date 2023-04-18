@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
@@ -10,6 +11,7 @@ from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.hooks import hook
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
+    ModelCache,
     ModelMeta,
     SeedKind,
     SqlModel,
@@ -982,3 +984,31 @@ def test_batch_size_validation():
 
     with pytest.raises(ConfigError) as ex:
         load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+
+def test_model_cache(tmp_path: Path, mocker: MockerFixture):
+    cache = ModelCache(tmp_path)
+
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+        );
+        SELECT 1, ds;
+    """
+    )
+
+    model = load_model([e for e in expressions if e])
+
+    loader = mocker.Mock(return_value=model)
+
+    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+
+    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
+
+    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+
+    assert loader.call_count == 3
