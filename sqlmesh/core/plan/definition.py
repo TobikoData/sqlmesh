@@ -27,6 +27,7 @@ from sqlmesh.utils.date import (
     now,
     to_date,
     to_datetime,
+    to_ds,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -576,12 +577,15 @@ class MissingIntervals(PydanticModel, frozen=True):
     def merged_intervals(self) -> Intervals:
         return merge_intervals(self.intervals)
 
-    def format_missing_range(self) -> str:
+    def format_missing_range(self, unit: t.Optional[IntervalUnit] = None) -> str:
         intervals = [make_inclusive(start, end) for start, end in self.merged_intervals]
         return ", ".join(
-            f"({_format_date_time(start)}, {_format_date_time(end)})" for start, end in intervals
+            f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
+            for start, end in intervals
         )
 
 
-def _format_date_time(time_like: TimeLike) -> str:
+def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
+    if unit is None or unit == IntervalUnit.DAY:
+        return to_ds(time_like)
     return to_datetime(time_like).isoformat()[:19]
