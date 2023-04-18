@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
+
+logger = logging.getLogger(__name__)
 
 
 class Project:
@@ -63,6 +66,13 @@ class Project:
 
         profile = Profile.load(context, context.target_name)
         context.target = profile.target
+
+        extra_fields = profile.target.extra
+        if extra_fields:
+            extra_str = ",".join(f"'{field}'" for field in extra_fields)
+            logger.warning(
+                f"Warning: {profile.target.type} adapter does not currently support {extra_str}."
+            )
 
         packages = {}
         root_loader = PackageLoader(context, ProjectConfig())
