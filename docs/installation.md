@@ -1,7 +1,7 @@
 # Installation
 
 
-It is recommended, but not required, that you use a virtual environment:
+It is recommended, but not required, that you use a python virtual environment:
 ```bash
 python -m venv .env
 ```

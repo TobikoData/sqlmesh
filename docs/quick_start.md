@@ -13,7 +13,7 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
-When using a virtual environment, you must ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](installation.md).
+When using a python virtual environment, you must ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](installation.md).
 
 Create a SQLMesh scaffold by using the following command:
 
