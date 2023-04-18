@@ -11,6 +11,7 @@ nav:
     - guides/testing.md
     - guides/scheduling.md
     - guides/connections.md
+    - guides/multi_repo.md
   - Concepts:
     - concepts/overview.md
     - Models:
@@ -25,7 +26,6 @@ nav:
     - concepts/audits.md
     - concepts/macros.md
     - concepts/hooks.md
-    - concepts/team_development.md
     - Architecture:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md
