@@ -218,16 +218,17 @@ def test_config_containing_missing_dependency():
     context = DbtContext()
     model = ModelConfig(sql="{{ config(pre_hook=\"{{ print(ref('bar')) }}\") }} SELECT 1 FROM a")
     with pytest.raises(ConfigError, match="'bar' was not found"):
-        model.render_config(context)
+        model.render_config(context).to_sqlmesh(context)
 
     model = ModelConfig(sql='{{ config(pre_hook="{{ get_table_name() }}") }} SELECT 1 FROM a')
     with pytest.raises(ConfigError, match="get_table_name"):
-        model.render_config(context)
+        model.render_config(context).to_sqlmesh(context)
 
     model = ModelConfig(sql="{{ config(alias='{{ get_table_name() }}') }} SELECT 1 FROM a")
     rendered = model.render_config(context)
     assert rendered.alias == "{{ get_table_name() }}"
     assert "get_table_name" not in [macro.name for macro in rendered._dependencies.macros]
+    rendered.to_sqlmesh(context)
 
 
 def test_config_containing_method():
@@ -271,6 +272,16 @@ def test_schema_jinja(sushi_test_project: Project):
     model_config = ModelConfig(target_schema="sushi", sql="SELECT 1 AS one FROM {{ schema }}")
     context = sushi_test_project.context
     model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+
+
+def test_materialized_jinja(sushi_test_project: Project):
+    model_config = ModelConfig(
+        materialized="{{ 'table' if target.type in ['duckdb'] else 'view' }}",
+        sql="SELECT 1 AS one FROM {{ schema }}",
+    )
+    context = sushi_test_project.context
+    rendered = model_config.render_config(context)
+    assert rendered.materialized == "table"
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):

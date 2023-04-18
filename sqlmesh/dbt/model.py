@@ -70,7 +70,7 @@ class ModelConfig(BaseModelConfig):
     start: t.Optional[str] = None
     cluster_by: t.Optional[t.List[str]] = None
     incremental_strategy: t.Optional[str] = None
-    materialized: Materialization = Materialization.VIEW
+    materialized: str = Materialization.VIEW.value
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
 
@@ -94,10 +94,6 @@ class ModelConfig(BaseModelConfig):
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
         return SqlStr(v)
 
-    @validator("materialized", pre=True)
-    def _validate_materialization(cls, v: str) -> Materialization:
-        return Materialization(v.lower())
-
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
@@ -112,7 +108,7 @@ class ModelConfig(BaseModelConfig):
 
     @property
     def model_materialization(self) -> Materialization:
-        return self.materialized
+        return Materialization(self.materialized.lower())
 
     def model_kind(self, target: TargetConfig) -> ModelKind:
         """
@@ -120,7 +116,7 @@ class ModelConfig(BaseModelConfig):
         Returns:
             The sqlmesh ModelKind
         """
-        materialization = self.materialized
+        materialization = self.model_materialization
         if materialization == Materialization.TABLE:
             return ModelKind(name=ModelKindName.FULL)
         if materialization == Materialization.VIEW:
