@@ -54,6 +54,11 @@ def test_ast_correctness(macro_evaluator):
     "sql, expected, args",
     [
         (
+            """select @EACH(['a', 'b'], x -> x)""",
+            "SELECT 'a', 'b'",
+            {},
+        ),
+        (
             """@FILTER_COUNTRY(@'continent = ''NA''', 'USA')""",
             "continent = 'NA' AND country = 'USA'",
             {},
