@@ -340,7 +340,9 @@ class TerminalConsole(Console):
         for missing in plan.missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_name]
             view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
-            backfill.add(f"{view_name}: {missing.format_missing_range()}")
+            backfill.add(
+                f"{view_name}: {missing.format_missing_range(snapshot.model.interval_unit())}"
+            )
         self._print(backfill)
 
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:

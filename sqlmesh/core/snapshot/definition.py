@@ -453,14 +453,26 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
-    def _inclusive_exclusive(self, start: TimeLike, end: TimeLike) -> t.Tuple[int, int]:
+    def _inclusive_exclusive(
+        self, start: TimeLike, end: TimeLike, strict: bool = True
+    ) -> t.Tuple[int, int]:
+        """Transform the inclusive start and end into a [start, end) pair.
+
+        Args:
+            start: The start date/time of the interval (inclusive)
+            end: The end date/time of the interval (inclusive)
+            strict: Whether to fail when the inclusive start is the same as the exclusive end.
+
+        Returns:
+            A [start, end) pair.
+        """
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
         )
 
-        if start_ts >= end_ts:
-            raise ValueError("`end` must be >= `start`")
+        if (strict and start_ts >= end_ts) or (start_ts > end_ts):
+            raise ValueError("`end` must be greater than `start`")
         return (start_ts, end_ts)
 
     def merge_intervals(self, other: Snapshot) -> None:
@@ -493,7 +505,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         missing = []
-        start_dt, end_dt = (to_datetime(ts) for ts in self._inclusive_exclusive(start, end))
+        start_dt, end_dt = (
+            to_datetime(ts) for ts in self._inclusive_exclusive(start, end, strict=False)
+        )
         dates = tuple(croniter_range(start_dt, end_dt, self.model.normalized_cron()))
         size = len(dates) - 1
 
