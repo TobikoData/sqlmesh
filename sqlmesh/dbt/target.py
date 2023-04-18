@@ -16,10 +16,9 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
 )
 from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
-from sqlmesh.dbt.common import QuotingConfig
+from sqlmesh.dbt.common import DbtConfig, QuotingConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -29,7 +28,7 @@ else:
 IncrementalKind = t.Union[t.Type[IncrementalByUniqueKeyKind], t.Type[IncrementalByTimeRangeKind]]
 
 
-class TargetConfig(abc.ABC, PydanticModel):
+class TargetConfig(abc.ABC, DbtConfig):
     """
     Configuration for DBT profile target
 
@@ -91,6 +90,10 @@ class TargetConfig(abc.ABC, PydanticModel):
     @property
     def quoting(self) -> QuotingConfig:
         return QuotingConfig()
+
+    @property
+    def extra(self) -> t.Set[str]:
+        return self.extra_fields(set(self.dict()))
 
 
 class DuckDbConfig(TargetConfig):
