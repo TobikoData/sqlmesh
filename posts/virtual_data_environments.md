@@ -23,7 +23,7 @@ Environments are routinely used by data practitioners. For example, **dbt** allo
 
 **dbt**’s approach is sufficient for deploying data pipelines into separate environments for development / testing, staging, and production, while ensuring that changes are only applied to the target environment and leave datasets in other environments unaffected.
 
-![Figure 1: Isolated but rigid Data Warehouse environments](virtual_environments/isolated_rigid_envs.png)
+![Figure 1: Isolated but rigid Data Warehouse environments](virtual_data_environments/isolated_rigid_envs.png)
 *Figure 1: Isolated but rigid Data Warehouse environments*
 
 However, this development process becomes troublesome as an organization grows in size and multiple users begin to iterate and push changes (oftentimes concurrently). Some of the challenges include:
@@ -49,7 +49,7 @@ This approach helps determine which pipelines have been modified in the new envi
 
 Variations of this approach can be seen in dbt’s [state](https://docs.getdbt.com/docs/deploy/project-state) + [defer](https://docs.getdbt.com/reference/node-selection/defer) method and Fivetran’s [“smart runs”](https://www.fivetran.com/blog/how-we-execute-dbt-runs-faster-and-cheaper).
 
-![Figure 2: Detecting changes by comparing the raw contents of source files](virtual_environments/stateful_envs.png)
+![Figure 2: Detecting changes by comparing the raw contents of source files](virtual_data_environments/stateful_envs.png)
 *Figure 2: Detecting changes by comparing the raw contents of source files*
 
 This approach, though clearly an improvement, still has several shortcomings:
@@ -81,7 +81,7 @@ SQLMesh’s Virtual Data Environments achieve exactly this thanks to the followi
 - Each dataset managed by the platform is populated by a logic defined as a [model](https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/) using either SQL or Python. Every time a change to an existing model is made, a new [snapshot](https://sqlmesh.readthedocs.io/en/stable/concepts/architecture/snapshots/) of this model gets created and associated with a unique [fingerprint](https://sqlmesh.readthedocs.io/en/stable/concepts/architecture/snapshots/#fingerprinting). The fingerprint itself is a combination of hashes computed on the attributes that constitute a model. By default, each model snapshot writes into its own unique table (or updates its own unique view), so multiple versions of a model can exist at the same time without causing conflicts.
 - The platform doesn't expose datasets (physical tables or views) populated with model snapshots directly. Instead, it provides access to them through a layer of indirection implemented using [views](https://en.wikipedia.org/wiki/View_(SQL)). This way, updating a dataset version in production becomes the atomic and almost instantaneous operation of updating a view associated with it by swapping the source it points to. The best part is that this operation is completely transparent to downstream consumers who always refer to a view and never to an underlying physical table. I refer to the layer of indirection powered by views as the **virtual layer**, while the layer of tables and views populated directly with model snapshots is called the **physical layer**.
 
-![Figure 3: Environments managed through the virtual layer](virtual_environments/virtual_envs.png)
+![Figure 3: Environments managed through the virtual layer](virtual_data_environments/virtual_envs.png)
 *Figure 3: Environments managed through the virtual layer*
 
 These two properties combined constitute **Virtual Data Environments**.
@@ -105,7 +105,7 @@ Every time a model is modified directly, SQLMesh automatically categorizes the c
 
 For example, adding a new column is not considered to be a breaking change, but removing or modifying the existing one is.
 
-![Figure 4: Breaking vs. non-breaking changes](virtual_environments/change_categorization.png)
+![Figure 4: Breaking vs. non-breaking changes](virtual_data_environments/change_categorization.png)
 *Figure 4: Breaking vs. non-breaking changes*
 
 This way SQLMesh automatically reduces the amount of necessary recomputation to a minimum while guaranteeing correctness. No user intervention needed.
@@ -114,7 +114,7 @@ Currently, this approach doesn’t extend beyond looking at each model as a whol
 
 This will allow an even finer balance between correctness and efficiency, since changes like removing a column that is not referenced downstream will no longer be categorized as “breaking.”
 
-![Figure 5: Column-level change categorization](virtual_environments/partial_breaking.png)
+![Figure 5: Column-level change categorization](virtual_data_environments/partial_breaking.png)
 *Figure 5: Column-level change categorization*
 
 #### Physical Layer
@@ -139,7 +139,7 @@ Unlike those tools, SQLMesh uses the virtual layer approach to create and manage
 
 Each [environment](https://sqlmesh.readthedocs.io/en/stable/concepts/environments/) in SQLMesh is just a collection of views, one per model, each pointing at a snapshot table in the **physical layer**. This works equally well with most Data Warehouse technologies, be it Iceberg, Delta Lake, Snowflake, BigQuery, or something else.
 
-![Figure 6: Virtual Data Environments end-to-end](virtual_environments/virtual_envs_end_to_end.png)
+![Figure 6: Virtual Data Environments end-to-end](virtual_data_environments/virtual_envs_end_to_end.png)
 *Figure 6: Virtual Data Environments end-to-end*
 
 Views that belong to environments other than production have an environment name attached as a suffix to the schema portion of their fully qualified names. For example, the `db.model_a` dataset is accessed using that name in the production environment, but in an environment named `test` the name `db__test.model_a` would be used instead. That's how changes can be **previewed** before making their way into production.
