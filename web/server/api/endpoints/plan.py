@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import functools
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
@@ -12,7 +10,6 @@ from sqlmesh.utils.date import make_inclusive, to_ds
 from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.settings import get_loaded_context
-from web.server.utils import run_in_executor
 
 router = APIRouter()
 
@@ -39,23 +36,20 @@ async def run_plan(
 
     context.refresh()
 
-    plan_func = functools.partial(
-        context.plan,
-        environment=environment,
-        no_prompts=True,
-        start=plan_dates.start if plan_dates else None,
-        end=plan_dates.end if plan_dates else None,
-        create_from=plan_options.create_from,
-        skip_tests=plan_options.skip_tests,
-        restate_models=plan_options.restate_models,
-        no_gaps=plan_options.no_gaps,
-        skip_backfill=plan_options.skip_backfill,
-        forward_only=plan_options.forward_only,
-        no_auto_categorization=plan_options.no_auto_categorization,
-    )
-    request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
     try:
-        plan = await request.app.state.task
+        plan = context.plan(
+            environment=environment,
+            no_prompts=True,
+            start=plan_dates.start if plan_dates else None,
+            end=plan_dates.end if plan_dates else None,
+            create_from=plan_options.create_from,
+            skip_tests=plan_options.skip_tests,
+            restate_models=plan_options.restate_models,
+            no_gaps=plan_options.no_gaps,
+            skip_backfill=plan_options.skip_backfill,
+            forward_only=plan_options.forward_only,
+            no_auto_categorization=plan_options.no_auto_categorization,
+        )
     except PlanError as e:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
