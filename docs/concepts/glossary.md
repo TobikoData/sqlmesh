@@ -66,8 +66,8 @@ Functions that a user of a database server provides to extend its functionality,
 ## View
 A view is the result of a SQL query on a database.
 
-## Virtual Data Marts
-Term used to describes SQLMesh's ability to share tables across environments to ensure tables are only built once while maintaining data integrity and environment isolation. See [plan application](plans.md#plan-application) for more information. 
+## Virtual Environments
+SQLMesh's unique approach to environment that allows it to provide both environment isolation and the ability to share tables across environments. This is done in a way to ensure data consistency and accuracy. See [plan application](plans.md#plan-application) for more information. 
 
 ## Virtual Update
 Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.

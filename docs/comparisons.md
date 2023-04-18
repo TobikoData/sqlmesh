@@ -62,7 +62,7 @@ dbt's default full refresh approach leads to the most costly version of this loo
 
 SQLMesh takes another approach. It examines the code modifications and the dependency structure among the models to determine which models are affected -- and executes only those models. This results in the least costly version of the loop: computing only what is required every time through.
 
-This enables SQLMesh to provide efficient isolated environments with [Virtual Data Marts](./concepts/plans.md#plan-application). Environments in dbt cost compute and storage, but creating a development environment in SQLMesh is free -- you can quickly access a full replica of any other environment with a single command.
+This enables SQLMesh to provide efficient isolated [Virtual Environments](./concepts/plans.md#plan-application). Environments in dbt cost compute and storage, but creating a development environment in SQLMesh is free -- you can quickly access a full replica of any other environment with a single command.
 
 Additionally, SQLMesh ensures that promotion of staging environments to production is predictable and consistent. There is no concept of promotion in dbt, so queries are all rerun when it's time to deploy something. In SQLMesh, promotions are simple pointer swaps so there is no wasted compute.
 
