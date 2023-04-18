@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from web.server.api.endpoints import api_router
 from web.server.console import ApiConsole
+from web.server.settings import get_context, get_settings
 
 app = FastAPI()
 api_console = ApiConsole()
@@ -26,6 +27,12 @@ async def startup_event() -> None:
 
     app.state.console_listeners = []
     app.state.dispatch_task = asyncio.create_task(dispatch())
+
+    settings = get_settings()
+    context = await get_context(settings)
+    if context:
+        # Access state sync to create it and trigger a migration if needed
+        context.state_sync
 
 
 @app.on_event("shutdown")
