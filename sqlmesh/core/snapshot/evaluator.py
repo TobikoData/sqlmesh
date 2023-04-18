@@ -326,7 +326,7 @@ class SnapshotEvaluator:
                 **audit_args,
                 **kwargs,
             )
-            count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(query.subquery()))
+            count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(query.subquery("audit")))
             if count and raise_exception:
                 message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
                 if audit.blocking:
@@ -381,15 +381,23 @@ class SnapshotEvaluator:
             )
         else:
             logger.info("Creating table '%s'", table_name)
-            self.adapter.create_table(
-                table_name,
-                query_or_columns_to_types=snapshot.model.columns_to_types
-                if snapshot.model.annotated
-                else snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
-                storage_format=snapshot.model.storage_format,
-                partitioned_by=snapshot.model.partitioned_by,
-                partition_interval_unit=snapshot.model.interval_unit(),
-            )
+            if snapshot.model.annotated:
+                self.adapter.create_table(
+                    table_name,
+                    columns_to_types=snapshot.model.columns_to_types,
+                    storage_format=snapshot.model.storage_format,
+                    partitioned_by=snapshot.model.partitioned_by,
+                    partition_interval_unit=snapshot.model.interval_unit(),
+                )
+            else:
+                self.adapter.ctas(
+                    table_name,
+                    snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
+                    snapshot.model.columns_to_types,
+                    storage_format=snapshot.model.storage_format,
+                    partitioned_by=snapshot.model.partitioned_by,
+                    partition_interval_unit=snapshot.model.interval_unit(),
+                )
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         if not snapshot.is_materialized or snapshot.is_new_version:

@@ -27,13 +27,16 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "mssql": EngineAdapterWithIndexSupport,
 }
 
+DIALECT_ALIASES = {
+    "postgresql": "postgres",
+}
+
 
 def create_engine_adapter(
     connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
 ) -> EngineAdapter:
     dialect = dialect.lower()
-    if dialect == "postgresql":
-        dialect = "postgres"
+    dialect = DIALECT_ALIASES.get(dialect, dialect)
     if dialect == "databricks":
         try:
             from pyspark.sql import SparkSession
