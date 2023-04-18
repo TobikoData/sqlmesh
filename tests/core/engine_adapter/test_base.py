@@ -209,7 +209,7 @@ def test_create_table_properties(mocker: MockerFixture):
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "a": "INT",
@@ -247,7 +247,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_nested_operations": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "a": "INT",
@@ -284,7 +284,7 @@ def test_create_table_properties(mocker: MockerFixture):
         ),
         (
             {
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "a": "INT",
@@ -323,7 +323,7 @@ def test_create_table_properties(mocker: MockerFixture):
         ),
         (
             {
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "a": "INT",
@@ -365,27 +365,27 @@ def test_create_table_properties(mocker: MockerFixture):
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
-                "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
-                "array_col": "ARRAY<STRUCT<array_a INT, array_c INT, array_e INT>>",
+                "nested": """STRUCT<nested_a INT, "nested_c" INT, nested_e INT>""",
+                "array_col": """ARRAY<STRUCT<array_a INT, "array_c" INT, array_e INT>>""",
             },
             {
-                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
-                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+                "nested": """STRUCT<nested_a INT, "nested_b" INT, nested_d INT, nested_e INT>""",
+                "array_col": """ARRAY<STRUCT<array_a INT, "array_b" INT, array_d INT, array_e INT>>""",
             },
             {
-                "nested": "STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>",
-                "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
+                "nested": """STRUCT<nested_a INT, "nested_b" INT, nested_d INT, nested_e INT>""",
+                "array_col": """ARRAY<STRUCT<array_a INT, "array_b" INT, array_d INT, array_e INT>>""",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested.nested_c""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_b INT AFTER nested_a""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_d INT AFTER nested_b""",
-                """ALTER TABLE test_table DROP COLUMN array_col.element.array_c""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_b INT AFTER array_a""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_d INT AFTER array_b""",
+                """ALTER TABLE test_table DROP COLUMN nested."nested_c\"""",
+                """ALTER TABLE test_table ADD COLUMN nested."nested_b" INT AFTER nested_a""",
+                """ALTER TABLE test_table ADD COLUMN nested.nested_d INT AFTER "nested_b\"""",
+                """ALTER TABLE test_table DROP COLUMN array_col.element."array_c\"""",
+                """ALTER TABLE test_table ADD COLUMN array_col.element."array_b" INT AFTER array_a""",
+                """ALTER TABLE test_table ADD COLUMN array_col.element.array_d INT AFTER "array_b\"""",
             ],
         ),
         # Test multiple operations on a column with positional and nested features enabled and that when adding
@@ -394,7 +394,7 @@ def test_create_table_properties(mocker: MockerFixture):
             {
                 "support_positional_add": True,
                 "support_nested_operations": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "nested": "STRUCT<nested_a INT, nested_c INT>",
@@ -422,7 +422,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_positional_add": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
@@ -450,7 +450,7 @@ def test_create_table_properties(mocker: MockerFixture):
         (
             {
                 "support_nested_operations": True,
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
@@ -479,7 +479,7 @@ def test_create_table_properties(mocker: MockerFixture):
         # Test multiple operations on a column with no positional or nested features enabled
         (
             {
-                "array_suffix": ".element",
+                "array_element_selector": "element",
             },
             {
                 "nested": "STRUCT<nested_a INT, nested_c INT, nested_e INT>",
@@ -501,6 +501,25 @@ def test_create_table_properties(mocker: MockerFixture):
                 """ALTER TABLE test_table ADD COLUMN nested STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>""",
                 """ALTER TABLE test_table DROP COLUMN array_col""",
                 """ALTER TABLE test_table ADD COLUMN array_col ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>""",
+            ],
+        ),
+        # Test deeply nested structures
+        (
+            {
+                "support_nested_operations": True,
+                "array_element_selector": "element",
+            },
+            {
+                "nested": """STRUCT<nested_1_a STRUCT<"nested_2_a" ARRAY<STRUCT<nested_3_a STRUCT<nested_4_a ARRAY<STRUCT<"nested_5_a" ARRAY<STRUCT<nested_6_a INT>>>>>>>>>""",
+            },
+            {
+                "nested": """STRUCT<nested_1_a STRUCT<"nested_2_a" ARRAY<STRUCT<nested_3_a STRUCT<nested_4_a ARRAY<STRUCT<"nested_5_a" ARRAY<STRUCT<nested_6_a INT, nested_6_b INT>>>>>>>>>""",
+            },
+            {
+                "nested": """STRUCT<nested_1_a STRUCT<"nested_2_a" ARRAY<STRUCT<nested_3_a STRUCT<nested_4_a ARRAY<STRUCT<"nested_5_a" ARRAY<STRUCT<nested_6_a INT, nested_6_b INT>>>>>>>>>""",
+            },
+            [
+                """ALTER TABLE test_table ADD COLUMN nested.nested_1_a."nested_2_a".element.nested_3_a.nested_4_a.element."nested_5_a".element.nested_6_b INT""",
             ],
         ),
     ],

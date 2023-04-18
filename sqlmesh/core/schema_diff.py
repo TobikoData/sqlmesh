@@ -32,43 +32,61 @@ class TableAlterColumn(PydanticModel):
     is_struct: bool
     is_array_of_struct: bool
     is_array_of_primitive: bool
+    quoted: bool = False
 
     @classmethod
-    def primitive(self, name: str) -> TableAlterColumn:
+    def primitive(self, name: str, quoted: bool = False) -> TableAlterColumn:
         return self(
-            name=name, is_struct=False, is_array_of_struct=False, is_array_of_primitive=False
+            name=name,
+            is_struct=False,
+            is_array_of_struct=False,
+            is_array_of_primitive=False,
+            quoted=quoted,
         )
 
     @classmethod
-    def struct(self, name: str) -> TableAlterColumn:
+    def struct(self, name: str, quoted: bool = False) -> TableAlterColumn:
         return self(
-            name=name, is_struct=True, is_array_of_struct=False, is_array_of_primitive=False
+            name=name,
+            is_struct=True,
+            is_array_of_struct=False,
+            is_array_of_primitive=False,
+            quoted=quoted,
         )
 
     @classmethod
-    def array_of_struct(self, name: str) -> TableAlterColumn:
+    def array_of_struct(self, name: str, quoted: bool = False) -> TableAlterColumn:
         return self(
-            name=name, is_struct=False, is_array_of_struct=True, is_array_of_primitive=False
+            name=name,
+            is_struct=False,
+            is_array_of_struct=True,
+            is_array_of_primitive=False,
+            quoted=quoted,
         )
 
     @classmethod
-    def array_of_primitive(self, name: str) -> TableAlterColumn:
+    def array_of_primitive(self, name: str, quoted: bool = False) -> TableAlterColumn:
         return self(
-            name=name, is_struct=False, is_array_of_struct=False, is_array_of_primitive=True
+            name=name,
+            is_struct=False,
+            is_array_of_struct=False,
+            is_array_of_primitive=True,
+            quoted=quoted,
         )
 
     @classmethod
     def from_struct_kwarg(self, struct: exp.StructKwarg) -> TableAlterColumn:
         name = struct.alias_or_name
+        quoted = struct.this.quoted
         if struct.expression.is_type(exp.DataType.Type.STRUCT):
-            return self.struct(name)
+            return self.struct(name, quoted=quoted)
         elif struct.expression.is_type(exp.DataType.Type.ARRAY):
             if struct.expression.expressions[0].is_type(exp.DataType.Type.STRUCT):
-                return self.array_of_struct(name)
+                return self.array_of_struct(name, quoted=quoted)
             else:
-                return self.array_of_primitive(name)
+                return self.array_of_primitive(name, quoted=quoted)
         else:
-            return self.primitive(name)
+            return self.primitive(name, quoted=quoted)
 
     @property
     def is_array(self) -> bool:
@@ -82,23 +100,29 @@ class TableAlterColumn(PydanticModel):
     def is_nested(self) -> bool:
         return not self.is_primitive
 
+    @property
+    def identifier(self) -> exp.Identifier:
+        return exp.to_identifier(self.name, quoted=self.quoted)
+
 
 class TableAlterColumnPosition(PydanticModel):
     is_first: bool
     is_last: bool
-    after: t.Optional[str] = None
+    after: t.Optional[exp.Identifier] = None
 
     @classmethod
     def first(self) -> TableAlterColumnPosition:
         return self(is_first=True, is_last=False, after=None)
 
     @classmethod
-    def last(self, after: t.Optional[str] = None) -> TableAlterColumnPosition:
-        return self(is_first=False, is_last=True, after=after)
+    def last(
+        self, after: t.Optional[t.Union[str, exp.Identifier]] = None
+    ) -> TableAlterColumnPosition:
+        return self(is_first=False, is_last=True, after=exp.to_identifier(after) if after else None)
 
     @classmethod
-    def middle(self, after: str) -> TableAlterColumnPosition:
-        return self(is_first=False, is_last=False, after=after)
+    def middle(self, after: t.Union[str, exp.Identifier]) -> TableAlterColumnPosition:
+        return self(is_first=False, is_last=False, after=exp.to_identifier(after))
 
     @classmethod
     def create(
@@ -117,7 +141,7 @@ class TableAlterColumnPosition(PydanticModel):
 
     @property
     def column_position_node(self) -> t.Optional[exp.ColumnPosition]:
-        column = exp.column(self.after) if self.after and not self.is_last else None
+        column = self.after if not self.is_last else None
         position = None
         if self.is_first:
             position = "FIRST"
@@ -195,45 +219,49 @@ class TableAlterOperation(PydanticModel):
     def is_alter_type(self) -> bool:
         return self.op.is_alter_type
 
-    def full_column_path(self, array_suffix: str) -> str:
+    def column_identifiers(self, array_element_selector: str) -> t.List[exp.Identifier]:
         results = []
         for column in self.columns:
-            if column.is_array_of_struct and len(self.columns) > 1:
-                results.append(column.name + array_suffix)
-            else:
-                results.append(column.name)
-        return ".".join(results)
+            results.append(column.identifier)
+            if column.is_array_of_struct and len(self.columns) > 1 and array_element_selector:
+                results.append(exp.to_identifier(array_element_selector))
+        return results
 
-    def column(self, array_suffix: str) -> exp.Column:
-        return exp.column(self.full_column_path(array_suffix))
+    def column(self, array_element_selector: str) -> t.Union[exp.Dot, exp.Identifier]:
+        columns = self.column_identifiers(array_element_selector)
+        if len(columns) == 1:
+            return columns[0]
+        return exp.Dot.build(columns)
 
-    def column_def(self, array_suffix: str) -> exp.ColumnDef:
+    def column_def(self, array_element_selector: str) -> exp.ColumnDef:
         return exp.ColumnDef(
-            this=exp.to_identifier(self.full_column_path(array_suffix)),
+            this=self.column(array_element_selector),
             kind=self.column_type,
         )
 
-    def expression(self, table_name: t.Union[str, exp.Table], array_suffix: str) -> exp.AlterTable:
+    def expression(
+        self, table_name: t.Union[str, exp.Table], array_element_selector: str
+    ) -> exp.AlterTable:
         if self.is_alter_type:
             return exp.AlterTable(
                 this=exp.to_table(table_name),
                 actions=[
                     exp.AlterColumn(
-                        this=self.column(array_suffix),
+                        this=self.column(array_element_selector),
                         dtype=self.column_type,
                     )
                 ],
             )
         elif self.is_add:
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
-            column = self.column_def(array_suffix)
+            column = self.column_def(array_element_selector)
             alter_table.set("actions", [column])
             if self.add_position:
                 column.set("position", self.add_position.column_position_node)
             return alter_table
         elif self.is_drop:
             alter_table = exp.AlterTable(this=exp.to_table(table_name))
-            drop_column = exp.Drop(this=self.column(array_suffix), kind="COLUMN")
+            drop_column = exp.Drop(this=self.column(array_element_selector), kind="COLUMN")
             alter_table.set("actions", [drop_column])
             return alter_table
         else:
@@ -260,7 +288,7 @@ class SchemaDiffer(PydanticModel):
 
     support_positional_add: bool = False
     support_nested_operations: bool = False
-    array_suffix: str = ""
+    array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
     @classmethod
@@ -287,7 +315,7 @@ class SchemaDiffer(PydanticModel):
         current_pos: int,
     ) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
         current_name = (
-            current_kwarg
+            exp.to_identifier(current_kwarg)
             if isinstance(current_kwarg, str)
             else _get_name_and_type(current_kwarg)[0]
         )
@@ -295,12 +323,12 @@ class SchemaDiffer(PydanticModel):
         new_kwarg = seq_get(new_struct.expressions, current_pos)
         if new_kwarg:
             new_name, new_type = _get_name_and_type(new_kwarg)
-            if current_name == new_name:
+            if current_name.this == new_name.this:
                 return current_pos, new_kwarg
         # If not, check if we have the same column in all positions with O(n) complexity
         for i, new_kwarg in enumerate(new_struct.expressions):
             new_name, new_type = _get_name_and_type(new_kwarg)
-            if current_name == new_name:
+            if current_name.this == new_name.this:
                 return i, new_kwarg
         return None, None
 
@@ -499,7 +527,8 @@ class SchemaDiffer(PydanticModel):
             The list of table alter operations.
         """
         return [
-            op.expression(table_name, self.array_suffix) for op in self._from_structs(current, new)
+            op.expression(table_name, self.array_element_selector)
+            for op in self._from_structs(current, new)
         ]
 
     def compare_columns(
@@ -523,5 +552,5 @@ class SchemaDiffer(PydanticModel):
         )
 
 
-def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[str, exp.DataType]:
-    return struct.alias_or_name, struct.expression
+def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[exp.Identifier, exp.DataType]:
+    return struct.this, struct.expression

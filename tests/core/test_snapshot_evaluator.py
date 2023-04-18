@@ -240,10 +240,8 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE "physical_schema"."test_schema__test_model__1" DROP COLUMN "b\""""),
-            call(
-                """ALTER TABLE "physical_schema"."test_schema__test_model__1" ADD COLUMN "a" INT"""
-            ),
+            call("""ALTER TABLE physical_schema.test_schema__test_model__1 DROP COLUMN b"""),
+            call("""ALTER TABLE physical_schema.test_schema__test_model__1 ADD COLUMN a INT"""),
         ]
     )
 
