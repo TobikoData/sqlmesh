@@ -145,5 +145,5 @@ async def render(
         latest=options.latest,
         expand=options.expand,
     )
-    dialect = options.dialect or context.dialect
+    dialect = options.dialect or context.config.dialect
     return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))

@@ -35,7 +35,7 @@ def scoped_state_sync() -> t.Generator[StateSync, None, None]:
         settings.engine.raw_connection, dialect, multithreaded=True
     )
     try:
-        yield EngineAdapterStateSync(engine_adapter, "sqlmesh")
+        yield EngineAdapterStateSync(engine_adapter)
     finally:
         engine_adapter.close()
 

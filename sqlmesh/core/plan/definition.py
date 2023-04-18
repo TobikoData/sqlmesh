@@ -42,7 +42,6 @@ class Plan:
 
     Args:
         context_diff: The context diff that the plan is based on.
-        dag: The dag object to determine relationships.
         state_reader: The state_reader to get metadata with.
         start: The start time to backfill data.
         end: The end time to backfill data.
@@ -64,7 +63,6 @@ class Plan:
     def __init__(
         self,
         context_diff: ContextDiff,
-        dag: DAG,
         state_reader: StateReader,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -92,7 +90,12 @@ class Plan:
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
         self._apply = apply
-        self._dag = dag
+        self._dag: DAG[str] = DAG()
+
+        for name, snapshot in self.context_diff.snapshots.items():
+            self._dag.graph[name] = set()
+            self._dag.add(name, snapshot.model.depends_on)
+
         self._state_reader = state_reader
         self.__missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
         self._restatements: t.Set[str] = set()

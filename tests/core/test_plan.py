@@ -13,7 +13,6 @@ from sqlmesh.core.snapshot import (
     SnapshotDataVersion,
     SnapshotFingerprint,
 )
-from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
@@ -34,8 +33,6 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     )
     assert not snapshot_b.version
 
-    dag = DAG[str]({"b": {"a"}})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
@@ -45,7 +42,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    plan = Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+    plan = Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
     assert snapshot_b.version == "test_version"
 
@@ -66,8 +63,6 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     expected_start = to_datetime("2022-01-01")
     expected_end = to_datetime("2022-01-02")
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
@@ -84,7 +79,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     now_ds_mock.return_value = expected_end
     state_reader_mock.missing_intervals.return_value = {}
 
-    plan = Plan(context_diff_mock, dag, state_reader_mock, forward_only=True, is_dev=True)
+    plan = Plan(context_diff_mock, state_reader_mock, forward_only=True, is_dev=True)
 
     assert plan.restatements == {"a"}
     assert plan.start == expected_start
@@ -98,8 +93,6 @@ def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerF
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_a.set_version()
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = {"a"}
@@ -112,7 +105,7 @@ def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerF
     with pytest.raises(
         PlanError, match="New models can't be added as part of the forward-only plan."
     ):
-        Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+        Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
 
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
@@ -129,10 +122,8 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     )
     snapshot_a.set_version(snapshot_a.previous_version)
 
-    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds from a")))
     assert not snapshot_b.version
-
-    dag = DAG[str]({"b": {"a"}})
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
@@ -147,7 +138,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Model 'b' depends on a paused version of model 'a'.*",
     ):
-        Plan(context_diff_mock, dag, state_reader_mock, forward_only=False)
+        Plan(context_diff_mock, state_reader_mock, forward_only=False)
 
 
 def test_restate_models(sushi_context_pre_scheduling: Context):
@@ -170,8 +161,6 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         )
     )
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
@@ -185,13 +174,11 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         PlanError,
         match=r"Cannot restate from 'a'. Either such model doesn't exist or no other model references it.",
     ):
-        Plan(context_diff_mock, dag, state_reader_mock, restate_models=["a"])
+        Plan(context_diff_mock, state_reader_mock, restate_models=["a"])
 
 
 def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-
-    dag = DAG[str]({"a": set()})
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
@@ -206,7 +193,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Model changes and restatements can't be a part of the same plan.*",
     ):
-        Plan(context_diff_mock, dag, state_reader_mock, restate_models=["a"])
+        Plan(context_diff_mock, state_reader_mock, restate_models=["a"])
 
 
 def test_end_validation(make_snapshot, mocker: MockerFixture):
@@ -218,8 +205,6 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
         )
     )
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
@@ -229,7 +214,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    dev_plan = Plan(context_diff_mock, dag, state_reader_mock, end="2022-01-03", is_dev=True)
+    dev_plan = Plan(context_diff_mock, state_reader_mock, end="2022-01-03", is_dev=True)
     assert dev_plan.end == "2022-01-03"
     dev_plan.end = "2022-01-04"
     assert dev_plan.end == "2022-01-04"
@@ -239,12 +224,12 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     )
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        Plan(context_diff_mock, dag, state_reader_mock, end="2022-01-03")
+        Plan(context_diff_mock, state_reader_mock, end="2022-01-03")
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
-        Plan(context_diff_mock, dag, state_reader_mock, start="2022-01-03")
+        Plan(context_diff_mock, state_reader_mock, start="2022-01-03")
 
-    prod_plan = Plan(context_diff_mock, dag, state_reader_mock)
+    prod_plan = Plan(context_diff_mock, state_reader_mock)
 
     with pytest.raises(PlanError, match=start_end_not_allowed_message):
         prod_plan.end = "2022-01-03"
@@ -255,7 +240,6 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     context_diff_mock.new_snapshots = {}
     restatement_prod_plan = Plan(
         context_diff_mock,
-        dag,
         state_reader_mock,
         end="2022-01-03",
         restate_models=["a"],
@@ -274,8 +258,6 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     forward_only_snapshot.set_version(snapshot.version)
     assert forward_only_snapshot.is_forward_only
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot}
     context_diff_mock.added = set()
@@ -289,7 +271,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Detected an existing version of model 'a' that has been previously superseded by a forward-only change.*",
     ):
-        Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+        Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
     # Make sure the plan can be created if a new snapshot version was enforced.
     new_version_snapshot = make_snapshot(
@@ -298,7 +280,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     new_version_snapshot.set_version()
     context_diff_mock.modified_snapshots = {"a": (new_version_snapshot, forward_only_snapshot)}
     context_diff_mock.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
-    Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+    Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
 
 def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
@@ -323,8 +305,6 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     assert snapshot_a_updated.version is None
     assert snapshot_a_updated.change_category is None
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a_updated}
     context_diff_mock.added = set()
@@ -334,7 +314,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    Plan(context_diff_mock, dag, state_reader_mock, forward_only=True)
+    Plan(context_diff_mock, state_reader_mock, forward_only=True)
     assert snapshot_a_updated.version == snapshot_a_updated.fingerprint.to_version()
     assert snapshot_a_updated.change_category == SnapshotChangeCategory.NON_BREAKING
 
@@ -348,8 +328,6 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     snapshot_b.set_version()
 
-    dag = DAG[str]({"a": set(), "b": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
@@ -362,7 +340,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
         snapshot_b: [(to_timestamp("2022-01-01"), to_timestamp("2023-01-01"))]
     }
 
-    plan = Plan(context_diff_mock, dag, state_reader_mock)
+    plan = Plan(context_diff_mock, state_reader_mock)
     assert len(plan._missing_intervals) == 1
     assert snapshot_b.version_get_or_generate() in plan._missing_intervals
 
@@ -375,8 +353,6 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
 
     updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
     context_diff_mock.added = set()
@@ -386,7 +362,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
 
     state_reader_mock = mocker.Mock()
 
-    Plan(context_diff_mock, dag, state_reader_mock)
+    Plan(context_diff_mock, state_reader_mock)
 
     assert updated_snapshot.version == updated_snapshot.fingerprint.to_version()
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
@@ -406,8 +382,6 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     expected_end = to_date(end_date) - timedelta(days=1)
     now = to_datetime("2022-01-30")
 
-    dag = DAG[str]({"a": set()})
-
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
@@ -423,7 +397,7 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
         snapshot_a: [(to_timestamp(expected_start), to_timestamp(end_date))]
     }
 
-    plan = Plan(context_diff_mock, dag, state_reader_mock, is_dev=True)
+    plan = Plan(context_diff_mock, state_reader_mock, is_dev=True)
 
     assert plan.start == to_timestamp(expected_start)
     assert plan.end == expected_end
@@ -432,8 +406,6 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
 def test_broken_references(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds FROM a")))
     snapshot_b.set_version()
-
-    dag = DAG[str]({"b": set()})
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"b": snapshot_b}
@@ -448,4 +420,4 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         PlanError,
         match=r"Removed models {'a'} are referenced in model 'b'.*",
     ):
-        Plan(context_diff_mock, dag, state_reader_mock)
+        Plan(context_diff_mock, state_reader_mock)

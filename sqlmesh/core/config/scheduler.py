@@ -68,7 +68,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
-        return EngineAdapterStateSync(context.engine_adapter, context.physical_schema)
+        return EngineAdapterStateSync(context.engine_adapter)
 
     def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
@@ -107,10 +107,10 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
             dag_creation_poll_interval_secs=self.dag_creation_poll_interval_secs,
             dag_creation_max_retry_attempts=self.dag_creation_max_retry_attempts,
             console=context.console,
-            notification_targets=context.notification_targets,
+            notification_targets=context.config.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
-            users=context.users,
+            users=context.config.users,
         )
 
 

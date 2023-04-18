@@ -96,6 +96,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "name": "test_model",
                 "parents": [],
                 "previous_versions": [],
+                "project": "",
                 "physical_schema": "physical_schema",
                 "updated_ts": 1665014400000,
                 "version": snapshot.version,
