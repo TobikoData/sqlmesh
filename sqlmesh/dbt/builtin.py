@@ -161,7 +161,7 @@ def generate_ref(refs: t.Dict[str, t.Any]) -> t.Callable:
         name = name or package
         relation_info = refs.get(name)
         if relation_info is None:
-            return relation_info
+            return None
 
         return BaseRelation.create(**relation_info)
 
@@ -172,7 +172,7 @@ def generate_source(sources: t.Dict[str, t.Any]) -> t.Callable:
     def source(package: str, name: str) -> t.Optional[BaseRelation]:
         relation_info = sources.get(f"{package}.{name}")
         if relation_info is None:
-            return relation_info
+            return None
 
         return BaseRelation.create(**relation_info)
 
