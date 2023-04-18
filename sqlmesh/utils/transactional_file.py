@@ -30,9 +30,13 @@ class TransactionalFile:
     mtime_dispatch = {
         "s3": lambda f: datetime.strptime(f["LastModified"], "%Y-%m-%d %H:%M:%S%z"),
         "gcs": lambda f: datetime.strptime(f["updated"], "%Y-%m-%dT%H:%M:%S.%fZ"),
-        "azure": lambda f: datetime.strptime(f["LastModified"], "%Y-%m-%d %H:%M:%S%z"),
+        "adl": lambda f: datetime.strptime(f["LastModified"], "%Y-%m-%d %H:%M:%S%z"),
         "file": lambda f: datetime.fromtimestamp(f["mtime"]),
     }
+    # Support aliases
+    mtime_dispatch["gs"] = mtime_dispatch["gcs"]
+    mtime_dispatch["s3a"] = mtime_dispatch["s3"]
+    mtime_dispatch["azure"] = mtime_dispatch["adl"]
 
     def __init__(self, path: str, fs: fsspec.AbstractFileSystem) -> None:
         """Creates a new FileTransactionHandler.
@@ -44,6 +48,8 @@ class TransactionalFile:
         self.path = path
         self.lock_prefix = f"{self.path}.lock"
         self.lock_path = f"{self.lock_prefix}.{lock_id()}"
+        proto = fs.protocol[0] if isinstance(fs.protocol, (list, tuple)) else (fs.protocol,)
+        self.get_mtime = self.mtime_dispatch.get(proto, self.mtime_dispatch["file"])
         self._fs = fs
         self._original_contents: t.Optional[bytes] = None
         self._is_locked = False
@@ -54,7 +60,7 @@ class TransactionalFile:
         now = datetime.now()
 
         for lock in self._fs.glob(self.lock_prefix + ".*", refresh=True, detail=True).values():
-            mtime = self.mtime_dispatch[self._fs.protocol](lock)
+            mtime = self.get_mtime(lock)
             name = lock["name"]
             if now - mtime > timedelta(seconds=LOCK_TTL_SECONDS):
                 # Manage stale locks
