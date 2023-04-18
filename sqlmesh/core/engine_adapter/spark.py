@@ -87,6 +87,20 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
             table_name, overwrite=overwrite
         )
 
+    def _create_table_from_df(
+        self,
+        table_name: TableName,
+        df: DF,
+        columns_to_types: t.Dict[str, exp.DataType],
+        exists: bool = True,
+        replace: bool = True,
+        **kwargs: t.Any,
+    ) -> None:
+        df = self._ensure_pyspark_df(df)
+        if isinstance(table_name, exp.Table):
+            table_name = table_name.sql(dialect=self.dialect)
+        df.write.saveAsTable(table_name, mode="overwrite")
+
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:

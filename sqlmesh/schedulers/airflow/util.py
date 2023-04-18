@@ -139,6 +139,12 @@ def discover_engine_operator(name: str, sql_only: bool = False) -> t.Type[BaseOp
             )
 
             return SQLMeshRedshiftOperator
+        if name in ("postgres", "postgresql"):
+            from sqlmesh.schedulers.airflow.operators.postgres import (
+                SQLMeshPostgresOperator,
+            )
+
+            return SQLMeshPostgresOperator
     except ImportError:
         raise SQLMeshError(f"Failed to automatically discover an operator for '{name}'.'")
 

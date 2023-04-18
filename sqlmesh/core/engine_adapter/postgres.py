@@ -1,45 +1,53 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
+from pandas.io.sql import read_sql_query
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import (
-    EngineAdapter,
-    EngineAdapterWithIndexSupport,
-)
+from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
+from sqlmesh.core.engine_adapter.shared import TransactionType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+
+logger = logging.getLogger(__name__)
 
 
-class PostgresBaseEngineAdapter(EngineAdapter):
-    def table_exists(self, table_name: TableName) -> bool:
-        """
-        Redshift/Postgres doesn't support describe so I'm using what the redshift cursor does to check if a table
-        exists. We don't use this directly because we still want all execution to go through our execute method
-
-        Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
-        """
-        table = exp.to_table(table_name)
-
-        # Redshift doesn't support catalog
-        if table.args.get("catalog"):
-            return False
-
-        query = exp.select("1").from_("information_schema.tables")
-        where = exp.condition(f"table_name = '{table.alias_or_name}'")
-
-        schema = table.text("db")
-        if schema:
-            where = where.and_(f"table_schema = '{schema}'")
-
-        self.execute(query.where(where))
-
-        result = self.cursor.fetchone()
-
-        return result[0] == 1 if result is not None else False
-
-
-class PostgresEngineAdapter(PostgresBaseEngineAdapter, EngineAdapterWithIndexSupport):
+class PostgresEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "postgres"
+    SUPPORTS_INDEXES = True
+
+    @property
+    def cursor(self) -> t.Any:
+        cursor = self._connection_pool.get_cursor()
+        # The SQLMesh implementation relies on autocommit being set to True
+        cursor.connection.autocommit = True
+        return cursor
+
+    def replace_query(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        """
+        Postgres does not support replace table and also enforce binding views. Therefore we can't swap out tables
+        under views and we also can't drop them. Therefore we need to truncate and insert within a transaction.
+        I believe the issue with this approach is that even in a transaction we do an exclusive lock on the table which will
+        block reads until the insert is done. I'm not certain about this though.
+        """
+        if not self.table_exists(table_name):
+            return self.ctas(table_name, query_or_df, columns_to_types, exists=False)
+        with self.transaction(TransactionType.DDL):
+            sql = f"TRUNCATE {exp.to_table(table_name).sql(identify=True, dialect=self.dialect)}"
+            self.execute(sql)
+            return self.insert_append(table_name, query_or_df, columns_to_types)
+
+    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+        """Fetches a Pandas DataFrame from a SQL query."""
+        sql = self._to_sql(query) if isinstance(query, exp.Expression) else query
+        logger.debug(f"Executing SQL:\n{sql}")
+        return read_sql_query(sql, self.cursor.connection)

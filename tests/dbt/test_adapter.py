@@ -16,13 +16,13 @@ def test_adapter_relation(sushi_test_project: Project):
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("ignored")
     engine_adapter.create_table(
-        table_name="foo.bar", query_or_columns_to_types={"baz": exp.DataType.build("int")}
+        table_name="foo.bar", columns_to_types={"baz": exp.DataType.build("int")}
     )
     engine_adapter.create_table(
-        table_name="foo.another", query_or_columns_to_types={"col": exp.DataType.build("int")}
+        table_name="foo.another", columns_to_types={"col": exp.DataType.build("int")}
     )
     engine_adapter.create_table(
-        table_name="ignored.ignore", query_or_columns_to_types={"col": exp.DataType.build("int")}
+        table_name="ignored.ignore", columns_to_types={"col": exp.DataType.build("int")}
     )
 
     assert (
