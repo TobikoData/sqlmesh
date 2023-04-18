@@ -229,7 +229,7 @@ class EngineAdapter:
         """
         table = exp.to_table(table_name)
         primary_key_expression = (
-            [exp.Anonymous(this="PRIMARY KEY", expressions=[exp.to_column(k) for k in primary_key])]
+            [exp.PrimaryKey(expressions=[exp.to_column(k) for k in primary_key])]
             if primary_key and self.SUPPORTS_INDEXES
             else []
         )
