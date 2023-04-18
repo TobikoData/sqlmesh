@@ -451,6 +451,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def _inclusive_exclusive(
         self, start: TimeLike, end: TimeLike, strict: bool = True
     ) -> t.Tuple[int, int]:
+        """Transform the inclusive start and end into a [start, end) pair.
+
+        Args:
+            start: The start date/time of the interval (inclusive)
+            end: The end date/time of the interval (inclusive)
+            strict: Whether to fail when the inclusive start is the same as the exclusive end.
+
+        Returns:
+            A [start, end) pair.
+        """
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
