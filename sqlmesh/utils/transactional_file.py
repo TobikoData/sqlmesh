@@ -48,7 +48,7 @@ class TransactionalFile:
         self.path = path
         self.lock_prefix = f"{self.path}.lock"
         self.lock_path = f"{self.lock_prefix}.{lock_id()}"
-        proto = fs.protocol[0] if isinstance(fs.protocol, (list, tuple)) else (fs.protocol,)
+        proto = fs.protocol[0] if isinstance(fs.protocol, (list, tuple)) else fs.protocol
         self.get_mtime = self.mtime_dispatch.get(proto, self.mtime_dispatch["file"])
         self._fs = fs
         self._original_contents: t.Optional[bytes] = None
