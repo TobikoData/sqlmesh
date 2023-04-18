@@ -37,7 +37,7 @@ SQLMesh was built on three core principles:
 
 ### Key features
 * Efficient dev/staging environments
-    * SQLMesh builds a virtual data mart using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
+    * SQLMesh builds a Virtual Data Environment using views, which allows you to seamlessly rollback or roll forward your changes. Any data computation you run for validation purposes is actually not wasted &mdash; with a cheap pointer swap, you re-use your “staging” data in production. This means you get unlimited copy-on-write environments that make data exploration and preview of changes fun and safe.
 
 * Automatic DAG generation by semantically parsing and understanding SQL or Python scripts
     * No need to manually tag dependencies &mdash; SQLMesh was built with the ability to understand your entire data warehouse’s dependency graph.

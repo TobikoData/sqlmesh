@@ -35,16 +35,16 @@ Most business data is temporal &mdash; each data fact was collected at a specifi
 
 The SQLMesh plan automatically determines which models and dates require backfill due to your changes. Based on this information, you specify the dates for which backfills will occur before you apply the plan.
 
-#### Build a virtual data mart
+#### Build a Virtual Environment
 Development activities for complex data systems should occur in a non-production environment so that errors can be detected before being deployed in production systems.
 
 One challenge with using multiple data environments is that backfill and other computations must happen twice &mdash; once for the non-production, and again for the production environment. This process consumes time and computing resources, resulting in delays and extra costs.
 
 SQLMesh solves this problem by maintaining a record of all model versions and their changes. It uses this record to determine when computations executed in a non-production environment generate outputs identical to what they would generate in the production environment. 
 
-SQLMesh uses its knowledge of equivalent outputs to create a **virtual data mart**. It does this by replacing references to outdated tables in the production environment with references to newly computed tables in the non-production environment. It effectively promotes views and tables from non-production to production, but *without computation or data movement*.
+SQLMesh uses its knowledge of equivalent outputs to create a **Virtual Environment**. It does this by replacing references to outdated tables in the production environment with references to newly computed tables in the non-production environment. It effectively promotes views and tables from non-production to production, but *without computation or data movement*.
 
-Because SQLMesh uses virtual data marts instead of re-computing everything in the production environment, promoting changes to production is quick and has no downtime. 
+Because SQLMesh uses virtual environments instead of re-computing everything in the production environment, promoting changes to production is quick and has no downtime. 
 
 ## Test your code and data
 Bad data is worse than no data. The best way to keep bad data out of your system is by testing your transformation code and results.
