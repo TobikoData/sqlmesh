@@ -100,18 +100,6 @@ async def column_lineage(
 async def model_lineage(
     model_name: str,
     context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, t.List[str]]:
+) -> t.Dict[str, t.Set[str]]:
     """Get a model's lineage"""
-    models = (
-        [model_name]
-        + list(context.dag.graph[model_name])
-        + [name for name, model_names in context.dag.graph.items() if model_name in model_names]
-    )
-    return {
-        name: list(context.dag.graph[name])
-        if name == model_name
-        else [model_name]
-        if model_name in context.dag.graph[name]
-        else []
-        for name in models
-    }
+    return context.dag.lineage(model_name).graph
