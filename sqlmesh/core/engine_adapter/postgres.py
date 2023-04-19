@@ -42,7 +42,7 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False)
         with self.transaction(TransactionType.DDL):
-            sql = f"TRUNCATE {exp.to_table(table_name).sql(identify=True, dialect=self.dialect)}"
+            sql = f"TRUNCATE {exp.to_table(table_name).sql(dialect=self.dialect)}"
             self.execute(sql)
             return self.insert_append(table_name, query_or_df, columns_to_types)
 
