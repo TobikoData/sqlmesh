@@ -17,7 +17,7 @@ class DatabricksSQLEngineAdapter(BaseSparkEngineAdapter):
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
-        array_suffix=".element",
+        array_element_selector="element",
     )
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:

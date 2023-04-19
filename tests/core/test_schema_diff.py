@@ -17,7 +17,7 @@ def test_schema_diff_calculate():
         **{
             "support_positional_add": False,
             "support_nested_operations": False,
-            "array_suffix": "",
+            "array_element_selector": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
             },
@@ -50,7 +50,7 @@ def test_schema_diff_calculate_type_transitions():
         **{
             "support_positional_add": False,
             "support_nested_operations": False,
-            "array_suffix": "",
+            "array_element_selector": "",
             "compatible_types": {
                 exp.DataType.build("STRING"): {exp.DataType.build("INT")},
             },
@@ -736,3 +736,64 @@ def test_schema_diff_calculate_duckdb(duck_conn):
         "new_column": exp.DataType.build("double"),
         "name": exp.DataType.build("int"),
     }
+
+
+def test_schema_diff_alter_op_column():
+    nested = TableAlterOperation.add(
+        [
+            TableAlterColumn.array_of_struct("nested"),
+            TableAlterColumn.primitive("col_a"),
+        ],
+        "INT",
+        expected_table_struct="STRUCT<id INT, nested ARRAY<STRUCT<col_a INT>>>",
+        position=TableAlterColumnPosition.last("id"),
+    )
+    assert nested.column("").sql() == "nested.col_a"
+    nested_complete_column = TableAlterOperation.add(
+        [
+            TableAlterColumn.array_of_struct("nested_1", quoted=True),
+            TableAlterColumn.struct("nested_2"),
+            TableAlterColumn.array_of_struct("nested_3"),
+            TableAlterColumn.primitive("col_a", quoted=True),
+        ],
+        "INT",
+        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<"col_a" INT>>>>>>""",
+        position=TableAlterColumnPosition.last("id"),
+    )
+    assert nested_complete_column.column("").sql() == '"nested_1".nested_2.nested_3."col_a"'
+    nested_one_more_complete_column = TableAlterOperation.add(
+        [
+            TableAlterColumn.array_of_struct("nested_1", quoted=True),
+            TableAlterColumn.struct("nested_2"),
+            TableAlterColumn.array_of_struct("nested_3"),
+            TableAlterColumn.struct("nested_4"),
+            TableAlterColumn.primitive("col_a", quoted=True),
+        ],
+        "INT",
+        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<"col_a" INT>>>>>>>""",
+        position=TableAlterColumnPosition.last("id"),
+    )
+    assert (
+        nested_one_more_complete_column.column("").sql()
+        == '"nested_1".nested_2.nested_3.nested_4."col_a"'
+    )
+    super_nested = TableAlterOperation.add(
+        [
+            TableAlterColumn.array_of_struct("nested_1", quoted=True),
+            TableAlterColumn.struct("nested_2"),
+            TableAlterColumn.array_of_struct("nested_3"),
+            TableAlterColumn.struct("nested_4"),
+            TableAlterColumn.struct("nested_5"),
+            TableAlterColumn.struct("nested_6", quoted=True),
+            TableAlterColumn.struct("nested_7"),
+            TableAlterColumn.array_of_struct("nested_8"),
+            TableAlterColumn.primitive("col_a", quoted=True),
+        ],
+        "INT",
+        expected_table_struct="""STRUCT<id INT, "nested_1" ARRAY<STRUCT<nested_2 STRUCT<nested_3 ARRAY<STRUCT<nested_4 STRUCT<nested_5 STRUCT<"nested_6" STRUCT<nested_7 STRUCT<nested_8 ARRAY<STRUCT<"col_a" INT>>>>>>>>>>>>""",
+        position=TableAlterColumnPosition.last("id"),
+    )
+    assert (
+        super_nested.column("element").sql()
+        == '"nested_1".element.nested_2.nested_3.element.nested_4.nested_5."nested_6".nested_7.nested_8.element."col_a"'
+    )

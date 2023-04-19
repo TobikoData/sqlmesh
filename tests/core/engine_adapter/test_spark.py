@@ -28,7 +28,7 @@ def test_create_table_properties(mocker: MockerFixture):
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING) USING ICEBERG PARTITIONED BY (`colb`)"
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING) USING ICEBERG PARTITIONED BY (colb)"
     )
 
 
@@ -64,15 +64,15 @@ def test_alter_table(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE `test_table` DROP COLUMN `b`"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `id`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `id` LONG"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `a`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `a` STRING"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `complex`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `complex` STRUCT<`complex_a`: INT>"""),
-            call("""ALTER TABLE `test_table` DROP COLUMN `ds`"""),
-            call("""ALTER TABLE `test_table` ADD COLUMN `ds` INT"""),
+            call("""ALTER TABLE test_table DROP COLUMN b"""),
+            call("""ALTER TABLE test_table DROP COLUMN id"""),
+            call("""ALTER TABLE test_table ADD COLUMN id LONG"""),
+            call("""ALTER TABLE test_table DROP COLUMN a"""),
+            call("""ALTER TABLE test_table ADD COLUMN a STRING"""),
+            call("""ALTER TABLE test_table DROP COLUMN complex"""),
+            call("""ALTER TABLE test_table ADD COLUMN complex STRUCT<complex_a: INT>"""),
+            call("""ALTER TABLE test_table DROP COLUMN ds"""),
+            call("""ALTER TABLE test_table ADD COLUMN ds INT"""),
         ]
     )
 
@@ -86,5 +86,5 @@ def test_replace_query(mocker: MockerFixture):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM `tbl`"
+        "INSERT OVERWRITE TABLE test_table (a) SELECT a FROM tbl"
     )

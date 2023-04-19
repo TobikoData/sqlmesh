@@ -9,5 +9,5 @@ class DatabricksSparkSessionEngineAdapter(SparkEngineAdapter):
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
-        array_suffix=".element",
+        array_element_selector="element",
     )

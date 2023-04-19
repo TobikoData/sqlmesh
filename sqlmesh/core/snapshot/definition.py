@@ -733,10 +733,7 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
                 name, args = hook
                 serialized.append(
                     f"{name}:"
-                    + ",".join(
-                        f"{k}={v.sql(identify=True, comments=False)}"
-                        for k, v in sorted(args.items())
-                    )
+                    + ",".join(f"{k}={v.sql(comments=False)}" for k, v in sorted(args.items()))
                 )
         return serialized
 
@@ -747,14 +744,14 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         model.storage_format,
         physical_schema,
         *(model.partitioned_by or []),
-        *(expression.sql(identify=True, comments=False) for expression in model.expressions or []),
+        *(expression.sql(comments=False) for expression in model.expressions or []),
         *serialize_hooks(model.pre),
         *serialize_hooks(model.post),
         model.stamp,
     ]
 
     if isinstance(model, SqlModel):
-        data.append(model.query.sql(identify=True, comments=False))
+        data.append(model.query.sql(comments=False))
 
         for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
             data.append(macro_name)
@@ -800,13 +797,13 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         if audit_name in BUILT_IN_AUDITS:
             for arg_name, arg_value in audit_args.items():
                 metadata.append(arg_name)
-                metadata.append(arg_value.sql(identify=True, comments=True))
+                metadata.append(arg_value.sql(comments=True))
         elif audit_name in audits:
             audit = audits[audit_name]
             metadata.extend(
                 [
                     audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args)).sql(
-                        identify=True, comments=True
+                        comments=True
                     ),
                     audit.dialect,
                     str(audit.skip),
