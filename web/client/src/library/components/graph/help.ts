@@ -2,6 +2,7 @@ import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
 import { type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
+import { type Lineage } from '@context/editor'
 
 export interface GraphNodeData {
   label: string
@@ -16,10 +17,10 @@ const NODE_WIDTH = 172
 const NODE_HEIGHT = 32
 
 export function getNodesAndEdges({
-  data,
+  lineage,
   highlightedNodes,
 }: {
-  data: Record<string, string[]>
+  lineage: Record<string, Lineage>
   highlightedNodes: string[]
 }): {
   nodesMap: Record<string, Node>
@@ -27,8 +28,12 @@ export function getNodesAndEdges({
   targets: Set<string>
   columns: Record<string, { ins: string[]; outs: string[] }>
 } {
-  const targets = new Set(Object.values(data).flat())
-  const modelNames = Object.keys(data)
+  const targets = new Set(
+    Object.values(lineage)
+      .map(l => l.models)
+      .flat(),
+  )
+  const modelNames = Object.keys(lineage)
   const nodesMap: Record<string, Node> = modelNames.reduce(
     (acc, label) =>
       Object.assign(acc, {
@@ -46,12 +51,16 @@ export function getNodesAndEdges({
   const columns: Record<string, { ins: string[]; outs: string[] }> = {}
 
   for (const modelSource of modelNames) {
-    const dag = data[modelSource]
+    const modelLineage = lineage[modelSource]
+
+    if (modelLineage == null) continue
+
+    const dag = modelLineage.models
 
     if (dag == null) continue
 
     const modelsTarget = dag
-    const columnsLineage = undefined
+    const columnsLineage = modelLineage.columns
 
     modelsTarget.forEach(modelTarget => {
       edges.push(toGraphEdge(modelSource, modelTarget))
@@ -59,56 +68,56 @@ export function getNodesAndEdges({
 
     if (columnsLineage == null) continue
 
-    // for (const columnSource in columnsLineage) {
-    //   const sourceId = toNodeOrEdgeId(modelSource, columnSource)
+    for (const columnSource in columnsLineage) {
+      const sourceId = toNodeOrEdgeId(modelSource, columnSource)
 
-    //   if (columns[sourceId] == null) {
-    //     columns[sourceId] = {
-    //       ins: [],
-    //       outs: [],
-    //     }
-    //   }
+      if (columns[sourceId] == null) {
+        columns[sourceId] = {
+          ins: [],
+          outs: [],
+        }
+      }
 
-    //   const modelsTarget = columnsLineage[columnSource]
+      const modelsTarget = columnsLineage[columnSource]
 
-    //   if (modelsTarget == null) continue
+      if (modelsTarget == null) continue
 
-    //   for (const modelTarget in modelsTarget) {
-    //     const columnsTarget = modelsTarget[modelTarget]
+      for (const modelTarget in modelsTarget.models) {
+        const columnsTarget = modelsTarget.models[modelTarget]
 
-    //     if (columnsTarget == null) continue
+        if (columnsTarget == null) continue
 
-    //     for (const columnTarget of columnsTarget) {
-    //       const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
+        for (const columnTarget of columnsTarget) {
+          const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
 
-    //       if (columns[targetId] == null) {
-    //         columns[targetId] = {
-    //           ins: [],
-    //           outs: [],
-    //         }
-    //       }
+          if (columns[targetId] == null) {
+            columns[targetId] = {
+              ins: [],
+              outs: [],
+            }
+          }
 
-    //       columns[sourceId]?.ins.push(targetId)
-    //       columns[targetId]?.outs.push(sourceId)
+          columns[sourceId]?.ins.push(targetId)
+          columns[targetId]?.outs.push(sourceId)
 
-    //       edges.push(
-    //         toGraphEdge(
-    //           modelSource,
-    //           modelTarget,
-    //           toNodeOrEdgeId('source', modelSource, columnSource),
-    //           toNodeOrEdgeId('target', modelTarget, columnTarget),
-    //           true,
-    //           {
-    //             target: modelTarget,
-    //             source: modelSource,
-    //             columnSource,
-    //             columnTarget,
-    //           },
-    //         ),
-    //       )
-    //     }
-    //   }
-    // }
+          edges.push(
+            toGraphEdge(
+              modelSource,
+              modelTarget,
+              toNodeOrEdgeId('source', modelSource, columnSource),
+              toNodeOrEdgeId('target', modelTarget, columnTarget),
+              true,
+              {
+                target: modelTarget,
+                source: modelSource,
+                columnSource,
+                columnTarget,
+              },
+            ),
+          )
+        }
+      }
+    }
   }
 
   return { targets, edges, nodesMap, columns }
@@ -146,7 +155,7 @@ export async function createGraphLayout({
   targets,
   lineage,
 }: {
-  data: Record<string, string[]>
+  data: Record<string, Lineage>
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>
@@ -160,7 +169,7 @@ export async function createGraphLayout({
 
     if (output == null) return
 
-    if (isArrayNotEmpty(data[node.id])) {
+    if (isArrayNotEmpty(data[node.id]?.models)) {
       output.sourcePosition = Position.Left
     }
 

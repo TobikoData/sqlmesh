@@ -28,7 +28,13 @@ import {
   toNodeOrEdgeId,
   type GraphNodeData,
 } from './help'
-import { isArrayNotEmpty, isFalse, isNil, isTrue } from '../../../utils'
+import {
+  debounceAsync,
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isTrue,
+} from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import {
@@ -41,6 +47,7 @@ import { type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
 import { useApiColumnLineage } from '@api/index'
 import { Popover, Transition } from '@headlessui/react'
+import { useStoreEditor, type Lineage } from '@context/editor'
 
 export default function Graph({
   dag,
@@ -48,7 +55,7 @@ export default function Graph({
   highlightedNodes = [],
 }: {
   closeGraph?: () => void
-  dag: Record<string, string[]>
+  dag: Record<string, Lineage>
   highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
@@ -67,7 +74,7 @@ export default function Graph({
     () =>
       dag == null
         ? undefined
-        : getNodesAndEdges({ data: dag, highlightedNodes }),
+        : getNodesAndEdges({ lineage: dag, highlightedNodes }),
     [dag, models],
   )
   const lineage = useMemo(
@@ -383,21 +390,36 @@ function ModelColumn({
   const { data: columnLineage, refetch: getColumnLineage } =
     useApiColumnLineage(id, column.name)
 
+  const debouncedGetColumnLineage = useCallback(
+    debounceAsync(getColumnLineage, 1000, true),
+    [getColumnLineage],
+  )
+
   const columnId = toNodeOrEdgeId(id, column.name)
   const sourceId = toNodeOrEdgeId('source', columnId)
   const targetId = toNodeOrEdgeId('target', columnId)
 
   const columns = useStoreLineage(s => s.columns)
 
+  const previewLineage = useStoreEditor(s => s.previewLineage)
+  const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
+
   const [isActive, setIsActive] = useState(false)
-  const [lineage, setLineage] = useState<any>()
   const [isShowing, setIsShowing] = useState(false)
 
   useEffect(() => {
+    return () => {
+      debouncedGetColumnLineage.cancel()
+    }
+  }, [])
+
+  useEffect(() => {
     if (isActive && columnLineage?.[id]?.[column.name] != null) {
-      setLineage(columnLineage)
+      setPreviewLineage(previewLineage, columnLineage)
     }
   }, [columnLineage])
+
+  const lineage = previewLineage?.[id]?.columns?.[column.name]
 
   return (
     <li
@@ -408,7 +430,7 @@ function ModelColumn({
       )}
       onClick={() => {
         if (isFalse(isActive)) {
-          void getColumnLineage()
+          void debouncedGetColumnLineage()
         }
 
         setIsActive(!isActive)
@@ -437,7 +459,7 @@ function ModelColumn({
                 : 'text-neutral-600 dark:text-neutral-100',
             )}
           >
-            {lineage != null && (
+            {lineage?.source != null && (
               <Popover
                 onMouseEnter={() => {
                   setIsShowing(true)
@@ -460,12 +482,12 @@ function ModelColumn({
                       leaveFrom="opacity-100 translate-y-0"
                       leaveTo="opacity-0 translate-y-1"
                     >
-                      <Popover.Panel className="absolute bottom-6 z-10 transform">
+                      <Popover.Panel className="absolute bottom-2 z-10 transform">
                         <div
-                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[25vw] rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5 p-4"
+                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[50vw] rounded-lg bg-theme p-4 border-4 border-primary-20"
                           dangerouslySetInnerHTML={{
                             __html: `<pre class='inline-block w-full h-full'>${
-                              lineage?.[id][column.name].source as string
+                              lineage.source ?? ''
                             }</pre>`,
                           }}
                         ></div>

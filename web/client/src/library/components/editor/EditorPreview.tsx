@@ -7,7 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { debounceAsync, isNil, isTrue } from '~/utils'
-import { type EditorTab, useStoreEditor } from '~/context/editor'
+import { type EditorTab, useStoreEditor, type Lineage } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
@@ -282,6 +282,9 @@ function EditorPreviewLineage({ model }: { model: string }): JSX.Element {
 
   const { data: dag, refetch: getModelLineage } = useApiModelLineage(model)
 
+  const previewLineage = useStoreEditor(s => s.previewLineage)
+  const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
+
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 1000, true),
     [model],
@@ -297,13 +300,29 @@ function EditorPreviewLineage({ model }: { model: string }): JSX.Element {
     }
   }, [model])
 
-  return dag == null ? (
+  useEffect(() => {
+    if (dag == null) {
+      setPreviewLineage(undefined)
+    } else {
+      setPreviewLineage(
+        Object.keys(dag).reduce((acc: Record<string, Lineage>, key) => {
+          acc[key] = {
+            models: dag[key] ?? [],
+          }
+
+          return acc
+        }, {}),
+      )
+    }
+  }, [dag])
+
+  return previewLineage == null ? (
     <div className="w-full h-full flex items-center justify-center bg-primary-10">
       <Loading hasSpinner>Loading Lineage...</Loading>
     </div>
   ) : (
     <Graph
-      dag={dag}
+      dag={previewLineage}
       highlightedNodes={[model]}
     />
   )

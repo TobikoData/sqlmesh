@@ -1,3 +1,5 @@
+import { type ColumnLineageApiLineageGet200 } from '@api/client'
+import { isObjectEmpty } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
@@ -6,6 +8,17 @@ import { sqlglotWorker } from '~/workers'
 export interface Dialect {
   dialect_title: string
   dialect_name: string
+}
+
+export interface Lineage {
+  models: string[]
+  columns?: Record<
+    string,
+    {
+      source?: string
+      models?: Record<string, string[]>
+    }
+  >
 }
 
 interface EditorStore {
@@ -17,6 +30,7 @@ interface EditorStore {
   previewQuery?: string
   previewTable?: any[]
   previewConsole?: string
+  previewLineage?: Record<string, Lineage>
   selectTab: (tab?: EditorTab) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
@@ -27,12 +41,17 @@ interface EditorStore {
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: any[]) => void
   setPreviewConsole: (previewConsole?: string) => void
+  setPreviewLineage: (
+    previewLineage?: Record<string, Lineage>,
+    columns?: ColumnLineageApiLineageGet200,
+  ) => void
 }
 
 interface EditorPreview<TTable = any> {
   queryPreview?: string
   table?: TTable[]
   terminal?: string
+  lineage?: Record<string, Lineage>
 }
 
 export interface EditorTab {
@@ -62,6 +81,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewQuery: undefined,
   previewTable: undefined,
   previewConsole: undefined,
+  previewLineage: undefined,
   updateStoredTabsIds() {
     setStoredTabs({
       ids: Array.from(get().tabs.values())
@@ -132,6 +152,54 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   setPreviewConsole(previewConsole) {
     set(() => ({ previewConsole }))
+  },
+  setPreviewLineage(lineage, columns) {
+    const previewLineage = structuredClone(lineage)
+
+    if (columns != null && previewLineage != null) {
+      for (const model in columns) {
+        const previewModelLineage = previewLineage[model]
+
+        if (previewModelLineage == null || columns[model] == null) continue
+
+        if (previewModelLineage.columns == null) {
+          previewModelLineage.columns = {}
+        }
+
+        for (const columnName in columns[model]) {
+          if (columns[model][columnName] == null) continue
+
+          if (previewModelLineage.columns[columnName] == null) {
+            previewModelLineage.columns[columnName] = {}
+          }
+
+          if (previewModelLineage.columns?.[columnName] != null) {
+            previewModelLineage.columns[columnName].source =
+              columns[model][columnName].source
+            previewModelLineage.columns[columnName].models = {}
+          }
+
+          if (isObjectEmpty(columns[model][columnName].models)) continue
+
+          for (const m in columns[model][columnName].models) {
+            if (previewModelLineage.columns[columnName].models[m] == null) {
+              previewModelLineage.columns[columnName].models[m] =
+                columns[model][columnName].models[m]
+            } else {
+              previewModelLineage.columns[columnName].models[m] = Array.from(
+                new Set(
+                  previewModelLineage.columns[columnName].models[m].concat(
+                    columns[model][columnName].models[m],
+                  ),
+                ),
+              )
+            }
+          }
+        }
+      }
+    }
+
+    set(() => ({ previewLineage }))
   },
 }))
 
