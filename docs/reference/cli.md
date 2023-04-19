@@ -6,7 +6,7 @@ Usage: sqlmesh [OPTIONS] COMMAND [ARGS]...
   SQLMesh command line tool.
 
 Options:
-  --path TEXT    Path to the models directory.
+  --paths TEXT   Path(s) to the models directory.
   --config TEXT  Name of the config object.
   --help         Show this message and exit.
 
@@ -68,9 +68,9 @@ Usage: sqlmesh evaluate [OPTIONS] MODEL
   Evaluate a model and return a dataframe with a default limit of 1000.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval for which this 
+  -s, --start TEXT   The start datetime of the interval for which this
                      command will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this 
+  -e, --end TEXT     The end datetime of the interval for which this
                      command will be applied.
   -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
@@ -85,9 +85,9 @@ Usage: sqlmesh render [OPTIONS] MODEL
   Renders a model's query, optionally expanding referenced models.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval for which this 
+  -s, --start TEXT   The start datetime of the interval for which this
                      command will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this 
+  -e, --end TEXT     The end datetime of the interval for which this
                      command will be applied.
   -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
@@ -128,9 +128,9 @@ Usage: sqlmesh audit [OPTIONS]
 
 Options:
   --model TEXT       A model to audit. Multiple models can be audited.
-  -s, --start TEXT   The start datetime of the interval for which this 
+  -s, --start TEXT   The start datetime of the interval for which this
                      command will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this 
+  -e, --end TEXT     The end datetime of the interval for which this
                      command will be applied.
   -l, --latest TEXT  The latest time used for non-incremental datasets
                      (defaults to now).
@@ -176,6 +176,6 @@ Options:
 Usage: sqlmesh migrate
 
   Migrates SQLMesh to the current running version.
-  
+
   Please contact your SQLMesh administrator before doing this.
 ```
