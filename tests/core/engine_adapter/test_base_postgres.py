@@ -15,7 +15,7 @@ def test_columns(mocker: MockerFixture):
 
     resp = adapter.columns("db.table")
     cursor_mock.execute.assert_called_once_with(
-        """SELECT "column_name", "data_type" FROM "information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        """SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'table' AND table_schema = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 
@@ -30,7 +30,7 @@ def test_table_exists(mocker: MockerFixture):
 
     resp = adapter.table_exists("db.table")
     cursor_mock.execute.assert_called_once_with(
-        """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        """SELECT 1 FROM information_schema.tables WHERE table_name = 'table' AND table_schema = 'db'"""
     )
     assert resp
     cursor_mock.fetchone.return_value = None

@@ -100,9 +100,7 @@ def test_create_table_from_query_not_exists_no_if_not_exists(mocker: MockerFixtu
         exists=False,
     )
 
-    cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'
-    )
+    cursor_mock.execute.assert_called_once_with("CREATE TABLE test_table AS SELECT cola FROM table")
 
 
 def test_pandas_to_sql(mocker: MockerFixture):
@@ -134,8 +132,8 @@ def test_replace_query_with_query(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            mocker.call('DROP TABLE IF EXISTS test_table'),
-            mocker.call('CREATE TABLE test_table AS SELECT cola FROM table'),
+            mocker.call("DROP TABLE IF EXISTS test_table"),
+            mocker.call("CREATE TABLE test_table AS SELECT cola FROM table"),
         ]
     )
 
