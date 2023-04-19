@@ -1,14 +1,7 @@
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import {
-  type RefObject,
-  Suspense,
-  useCallback,
-  useMemo,
-  useEffect,
-  useState,
-} from 'react'
+import { type RefObject, Suspense, useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import {
@@ -29,18 +22,16 @@ import { EnumPlanChangeType, usePlan } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
-import { useChannelEvents } from '@api/channels'
 import { EnumVariant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
+import ReportTestsErrors from '@components/report/ReportTestsErrors'
 
 export default function PlanWizard({
   setRefTasksOverview,
 }: {
   setRefTasksOverview: RefObject<HTMLDivElement>
 }): JSX.Element {
-  const [subscribe] = useChannelEvents()
-
   const {
     backfills,
     hasChanges,
@@ -54,18 +45,14 @@ export default function PlanWizard({
     skip_tests,
     change_categorization,
     hasVirtualUpdate,
+    testsReportErrors,
+    testsReportMessages,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-
-  const [testsReport, setTestsReport] = useState<{
-    ok: boolean
-    time: number
-    message: string
-  }>()
 
   const categories = useMemo(
     () =>
@@ -142,14 +129,6 @@ export default function PlanWizard({
     [backfills, change_categorization, activeBackfill],
   )
 
-  useEffect(() => {
-    const unsubscribeTasks = subscribe('tests', setTestsReport)
-
-    return () => {
-      unsubscribeTasks?.()
-    }
-  }, [])
-
   const isFinished = planState === EnumPlanState.Finished
   const hasNoChanges = [
     hasChanges,
@@ -187,17 +166,28 @@ export default function PlanWizard({
               <PlanWizardStepMessage hasSpinner>
                 Running Tests ...
               </PlanWizardStepMessage>
-            ) : testsReport == null ? (
+            ) : isArrayEmpty(testsReportErrors) ||
+              isArrayEmpty(testsReportMessages) ? (
               <PlanWizardStepMessage>
                 {skip_tests ? 'Tests Skipped' : 'No Tests'}
               </PlanWizardStepMessage>
             ) : (
-              <Banner
-                variant={
-                  testsReport.ok ? EnumVariant.Success : EnumVariant.Danger
-                }
-                description={testsReport.message}
-              />
+              <>
+                {testsReportErrors != null && (
+                  <Banner variant={EnumVariant.Danger}>
+                    {isObjectNotEmpty(testsReportErrors) && (
+                      <ReportTestsErrors report={testsReportErrors} />
+                    )}
+                  </Banner>
+                )}
+                {testsReportMessages != null && (
+                  <Banner variant={EnumVariant.Success}>
+                    {isObjectNotEmpty(testsReportMessages) && (
+                      <div>{testsReportMessages.message}</div>
+                    )}
+                  </Banner>
+                )}
+              </>
             )}
           </PlanWizardStep>
           <PlanWizardStep

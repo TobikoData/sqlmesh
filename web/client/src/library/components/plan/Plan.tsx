@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { debounceAsync, includes, isFalse } from '~/utils'
+import { debounceAsync, includes, isFalse, isTrue } from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -26,6 +26,8 @@ import PlanBackfillDates from './PlanBackfillDates'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
+import { useChannelEvents } from '@api/channels'
+import SplitPane from '../splitPane/SplitPane'
 
 function Plan({
   environment,
@@ -56,7 +58,8 @@ function Plan({
   const elTaskProgress = useRef<HTMLDivElement>(null)
 
   const [isPlanRan, seIsPlanRan] = useState(false)
-  const [error, setError] = useState<Error>()
+
+  const [subscribe] = useChannelEvents()
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
@@ -69,6 +72,8 @@ function Plan({
   ])
 
   useEffect(() => {
+    const unsubscribeTests = subscribe('tests', testsReport)
+
     if (environment.isInitial && environment.isDefault) {
       run()
     }
@@ -83,6 +88,8 @@ function Plan({
 
     return () => {
       debouncedPlanRun.cancel()
+
+      unsubscribeTests?.()
 
       apiCancelPlanRun(client)
     }
@@ -144,6 +151,20 @@ function Plan({
     })
   }, [activePlan])
 
+  function testsReport(data: { ok: boolean } & any): void {
+    dispatch([
+      isTrue(data.ok)
+        ? {
+            type: EnumPlanActions.TestsReportMessages,
+            testsReportMessages: data,
+          }
+        : {
+            type: EnumPlanActions.TestsReportErrors,
+            testsReportErrors: data,
+          },
+    ])
+  }
+
   function cleanUp(): void {
     seIsPlanRan(false)
 
@@ -179,7 +200,11 @@ function Plan({
   }
 
   function cancel(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+    ])
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
@@ -193,14 +218,23 @@ function Plan({
           console.log('apiCancelPlanApply', 'Request aborted by React Query')
         } else {
           console.log('apiCancelPlanApply', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
   }
 
   function apply(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+    ])
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
@@ -217,7 +251,12 @@ function Plan({
           console.log('planApply', 'Request aborted by React Query')
         } else {
           console.log('planApply', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
@@ -230,7 +269,11 @@ function Plan({
   }
 
   function run(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+    ])
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
@@ -268,7 +311,12 @@ function Plan({
           console.log('planRun', 'Request aborted by React Query')
         } else {
           console.log('planRun', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
@@ -276,10 +324,17 @@ function Plan({
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <Plan.Header error={error} />
-      <Divider />
-      <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+      <div className="flex h-full w-full">
+        <SplitPane
+          sizes={[30, 70]}
+          direction="vertical"
+          snapOffset={0}
+        >
+          <Plan.Header />
+          <div className="w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
+            <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+          </div>
+        </SplitPane>
       </div>
       <Divider />
       <Plan.Actions
