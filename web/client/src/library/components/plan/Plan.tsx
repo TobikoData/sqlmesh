@@ -324,7 +324,7 @@ function Plan({
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <div className="flex h-full w-full">
+      <div className="flex w-full h-full overflow-hidden">
         <SplitPane
           sizes={[30, 70]}
           direction="vertical"
