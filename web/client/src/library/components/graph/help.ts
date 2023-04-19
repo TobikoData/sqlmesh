@@ -1,6 +1,6 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
-import { type Dag, type Model } from '@api/client'
+import { type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 
 export interface GraphNodeData {
@@ -19,7 +19,7 @@ export function getNodesAndEdges({
   data,
   highlightedNodes,
 }: {
-  data: Record<string, Dag>
+  data: Record<string, string[]>
   highlightedNodes: string[]
 }): {
   nodesMap: Record<string, Node>
@@ -27,11 +27,7 @@ export function getNodesAndEdges({
   targets: Set<string>
   columns: Record<string, { ins: string[]; outs: string[] }>
 } {
-  const targets = new Set(
-    Object.values(data)
-      .map(item => item.models)
-      .flat(),
-  )
+  const targets = new Set(Object.values(data).flat())
   const modelNames = Object.keys(data)
   const nodesMap: Record<string, Node> = modelNames.reduce(
     (acc, label) =>
@@ -54,8 +50,8 @@ export function getNodesAndEdges({
 
     if (dag == null) continue
 
-    const modelsTarget = dag.models
-    const columnsLineage = dag.columns
+    const modelsTarget = dag
+    const columnsLineage = undefined
 
     modelsTarget.forEach(modelTarget => {
       edges.push(toGraphEdge(modelSource, modelTarget))
@@ -63,56 +59,56 @@ export function getNodesAndEdges({
 
     if (columnsLineage == null) continue
 
-    for (const columnSource in columnsLineage) {
-      const sourceId = toNodeOrEdgeId(modelSource, columnSource)
+    // for (const columnSource in columnsLineage) {
+    //   const sourceId = toNodeOrEdgeId(modelSource, columnSource)
 
-      if (columns[sourceId] == null) {
-        columns[sourceId] = {
-          ins: [],
-          outs: [],
-        }
-      }
+    //   if (columns[sourceId] == null) {
+    //     columns[sourceId] = {
+    //       ins: [],
+    //       outs: [],
+    //     }
+    //   }
 
-      const modelsTarget = columnsLineage[columnSource]
+    //   const modelsTarget = columnsLineage[columnSource]
 
-      if (modelsTarget == null) continue
+    //   if (modelsTarget == null) continue
 
-      for (const modelTarget in modelsTarget) {
-        const columnsTarget = modelsTarget[modelTarget]
+    //   for (const modelTarget in modelsTarget) {
+    //     const columnsTarget = modelsTarget[modelTarget]
 
-        if (columnsTarget == null) continue
+    //     if (columnsTarget == null) continue
 
-        for (const columnTarget of columnsTarget) {
-          const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
+    //     for (const columnTarget of columnsTarget) {
+    //       const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
 
-          if (columns[targetId] == null) {
-            columns[targetId] = {
-              ins: [],
-              outs: [],
-            }
-          }
+    //       if (columns[targetId] == null) {
+    //         columns[targetId] = {
+    //           ins: [],
+    //           outs: [],
+    //         }
+    //       }
 
-          columns[sourceId]?.ins.push(targetId)
-          columns[targetId]?.outs.push(sourceId)
+    //       columns[sourceId]?.ins.push(targetId)
+    //       columns[targetId]?.outs.push(sourceId)
 
-          edges.push(
-            toGraphEdge(
-              modelSource,
-              modelTarget,
-              toNodeOrEdgeId('source', modelSource, columnSource),
-              toNodeOrEdgeId('target', modelTarget, columnTarget),
-              true,
-              {
-                target: modelTarget,
-                source: modelSource,
-                columnSource,
-                columnTarget,
-              },
-            ),
-          )
-        }
-      }
-    }
+    //       edges.push(
+    //         toGraphEdge(
+    //           modelSource,
+    //           modelTarget,
+    //           toNodeOrEdgeId('source', modelSource, columnSource),
+    //           toNodeOrEdgeId('target', modelTarget, columnTarget),
+    //           true,
+    //           {
+    //             target: modelTarget,
+    //             source: modelSource,
+    //             columnSource,
+    //             columnTarget,
+    //           },
+    //         ),
+    //       )
+    //     }
+    //   }
+    // }
   }
 
   return { targets, edges, nodesMap, columns }
@@ -150,7 +146,7 @@ export async function createGraphLayout({
   targets,
   lineage,
 }: {
-  data: Record<string, Dag>
+  data: Record<string, string[]>
   nodesMap: Record<string, Node>
   edges: Edge[]
   targets: Set<string>
@@ -164,7 +160,7 @@ export async function createGraphLayout({
 
     if (output == null) return
 
-    if (isArrayNotEmpty(data[node.id]?.models)) {
+    if (isArrayNotEmpty(data[node.id])) {
       output.sourcePosition = Position.Left
     }
 
@@ -200,6 +196,9 @@ function toGraphNode(
     selectable: false,
     deletable: false,
     focusable: false,
+    style: {
+      zIndex: 'auto',
+    },
   }
 }
 

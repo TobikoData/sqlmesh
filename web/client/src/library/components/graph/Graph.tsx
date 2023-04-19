@@ -4,6 +4,7 @@ import React, {
   useMemo,
   useState,
   useCallback,
+  Fragment,
 } from 'react'
 import ReactFlow, {
   Controls,
@@ -30,11 +31,16 @@ import {
 import { isArrayNotEmpty, isFalse, isNil, isTrue } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
-import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
+import {
+  ArrowRightCircleIcon,
+  InformationCircleIcon,
+} from '@heroicons/react/24/solid'
 import { useStoreLineage } from '@context/lineage'
 import clsx from 'clsx'
-import { type Dag, type Column } from '@api/client'
+import { type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
+import { useApiColumnLineage } from '@api/index'
+import { Popover, Transition } from '@headlessui/react'
 
 export default function Graph({
   dag,
@@ -42,7 +48,7 @@ export default function Graph({
   highlightedNodes = [],
 }: {
   closeGraph?: () => void
-  dag: Record<string, Dag>
+  dag: Record<string, string[]>
   highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
@@ -253,7 +259,7 @@ function ModelNode({
   return (
     <div
       className={clsx(
-        'text-xs  font-semibold text-secondary-500 dark:text-primary-100 rounded-xl shadow-lg',
+        'text-xs font-semibold text-secondary-500 dark:text-primary-100 rounded-xl shadow-lg relative z-1',
         isTrue(data.isHighlighted) && 'border-4 border-brand-500',
       )}
     >
@@ -345,7 +351,7 @@ function ModelColumns({
   return (
     <ul
       className={clsx(
-        'w-full py-2 bg-theme-lighter opacity-90 overflow-hidden cursor-default',
+        'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
         className,
       )}
     >
@@ -374,6 +380,9 @@ function ModelColumn({
     type: string,
   ) => void
 }): JSX.Element {
+  const { data: columnLineage, refetch: getColumnLineage } =
+    useApiColumnLineage(id, column.name)
+
   const columnId = toNodeOrEdgeId(id, column.name)
   const sourceId = toNodeOrEdgeId('source', columnId)
   const targetId = toNodeOrEdgeId('target', columnId)
@@ -381,6 +390,14 @@ function ModelColumn({
   const columns = useStoreLineage(s => s.columns)
 
   const [isActive, setIsActive] = useState(false)
+  const [lineage, setLineage] = useState<any>()
+  const [isShowing, setIsShowing] = useState(false)
+
+  useEffect(() => {
+    if (isActive && columnLineage?.[id]?.[column.name] != null) {
+      setLineage(columnLineage)
+    }
+  }, [columnLineage])
 
   return (
     <li
@@ -389,26 +406,16 @@ function ModelColumn({
         isActive && 'bg-secondary-10 dark:bg-primary-900',
         className,
       )}
-      onClick={
-        columns?.[columnId] != null
-          ? () => {
-              setIsActive(!isActive)
+      onClick={() => {
+        if (isFalse(isActive)) {
+          void getColumnLineage()
+        }
 
-              toggleEdgeById(
-                isActive,
-                sourceId,
-                columns?.[columnId]?.ins,
-                'source',
-              )
-              toggleEdgeById(
-                isActive,
-                targetId,
-                columns?.[columnId]?.outs,
-                'target',
-              )
-            }
-          : undefined
-      }
+        setIsActive(!isActive)
+
+        toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
+        toggleEdgeById(isActive, targetId, columns?.[columnId]?.outs, 'target')
+      }}
     >
       <ModelNodeHandles
         id={columnId}
@@ -424,12 +431,50 @@ function ModelColumn({
         <div className="flex w-full justify-between">
           <div
             className={clsx(
-              'mr-3 ',
+              'mr-3 flex',
               columns?.[columnId] != null
                 ? 'font-bold text-secondary-500 dark:text-primary-500'
                 : 'text-neutral-600 dark:text-neutral-100',
             )}
           >
+            {lineage != null && (
+              <Popover
+                onMouseEnter={() => {
+                  setIsShowing(true)
+                }}
+                onMouseLeave={() => {
+                  setIsShowing(false)
+                }}
+                className="relative flex"
+              >
+                {() => (
+                  <>
+                    <InformationCircleIcon className="inline-block mr-3 w-4 h-4" />
+                    <Transition
+                      show={isShowing}
+                      as={Fragment}
+                      enter="transition ease-out duration-200"
+                      enterFrom="opacity-0 translate-y-1"
+                      enterTo="opacity-100 translate-y-0"
+                      leave="transition ease-in duration-150"
+                      leaveFrom="opacity-100 translate-y-0"
+                      leaveTo="opacity-0 translate-y-1"
+                    >
+                      <Popover.Panel className="absolute bottom-6 z-10 transform">
+                        <div
+                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[25wh] rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5 p-4"
+                          dangerouslySetInnerHTML={{
+                            __html: `<pre class='inline-block w-full h-full'>${
+                              lineage?.[id][column.name].source as string
+                            }</pre>`,
+                          }}
+                        ></div>
+                      </Popover.Panel>
+                    </Transition>
+                  </>
+                )}
+              </Popover>
+            )}
             {column.name}
           </div>
           <div className="text-neutral-400 dark:text-neutral-300">

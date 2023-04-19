@@ -97,26 +97,6 @@
         }
       }
     },
-    "/api/commands/dag": {
-      "get": {
-        "summary": "Dag",
-        "operationId": "dag_api_commands_dag_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Dag Api Commands Dag Get",
-                  "type": "object",
-                  "additionalProperties": { "$ref": "#/components/schemas/DAG" }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/commands/render": {
       "post": {
         "summary": "Render",
@@ -464,11 +444,7 @@
                   "additionalProperties": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": { "type": "string" }
-                      }
+                      "$ref": "#/components/schemas/LineageColumn"
                     }
                   }
                 }
@@ -488,9 +464,9 @@
     },
     "/api/lineage/{model_name}": {
       "get": {
-        "summary": "Model Column Lineage",
-        "description": "Get a model's column lineage",
-        "operationId": "model_column_lineage_api_lineage__model_name__get",
+        "summary": "Model Lineage",
+        "description": "Get a model's lineage",
+        "operationId": "model_lineage_api_lineage__model_name__get",
         "parameters": [
           {
             "required": true,
@@ -505,9 +481,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Model Column Lineage Api Lineage  Model Name  Get",
+                  "title": "Response Model Lineage Api Lineage  Model Name  Get",
                   "type": "object",
-                  "additionalProperties": { "$ref": "#/components/schemas/DAG" }
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
                 }
               }
             }
@@ -820,29 +799,6 @@
           "modified": { "$ref": "#/components/schemas/ModelsDiff" }
         }
       },
-      "DAG": {
-        "title": "DAG",
-        "required": ["models"],
-        "type": "object",
-        "properties": {
-          "models": {
-            "title": "Models",
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "columns": {
-            "title": "Columns",
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "array",
-                "items": { "type": "string" }
-              }
-            }
-          }
-        }
-      },
       "Directory": {
         "title": "Directory",
         "required": ["name", "path"],
@@ -976,6 +932,21 @@
             "title": "Detail",
             "type": "array",
             "items": { "$ref": "#/components/schemas/ValidationError" }
+          }
+        }
+      },
+      "LineageColumn": {
+        "title": "LineageColumn",
+        "type": "object",
+        "properties": {
+          "source": { "title": "Source", "type": "string" },
+          "models": {
+            "title": "Models",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
           }
         }
       },
