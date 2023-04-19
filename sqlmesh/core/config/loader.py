@@ -44,7 +44,7 @@ def load_config_from_paths(
 
     if config is None:
         raise ConfigError(
-            "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh --path`. If you haven't set up SQLMesh, run `sqlmesh init`."
+            "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
     if load_from_env:

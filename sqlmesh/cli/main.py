@@ -59,7 +59,7 @@ def cli(
 
     if not context.models:
         raise click.ClickException(
-            f"`{paths}` doesn't seem to have any models... cd into the proper directory or specify the path(s) with --paths."
+            f"`{paths}` doesn't seem to have any models... cd into the proper directory or specify the path(s) with -p."
         )
 
     ctx.obj = context
