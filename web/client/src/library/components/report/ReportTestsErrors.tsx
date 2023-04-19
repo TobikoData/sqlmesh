@@ -24,7 +24,7 @@ export default function ReportTestsErrors({
             <div className="mr-4">
               <span className="inline-block mb-2">{item.message}</span>
               <code className="inline-block bg-theme py-2 px-4 rounded-lg">
-                {item.details}
+                <pre>{item.details}</pre>
               </code>
             </div>
           </li>
