@@ -10,16 +10,47 @@ from sqlglot.lineage import Node, lineage
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from web.server.api.endpoints.models import (
-    get_model_with_columns,
-    get_models_with_columns,
-)
-from web.server.models import DAG
+from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
 
-Lineage = t.NewType("Lineage", t.Dict[str, t.Dict[str, t.Dict[str, t.List[str]]]])
+
+def _get_table(node: Node) -> str:
+    """Get a node's table/source"""
+    if isinstance(node.expression, exp.Table):
+        return exp.table_name(node.expression)
+    else:
+        return node.alias
+
+
+def _get_node_source(node: Node, dialect: str) -> str:
+    """Get a node's source"""
+    if isinstance(node.expression, exp.Table):
+        source = f"SELECT {node.name} FROM {node.expression.this}"
+    else:
+        source = node.source.transform(
+            lambda n: exp.Tag(this=n, prefix="<b>", postfix="</b>") if n is node.expression else n,
+            copy=False,
+        ).sql(pretty=True, dialect=dialect)
+    return source
+
+
+def _process_downstream(
+    downstream: t.List[Node], node_column: str, cache_column_names: t.Dict[str, str]
+) -> t.Dict[str, t.List[str]]:
+    """Aggregate a list of downstream nodes by table/source"""
+    graph = collections.defaultdict(list)
+    for node in downstream:
+        column = exp.to_column(node.name).name
+        table = _get_table(node)
+        if not column:
+            continue
+        if not table:
+            cache_column_names[column] = node_column
+            continue
+        graph[table].append(column)
+    return graph
 
 
 @router.get("")
@@ -27,7 +58,7 @@ async def column_lineage(
     column: str,
     model: str,
     context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, t.Dict[str, t.Dict[str, t.List[str]]]]:
+) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
     try:
         node = lineage(
@@ -44,160 +75,43 @@ async def column_lineage(
 
     graph = {}
     table = model
+    cache_column_names: t.Dict[str, str] = {}
 
     for i, node in enumerate(node.walk()):
         if i > 0:
-            table = _get_table(node)
+            table = _get_table(node) or model
             column = exp.to_column(node.name).name
-        graph[table] = {column: _process_downstream(node.downstream)}
+        if column in cache_column_names:
+            column = cache_column_names[column]
+        graph[table] = {
+            column: LineageColumn(
+                source=_get_node_source(node=node, dialect=context.models[table].dialect),
+                models=_process_downstream(
+                    node.downstream,
+                    column,
+                    cache_column_names,
+                ),
+            )
+        }
     return graph
 
 
 @router.get("/{model_name:str}")
-async def model_column_lineage(
+async def model_lineage(
     model_name: str,
     context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, DAG]:
-    """Get a model's column lineage"""
-    columns = get_column_lineage(context, model_name)
+) -> t.Dict[str, t.List[str]]:
+    """Get a model's lineage"""
     models = (
-        set(key for column in columns[model_name].values() for key in column.keys())
-        if model_name in columns
-        else set()
+        [model_name]
+        + list(context.dag.graph[model_name])
+        + [name for name, model_names in context.dag.graph.items() if model_name in model_names]
     )
-
-    models.add(model_name)
-
-    for model in context.dag.graph[model_name]:
-        models.add(model)
-
     return {
-        name: DAG(
-            models=list(model_names)
-            if name == model_name
-            else [model_name]
-            if model_name in model_names
-            else [],
-            columns=columns[model_name] if name == model_name and model_name in columns else None,
-        )
-        for name, model_names in context.dag.graph.items()
-        if name in models or model_name in model_names
+        name: list(context.dag.graph[name])
+        if name == model_name
+        else [model_name]
+        if model_name in context.dag.graph[name]
+        else []
+        for name in models
     }
-
-
-def get_column_lineage(context: Context, model_name: t.Optional[str] = None) -> Lineage:
-    lineage: t.Any = dict()
-    nodes = _get_nodes(context, model_name)
-
-    print(nodes)
-
-    for model_name in nodes:
-        for column_name in nodes[model_name]:
-            table = model_name
-            column = column_name
-            node = nodes[model_name][column_name]
-
-            if len(node.downstream) == 0:
-                continue
-
-            for i, node in enumerate(node.walk()):
-                print("No child model", node.expression)
-                if i > 0:
-                    table, column = _get_model_and_column(node)
-                if not table:
-                    table = model_name
-                _walk_node(lineage, node, table, column)
-    return lineage
-
-
-def _get_table(node: Node) -> str:
-    """Get a node's table/source"""
-    if isinstance(node.expression, exp.Table):
-        return exp.table_name(node.expression)
-    else:
-        return node.alias
-
-
-def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
-    """Aggregate a list of downstream nodes by table/source"""
-    graph = collections.defaultdict(list)
-    for node in downstream:
-        column = exp.to_column(node.name).name
-        table = _get_table(node)
-        graph[table].append(column)
-    return graph
-
-
-temp_columns: t.Dict[str, str] = {}
-
-
-def _walk_node(
-    lineage: t.Any,
-    node: Node,
-    node_model: str,
-    node_column: str,
-) -> None:
-    """Walk a node and add it to the lineage graph"""
-    if node_column in temp_columns:
-        node_column = temp_columns[node_column]
-    for child_node in node.downstream:
-        child_model, child_column = _get_model_and_column(child_node)
-        if not child_column:
-            continue
-        if not child_model:
-            temp_columns[child_column] = node_column
-            continue
-        _add_column_to_graph(lineage, node_model, node_column, child_model, child_column)
-
-
-def _add_column_to_graph(
-    lineage: t.Any,
-    model: str,
-    column: str,
-    child_model: t.Optional[str] = None,
-    child_column: t.Optional[str] = None,
-) -> None:
-    """Add a column to the lineage graph"""
-    if not model in lineage:
-        lineage[model] = {}
-
-    if not column in lineage[model]:
-        lineage[model][column] = {}
-
-    if child_model is not None and not child_model in lineage[model][column]:
-        lineage[model][column][child_model] = []
-
-    if child_column is not None and not child_column in lineage[model][column][child_model]:
-        lineage[model][column][child_model].append(child_column)
-
-
-def _get_nodes(
-    context: Context, model_name: t.Optional[str] = None
-) -> t.Dict[str, t.Dict[str, Node]]:
-    """Get a mapping of model names to column names to lineage nodes"""
-    models = (
-        [get_model_with_columns(context, model_name)]
-        if model_name is not None
-        else get_models_with_columns(context)
-    )
-    nodes: t.Dict[str, t.Dict[str, Node]] = {model.name: {} for model in models}
-
-    for model in models:
-        for column in model.columns:
-            nodes[model.name][column.name] = lineage(
-                column=column.name,
-                sql=context.models[model.name].render_query(),
-                # sources={
-                #     model: context.models[model].render_query()
-                #     for model in context.dag.upstream(model.name)
-                # },
-            )
-    return nodes
-
-
-def _get_model_and_column(node: Node) -> t.Tuple[str, str]:
-    """Get a model and column"""
-    table = _get_table(node)
-    col = exp.to_column(node.name).name
-
-    return (table, col)

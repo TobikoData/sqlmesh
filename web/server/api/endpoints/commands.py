@@ -13,7 +13,6 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.errors import PlanError
 from web.server import models
-from web.server.api.endpoints.lineage import get_column_lineage
 from web.server.settings import get_loaded_context
 from web.server.utils import (
     ArrowStreamingResponse,
@@ -114,26 +113,6 @@ async def fetchdf(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
         )
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
-
-
-@router.get("/dag", response_model=t.Dict[str, models.DAG])
-async def dag(
-    context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, models.DAG]:
-    try:
-        lineage = get_column_lineage(context)
-
-        return {
-            model_name: models.DAG(
-                models=list(model_names),
-                columns=lineage[model_name] if model_name in lineage else None,
-            )
-            for model_name, model_names in context.dag.graph.items()
-        }
-    except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
-        )
 
 
 @router.post("/render", response_model=models.Query)

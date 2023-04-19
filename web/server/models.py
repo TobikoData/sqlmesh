@@ -213,9 +213,9 @@ class PlanOptions(BaseModel):
         return v
 
 
-class DAG(BaseModel):
-    models: t.List[str]
-    columns: t.Optional[t.Dict[str, t.Dict[str, t.List[str]]]] = None
+class LineageColumn(BaseModel):
+    source: t.Optional[str]
+    models: t.Optional[t.Dict[str, t.List[str]]]
 
 
 class Query(BaseModel):
