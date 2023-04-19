@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { debounceAsync, includes, isFalse, isTrue } from '~/utils'
+import {
+  debounceAsync,
+  includes,
+  isArrayNotEmpty,
+  isFalse,
+  isObjectNotEmpty,
+  isTrue,
+} from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -47,7 +54,15 @@ function Plan({
   const client = useQueryClient()
 
   const dispatch = usePlanDispatch()
-  const { auto_apply, hasChanges, hasBackfills, hasVirtualUpdate } = usePlan()
+
+  const {
+    auto_apply,
+    hasChanges,
+    hasBackfills,
+    hasVirtualUpdate,
+    testsReportErrors,
+    errors,
+  } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -204,6 +219,9 @@ function Plan({
       {
         type: EnumPlanActions.ResetErrors,
       },
+      {
+        type: EnumPlanActions.ResetTestsReport,
+      },
     ])
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
@@ -233,6 +251,9 @@ function Plan({
     dispatch([
       {
         type: EnumPlanActions.ResetErrors,
+      },
+      {
+        type: EnumPlanActions.ResetTestsReport,
       },
     ])
     setPlanAction(EnumPlanAction.Applying)
@@ -272,6 +293,9 @@ function Plan({
     dispatch([
       {
         type: EnumPlanActions.ResetErrors,
+      },
+      {
+        type: EnumPlanActions.ResetTestsReport,
       },
     ])
     setPlanAction(EnumPlanAction.Running)
@@ -322,20 +346,28 @@ function Plan({
       })
   }
 
+  const shouldSplitPane =
+    isObjectNotEmpty(testsReportErrors) || isArrayNotEmpty(errors)
+
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <div className="flex w-full h-full overflow-hidden">
+      {shouldSplitPane ? (
         <SplitPane
-          sizes={[30, 70]}
+          sizes={isObjectNotEmpty(testsReportErrors) ? [50, 50] : [30, 70]}
           direction="vertical"
           snapOffset={0}
+          className="flex flex-col w-full h-full overflow-hidden"
         >
           <Plan.Header />
-          <div className="w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-            <Plan.Wizard setRefTasksOverview={elTaskProgress} />
-          </div>
+          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
         </SplitPane>
-      </div>
+      ) : (
+        <>
+          <Plan.Header />
+          <Divider />
+          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+        </>
+      )}
       <Divider />
       <Plan.Actions
         disabled={disabled}

@@ -23,18 +23,37 @@ export default function PlanHeader(): JSX.Element {
       <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-6 ">
         {environment.isInitial && environment.isDefault && (
           <Banner variant={EnumVariant.Warning}>
-            <Banner.Headline>Initializing Prod Environment</Banner.Headline>
-            <Banner.Description>
-              Prod will be completely backfilled in order to ensure there are no
-              data gaps. After this is applied, it is recommended to validate
-              further changes in a dev environment before deploying to
-              production.
-            </Banner.Description>
+            <Disclosure defaultOpen={true}>
+              {({ open }) => (
+                <>
+                  <div className="flex items-center">
+                    <Banner.Headline className="w-full mr-2 text-sm">
+                      Initializing Prod Environment
+                    </Banner.Headline>
+                    <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                      {open ? (
+                        <MinusCircleIcon className="h-6 w-6 text-warning-500" />
+                      ) : (
+                        <PlusCircleIcon className="h-6 w-6 text-warning-500" />
+                      )}
+                    </Disclosure.Button>
+                  </div>
+                  <Disclosure.Panel className="px-4 pb-2 text-sm">
+                    <Banner.Description>
+                      Prod will be completely backfilled in order to ensure
+                      there are no data gaps. After this is applied, it is
+                      recommended to validate further changes in a dev
+                      environment before deploying to production.
+                    </Banner.Description>
+                  </Disclosure.Panel>
+                </>
+              )}
+            </Disclosure>
           </Banner>
         )}
         {isArrayNotEmpty(errors) && (
           <Banner variant={EnumVariant.Danger}>
-            <Disclosure defaultOpen={false}>
+            <Disclosure defaultOpen={true}>
               {({ open }) => (
                 <>
                   <div className="flex items-center">
@@ -50,9 +69,14 @@ export default function PlanHeader(): JSX.Element {
                     </Disclosure.Button>
                   </div>
                   <Disclosure.Panel className="px-4 pb-2 text-sm">
-                    {errors.map(error => (
-                      <li key={error}>{error}</li>
-                    ))}
+                    <ul className="mt-2">
+                      {errors.map(error => (
+                        <li key={error}>
+                          <span className="inline-block mr-2">&mdash;</span>
+                          <span>{error}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </Disclosure.Panel>
                 </>
               )}

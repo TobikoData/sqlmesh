@@ -41,12 +41,26 @@ function Banner({
   )
 }
 
-function Headline({ children }: { children: React.ReactNode }): JSX.Element {
-  return <h4 className="mb-2 font-bold text-lg">{children}</h4>
+function Headline({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}): JSX.Element {
+  return (
+    <h4 className={clsx('mb-2 font-bold text-lg', className)}>{children}</h4>
+  )
 }
 
-function Description({ children }: { children: React.ReactNode }): JSX.Element {
-  return <p className="text-prose">{children}</p>
+function Description({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}): JSX.Element {
+  return <p className={clsx('text-prose', className)}>{children}</p>
 }
 
 Banner.Headline = Headline
