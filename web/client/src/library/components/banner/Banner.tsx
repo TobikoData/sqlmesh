@@ -20,7 +20,7 @@ function Banner({
     >
       <div
         className={clsx(
-          'p-4 w-full h-full border-2 rounded-lg ',
+          'p-4 w-full h-full border-2 rounded-lg',
           variant === EnumVariant.Primary &&
             'bg-primary-10 border-primary-400 text-primary-600',
           variant === EnumVariant.Secondary &&

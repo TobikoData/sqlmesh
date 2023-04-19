@@ -19,9 +19,9 @@ class ApiConsole(TerminalConsole):
         self.queue: asyncio.Queue = asyncio.Queue()
 
     def _make_event(
-        self, data: str | t.Dict[str, t.Any], event: str | None = None, ok: bool | None = None
+        self, data: str | dict[str, t.Any], event: str | None = None, ok: bool | None = None
     ) -> Event:
-        payload: t.Dict[str, t.Any] = {
+        payload: dict[str, t.Any] = {
             "ok": True if ok is None else ok,
             "timestamp": now_timestamp(),
         }
@@ -71,7 +71,7 @@ class ApiConsole(TerminalConsole):
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
         ok = True
-        data: t.Union[str, t.Dict[str, t.Any]]
+        data: str | t.Dict[str, t.Any]
         if result.wasSuccessful():
             data = f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
         else:

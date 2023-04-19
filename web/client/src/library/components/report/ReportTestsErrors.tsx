@@ -9,7 +9,7 @@ export default function ReportTestsErrors({
     <div>
       <div className="py-2">
         <p>Total: {report.total}</p>
-        <p>Successed: {report.successful}</p>
+        <p>Succeeded: {report.successful}</p>
         <p>Failed: {report.failures}</p>
         <p>Errors: {report.errors}</p>
         <p>Dialect: {report.dialect}</p>

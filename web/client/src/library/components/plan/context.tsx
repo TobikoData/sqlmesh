@@ -348,8 +348,6 @@ function reducer(
     }
 
     case EnumPlanActions.TestsReportErrors: {
-      console.log({ newState })
-
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
