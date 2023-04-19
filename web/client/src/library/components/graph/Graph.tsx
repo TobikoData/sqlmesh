@@ -462,7 +462,7 @@ function ModelColumn({
                     >
                       <Popover.Panel className="absolute bottom-6 z-10 transform">
                         <div
-                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[25wh] rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5 p-4"
+                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[25vw] rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5 p-4"
                           dangerouslySetInnerHTML={{
                             __html: `<pre class='inline-block w-full h-full'>${
                               lineage?.[id][column.name].source as string
