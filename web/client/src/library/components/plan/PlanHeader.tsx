@@ -13,7 +13,7 @@ export default function PlanHeader(): JSX.Element {
   const { errors, testsReportErrors } = usePlan()
 
   return (
-    <div className="flex flex-col py-2 w-full overflow-hidden">
+    <div className="flex flex-col py-2 w-full">
       <h4 className="text-xl pb-2 px-6">
         <span className="font-bold">Target Environment is</span>
         <b className="ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">

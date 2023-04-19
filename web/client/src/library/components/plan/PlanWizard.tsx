@@ -153,7 +153,7 @@ export default function PlanWizard({
   })
 
   return (
-    <div className="w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
+    <div className="w-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
       <ul className="w-full">
         {planAction === EnumPlanAction.Run ? (
           <Plan.StepOptions className="w-full" />
@@ -168,7 +168,7 @@ export default function PlanWizard({
                 <PlanWizardStepMessage hasSpinner>
                   Running Tests ...
                 </PlanWizardStepMessage>
-              ) : isNil(testsReportErrors) || isNil(testsReportMessages) ? (
+              ) : isNil(testsReportErrors) && isNil(testsReportMessages) ? (
                 <PlanWizardStepMessage>
                   {skip_tests ? 'Tests Skipped' : 'No Tests'}
                 </PlanWizardStepMessage>
