@@ -659,7 +659,7 @@ def test_create_table_primary_key(mocker: MockerFixture):
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT, PRIMARY KEY (cola, colb))'
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT, PRIMARY KEY (cola, colb))"
     )
 
 
