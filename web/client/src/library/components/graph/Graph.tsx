@@ -17,24 +17,16 @@ import ReactFlow, {
   BackgroundVariant,
   type NodeProps,
   type Edge,
-  type Node,
 } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
 import {
   getNodesAndEdges,
   createGraphLayout,
-  createGraph,
   toNodeOrEdgeId,
   type GraphNodeData,
 } from './help'
-import {
-  debounceAsync,
-  isArrayNotEmpty,
-  isFalse,
-  isNil,
-  isTrue,
-} from '../../../utils'
+import { debounceAsync, isArrayNotEmpty, isFalse, isTrue } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import {
@@ -50,12 +42,12 @@ import { Popover, Transition } from '@headlessui/react'
 import { useStoreEditor, type Lineage } from '@context/editor'
 
 export default function Graph({
-  dag,
+  graph,
   closeGraph,
   highlightedNodes = [],
 }: {
+  graph: Record<string, Lineage>
   closeGraph?: () => void
-  dag: Record<string, Lineage>
   highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
@@ -67,76 +59,52 @@ export default function Graph({
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
-  const [graph, setGraph] = useState<{ nodes: Node[]; edges: Edge[] }>()
-
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
   const nodesAndEdges = useMemo(
     () =>
-      dag == null
-        ? undefined
-        : getNodesAndEdges({ lineage: dag, highlightedNodes }),
-    [dag, models],
-  )
-  const lineage = useMemo(
-    () =>
-      nodesAndEdges == null
-        ? undefined
-        : createGraph({
-            nodesMap: nodesAndEdges.nodesMap,
-            edges: nodesAndEdges.edges,
-            models,
-          }),
-    [nodesAndEdges],
+      getNodesAndEdges({
+        lineage: graph,
+        highlightedNodes,
+        models,
+        nodes,
+      }),
+    [graph, highlightedNodes, models],
   )
 
   useEffect(() => {
-    return () => {
-      setColumns(undefined)
-    }
-  }, [])
-
-  useEffect(() => {
-    setColumns(nodesAndEdges?.columns)
-  }, [nodesAndEdges?.columns])
-
-  useEffect(() => {
-    if (isNil(dag)) return
-
     let active = true
 
     void load()
 
     return () => {
       active = false
+      setColumns(undefined)
     }
 
     async function load(): Promise<void> {
-      setGraph(undefined)
-
-      if (dag == null || nodesAndEdges == null || lineage == null) return
-
-      const graph = await createGraphLayout({
-        data: dag,
-        lineage,
-        ...nodesAndEdges,
+      const layout = await createGraphLayout({
+        nodes: nodesAndEdges.nodes,
+        edges: nodesAndEdges.edges,
+        nodesMap: nodesAndEdges.nodesMap,
       })
 
       if (isFalse(active)) return
 
-      setGraph(graph)
+      setNodes(layout.nodes)
+      setEdges(layout.edges)
+      setColumns(nodesAndEdges.columns)
     }
-  }, [dag, nodesAndEdges, lineage])
+  }, [])
 
   useEffect(() => {
-    if (graph == null) return
-
-    setNodes(graph.nodes)
-    setEdges(toggleEdge(graph.edges))
-  }, [graph])
-
-  useEffect(() => {
-    setEdges(toggleEdge)
+    setEdges(toggleEdge(nodesAndEdges.edges))
   }, [activeEdges])
+
+  useEffect(() => {
+    setNodes(nodesAndEdges.nodes)
+    setEdges(nodesAndEdges.edges)
+    setColumns(nodesAndEdges.columns)
+  }, [nodesAndEdges])
 
   function toggleEdge(edges: Edge[] = []): Edge[] {
     return edges.map(edge => {
@@ -301,8 +269,9 @@ function ModelNode({
           </span>
         </ModelNodeHandles>
       </div>
-      <ModelColumns
+      <div
         className={clsx(
+          'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
           columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
         )}
       >
@@ -327,7 +296,7 @@ function ModelNode({
             toggleEdgeById={toggleEdgeById}
           />
         ))}
-      </ModelColumns>
+      </div>
       {columns.length > COLUMS_LIMIT_DEFAULT && (
         <div className="flex px-3 py-2 bg-theme-lighter rounded-b-lg cursor-default">
           <Button
@@ -345,25 +314,6 @@ function ModelNode({
         </div>
       )}
     </div>
-  )
-}
-
-function ModelColumns({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}): JSX.Element {
-  return (
-    <ul
-      className={clsx(
-        'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
-        className,
-      )}
-    >
-      {children}
-    </ul>
   )
 }
 
@@ -420,9 +370,11 @@ function ModelColumn({
   }, [columnLineage])
 
   const lineage = previewLineage?.[id]?.columns?.[column.name]
+  const hasTarget = isArrayNotEmpty(columns?.[columnId]?.outs)
+  const hasSource = isArrayNotEmpty(columns?.[columnId]?.ins)
 
   return (
-    <li
+    <div
       key={column.name}
       className={clsx(
         isActive && 'bg-secondary-10 dark:bg-primary-900',
@@ -433,22 +385,25 @@ function ModelColumn({
           void debouncedGetColumnLineage()
         }
 
-        setIsActive(!isActive)
+        if (columnLineage != null) {
+          toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
+          toggleEdgeById(
+            isActive,
+            targetId,
+            columns?.[columnId]?.outs,
+            'target',
+          )
+        }
 
-        toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
-        toggleEdgeById(isActive, targetId, columns?.[columnId]?.outs, 'target')
+        setIsActive(!isActive)
       }}
     >
       <ModelNodeHandles
         id={columnId}
-        targetPosition={
-          isArrayNotEmpty(columns?.[columnId]?.outs)
-            ? targetPosition
-            : undefined
-        }
-        sourcePosition={
-          isArrayNotEmpty(columns?.[columnId]?.ins) ? sourcePosition : undefined
-        }
+        targetPosition={targetPosition}
+        sourcePosition={sourcePosition}
+        hasTarget={hasTarget}
+        hasSource={hasSource}
       >
         <div className="flex w-full justify-between">
           <div
@@ -504,7 +459,7 @@ function ModelColumn({
           </div>
         </div>
       </ModelNodeHandles>
-    </li>
+    </div>
   )
 }
 
@@ -515,13 +470,17 @@ function ModelNodeHandles({
   children,
   className,
   isLeading = false,
+  hasTarget = true,
+  hasSource = true,
 }: {
+  id: string
   sourcePosition?: Position
   targetPosition?: Position
   children: React.ReactNode
-  id?: string
   isLeading?: boolean
   className?: string
+  hasTarget?: boolean
+  hasSource?: boolean
 }): JSX.Element {
   return (
     <div
@@ -534,23 +493,27 @@ function ModelNodeHandles({
       {targetPosition === Position.Right && (
         <Handle
           type="target"
-          id={id != null ? toNodeOrEdgeId('target', id) : undefined}
+          id={toNodeOrEdgeId('target', id)}
           position={Position.Right}
           isConnectable={false}
-          className="w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500"
+          className={clsx(
+            'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
+            hasTarget ? 'visible' : 'invisible',
+          )}
         />
       )}
       {children}
       {sourcePosition === Position.Left && (
         <Handle
           type="source"
-          id={id != null ? toNodeOrEdgeId('source', id) : undefined}
+          id={toNodeOrEdgeId('source', id)}
           position={Position.Left}
           isConnectable={false}
           className={clsx(
             isLeading
               ? '!bg-transparent -ml-2 dark:text-primary-500'
               : 'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
+            hasSource ? 'visible' : 'invisible',
           )}
         >
           {isLeading && (

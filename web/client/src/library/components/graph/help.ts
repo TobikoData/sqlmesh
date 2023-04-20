@@ -1,5 +1,5 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
-import { isArrayNotEmpty, isFalse, isNil } from '../../../utils'
+import { isArrayNotEmpty, isFalse, isNil, isObjectEmpty } from '../../../utils'
 import { type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
@@ -19,13 +19,17 @@ const NODE_HEIGHT = 32
 export function getNodesAndEdges({
   lineage,
   highlightedNodes,
+  models,
+  nodes = [],
 }: {
   lineage: Record<string, Lineage>
   highlightedNodes: string[]
+  models: Map<string, Model>
+  nodes: Node[]
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
-  targets: Set<string>
+  nodes: Node[]
   columns: Record<string, { ins: string[]; outs: string[] }>
 } {
   const targets = new Set(
@@ -34,18 +38,13 @@ export function getNodesAndEdges({
       .flat(),
   )
   const modelNames = Object.keys(lineage)
-  const nodesMap: Record<string, Node> = modelNames.reduce(
-    (acc, label) =>
-      Object.assign(acc, {
-        [label]: toGraphNode({
-          label,
-          isHighlighted: highlightedNodes.includes(label),
-          isInteractive:
-            isArrayNotEmpty(highlightedNodes) &&
-            isFalse(highlightedNodes.includes(label)),
-        }),
-      }),
-    {},
+  const nodesMap = getNodeMap(
+    modelNames,
+    lineage,
+    highlightedNodes,
+    models,
+    targets,
+    nodes,
   )
   const edges: Edge[] = []
   const columns: Record<string, { ins: string[]; outs: string[] }> = {}
@@ -55,21 +54,16 @@ export function getNodesAndEdges({
 
     if (modelLineage == null) continue
 
-    const dag = modelLineage.models
-
-    if (dag == null) continue
-
-    const modelsTarget = dag
-    const columnsLineage = modelLineage.columns
-
-    modelsTarget.forEach(modelTarget => {
-      edges.push(toGraphEdge(modelSource, modelTarget))
+    modelLineage.models.forEach(modelTarget => {
+      edges.push(createGraphEdge(modelSource, modelTarget))
     })
 
-    if (columnsLineage == null) continue
+    if (modelLineage.columns == null || isObjectEmpty(modelLineage.columns))
+      continue
 
-    for (const columnSource in columnsLineage) {
+    for (const columnSource in modelLineage.columns) {
       const sourceId = toNodeOrEdgeId(modelSource, columnSource)
+      const modelsTarget = modelLineage.columns[columnSource]?.models
 
       if (columns[sourceId] == null) {
         columns[sourceId] = {
@@ -78,12 +72,10 @@ export function getNodesAndEdges({
         }
       }
 
-      const modelsTarget = columnsLineage[columnSource]
-
       if (modelsTarget == null) continue
 
-      for (const modelTarget in modelsTarget.models) {
-        const columnsTarget = modelsTarget.models[modelTarget]
+      for (const modelTarget in modelsTarget) {
+        const columnsTarget = modelsTarget[modelTarget]
 
         if (columnsTarget == null) continue
 
@@ -101,12 +93,12 @@ export function getNodesAndEdges({
           columns[targetId]?.outs.push(sourceId)
 
           edges.push(
-            toGraphEdge(
+            createGraphEdge(
               modelSource,
               modelTarget,
               toNodeOrEdgeId('source', modelSource, columnSource),
               toNodeOrEdgeId('target', modelTarget, columnTarget),
-              true,
+              false,
               {
                 target: modelTarget,
                 source: modelSource,
@@ -120,75 +112,111 @@ export function getNodesAndEdges({
     }
   }
 
-  return { targets, edges, nodesMap, columns }
+  return {
+    edges,
+    nodes: Object.values(nodesMap),
+    nodesMap,
+    columns,
+  }
 }
 
-export function createGraph({
-  nodesMap,
+export async function createGraphLayout({
+  nodes = [],
   edges = [],
-  models,
+  nodesMap,
 }: {
-  nodesMap: Record<string, Node>
+  nodes: Node[]
   edges: Edge[]
-  models: Map<string, Model>
-}): ElkNode {
-  return {
+  nodesMap: Record<string, Node>
+}): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const layout = await elk.layout({
     id: 'root',
     layoutOptions: { algorithm: 'layered' },
-    children: Object.values(nodesMap).map(node => ({
+    children: nodes.map(node => ({
       id: node.id,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT + 32 * (models.get(node.id)?.columns?.length ?? 0),
+      width: node.data.width,
+      height: node.data.height,
     })),
     edges: edges.map(edge => ({
       id: edge.id,
       sources: [edge.source],
       targets: [edge.target],
     })),
+  })
+
+  return {
+    edges,
+    nodes: repositionNodes(layout.children, nodesMap),
   }
 }
 
-export async function createGraphLayout({
-  data,
-  nodesMap,
-  edges = [],
-  targets,
-  lineage,
-}: {
-  data: Record<string, Lineage>
-  nodesMap: Record<string, Node>
-  edges: Edge[]
-  targets: Set<string>
-  lineage: ElkNode
-}): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const layout = await elk.layout(lineage)
+function getNodeMap(
+  modelNames: string[],
+  lineage: Record<string, Lineage>,
+  highlightedNodes: string[],
+  models: Map<string, Model>,
+  targets: Set<string>,
+  nodes: Node[],
+): Record<string, Node> {
+  const current = nodes.reduce(
+    (acc: Record<string, Node>, node) =>
+      Object.assign(acc, { [node.id]: node }),
+    {},
+  )
+
+  return modelNames.reduce((acc: Record<string, Node>, label: string) => {
+    const node =
+      current[label] ??
+      createGraphNode({
+        label,
+        isHighlighted: highlightedNodes.includes(label),
+        isInteractive:
+          isArrayNotEmpty(highlightedNodes) &&
+          isFalse(highlightedNodes.includes(label)),
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT + 32 * (models.get(label)?.columns?.length ?? 0),
+      })
+
+    if (isArrayNotEmpty(lineage[node.id]?.models)) {
+      node.sourcePosition = Position.Left
+    }
+
+    if (targets.has(node.id)) {
+      node.targetPosition = Position.Right
+    }
+
+    acc[label] = node
+
+    return acc
+  }, {})
+}
+
+function repositionNodes(
+  elkNodes: ElkNode[] = [],
+  nodesMap: Record<string, Node>,
+): Node[] {
   const nodes: Node[] = []
 
-  layout.children?.forEach(node => {
+  elkNodes.forEach(node => {
     const output = nodesMap[node.id]
 
     if (output == null) return
 
-    if (isArrayNotEmpty(data[node.id]?.models)) {
-      output.sourcePosition = Position.Left
+    if (output.position.x === 0 && node.x != null) {
+      output.position.x = -node.x * 2
     }
 
-    if (targets.has(node.id)) {
-      output.targetPosition = Position.Right
-    }
-
-    output.position = {
-      x: node.x == null ? 0 : -node.x * 2,
-      y: node.y == null ? 0 : -node.y * 1.25,
+    if (output.position.y === 0 && node.y != null) {
+      output.position.y = -node.y * 1.5
     }
 
     nodes.push(output)
   })
 
-  return { nodes, edges }
+  return nodes
 }
 
-function toGraphNode(
+function createGraphNode(
   data: GraphNodeData,
   type: string = 'model',
   position: XYPosition = { x: 0, y: 0 },
@@ -211,7 +239,7 @@ function toGraphNode(
   }
 }
 
-function toGraphEdge<TData = any>(
+function createGraphEdge<TData = any>(
   source: string,
   target: string,
   sourceHandle?: string,

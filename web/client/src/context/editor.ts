@@ -1,4 +1,4 @@
-import { type ColumnLineageApiLineageGet200 } from '@api/client'
+import { type ColumnLineageApiLineageModelNameColumnNameGet200 } from '@api/client'
 import { isObjectEmpty } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
@@ -43,7 +43,7 @@ interface EditorStore {
   setPreviewConsole: (previewConsole?: string) => void
   setPreviewLineage: (
     previewLineage?: Record<string, Lineage>,
-    columns?: ColumnLineageApiLineageGet200,
+    columns?: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
 }
 
@@ -187,7 +187,7 @@ function getStoredTabsIds(): ID[] {
 
 function mergeLineageWithColumns(
   lineage: Record<string, Lineage>,
-  columns: ColumnLineageApiLineageGet200,
+  columns: ColumnLineageApiLineageModelNameColumnNameGet200,
 ): Record<string, Lineage> {
   for (const model in columns) {
     const lineageModel = lineage[model]
@@ -209,6 +209,8 @@ function mergeLineageWithColumns(
       lineageModelColumn.source = columnsModelColumn.source
       lineageModelColumn.models = {}
 
+      lineageModel.columns[columnName] = lineageModelColumn
+
       if (isObjectEmpty(columnsModelColumn.models)) continue
 
       for (const columnModel in columnsModelColumn.models) {
@@ -216,20 +218,16 @@ function mergeLineageWithColumns(
 
         if (columnsModelColumnModel == null) continue
 
-        let lineageModelColumnModel = lineageModelColumn.models[columnModel]
+        const lineageModelColumnModel = lineageModelColumn.models[columnModel]
 
         if (lineageModelColumnModel == null) {
-          lineageModelColumnModel = columnsModelColumnModel
+          lineageModelColumn.models[columnModel] = columnsModelColumnModel
         } else {
-          lineageModelColumnModel = Array.from(
+          lineageModelColumn.models[columnModel] = Array.from(
             new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
           )
         }
-
-        lineageModelColumn.models[columnModel] = lineageModelColumnModel
       }
-
-      lineageModel.columns[columnName] = lineageModelColumn
     }
   }
 

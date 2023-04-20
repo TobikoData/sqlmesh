@@ -26,8 +26,8 @@ import {
   type Model,
   type ModelLineageApiLineageModelNameGet200,
   modelLineageApiLineageModelNameGet,
-  type ColumnLineageApiLineageGet200,
-  columnLineageApiLineageGet,
+  type ColumnLineageApiLineageModelNameColumnNameGet200,
+  columnLineageApiLineageModelNameColumnNameGet,
 } from './client'
 
 export function useApiModelLineage(
@@ -45,11 +45,13 @@ export function useApiModelLineage(
 export function useApiColumnLineage(
   model: string,
   column: string,
-): UseQueryResult<ColumnLineageApiLineageGet200> {
+): UseQueryResult<ColumnLineageApiLineageModelNameColumnNameGet200> {
   return useQuery({
-    queryKey: [`/api/lineage`],
+    queryKey: [`/api/lineage`, model, column],
     queryFn: async ({ signal }) =>
-      await columnLineageApiLineageGet({ model, column }, { signal }),
+      await columnLineageApiLineageModelNameColumnNameGet(model, column, {
+        signal,
+      }),
     cacheTime: 0,
     enabled: false,
   })

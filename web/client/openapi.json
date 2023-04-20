@@ -414,23 +414,23 @@
         }
       }
     },
-    "/api/lineage": {
+    "/api/lineage/{model_name}/{column_name}": {
       "get": {
         "summary": "Column Lineage",
         "description": "Get a column's lineage",
-        "operationId": "column_lineage_api_lineage_get",
+        "operationId": "column_lineage_api_lineage__model_name___column_name__get",
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Column", "type": "string" },
-            "name": "column",
-            "in": "query"
+            "schema": { "title": "Column Name", "type": "string" },
+            "name": "column_name",
+            "in": "path"
           },
           {
             "required": true,
-            "schema": { "title": "Model", "type": "string" },
-            "name": "model",
-            "in": "query"
+            "schema": { "title": "Model Name", "type": "string" },
+            "name": "model_name",
+            "in": "path"
           }
         ],
         "responses": {
@@ -439,7 +439,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Column Lineage Api Lineage Get",
+                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get",
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",

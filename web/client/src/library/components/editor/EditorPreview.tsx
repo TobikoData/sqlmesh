@@ -322,7 +322,7 @@ function EditorPreviewLineage({ model }: { model: string }): JSX.Element {
     </div>
   ) : (
     <Graph
-      dag={previewLineage}
+      graph={previewLineage}
       highlightedNodes={[model]}
     />
   )
