@@ -441,25 +441,22 @@ def test_fetchdf(web_sushi_context: Context) -> None:
 def test_get_models(web_sushi_context: Context) -> None:
     response = client.get("/api/models")
     json_models = [
-        model.dict()
-        for model in [
-            models.Model(
-                name=model.name,
-                path=str(model._path.relative_to(web_sushi_context.path)),
-                description=model.description,
-                owner=model.owner,
-                dialect=model.dialect,
-                columns=[
-                    models.Column(
-                        name=name,
-                        type=str(data_type),
-                        description=model.column_descriptions.get(name),
-                    )
-                    for name, data_type in model.columns_to_types.items()
-                ],
-            )
-            for model in web_sushi_context.models.values()
-        ]
+        models.Model(
+            name=model.name,
+            path=str(model._path.relative_to(web_sushi_context.path)),
+            description=model.description,
+            owner=model.owner,
+            dialect=model.dialect,
+            columns=[
+                models.Column(
+                    name=name,
+                    type=str(data_type),
+                    description=model.column_descriptions.get(name),
+                )
+                for name, data_type in model.columns_to_types.items()
+            ],
+        ).dict()
+        for model in web_sushi_context.models.values()
     ]
 
     assert response.status_code == 200
@@ -491,4 +488,23 @@ def test_get_environments(project_context: Context) -> None:
             "previous_plan_id": None,
             "expiration_ts": None,
         }
+    }
+
+
+def test_get_lineage(web_sushi_context: Context) -> None:
+    response = client.get("/api/lineage", params={"model": "sushi.waiters", "column": "ds"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "sushi.waiters": {
+            "ds": {
+                "source": "SELECT DISTINCT\n  <b>CAST(o.ds AS TEXT) AS ds</b>\nFROM (\n  SELECT\n    CAST(NULL AS INT) AS id,\n    CAST(NULL AS INT) AS customer_id,\n    CAST(NULL AS INT) AS waiter_id,\n    CAST(NULL AS INT) AS start_ts,\n    CAST(NULL AS INT) AS end_ts,\n    CAST(NULL AS TEXT) AS ds\n  FROM (VALUES\n    (1)) AS t(dummy)\n) AS o /* source: sushi.orders */\nWHERE\n  o.ds BETWEEN '1970-01-01' AND '1970-01-01'",
+                "models": {"sushi.orders": ["ds"]},
+            }
+        },
+        "sushi.orders": {
+            "ds": {
+                "source": "SELECT\n  <b>CAST(NULL AS TEXT) AS ds</b>\nFROM (VALUES\n  (1)) AS t(dummy)",
+                "models": {},
+            }
+        },
     }
