@@ -43,27 +43,38 @@ Consider the following when using a dbt project:
 
 ## How to use SQLMesh incremental models with dbt projects
 
-Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's.
-
-SQLMesh automatically detects and offers to backfill missing time intervals for incremental models. dbt's incremental logic does not support intervals and is not compatible with SQLMesh.
+Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's in that SQLMesh will always run incrementally, even the first time, detecting and backfilling each missing time interval.
 
 This section describes how to implement SQLMesh incremental models in a dbt-formatted project.
 
-### dbt's incremental logic
-dbt's incremental logic is implemented with jinja blocks gated by `{% if is_incremental() %}`. 
-
-Existing uses of these blocks do not need to be removed from the dbt project's models, but SQLMesh will ignore them.
-
-### SQLMesh's incremental logic
-SQLMesh's incremental logic is implemented in dbt projects with jinja blocks gated by `{% if sqlmesh is defined %}`.
+### Incremental types
 
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads: 
-- Using merge (with the sqlmesh [`incremental_by_unique_key` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key)) 
-- Using insert-overwrite/delete+insert (with the sqlmesh [`incremental_by_time_range` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
 
-A model using the insert-overwrite approach must specify the model's time column. The following example jinja block is for an `INCREMENTAL_BY_TIME_RANGE` model kind with a `time_column` named "ds". 
+* Using merge (with the sqlmesh [`incremental_by_unique_key` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key)) 
+* Using insert-overwrite/delete+insert (with the sqlmesh [`incremental_by_time_range` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
 
-The SQL `WHERE` clause selecting a time interval with the "ds" column goes in a jinja block gated by `{% if sqlmesh is defined %}`:
+#### Incremental by unique key
+
+To enable incremental_by_unique_key incrementality, make sure the model configuration contains the following:
+
+* `unique_key`
+* `materialized` type of `incremental`
+* Either no `incremental_strategy` or `incremental_strategy` of `merge`
+
+#### Incremental by time range
+
+To enable incremental_by_time_range incrementality, make sure the model configuration contains the following:
+
+* `time_column` (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
+* `materialized` type of `incremental`
+* `incremental_strategy` of either `insert_ovewrite` or `delete+insert`
+
+### Incremental logic
+
+SQLMesh's incremental logic will ignore dbt's incremental jinja block `{% if is_incremental() %}`, to maintain backwards compatibility, and instead use a new jinja block gated by `{% if sqlmesh is defined %}`. The new block will contain the where clause selecting the time interval.
+
+For example, the SQL `WHERE` clause with the "ds" column goes in a jinja block gated by `{% if sqlmesh is defined %}` as follows:
 
 ```bash
 > {% if sqlmesh is defined %}
@@ -72,7 +83,7 @@ The SQL `WHERE` clause selecting a time interval with the "ds" column goes in a 
 > {% endif %}
 ```
 
-For more information about how to use different time types or unique keys with incremental loads, refer to [incremental model kinds](../concepts/models/model_kinds.md).
+`{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalent of SQLMesh's `@start_ds` and `@end_ds` predefined time variables. See all [`predefined time variables`](../concepts/macros.md#predefined-variables) available in jinja.
 
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
