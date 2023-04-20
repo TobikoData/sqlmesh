@@ -188,12 +188,11 @@ class SqlMeshLoader(Loader):
         self, macros: MacroRegistry, hooks: HookRegistry
     ) -> UniqueKeyDict[str, Model]:
         """Loads the sql models into a Dict"""
-        model_cache = ModelCache(self._context.path / c.CACHE)
-
         models: UniqueKeyDict = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
-            models_path = context_path / c.MODELS
-            for path in self._glob_paths(models_path, config=config, extension=".sql"):
+            cache = SqlMeshLoader._Cache(self, context_path)
+
+            for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
                 self._track_file(path)
 
                 def _load() -> Model:
@@ -217,13 +216,7 @@ class SqlMeshLoader(Loader):
                         time_column_format=config.time_column_format,
                     )
 
-                cache_entry_name = "__".join(path.relative_to(models_path).parts).replace(
-                    ".sql", ""
-                )
-                cache_entry_id = self._model_cache_entry_id(path, context_path)
-
-                model = model_cache.get_or_load(cache_entry_name, cache_entry_id, _load)
-                model._path = path
+                model = cache.get_or_load_model(path, _load)
                 models[model.name] = model
 
                 if isinstance(model, SeedModel):
@@ -304,11 +297,30 @@ class SqlMeshLoader(Loader):
             else:
                 yield filepath
 
-    def _model_cache_entry_id(self, model_path: Path, context_path: Path) -> str:
-        mtimes = [
-            self._path_mtimes[model_path],
-            self._macros_max_mtime,
-            self._config_mtimes.get(context_path),
-            self._config_mtimes.get(self._context.sqlmesh_path),
-        ]
-        return str(int(max([m for m in mtimes if m is not None])))
+    class _Cache:
+        def __init__(self, loader: SqlMeshLoader, context_path: Path):
+            self._loader = loader
+            self._context_path = context_path
+
+            self._model_cache = ModelCache(loader._context.path / c.CACHE)
+
+        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
+            model = self._model_cache.get_or_load(
+                self._cache_entry_name(target_path), self._model_cache_entry_id(target_path), loader
+            )
+            model._path = target_path
+            return model
+
+        def _cache_entry_name(self, target_path: Path) -> str:
+            return "__".join(target_path.relative_to(self._context_path).parts).replace(
+                target_path.suffix, ""
+            )
+
+        def _model_cache_entry_id(self, model_path: Path) -> str:
+            mtimes = [
+                self._loader._path_mtimes[model_path],
+                self._loader._macros_max_mtime,
+                self._loader._config_mtimes.get(self._context_path),
+                self._loader._config_mtimes.get(self._loader._context.sqlmesh_path),
+            ]
+            return str(int(max([m for m in mtimes if m is not None])))
