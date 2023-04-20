@@ -201,7 +201,7 @@ class Context(BaseContext):
     ):
         self.console = console or get_console()
 
-        self._sqlmesh_path = Path.home() / ".sqlmesh"
+        self.sqlmesh_path = Path.home() / ".sqlmesh"
 
         self.configs = self._load_configs(
             config or "config",
@@ -888,7 +888,7 @@ class Context(BaseContext):
         if isinstance(config, Config):
             return {path: config for path in paths}
 
-        lookup_paths = [self._sqlmesh_path / "config.yml", self._sqlmesh_path / "config.yaml"]
+        lookup_paths = [self.sqlmesh_path / "config.yml", self.sqlmesh_path / "config.yaml"]
 
         return {
             path: load_config_from_paths(

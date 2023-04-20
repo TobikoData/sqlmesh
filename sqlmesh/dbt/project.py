@@ -71,7 +71,7 @@ class Project:
         if extra_fields:
             extra_str = ",".join(f"'{field}'" for field in extra_fields)
             logger.warning(
-                f"Warning: {profile.target.type} adapter does not currently support {extra_str}."
+                "%s adapter does not currently support %s", profile.target.type, extra_str
             )
 
         packages = {}

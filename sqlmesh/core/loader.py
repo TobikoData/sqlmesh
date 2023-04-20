@@ -8,6 +8,7 @@ import os
 import sys
 import types
 import typing as t
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model import Model, SeedModel, load_model
+from sqlmesh.core.model import Model, ModelCache, SeedModel, load_model
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
@@ -79,6 +80,18 @@ class Loader(abc.ABC):
         self._path_mtimes.clear()
         self._dag = DAG()
 
+        config_mtimes: t.Dict[Path, t.List[float]] = defaultdict(list)
+        for context_path, config in self._context.configs.items():
+            for config_file in context_path.glob("config.*"):
+                self._track_file(config_file)
+                config_mtimes[context_path].append(self._path_mtimes[config_file])
+
+        for config_file in context.sqlmesh_path.glob("config.*"):
+            self._track_file(config_file)
+            config_mtimes[context.sqlmesh_path].append(self._path_mtimes[config_file])
+
+        self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
+
         macros, hooks = self._load_scripts()
         models = self._load_models(macros, hooks)
         for model in models.values():
@@ -135,6 +148,8 @@ class SqlMeshLoader(Loader):
         standard_hooks = hook.get_registry()
         standard_macros = macro.get_registry()
 
+        macros_max_mtime: t.Optional[float] = None
+
         for context_path, config in self._context.configs.items():
             for path in itertools.chain(
                 self._glob_paths(context_path / c.MACROS, config=config, extension=".py"),
@@ -142,6 +157,14 @@ class SqlMeshLoader(Loader):
             ):
                 if self._import_python_file(path, context_path):
                     self._track_file(path)
+                    macro_file_mtime = self._path_mtimes[path]
+                    macros_max_mtime = (
+                        max(macros_max_mtime, macro_file_mtime)
+                        if macros_max_mtime
+                        else macro_file_mtime
+                    )
+
+        self._macros_max_mtime = macros_max_mtime
 
         hooks = hook.get_registry()
         macros = macro.get_registry()
@@ -167,16 +190,22 @@ class SqlMeshLoader(Loader):
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
+            cache = SqlMeshLoader._Cache(self, context_path)
+
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
                 self._track_file(path)
-                with open(path, "r", encoding="utf-8") as file:
-                    try:
-                        expressions = parse(
-                            file.read(), default_dialect=config.model_defaults.dialect
-                        )
-                    except SqlglotError as ex:
-                        raise ConfigError(f"Failed to parse a model definition at '{path}': {ex}")
-                    model = load_model(
+
+                def _load() -> Model:
+                    with open(path, "r", encoding="utf-8") as file:
+                        try:
+                            expressions = parse(
+                                file.read(), default_dialect=config.model_defaults.dialect
+                            )
+                        except SqlglotError as ex:
+                            raise ConfigError(
+                                f"Failed to parse a model definition at '{path}': {ex}."
+                            )
+                    return load_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
                         macros=macros,
@@ -186,11 +215,13 @@ class SqlMeshLoader(Loader):
                         dialect=config.model_defaults.dialect,
                         time_column_format=config.time_column_format,
                     )
-                    models[model.name] = model
 
-                    if isinstance(model, SeedModel):
-                        seed_path = model.seed_path
-                        self._track_file(seed_path)
+                model = cache.get_or_load_model(path, _load)
+                models[model.name] = model
+
+                if isinstance(model, SeedModel):
+                    seed_path = model.seed_path
+                    self._track_file(seed_path)
 
         return models
 
@@ -265,3 +296,31 @@ class SqlMeshLoader(Loader):
                     break
             else:
                 yield filepath
+
+    class _Cache:
+        def __init__(self, loader: SqlMeshLoader, context_path: Path):
+            self._loader = loader
+            self._context_path = context_path
+
+            self._model_cache = ModelCache(loader._context.path / c.CACHE)
+
+        def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
+            model = self._model_cache.get_or_load(
+                self._cache_entry_name(target_path), self._model_cache_entry_id(target_path), loader
+            )
+            model._path = target_path
+            return model
+
+        def _cache_entry_name(self, target_path: Path) -> str:
+            return "__".join(target_path.relative_to(self._context_path).parts).replace(
+                target_path.suffix, ""
+            )
+
+        def _model_cache_entry_id(self, model_path: Path) -> str:
+            mtimes = [
+                self._loader._path_mtimes[model_path],
+                self._loader._macros_max_mtime,
+                self._loader._config_mtimes.get(self._context_path),
+                self._loader._config_mtimes.get(self._loader._context.sqlmesh_path),
+            ]
+            return str(int(max(m for m in mtimes if m is not None)))

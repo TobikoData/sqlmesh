@@ -19,10 +19,6 @@ IGNORE_PATTERNS = [
     ".ipynb_checkpoints/*",
 ]
 """Ignore patterns"""
-CACHE_PATH = ".cache"
-"""Cache path"""
-TABLE_INFO_CACHE = "table_info_cache"
-"""Table info cache"""
 DATA_VERSION_LIMIT = 10
 """Data version limit"""
 DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
@@ -38,3 +34,4 @@ HOOKS = "hooks"
 MACROS = "macros"
 MODELS = "models"
 TESTS = "tests"
+CACHE = ".cache"
