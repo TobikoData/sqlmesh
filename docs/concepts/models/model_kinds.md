@@ -131,7 +131,7 @@ FROM raw_employees;
 ```
 
 Composite keys are also supported:
-```sql linenums="1" hl_lines-"4"
+```sql linenums="1" hl_lines="4"
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (

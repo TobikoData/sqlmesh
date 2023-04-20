@@ -72,6 +72,9 @@ def test_model_kind():
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
     ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+    assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
+        target
+    ) == IncrementalByUniqueKeyKind(unique_key=["bar"])
 
     with pytest.raises(ConfigError) as exception:
         ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
@@ -88,8 +91,6 @@ def test_model_kind():
             incremental_strategy="append",
         ).model_kind(target)
 
-    with pytest.raises(ConfigError) as exception:
-        ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(target)
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
