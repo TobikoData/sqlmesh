@@ -70,6 +70,8 @@ To enable incremental_by_time_range incrementality, make sure the model configur
 * `materialized` type of `incremental`
 * `incremental_strategy` of either `insert_ovewrite` or `delete+insert`
 
+Note: SQLMesh will use the [`best incremental strategy`](../concepts/models/model_kinds.md#materialization-strategy) for the target engine.
+
 ### Incremental logic
 
 SQLMesh's incremental logic will ignore dbt's incremental jinja block `{% if is_incremental() %}`, to maintain backwards compatibility, and instead use a new jinja block gated by `{% if sqlmesh is defined %}`. The new block will contain the where clause selecting the time interval.
