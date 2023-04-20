@@ -5,12 +5,19 @@ import pickle
 import typing as t
 from pathlib import Path
 
+from sqlglot import __version__ as SQLGLOT_VERSION
+
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
 
 T = t.TypeVar("T", bound=PydanticModel)
+
+
+SQLGLOT_VERSION_TUPLE = tuple(SQLGLOT_VERSION.split("."))
+SQLGLOT_MAJOR_VERSION = SQLGLOT_VERSION_TUPLE[0]
+SQLGLOT_MINOR_VERSION = SQLGLOT_VERSION_TUPLE[1]
 
 
 class FileCache(t.Generic[T]):
@@ -62,4 +69,5 @@ class FileCache(t.Generic[T]):
             major, minor = __version_tuple__[0], __version_tuple__[1]
         except ImportError:
             major, minor = 0, 0
-        return self._path / f"{name}__{major}__{minor}__{entry_id}"
+        entry_file_name = f"{name}__{major}__{minor}__{SQLGLOT_MAJOR_VERSION}__{SQLGLOT_MINOR_VERSION}__{entry_id}"
+        return self._path / entry_file_name
