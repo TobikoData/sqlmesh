@@ -213,6 +213,9 @@ class ModelConfig(BaseModelConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
+        if not context.target:
+            raise ConfigError(f"Target required to load '{self.model_name}' into SQLMesh.")
+
         return create_sql_model(
             self.model_name,
             expressions[-1],

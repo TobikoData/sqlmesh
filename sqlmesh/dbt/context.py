@@ -39,7 +39,7 @@ class DbtContext:
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
     _refs: t.Dict[str, str] = field(default_factory=dict)
 
-    _target: TargetConfig = field(default_factory=TargetConfig)
+    _target: t.Optional[TargetConfig] = None
 
     _jinja_environment: t.Optional[Environment] = None
 
@@ -110,7 +110,7 @@ class DbtContext:
         return self._refs
 
     @property
-    def target(self) -> TargetConfig:
+    def target(self) -> t.Optional[TargetConfig]:
         return self._target
 
     @target.setter
@@ -146,6 +146,6 @@ class DbtContext:
         }
         if self.project_name is not None:
             output["project_name"] = self.project_name
-        if self._target is not None and self.project_name is not None:
-            output["target"] = self._target.target_jinja(self.project_name)
+        if self._target is not None:
+            output["target"] = self._target.attribute_dict()
         return output

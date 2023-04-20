@@ -14,6 +14,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroExtractor, MacroInfo
 from sqlmesh.utils.pydantic import PydanticModel
@@ -146,10 +147,12 @@ class PackageLoader:
 
             return scoped_configs
 
+        target = self._context.target or self._create_empty_target()
+
         if "quoting" in yaml:
             quoting = QuotingConfig(**yaml["quoting"])
         else:
-            quoting = self._context.target.quoting
+            quoting = target.quoting
 
         scope = ()
         self.project_config.source_config = load_config(
@@ -157,12 +160,12 @@ class PackageLoader:
         )
         self.project_config.seed_config = load_config(
             yaml.get("seeds", {}),
-            SeedConfig(target_schema=self._context.target.schema_, quoting=quoting),
+            SeedConfig(target_schema=target.schema_, quoting=quoting),
             scope,
         )
         self.project_config.model_config = load_config(
             yaml.get("models", {}),
-            ModelConfig(target_schema=self._context.target.schema_, quoting=quoting),
+            ModelConfig(target_schema=target.schema_, quoting=quoting),
             scope,
         )
 
@@ -360,3 +363,7 @@ class PackageLoader:
 
     def _config_for_scope(self, scope: Scope, configs: t.Dict[Scope, C]) -> C:
         return configs.get(scope) or self._config_for_scope(scope[0:-1], configs)
+
+    @classmethod
+    def _create_empty_target(cls) -> TargetConfig:
+        return TargetConfig(name="", database="", schema="", profile_name="")
