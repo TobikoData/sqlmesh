@@ -128,7 +128,7 @@ class ModelConfig(BaseModelConfig):
                 )
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
                     raise ConfigError(
-                        f"SQLMesh IncrementalByTime not compatible with '{strategy}'"
+                        f"SQLMesh IncrementalByTime is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
                     )
                 return IncrementalByTimeRangeKind(time_column=self.time_column)
@@ -136,22 +136,20 @@ class ModelConfig(BaseModelConfig):
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByUniqueKeyKind
                 )
-                if strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES:
-                    support_msg = (
-                        "does not currently support"
-                        if strategy is "append"
-                        else "not compatible with"
-                    )
+                if (
+                    self.incremental_strategy
+                    and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
+                ):
                     raise ConfigError(
-                        f"{self.model_name}: SQLMesh IncrementalByUniqueKey {support_msg} '{strategy}'"
+                        f"{self.model_name}: SQLMesh IncrementalByUniqueKey is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
 
             raise ConfigError(
-                f"{self.model_name}: Incremental materialization requires either "
-                f"time_column ({collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or "
-                f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}) configuration."
+                f"{self.model_name}: Incremental materialization requires either a "
+                f"time_column {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or a "
+                f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(['none']))}) configuration."
             )
         if materialization == Materialization.EPHEMERAL:
             return ModelKind(name=ModelKindName.EMBEDDED)
