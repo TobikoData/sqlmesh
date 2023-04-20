@@ -323,4 +323,4 @@ class SqlMeshLoader(Loader):
                 self._loader._config_mtimes.get(self._context_path),
                 self._loader._config_mtimes.get(self._loader._context.sqlmesh_path),
             ]
-            return str(int(max([m for m in mtimes if m is not None])))
+            return str(int(max(m for m in mtimes if m is not None)))
