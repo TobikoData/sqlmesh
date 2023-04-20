@@ -493,7 +493,7 @@ def test_get_environments(project_context: Context) -> None:
 
 
 def test_get_lineage(web_sushi_context: Context) -> None:
-    response = client.get("/api/lineage", params={"model": "sushi.waiters", "column": "ds"})
+    response = client.get("/api/lineage/sushi.waiters/ds")
     assert response.status_code == 200
     assert response.json() == {
         "sushi.waiters": {
