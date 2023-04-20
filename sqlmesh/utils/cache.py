@@ -29,6 +29,7 @@ class FileCache(t.Generic[T]):
         prefix: The prefix shared between all entries to distinguish them from other entries
             stored in the same cache folder.
     """
+
     def __init__(
         self,
         path: Path,
