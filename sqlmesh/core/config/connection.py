@@ -45,6 +45,11 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
         """The static connection kwargs for this connection"""
         return {}
 
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        """kwargs that are for execution config only"""
+        return {}
+
     def create_engine_adapter(self) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
@@ -55,6 +60,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
                 }
             ),
             multithreaded=self.concurrent_tasks > 1,
+            **self._extra_engine_config,
         )
 
 
@@ -344,6 +350,27 @@ class BigQueryConnectionMethod(str, Enum):
     SERVICE_ACCOUNT_JSON = "service-account-json"
 
 
+class BigQueryPriority(str, Enum):
+    BATCH = "batch"
+    INTERACTIVE = "interactive"
+
+    @property
+    def is_batch(self) -> bool:
+        return self == self.BATCH
+
+    @property
+    def is_interactive(self) -> bool:
+        return self == self.INTERACTIVE
+
+    @property
+    def bigquery_constant(self) -> str:
+        from google.cloud.bigquery import QueryPriority
+
+        if self.is_batch:
+            return QueryPriority.BATCH
+        return QueryPriority.INTERACTIVE
+
+
 class BigQueryConnectionConfig(_ConnectionConfig):
     """
     BigQuery Connection Configuration.
@@ -363,8 +390,15 @@ class BigQueryConnectionConfig(_ConnectionConfig):
     client_secret: t.Optional[str] = None
     token_uri: t.Optional[str] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
+    job_creation_timeout_seconds: t.Optional[int] = None
+    # Extra Engine Config
+    job_execution_timeout_seconds: t.Optional[int] = None
+    job_retries: t.Optional[int] = 1
+    job_retry_deadline_seconds: t.Optional[int] = None
+    priority: t.Optional[BigQueryPriority] = None
+    maximum_bytes_billed: t.Optional[int] = None
 
-    concurrent_tasks: int = 4
+    concurrent_tasks: int = 1
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
 
@@ -413,6 +447,22 @@ class BigQueryConnectionConfig(_ConnectionConfig):
 
         return {
             "client": client,
+        }
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            k: v
+            for k, v in self.dict().items()
+            if k
+            in {
+                "job_creation_timeout_seconds",
+                "job_execution_timeout_seconds",
+                "job_retries",
+                "job_retry_deadline_seconds",
+                "priority",
+                "maximum_bytes_billed",
+            }
         }
 
     @property

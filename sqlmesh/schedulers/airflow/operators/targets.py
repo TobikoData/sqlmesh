@@ -38,7 +38,11 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         return self._get_command_payload_or_skip(context).json()
 
     def execute(
-        self, context: Context, connection_factory: t.Callable[[], t.Any], dialect: str
+        self,
+        context: Context,
+        connection_factory: t.Callable[[], t.Any],
+        dialect: str,
+        **kwargs: t.Any,
     ) -> None:
         """Executes this target.
 
@@ -51,7 +55,10 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         payload = self._get_command_payload_or_skip(context)
         snapshot_evaluator = SnapshotEvaluator(
             create_engine_adapter(
-                connection_factory, dialect, multithreaded=self.ddl_concurrent_tasks > 1
+                connection_factory,
+                dialect,
+                multithreaded=self.ddl_concurrent_tasks > 1,
+                **kwargs,
             ),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )

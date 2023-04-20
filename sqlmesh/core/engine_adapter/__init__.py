@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing as t
 
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
@@ -33,7 +35,10 @@ DIALECT_ALIASES = {
 
 
 def create_engine_adapter(
-    connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
+    connection_factory: t.Callable[[], t.Any],
+    dialect: str,
+    multithreaded: bool = False,
+    **kwargs: t.Any,
 ) -> EngineAdapter:
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
@@ -53,9 +58,17 @@ def create_engine_adapter(
     else:
         engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
     if engine_adapter is None:
-        return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
+        return EngineAdapter(
+            connection_factory,
+            dialect,
+            multithreaded=multithreaded,
+            **kwargs,
+        )
     if engine_adapter is EngineAdapterWithIndexSupport:
         return EngineAdapterWithIndexSupport(
-            connection_factory, dialect, multithreaded=multithreaded
+            connection_factory,
+            dialect,
+            multithreaded=multithreaded,
+            **kwargs,
         )
-    return engine_adapter(connection_factory, multithreaded=multithreaded)
+    return engine_adapter(connection_factory, multithreaded=multithreaded, **kwargs)
