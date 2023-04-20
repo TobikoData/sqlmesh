@@ -35,6 +35,13 @@ class ProjectConfig(PydanticModel):
     model_config: ScopedModels = {(): ModelConfig()}
 
 
+class MacroConfig(PydanticModel):
+    """Class to contain macro configuration"""
+
+    info: MacroInfo
+    path: Path
+
+
 class Package(PydanticModel):
     """Class to contain package configuration"""
 
@@ -42,8 +49,12 @@ class Package(PydanticModel):
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
     variables: t.Dict[str, t.Any]
-    macros: t.Dict[str, MacroInfo]
+    macros: t.Dict[str, MacroConfig]
     files: t.Set[Path]
+
+    @property
+    def macro_infos(self) -> t.Dict[str, MacroInfo]:
+        return {name: macro.info for name, macro in self.macros.items()}
 
 
 class PackageLoader:
@@ -240,8 +251,8 @@ class PackageLoader:
 
         return seeds
 
-    def _load_macros(self, macros_dirs: t.List[Path]) -> t.Dict[str, MacroInfo]:
-        macros: t.Dict[str, MacroInfo] = {}
+    def _load_macros(self, macros_dirs: t.List[Path]) -> t.Dict[str, MacroConfig]:
+        macros: t.Dict[str, MacroConfig] = {}
 
         for root in macros_dirs:
             for path in root.glob("**/*.sql"):
@@ -249,10 +260,11 @@ class PackageLoader:
 
         return macros
 
-    def _load_macro_file(self, path: Path) -> t.Dict[str, MacroInfo]:
+    def _load_macro_file(self, path: Path) -> t.Dict[str, MacroConfig]:
         self._config_paths.add(path)
         with open(path, mode="r", encoding="utf8") as file:
-            return MacroExtractor().extract(file.read())
+            infos: t.Dict[str, MacroInfo] = MacroExtractor().extract(file.read())
+            return {k: MacroConfig(info=i, path=path) for k, i in infos.items()}
 
     def _load_config_section_from_properties(
         self,

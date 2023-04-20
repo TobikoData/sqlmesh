@@ -265,7 +265,7 @@ def _dbt_macro_registry() -> JinjaMacroRegistry:
             continue
         context = DbtContext(project_root=project_file.parent, jinja_macros=JinjaMacroRegistry())
         package = PackageLoader(context).load()
-        registry.add_macros(package.macros, package="dbt")
+        registry.add_macros(package.macro_infos, package="dbt")
 
     return registry
 

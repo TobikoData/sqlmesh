@@ -154,7 +154,7 @@ class QueryRenderer(ExpressionRenderer):
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
-        self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Subqueryable] = {}
+        self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
         self._schema: t.Optional[MappingSchema] = None
 
     def render(
@@ -206,19 +206,7 @@ class QueryRenderer(ExpressionRenderer):
             if not query:
                 raise ConfigError(f"Failed to render query {query}")
 
-            self._query_cache[cache_key] = t.cast(exp.Subqueryable, query)
-
-            try:
-                self._query_cache[cache_key] = optimize(
-                    self._query_cache[cache_key],
-                    schema=self._schema,
-                    rules=RENDER_OPTIMIZER_RULES,
-                    remove_unused_selections=False,
-                )
-            except (SchemaError, OptimizeError):
-                pass
-            except SqlglotError as ex:
-                raise_config_error(f"Invalid model query. {ex}", self._path)
+            self._query_cache[cache_key] = self._optimize_query(query) or query
 
         query = self._query_cache[cache_key]
 
@@ -269,12 +257,23 @@ class QueryRenderer(ExpressionRenderer):
         return any(isinstance(expression, exp.Star) for expression in self.render().expressions)
 
     def update_schema(self, schema: MappingSchema) -> None:
+        old_schema = self._schema
         self._schema = schema
 
-        if self.contains_star_query:
-            # We need to re-render in order to expand the star projection
-            self._query_cache.clear()
-            self.render()
+        if self.contains_star_query and old_schema != schema:
+            new_cache = {}
+            for cached_key, cached_query in self._query_cache.items():
+                new_cache[cached_key] = self._optimize_query(cached_query) or cached_query
+            self._query_cache = new_cache
+
+    def update_cache(
+        self,
+        query: exp.Expression,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+    ) -> None:
+        self._query_cache[_dates(start, end, latest)] = query
 
     def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
         """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
@@ -312,3 +311,17 @@ class QueryRenderer(ExpressionRenderer):
             query.having(between, copy=False)
 
         simplify(query)
+
+    def _optimize_query(self, query: exp.Expression) -> t.Optional[exp.Expression]:
+        try:
+            return optimize(
+                query,
+                schema=self._schema,
+                rules=RENDER_OPTIMIZER_RULES,
+                remove_unused_selections=False,
+            )
+        except (SchemaError, OptimizeError):
+            return None
+        except SqlglotError as ex:
+            raise_config_error(f"Invalid model query. {ex}", self._path)
+            raise
