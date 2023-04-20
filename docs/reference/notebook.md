@@ -5,8 +5,17 @@ SQLMesh supports Jupyter and Databricks Notebooks. Magics are loaded automatical
 ```python
 from sqlmesh import Context
 
-context = Context(path="example")
+context = Context(paths="path_to_sqlmesh_project")
 ```
+
+To create a fresh project in Databricks using the example project under Get Started, use the following.
+
+```python
+from sqlmesh.cli.example_project import init_example_project
+
+init_example_project("local_dbfs_path")
+```
+Update the `default_connection` and `test_connection` in the config.yaml file to use your Databricks cluster. For Databricks connection configuration, see the [Execution Engines](https://sqlmesh.readthedocs.io/en/stable/integrations/engines/) page.
 
 ## plan
 ```
