@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing as t
 
 from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
@@ -14,6 +16,9 @@ from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.config.connection import BigQueryExecutionConfig
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "spark": SparkEngineAdapter,
@@ -33,7 +38,10 @@ DIALECT_ALIASES = {
 
 
 def create_engine_adapter(
-    connection_factory: t.Callable[[], t.Any], dialect: str, multithreaded: bool = False
+    connection_factory: t.Callable[[], t.Any],
+    dialect: str,
+    multithreaded: bool = False,
+    execution_config: t.Optional[BigQueryExecutionConfig] = None,
 ) -> EngineAdapter:
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
@@ -53,9 +61,19 @@ def create_engine_adapter(
     else:
         engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
     if engine_adapter is None:
-        return EngineAdapter(connection_factory, dialect, multithreaded=multithreaded)
+        return EngineAdapter(
+            connection_factory,
+            dialect,
+            multithreaded=multithreaded,
+            execution_config=execution_config,
+        )
     if engine_adapter is EngineAdapterWithIndexSupport:
         return EngineAdapterWithIndexSupport(
-            connection_factory, dialect, multithreaded=multithreaded
+            connection_factory,
+            dialect,
+            multithreaded=multithreaded,
+            execution_config=execution_config,
         )
-    return engine_adapter(connection_factory, multithreaded=multithreaded)
+    return engine_adapter(
+        connection_factory, multithreaded=multithreaded, execution_config=execution_config
+    )

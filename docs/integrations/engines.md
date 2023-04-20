@@ -2,19 +2,25 @@
 
 # BigQuery
 ## BigQuery - Local/Built-in Scheduler
-| Option          | Description                                                                                   |  Type  | Required |
-|-----------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
-| `method`        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json` | string |    N     |
-| `project`       | The name of the GCP project                                                                   | string |    N     |
-| `location`      | The location of for the datasets (can be regional or multi-regional)                          | string |    Y     |
-| `keyfile`       | Path to the keyfile to be used with service-account method                                    | string |    Y     |
-| `keyfile_json`  | Keyfile information provided inline (not recommended)                                         |  dict  |    N     |
-| `token`         | Oath secret auth token                                                                        | string |    N     |
-| `refresh_token` | Oath secret auth refresh_token                                                                | string |    N     |
-| `client_id`     | Oath secret auth client_id                                                                    | string |    N     |
-| `client_secret` | Oath secret auth client_secret                                                                | string |    N     |
-| `token_uri`     | Oath secret auth token_uri                                                                    | string |    N     |
-| `scopes`        | Oath secret auth scopes                                                                       |  list  |    N     |
+| Option                          | Description                                                                                   |  Type  | Required |
+|---------------------------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
+| `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json` | string |    N     |
+| `project`                       | The name of the GCP project                                                                   | string |    N     |
+| `location`                      | The location of for the datasets (can be regional or multi-regional)                          | string |    Y     |
+| `keyfile`                       | Path to the keyfile to be used with service-account method                                    | string |    Y     |
+| `keyfile_json`                  | Keyfile information provided inline (not recommended)                                         |  dict  |    N     |
+| `token`                         | Oath secret auth token                                                                        | string |    N     |
+| `refresh_token`                 | Oath secret auth refresh_token                                                                | string |    N     |
+| `client_id`                     | Oath secret auth client_id                                                                    | string |    N     |
+| `client_secret`                 | Oath secret auth client_secret                                                                | string |    N     |
+| `token_uri`                     | Oath secret auth token_uri                                                                    | string |    N     |
+| `scopes`                        | Oath secret auth scopes                                                                       |  list  |    N     |
+| `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.         |  int   |    N     |
+| `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.           |  int   |    N     |
+| `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                   |  int   |    N     |
+| `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                  | string |    N     |
+| `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                              |  int   |    N     |
+
 
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`

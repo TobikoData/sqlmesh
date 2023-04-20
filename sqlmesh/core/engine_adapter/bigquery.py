@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import functools
+import logging
 import typing as t
 import uuid
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.errors import ErrorLevel
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
@@ -26,10 +29,21 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.config.connection import BigQueryExecutionConfig
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 
+logger = logging.getLogger(__name__)
+
+
 class BigQueryEngineAdapter(EngineAdapter):
+    """
+    BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
+
+    TODO: Consider writing a custom implementation using the BigQuery API directly because we are already starting
+    to override some of the DB API behavior.
+    """
+
     DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
@@ -58,13 +72,19 @@ class BigQueryEngineAdapter(EngineAdapter):
     def connection(self) -> BigQueryConnection:
         return self.cursor.connection
 
+    @property
+    def execution_config(self) -> BigQueryExecutionConfig:
+        from sqlmesh.core.config.connection import BigQueryExecutionConfig
+
+        return self._execution_config or BigQueryExecutionConfig()
+
     def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
         """Create a schema from a name or qualified table name."""
-        from google.cloud.bigquery.dbapi.exceptions import DatabaseError
+        from google.api_core.exceptions import Conflict
 
         try:
             super().create_schema(schema_name, ignore_if_exists=ignore_if_exists)
-        except DatabaseError as e:
+        except Conflict as e:
             for arg in e.args:
                 if ignore_if_exists and "Already Exists: " in arg.message:
                     return
@@ -77,6 +97,33 @@ class BigQueryEngineAdapter(EngineAdapter):
             field.name: exp.DataType.build(field.field_type, dialect=self.dialect)
             for field in table.schema
         }
+
+    def fetchone(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.Tuple:
+        """
+        BigQuery's `fetchone` method doesn't call execute and therefore would not benefit from the execute
+        configuration we have in place. Therefore this implementation calls execute instead.
+        """
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        try:
+            return next(self.cursor._query_data)
+        except StopIteration:
+            return ()
+
+    def fetchall(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+    ) -> t.List[t.Tuple]:
+        """
+        BigQuery's `fetchone` method doesn't call execute and therefore would not benefit from the execute
+        configuration we have in place. Therefore this implementation calls execute instead.
+        """
+        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        return list(self.cursor._query_data)
 
     def __load_pandas_to_temp_table(
         self,
@@ -239,6 +286,50 @@ class BigQueryEngineAdapter(EngineAdapter):
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False
 
+    def _retryable_execute(
+        self,
+        sql: str,
+    ) -> None:
+        """
+        BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
+        So we update the cursor's query job and query data with the results of the new query job. This makes sure
+        that other cursor based operations execute correctly.
+        """
+        from google.cloud.bigquery import QueryJobConfig
+
+        job_config = QueryJobConfig(**self.execution_config.job_params)
+        self.cursor._query_job = self.client.query(
+            sql, job_config=job_config, timeout=self.execution_config.job_creation_timeout_seconds
+        )
+        results = self.cursor._query_job.result(
+            timeout=self.execution_config.job_execution_timeout_seconds  # type: ignore
+        )
+        self.cursor._query_data = iter(results) if results.total_rows else iter([])
+        query_results = self.cursor._query_job._query_results
+        self.cursor._set_rowcount(query_results)
+        self.cursor._set_description(query_results.schema)
+
+    def execute(
+        self,
+        sql: t.Union[str, exp.Expression],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        """Execute a sql query."""
+        from google.api_core import retry
+
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        )
+        sql = self._to_sql(sql, **to_sql_kwargs) if isinstance(sql, exp.Expression) else sql
+        logger.debug(f"Executing SQL:\n{sql}")
+        retry.retry_target(
+            target=functools.partial(self._retryable_execute, sql=sql),
+            predicate=_ErrorCounter(self.execution_config.job_retries).should_retry,
+            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
+            deadline=self.execution_config.job_retry_deadline_seconds,
+        )
+
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
@@ -260,3 +351,47 @@ class BigQueryEngineAdapter(EngineAdapter):
             )
             for table in all_tables
         ]
+
+
+class _ErrorCounter:
+    """
+    A class that counts errors and determines whether or not to retry based on the number of errors and the error
+    type.
+
+    Reference implementation: https://github.com/dbt-labs/dbt-bigquery/blob/8339a034929b12e027f0a143abf46582f3f6ffbc/dbt/adapters/bigquery/connections.py#L672
+
+    TODO: Implement a retry configuration that works across all engines
+    """
+
+    def __init__(self, num_retries: int) -> None:
+        self.num_retries = num_retries
+        self.error_count = 0
+
+    @property
+    def retryable_errors(self) -> t.Tuple[t.Type[Exception], ...]:
+        from google.cloud.exceptions import BadRequest, ServerError
+        from requests.exceptions import ConnectionError
+
+        return (ServerError, BadRequest, ConnectionError)
+
+    def _is_retryable(self, error: t.Type[Exception]) -> bool:
+        from google.api_core.exceptions import Forbidden
+
+        if isinstance(error, self.retryable_errors):
+            return True
+        elif isinstance(error, Forbidden) and any(
+            e["reason"] == "rateLimitExceeded" for e in error.errors
+        ):
+            return True
+        return False
+
+    def should_retry(self, error: t.Type[Exception]) -> bool:
+        if self.num_retries == 0:
+            return False
+        self.error_count += 1
+        if self._is_retryable(error) and self.error_count <= self.num_retries:
+            logger.debug(
+                f"Retry Num {self.error_count} of {self.num_retries}. Error: {repr(error)}"
+            )
+            return True
+        return False

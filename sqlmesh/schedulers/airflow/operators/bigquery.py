@@ -5,6 +5,7 @@ import typing as t
 from airflow.models import BaseOperator
 from airflow.utils.context import Context
 
+from sqlmesh.core.config.connection import BigQueryExecutionConfig
 from sqlmesh.schedulers.airflow.hooks.bigquery import SQLMeshBigQueryHook
 from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
 
@@ -35,4 +36,11 @@ class SQLMeshBigQueryOperator(BaseOperator):
 
     def execute(self, context: Context) -> None:
         """Executes the desired target against the configured BigQuery connection"""
-        self._target.execute(context, lambda: self.get_db_hook().get_conn(), "bigquery")
+        self._target.execute(
+            context,
+            lambda: self.get_db_hook().get_conn(),
+            "bigquery",
+            BigQueryExecutionConfig(
+                job_retries=self.get_db_hook().num_retries,
+            ),
+        )
