@@ -484,6 +484,7 @@
                   "title": "Response Model Lineage Api Lineage  Model Name  Get",
                   "type": "object",
                   "additionalProperties": {
+                    "uniqueItems": true,
                     "type": "array",
                     "items": { "type": "string" }
                   }

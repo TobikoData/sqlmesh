@@ -32,11 +32,7 @@ export const useStoreLineage = create<LineageStore>((set, get) => ({
     const { activeEdges } = get()
 
     edges.forEach(edge => {
-      activeEdges.set(edge, (activeEdges.get(edge) ?? 0) - 1)
-
-      if ((activeEdges.get(edge) ?? 0) < 0) {
-        activeEdges.set(edge, 0)
-      }
+      activeEdges.set(edge, Math.max((activeEdges.get(edge) ?? 0) - 1, 0))
     })
 
     set({ activeEdges: new Map(activeEdges) })

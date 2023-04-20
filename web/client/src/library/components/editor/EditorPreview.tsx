@@ -263,7 +263,7 @@ export default function EditorPreview({
             )}
           >
             {model == null ? (
-              <div>Model Not Exist</div>
+              <div>Model Does Not Exist</div>
             ) : (
               <EditorPreviewLineage
                 key={model.name}

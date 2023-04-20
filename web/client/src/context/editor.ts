@@ -157,46 +157,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     const previewLineage = structuredClone(lineage)
 
     if (columns != null && previewLineage != null) {
-      for (const model in columns) {
-        const previewModelLineage = previewLineage[model]
-
-        if (previewModelLineage == null || columns[model] == null) continue
-
-        if (previewModelLineage.columns == null) {
-          previewModelLineage.columns = {}
-        }
-
-        for (const columnName in columns[model]) {
-          if (columns[model][columnName] == null) continue
-
-          if (previewModelLineage.columns[columnName] == null) {
-            previewModelLineage.columns[columnName] = {}
-          }
-
-          if (previewModelLineage.columns?.[columnName] != null) {
-            previewModelLineage.columns[columnName].source =
-              columns[model][columnName].source
-            previewModelLineage.columns[columnName].models = {}
-          }
-
-          if (isObjectEmpty(columns[model][columnName].models)) continue
-
-          for (const m in columns[model][columnName].models) {
-            if (previewModelLineage.columns[columnName].models[m] == null) {
-              previewModelLineage.columns[columnName].models[m] =
-                columns[model][columnName].models[m]
-            } else {
-              previewModelLineage.columns[columnName].models[m] = Array.from(
-                new Set(
-                  previewModelLineage.columns[columnName].models[m].concat(
-                    columns[model][columnName].models[m],
-                  ),
-                ),
-              )
-            }
-          }
-        }
-      }
+      mergeLineageWithColumns(previewLineage, columns)
     }
 
     set(() => ({ previewLineage }))
@@ -222,4 +183,55 @@ function createLocalFile(): ModelFile {
 
 function getStoredTabsIds(): ID[] {
   return getStoredTabs()?.ids ?? []
+}
+
+function mergeLineageWithColumns(
+  lineage: Record<string, Lineage>,
+  columns: ColumnLineageApiLineageGet200,
+): Record<string, Lineage> {
+  for (const model in columns) {
+    const lineageModel = lineage[model]
+    const columnsModel = columns[model]
+
+    if (lineageModel == null || columnsModel == null) continue
+
+    if (lineageModel.columns == null) {
+      lineageModel.columns = {}
+    }
+
+    for (const columnName in columnsModel) {
+      const columnsModelColumn = columnsModel[columnName]
+
+      if (columnsModelColumn == null) continue
+
+      const lineageModelColumn = lineageModel.columns[columnName] ?? {}
+
+      lineageModelColumn.source = columnsModelColumn.source
+      lineageModelColumn.models = {}
+
+      if (isObjectEmpty(columnsModelColumn.models)) continue
+
+      for (const columnModel in columnsModelColumn.models) {
+        const columnsModelColumnModel = columnsModelColumn.models[columnModel]
+
+        if (columnsModelColumnModel == null) continue
+
+        let lineageModelColumnModel = lineageModelColumn.models[columnModel]
+
+        if (lineageModelColumnModel == null) {
+          lineageModelColumnModel = columnsModelColumnModel
+        } else {
+          lineageModelColumnModel = Array.from(
+            new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
+          )
+        }
+
+        lineageModelColumn.models[columnModel] = lineageModelColumnModel
+      }
+
+      lineageModel.columns[columnName] = lineageModelColumn
+    }
+  }
+
+  return lineage
 }

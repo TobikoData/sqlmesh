@@ -34,7 +34,7 @@ export function useApiModelLineage(
   modelName: string,
 ): UseQueryResult<ModelLineageApiLineageModelNameGet200> {
   return useQuery({
-    queryKey: [`/api/lineage/${modelName}`],
+    queryKey: [`/api/lineage`, modelName],
     queryFn: async ({ signal }) =>
       await modelLineageApiLineageModelNameGet(modelName, { signal }),
     cacheTime: 0,
