@@ -29,7 +29,6 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.config.connection import BigQueryExecutionConfig
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 
@@ -73,10 +72,18 @@ class BigQueryEngineAdapter(EngineAdapter):
         return self.cursor.connection
 
     @property
-    def execution_config(self) -> BigQueryExecutionConfig:
-        from sqlmesh.core.config.connection import BigQueryExecutionConfig
+    def _job_params(self) -> t.Dict[str, t.Any]:
+        from sqlmesh.core.config.connection import BigQueryPriority
 
-        return self._execution_config or BigQueryExecutionConfig()
+        params = {
+            "use_legacy_sql": False,
+            "priority": self._extra_config.get(
+                "priority", BigQueryPriority.INTERACTIVE.bigquery_constant
+            ),
+        }
+        if self._extra_config.get("maximum_bytes_billed"):
+            params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
+        return params
 
     def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
         """Create a schema from a name or qualified table name."""
@@ -297,12 +304,14 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud.bigquery import QueryJobConfig
 
-        job_config = QueryJobConfig(**self.execution_config.job_params)
+        job_config = QueryJobConfig(**self._job_params)
         self.cursor._query_job = self.client.query(
-            sql, job_config=job_config, timeout=self.execution_config.job_creation_timeout_seconds
+            sql,
+            job_config=job_config,
+            timeout=self._extra_config.get("job_creation_timeout_seconds"),
         )
         results = self.cursor._query_job.result(
-            timeout=self.execution_config.job_execution_timeout_seconds  # type: ignore
+            timeout=self._extra_config.get("job_execution_timeout_seconds")  # type: ignore
         )
         self.cursor._query_data = iter(results) if results.total_rows else iter([])
         query_results = self.cursor._query_job._query_results
@@ -325,9 +334,9 @@ class BigQueryEngineAdapter(EngineAdapter):
         logger.debug(f"Executing SQL:\n{sql}")
         retry.retry_target(
             target=functools.partial(self._retryable_execute, sql=sql),
-            predicate=_ErrorCounter(self.execution_config.job_retries).should_retry,
+            predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
             sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
-            deadline=self.execution_config.job_retry_deadline_seconds,
+            deadline=self._extra_config.get("job_retry_deadline_seconds"),
         )
 
     def _get_data_objects(

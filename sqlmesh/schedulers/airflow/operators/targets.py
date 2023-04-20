@@ -6,7 +6,6 @@ from airflow.utils.context import Context
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
-from sqlmesh.core.config.connection import BigQueryExecutionConfig
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -43,7 +42,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
         context: Context,
         connection_factory: t.Callable[[], t.Any],
         dialect: str,
-        execution_config: t.Optional[BigQueryExecutionConfig] = None,
+        **kwargs: t.Any,
     ) -> None:
         """Executes this target.
 
@@ -52,7 +51,6 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
             connection_factory: a callable which produces a new Database API compliant
                 connection on every call.
             dialect: The dialect with which this adapter is associated.
-            execution_config: Execution configuration for the target engine adapter.
         """
         payload = self._get_command_payload_or_skip(context)
         snapshot_evaluator = SnapshotEvaluator(
@@ -60,7 +58,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
                 connection_factory,
                 dialect,
                 multithreaded=self.ddl_concurrent_tasks > 1,
-                execution_config=execution_config,
+                **kwargs,
             ),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
         )

@@ -37,7 +37,6 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.config.connection import BigQueryExecutionConfig
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.model.meta import IntervalUnit
 
@@ -70,12 +69,12 @@ class EngineAdapter:
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
-        execution_config: t.Optional[BigQueryExecutionConfig] = None,
+        **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(connection_factory, multithreaded)
         self.sql_gen_kwargs = sql_gen_kwargs or {}
-        self._execution_config = execution_config
+        self._extra_config = kwargs
 
     @property
     def cursor(self) -> t.Any:
@@ -84,10 +83,6 @@ class EngineAdapter:
     @property
     def spark(self) -> t.Optional[PySparkSession]:
         return None
-
-    @property
-    def execution_config(self) -> t.Optional[BigQueryExecutionConfig]:
-        return self._execution_config
 
     def recycle(self) -> t.Any:
         """Closes all open connections and releases all allocated resources associated with any thread

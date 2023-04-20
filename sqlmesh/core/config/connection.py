@@ -15,7 +15,6 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -47,9 +46,9 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
         return {}
 
     @property
-    def _execution_config(self) -> t.Optional[BigQueryExecutionConfig]:
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
         """kwargs that are for execution config only"""
-        return None
+        return {}
 
     def create_engine_adapter(self) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
@@ -61,7 +60,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
                 }
             ),
             multithreaded=self.concurrent_tasks > 1,
-            execution_config=self._execution_config,
+            **self._extra_engine_config,
         )
 
 
@@ -372,25 +371,6 @@ class BigQueryPriority(str, Enum):
         return QueryPriority.INTERACTIVE
 
 
-class BigQueryExecutionConfig(PydanticModel):
-    job_creation_timeout_seconds: t.Optional[int] = None
-    job_execution_timeout_seconds: t.Optional[int] = None
-    job_retries: int = 1
-    job_retry_deadline_seconds: t.Optional[int] = None
-    priority: BigQueryPriority = BigQueryPriority.INTERACTIVE
-    maximum_bytes_billed: t.Optional[int] = None
-
-    @property
-    def job_params(self) -> t.Dict[str, t.Any]:
-        job_params = {
-            "use_legacy_sql": False,
-            "priority": self.priority.bigquery_constant,
-        }
-        if self.maximum_bytes_billed:
-            job_params["maximum_bytes_billed"] = self.maximum_bytes_billed
-        return job_params
-
-
 class BigQueryConnectionConfig(_ConnectionConfig):
     """
     BigQuery Connection Configuration.
@@ -411,7 +391,7 @@ class BigQueryConnectionConfig(_ConnectionConfig):
     token_uri: t.Optional[str] = None
     scopes: t.Tuple[str, ...] = ("https://www.googleapis.com/auth/bigquery",)
     job_creation_timeout_seconds: t.Optional[int] = None
-    # Execution Config
+    # Extra Engine Config
     job_execution_timeout_seconds: t.Optional[int] = None
     job_retries: t.Optional[int] = 1
     job_retry_deadline_seconds: t.Optional[int] = None
@@ -470,22 +450,20 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         }
 
     @property
-    def _execution_config(self) -> BigQueryExecutionConfig:
-        return BigQueryExecutionConfig(
-            **{
-                k: v
-                for k, v in self.dict().items()
-                if k
-                in {
-                    "job_creation_timeout_seconds",
-                    "job_execution_timeout_seconds",
-                    "job_retries",
-                    "job_retry_deadline_seconds",
-                    "priority",
-                    "maximum_bytes_billed",
-                }
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            k: v
+            for k, v in self.dict().items()
+            if k
+            in {
+                "job_creation_timeout_seconds",
+                "job_execution_timeout_seconds",
+                "job_retries",
+                "job_retry_deadline_seconds",
+                "priority",
+                "maximum_bytes_billed",
             }
-        )
+        }
 
     @property
     def _connection_factory(self) -> t.Callable:
