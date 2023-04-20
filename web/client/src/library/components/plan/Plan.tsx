@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { debounceAsync, includes, isFalse } from '~/utils'
+import {
+  debounceAsync,
+  includes,
+  isArrayNotEmpty,
+  isFalse,
+  isObjectNotEmpty,
+  isTrue,
+} from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -26,6 +33,8 @@ import PlanBackfillDates from './PlanBackfillDates'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
+import { useChannelEvents } from '@api/channels'
+import SplitPane from '../splitPane/SplitPane'
 
 function Plan({
   environment,
@@ -45,7 +54,15 @@ function Plan({
   const client = useQueryClient()
 
   const dispatch = usePlanDispatch()
-  const { auto_apply, hasChanges, hasBackfills, hasVirtualUpdate } = usePlan()
+
+  const {
+    auto_apply,
+    hasChanges,
+    hasBackfills,
+    hasVirtualUpdate,
+    testsReportErrors,
+    errors,
+  } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -56,7 +73,8 @@ function Plan({
   const elTaskProgress = useRef<HTMLDivElement>(null)
 
   const [isPlanRan, seIsPlanRan] = useState(false)
-  const [error, setError] = useState<Error>()
+
+  const [subscribe] = useChannelEvents()
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
@@ -69,6 +87,8 @@ function Plan({
   ])
 
   useEffect(() => {
+    const unsubscribeTests = subscribe('tests', testsReport)
+
     if (environment.isInitial && environment.isDefault) {
       run()
     }
@@ -83,6 +103,8 @@ function Plan({
 
     return () => {
       debouncedPlanRun.cancel()
+
+      unsubscribeTests?.()
 
       apiCancelPlanRun(client)
     }
@@ -144,6 +166,20 @@ function Plan({
     })
   }, [activePlan])
 
+  function testsReport(data: { ok: boolean } & any): void {
+    dispatch([
+      isTrue(data.ok)
+        ? {
+            type: EnumPlanActions.TestsReportMessages,
+            testsReportMessages: data,
+          }
+        : {
+            type: EnumPlanActions.TestsReportErrors,
+            testsReportErrors: data,
+          },
+    ])
+  }
+
   function cleanUp(): void {
     seIsPlanRan(false)
 
@@ -179,7 +215,14 @@ function Plan({
   }
 
   function cancel(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+      {
+        type: EnumPlanActions.ResetTestsReport,
+      },
+    ])
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
@@ -193,14 +236,26 @@ function Plan({
           console.log('apiCancelPlanApply', 'Request aborted by React Query')
         } else {
           console.log('apiCancelPlanApply', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
   }
 
   function apply(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+      {
+        type: EnumPlanActions.ResetTestsReport,
+      },
+    ])
     setPlanAction(EnumPlanAction.Applying)
     setPlanState(EnumPlanState.Applying)
 
@@ -217,7 +272,12 @@ function Plan({
           console.log('planApply', 'Request aborted by React Query')
         } else {
           console.log('planApply', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
@@ -230,7 +290,14 @@ function Plan({
   }
 
   function run(): void {
-    setError(undefined)
+    dispatch([
+      {
+        type: EnumPlanActions.ResetErrors,
+      },
+      {
+        type: EnumPlanActions.ResetTestsReport,
+      },
+    ])
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
@@ -268,19 +335,39 @@ function Plan({
           console.log('planRun', 'Request aborted by React Query')
         } else {
           console.log('planRun', error)
-          setError(error)
+          dispatch([
+            {
+              type: EnumPlanActions.Errors,
+              errors: [error.message],
+            },
+          ])
           reset()
         }
       })
   }
 
+  const shouldSplitPane =
+    isObjectNotEmpty(testsReportErrors) || isArrayNotEmpty(errors)
+
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <Plan.Header error={error} />
-      <Divider />
-      <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
-        <Plan.Wizard setRefTasksOverview={elTaskProgress} />
-      </div>
+      {shouldSplitPane ? (
+        <SplitPane
+          sizes={isObjectNotEmpty(testsReportErrors) ? [50, 50] : [30, 70]}
+          direction="vertical"
+          snapOffset={0}
+          className="flex flex-col w-full h-full overflow-hidden"
+        >
+          <Plan.Header />
+          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+        </SplitPane>
+      ) : (
+        <>
+          <Plan.Header />
+          <Divider />
+          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+        </>
+      )}
       <Divider />
       <Plan.Actions
         disabled={disabled}

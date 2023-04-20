@@ -22,6 +22,8 @@ export const EnumPlanActions = {
   ResetPlanOptions: 'reset-plan-options',
   ResetBackfills: 'reset-backfills',
   ResetChanges: 'reset-changes',
+  ResetErrors: 'reset-errors',
+  ResetTestsReport: 'reset-tests-report',
   Dates: 'dates',
   DateStart: 'date-start',
   DateEnd: 'date-end',
@@ -31,6 +33,9 @@ export const EnumPlanActions = {
   Changes: 'changes',
   PlanOptions: 'plan-options',
   External: 'external',
+  Errors: 'errors',
+  TestsReportErrors: 'tests-report-errors',
+  TestsReportMessages: 'tests-report-messages',
 } as const
 
 export const EnumPlanChangeType = {
@@ -89,6 +94,25 @@ interface PlanBackfills {
   activeBackfill?: PlanProgress
 }
 
+export interface TestReportError {
+  ok: boolean
+  time: number
+  title: string
+  total: string
+  successful: number
+  failures: number
+  errors: number
+  dialect: string
+  traceback: string
+  details: Array<{ message: string; details: string }>
+}
+
+export interface TestReportMessage {
+  ok: boolean
+  time: number
+  message: string
+}
+
 interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   start?: ContextEnvironmentStart
   end?: ContextEnvironmentEnd
@@ -96,6 +120,9 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
+  errors: string[]
+  testsReportErrors?: TestReportError
+  testsReportMessages?: TestReportMessage
 }
 
 type PlanAction = { type: PlanActions } & Partial<PlanDetails> &
@@ -142,6 +169,9 @@ const initial = {
   hasBackfills: false,
   backfills: [],
   isInitialPlanRun: false,
+  errors: [],
+  testsReportErrors: undefined,
+  testsReportMessages: undefined,
 }
 
 export const PlanContext = createContext<PlanDetails>(initial)
@@ -304,6 +334,60 @@ function reducer(
         hasVirtualUpdate: isArrayEmpty(backfills),
       })
     }
+
+    case EnumPlanActions.Errors: {
+      const { errors } = newState as PlanDetails
+
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'errors'>
+      >({}, plan, {
+        errors: plan.errors.concat(errors),
+      })
+    }
+
+    case EnumPlanActions.TestsReportErrors: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'testsReportErrors'>
+      >({}, plan, {
+        testsReportErrors: newState.testsReportErrors,
+      })
+    }
+
+    case EnumPlanActions.TestsReportMessages: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'testsReportMessages'>
+      >({}, plan, {
+        testsReportMessages: newState.testsReportMessages,
+      })
+    }
+
+    case EnumPlanActions.ResetErrors: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'errors'>
+      >({}, plan, {
+        errors: [],
+      })
+    }
+
+    case EnumPlanActions.ResetTestsReport: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'testsReportErrors' | 'testsReportMessages'>
+      >({}, plan, {
+        testsReportErrors: undefined,
+        testsReportMessages: undefined,
+      })
+    }
+
     case EnumPlanActions.Category: {
       const { change, category } = newState as ChangeCategory
 

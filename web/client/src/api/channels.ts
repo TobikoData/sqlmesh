@@ -20,7 +20,7 @@ function subscribe(
 ): Optional<() => void> {
   if (isNil(topic) || CHANNELS.has(topic)) return CHANNELS.get(topic)
 
-  const handler = handleChannelTasks(topic, callback)
+  const handler = handleChannelTopicCallback(topic, callback)
 
   SSE_CHANNEL.addEventListener(topic, handler)
 
@@ -32,7 +32,7 @@ function subscribe(
   return CHANNELS.get(topic)
 }
 
-function handleChannelTasks(
+function handleChannelTopicCallback(
   topic: string,
   callback: ChannelCallback,
 ): (e: MessageEvent) => void {
