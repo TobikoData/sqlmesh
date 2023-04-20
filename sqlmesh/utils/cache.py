@@ -21,6 +21,14 @@ SQLGLOT_MINOR_VERSION = SQLGLOT_VERSION_TUPLE[1]
 
 
 class FileCache(t.Generic[T]):
+    """Generic file-based cache implementation.
+
+    Args:
+        path: The path to the cache folder.
+        entry_class: The type of cached entries.
+        prefix: The prefix shared between all entries to distinguish them from other entries
+            stored in the same cache folder.
+    """
     def __init__(
         self,
         path: Path,
@@ -31,6 +39,16 @@ class FileCache(t.Generic[T]):
         self._entry_class = entry_class
 
     def get_or_load(self, name: str, entry_id: str, loader: t.Callable[[], T]) -> T:
+        """Returns an existing cached entry or loads and caches a new one.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+            loader: Used to load a new entry when no cached instance was found.
+
+        Returns:
+            The entry.
+        """
         cached_entry = self.get(name, entry_id)
         if cached_entry:
             return cached_entry
@@ -40,6 +58,15 @@ class FileCache(t.Generic[T]):
         return loaded_entry
 
     def get(self, name: str, entry_id: str) -> t.Optional[T]:
+        """Returns a cached entry if exists.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+
+        Returns:
+            The entry or None if no entry was found in the cache.
+        """
         cache_entry_path = self._cache_entry_path(name, entry_id)
         if cache_entry_path.exists():
             with open(cache_entry_path, "rb") as fd:
@@ -51,6 +78,13 @@ class FileCache(t.Generic[T]):
         return None
 
     def put(self, name: str, entry_id: str, value: T) -> None:
+        """Stores the given value in the cache.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+            value: The value to store in the cache.
+        """
         if not self._path.exists():
             self._path.mkdir(parents=True)
         if not self._path.is_dir():

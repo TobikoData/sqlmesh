@@ -16,6 +16,12 @@ class SqlModelCacheEntry(PydanticModel):
 
 
 class ModelCache:
+    """File-based cache implementation for model definitions.
+
+    Args:
+        path: The path to the cache folder.
+    """
+
     def __init__(self, path: Path):
         self.path = path
         self._file_cache: FileCache[SqlModelCacheEntry] = FileCache(
@@ -25,6 +31,16 @@ class ModelCache:
         )
 
     def get_or_load(self, name: str, entry_id: str, loader: t.Callable[[], Model]) -> Model:
+        """Returns an existing cached model definition or loads and caches a new one.
+
+        Args:
+            name: The name of the entry.
+            entry_id: The unique entry identifier. Used for cache invalidation.
+            loader: Used to load a new model definition when no cached instance was found.
+
+        Returns:
+            The model definition.
+        """
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model

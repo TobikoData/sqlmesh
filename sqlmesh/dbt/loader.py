@@ -74,7 +74,7 @@ class DbtLoader(Loader):
                 ]
             )
 
-        macros_max_mtime: t.Optional[float] = max(macros_mtimes) if macros_mtimes else None
+        macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
         yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(self._context.path)
         cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
 
