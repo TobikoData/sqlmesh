@@ -141,7 +141,9 @@ class DbtLoader(Loader):
     ) -> t.Optional[float]:
         project_root = project.context.project_root
 
-        if not target_path.is_relative_to(project_root):
+        try:
+            target_path.absolute().relative_to(project_root.absolute())
+        except ValueError:
             return None
 
         mtimes = [
