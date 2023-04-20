@@ -9,6 +9,7 @@ from pydantic import Field, root_validator
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     BigQueryConnectionMethod,
+    BigQueryPriority,
     ConnectionConfig,
     DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
@@ -329,6 +330,11 @@ class BigQueryConfig(TargetConfig):
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/drive",
     )
+    job_execution_timeout_seconds: t.Optional[int] = None
+    job_retries: int = 1
+    job_retry_deadline_seconds: t.Optional[int] = None
+    priority: BigQueryPriority = BigQueryPriority.INTERACTIVE
+    maximum_bytes_billed: t.Optional[int] = None
 
     @root_validator
     def validate_schema(
@@ -356,4 +362,9 @@ class BigQueryConfig(TargetConfig):
             client_secret=self.client_secret,
             token_uri=self.token_uri,
             scopes=self.scopes,
+            job_execution_timeout_seconds=self.job_execution_timeout_seconds,
+            job_retries=self.job_retries,
+            job_retry_deadline_seconds=self.job_retry_deadline_seconds,
+            priority=self.priority,
+            maximum_bytes_billed=self.maximum_bytes_billed,
         )

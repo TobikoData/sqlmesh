@@ -69,10 +69,12 @@ class EngineAdapter:
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
+        **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(connection_factory, multithreaded)
         self.sql_gen_kwargs = sql_gen_kwargs or {}
+        self._extra_config = kwargs
 
     @property
     def cursor(self) -> t.Any:
