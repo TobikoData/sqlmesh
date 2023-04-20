@@ -53,19 +53,20 @@ def _process_downstream(
     return graph
 
 
-@router.get("")
+@router.get("/{model_name:str}/{column_name:str}")
 async def column_lineage(
-    column: str,
-    model: str,
+    column_name: str,
+    model_name: str,
     context: Context = Depends(get_loaded_context),
 ) -> t.Dict[str, t.Dict[str, LineageColumn]]:
     """Get a column's lineage"""
     try:
         node = lineage(
-            column=column,
-            sql=context.models[model].render_query(),
+            column=column_name,
+            sql=context.models[model_name].render_query(),
             sources={
-                model: context.models[model].render_query() for model in context.dag.upstream(model)
+                model: context.models[model].render_query()
+                for model in context.dag.upstream(model_name)
             },
         )
     except Exception:
@@ -74,21 +75,21 @@ async def column_lineage(
         )
 
     graph = {}
-    table = model
+    table = model_name
     cache_column_names: t.Dict[str, str] = {}
 
     for i, node in enumerate(node.walk()):
         if i > 0:
-            table = _get_table(node) or model
-            column = exp.to_column(node.name).name
-        if column in cache_column_names:
-            column = cache_column_names[column]
+            table = _get_table(node) or model_name
+            column_name = exp.to_column(node.name).name
+        if column_name in cache_column_names:
+            column_name = cache_column_names[column_name]
         graph[table] = {
-            column: LineageColumn(
+            column_name: LineageColumn(
                 source=_get_node_source(node=node, dialect=context.models[table].dialect),
                 models=_process_downstream(
                     node.downstream,
-                    column,
+                    column_name,
                     cache_column_names,
                 ),
             )

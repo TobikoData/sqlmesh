@@ -439,6 +439,7 @@ def test_fetchdf(web_sushi_context: Context) -> None:
 
 
 def test_get_models(web_sushi_context: Context) -> None:
+    # TODO: add better tests for this endpoint
     response = client.get("/api/models")
     json_models = [
         models.Model(
