@@ -71,18 +71,29 @@ class ApiConsole(TerminalConsole):
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
         ok = True
+        data: str | t.Dict[str, t.Any]
         if result.wasSuccessful():
             data = f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
         else:
-            messages = ["Test Failure Summary"]
-            messages.append(
-                f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}"
-            )
-            for test, _ in result.failures + result.errors:
+            messages = []
+            for test, details in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    messages.append(f"Failure Test: {test.model_name} {test.test_name}")
-            messages.append(output)
-            data = "\n".join(messages)
+                    messages.append(
+                        {
+                            "message": f"Failure test: {test.model_name} {test.test_name}",
+                            "details": details,
+                        }
+                    )
+            data = {
+                "title": "Test Failure Summary",
+                "total": result.testsRun,
+                "failures": len(result.failures),
+                "errors": len(result.errors),
+                "successful": result.testsRun - len(result.failures) - len(result.errors),
+                "dialect": target_dialect,
+                "details": messages,
+                "traceback": output,
+            }
             ok = False
         self.queue.put_nowait(self._make_event(data, event="tests", ok=ok))
 

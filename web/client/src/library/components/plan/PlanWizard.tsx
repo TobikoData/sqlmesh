@@ -1,14 +1,7 @@
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import {
-  type RefObject,
-  Suspense,
-  useCallback,
-  useMemo,
-  useEffect,
-  useState,
-} from 'react'
+import { type RefObject, Suspense, useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import {
@@ -19,6 +12,7 @@ import {
   type PlanTaskStatus,
 } from '../../../context/plan'
 import {
+  isNil,
   isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
@@ -29,18 +23,16 @@ import { EnumPlanChangeType, usePlan } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
-import { useChannelEvents } from '@api/channels'
 import { EnumVariant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
+import ReportTestsErrors from '@components/report/ReportTestsErrors'
 
 export default function PlanWizard({
   setRefTasksOverview,
 }: {
   setRefTasksOverview: RefObject<HTMLDivElement>
 }): JSX.Element {
-  const [subscribe] = useChannelEvents()
-
   const {
     backfills,
     hasChanges,
@@ -54,18 +46,14 @@ export default function PlanWizard({
     skip_tests,
     change_categorization,
     hasVirtualUpdate,
+    testsReportErrors,
+    testsReportMessages,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
-
-  const [testsReport, setTestsReport] = useState<{
-    ok: boolean
-    time: number
-    message: string
-  }>()
 
   const categories = useMemo(
     () =>
@@ -142,14 +130,6 @@ export default function PlanWizard({
     [backfills, change_categorization, activeBackfill],
   )
 
-  useEffect(() => {
-    const unsubscribeTasks = subscribe('tests', setTestsReport)
-
-    return () => {
-      unsubscribeTasks?.()
-    }
-  }, [])
-
   const isFinished = planState === EnumPlanState.Finished
   const hasNoChanges = [
     hasChanges,
@@ -173,222 +153,236 @@ export default function PlanWizard({
   })
 
   return (
-    <ul className="w-full">
-      {planAction === EnumPlanAction.Run ? (
-        <Plan.StepOptions className="w-full" />
-      ) : (
-        <>
-          <PlanWizardStep
-            headline="Tests"
-            description="Report"
-            disabled={environment == null}
-          >
-            {planAction === EnumPlanAction.Running ? (
-              <PlanWizardStepMessage hasSpinner>
-                Running Tests ...
-              </PlanWizardStepMessage>
-            ) : testsReport == null ? (
-              <PlanWizardStepMessage>
-                {skip_tests ? 'Tests Skipped' : 'No Tests'}
-              </PlanWizardStepMessage>
-            ) : (
-              <Banner
-                variant={
-                  testsReport.ok ? EnumVariant.Success : EnumVariant.Danger
-                }
-                description={testsReport.message}
-              />
-            )}
-          </PlanWizardStep>
-          <PlanWizardStep
-            headline="Models"
-            description="Review Changes"
-            disabled={environment == null}
-          >
-            {hasChanges ? (
-              <>
-                {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
-                  <div className="flex">
-                    {isArrayNotEmpty(added) && (
-                      <PlanChangePreview
-                        className="w-full m-2"
-                        headline="Added Models"
-                        type={EnumPlanChangeType.Add}
-                      >
-                        <PlanChangePreview.Default
-                          type={EnumPlanChangeType.Add}
-                          changes={added}
-                        />
-                      </PlanChangePreview>
-                    )}
-                    {isArrayNotEmpty(removed) && (
-                      <PlanChangePreview
-                        className="w-full m-2"
-                        headline="Removed Models"
-                        type={EnumPlanChangeType.Remove}
-                      >
-                        <PlanChangePreview.Default
-                          type={EnumPlanChangeType.Remove}
-                          changes={removed}
-                        />
-                      </PlanChangePreview>
-                    )}
-                  </div>
-                )}
-                {isModified(modified) && (
-                  <>
-                    {isArrayNotEmpty(modified?.direct) && (
-                      <PlanChangePreview
-                        className="m-2"
-                        headline="Modified Directly"
-                        type={EnumPlanChangeType.Direct}
-                      >
-                        <PlanChangePreview.Direct
-                          changes={modified.direct ?? []}
-                        />
-                      </PlanChangePreview>
-                    )}
-                    {isArrayNotEmpty(modified.indirect) && (
-                      <PlanChangePreview
-                        className="m-2"
-                        headline="Modified Indirectly"
-                        type={EnumPlanChangeType.Indirect}
-                      >
-                        <PlanChangePreview.Indirect
-                          changes={modified.indirect ?? []}
-                        />
-                      </PlanChangePreview>
-                    )}
-                    {isArrayNotEmpty(modified?.metadata) && (
-                      <PlanChangePreview
-                        className="m-2"
-                        headline="Modified Metadata"
-                        type={EnumPlanChangeType.Metadata}
-                      >
-                        <PlanChangePreview.Default
-                          type={EnumPlanChangeType.Metadata}
-                          changes={modified?.metadata ?? []}
-                        />
-                      </PlanChangePreview>
-                    )}
-                  </>
-                )}
-              </>
-            ) : planAction === EnumPlanAction.Running ? (
-              <PlanWizardStepMessage hasSpinner>
-                Checking Models...
-              </PlanWizardStepMessage>
-            ) : (
-              <PlanWizardStepMessage>No Changes</PlanWizardStepMessage>
-            )}
-          </PlanWizardStep>
-          <PlanWizardStep
-            headline="Backfill"
-            description="Progress"
-            disabled={environment == null}
-          >
-            <Disclosure
-              key={backfillStepHeadline}
-              defaultOpen={hasBackfills}
+    <div className="w-full overflow-hidden overflow-y-auto p-4 scrollbar scrollbar--vertical">
+      <ul className="w-full">
+        {planAction === EnumPlanAction.Run ? (
+          <Plan.StepOptions className="w-full" />
+        ) : (
+          <>
+            <PlanWizardStep
+              headline="Tests"
+              description="Report"
+              disabled={environment == null}
             >
-              {({ open }) => (
+              {planAction === EnumPlanAction.Running ? (
+                <PlanWizardStepMessage hasSpinner>
+                  Running Tests ...
+                </PlanWizardStepMessage>
+              ) : isNil(testsReportErrors) && isNil(testsReportMessages) ? (
+                <PlanWizardStepMessage>
+                  {skip_tests ? 'Tests Skipped' : 'No Tests'}
+                </PlanWizardStepMessage>
+              ) : (
                 <>
-                  <PlanWizardStepMessage
-                    hasSpinner={
-                      isFalse(open) &&
-                      (planAction === EnumPlanAction.Running ||
-                        planAction === EnumPlanAction.Applying)
-                    }
-                  >
-                    <div className="flex justify-between items-center w-full">
-                      <div className="flex items-center">
-                        <h3
-                          className={clsx(
-                            planState === EnumPlanState.Cancelled &&
-                              'text-prose',
-                            planState === EnumPlanState.Failed &&
-                              'text-danger-700',
-                            planState === EnumPlanState.Finished &&
-                              'text-success-700',
-                          )}
-                        >
-                          {backfillStepHeadline}
-                        </h3>
-                      </div>
-                      {showDetails && (
-                        <div className="flex items-center">
-                          <p className="mr-2 text-sm">Details</p>
-                          <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                            {open ? (
-                              <MinusCircleIcon className="h-6 w-6 text-primary-500" />
-                            ) : (
-                              <PlusCircleIcon className="h-6 w-6 text-primary-500" />
-                            )}
-                          </Disclosure.Button>
-                        </div>
+                  {testsReportErrors != null && (
+                    <Banner variant={EnumVariant.Danger}>
+                      {isObjectNotEmpty(testsReportErrors) && (
+                        <ReportTestsErrors report={testsReportErrors} />
                       )}
-                    </div>
-                  </PlanWizardStepMessage>
-
-                  <Disclosure.Panel className="px-4 pb-2 text-sm">
-                    {hasBackfills &&
-                      isFalse(skip_backfill) &&
-                      isArrayNotEmpty(Object.keys(tasks)) && (
-                        <>
-                          <Suspense
-                            fallback={<Spinner className="w-4 h-4 mr-2" />}
-                          >
-                            <TasksOverview
-                              tasks={tasks}
-                              setRefTasksOverview={setRefTasksOverview}
-                            >
-                              {({ total, completed, models }) => (
-                                <>
-                                  <TasksOverview.Summary
-                                    environment={environment.name}
-                                    planState={planState}
-                                    headline="Target Environment"
-                                    completed={completed}
-                                    total={total}
-                                    updateType={
-                                      hasVirtualUpdate ? 'Virtual' : 'Backfill'
-                                    }
-                                    updatedAt={activeBackfill?.updated_at}
-                                  />
-                                  {models != null && (
-                                    <TasksOverview.Details
-                                      models={models}
-                                      changes={{
-                                        modified,
-                                        added,
-                                        removed,
-                                      }}
-                                      showBatches={hasBackfills}
-                                      showVirtualUpdate={hasVirtualUpdate}
-                                      showProgress={true}
-                                    />
-                                  )}
-                                </>
-                              )}
-                            </TasksOverview>
-                          </Suspense>
-                        </>
+                    </Banner>
+                  )}
+                  {testsReportMessages != null && (
+                    <Banner variant={EnumVariant.Success}>
+                      {isObjectNotEmpty(testsReportMessages) && (
+                        <div>{testsReportMessages.message}</div>
                       )}
-                    {hasVirtualUpdate && (
-                      <div>
-                        <small className="text-sm">
-                          {virtualUpdateDescription}
-                        </small>
-                      </div>
-                    )}
-                  </Disclosure.Panel>
+                    </Banner>
+                  )}
                 </>
               )}
-            </Disclosure>
-          </PlanWizardStep>
-        </>
-      )}
-    </ul>
+            </PlanWizardStep>
+            <PlanWizardStep
+              headline="Models"
+              description="Review Changes"
+              disabled={environment == null}
+            >
+              {hasChanges ? (
+                <>
+                  {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
+                    <div className="flex">
+                      {isArrayNotEmpty(added) && (
+                        <PlanChangePreview
+                          className="w-full m-2"
+                          headline="Added Models"
+                          type={EnumPlanChangeType.Add}
+                        >
+                          <PlanChangePreview.Default
+                            type={EnumPlanChangeType.Add}
+                            changes={added}
+                          />
+                        </PlanChangePreview>
+                      )}
+                      {isArrayNotEmpty(removed) && (
+                        <PlanChangePreview
+                          className="w-full m-2"
+                          headline="Removed Models"
+                          type={EnumPlanChangeType.Remove}
+                        >
+                          <PlanChangePreview.Default
+                            type={EnumPlanChangeType.Remove}
+                            changes={removed}
+                          />
+                        </PlanChangePreview>
+                      )}
+                    </div>
+                  )}
+                  {isModified(modified) && (
+                    <>
+                      {isArrayNotEmpty(modified?.direct) && (
+                        <PlanChangePreview
+                          className="m-2"
+                          headline="Modified Directly"
+                          type={EnumPlanChangeType.Direct}
+                        >
+                          <PlanChangePreview.Direct
+                            changes={modified.direct ?? []}
+                          />
+                        </PlanChangePreview>
+                      )}
+                      {isArrayNotEmpty(modified.indirect) && (
+                        <PlanChangePreview
+                          className="m-2"
+                          headline="Modified Indirectly"
+                          type={EnumPlanChangeType.Indirect}
+                        >
+                          <PlanChangePreview.Indirect
+                            changes={modified.indirect ?? []}
+                          />
+                        </PlanChangePreview>
+                      )}
+                      {isArrayNotEmpty(modified?.metadata) && (
+                        <PlanChangePreview
+                          className="m-2"
+                          headline="Modified Metadata"
+                          type={EnumPlanChangeType.Metadata}
+                        >
+                          <PlanChangePreview.Default
+                            type={EnumPlanChangeType.Metadata}
+                            changes={modified?.metadata ?? []}
+                          />
+                        </PlanChangePreview>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : planAction === EnumPlanAction.Running ? (
+                <PlanWizardStepMessage hasSpinner>
+                  Checking Models...
+                </PlanWizardStepMessage>
+              ) : (
+                <PlanWizardStepMessage>No Changes</PlanWizardStepMessage>
+              )}
+            </PlanWizardStep>
+            <PlanWizardStep
+              headline="Backfill"
+              description="Progress"
+              disabled={environment == null}
+            >
+              <Disclosure
+                key={backfillStepHeadline}
+                defaultOpen={hasBackfills}
+              >
+                {({ open }) => (
+                  <>
+                    <PlanWizardStepMessage
+                      hasSpinner={
+                        isFalse(open) &&
+                        (planAction === EnumPlanAction.Running ||
+                          planAction === EnumPlanAction.Applying)
+                      }
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <div className="flex items-center">
+                          <h3
+                            className={clsx(
+                              planState === EnumPlanState.Cancelled &&
+                                'text-prose',
+                              planState === EnumPlanState.Failed &&
+                                'text-danger-700',
+                              planState === EnumPlanState.Finished &&
+                                'text-success-700',
+                            )}
+                          >
+                            {backfillStepHeadline}
+                          </h3>
+                        </div>
+                        {showDetails && (
+                          <div className="flex items-center">
+                            <p className="mr-2 text-sm">Details</p>
+                            <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                              {open ? (
+                                <MinusCircleIcon className="h-6 w-6 text-primary-500" />
+                              ) : (
+                                <PlusCircleIcon className="h-6 w-6 text-primary-500" />
+                              )}
+                            </Disclosure.Button>
+                          </div>
+                        )}
+                      </div>
+                    </PlanWizardStepMessage>
+
+                    <Disclosure.Panel className="px-4 pb-2 text-sm">
+                      {hasBackfills &&
+                        isFalse(skip_backfill) &&
+                        isArrayNotEmpty(Object.keys(tasks)) && (
+                          <>
+                            <Suspense
+                              fallback={<Spinner className="w-4 h-4 mr-2" />}
+                            >
+                              <TasksOverview
+                                tasks={tasks}
+                                setRefTasksOverview={setRefTasksOverview}
+                              >
+                                {({ total, completed, models }) => (
+                                  <>
+                                    <TasksOverview.Summary
+                                      environment={environment.name}
+                                      planState={planState}
+                                      headline="Target Environment"
+                                      completed={completed}
+                                      total={total}
+                                      updateType={
+                                        hasVirtualUpdate
+                                          ? 'Virtual'
+                                          : 'Backfill'
+                                      }
+                                      updatedAt={activeBackfill?.updated_at}
+                                    />
+                                    {models != null && (
+                                      <TasksOverview.Details
+                                        models={models}
+                                        changes={{
+                                          modified,
+                                          added,
+                                          removed,
+                                        }}
+                                        showBatches={hasBackfills}
+                                        showVirtualUpdate={hasVirtualUpdate}
+                                        showProgress={true}
+                                      />
+                                    )}
+                                  </>
+                                )}
+                              </TasksOverview>
+                            </Suspense>
+                          </>
+                        )}
+                      {hasVirtualUpdate && (
+                        <div>
+                          <small className="text-sm">
+                            {virtualUpdateDescription}
+                          </small>
+                        </div>
+                      )}
+                    </Disclosure.Panel>
+                  </>
+                )}
+              </Disclosure>
+            </PlanWizardStep>
+          </>
+        )}
+      </ul>
+    </div>
   )
 }
 

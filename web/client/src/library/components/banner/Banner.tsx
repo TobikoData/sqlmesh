@@ -1,17 +1,23 @@
 import clsx from 'clsx'
+import React from 'react'
 import { EnumVariant, type Variant } from '~/types/enum'
 
-export default function Banner({
+function Banner({
   variant,
-  headline,
-  description,
+  children,
+  className,
 }: {
   variant: Variant
-  description?: string
-  headline?: string
+  children: React.ReactNode
+  className?: string
 }): JSX.Element {
   return (
-    <div className="mt-4 mb-2 flex items-center w-full text-sm">
+    <div
+      className={clsx(
+        'mt-4 mb-2 flex items-center w-full text-sm overflow-hidden',
+        className,
+      )}
+    >
       <div
         className={clsx(
           'p-4 w-full h-full border-2 rounded-lg',
@@ -29,11 +35,35 @@ export default function Banner({
             'bg-neutral-10 border-neutral-400 text-neutral-400',
         )}
       >
-        {headline != null && (
-          <h4 className="mb-2 font-bold text-lg">{headline}</h4>
-        )}
-        {description != null && <p className="text-prose">{description}</p>}
+        {children}
       </div>
     </div>
   )
 }
+
+function Headline({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}): JSX.Element {
+  return (
+    <h4 className={clsx('mb-2 font-bold text-lg', className)}>{children}</h4>
+  )
+}
+
+function Description({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}): JSX.Element {
+  return <p className={clsx('text-prose', className)}>{children}</p>
+}
+
+Banner.Headline = Headline
+Banner.Description = Description
+
+export default Banner
