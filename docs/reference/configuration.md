@@ -8,6 +8,9 @@ Configuration options from different sources have the following order of precede
 2. Set in `config.yaml` in a project folder.
 3. Set in `config.yaml` in the `~/.sqlmesh` folder.
 
+## Debug mode
+To enable the debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
+
 ## Connections
 
 A dictionary of supported connections and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly, omitting the dictionary.
