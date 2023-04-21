@@ -210,6 +210,77 @@ def test_missing_intervals(snapshot: Snapshot):
     ]
 
 
+def test_lookback(snapshot: Snapshot, make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2),
+            cron="@daily",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-01") == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+    ]
+
+    snapshot.add_interval("2023-01-01", "2023-01-04")
+    assert snapshot.missing_intervals("2023-01-01", "2023-01-02") == []
+
+    snapshot.add_interval("2023-01-06", "2023-01-07")
+    assert snapshot.missing_intervals("2023-01-03", "2023-01-03") == [
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+    ]
+    assert snapshot.missing_intervals("2023-01-04", "2023-01-04") == [
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+    ]
+    assert snapshot.missing_intervals("2023-01-05", "2023-01-05") == [
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+    assert snapshot.missing_intervals("2023-01-03", "2023-01-05") == [
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+    ]
+    snapshot.add_interval("2023-01-05", "2023-01-05")
+    assert snapshot.missing_intervals("2023-01-03", "2023-01-06") == [
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+    ]
+
+    assert snapshot.missing_intervals("2023-01-29", "2023-01-29") == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+    snapshot.add_interval("2023-01-28", "2023-01-29")
+    assert snapshot.missing_intervals("2023-01-27", "2023-01-27", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
+    ]
+    assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
+    ]
+    assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
+        (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+    snapshot.add_interval("2023-01-28", "2023-01-30")
+    assert snapshot.missing_intervals("2023-01-27", "2023-01-27", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
+    ]
+    assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == []
+    assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == []
+    assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-27"), to_timestamp("2023-01-28")),
+    ]
+
+    assert snapshot.missing_intervals("2023-01-30", "2023-01-30", "2023-01-30") == []
+
+
 def test_seed_intervals(make_snapshot):
     snapshot_a = make_snapshot(
         SeedModel(
@@ -284,8 +355,8 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="596551453",
-        metadata_hash="2417444816",
+        data_hash="3593384045",
+        metadata_hash="1470503113",
     )
 
     assert fingerprint == original_fingerprint
@@ -325,8 +396,8 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="2542007450",
-        metadata_hash="2750000337",
+        data_hash="1152882766",
+        metadata_hash="2457734471",
     )
 
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -363,8 +434,8 @@ def test_fingerprint_jinja_macros(model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2038703918",
-        metadata_hash="2417444816",
+        data_hash="674398371",
+        metadata_hash="1470503113",
     )
 
     fingerprint = fingerprint_from_model(model, models={})

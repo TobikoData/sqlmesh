@@ -5,9 +5,9 @@ import zlib
 from collections import defaultdict
 from enum import IntEnum
 
-from croniter import croniter_range
 from pydantic import validator
 from sqlglot import exp
+from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit
@@ -23,6 +23,7 @@ from sqlmesh.core.model.meta import HookCall
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
+    make_inclusive_end,
     now,
     now_timestamp,
     to_datetime,
@@ -504,26 +505,50 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_embedded_kind:
             return []
 
+        latest = make_inclusive_end(latest or now())
         missing = []
+
         start_dt, end_dt = (
             to_datetime(ts) for ts in self._inclusive_exclusive(start, end, strict=False)
         )
-        dates = tuple(croniter_range(start_dt, end_dt, self.model.normalized_cron()))
-        size = len(dates) - 1
 
-        for i in range(size):
+        croniter = self.model.croniter(start_dt)
+        dates = [start_dt]
+
+        # get all individual dates with the addition of extra lookback dates up to the latest date
+        # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
+        while True:
+            date = to_datetime(croniter.get_next())
+
+            if date < end_dt:
+                dates.append(date)
+            else:
+                croniter.get_prev()
+                break
+
+        lookback = self.model.lookback
+
+        for _ in range(lookback):
+            date = to_datetime(croniter.get_next())
+            if date < latest:
+                dates.append(date)
+            else:
+                break
+
+        for i in range(len(dates)):
+            if dates[i] >= end_dt:
+                break
             current_ts = to_timestamp(dates[i])
-            end_ts = (
-                to_timestamp(dates[i + 1])
-                if i + 1 < size
-                else to_timestamp(self.model.cron_next(current_ts))
+            end_ts = to_timestamp(
+                dates[i + 1] if i + 1 < len(dates) else self.model.cron_next(current_ts)
             )
+            compare_ts = to_timestamp(seq_get(dates, i + lookback) or dates[-1])
 
             for low, high in self.intervals:
-                if current_ts < low:
+                if compare_ts < low:
                     missing.append((current_ts, end_ts))
                     break
-                elif current_ts < high:
+                elif current_ts >= low and compare_ts < high:
                     break
             else:
                 missing.append((current_ts, end_ts))
@@ -742,6 +767,7 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         model.kind.name,
         model.cron,
         model.storage_format,
+        str(model.lookback),
         physical_schema,
         *(model.partitioned_by or []),
         *(expression.sql(comments=False) for expression in model.expressions or []),
@@ -788,6 +814,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         model.owner,
         model.description,
         str(model.start) if model.start else None,
+        str(model.retention) if model.retention else None,
         str(model.batch_size) if model.batch_size is not None else None,
     ]
 
