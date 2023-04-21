@@ -29,10 +29,12 @@ class OrderItemDetails:
 
 @model(
     "src.order_item_details",
-    kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")),
+    kind=IncrementalByTimeRangeKind(
+        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d"),
+        batch_size=100,
+    ),
     start=DATA_START_DATE_STR,
     cron="@daily",
-    batch_size=100,
     columns={
         "id": "TEXT",
         "customer_id": "TEXT",
@@ -53,18 +55,18 @@ def execute(
 
     df_customers = context.fetchdf(
         f"""
-        SELECT 
-            id AS customer_id, 
+        SELECT
+            id AS customer_id,
             register_ds
         FROM {customer_details_table_name}
-        WHERE 
+        WHERE
             register_ds <= '{to_ds(end)}'
         """
     )
 
     df_menu_items = context.fetchdf(
         f"""
-        SELECT 
+        SELECT
             id AS item_id
         FROM {menu_item_details_table_name}
         """

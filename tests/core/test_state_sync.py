@@ -563,7 +563,7 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
 
     with pytest.raises(
         SQLMeshError,
-        match=r"SQLMesh \(local\) is using version '2' which is ahead of '0'",
+        match=rf"SQLMesh \(local\) is using version '{SCHEMA_VERSION}' which is ahead of '0'",
     ):
         state_sync.get_versions()
 

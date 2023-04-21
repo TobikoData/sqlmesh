@@ -793,7 +793,6 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
             data.append(column_name)
             data.append(str(column_type))
     elif isinstance(model, SeedModel):
-        data.append(str(model.kind.batch_size))
         data.append(model.seed.content)
         for column_name, column_type in (model.columns_to_types_ or {}).items():
             data.append(column_name)

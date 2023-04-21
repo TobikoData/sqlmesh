@@ -16,9 +16,11 @@ ITEMS = "sushi.items"
 
 @model(
     "sushi.order_items",
-    kind=IncrementalByTimeRangeKind(time_column="ds"),
+    kind=IncrementalByTimeRangeKind(
+        time_column="ds",
+        batch_size=30,
+    ),
     cron="@daily",
-    batch_size=30,
     columns={
         "id": "int",
         "order_id": "int",
