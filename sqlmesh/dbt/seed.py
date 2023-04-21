@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
-from sqlmesh.dbt.common import SqlStr
 from sqlmesh.dbt.context import DbtContext
 
 
@@ -14,10 +13,6 @@ class SeedConfig(BaseModelConfig):
     a more detailed description of each config parameter under the
     General propreties, General configs, and For seeds sections.
     """
-
-    @property
-    def all_sql(self) -> SqlStr:
-        return SqlStr(";\n".join(self.pre_hook + self.post_hook))
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt seed into a SQLMesh model."""

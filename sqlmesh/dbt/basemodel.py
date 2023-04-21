@@ -23,7 +23,7 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
     yaml_to_columns,
 )
-from sqlmesh.dbt.common import GeneralConfig, QuotingConfig, SqlStr
+from sqlmesh.dbt.common import DbtConfig, GeneralConfig, QuotingConfig, SqlStr
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
@@ -71,6 +71,17 @@ class Materialization(str, Enum):
     EPHEMERAL = "ephemeral"
 
 
+class Hook(DbtConfig):
+    """
+    Args:
+        sql: The sql to execute.
+        transaction: bool indicating if the hook is executed in the same transaction as the model query.
+    """
+
+    sql: SqlStr
+    transaction: bool = True  # TODO not yet supported
+
+
 class BaseModelConfig(GeneralConfig):
     """
     Args:
@@ -105,16 +116,27 @@ class BaseModelConfig(GeneralConfig):
     database: t.Optional[str] = None
     schema_: t.Optional[str] = Field(None, alias="schema")
     alias: t.Optional[str] = None
-    pre_hook: t.List[SqlStr] = Field([], alias="pre-hook")
-    post_hook: t.List[SqlStr] = Field([], alias="post-hook")
+    pre_hook: t.List[Hook] = Field([], alias="pre-hook")
+    post_hook: t.List[Hook] = Field([], alias="post-hook")
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
 
     @validator("pre_hook", "post_hook", pre=True)
-    def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[SqlStr]:
-        return [SqlStr(val) for val in ensure_list(v)]
+    def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
+        hooks = []
+        for hook in ensure_list(v):
+            if isinstance(hook, Hook):
+                hooks.append(hook)
+            elif isinstance(hook, str):
+                hooks.append(Hook(sql=hook))
+            elif isinstance(hook, dict):
+                hooks.append(Hook(**hook))
+            else:
+                raise ConfigError(f"Invalid hook data: {hook}")
+
+        return hooks
 
     @validator("full_refresh", pre=True)
     def _validate_bool(cls, v: str) -> bool:
@@ -126,7 +148,7 @@ class BaseModelConfig(GeneralConfig):
 
     @validator("columns", pre=True)
     def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
-        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
+        if isinstance(v, dict) and all(isinstance(col, ColumnConfig) for col in v.values()):
             return v
 
         return yaml_to_columns(v)
@@ -144,7 +166,13 @@ class BaseModelConfig(GeneralConfig):
 
     @property
     def all_sql(self) -> SqlStr:
-        return SqlStr("\n".join(self.pre_hook + [self.sql_no_config] + self.post_hook))
+        return SqlStr(
+            "\n".join(
+                [hook.sql for hook in self.pre_hook]
+                + [self.sql_no_config]
+                + [hook.sql for hook in self.post_hook]
+            )
+        )
 
     @property
     def sql_no_config(self) -> SqlStr:
@@ -230,8 +258,8 @@ class BaseModelConfig(GeneralConfig):
             "depends_on": {model_context.refs[ref] for ref in self._dependencies.refs},
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "pre": [exp for hook in self.pre_hook for exp in d.parse(hook)],
-            "post": [exp for hook in self.post_hook for exp in d.parse(hook)],
+            "pre": [exp for hook in self.pre_hook for exp in d.parse(hook.sql)],
+            "post": [exp for hook in self.post_hook for exp in d.parse(hook.sql)],
             **optional_kwargs,
         }
 
@@ -345,6 +373,11 @@ class ModelSqlRenderer(t.Generic[BMC]):
                     self._enriched_config.all_sql
                 ).render()
             except UndefinedError as e:
+                print(self.config.model_name)
+                print("------")
+                print(self._enriched_config.all_sql)
+                print("------")
+                print(self.config.post_hook)
                 raise ConfigError(e.message)
         return self._rendered_sql
 
