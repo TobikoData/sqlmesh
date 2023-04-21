@@ -200,7 +200,8 @@ html[mode='dark'] {
   --color-editor-text: var(--color-neutral-300);
   --color-editor-active-line-text: var(--color-neutral-100);
 
-  --color-graph-edge: var(--color-primary-50);
+  --color-graph-edge-main: var(--color-primary-80);
+  --color-graph-edge-secondary: var(--color-primary-40);
 }
 
 html[mode='light'] {
@@ -223,7 +224,8 @@ html[mode='light'] {
   --color-editor-text: var(--color-neutral-600);
   --color-editor-active-line-text: var(--color-neutral-800);
 
-  --color-graph-edge: var(--color-secondary-50);
+  --color-graph-edge-main: var(--color-secondary-80);
+  --color-graph-edge-secondary: var(--color-secondary-40);
 }
 
 html {

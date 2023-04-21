@@ -182,10 +182,6 @@ class Model(BaseModel):
     columns: t.List[Column]
 
 
-class Models(BaseModel):
-    models: t.Dict[str, Model]
-
-
 class RenderInput(BaseModel):
     model: str
     start: t.Optional[TimeLike] = None
@@ -215,6 +211,11 @@ class PlanOptions(BaseModel):
         if isinstance(v, str):
             return v.split(",")
         return v
+
+
+class LineageColumn(BaseModel):
+    source: t.Optional[str]
+    models: t.Optional[t.Dict[str, t.List[str]]]
 
 
 class Query(BaseModel):

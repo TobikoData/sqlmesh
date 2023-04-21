@@ -97,30 +97,6 @@
         }
       }
     },
-    "/api/commands/dag": {
-      "get": {
-        "summary": "Dag",
-        "operationId": "dag_api_commands_dag_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "title": "Response Dag Api Commands Dag Get",
-                  "type": "object",
-                  "additionalProperties": {
-                    "uniqueItems": true,
-                    "type": "array",
-                    "items": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/commands/render": {
       "post": {
         "summary": "Render",
@@ -438,23 +414,23 @@
         }
       }
     },
-    "/api/lineage/": {
+    "/api/lineage/{model_name}/{column_name}": {
       "get": {
         "summary": "Column Lineage",
         "description": "Get a column's lineage",
-        "operationId": "column_lineage_api_lineage__get",
+        "operationId": "column_lineage_api_lineage__model_name___column_name__get",
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Column", "type": "string" },
-            "name": "column",
-            "in": "query"
+            "schema": { "title": "Column Name", "type": "string" },
+            "name": "column_name",
+            "in": "path"
           },
           {
             "required": true,
-            "schema": { "title": "Model", "type": "string" },
-            "name": "model",
-            "in": "query"
+            "schema": { "title": "Model Name", "type": "string" },
+            "name": "model_name",
+            "in": "path"
           }
         ],
         "responses": {
@@ -463,17 +439,54 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Column Lineage Api Lineage  Get",
+                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get",
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "array",
-                        "items": { "type": "string" }
-                      }
+                      "$ref": "#/components/schemas/LineageColumn"
                     }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage/{model_name}": {
+      "get": {
+        "summary": "Model Lineage",
+        "description": "Get a model's lineage",
+        "operationId": "model_lineage_api_lineage__model_name__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "title": "Model Name", "type": "string" },
+            "name": "model_name",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Model Lineage Api Lineage  Model Name  Get",
+                  "type": "object",
+                  "additionalProperties": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": { "type": "string" }
                   }
                 }
               }
@@ -500,7 +513,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Models" }
+                "schema": {
+                  "title": "Response Get Models Api Models Get",
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Model" }
+                }
               }
             }
           }
@@ -919,6 +936,21 @@
           }
         }
       },
+      "LineageColumn": {
+        "title": "LineageColumn",
+        "type": "object",
+        "properties": {
+          "source": { "title": "Source", "type": "string" },
+          "models": {
+            "title": "Models",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      },
       "Model": {
         "title": "Model",
         "required": ["name", "path", "dialect", "columns"],
@@ -933,18 +965,6 @@
             "title": "Columns",
             "type": "array",
             "items": { "$ref": "#/components/schemas/Column" }
-          }
-        }
-      },
-      "Models": {
-        "title": "Models",
-        "required": ["models"],
-        "type": "object",
-        "properties": {
-          "models": {
-            "title": "Models",
-            "type": "object",
-            "additionalProperties": { "$ref": "#/components/schemas/Model" }
           }
         }
       },

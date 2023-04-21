@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   type Model,
-  type ModelsModels,
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
   type Environment,
@@ -19,7 +18,7 @@ interface ContextStore {
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, Model>
-  setModels: (models?: ModelsModels) => void
+  setModels: (models?: Model[]) => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
   ) => boolean
@@ -46,17 +45,15 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
-  setModels(models = {}) {
-    set(() => {
-      return {
-        models: Object.values(models).reduce((acc, model) => {
-          acc.set(model.name, model)
-          acc.set(model.path, model)
+  setModels(models = []) {
+    set(() => ({
+      models: models.reduce((acc, model) => {
+        acc.set(model.name, model)
+        acc.set(model.path, model)
 
-          return acc
-        }, new Map()),
-      }
-    })
+        return acc
+      }, new Map()),
+    }))
   },
   getNextEnvironment() {
     return get().environments.values().next().value
