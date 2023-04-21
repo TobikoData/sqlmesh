@@ -169,6 +169,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @click.argument("environment", required=False)
 @opt.start_time
 @opt.end_time
+@opt.latest_time
 @click.option(
     "--create-from",
     type=str,

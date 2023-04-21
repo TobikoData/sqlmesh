@@ -46,6 +46,7 @@ class Plan:
         state_reader: The state_reader to get metadata with.
         start: The start time to backfill data.
         end: The end time to backfill data.
+        latest: The latest time used for non incremental datasets.
         apply: The callback to apply the plan.
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
@@ -67,6 +68,7 @@ class Plan:
         state_reader: StateReader,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
@@ -90,6 +92,7 @@ class Plan:
         self.auto_categorization_enabled = auto_categorization_enabled
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
+        self._latest = latest or now()
         self._apply = apply
         self._dag: DAG[str] = DAG()
 
@@ -383,14 +386,13 @@ class Plan:
                 else []
             )
 
-            end = self._end or now()
             self.__missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
                     previous_snapshots + list(self.snapshots),
                     start=self._start or scheduler.earliest_start_date(self.snapshots),
-                    end=end,
-                    latest=end,
+                    end=self._end or now(),
+                    latest=self._latest,
                     restatements=self.restatements,
                 ).items()
             }

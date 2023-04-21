@@ -178,6 +178,7 @@ class SQLMeshMagics(Magics):
     )
     @argument("--start", "-s", type=str, help="Start date to backfill.")
     @argument("--end", "-e", type=str, help="End date to backfill.")
+    @argument("--latest", "-l", type=str, help="Latest date to backfill.")
     @argument(
         "--create-from",
         type=str,
@@ -242,6 +243,7 @@ class SQLMeshMagics(Magics):
             args.environment,
             start=args.start,
             end=args.end,
+            latest=args.latest,
             create_from=args.create_from,
             skip_tests=args.skip_tests,
             restate_models=args.restate_model,
