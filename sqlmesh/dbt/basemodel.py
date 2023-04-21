@@ -373,11 +373,6 @@ class ModelSqlRenderer(t.Generic[BMC]):
                     self._enriched_config.all_sql
                 ).render()
             except UndefinedError as e:
-                print(self.config.model_name)
-                print("------")
-                print(self._enriched_config.all_sql)
-                print("------")
-                print(self.config.post_hook)
                 raise ConfigError(e.message)
         return self._rendered_sql
 
