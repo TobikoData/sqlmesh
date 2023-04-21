@@ -220,6 +220,7 @@ class Context(BaseContext):
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
         self._scheduler = self.config.scheduler
         self.connection = connection
+        self.test_connection = test_connection
         self.environment_ttl = self.config.environment_ttl
         self.auto_categorize_changes = self.config.auto_categorize_changes
         connection_config = self.config.get_connection(connection)
@@ -838,6 +839,24 @@ class Context(BaseContext):
         """
         self.state_sync.migrate()
 
+    def print_info(self) -> None:
+        """Prints information about connections, models, macros, etc. to the console."""
+        self.console.log_status_update(f"Models: {len(self.models)}")
+        self.console.log_status_update(f"Macros: {len(self.macros)}")
+
+        primary_connection_name = self.connection or self.config.default_connection or "default"
+        self._try_connection(primary_connection_name, self._engine_adapter)
+
+        test_connection_name_in_config = (
+            self.config.test_connection_
+            if isinstance(self.config.test_connection_, str)
+            else "test_default"
+        )
+        if test_connection_name_in_config != primary_connection_name:
+            self._try_connection(
+                self.test_connection or test_connection_name_in_config, self._test_engine_adapter
+            )
+
     def close(self) -> None:
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
@@ -913,3 +932,12 @@ class Context(BaseContext):
 
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(expired_snapshots)
+
+    def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
+        try:
+            engine_adapter.fetchall("SELECT 1")
+            self.console.log_status_update(
+                f"Connection '{connection_name}' [green]succeeded[/green]"
+            )
+        except Exception as ex:
+            self.console.log_error(f"Connection '{connection_name}' failed. {ex}")
