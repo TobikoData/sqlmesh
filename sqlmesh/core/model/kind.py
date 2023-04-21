@@ -38,6 +38,14 @@ class ModelKind(PydanticModel):
         return self.name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
 
     @property
+    def is_incremental(self) -> bool:
+        """Whether or not this model is incremental."""
+        return self.name in (
+            ModelKindName.INCREMENTAL_BY_TIME_RANGE,
+            ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
+        )
+
+    @property
     def is_full(self) -> bool:
         return self.name == ModelKindName.FULL
 
@@ -60,14 +68,6 @@ class ModelKind(PydanticModel):
     @property
     def is_materialized(self) -> bool:
         return self.name not in (ModelKindName.VIEW, ModelKindName.EMBEDDED)
-
-    @property
-    def supports_batch_size(self) -> bool:
-        """Whether or not this model supports the batch_size property."""
-        return self.name in (
-            ModelKindName.INCREMENTAL_BY_TIME_RANGE,
-            ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
-        )
 
     @property
     def only_latest(self) -> bool:

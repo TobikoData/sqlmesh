@@ -5,6 +5,7 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
+from pydantic.fields import ModelField
 from sqlglot import exp, maybe_parse
 
 import sqlmesh.core.dialect as d
@@ -50,7 +51,9 @@ class ModelMeta(PydanticModel):
     description: t.Optional[str]
     stamp: t.Optional[str]
     start: t.Optional[TimeLike]
+    retention: t.Optional[int]  # not implemented yet
     batch_size: t.Optional[int]
+    lookback: t.Optional[int]
     storage_format: t.Optional[str]
     partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
     pre: t.List[HookCall] = []
@@ -216,20 +219,20 @@ class ModelMeta(PydanticModel):
         if isinstance(v, exp.Expression):
             v = v.name
         if v and not to_datetime(v):
-            raise ConfigError(f"'{v}' not a valid date time")
+            raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
 
-    @validator("batch_size", pre=True)
-    def _int_validator(cls, v: t.Any) -> t.Optional[int]:
+    @validator("batch_size", "lookback", pre=True)
+    def _int_validator(cls, v: t.Any, field: ModelField) -> t.Optional[int]:
         if not isinstance(v, exp.Expression):
-            batch_size = int(v) if v is not None else None
+            num = int(v) if v is not None else None
         else:
-            batch_size = int(v.name)
-        if batch_size is not None and batch_size <= 0:
+            num = int(v.name)
+        if num is not None and num <= 0:
             raise ConfigError(
-                f"Invalid batch size {batch_size}. The value should be greater than 0"
+                f"Invalid value {num} for {field.name}. The value should be greater than 0"
             )
-        return batch_size
+        return num
 
     @root_validator
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -238,8 +241,15 @@ class ModelMeta(PydanticModel):
             if not kind.is_materialized:
                 if values.get("partitioned_by_"):
                     raise ValueError(f"partitioned_by field cannot be set for {kind} models")
-            if values.get("batch_size") and not kind.supports_batch_size:
-                raise ValueError(f"batch_size field cannot be set for {kind} models")
+            if values.get("batch_size") and not kind.is_incremental_by_time_range:
+                raise ValueError(
+                    f"batch_size field cannot be set for {kind} models, only incremental_by_time models"
+                )
+            if values.get("lookback") and not kind.is_incremental:
+                raise ValueError(
+                    f"lookback field cannot be set for {kind} models, only incremental models"
+                )
+
         return values
 
     @property
