@@ -115,18 +115,6 @@ async def fetchdf(
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
 
 
-@router.get("/dag")
-async def dag(
-    context: Context = Depends(get_loaded_context),
-) -> t.Dict[str, t.Set[str]]:
-    try:
-        return context.dag.graph
-    except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
-        )
-
-
 @router.post("/render", response_model=models.Query)
 async def render(
     options: models.RenderInput,

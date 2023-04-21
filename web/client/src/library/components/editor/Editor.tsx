@@ -10,6 +10,7 @@ import EditorInspector from './EditorInspector'
 import './Editor.css'
 import EditorPreview from './EditorPreview'
 import { useStoreEditor } from '~/context/editor'
+import clsx from 'clsx'
 
 export default function Editor(): JSX.Element {
   const files = useStoreFileTree(s => s.files)
@@ -29,6 +30,9 @@ export default function Editor(): JSX.Element {
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
+  const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
+    'vertical',
+  )
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'init') {
@@ -85,9 +89,8 @@ export default function Editor(): JSX.Element {
   function getSizesCodeEditorAndPreview(): [number, number] {
     const showPreview =
       tab != null &&
-      (tab.file.isSQLMeshModel || tab.file.isLocal) &&
-      [previewTable, previewConsole].some(Boolean)
-
+      ((tab.file.isLocal && [previewTable, previewConsole].some(Boolean)) ||
+        tab.file.isSQLMeshModel)
     return showPreview ? [80, 20] : [100, 0]
   }
 
@@ -98,6 +101,12 @@ export default function Editor(): JSX.Element {
       isFalse(isStringEmptyOrNil(tab.file.content))
 
     return showInspector ? [75, 25] : [100, 0]
+  }
+
+  function toggleDirection(): void {
+    setDirection(direction =>
+      direction === 'vertical' ? 'horizontal' : 'vertical',
+    )
   }
 
   return (
@@ -112,13 +121,17 @@ export default function Editor(): JSX.Element {
         </div>
       ) : (
         <SplitPane
-          className="h-full w-full overflow-hidden"
+          key={direction}
+          className={clsx(
+            'w-full h-full overflow-hidden',
+            direction === 'vertical' ? 'flex flex-col' : 'flex',
+          )}
           sizes={sizesCodeEditorAndPreview}
-          direction="vertical"
+          direction={direction}
           minSize={0}
           snapOffset={0}
         >
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col h-full overflow-hidden">
             {isReadyEngine && (
               <>
                 <div className="flex flex-col h-full overflow-hidden">
@@ -144,7 +157,12 @@ export default function Editor(): JSX.Element {
             )}
           </div>
           <div className="w-full">
-            {tab != null && <EditorPreview tab={tab} />}
+            {tab != null && (
+              <EditorPreview
+                tab={tab}
+                toggleDirection={toggleDirection}
+              />
+            )}
           </div>
         </SplitPane>
       )}

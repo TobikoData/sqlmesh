@@ -1,3 +1,5 @@
+import { type ColumnLineageApiLineageModelNameColumnNameGet200 } from '@api/client'
+import { isObjectEmpty } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
@@ -6,6 +8,17 @@ import { sqlglotWorker } from '~/workers'
 export interface Dialect {
   dialect_title: string
   dialect_name: string
+}
+
+export interface Lineage {
+  models: string[]
+  columns?: Record<
+    string,
+    {
+      source?: string
+      models?: Record<string, string[]>
+    }
+  >
 }
 
 interface EditorStore {
@@ -17,6 +30,7 @@ interface EditorStore {
   previewQuery?: string
   previewTable?: any[]
   previewConsole?: string
+  previewLineage?: Record<string, Lineage>
   selectTab: (tab?: EditorTab) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
@@ -27,12 +41,17 @@ interface EditorStore {
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: any[]) => void
   setPreviewConsole: (previewConsole?: string) => void
+  setPreviewLineage: (
+    previewLineage?: Record<string, Lineage>,
+    columns?: ColumnLineageApiLineageModelNameColumnNameGet200,
+  ) => void
 }
 
 interface EditorPreview<TTable = any> {
   queryPreview?: string
   table?: TTable[]
   terminal?: string
+  lineage?: Record<string, Lineage>
 }
 
 export interface EditorTab {
@@ -40,6 +59,10 @@ export interface EditorTab {
   isValid: boolean
   isSaved: boolean
   dialect?: string
+  dialectOptions?: {
+    keywords: string
+    types: string
+  }
   preview?: EditorPreview
 }
 
@@ -58,6 +81,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewQuery: undefined,
   previewTable: undefined,
   previewConsole: undefined,
+  previewLineage: undefined,
   updateStoredTabsIds() {
     setStoredTabs({
       ids: Array.from(get().tabs.values())
@@ -129,6 +153,15 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   setPreviewConsole(previewConsole) {
     set(() => ({ previewConsole }))
   },
+  setPreviewLineage(lineage, columns) {
+    const previewLineage = structuredClone(lineage)
+
+    if (columns != null && previewLineage != null) {
+      mergeLineageWithColumns(previewLineage, columns)
+    }
+
+    set(() => ({ previewLineage }))
+  },
 }))
 
 function createTab(file: ModelFile = createLocalFile()): EditorTab {
@@ -150,4 +183,53 @@ function createLocalFile(): ModelFile {
 
 function getStoredTabsIds(): ID[] {
   return getStoredTabs()?.ids ?? []
+}
+
+function mergeLineageWithColumns(
+  lineage: Record<string, Lineage>,
+  columns: ColumnLineageApiLineageModelNameColumnNameGet200,
+): Record<string, Lineage> {
+  for (const model in columns) {
+    const lineageModel = lineage[model]
+    const columnsModel = columns[model]
+
+    if (lineageModel == null || columnsModel == null) continue
+
+    if (lineageModel.columns == null) {
+      lineageModel.columns = {}
+    }
+
+    for (const columnName in columnsModel) {
+      const columnsModelColumn = columnsModel[columnName]
+
+      if (columnsModelColumn == null) continue
+
+      const lineageModelColumn = lineageModel.columns[columnName] ?? {}
+
+      lineageModelColumn.source = columnsModelColumn.source
+      lineageModelColumn.models = {}
+
+      lineageModel.columns[columnName] = lineageModelColumn
+
+      if (isObjectEmpty(columnsModelColumn.models)) continue
+
+      for (const columnModel in columnsModelColumn.models) {
+        const columnsModelColumnModel = columnsModelColumn.models[columnModel]
+
+        if (columnsModelColumnModel == null) continue
+
+        const lineageModelColumnModel = lineageModelColumn.models[columnModel]
+
+        if (lineageModelColumnModel == null) {
+          lineageModelColumn.models[columnModel] = columnsModelColumnModel
+        } else {
+          lineageModelColumn.models[columnModel] = Array.from(
+            new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
+          )
+        }
+      }
+    }
+  }
+
+  return lineage
 }
