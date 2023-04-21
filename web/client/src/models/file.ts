@@ -52,6 +52,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     return this.type === 'model'
   }
 
+  get fingerprint(): string {
+    return this._content
+  }
+
   updateContent(newContent: string = ''): void {
     this._content = newContent
     this.content = newContent
