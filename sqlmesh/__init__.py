@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import typing as t
 from enum import Enum
 
 from sqlmesh.core.dialect import extend_sqlglot
@@ -112,10 +113,15 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def enable_logging(level: int = logging.INFO) -> None:
+def debug_mode_enabled() -> bool:
+    return os.environ.get("SQLMESH_DEBUG", "").lower() in ("1", "true", "t", "yes", "y")
+
+
+def enable_logging(level: t.Optional[int] = None) -> None:
     """Enable logging to send to stdout and color different levels"""
+    level = level or (logging.DEBUG if debug_mode_enabled() else logging.INFO)
     logger = logging.getLogger()
-    logger.setLevel(level)
+    logger.setLevel(level if not debug_mode_enabled() else logging.DEBUG)
     if not logger.hasHandlers():
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level)
