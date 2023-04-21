@@ -34,7 +34,7 @@ The `SELECT` expression of a model must follow certain conventions for SQLMesh t
 The final `SELECT` of a model's query must contain unique column names.
 
 ### Explict types
-The columns in the final `SELECT` of a model's query must be explicitly cast to a type so SQLMesh can automatically create tables with the appropriate schema.
+SQLMesh encourages explicit type casting in the final `SELECT` of a model's query. It is considered a best practice to prevent unexpected types in the schema of a model's table.
 
 SQLMesh uses the postgres `x::int` syntax for casting; the casts are automatically transpiled to the appropriate format for the execution engine.
 
