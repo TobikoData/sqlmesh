@@ -87,7 +87,7 @@ def get_files(
 def get_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
-    path_mapping: t.Dict[str, t.Any] = Depends(get_path_mapping),
+    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.File:
     """Get a file, including its contents."""
     try:
@@ -96,7 +96,7 @@ def get_file(
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     return models.File(
-        name=os.path.basename(path), path=path, content=content, type=path_mapping.get(path)
+        name=os.path.basename(path), path=path, content=content, type=path_mapping.get(Path(path))
     )
 
 
@@ -117,8 +117,12 @@ async def write_file(
         (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
 
     content = (settings.project_path / path_or_new_path).read_text()
+    path_mapping = await get_path_mapping(settings)
     return models.File(
-        name=os.path.basename(path_or_new_path), path=path_or_new_path, content=content
+        name=os.path.basename(path_or_new_path),
+        path=path_or_new_path,
+        content=content,
+        type=path_mapping.get(Path(path)),
     )
 
 
