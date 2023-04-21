@@ -148,7 +148,7 @@ class DbtLoader(Loader):
             self._macros_max_mtime = macros_max_mtime
             self._yaml_max_mtimes = yaml_max_mtimes
 
-            cache_path = loader._context.path / c.CACHE / project.context.target.name
+            cache_path = loader._context.path / c.CACHE / project.context.target.name  # type: ignore
             self._model_cache = ModelCache(cache_path)
             self._model_config_cache = FileCache(cache_path, ModelConfig, prefix="model_config")
             self._seed_config_cache = FileCache(cache_path, SeedConfig, prefix="seed_config")
