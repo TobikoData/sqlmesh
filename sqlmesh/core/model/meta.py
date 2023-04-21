@@ -15,6 +15,7 @@ from sqlmesh.core.model.kind import (
     ModelKind,
     ModelKindName,
     TimeColumn,
+    _Incremental,
     model_kind_validator,
 )
 from sqlmesh.utils import unique
@@ -53,7 +54,6 @@ class ModelMeta(PydanticModel):
     start: t.Optional[TimeLike]
     retention: t.Optional[int]  # not implemented yet
     batch_size: t.Optional[int]
-    lookback: t.Optional[int]
     storage_format: t.Optional[str]
     partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
     pre: t.List[HookCall] = []
@@ -222,7 +222,7 @@ class ModelMeta(PydanticModel):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
 
-    @validator("batch_size", "lookback", pre=True)
+    @validator("batch_size", pre=True)
     def _int_validator(cls, v: t.Any, field: ModelField) -> t.Optional[int]:
         if not isinstance(v, exp.Expression):
             num = int(v) if v is not None else None
@@ -241,14 +241,14 @@ class ModelMeta(PydanticModel):
             if not kind.is_materialized:
                 if values.get("partitioned_by_"):
                     raise ValueError(f"partitioned_by field cannot be set for {kind} models")
-            if values.get("batch_size") and not kind.is_incremental_by_time_range:
-                raise ValueError(
-                    f"batch_size field cannot be set for {kind} models, only incremental_by_time models"
-                )
-            if values.get("lookback") and not kind.is_incremental:
-                raise ValueError(
-                    f"lookback field cannot be set for {kind} models, only incremental models"
-                )
+            batch_size = values.get("batch_size")
+            if batch_size:
+                if not kind.is_incremental:
+                    raise ValueError(
+                        f"batch_size field cannot be set for {kind} models, only incremental models"
+                    )
+                if batch_size < (kind.lookback or 0):
+                    raise ValueError("batch_size cannot be less than lookback")
 
         return values
 
@@ -273,6 +273,11 @@ class ModelMeta(PydanticModel):
     def column_descriptions(self) -> t.Dict[str, str]:
         """A dictionary of column names to annotation comments."""
         return self.column_descriptions_ or {}
+
+    @property
+    def lookback(self) -> int:
+        """The incremental lookback window."""
+        return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

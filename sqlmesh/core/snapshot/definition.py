@@ -513,14 +513,20 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
         croniter = self.model.croniter(start_dt)
-        dates = [start_dt, to_datetime(croniter.get_next())]
+        dates = [start_dt]
 
         # get all individual dates with the addition of extra lookback dates up to the latest date
         # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
-        while dates[-1] < end_dt:
-            dates.append(to_datetime(croniter.get_next()))
+        while True:
+            date = to_datetime(croniter.get_next())
 
-        lookback = self.model.lookback or 0
+            if date < end_dt:
+                dates.append(date)
+            else:
+                croniter.get_prev()
+                break
+
+        lookback = self.model.lookback
 
         for _ in range(lookback):
             date = to_datetime(croniter.get_next())
@@ -533,7 +539,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if dates[i] >= end_dt:
                 break
             current_ts = to_timestamp(dates[i])
-            end_ts = to_timestamp(dates[i + 1])
+            end_ts = to_timestamp(
+                dates[i + 1] if i + 1 < len(dates) else self.model.cron_next(current_ts)
+            )
             compare_ts = to_timestamp(seq_get(dates, i + lookback) or dates[-1])
 
             for low, high in self.intervals:
@@ -759,6 +767,7 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         model.kind.name,
         model.cron,
         model.storage_format,
+        str(model.lookback),
         physical_schema,
         *(model.partitioned_by or []),
         *(expression.sql(comments=False) for expression in model.expressions or []),
@@ -807,7 +816,6 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         str(model.start) if model.start else None,
         str(model.retention) if model.retention else None,
         str(model.batch_size) if model.batch_size is not None else None,
-        str(model.lookback) if model.lookback else None,
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):

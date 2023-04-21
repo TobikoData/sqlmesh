@@ -95,7 +95,7 @@ An optional arbitrary string sequence used to create new model versions without 
 - Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
 ### lookback
-- Lookback is used for incremental models to capture late arriving data. This must be a positive integer and refers to the number of units that late arriving data is expected.
+- Lookback is used for [incremental](model_kinds.md#incremental_by_time_range) models to capture late arriving data. This must be a positive integer and refers to the number of units that late arriving data is expected.
 
 ### storage_format
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.

@@ -40,10 +40,7 @@ class ModelKind(PydanticModel):
     @property
     def is_incremental(self) -> bool:
         """Whether or not this model is incremental."""
-        return self.name in (
-            ModelKindName.INCREMENTAL_BY_TIME_RANGE,
-            ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
-        )
+        return isinstance(self, _Incremental)
 
     @property
     def is_full(self) -> bool:
@@ -110,7 +107,21 @@ class TimeColumn(PydanticModel):
         )
 
 
-class IncrementalByTimeRangeKind(ModelKind):
+class _Incremental(ModelKind):
+    lookback: t.Optional[int] = None
+
+    @validator("lookback", pre=True)
+    def _int_validator(cls, v: t.Any) -> t.Optional[int]:
+        if isinstance(v, exp.Expression):
+            num = int(v.name)
+        else:
+            num = int(v)
+        if num < 0:
+            raise ConfigError(f"Lookback must be an integer > 0")
+        return num
+
+
+class IncrementalByTimeRangeKind(_Incremental):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_TIME_RANGE, const=True)
     time_column: TimeColumn
 
@@ -141,7 +152,7 @@ class IncrementalByTimeRangeKind(ModelKind):
         )
 
 
-class IncrementalByUniqueKeyKind(ModelKind):
+class IncrementalByUniqueKeyKind(_Incremental):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_UNIQUE_KEY, const=True)
     unique_key: t.List[str]
 

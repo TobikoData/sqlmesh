@@ -576,6 +576,7 @@ class Context(BaseContext):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
         create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
@@ -595,6 +596,7 @@ class Context(BaseContext):
             environment: The environment to diff and plan against.
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
+            latest: The latest time used for non incremental datasets.
             create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
@@ -635,6 +637,7 @@ class Context(BaseContext):
             state_reader=self.state_reader,
             start=start,
             end=end,
+            latest=latest,
             apply=self.apply,
             restate_models=restate_models,
             no_gaps=no_gaps,
