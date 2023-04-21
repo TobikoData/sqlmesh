@@ -4,6 +4,7 @@ from functools import wraps
 import click
 from sqlglot.errors import SqlglotError
 
+from sqlmesh import debug_mode_enabled
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -23,4 +24,4 @@ def error_handler(
         except (SQLMeshError, SqlglotError, ValueError) as ex:
             raise click.ClickException(str(ex))
 
-    return wrapper
+    return wrapper if not debug_mode_enabled() else func
