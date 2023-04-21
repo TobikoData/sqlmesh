@@ -299,6 +299,14 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
     context.console.log_success(context.fetchdf(sql))
 
 
+@cli.command("info")
+@click.pass_obj
+@error_handler
+def info(obj: Context) -> None:
+    """Print info."""
+    obj.print_info()
+
+
 @cli.command("version")
 @error_handler
 def version() -> None:
