@@ -229,7 +229,7 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
 @click.argument("environment", required=False)
 @opt.start_time
 @opt.end_time
-@click.option("--skip-janitor", is_flag=True, help="Skip the jantitor task.")
+@click.option("--skip-janitor", is_flag=True, help="Skip the janitor task.")
 @click.pass_context
 @error_handler
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
