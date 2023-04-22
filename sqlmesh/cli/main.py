@@ -89,6 +89,11 @@ def init(ctx: click.Context, template: t.Optional[str] = None) -> None:
 @opt.end_time
 @opt.latest_time
 @opt.expand
+@click.option(
+    "--dialect",
+    type=str,
+    help="The SQL dialect to render the query as.",
+)
 @click.pass_context
 @error_handler
 def render(
@@ -98,6 +103,7 @@ def render(
     end: TimeLike,
     latest: t.Optional[TimeLike] = None,
     expand: t.Optional[t.Union[bool, t.Iterable[str]]] = None,
+    dialect: t.Optional[str] = None,
 ) -> None:
     """Renders a model's query, optionally expanding referenced models."""
     snapshot = ctx.obj.snapshots.get(model)
@@ -113,7 +119,7 @@ def render(
         expand=expand,
     )
 
-    sql = rendered.sql(pretty=True, dialect=ctx.obj.dialect)
+    sql = rendered.sql(pretty=True, dialect=ctx.obj.config.dialect if dialect is None else dialect)
     ctx.obj.console.show_sql(sql)
 
 
