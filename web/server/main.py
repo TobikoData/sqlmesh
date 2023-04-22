@@ -27,13 +27,13 @@ async def startup_event() -> None:
 
     app.state.console_listeners = []
     app.state.dispatch_task = asyncio.create_task(dispatch())
-
-    asyncio.create_task(watch_project(api_console.queue))
+    app.state.watch_task = asyncio.create_task(watch_project(api_console.queue))
 
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
     app.state.dispatch_task.cancel()
+    app.state.watch_task.cancel()
 
 
 @app.get("/health")

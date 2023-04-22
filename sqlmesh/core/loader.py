@@ -193,10 +193,10 @@ class SqlMeshLoader(Loader):
             cache = SqlMeshLoader._Cache(self, context_path)
 
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
-                self._track_file(path)
-
                 if not os.path.getsize(path):
                     continue
+
+                self._track_file(path)
 
                 def _load() -> Model:
                     with open(path, "r", encoding="utf-8") as file:
