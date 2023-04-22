@@ -85,16 +85,17 @@ Usage: sqlmesh render [OPTIONS] MODEL
   Renders a model's query, optionally expanding referenced models.
 
 Options:
-  -s, --start TEXT   The start datetime of the interval for which this
-                     command will be applied.
-  -e, --end TEXT     The end datetime of the interval for which this
-                     command will be applied.
-  -l, --latest TEXT  The latest time used for non-incremental datasets
+  -s, --start TEXT   The start datetime of the interval for which this command
+                     will be applied.
+  -e, --end TEXT     The end datetime of the interval for which this command
+                     will be applied.
+  -l, --latest TEXT  The latest time used for non incremental datasets
                      (defaults to now).
   --expand TEXT      Whether or not to expand materialized models (defaults to
                      False). If True, all referenced models are expanded as
                      raw queries. Multiple model names can also be specified,
                      in which case only they will be expanded as raw queries.
+  --dialect TEXT     The SQL dialect to render the query as.
   --help             Show this message and exit.
 ```
 
