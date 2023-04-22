@@ -1,6 +1,8 @@
 # type: ignore
+from unittest.mock import call
+
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
@@ -36,3 +38,24 @@ def test_table_exists(mocker: MockerFixture):
     cursor_mock.fetchone.return_value = None
     resp = adapter.table_exists("db.table")
     assert not resp
+
+
+def test_create_view(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BasePostgresEngineAdapter(lambda: connection_mock, "postgres")
+
+    adapter.create_view("db.view", parse_one("SELECT 1"), replace=True)
+    adapter.create_view("db.view", parse_one("SELECT 1"), replace=False)
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            # 1st call
+            call("DROP VIEW IF EXISTS db.view"),
+            call("CREATE OR REPLACE VIEW db.view AS SELECT 1"),
+            # 2nd call
+            call("CREATE VIEW db.view AS SELECT 1"),
+        ]
+    )

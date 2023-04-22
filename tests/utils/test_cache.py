@@ -6,15 +6,15 @@ from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-class TestEntry(PydanticModel):
+class _TestEntry(PydanticModel):
     value: str
 
 
 def test_file_cache(tmp_path: Path, mocker: MockerFixture):
-    cache = FileCache(tmp_path, TestEntry)
+    cache = FileCache(tmp_path, _TestEntry)
 
-    test_entry_a = TestEntry(value="value_a")
-    test_entry_b = TestEntry(value="value_b")
+    test_entry_a = _TestEntry(value="value_a")
+    test_entry_b = _TestEntry(value="value_b")
 
     loader = mocker.Mock(return_value=test_entry_a)
 
