@@ -25,10 +25,12 @@ COLUMN_TO_TYPE = {
 
 @model(
     "db.order_f",
-    kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="order_ds", format="%Y-%m-%d")),
+    kind=IncrementalByTimeRangeKind(
+        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d"),
+        batch_size=200,
+    ),
     start=DATA_START_DATE_STR,
     cron="@daily",
-    batch_size=200,
     columns=COLUMN_TO_TYPE,
     audits=["assert_valid_order_totals"],
 )
@@ -43,7 +45,7 @@ def execute(
 
     df_item_d = context.fetchdf(
         f"""
-        SELECT 
+        SELECT
             item_id,
             item_price
         FROM {item_d_table_name}
@@ -52,14 +54,14 @@ def execute(
 
     df_order_item_f = context.fetchdf(
         f"""
-        SELECT 
+        SELECT
             order_id,
             customer_id,
             item_id,
             quantity,
             order_ds
         FROM {order_item_f_table_name}
-        WHERE 
+        WHERE
             order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
         """
     )

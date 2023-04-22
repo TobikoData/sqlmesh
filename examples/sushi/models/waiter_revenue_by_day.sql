@@ -2,11 +2,11 @@
 MODEL (
   name sushi.waiter_revenue_by_day,
   kind incremental_by_time_range (
-    time_column (ds, '%Y-%m-%d')
+    time_column (ds, '%Y-%m-%d'),
+    batch_size 10,
   ),
   owner jen,
   cron '@daily',
-  batch_size 10,
   audits (
     NUMBER_OF_ROWS(threshold=0)
   )

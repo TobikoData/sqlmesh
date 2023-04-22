@@ -5,7 +5,6 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from pydantic.fields import ModelField
 from sqlglot import exp, maybe_parse
 
 import sqlmesh.core.dialect as d
@@ -53,7 +52,6 @@ class ModelMeta(PydanticModel):
     stamp: t.Optional[str]
     start: t.Optional[TimeLike]
     retention: t.Optional[int]  # not implemented yet
-    batch_size: t.Optional[int]
     storage_format: t.Optional[str]
     partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
     pre: t.List[HookCall] = []
@@ -222,33 +220,12 @@ class ModelMeta(PydanticModel):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
 
-    @validator("batch_size", pre=True)
-    def _int_validator(cls, v: t.Any, field: ModelField) -> t.Optional[int]:
-        if not isinstance(v, exp.Expression):
-            num = int(v) if v is not None else None
-        else:
-            num = int(v.name)
-        if num is not None and num <= 0:
-            raise ConfigError(
-                f"Invalid value {num} for {field.name}. The value should be greater than 0"
-            )
-        return num
-
     @root_validator
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         kind = values.get("kind")
         if kind:
-            if not kind.is_materialized:
-                if values.get("partitioned_by_"):
-                    raise ValueError(f"partitioned_by field cannot be set for {kind} models")
-            batch_size = values.get("batch_size")
-            if batch_size:
-                if not kind.is_incremental:
-                    raise ValueError(
-                        f"batch_size field cannot be set for {kind} models, only incremental models"
-                    )
-                if batch_size < (kind.lookback or 0):
-                    raise ValueError("batch_size cannot be less than lookback")
+            if values.get("partitioned_by_") and not kind.is_materialized:
+                raise ValueError(f"partitioned_by field cannot be set for {kind} models")
 
         return values
 
@@ -278,6 +255,11 @@ class ModelMeta(PydanticModel):
     def lookback(self) -> int:
         """The incremental lookback window."""
         return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
+
+    @property
+    def batch_size(self) -> t.Optional[int]:
+        """The maximal number of units in a single task for a backfill."""
+        return self.kind.batch_size if isinstance(self.kind, _Incremental) else None
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

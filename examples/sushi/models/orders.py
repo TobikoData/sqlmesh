@@ -16,10 +16,9 @@ WAITERS = list(range(0, 10))
 @model(
     "sushi.orders",
     description="Table of sushi orders.",
-    kind=IncrementalByTimeRangeKind(time_column="ds"),
+    kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
     start="3 months ago",
     cron="@daily",
-    batch_size=30,
     columns={
         "id": "int",
         "customer_id": "int",
