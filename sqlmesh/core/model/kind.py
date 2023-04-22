@@ -3,7 +3,8 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import Field, validator
+from pydantic import Field, root_validator, validator
+from pydantic.fields import ModelField
 from sqlglot import exp
 from sqlglot.time import format_time
 
@@ -108,17 +109,28 @@ class TimeColumn(PydanticModel):
 
 
 class _Incremental(ModelKind):
-    lookback: t.Optional[int] = None
+    batch_size: t.Optional[int]
+    lookback: t.Optional[int]
 
-    @validator("lookback", pre=True)
-    def _int_validator(cls, v: t.Any) -> t.Optional[int]:
+    @validator("batch_size", "lookback", pre=True)
+    def _int_validator(cls, v: t.Any, field: ModelField) -> t.Optional[int]:
         if isinstance(v, exp.Expression):
             num = int(v.name)
         else:
             num = int(v)
         if num < 0:
-            raise ConfigError(f"Lookback must be an integer > 0")
+            raise ConfigError(
+                f"Invalid value {num} for {field.name}. The value should be greater than 0"
+            )
         return num
+
+    @root_validator
+    def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        batch_size = values.get("batch_size")
+        lookback = values.get("lookback") or 0
+        if batch_size and batch_size < lookback:
+            raise ValueError("batch_size cannot be less than lookback")
+        return values
 
 
 class IncrementalByTimeRangeKind(_Incremental):

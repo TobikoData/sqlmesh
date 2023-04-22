@@ -146,12 +146,11 @@ def _get_snapshot_dag(
 def _create_model(name: str) -> Model:
     return SqlModel(
         name=name,
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
         description="Dummy table",
         owner="jen",
         cron="@daily",
         start="2020-01-01",
-        batch_size=30,
         partitioned_by=["ds"],
         query=parse_one("SELECT '2022-01-01'::TEXT AS ds, 1::INT AS one"),
     )

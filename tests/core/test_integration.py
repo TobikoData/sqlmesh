@@ -224,7 +224,6 @@ def change_model_kind(context: Context, kind: ModelKindName):
     if kind in (ModelKindName.VIEW, ModelKindName.EMBEDDED, ModelKindName.FULL):
         context.upsert_model(
             "sushi.items",
-            batch_size=None,
             partitioned_by=[],
             audits=[],
         )
@@ -259,8 +258,8 @@ def validate_model_kind_change(
         assert (
             next(
                 snapshot for snapshot in plan.snapshots if snapshot.name == "sushi.items"
-            ).model.kind
-            == kind
+            ).model.kind.name
+            == kind.name
         )
         assert bool(plan.missing_intervals) != logical
 

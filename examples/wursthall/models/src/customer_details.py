@@ -27,11 +27,11 @@ class CustomerDetails:
 @model(
     "src.customer_details",
     kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="register_ds", format="%Y-%m-%d")
+        time_column=TimeColumn(column="register_ds", format="%Y-%m-%d"),
+        batch_size=200,
     ),
     start=DATA_START_DATE_STR,
     cron="@daily",
-    batch_size=200,
     columns={
         "id": "TEXT",
         "name": "TEXT",

@@ -43,11 +43,10 @@ def parent_model():
 def model():
     return SqlModel(
         name="name",
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
         owner="owner",
         dialect="spark",
         cron="1 0 * * *",
-        batch_size=30,
         start="2020-01-01",
         query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
     )
@@ -83,10 +82,10 @@ def test_json(snapshot: Snapshot):
         "model": {
             "audits": [],
             "cron": "1 0 * * *",
-            "batch_size": 30,
             "kind": {
                 "name": "INCREMENTAL_BY_TIME_RANGE",
                 "time_column": {"column": "ds"},
+                "batch_size": 30,
             },
             "start": "2020-01-01",
             "dialect": "spark",
@@ -396,7 +395,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1152882766",
+        data_hash="3896405490",
         metadata_hash="2457734471",
     )
 
