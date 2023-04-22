@@ -5,10 +5,15 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import (
+    DataObject,
+    DataObjectType,
+    TransactionType,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
@@ -54,6 +59,32 @@ class BasePostgresEngineAdapter(EngineAdapter):
         result = self.cursor.fetchone()
 
         return result[0] == 1 if result is not None else False
+
+    def create_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """
+        Postgres has very strict rules around view replacement. For example the new query must generate an identical setFormatter
+        of columns, using the same column names and data types as the old one. We have to delete the old view instead of replacing it
+        to work around these constraints.
+
+        Reference: https://www.postgresql.org/docs/current/sql-createview.html
+        """
+        with self.transaction(TransactionType.DDL):
+            if replace:
+                self.drop_view(view_name)
+            super().create_view(
+                view_name,
+                query_or_df,
+                columns_to_types=columns_to_types,
+                replace=replace,
+                **create_kwargs,
+            )
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
