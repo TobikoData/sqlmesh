@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import typing as t
 
 import click
 
+from sqlmesh import debug_mode_enabled, enable_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
@@ -49,6 +51,9 @@ def cli(
     # Delegates the execution of the --help option to the corresponding subcommand
     if "--help" in sys.argv:
         return
+
+    if debug_mode_enabled():
+        enable_logging(level=logging.DEBUG)
 
     context = Context(
         paths=paths,
