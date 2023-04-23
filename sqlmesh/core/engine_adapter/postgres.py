@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class PostgresEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "postgres"
+    QUALIFY_TARGET_COLUMN_MERGE = False
     SUPPORTS_INDEXES = True
 
     @property

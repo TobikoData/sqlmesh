@@ -60,6 +60,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    QUALIFY_TARGET_COLUMN_MERGE = True
     SUPPORTS_INDEXES = False
     SCHEMA_DIFFER = SchemaDiffer()
 
@@ -660,7 +661,10 @@ class EngineAdapter:
             then=exp.Update(
                 expressions=[
                     exp.EQ(
-                        this=exp.column(col, TARGET_ALIAS), expression=exp.column(col, SOURCE_ALIAS)
+                        this=exp.column(
+                            col, TARGET_ALIAS if self.QUALIFY_TARGET_COLUMN_MERGE else None
+                        ),
+                        expression=exp.column(col, SOURCE_ALIAS),
                     )
                     for col in column_names
                 ],
