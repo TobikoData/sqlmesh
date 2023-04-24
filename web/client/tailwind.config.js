@@ -43,7 +43,7 @@ module.exports = {
         DEFAULT: 'var(--color-divider)',
       },
       brand: {
-        10: 'var(--color-brand-101)',
+        10: 'var(--color-brand-10)',
         100: 'var(--color-brand-100)',
         200: 'var(--color-brand-200)',
         300: 'var(--color-brand-300)',
