@@ -78,7 +78,7 @@ async def run_plan(
                     [to_ds(t) for t in make_inclusive(start, end)]
                     for start, end in interval.merged_intervals
                 ][0],
-                batches=tasks[interval.snapshot_name] if interval.snapshot_name in tasks else 0,
+                batches=tasks.get(interval.snapshot_name, 0),
             )
             for interval in plan.missing_intervals
         ]
