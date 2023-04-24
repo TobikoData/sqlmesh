@@ -87,12 +87,12 @@ def test_load(assert_exp_eq):
         model.query,
         """
     SELECT
-        CAST(1 AS INT) AS a,
+        TRY_CAST(1 AS INT) AS a,
         TRY_CAST(2 AS DOUBLE) AS b,
-        CAST(c AS BOOL),
-        CAST(1 AS INT) AS d, -- d
+        TRY_CAST(c AS BOOL),
+        TRY_CAST(1 AS INT) AS d, -- d
         TRY_CAST(2 AS DOUBLE) AS e, -- e
-        CAST(f AS BOOL), -- f
+        TRY_CAST(f AS BOOL), -- f
     FROM
         db.other_table t1
         LEFT JOIN
