@@ -114,7 +114,7 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
         owner="Sally",
     )
     context = DbtContext(project_name="Foo")
-    context.target = DuckDbConfig(schema="foo")
+    context.target = DuckDbConfig(name="target", schema="foo")
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
@@ -273,12 +273,12 @@ def test_quoting():
     assert str(BaseRelation.create(**source.relation_info)) == 'foo."bar"'
 
 
-def _test_warehouse_config(config_yaml: str, config_model: t.Type[TargetConfig], *params_path: str):
+def _test_warehouse_config(config_yaml: str, target_class: t.Type[TargetConfig], *params_path: str):
     config_dict = yaml_load(config_yaml)
     for path in params_path:
         config_dict = config_dict[path]
 
-    config = config_model(**config_dict)
+    config = target_class(**{"name": "dev", **config_dict})
 
     for key, value in config.dict().items():
         input_value = config_dict.get(key)

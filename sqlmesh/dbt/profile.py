@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import typing as t
 from pathlib import Path
 
@@ -65,10 +66,12 @@ class Profile:
 
     @classmethod
     def _find_profile(cls, project_root: Path) -> t.Optional[Path]:
-        # TODO Check environment variable
-        path = Path(project_root, cls.PROFILE_FILE)
+        dir = os.environ.get("DBT_PROFILES_DIR", "")
+        path = Path(project_root, dir, cls.PROFILE_FILE)
         if path.exists():
             return path
+        elif dir:
+            return None
 
         path = Path(Path.home(), ".dbt", cls.PROFILE_FILE)
         if path.exists():
@@ -99,6 +102,8 @@ class Profile:
             )
 
         target_fields = load_yaml(context.render(dump_yaml(outputs[target_name])))
-        target = TargetConfig.load(target_name, target_fields)
+        target = TargetConfig.load(
+            {"name": target_name, "profile_name": context.profile_name, **target_fields}
+        )
 
         return (target_name, target)
