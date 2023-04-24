@@ -34,7 +34,7 @@ JINJA_ONLY = {
 
 
 def load_yaml(source: str | Path) -> t.OrderedDict:
-    return load(source, render_jinja=False)
+    return load(source, render_jinja=False, allow_duplicate_keys=True)
 
 
 def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -79,7 +79,7 @@ class GeneralConfig(DbtConfig):
     start: t.Optional[str] = None
     description: t.Optional[str] = None
     # TODO add test support
-    tests: t.Dict[str, t.Any] = {}
+    tests: t.List[t.Any] = []
     enabled: bool = True
     docs: t.Dict[str, t.Any] = {"show": True}
     persist_docs: t.Dict[str, t.Any] = {}

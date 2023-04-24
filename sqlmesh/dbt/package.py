@@ -311,7 +311,7 @@ class PackageLoader:
             if config_fields:
                 source_config = source_config.update_with(config_fields)
 
-            for table in source["tables"]:
+            for table in source.get("tables", []):
                 table_name = table["name"]
                 table_config = source_config.copy()
 
