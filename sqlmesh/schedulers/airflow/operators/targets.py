@@ -146,7 +146,10 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         )
 
     def _get_start(self, context: Context) -> TimeLike:
-        return self.start or context["dag_run"].data_interval_start
+        return (
+            self.start
+            or context["dag_run"].data_interval_start - self.snapshot.model.lookback_delta
+        )
 
     def _get_end(self, context: Context) -> TimeLike:
         return self.end or context["dag_run"].data_interval_end
