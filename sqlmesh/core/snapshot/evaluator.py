@@ -30,7 +30,12 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotId,
+    SnapshotInfoLike,
+)
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
@@ -400,7 +405,10 @@ class SnapshotEvaluator:
                 )
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
-        if not snapshot.is_materialized or snapshot.is_new_version:
+        if (
+            not snapshot.is_materialized
+            or snapshot.change_category != SnapshotChangeCategory.FORWARD_ONLY
+        ):
             return
 
         tmp_table_name = snapshot.table_name(is_dev=True)

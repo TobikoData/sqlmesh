@@ -20,6 +20,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot import (
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotEvaluator,
     SnapshotFingerprint,
     SnapshotTableInfo,
@@ -235,6 +236,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     evaluator.migrate([snapshot])
 
