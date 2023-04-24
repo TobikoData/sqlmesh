@@ -6,7 +6,7 @@ from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.model import Materialization, ModelConfig
+from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
@@ -104,12 +104,15 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
         target_schema="schema",
         schema_="custom",
         database="database",
-        materialized=Materialization.TABLE,
+        materialized=Materialization.INCREMENTAL,
         description="test model",
         sql="SELECT 1 AS a FROM foo",
         start="Jan 1 2023",
         partitioned_by=["a"],
         cron="@hourly",
+        batch_size=5,
+        lookback=3,
+        unique_key=["a"],
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
     )
@@ -127,6 +130,9 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
     assert model.owner == "Sally"
+    kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
+    assert kind.batch_size == 5
+    assert kind.lookback == 3
 
 
 def test_model_config_sql_no_config():
