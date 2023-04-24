@@ -49,6 +49,7 @@ setup(
     extras_require={
         "bigquery": [
             "google-cloud-bigquery[pandas]",
+            "google-cloud-bigquery-storage",
         ],
         "databricks": [
             "databricks-sql-connector",
