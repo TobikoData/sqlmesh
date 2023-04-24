@@ -36,12 +36,13 @@ connections:
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
 ### Engine connection configuration
-* [BigQuery](../integrations/engines.md#bigquery---localbuilt-in-scheduler)
-* [Databricks](../integrations/engines.md#databricks---localbuilt-in-scheduler)
-* [DuckDB](../integrations/engines.md#duckdb---localbuilt-in-scheduler)
-* [Redshift](../integrations/engines.md#redshift---localbuilt-in-scheduler)
-* [Snowflake](../integrations/engines.md#snowflake---localbuilt-in-scheduler)
-* [Spark](../integrations/engines.md#spark---localbuilt-in-scheduler)
+* [BigQuery](../integrations/engines.md#bigquery-localbuilt-in-scheduler)
+* [Databricks](../integrations/engines.md#databricks-localbuilt-in-scheduler)
+* [DuckDB](../integrations/engines.md#duckdb-localbuilt-in-scheduler)
+* [Postgres](../integrations/engines.md#postgres-localbuilt-in-scheduler)
+* [Redshift](../integrations/engines.md#redshift-localbuilt-in-scheduler)
+* [Snowflake](../integrations/engines.md#snowflake-localbuilt-in-scheduler)
+* [Spark](../integrations/engines.md#spark-localbuilt-in-scheduler)
 
 ## Scheduler
 
