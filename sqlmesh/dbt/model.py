@@ -47,9 +47,10 @@ class ModelConfig(BaseModelConfig):
             [croniter](https://github.com/kiorky/croniter) library.
         dialect: The SQL dialect that the model's query is written in. By default,
             this is assumed to be the dialect of the context.
-        batch_size: The maximum number of intervals that can be run per backfill job. If this is None,
+        batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
+        lookback: The number of previous incremental intervals in the lookback window.
         start: The earliest date that the model will be backfilled for
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         incremental_strategy: Strategy used to build the incremental model
@@ -64,7 +65,8 @@ class ModelConfig(BaseModelConfig):
     partitioned_by: t.Optional[t.Union[t.List[str], str]] = None
     cron: t.Optional[str] = None
     dialect: t.Optional[str] = None
-    batch_size: t.Optional[int]
+    batch_size: t.Optional[int] = None
+    lookback: t.Optional[int] = None
 
     # DBT configuration fields
     start: t.Optional[str] = None
@@ -122,6 +124,12 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.VIEW:
             return ModelKind(name=ModelKindName.VIEW)
         if materialization == Materialization.INCREMENTAL:
+            incremental_kwargs = {}
+            for field in ("batch_size", "lookback"):
+                field_val = getattr(self, field, None) or self.meta.get(field, None)
+                if field_val:
+                    incremental_kwargs[field] = field_val
+
             if self.time_column:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByTimeRangeKind
@@ -131,7 +139,9 @@ class ModelConfig(BaseModelConfig):
                         f"SQLMesh IncrementalByTime is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
                     )
-                return IncrementalByTimeRangeKind(time_column=self.time_column)
+                return IncrementalByTimeRangeKind(
+                    time_column=self.time_column, **incremental_kwargs
+                )
             if self.unique_key:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByUniqueKeyKind
@@ -144,7 +154,7 @@ class ModelConfig(BaseModelConfig):
                         f"{self.model_name}: SQLMesh IncrementalByUniqueKey is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
-                return IncrementalByUniqueKeyKind(unique_key=self.unique_key)
+                return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
             raise ConfigError(
                 f"{self.model_name}: Incremental materialization requires either a "
@@ -208,7 +218,7 @@ class ModelConfig(BaseModelConfig):
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
             optional_kwargs["partitioned_by"] = self.partitioned_by
-        for field in ("cron", "batch_size"):
+        for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val
