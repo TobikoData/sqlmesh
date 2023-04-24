@@ -57,11 +57,7 @@ class ColumnConfig(GeneralConfig):
     Args:
         name: Name of the column
         data_type: The column's data type
-        description: User defined description of the column
-        meta: Meta data associated with the column
         quote: Boolean flag to use quoting for the column name
-        tests: Tests associated with this column
-        tags: Tags associated with this column
     """
 
     name: str

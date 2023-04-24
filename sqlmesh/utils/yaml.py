@@ -17,7 +17,10 @@ JINJA_METHODS = {
 
 
 def load(
-    source: str | Path, raise_if_empty: bool = True, render_jinja: bool = True
+    source: str | Path,
+    raise_if_empty: bool = True,
+    render_jinja: bool = True,
+    allow_duplicate_keys: bool = False,
 ) -> t.OrderedDict:
     """Loads a YAML object from either a raw string or a file."""
     path: t.Optional[Path] = None
@@ -30,7 +33,9 @@ def load(
     if render_jinja:
         source = ENVIRONMENT.from_string(source).render(JINJA_METHODS)
 
-    contents = YAML().load(source)
+    yaml = YAML()
+    yaml.allow_duplicate_keys = allow_duplicate_keys
+    contents = yaml.load(source)
     if contents is None:
         if raise_if_empty:
             error_path = f" '{path}'" if path else ""
