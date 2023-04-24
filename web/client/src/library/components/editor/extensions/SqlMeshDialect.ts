@@ -128,14 +128,13 @@ export function useSqlMeshExtension(): [
       ])
     }
 
-  const SqlMeshDialectCleanUp: ExtensionCleanUp =
-    function SqlMeshDialectCleanUp(): void {
-      const handler = cache.get('message')
+  function SqlMeshDialectCleanUp(): void {
+    const handler = cache.get('message')
 
-      if (handler == null) return
+    if (handler == null) return
 
-      sqlglotWorker.removeEventListener('message', handler)
-    }
+    sqlglotWorker.removeEventListener('message', handler)
+  }
 
   return [SqlMeshDialectExtension, SqlMeshDialectCleanUp]
 }

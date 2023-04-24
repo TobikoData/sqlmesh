@@ -38,10 +38,10 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
 
   const models = useStoreContext(s => s.models)
-
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
+  const previewLineage = useStoreEditor(s => s.previewLineage)
   const tabs = useStoreEditor(s => s.tabs)
   const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
@@ -73,11 +73,17 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const extensions = useMemo(() => {
+    const model = models.get(tab.file.path)
+    const columns = Object.keys(previewLineage ?? {})
+      .map(model => models.get(model)?.columns.map(c => c.name))
+      .flat()
+      .filter(Boolean) as string[]
+
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
       HoverTooltip(models),
       events(models, files, selectFile),
-      SqlMeshModel(models),
+      model != null && SqlMeshModel(models, model, columns),
       tab.file.extension === '.py' && python(),
       tab.file.extension === '.yaml' && StreamLanguage.define(yaml),
       tab.file.extension === '.sql' &&
