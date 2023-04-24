@@ -150,17 +150,17 @@ DuckDB only works when running locally; therefore it does not support Airflow.
 
 # Postgres
 ## Postgres - Local/Built-in Scheduler
-| Option            | Description                                                                                                                          |  Type  | Required |
-|-------------------|--------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `host`            | The hostname of the Postgres server                                                                                                  | string |    Y     |
-| `user`            | The username to use for authentication with the Postgres server                                                                      | string |    Y     |
-| `password`        | The password to use for authentication with the Postgres server                                                                      | string |    Y     |
-| `port`            | The port number of the Postgres server                                                                                               |  int   |    Y     |
-| `database`        | The name of the database instance to connect to                                                                                      | string |    Y     |
-| `keepalives_idle` | The number of seconds between each keepalive packet sent to the server. If set to 0, the system default will be used. (Default: `0`) |  int   |    N     |
-| `connect_timeout` | The number of seconds to wait for the connection to the server. (Default: `10`)                                                      |  int   |    N     |
-| `role`            | The role to use for authentication with the Postgres server                                                                          | string |    N     |
-| `sslmode`         | The security of the connection to the Postgres server.                                                                               | string |    N     |
+| Option            | Description                                                                     |  Type  | Required |
+|-------------------|---------------------------------------------------------------------------------|:------:|:--------:|
+| `host`            | The hostname of the Postgres server                                             | string |    Y     |
+| `user`            | The username to use for authentication with the Postgres server                 | string |    Y     |
+| `password`        | The password to use for authentication with the Postgres server                 | string |    Y     |
+| `port`            | The port number of the Postgres server                                          |  int   |    Y     |
+| `database`        | The name of the database instance to connect to                                 | string |    Y     |
+| `keepalives_idle` | The number of seconds between each keepalive packet sent to the server.         |  int   |    N     |
+| `connect_timeout` | The number of seconds to wait for the connection to the server. (Default: `10`) |  int   |    N     |
+| `role`            | The role to use for authentication with the Postgres server                     | string |    N     |
+| `sslmode`         | The security of the connection to the Postgres server.                          | string |    N     |
 
 ## Postgres - Airflow
 **Engine Name:** `postgres`
