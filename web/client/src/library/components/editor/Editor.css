@@ -45,21 +45,44 @@
   border-radius: 1rem;
 }
 
-.sqlmesh-model {
-  color: var(--color-primary-500);
-  background: var(--color-primary-10);
-  box-shadow: inset 0 -2px 0 0 var(--color-primary-300);
-  display: inline-block;
-  cursor: pointer;
-  font-weight: bold;
-}
-
 .cm-tooltip {
   border: none !important;
   outline: none !important;
   background: var(--color-theme) !important;
 }
 
+.sqlmesh-model,
+.sqlmesh-model > span {
+  display: inline-block;
+  color: var(--color-primary-500);
+  background: var(--color-primary-10);
+  box-shadow: inset 0 -2px 0 0 var(--color-primary-300);
+  cursor: pointer;
+  font-weight: bold;
+}
+
 .sqlmesh-model:hover {
   opacity: 0.8;
+}
+
+.sqlmesh-model.--is-active-model,
+.sqlmesh-model.--is-active-model:hover,
+.sqlmesh-model.--is-active-model > span,
+.sqlmesh-model.--is-active-model:hover > span {
+  box-shadow: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.sqlmesh-model__column.--is-original,
+.sqlmesh-model__column.--is-original > span {
+  display: inline-block;
+  color: var(--color-accent-300);
+}
+
+.sqlmesh-model__column.--is-active-model.--is-derived,
+.sqlmesh-model__column.--is-active-model.--is-derived > span {
+  display: inline-block;
+  color: var(--color-brand-300);
+  background: var(--color-brand-10);
 }
