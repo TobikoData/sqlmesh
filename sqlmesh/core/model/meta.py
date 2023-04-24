@@ -264,9 +264,9 @@ class ModelMeta(PydanticModel):
             interval_unit = self.interval_unit()
             if interval_unit == IntervalUnit.DAY:
                 return timedelta(days=self.lookback)
-            elif interval_unit == IntervalUnit.HOUR:
+            if interval_unit == IntervalUnit.HOUR:
                 return timedelta(hours=self.lookback)
-            elif interval_unit == IntervalUnit.MINUTE:
+            if interval_unit == IntervalUnit.MINUTE:
                 return timedelta(minutes=self.lookback)
         return timedelta()
 
