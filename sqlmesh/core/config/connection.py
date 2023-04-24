@@ -572,7 +572,7 @@ class PostgresConnectionConfig(_ConnectionConfig):
     password: str
     port: int
     database: str
-    keepalives_idle: int = 0
+    keepalives_idle: t.Optional[int]
     connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
