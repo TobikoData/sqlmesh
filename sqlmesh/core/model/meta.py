@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from datetime import timedelta
 from enum import Enum
 
 from croniter import croniter
@@ -255,6 +256,19 @@ class ModelMeta(PydanticModel):
     def lookback(self) -> int:
         """The incremental lookback window."""
         return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
+
+    @property
+    def lookback_delta(self) -> timedelta:
+        """The incremental lookback time delta."""
+        if isinstance(self.kind, _Incremental):
+            interval_unit = self.interval_unit()
+            if interval_unit == IntervalUnit.DAY:
+                return timedelta(days=self.lookback)
+            elif interval_unit == IntervalUnit.HOUR:
+                return timedelta(hours=self.lookback)
+            elif interval_unit == IntervalUnit.MINUTE:
+                return timedelta(minutes=self.lookback)
+        return timedelta()
 
     @property
     def batch_size(self) -> t.Optional[int]:
