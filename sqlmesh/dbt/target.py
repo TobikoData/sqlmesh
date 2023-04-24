@@ -35,21 +35,23 @@ class TargetConfig(abc.ABC, DbtConfig):
     Configuration for DBT profile target
 
     Args:
-        name: The name of this target
         type: The type of the data warehouse
-        schema_: The target schema for this project
+        name: The name of this target
+        database: Name of the database
+        schema_: Name of the schema
         threads: The number of threads to run on
     """
 
     # dbt
-    type: str = ""
-    name: str = ""
-    schema_: str = Field(default="", alias="schema")
+    type: str = "none"
+    name: str
+    database: str
+    schema_: str = Field(alias="schema")
     threads: int = 1
     profile_name: t.Optional[str] = None
 
     @classmethod
-    def load(cls, name: str, data: t.Dict[str, t.Any]) -> TargetConfig:
+    def load(cls, data: t.Dict[str, t.Any]) -> TargetConfig:
         """
         Loads the configuration from the yaml provided for a profile target
 
@@ -61,17 +63,17 @@ class TargetConfig(abc.ABC, DbtConfig):
         """
         db_type = data["type"]
         if db_type == "databricks":
-            return DatabricksConfig(name=name, **data)
+            return DatabricksConfig(**data)
         elif db_type == "duckdb":
-            return DuckDbConfig(name=name, **data)
+            return DuckDbConfig(**data)
         elif db_type == "postgres":
-            return PostgresConfig(name=name, **data)
+            return PostgresConfig(**data)
         elif db_type == "redshift":
-            return RedshiftConfig(name=name, **data)
+            return RedshiftConfig(**data)
         elif db_type == "snowflake":
-            return SnowflakeConfig(name=name, **data)
+            return SnowflakeConfig(**data)
         elif db_type == "bigquery":
-            return BigQueryConfig(name=name, **data)
+            return BigQueryConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -83,9 +85,8 @@ class TargetConfig(abc.ABC, DbtConfig):
         """Converts target config to SQLMesh connection config"""
         raise NotImplementedError
 
-    def target_jinja(self, profile_name: str) -> AttributeDict:
+    def attribute_dict(self) -> AttributeDict:
         fields = self.dict().copy()
-        fields["profile_name"] = profile_name
         fields["target_name"] = self.name
         return AttributeDict(fields)
 
@@ -107,7 +108,9 @@ class DuckDbConfig(TargetConfig):
     """
 
     type: Literal["duckdb"] = "duckdb"
-    path: t.Optional[str] = None
+    database: str = "main"
+    schema_: str = Field(default="main", alias="schema")
+    path: str = ":memory:"
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
@@ -123,7 +126,6 @@ class SnowflakeConfig(TargetConfig):
     Args:
         account: Snowflake account
         warehouse: Name of the warehouse
-        database: Name of the database
         user: Name of the user
         password: User's password
         role: Role of the user
@@ -139,7 +141,6 @@ class SnowflakeConfig(TargetConfig):
     type: Literal["snowflake"] = "snowflake"
     account: str
     warehouse: str
-    database: str
     user: str
     password: str
     role: t.Optional[str]
@@ -200,6 +201,15 @@ class PostgresConfig(TargetConfig):
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    @root_validator(pre=True)
+    def validate_database(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["database"] = values.get("database") or values.get("dbname")
+        if not values["database"]:
+            raise ConfigError("Either database or dbname must be set")
+        return values
+
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
 
@@ -248,6 +258,15 @@ class RedshiftConfig(TargetConfig):
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
+    @root_validator(pre=True)
+    def validate_database(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["database"] = values.get("database") or values.get("dbname")
+        if not values["database"]:
+            raise ConfigError("Either database or dbname must be set")
+        return values
+
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "append"
 
@@ -255,6 +274,7 @@ class RedshiftConfig(TargetConfig):
         return RedshiftConnectionConfig(
             user=self.user,
             password=self.password,
+            database=self.database,
             host=self.host,
             port=self.port,
             sslmode=self.sslmode,
@@ -272,6 +292,7 @@ class DatabricksConfig(TargetConfig):
         host: The Databricks host to connect to
         http_path: The Databricks compute resources URL
         token: Personal access token
+        database: Name of the database. Not applicable for Databricks and ignored
     """
 
     type: Literal["databricks"] = "databricks"
@@ -279,6 +300,7 @@ class DatabricksConfig(TargetConfig):
     host: str
     http_path: str
     token: str
+    database: t.Optional[str] = None  # type: ignore
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
@@ -297,7 +319,6 @@ class BigQueryConfig(TargetConfig):
     Project connection and operational configuration for the BigQuery target
 
     Args:
-        schema_: Overrides
         type: The type of the target (bigquery)
         method: The BigQuery authentication method to use
         project: The BigQuery project to connect to
@@ -314,7 +335,6 @@ class BigQueryConfig(TargetConfig):
 
     type: Literal["bigquery"] = "bigquery"
     method: t.Optional[str] = BigQueryConnectionMethod.OAUTH
-    schema_: t.Optional[str] = Field(None, alias="schema")  # type: ignore
     dataset: t.Optional[str] = None
     project: t.Optional[str] = None
     location: t.Optional[str] = None
@@ -336,13 +356,16 @@ class BigQueryConfig(TargetConfig):
     priority: BigQueryPriority = BigQueryPriority.INTERACTIVE
     maximum_bytes_billed: t.Optional[int] = None
 
-    @root_validator
-    def validate_schema(
+    @root_validator(pre=True)
+    def validate_fields(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        values["schema_"] = values.get("schema_") or values.get("dataset")
-        if not values["schema_"]:
+        values["schema"] = values.get("schema") or values.get("dataset")
+        if not values["schema"]:
             raise ConfigError("Either schema or dataset must be set")
+        values["database"] = values.get("database") or values.get("project")
+        if not values["database"]:
+            raise ConfigError("Either database or project must be set")
         return values
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
@@ -351,7 +374,7 @@ class BigQueryConfig(TargetConfig):
     def to_sqlmesh(self) -> ConnectionConfig:
         return BigQueryConnectionConfig(
             method=self.method,
-            project=self.project,
+            project=self.database,
             location=self.location,
             concurrent_tasks=self.threads,
             keyfile=self.keyfile,

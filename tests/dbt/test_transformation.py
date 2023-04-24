@@ -40,7 +40,7 @@ def test_model_name():
 
 
 def test_model_kind():
-    target = DuckDbConfig(schema="foo")
+    target = DuckDbConfig(name="target", schema="foo")
 
     assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
         name=ModelKindName.FULL
@@ -139,7 +139,7 @@ def test_model_columns():
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
     context = DbtContext(project_name="Foo")
-    context.target = DuckDbConfig(schema="foo")
+    context.target = DuckDbConfig(name="target", schema="foo")
     sqlmesh_model = model.to_sqlmesh(context)
     assert sqlmesh_model.columns_to_types == expected_column_types
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
@@ -196,7 +196,7 @@ def test_config_containing_jinja():
     )
 
     context = DbtContext(project_name="Foo")
-    context.target = DuckDbConfig(schema="foo")
+    context.target = DuckDbConfig(name="target", schema="foo")
     context.variables = {"schema": "foo", "size": "5"}
     model._dependencies.sources = set(["package.table"])
     context.sources = {"package.table": SourceConfig(schema_="raw", name="baz")}
@@ -216,7 +216,8 @@ def test_config_containing_jinja():
 
 
 def test_config_containing_missing_dependency():
-    context = DbtContext()
+    context = DbtContext(project_name="project")
+    context.target = DuckDbConfig(name="target", schema="foo")
     model = ModelConfig(sql="{{ config(pre_hook=\"{{ print(ref('bar')) }}\") }} SELECT 1 FROM a")
     with pytest.raises(ConfigError, match="'bar' was not found"):
         model.render_config(context).to_sqlmesh(context)
