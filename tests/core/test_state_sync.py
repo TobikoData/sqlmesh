@@ -1,5 +1,6 @@
 import typing as t
 
+import duckdb
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -445,6 +446,34 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
 
 
+def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot_a])
+    promote_snapshots(state_sync, [snapshot_a], "prod")
+
+    env = state_sync.get_environment("prod")
+    assert env
+    state_sync.finalize(env)
+
+    env = state_sync.get_environment("prod")
+    assert env
+    assert env.finalized_at_ts is not None
+
+    env.plan_id = "different_plan_id"
+    with pytest.raises(
+        SQLMeshError,
+        match=r"Plan 'different_plan_id' is no longer valid for the target environment 'prod'.*",
+    ):
+        state_sync.finalize(env)
+
+
 def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     model = SqlModel(
         name="a",
@@ -569,8 +598,8 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
         schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION
     )
 
-    # old install does not have this table / row
-    delete_versions(state_sync)
+    # Start with a clean slate.
+    state_sync = EngineAdapterStateSync(create_engine_adapter(duckdb.connect, "duckdb"))
 
     with pytest.raises(
         SQLMeshError,
@@ -626,7 +655,9 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
     state_sync.migrate()
     mock.assert_not_called()
 
-    delete_versions(state_sync)
+    # Start with a clean slate.
+    state_sync = EngineAdapterStateSync(create_engine_adapter(duckdb.connect, "duckdb"))
+
     state_sync.migrate()
     mock.assert_called_once()
     assert state_sync.get_versions() == Versions(

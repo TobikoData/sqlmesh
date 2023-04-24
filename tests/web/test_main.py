@@ -488,6 +488,7 @@ def test_get_environments(project_context: Context) -> None:
             "plan_id": "",
             "previous_plan_id": None,
             "expiration_ts": None,
+            "finalized_at_ts": None,
         }
     }
 

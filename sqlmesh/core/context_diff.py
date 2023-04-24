@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -38,6 +37,8 @@ class ContextDiff(PydanticModel):
     """The environment to diff."""
     is_new_environment: bool
     """Whether the target environment is new."""
+    is_unfinilized_environment: bool
+    """Whether the currently stored environment record is in unfinalized state."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
     added: t.Set[str]
@@ -56,7 +57,7 @@ class ContextDiff(PydanticModel):
     @classmethod
     def create(
         cls,
-        environment: str | Environment,
+        environment: str,
         snapshots: t.Dict[str, Snapshot],
         create_from: str,
         state_reader: StateReader,
@@ -73,12 +74,8 @@ class ContextDiff(PydanticModel):
         Returns:
             The ContextDiff object.
         """
-        if isinstance(environment, str):
-            environment = environment.lower()
-            env = state_reader.get_environment(environment)
-        else:
-            env = environment
-            environment = env.name.lower()
+        environment = environment.lower()
+        env = state_reader.get_environment(environment)
 
         if env is None:
             env = state_reader.get_environment(create_from.lower())
@@ -151,6 +148,7 @@ class ContextDiff(PydanticModel):
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
+            is_unfinilized_environment=bool(env and not env.finalized_at_ts),
             create_from=create_from,
             added=added,
             removed=removed,
@@ -162,7 +160,9 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_changes(self) -> bool:
-        return self.has_snapshot_changes or self.is_new_environment
+        return (
+            self.has_snapshot_changes or self.is_new_environment or self.is_unfinilized_environment
+        )
 
     @property
     def has_snapshot_changes(self) -> bool:

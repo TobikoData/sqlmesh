@@ -892,7 +892,7 @@ class Context(BaseContext):
 
     def _context_diff(
         self,
-        environment: str | Environment,
+        environment: str,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         create_from: t.Optional[str] = None,
     ) -> ContextDiff:

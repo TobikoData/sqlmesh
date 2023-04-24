@@ -242,23 +242,34 @@ class SnapshotDagGenerator:
         start_task = EmptyOperator(task_id="snapshot_promotion_start")
         end_task = EmptyOperator(task_id="snapshot_promotion_end")
 
+        environment = Environment(
+            name=request.environment_name,
+            snapshots=request.promoted_snapshots,
+            start_at=request.start,
+            end_at=request.end,
+            plan_id=request.plan_id,
+            previous_plan_id=request.previous_plan_id,
+            expiration_ts=request.environment_expiration_ts,
+        )
+
         update_state_task = PythonOperator(
             task_id="snapshot_promotion__update_state",
             python_callable=promotion_update_state_task,
             op_kwargs={
-                "snapshots": request.promoted_snapshots,
-                "environment_name": request.environment_name,
-                "start": request.start,
-                "end": request.end,
+                "environment": environment,
                 "unpaused_dt": request.unpaused_dt,
                 "no_gaps": request.no_gaps,
-                "plan_id": request.plan_id,
-                "previous_plan_id": request.previous_plan_id,
-                "environment_expiration_ts": request.environment_expiration_ts,
             },
         )
 
+        finalize_task = PythonOperator(
+            task_id="snapshot_promotion__finalize",
+            python_callable=promotion_finalize_task,
+            op_kwargs={"environment": environment},
+        )
+
         start_task >> update_state_task
+        finalize_task >> end_task
 
         if request.promoted_snapshots:
             create_views_task = self._create_snapshot_promotion_operator(
@@ -268,7 +279,7 @@ class SnapshotDagGenerator:
                 request.is_dev,
                 "snapshot_promotion__create_views",
             )
-            create_views_task >> end_task
+            create_views_task >> finalize_task
 
             if not request.is_dev and request.unpaused_dt:
                 migrate_tables_task = self._create_snapshot_migrate_tables_operator(
@@ -289,10 +300,10 @@ class SnapshotDagGenerator:
                 "snapshot_promotion__delete_views",
             )
             update_state_task >> delete_views_task
-            delete_views_task >> end_task
+            delete_views_task >> finalize_task
 
         if not request.promoted_snapshots and not request.demoted_snapshots:
-            update_state_task >> end_task
+            update_state_task >> finalize_task
 
         return (start_task, end_task)
 
@@ -479,26 +490,16 @@ def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
 
 
 def promotion_update_state_task(
-    snapshots: t.List[SnapshotTableInfo],
-    environment_name: str,
-    start: TimeLike,
-    end: t.Optional[TimeLike],
+    environment: Environment,
     unpaused_dt: t.Optional[TimeLike],
     no_gaps: bool,
-    plan_id: str,
-    previous_plan_id: t.Optional[str],
-    environment_expiration_ts: t.Optional[int],
 ) -> None:
-    environment = Environment(
-        name=environment_name,
-        snapshots=snapshots,
-        start_at=start,
-        end_at=end,
-        plan_id=plan_id,
-        previous_plan_id=previous_plan_id,
-        expiration_ts=environment_expiration_ts,
-    )
     with util.scoped_state_sync() as state_sync:
         state_sync.promote(environment, no_gaps=no_gaps)
-        if snapshots and not end and unpaused_dt:
-            state_sync.unpause_snapshots(snapshots, unpaused_dt)
+        if environment.snapshots and not environment.end_at and unpaused_dt:
+            state_sync.unpause_snapshots(environment.snapshots, unpaused_dt)
+
+
+def promotion_finalize_task(environment: Environment) -> None:
+    with util.scoped_state_sync() as state_sync:
+        state_sync.finalize(environment)
