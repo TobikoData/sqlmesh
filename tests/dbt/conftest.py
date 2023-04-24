@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from shutil import rmtree
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -11,7 +12,12 @@ from sqlmesh.dbt.project import Project
 
 @pytest.fixture()
 def sushi_test_project(mocker: MockerFixture) -> Project:
-    project = Project.load(DbtContext(project_root=Path("tests/fixtures/dbt/sushi_test")))
+    project_root = Path("tests/fixtures/dbt/sushi_test")
+    try:
+        rmtree(str(project_root) + "/.cache")
+    except FileNotFoundError:
+        pass
+    project = Project.load(DbtContext(project_root=project_root))
     for package_name, package in project.packages.items():
         project.context.jinja_macros.add_macros(
             package.macro_infos,
