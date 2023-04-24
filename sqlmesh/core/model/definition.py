@@ -95,7 +95,7 @@ class _Model(ModelMeta, frozen=True):
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
-        lookback: The number of previous increnental intervals in the lookback window.
+        lookback: The number of previous incremental intervals in the lookback window.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         partitioned_by: The partition columns, only applicable in certain engines. (eg. (ds, hour))

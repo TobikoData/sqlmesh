@@ -50,7 +50,7 @@ class ModelConfig(BaseModelConfig):
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
-        lookback: The number of previous increnental intervals in the lookback window.
+        lookback: The number of previous incremental intervals in the lookback window.
         start: The earliest date that the model will be backfilled for
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         incremental_strategy: Strategy used to build the incremental model
