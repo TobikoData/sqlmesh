@@ -251,7 +251,7 @@ function ModelNode({
             <span
               title={
                 file.isSQLMeshModelPython
-                  ? 'Column lineage disabled for python models'
+                  ? 'Column lineage disabled for Python models'
                   : 'SQL Model'
               }
               className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
