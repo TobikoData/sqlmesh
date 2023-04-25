@@ -62,6 +62,7 @@ export function IDE(): JSX.Element {
 
   useEffect(() => {
     const unsubscribeTasks = subscribe('tasks', updateTasks)
+    const unsubscribeModels = subscribe('models', setModels)
 
     void debouncedGetEnvironemnts()
     void debouncedGetFiles()
@@ -77,6 +78,7 @@ export function IDE(): JSX.Element {
       apiCancelGetEnvironments(client)
 
       unsubscribeTasks?.()
+      unsubscribeModels?.()
     }
   }, [])
 
