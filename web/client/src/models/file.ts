@@ -29,11 +29,11 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       (initial as ModelFile)?.isModel
         ? (initial as ModelFile).initial
         : {
-          ...(initial as File),
-          extension: initial?.extension ?? EnumFileExtensions.SQL,
-          is_supported: initial?.is_supported ?? true,
-          content: initial?.content ?? '',
-        },
+            ...(initial as File),
+            extension: initial?.extension ?? EnumFileExtensions.SQL,
+            is_supported: initial?.is_supported ?? true,
+            content: initial?.content ?? '',
+          },
       parent,
     )
 

@@ -139,8 +139,8 @@ export default function EditorPreview({
                       isDisabledPreviewQuery(tabName)
                       ? 'cursor-not-allowed opacity-50 bg-neutral-10'
                       : selected
-                        ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                        : 'bg-secondary-10 cursor-pointer',
+                      ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                      : 'bg-secondary-10 cursor-pointer',
                   )
                 }
               >
@@ -194,9 +194,9 @@ export default function EditorPreview({
                             {header.isPlaceholder
                               ? null
                               : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
+                                  header.column.columnDef.header,
+                                  header.getContext(),
+                                )}
                           </th>
                         ))}
                       </tr>
@@ -230,9 +230,9 @@ export default function EditorPreview({
                             {header.isPlaceholder
                               ? null
                               : flexRender(
-                                header.column.columnDef.footer,
-                                header.getContext(),
-                              )}
+                                  header.column.columnDef.footer,
+                                  header.getContext(),
+                                )}
                           </th>
                         ))}
                       </tr>
