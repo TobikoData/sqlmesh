@@ -12,9 +12,8 @@ import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
-import { apiCancelLineage, useApiModelLineage } from '@api/index'
+import { useApiModelLineage } from '@api/index'
 import Graph from '@components/graph/Graph'
-import { useQueryClient } from '@tanstack/react-query'
 import Loading from '@components/loading/Loading'
 
 export const EnumEditorPreviewTabs = {
@@ -40,6 +39,7 @@ export default function EditorPreview({
   const previewTable = useStoreEditor(s => s.previewTable)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
+  const [modelName, setModelName] = useState<string | undefined>()
 
   const tabs = useMemo(() => {
     if (tab.file.isLocal)
@@ -58,6 +58,7 @@ export default function EditorPreview({
 
     return [EnumEditorPreviewTabs.Console]
   }, [tab])
+
   const [headers, data] = useMemo(
     () =>
       previewTable == null
@@ -88,6 +89,10 @@ export default function EditorPreview({
     setActiveTabIndex(tab.file.isSQLMeshModel ? 3 : -1)
   }, [previewTable, previewQuery, previewConsole, tab])
 
+  useEffect(() => {
+    setModelName(models.get(tab.file.path)?.name)
+  }, [models, tab.file])
+
   const table = useReactTable({
     data,
     columns,
@@ -105,8 +110,6 @@ export default function EditorPreview({
   function isDisabledPreviewQuery(tabName: string): boolean {
     return tabName === EnumEditorPreviewTabs.Query && isNil(previewQuery)
   }
-
-  const model = models.get(tab.file.path)
 
   return (
     <div
@@ -262,12 +265,13 @@ export default function EditorPreview({
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            {model == null ? (
+            {modelName == null ? (
               <div>Model Does Not Exist</div>
             ) : (
               <EditorPreviewLineage
-                key={model.name}
-                model={model.name}
+                key={modelName}
+                model={modelName}
+                tab={tab}
               />
             )}
           </Tab.Panel>
@@ -277,44 +281,42 @@ export default function EditorPreview({
   )
 }
 
-function EditorPreviewLineage({ model }: { model: string }): JSX.Element {
-  const client = useQueryClient()
-
-  const { data: dag, refetch: getModelLineage } = useApiModelLineage(model)
+function EditorPreviewLineage({
+  model,
+  tab,
+}: {
+  model: string
+  tab: EditorTab
+}): JSX.Element {
+  const { data: lineage, refetch: getModelLineage } = useApiModelLineage(model)
 
   const previewLineage = useStoreEditor(s => s.previewLineage)
   const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
 
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 1000, true),
-    [model],
+    [model, tab.file.path, tab.file.fingerprint],
   )
 
   useEffect(() => {
     void debouncedGetModelLineage()
-
-    return () => {
-      debouncedGetModelLineage.cancel()
-
-      apiCancelLineage(client)
-    }
-  }, [model])
+  }, [debouncedGetModelLineage])
 
   useEffect(() => {
-    if (dag == null) {
+    if (lineage == null) {
       setPreviewLineage(undefined)
     } else {
       setPreviewLineage(
-        Object.keys(dag).reduce((acc: Record<string, Lineage>, key) => {
+        Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
           acc[key] = {
-            models: dag[key] ?? [],
+            models: lineage[key] ?? [],
           }
 
           return acc
         }, {}),
       )
     }
-  }, [dag])
+  }, [lineage])
 
   return previewLineage == null ? (
     <div className="w-full h-full flex items-center justify-center bg-primary-10">

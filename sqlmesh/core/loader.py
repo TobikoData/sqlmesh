@@ -193,6 +193,9 @@ class SqlMeshLoader(Loader):
             cache = SqlMeshLoader._Cache(self, context_path)
 
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".sql"):
+                if not os.path.getsize(path):
+                    continue
+
                 self._track_file(path)
 
                 def _load() -> Model:
@@ -234,6 +237,9 @@ class SqlMeshLoader(Loader):
 
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(context_path / c.MODELS, config=config, extension=".py"):
+                if not os.path.getsize(path):
+                    continue
+
                 self._track_file(path)
                 self._import_python_file(path, context_path)
                 new = registry.keys() - registered
