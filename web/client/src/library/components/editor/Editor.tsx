@@ -44,15 +44,23 @@ export default function Editor(): JSX.Element {
     }
   }, [])
 
-  const sizesCodeEditorAndInspector = useMemo(
-    () => getSizesCodeEditorAndInspector(),
-    [tab],
-  )
+  const sizesCodeEditorAndInspector = useMemo(() => {
+    const showInspector =
+      tab != null &&
+      (tab.file.isSQLMeshModel || tab.file.isLocal) &&
+      isFalse(isStringEmptyOrNil(tab.file.content))
 
-  const sizesCodeEditorAndPreview = useMemo(
-    () => getSizesCodeEditorAndPreview(),
-    [tab, previewConsole, previewTable],
-  )
+    return showInspector ? [75, 25] : [100, 0]
+  }, [tab])
+
+  const sizesCodeEditorAndPreview = useMemo(() => {
+    const showPreview =
+      tab != null &&
+      ((tab.file.isLocal && [previewTable, previewConsole].some(Boolean)) ||
+        tab.file.isSQLMeshModel)
+
+    return showPreview ? [70, 30] : [100, 0]
+  }, [tab, previewConsole, previewTable])
 
   useEffect(() => {
     engine.postMessage({
@@ -86,23 +94,6 @@ export default function Editor(): JSX.Element {
     selectTab(createTab(selectedFile))
   }, [selectedFile])
 
-  function getSizesCodeEditorAndPreview(): [number, number] {
-    const showPreview =
-      tab != null &&
-      ((tab.file.isLocal && [previewTable, previewConsole].some(Boolean)) ||
-        tab.file.isSQLMeshModel)
-    return showPreview ? [80, 20] : [100, 0]
-  }
-
-  function getSizesCodeEditorAndInspector(): [number, number] {
-    const showInspector =
-      tab != null &&
-      (tab.file.isSQLMeshModel || tab.file.isLocal) &&
-      isFalse(isStringEmptyOrNil(tab.file.content))
-
-    return showInspector ? [75, 25] : [100, 0]
-  }
-
   function toggleDirection(): void {
     setDirection(direction =>
       direction === 'vertical' ? 'horizontal' : 'vertical',
@@ -131,7 +122,12 @@ export default function Editor(): JSX.Element {
           minSize={0}
           snapOffset={0}
         >
-          <div className="flex flex-col h-full overflow-hidden">
+          <div
+            className={clsx(
+              'flex flex-col overflow-hidden',
+              direction === 'vertical' ? 'w-full ' : 'h-full',
+            )}
+          >
             {isReadyEngine && (
               <>
                 <div className="flex flex-col h-full overflow-hidden">
@@ -156,9 +152,14 @@ export default function Editor(): JSX.Element {
               </>
             )}
           </div>
-          <div className="w-full">
+          <div
+            className={clsx(
+              direction === 'vertical' ? 'flex flex-col' : 'flex',
+            )}
+          >
             {tab != null && (
               <EditorPreview
+                key={tab.file.id}
                 tab={tab}
                 toggleDirection={toggleDirection}
               />

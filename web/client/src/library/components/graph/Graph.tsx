@@ -9,8 +9,6 @@ import React, {
 import ReactFlow, {
   Controls,
   Background,
-  useNodesState,
-  useEdgesState,
   Panel,
   Handle,
   Position,
@@ -33,7 +31,7 @@ import {
   ArrowRightCircleIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/solid'
-import { useStoreLineage } from '@context/lineage'
+import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
 import clsx from 'clsx'
 import { type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
@@ -43,35 +41,40 @@ import { useStoreEditor, type Lineage } from '@context/editor'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 
-export default function Graph({
-  graph,
+export default function Flow({
+  lineage,
   closeGraph,
   highlightedNodes = [],
 }: {
-  graph: Record<string, Lineage>
+  lineage: Record<string, Lineage>
   closeGraph?: () => void
   highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
+  const nodes = useStoreReactFlow(s => s.nodes)
+  const edges = useStoreReactFlow(s => s.edges)
+  const setNodes = useStoreReactFlow(s => s.setNodes)
+  const setEdges = useStoreReactFlow(s => s.setEdges)
+  const onNodesChange = useStoreReactFlow(s => s.onNodesChange)
+  const onEdgesChange = useStoreReactFlow(s => s.onEdgesChange)
+  const onConnect = useStoreReactFlow(s => s.onConnect)
+
   const setColumns = useStoreLineage(s => s.setColumns)
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
   const nodesAndEdges = useMemo(
     () =>
       getNodesAndEdges({
-        lineage: graph,
+        lineage,
         highlightedNodes,
         models,
         nodes,
         edges,
       }),
-    [graph, highlightedNodes, models],
+    [lineage, highlightedNodes, models],
   )
 
   useEffect(() => {
@@ -81,7 +84,6 @@ export default function Graph({
 
     return () => {
       active = false
-      setColumns(undefined)
     }
 
     async function load(): Promise<void> {
@@ -97,7 +99,7 @@ export default function Graph({
       setEdges(layout.edges)
       setColumns(nodesAndEdges.columns)
     }
-  }, [])
+  }, [nodesAndEdges])
 
   useEffect(() => {
     setEdges(toggleEdge(nodesAndEdges.edges))
@@ -107,7 +109,7 @@ export default function Graph({
     setNodes(nodesAndEdges.nodes)
     setEdges(nodesAndEdges.edges)
     setColumns(nodesAndEdges.columns)
-  }, [nodesAndEdges])
+  }, [lineage, highlightedNodes, models])
 
   function toggleEdge(edges: Edge[] = []): Edge[] {
     return edges.map(edge => {
@@ -128,10 +130,10 @@ export default function Graph({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
+        onConnect={onConnect}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        nodeOrigin={[0.5, 0.5]}
-        nodeTypes={nodeTypes}
         fitView
       >
         {closeGraph != null && (
@@ -179,7 +181,6 @@ function ModelNode({
   const selectFile = useStoreFileTree(s => s.selectFile)
 
   const activeEdges = useStoreLineage(s => s.activeEdges)
-  const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
   const addActiveEdges = useStoreLineage(s => s.addActiveEdges)
   const removeActiveEdges = useStoreLineage(s => s.removeActiveEdges)
 
@@ -192,7 +193,7 @@ function ModelNode({
   )
   const toggleEdgeById = useCallback(
     function toggleEdgeById(
-      isActive: boolean,
+      action: 'add' | 'remove',
       edgeIds: [string, string],
       connections: { ins: string[]; outs: string[] } = { ins: [], outs: [] },
     ): void {
@@ -203,33 +204,23 @@ function ModelNode({
         .flat()
         .concat(edgeIds)
 
-      if (isActive) {
+      if (action === 'remove') {
         removeActiveEdges(edges)
-      } else {
+      }
+
+      if (action === 'add') {
         addActiveEdges(edges)
       }
     },
-    [removeActiveEdges, addActiveEdges],
+    [removeActiveEdges, addActiveEdges, activeEdges],
   )
   const [columnsVisible = [], columnHidden = []] = useMemo(() => {
     const visible: Column[] = []
-    const rest: Column[] = []
     const hidden: Column[] = []
 
     if (showColumns) return [columns, []]
 
     columns.forEach(column => {
-      const sourceId = toNodeOrEdgeId('source', id, column.name)
-      const targetId = toNodeOrEdgeId('target', id, column.name)
-
-      if (hasActiveEdge(sourceId) || hasActiveEdge(targetId)) {
-        visible.push(column)
-      } else {
-        rest.push(column)
-      }
-    })
-
-    rest.forEach(column => {
       if (visible.length < COLUMS_LIMIT_COLLAPSED) {
         visible.push(column)
       } else {
@@ -249,6 +240,7 @@ function ModelNode({
     >
       <div className="drag-handle">
         <ModelNodeHandles
+          key={id}
           id={id}
           className="rounded-t-lg bg-secondary-100 dark:bg-primary-900 py-2"
           sourcePosition={sourcePosition}
@@ -256,7 +248,14 @@ function ModelNode({
           isLeading={true}
         >
           {file != null && (
-            <span className="inline-block mr-2 bg-primary-30 px-2 py-1 rounded-md text-xs">
+            <span
+              title={
+                file.isSQLMeshModelPython
+                  ? 'Column lineage disabled for python models'
+                  : 'SQL Model'
+              }
+              className="inline-block mr-2 bg-primary-30 px-2 py-1 rounded-md text-xs"
+            >
               {file.isSQLMeshModelPython && 'Python'}
               {file.isSQLMeshModelSQL && 'SQL'}
             </span>
@@ -352,45 +351,48 @@ function ModelColumn({
   targetPosition?: Position
   disabled?: boolean
   toggleEdgeById: (
-    isActive: boolean,
+    type: 'add' | 'remove',
     edgeIds: [string, string],
     connections?: { ins: string[]; outs: string[] },
   ) => void
 }): JSX.Element {
-  const {
-    data: columnLineage,
-    refetch: getColumnLineage,
-    isFetching,
-  } = useApiColumnLineage(id, column.name)
+  const { refetch: getColumnLineage, isFetching } = useApiColumnLineage(
+    id,
+    column.name,
+  )
 
   const debouncedGetColumnLineage = useCallback(
     debounceAsync(getColumnLineage, 1000, true),
     [getColumnLineage],
   )
 
+  const activeEdges = useStoreLineage(s => s.activeEdges)
+  const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
+  const columns = useStoreLineage(s => s.columns)
+
   const columnId = toNodeOrEdgeId(id, column.name)
   const sourceId = toNodeOrEdgeId('source', columnId)
   const targetId = toNodeOrEdgeId('target', columnId)
 
-  const columns = useStoreLineage(s => s.columns)
-
   const previewLineage = useStoreEditor(s => s.previewLineage)
   const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
 
-  const [isActive, setIsActive] = useState(false)
   const [isShowing, setIsShowing] = useState(false)
+  const [isActive, setIsActive] = useState(
+    hasActiveEdge(sourceId) || hasActiveEdge(targetId),
+  )
+  const [shouldUpdate, setShouldUpdate] = useState(false)
 
   useEffect(() => {
-    return () => {
-      debouncedGetColumnLineage.cancel()
-    }
-  }, [])
+    setIsActive(hasActiveEdge(sourceId) || hasActiveEdge(targetId))
+  }, [activeEdges])
 
   useEffect(() => {
-    if (isActive && columnLineage?.[id]?.[column.name] != null) {
-      setPreviewLineage(previewLineage, columnLineage)
+    if (shouldUpdate) {
+      toggleEdgeById('add', [sourceId, targetId], columns?.[columnId])
+      setShouldUpdate(false)
     }
-  }, [columnLineage])
+  }, [columns, shouldUpdate])
 
   const lineage = previewLineage?.[id]?.columns?.[column.name]
   const hasTarget = isArrayNotEmpty(columns?.[columnId]?.outs)
@@ -408,14 +410,15 @@ function ModelColumn({
         if (disabled) return
 
         if (isFalse(isActive)) {
-          void debouncedGetColumnLineage()
+          void debouncedGetColumnLineage().then(({ data: columnLineage }) => {
+            if (columnLineage?.[id]?.[column.name] != null) {
+              setPreviewLineage(previewLineage, columnLineage)
+              setShouldUpdate(true)
+            }
+          })
+        } else {
+          toggleEdgeById('remove', [sourceId, targetId], columns?.[columnId])
         }
-
-        const connections = columns?.[columnId]
-
-        toggleEdgeById(isActive, [sourceId, targetId], connections)
-
-        setIsActive(!isActive)
       }}
     >
       <ModelNodeHandles

@@ -13,8 +13,8 @@ import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import { useApiModelLineage } from '@api/index'
-import Graph from '@components/graph/Graph'
 import Loading from '@components/loading/Loading'
+import Graph from '@components/graph/Graph'
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -139,8 +139,8 @@ export default function EditorPreview({
                       isDisabledPreviewQuery(tabName)
                       ? 'cursor-not-allowed opacity-50 bg-neutral-10'
                       : selected
-                      ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                      : 'bg-secondary-10 cursor-pointer',
+                        ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                        : 'bg-secondary-10 cursor-pointer',
                   )
                 }
               >
@@ -194,9 +194,9 @@ export default function EditorPreview({
                             {header.isPlaceholder
                               ? null
                               : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
                           </th>
                         ))}
                       </tr>
@@ -230,9 +230,9 @@ export default function EditorPreview({
                             {header.isPlaceholder
                               ? null
                               : flexRender(
-                                  header.column.columnDef.footer,
-                                  header.getContext(),
-                                )}
+                                header.column.columnDef.footer,
+                                header.getContext(),
+                              )}
                           </th>
                         ))}
                       </tr>
@@ -310,6 +310,7 @@ function EditorPreviewLineage({
         Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
           acc[key] = {
             models: lineage[key] ?? [],
+            columns: previewLineage?.[key]?.columns ?? undefined,
           }
 
           return acc
@@ -324,7 +325,7 @@ function EditorPreviewLineage({
     </div>
   ) : (
     <Graph
-      graph={previewLineage}
+      lineage={previewLineage}
       highlightedNodes={[model]}
     />
   )

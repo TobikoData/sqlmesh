@@ -6,8 +6,8 @@ import { type Lineage } from '@context/editor'
 
 export interface GraphNodeData {
   label: string
-  isHighlighted: boolean
-  isInteractive: boolean
+  isHighlighted?: boolean
+  isInteractive?: boolean
   [key: string]: any
 }
 
@@ -26,8 +26,8 @@ export function getNodesAndEdges({
   lineage: Record<string, Lineage>
   highlightedNodes: string[]
   models: Map<string, Model>
-  nodes: Node[]
-  edges: Edge[]
+  nodes?: Node[]
+  edges?: Edge[]
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
@@ -133,6 +133,8 @@ export function getNodesAndEdges({
                 },
               ),
           )
+
+          // console.log([modelSource, modelTarget], { currentEdge })
         }
       }
     }
@@ -195,13 +197,14 @@ function getNodeMap(
       current[label] ??
       createGraphNode({
         label,
-        isHighlighted: highlightedNodes.includes(label),
-        isInteractive:
-          isArrayNotEmpty(highlightedNodes) &&
-          isFalse(highlightedNodes.includes(label)),
         width: NODE_WIDTH,
         height: NODE_HEIGHT + 32 * (models.get(label)?.columns?.length ?? 0),
       })
+
+    node.data.isHighlighted = highlightedNodes.includes(label)
+    node.data.isInteractive =
+      isArrayNotEmpty(highlightedNodes) &&
+      isFalse(highlightedNodes.includes(label))
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.sourcePosition = Position.Left
