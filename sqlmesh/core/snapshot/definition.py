@@ -51,8 +51,7 @@ class SnapshotChangeCategory(IntEnum):
     NON_BREAKING = 2
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
-    INDIRECT_NON_BREAKING = 5
-    INDIRECT_FORWARD_ONLY = 6
+    INDIRECT_FORWARD_ONLY = 5
 
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
