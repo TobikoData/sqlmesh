@@ -133,8 +133,6 @@ export function getNodesAndEdges({
                 },
               ),
           )
-
-          // console.log([modelSource, modelTarget], { currentEdge })
         }
       }
     }
