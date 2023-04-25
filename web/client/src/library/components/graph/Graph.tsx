@@ -254,7 +254,7 @@ function ModelNode({
                   ? 'Column lineage disabled for python models'
                   : 'SQL Model'
               }
-              className="inline-block mr-2 bg-primary-30 px-2 py-1 rounded-md text-xs"
+              className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
             >
               {file.isSQLMeshModelPython && 'Python'}
               {file.isSQLMeshModelSQL && 'SQL'}
