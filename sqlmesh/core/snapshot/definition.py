@@ -574,6 +574,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return missing
 
     def categorize_as(self, category: SnapshotChangeCategory) -> None:
+        """Assigns the given category to this snapshot.
+
+        Args:
+            category: The change category to assign to this snapshot.
+        """
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_FORWARD_ONLY,
