@@ -464,7 +464,7 @@ def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable)
 
     env = state_sync.get_environment("prod")
     assert env
-    assert env.finalized_at_ts is not None
+    assert env.finalized_ts is not None
 
     env.plan_id = "different_plan_id"
     with pytest.raises(

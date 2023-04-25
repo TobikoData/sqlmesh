@@ -24,7 +24,7 @@ class Environment(PydanticModel):
     plan_id: str
     previous_plan_id: t.Optional[str]
     expiration_ts: t.Optional[int]
-    finalized_at_ts: t.Optional[int]
+    finalized_ts: t.Optional[int]
 
     @validator("snapshots", pre=True)
     @classmethod

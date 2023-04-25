@@ -10,7 +10,7 @@ def migrate(state_sync):  # type: ignore
         this=exp.to_table(environments_table),
         actions=[
             exp.ColumnDef(
-                this=exp.to_column("finalized_at_ts"),
+                this=exp.to_column("finalized_ts"),
                 kind=exp.DataType.build("bigint"),
             )
         ],

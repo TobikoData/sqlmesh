@@ -146,7 +146,7 @@ class CommonStateSyncMixin(StateSync):
                 f"Stored plan ID: '{stored_environment.plan_id}'. Please recreate the plan and try again"
             )
 
-        environment.finalized_at_ts = now_timestamp()
+        environment.finalized_ts = now_timestamp()
         self._update_environment(environment)
 
     @transactional()

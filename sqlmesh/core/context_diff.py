@@ -37,7 +37,7 @@ class ContextDiff(PydanticModel):
     """The environment to diff."""
     is_new_environment: bool
     """Whether the target environment is new."""
-    is_unfinilized_environment: bool
+    is_unfinalized_environment: bool
     """Whether the currently stored environment record is in unfinalized state."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
@@ -148,7 +148,7 @@ class ContextDiff(PydanticModel):
         return ContextDiff(
             environment=environment,
             is_new_environment=is_new_environment,
-            is_unfinilized_environment=bool(env and not env.finalized_at_ts),
+            is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
             added=added,
             removed=removed,
@@ -161,7 +161,7 @@ class ContextDiff(PydanticModel):
     @property
     def has_changes(self) -> bool:
         return (
-            self.has_snapshot_changes or self.is_new_environment or self.is_unfinilized_environment
+            self.has_snapshot_changes or self.is_new_environment or self.is_unfinalized_environment
         )
 
     @property
