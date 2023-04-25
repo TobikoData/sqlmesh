@@ -26,7 +26,7 @@ export const useStoreLineage = create<LineageStore>((set, get) => ({
   hasActiveEdge(edge) {
     const { activeEdges } = get()
 
-    return Boolean((activeEdges.get(edge) ?? 0) > 0)
+    return (activeEdges.get(edge) ?? 0) > 0
   },
   removeActiveEdges(edges) {
     const { activeEdges } = get()

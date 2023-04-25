@@ -40,6 +40,8 @@ import { useStoreFileTree } from '@context/fileTree'
 import { useApiColumnLineage } from '@api/index'
 import { Popover, Transition } from '@headlessui/react'
 import { useStoreEditor, type Lineage } from '@context/editor'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 export default function Graph({
   graph,
@@ -67,6 +69,7 @@ export default function Graph({
         highlightedNodes,
         models,
         nodes,
+        edges,
       }),
     [graph, highlightedNodes, models],
   )
@@ -180,7 +183,9 @@ function ModelNode({
   const addActiveEdges = useStoreLineage(s => s.addActiveEdges)
   const removeActiveEdges = useStoreLineage(s => s.removeActiveEdges)
 
-  const columns = models.get(data.label)?.columns ?? []
+  const model = models.get(data.label)
+  const file = model != null ? files.get(model.path) : undefined
+  const columns = model != null ? model.columns : []
 
   const [showColumns, setShowColumns] = useState(
     columns.length <= COLUMS_LIMIT_DEFAULT,
@@ -188,16 +193,20 @@ function ModelNode({
   const toggleEdgeById = useCallback(
     function toggleEdgeById(
       isActive: boolean,
-      edgeId: string,
-      from: string[] = [],
-      type: string,
+      edgeIds: [string, string],
+      connections: { ins: string[]; outs: string[] } = { ins: [], outs: [] },
     ): void {
-      const edges = from.map(id => toNodeOrEdgeId(type, id))
+      const edges = [
+        connections.ins.map(id => toNodeOrEdgeId('source', id)),
+        connections.outs.map(id => toNodeOrEdgeId('target', id)),
+      ]
+        .flat()
+        .concat(edgeIds)
 
       if (isActive) {
-        removeActiveEdges([edgeId].concat(edges))
+        removeActiveEdges(edges)
       } else {
-        addActiveEdges([edgeId].concat(edges))
+        addActiveEdges(edges)
       }
     },
     [removeActiveEdges, addActiveEdges],
@@ -246,6 +255,12 @@ function ModelNode({
           targetPosition={targetPosition}
           isLeading={true}
         >
+          {file != null && (
+            <span className="inline-block mr-2 bg-primary-30 px-2 py-1 rounded-md text-xs">
+              {file.isSQLMeshModelPython && 'Python'}
+              {file.isSQLMeshModelSQL && 'SQL'}
+            </span>
+          )}
           <span
             className={clsx(
               'inline-block',
@@ -265,38 +280,42 @@ function ModelNode({
               selectFile(file)
             }}
           >
-            {data.label}
+            <span>{data.label}</span>
           </span>
         </ModelNodeHandles>
       </div>
-      <div
-        className={clsx(
-          'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
-          columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
-        )}
-      >
-        {columnsVisible.map(column => (
-          <ModelColumn
-            key={column.name}
-            id={id}
-            column={column}
-            sourcePosition={sourcePosition}
-            targetPosition={targetPosition}
-            toggleEdgeById={toggleEdgeById}
-          />
-        ))}
-        {columnHidden.map(column => (
-          <ModelColumn
-            className={clsx('invisible h-0')}
-            key={column.name}
-            id={id}
-            column={column}
-            sourcePosition={sourcePosition}
-            targetPosition={targetPosition}
-            toggleEdgeById={toggleEdgeById}
-          />
-        ))}
-      </div>
+      {file != null && (
+        <div
+          className={clsx(
+            'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
+            columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
+          )}
+        >
+          {columnsVisible.map(column => (
+            <ModelColumn
+              key={column.name}
+              id={id}
+              column={column}
+              sourcePosition={sourcePosition}
+              targetPosition={targetPosition}
+              toggleEdgeById={toggleEdgeById}
+              disabled={file.isSQLMeshModelPython}
+            />
+          ))}
+          {columnHidden.map(column => (
+            <ModelColumn
+              className={clsx('invisible h-0')}
+              key={column.name}
+              id={id}
+              column={column}
+              sourcePosition={sourcePosition}
+              targetPosition={targetPosition}
+              toggleEdgeById={toggleEdgeById}
+              disabled={file.isSQLMeshModelPython}
+            />
+          ))}
+        </div>
+      )}
       {columns.length > COLUMS_LIMIT_DEFAULT && (
         <div className="flex px-3 py-2 bg-theme-lighter rounded-b-lg cursor-default">
           <Button
@@ -324,21 +343,25 @@ function ModelColumn({
   targetPosition,
   toggleEdgeById,
   className,
+  disabled = false,
 }: {
   className?: string
   id: string
   column: Column
   sourcePosition?: Position
   targetPosition?: Position
+  disabled?: boolean
   toggleEdgeById: (
     isActive: boolean,
-    edgeId: string,
-    from: string[] | undefined,
-    type: string,
+    edgeIds: [string, string],
+    connections?: { ins: string[]; outs: string[] },
   ) => void
 }): JSX.Element {
-  const { data: columnLineage, refetch: getColumnLineage } =
-    useApiColumnLineage(id, column.name)
+  const {
+    data: columnLineage,
+    refetch: getColumnLineage,
+    isFetching,
+  } = useApiColumnLineage(id, column.name)
 
   const debouncedGetColumnLineage = useCallback(
     debounceAsync(getColumnLineage, 1000, true),
@@ -378,22 +401,19 @@ function ModelColumn({
       key={column.name}
       className={clsx(
         isActive && 'bg-secondary-10 dark:bg-primary-900',
+        disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
       onClick={() => {
+        if (disabled) return
+
         if (isFalse(isActive)) {
           void debouncedGetColumnLineage()
         }
 
-        if (columnLineage != null) {
-          toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
-          toggleEdgeById(
-            isActive,
-            targetId,
-            columns?.[columnId]?.outs,
-            'target',
-          )
-        }
+        const connections = columns?.[columnId]
+
+        toggleEdgeById(isActive, [sourceId, targetId], connections)
 
         setIsActive(!isActive)
       }}
@@ -404,17 +424,16 @@ function ModelColumn({
         sourcePosition={sourcePosition}
         hasTarget={hasTarget}
         hasSource={hasSource}
+        className={clsx(disabled && 'pointer-events-none')}
       >
         <div className="flex w-full justify-between">
-          <div
-            className={clsx(
-              'mr-3 flex',
-              columns?.[columnId] != null
-                ? 'font-bold text-secondary-500 dark:text-primary-500'
-                : 'text-neutral-600 dark:text-neutral-100',
+          <div className={clsx('mr-3 flex')}>
+            {isFetching && (
+              <Loading className="inline-block mr-3 w-4 h-4">
+                <Spinner className="w-4 h-4 mr-2" />
+              </Loading>
             )}
-          >
-            {lineage?.source != null && (
+            {lineage?.source != null && isFalse(disabled) && (
               <Popover
                 onMouseEnter={() => {
                   setIsShowing(true)
@@ -426,7 +445,7 @@ function ModelColumn({
               >
                 {() => (
                   <>
-                    <InformationCircleIcon className="inline-block mr-3 w-4 h-4" />
+                    <InformationCircleIcon className="text-secondary-500 dark:text-primary-500 inline-block mr-3 w-4 h-4" />
                     <Transition
                       show={isShowing}
                       as={Fragment}

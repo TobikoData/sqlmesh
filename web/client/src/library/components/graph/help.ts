@@ -21,17 +21,24 @@ export function getNodesAndEdges({
   highlightedNodes,
   models,
   nodes = [],
+  edges = [],
 }: {
   lineage: Record<string, Lineage>
   highlightedNodes: string[]
   models: Map<string, Model>
   nodes: Node[]
+  edges: Edge[]
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
   nodes: Node[]
   columns: Record<string, { ins: string[]; outs: string[] }>
 } {
+  const currentEdges = edges.reduce(
+    (acc: Record<string, Edge>, edge) =>
+      Object.assign(acc, { [edge.id]: edge }),
+    {},
+  )
   const targets = new Set(
     Object.values(lineage)
       .map(l => l.models)
@@ -46,7 +53,7 @@ export function getNodesAndEdges({
     targets,
     nodes,
   )
-  const edges: Edge[] = []
+  const outputEdges: Edge[] = []
   const columns: Record<string, { ins: string[]; outs: string[] }> = {}
 
   for (const modelSource of modelNames) {
@@ -55,7 +62,7 @@ export function getNodesAndEdges({
     if (modelLineage == null) continue
 
     modelLineage.models.forEach(modelTarget => {
-      edges.push(createGraphEdge(modelSource, modelTarget))
+      outputEdges.push(createGraphEdge(modelSource, modelTarget))
     })
 
     if (modelLineage.columns == null || isObjectEmpty(modelLineage.columns))
@@ -92,20 +99,39 @@ export function getNodesAndEdges({
           columns[sourceId]?.ins.push(targetId)
           columns[targetId]?.outs.push(sourceId)
 
-          edges.push(
-            createGraphEdge(
-              modelSource,
-              modelTarget,
-              toNodeOrEdgeId('source', modelSource, columnSource),
-              toNodeOrEdgeId('target', modelTarget, columnTarget),
-              false,
-              {
-                target: modelTarget,
-                source: modelSource,
-                columnSource,
-                columnTarget,
-              },
-            ),
+          const sourceHandle = toNodeOrEdgeId(
+            'source',
+            modelSource,
+            columnSource,
+          )
+          const targetHandle = toNodeOrEdgeId(
+            'target',
+            modelTarget,
+            columnTarget,
+          )
+          const edgeId = toNodeOrEdgeId(
+            modelSource,
+            modelTarget,
+            sourceHandle,
+            targetHandle,
+          )
+          const currentEdge = currentEdges[edgeId]
+
+          outputEdges.push(
+            currentEdge ??
+              createGraphEdge(
+                modelSource,
+                modelTarget,
+                sourceHandle,
+                targetHandle,
+                false,
+                {
+                  target: modelTarget,
+                  source: modelSource,
+                  columnSource,
+                  columnTarget,
+                },
+              ),
           )
         }
       }
@@ -113,7 +139,7 @@ export function getNodesAndEdges({
   }
 
   return {
-    edges,
+    edges: outputEdges,
     nodes: Object.values(nodesMap),
     nodesMap,
     columns,
