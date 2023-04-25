@@ -136,15 +136,15 @@ class ContextDiff(PydanticModel):
                 and snapshot.data_hash_matches(snapshot.previous_version)
             ):
                 remote_versions = snapshot_remote_versions[snapshot.name][0]
-                remote_head = remote_versions[-1].version
-                local_head = snapshot.previous_version.version
+                remote_head = remote_versions[-1]
+                local_head = snapshot.previous_version
 
-                if remote_head in (local.version for local in snapshot.previous_versions):
-                    snapshot.version = local_head
-                    snapshot.change_category = snapshot.previous_version.change_category
-                elif local_head in (remote.version for remote in remote_versions):
-                    snapshot.version = remote_head
-                    snapshot.change_category = remote_versions[-1].change_category
+                if remote_head.version in (local.version for local in snapshot.previous_versions):
+                    snapshot.version = local_head.version
+                    snapshot.change_category = local_head.change_category
+                elif local_head.version in (remote.version for remote in remote_versions):
+                    snapshot.version = remote_head.version
+                    snapshot.change_category = remote_head.change_category
                 else:
                     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
