@@ -297,7 +297,10 @@ class Plan:
         for child in self.indirectly_modified[snapshot.name]:
             child_snapshot = self.context_diff.snapshots[child]
 
-            if choice == SnapshotChangeCategory.BREAKING:
+            if choice in (
+                SnapshotChangeCategory.BREAKING,
+                SnapshotChangeCategory.INDIRECT_BREAKING,
+            ):
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
