@@ -371,7 +371,7 @@ class SnapshotEvaluator:
 
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
-        is_dev = not snapshot.is_new_version
+        is_dev = snapshot.is_forward_only or snapshot.is_indirect_forward_only
         table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_snapshots_by_name = {

@@ -337,19 +337,15 @@ def test_environment_promotion(sushi_context: Context):
     # Promote to prod
     def _validate_plan(context, plan):
         assert (
-            plan.snapshot_change_category(plan.context_diff.modified_snapshots["sushi.items"][0])
+            plan.context_diff.modified_snapshots["sushi.items"][0].change_category
             == SnapshotChangeCategory.NON_BREAKING
         )
         assert (
-            plan.snapshot_change_category(
-                plan.context_diff.modified_snapshots["sushi.top_waiters"][0]
-            )
+            plan.context_diff.modified_snapshots["sushi.top_waiters"][0].change_category
             == SnapshotChangeCategory.BREAKING
         )
         assert (
-            plan.snapshot_change_category(
-                plan.context_diff.modified_snapshots["sushi.customer_revenue_by_day"][0]
-            )
+            plan.context_diff.modified_snapshots["sushi.customer_revenue_by_day"][0].change_category
             == SnapshotChangeCategory.FORWARD_ONLY
         )
 
@@ -523,11 +519,11 @@ def setup_rebase(
 @pytest.mark.parametrize(
     "change_categories, expected",
     [
-        ([SnapshotChangeCategory.NON_BREAKING], SnapshotChangeCategory.NON_BREAKING),
+        ([SnapshotChangeCategory.NON_BREAKING], SnapshotChangeCategory.BREAKING),
         ([SnapshotChangeCategory.BREAKING], SnapshotChangeCategory.BREAKING),
         (
             [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.NON_BREAKING],
-            SnapshotChangeCategory.NON_BREAKING,
+            SnapshotChangeCategory.BREAKING,
         ),
         (
             [SnapshotChangeCategory.NON_BREAKING, SnapshotChangeCategory.BREAKING],
@@ -563,7 +559,7 @@ def test_revert(
 
     def _validate_plan(_, plan):
         snapshot = next(s for s in plan.snapshots if s.name == "sushi.items")
-        assert plan.snapshot_change_category(snapshot) == expected
+        assert snapshot.change_category == expected
         assert not plan.missing_intervals
 
     apply_to_environment(
@@ -594,7 +590,7 @@ def test_revert_after_downstream_change(sushi_context: Context):
 
     def _validate_plan(_, plan):
         snapshot = next(s for s in plan.snapshots if s.name == "sushi.items")
-        assert plan.snapshot_change_category(snapshot) == SnapshotChangeCategory.BREAKING
+        assert snapshot.change_category == SnapshotChangeCategory.BREAKING
         assert plan.missing_intervals
 
     apply_to_environment(
@@ -620,7 +616,10 @@ def test_auto_categorization(sushi_context: Context):
     sushi_context.upsert_model("sushi.waiters", query=model.query.select("'foo' AS foo"))  # type: ignore
     apply_to_environment(sushi_context, environment)
 
-    assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].change_category is None
+    assert (
+        sushi_context.snapshots["sushi.waiter_as_customer_by_day"].change_category
+        == SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+    )
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint != fingerprint
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version == version
 

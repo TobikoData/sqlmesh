@@ -8,7 +8,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 
@@ -30,7 +30,7 @@ def snapshot() -> Snapshot:
         models={},
         ttl="in 1 week",
     )
-    snapshot.version = snapshot.fingerprint.to_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.updated_ts = 1665014400000
     snapshot.created_ts = 1665014400000
     return snapshot
@@ -100,6 +100,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "physical_schema": "physical_schema",
                 "updated_ts": 1665014400000,
                 "version": snapshot.version,
+                "change_category": snapshot.change_category,
             }
         ],
         "environment": {
@@ -111,6 +112,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "physical_schema": "physical_schema",
                     "previous_versions": [],
                     "version": snapshot.version,
+                    "change_category": snapshot.change_category,
                     "parents": [],
                     "is_materialized": True,
                     "is_embedded_kind": False,
