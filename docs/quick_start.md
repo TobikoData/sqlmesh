@@ -252,4 +252,4 @@ Double-check that the data did indeed update in prod by running `sqlmesh fetchdf
 Congratulations, you've now conquered the basics of using SQLMesh!
 
 * [Learn more about SQLMesh concepts](concepts/overview.md)
-* [Join our Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1tofr385z-vi~hDISNABiYIgkfGM3Khg)
+* [Join our Slack community](https://tobikodata.com/slack)

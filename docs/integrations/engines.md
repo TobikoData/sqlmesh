@@ -49,7 +49,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Databricks - Local/Built-in Scheduler
 If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster.
 This can be done using the [Notebook magic](../reference/notebook.md) or by using the [CLI](../reference/cli.md).
-This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://join.slack.com/t/tobiko-data/shared_invite/zt-1tofr385z-vi~hDISNABiYIgkfGM3Khg) if this impacts you.
+This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://tobikodata.com/slack) if this impacts you.
 A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster, and should theoretically work.
 
 Databricks has a few options for connection types to choose from:
