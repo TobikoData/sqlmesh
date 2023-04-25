@@ -25,7 +25,7 @@
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`
 
-In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator. 
+In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator.
 
 To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
 ```
@@ -47,21 +47,21 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Databricks
 ## Databricks - Local/Built-in Scheduler
-If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster. 
+If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster.
 This can be done using the [Notebook magic](../reference/notebook.md) or by using the [CLI](../reference/cli.md).
-This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://join.slack.com/t/tobiko-data/shared_invite/zt-1ma66d79v-a4dbf4DUpLAQJ8ptQrJygg) if this impacts you.
+This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://join.slack.com/t/tobiko-data/shared_invite/zt-1tofr385z-vi~hDISNABiYIgkfGM3Khg) if this impacts you.
 A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster, and should theoretically work.
 
 Databricks has a few options for connection types to choose from:
 ### Type: databricks (Recommended)
-This type will automatically detect if you are running in an environment that already has a SparkSession defined. 
-If it detects a SparkSession, then it assumes this is a Databricks SparkSession and uses that. 
+This type will automatically detect if you are running in an environment that already has a SparkSession defined.
+If it detects a SparkSession, then it assumes this is a Databricks SparkSession and uses that.
 If it doesn't detect a SparkSession, then it will use the connection configuration to connect to Databricks over
-the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html). 
+the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html).
 See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
 
 ### Type: databricks_spark_session
-This connection type assumes that wherever you are running you have access to a Databricks SparkSession. 
+This connection type assumes that wherever you are running you have access to a Databricks SparkSession.
 This will simplify the required configuration to run since you will not need to provide connection configuration.
 
 ### Type: databricks_sql
@@ -86,7 +86,7 @@ Databricks has multiple operators to help differentiate running a SQL query vs. 
 
 When evaluating models, the SQLMesh Databricks integration implements the [DatabricksSubmitRunOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/1.0.0/operators.html). This is needed to be able to run either SQL or Python scripts on the Databricks cluster.
 
-When performing environment management operations, the SQLMesh Databricks integration is similar to the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator), and relies on the same [DatabricksSqlHook](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/_api/airflow/providers/databricks/hooks/databricks_sql/index.html#airflow.providers.databricks.hooks.databricks_sql.DatabricksSqlHook) implementation. 
+When performing environment management operations, the SQLMesh Databricks integration is similar to the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator), and relies on the same [DatabricksSqlHook](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/_api/airflow/providers/databricks/hooks/databricks_sql/index.html#airflow.providers.databricks.hooks.databricks_sql.DatabricksSqlHook) implementation.
 All environment management operations are SQL-based, and the overhead of submitting jobs can be avoided.
 
 ### Engine: `databricks-submit`
@@ -95,7 +95,7 @@ Whether evaluating models or performing environment management operations, the S
 
 ### Engine: `databricks-sql`
 
-Forces the SQLMesh Databricks integration to use the operator based on the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator) for all operations. If your project is pure SQL operations, then this is an option. 
+Forces the SQLMesh Databricks integration to use the operator based on the [DatabricksSqlOperator](https://airflow.apache.org/docs/apache-airflow-providers-databricks/stable/operators/sql.html#databrickssqloperator) for all operations. If your project is pure SQL operations, then this is an option.
 
 To enable support for this operator, the Airflow Databricks provider package should be installed on the target Airflow cluster along with the SQLMesh package with databricks extra as follows:
 ```
@@ -146,7 +146,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
 ## DuckDB - Airflow
-DuckDB only works when running locally; therefore it does not support Airflow. 
+DuckDB only works when running locally; therefore it does not support Airflow.
 
 # Postgres
 ## Postgres - Local/Built-in Scheduler
@@ -212,7 +212,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Redshift - Airflow Scheduler
 **Engine Name:** `redshift`
 
-In order to share a common implementation across local and Airflow, SQLMesh Bigquery implements its own hook and operator. 
+In order to share a common implementation across local and Airflow, SQLMesh Bigquery implements its own hook and operator.
 
 To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
 ```
