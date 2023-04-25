@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import typing as t
+from shutil import rmtree
 
 import duckdb
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, maybe_parse
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
@@ -83,6 +85,7 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
 def init_and_plan_context(
     paths: str | t.List[str], mocker: MockerFixture, start: TimeLike = "1 week ago"
 ) -> t.Tuple[Context, Plan]:
+    delete_cache(paths)
     sushi_context = Context(paths=paths, config="test_config")
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
@@ -131,3 +134,11 @@ def make_snapshot() -> t.Callable:
 @pytest.fixture
 def random_name() -> t.Callable:
     return lambda: f"generated_{random_id()}"
+
+
+def delete_cache(project_paths: str | t.List[str]) -> None:
+    for path in ensure_list(project_paths):
+        try:
+            rmtree(path + "/.cache")
+        except FileNotFoundError:
+            pass
