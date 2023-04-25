@@ -14,7 +14,7 @@ Follow the [tutorial](https://sqlmesh.readthedocs.io/en/stable/quick_start/) to 
 ## Join our community
 We'd love to join you on your data journey. Connect with us in the following ways:
 
-* Join the [Tobiko Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1ma66d79v-a4dbf4DUpLAQJ8ptQrJygg) to ask questions, or just to say hi!
+* Join the [Tobiko Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1tofr385z-vi~hDISNABiYIgkfGM3Khg) to ask questions, or just to say hi!
 * File an issue on our [GitHub](https://github.com/TobikoData/sqlmesh/issues/new).
 * Send us an email at [hello@tobikodata.com](hello@tobikodata.com) with your questions or feedback.
 

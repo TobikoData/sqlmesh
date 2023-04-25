@@ -72,4 +72,4 @@ SQLMesh was built on three core principles:
 ## Next steps
 * [Jump right in with the quickstart](quick_start.md)
 * [Learn more about SQLMesh concepts](concepts/overview.md)
-* [Join our Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1ma66d79v-a4dbf4DUpLAQJ8ptQrJygg)
+* [Join our Slack community](https://join.slack.com/t/tobiko-data/shared_invite/zt-1tofr385z-vi~hDISNABiYIgkfGM3Khg)
