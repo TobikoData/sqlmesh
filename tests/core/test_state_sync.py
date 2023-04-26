@@ -452,8 +452,8 @@ def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable)
             name="a",
             query=parse_one("select 1, ds"),
         ),
-        version="a",
     )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot_a])
     promote_snapshots(state_sync, [snapshot_a], "prod")
