@@ -319,6 +319,7 @@ class Context(BaseContext):
 
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self._state_sync.migrate()
+            self._state_sync.get_versions()
         return self._state_sync
 
     @property
