@@ -198,7 +198,7 @@ def test_config_containing_jinja():
     context = DbtContext(project_name="Foo")
     context.target = DuckDbConfig(name="target", schema="foo")
     context.variables = {"schema": "foo", "size": "5"}
-    model._dependencies.sources = set(["package.table"])
+    model.dependencies.sources = set(["package.table"])
     context.sources = {"package.table": SourceConfig(schema_="raw", name="baz")}
 
     rendered = model.render_config(context)
@@ -229,7 +229,7 @@ def test_config_containing_missing_dependency():
     model = ModelConfig(sql="{{ config(alias='{{ get_table_name() }}') }} SELECT 1 FROM a")
     rendered = model.render_config(context)
     assert rendered.alias == "{{ get_table_name() }}"
-    assert "get_table_name" not in [macro.name for macro in rendered._dependencies.macros]
+    assert "get_table_name" not in [macro.name for macro in rendered.dependencies.macros]
     rendered.to_sqlmesh(context)
 
 
@@ -240,7 +240,7 @@ def test_config_containing_method():
 
     rendered = model.render_config(context)
     assert rendered.alias == "foo"
-    assert "get_table_name" not in [macro.name for macro in rendered._dependencies.macros]
+    assert "get_table_name" not in [macro.name for macro in rendered.dependencies.macros]
 
 
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
