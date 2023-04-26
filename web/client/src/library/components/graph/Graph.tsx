@@ -9,8 +9,6 @@ import React, {
 import ReactFlow, {
   Controls,
   Background,
-  useNodesState,
-  useEdgesState,
   Panel,
   Handle,
   Position,
@@ -33,42 +31,50 @@ import {
   ArrowRightCircleIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/solid'
-import { useStoreLineage } from '@context/lineage'
+import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
 import clsx from 'clsx'
 import { type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
 import { useApiColumnLineage } from '@api/index'
 import { Popover, Transition } from '@headlessui/react'
 import { useStoreEditor, type Lineage } from '@context/editor'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
-export default function Graph({
-  graph,
+export default function Flow({
+  lineage,
   closeGraph,
   highlightedNodes = [],
 }: {
-  graph: Record<string, Lineage>
+  lineage: Record<string, Lineage>
   closeGraph?: () => void
   highlightedNodes?: string[]
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
 
+  const nodes = useStoreReactFlow(s => s.nodes)
+  const edges = useStoreReactFlow(s => s.edges)
+  const setNodes = useStoreReactFlow(s => s.setNodes)
+  const setEdges = useStoreReactFlow(s => s.setEdges)
+  const onNodesChange = useStoreReactFlow(s => s.onNodesChange)
+  const onEdgesChange = useStoreReactFlow(s => s.onEdgesChange)
+  const onConnect = useStoreReactFlow(s => s.onConnect)
+
   const setColumns = useStoreLineage(s => s.setColumns)
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
   const nodesAndEdges = useMemo(
     () =>
       getNodesAndEdges({
-        lineage: graph,
+        lineage,
         highlightedNodes,
         models,
         nodes,
+        edges,
       }),
-    [graph, highlightedNodes, models],
+    [lineage, highlightedNodes, models],
   )
 
   useEffect(() => {
@@ -78,7 +84,6 @@ export default function Graph({
 
     return () => {
       active = false
-      setColumns(undefined)
     }
 
     async function load(): Promise<void> {
@@ -94,7 +99,7 @@ export default function Graph({
       setEdges(layout.edges)
       setColumns(nodesAndEdges.columns)
     }
-  }, [])
+  }, [nodesAndEdges])
 
   useEffect(() => {
     setEdges(toggleEdge(nodesAndEdges.edges))
@@ -104,7 +109,7 @@ export default function Graph({
     setNodes(nodesAndEdges.nodes)
     setEdges(nodesAndEdges.edges)
     setColumns(nodesAndEdges.columns)
-  }, [nodesAndEdges])
+  }, [lineage, highlightedNodes, models])
 
   function toggleEdge(edges: Edge[] = []): Edge[] {
     return edges.map(edge => {
@@ -125,10 +130,10 @@ export default function Graph({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
+        onConnect={onConnect}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        nodeOrigin={[0.5, 0.5]}
-        nodeTypes={nodeTypes}
         fitView
       >
         {closeGraph != null && (
@@ -176,51 +181,46 @@ function ModelNode({
   const selectFile = useStoreFileTree(s => s.selectFile)
 
   const activeEdges = useStoreLineage(s => s.activeEdges)
-  const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
   const addActiveEdges = useStoreLineage(s => s.addActiveEdges)
   const removeActiveEdges = useStoreLineage(s => s.removeActiveEdges)
 
-  const columns = models.get(data.label)?.columns ?? []
+  const model = models.get(data.label)
+  const file = model != null ? files.get(model.path) : undefined
+  const columns = model != null ? model.columns : []
 
   const [showColumns, setShowColumns] = useState(
     columns.length <= COLUMS_LIMIT_DEFAULT,
   )
   const toggleEdgeById = useCallback(
     function toggleEdgeById(
-      isActive: boolean,
-      edgeId: string,
-      from: string[] = [],
-      type: string,
+      action: 'add' | 'remove',
+      edgeIds: [string, string],
+      connections: { ins: string[]; outs: string[] } = { ins: [], outs: [] },
     ): void {
-      const edges = from.map(id => toNodeOrEdgeId(type, id))
+      const edges = [
+        connections.ins.map(id => toNodeOrEdgeId('source', id)),
+        connections.outs.map(id => toNodeOrEdgeId('target', id)),
+      ]
+        .flat()
+        .concat(edgeIds)
 
-      if (isActive) {
-        removeActiveEdges([edgeId].concat(edges))
-      } else {
-        addActiveEdges([edgeId].concat(edges))
+      if (action === 'remove') {
+        removeActiveEdges(edges)
+      }
+
+      if (action === 'add') {
+        addActiveEdges(edges)
       }
     },
-    [removeActiveEdges, addActiveEdges],
+    [removeActiveEdges, addActiveEdges, activeEdges],
   )
   const [columnsVisible = [], columnHidden = []] = useMemo(() => {
     const visible: Column[] = []
-    const rest: Column[] = []
     const hidden: Column[] = []
 
     if (showColumns) return [columns, []]
 
     columns.forEach(column => {
-      const sourceId = toNodeOrEdgeId('source', id, column.name)
-      const targetId = toNodeOrEdgeId('target', id, column.name)
-
-      if (hasActiveEdge(sourceId) || hasActiveEdge(targetId)) {
-        visible.push(column)
-      } else {
-        rest.push(column)
-      }
-    })
-
-    rest.forEach(column => {
       if (visible.length < COLUMS_LIMIT_COLLAPSED) {
         visible.push(column)
       } else {
@@ -240,12 +240,26 @@ function ModelNode({
     >
       <div className="drag-handle">
         <ModelNodeHandles
+          key={id}
           id={id}
           className="rounded-t-lg bg-secondary-100 dark:bg-primary-900 py-2"
           sourcePosition={sourcePosition}
           targetPosition={targetPosition}
           isLeading={true}
         >
+          {file != null && (
+            <span
+              title={
+                file.isSQLMeshModelPython
+                  ? 'Column lineage disabled for Python models'
+                  : 'SQL Model'
+              }
+              className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
+            >
+              {file.isSQLMeshModelPython && 'Python'}
+              {file.isSQLMeshModelSQL && 'SQL'}
+            </span>
+          )}
           <span
             className={clsx(
               'inline-block',
@@ -265,38 +279,42 @@ function ModelNode({
               selectFile(file)
             }}
           >
-            {data.label}
+            <span>{data.label}</span>
           </span>
         </ModelNodeHandles>
       </div>
-      <div
-        className={clsx(
-          'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
-          columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
-        )}
-      >
-        {columnsVisible.map(column => (
-          <ModelColumn
-            key={column.name}
-            id={id}
-            column={column}
-            sourcePosition={sourcePosition}
-            targetPosition={targetPosition}
-            toggleEdgeById={toggleEdgeById}
-          />
-        ))}
-        {columnHidden.map(column => (
-          <ModelColumn
-            className={clsx('invisible h-0')}
-            key={column.name}
-            id={id}
-            column={column}
-            sourcePosition={sourcePosition}
-            targetPosition={targetPosition}
-            toggleEdgeById={toggleEdgeById}
-          />
-        ))}
-      </div>
+      {file != null && (
+        <div
+          className={clsx(
+            'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
+            columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
+          )}
+        >
+          {columnsVisible.map(column => (
+            <ModelColumn
+              key={column.name}
+              id={id}
+              column={column}
+              sourcePosition={sourcePosition}
+              targetPosition={targetPosition}
+              toggleEdgeById={toggleEdgeById}
+              disabled={file.isSQLMeshModelPython}
+            />
+          ))}
+          {columnHidden.map(column => (
+            <ModelColumn
+              className={clsx('invisible h-0')}
+              key={column.name}
+              id={id}
+              column={column}
+              sourcePosition={sourcePosition}
+              targetPosition={targetPosition}
+              toggleEdgeById={toggleEdgeById}
+              disabled={file.isSQLMeshModelPython}
+            />
+          ))}
+        </div>
+      )}
       {columns.length > COLUMS_LIMIT_DEFAULT && (
         <div className="flex px-3 py-2 bg-theme-lighter rounded-b-lg cursor-default">
           <Button
@@ -324,50 +342,57 @@ function ModelColumn({
   targetPosition,
   toggleEdgeById,
   className,
+  disabled = false,
 }: {
   className?: string
   id: string
   column: Column
   sourcePosition?: Position
   targetPosition?: Position
+  disabled?: boolean
   toggleEdgeById: (
-    isActive: boolean,
-    edgeId: string,
-    from: string[] | undefined,
-    type: string,
+    type: 'add' | 'remove',
+    edgeIds: [string, string],
+    connections?: { ins: string[]; outs: string[] },
   ) => void
 }): JSX.Element {
-  const { data: columnLineage, refetch: getColumnLineage } =
-    useApiColumnLineage(id, column.name)
+  const { refetch: getColumnLineage, isFetching } = useApiColumnLineage(
+    id,
+    column.name,
+  )
 
   const debouncedGetColumnLineage = useCallback(
     debounceAsync(getColumnLineage, 1000, true),
     [getColumnLineage],
   )
 
+  const activeEdges = useStoreLineage(s => s.activeEdges)
+  const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
+  const columns = useStoreLineage(s => s.columns)
+
   const columnId = toNodeOrEdgeId(id, column.name)
   const sourceId = toNodeOrEdgeId('source', columnId)
   const targetId = toNodeOrEdgeId('target', columnId)
 
-  const columns = useStoreLineage(s => s.columns)
-
   const previewLineage = useStoreEditor(s => s.previewLineage)
   const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
 
-  const [isActive, setIsActive] = useState(false)
   const [isShowing, setIsShowing] = useState(false)
+  const [isActive, setIsActive] = useState(
+    hasActiveEdge(sourceId) || hasActiveEdge(targetId),
+  )
+  const [shouldUpdate, setShouldUpdate] = useState(false)
 
   useEffect(() => {
-    return () => {
-      debouncedGetColumnLineage.cancel()
-    }
-  }, [])
+    setIsActive(hasActiveEdge(sourceId) || hasActiveEdge(targetId))
+  }, [activeEdges])
 
   useEffect(() => {
-    if (isActive && columnLineage?.[id]?.[column.name] != null) {
-      setPreviewLineage(previewLineage, columnLineage)
+    if (shouldUpdate) {
+      toggleEdgeById('add', [sourceId, targetId], columns?.[columnId])
+      setShouldUpdate(false)
     }
-  }, [columnLineage])
+  }, [columns, shouldUpdate])
 
   const lineage = previewLineage?.[id]?.columns?.[column.name]
   const hasTarget = isArrayNotEmpty(columns?.[columnId]?.outs)
@@ -378,24 +403,22 @@ function ModelColumn({
       key={column.name}
       className={clsx(
         isActive && 'bg-secondary-10 dark:bg-primary-900',
+        disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
       onClick={() => {
+        if (disabled) return
+
         if (isFalse(isActive)) {
-          void debouncedGetColumnLineage()
+          void debouncedGetColumnLineage().then(({ data: columnLineage }) => {
+            if (columnLineage?.[id]?.[column.name] != null) {
+              setPreviewLineage(previewLineage, columnLineage)
+              setShouldUpdate(true)
+            }
+          })
+        } else {
+          toggleEdgeById('remove', [sourceId, targetId], columns?.[columnId])
         }
-
-        if (columnLineage != null) {
-          toggleEdgeById(isActive, sourceId, columns?.[columnId]?.ins, 'source')
-          toggleEdgeById(
-            isActive,
-            targetId,
-            columns?.[columnId]?.outs,
-            'target',
-          )
-        }
-
-        setIsActive(!isActive)
       }}
     >
       <ModelNodeHandles
@@ -404,17 +427,16 @@ function ModelColumn({
         sourcePosition={sourcePosition}
         hasTarget={hasTarget}
         hasSource={hasSource}
+        className={clsx(disabled && 'pointer-events-none')}
       >
         <div className="flex w-full justify-between">
-          <div
-            className={clsx(
-              'mr-3 flex',
-              columns?.[columnId] != null
-                ? 'font-bold text-secondary-500 dark:text-primary-500'
-                : 'text-neutral-600 dark:text-neutral-100',
+          <div className={clsx('mr-3 flex')}>
+            {isFetching && (
+              <Loading className="inline-block mr-3 w-4 h-4">
+                <Spinner className="w-4 h-4 mr-2" />
+              </Loading>
             )}
-          >
-            {lineage?.source != null && (
+            {lineage?.source != null && isFalse(disabled) && (
               <Popover
                 onMouseEnter={() => {
                   setIsShowing(true)
@@ -426,7 +448,7 @@ function ModelColumn({
               >
                 {() => (
                   <>
-                    <InformationCircleIcon className="inline-block mr-3 w-4 h-4" />
+                    <InformationCircleIcon className="text-secondary-500 dark:text-primary-500 inline-block mr-3 w-4 h-4" />
                     <Transition
                       show={isShowing}
                       as={Fragment}

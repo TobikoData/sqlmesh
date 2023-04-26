@@ -13,8 +13,8 @@ import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
 import { useApiModelLineage } from '@api/index'
-import Graph from '@components/graph/Graph'
 import Loading from '@components/loading/Loading'
+import Graph from '@components/graph/Graph'
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -310,6 +310,7 @@ function EditorPreviewLineage({
         Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
           acc[key] = {
             models: lineage[key] ?? [],
+            columns: previewLineage?.[key]?.columns ?? undefined,
           }
 
           return acc
@@ -324,7 +325,7 @@ function EditorPreviewLineage({
     </div>
   ) : (
     <Graph
-      graph={previewLineage}
+      lineage={previewLineage}
       highlightedNodes={[model]}
     />
   )

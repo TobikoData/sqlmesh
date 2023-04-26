@@ -13,13 +13,14 @@ import { type Model } from '~/api/client'
 import { type ModelFile } from '~/models'
 
 import { useSqlMeshExtension } from './SqlMeshDialect'
+import { isFalse } from '@utils/index'
 
 export { useSqlMeshExtension }
 
 export function SqlMeshModel(
   models: Map<string, Model>,
   model: Model,
-  columns: string[],
+  columns: Set<string>,
 ): Extension {
   return ViewPlugin.fromClass(
     class SqlMeshModelView {
@@ -104,7 +105,7 @@ function getDecorations(
   models: Map<string, Model>,
   view: EditorView,
   model: Model,
-  columns: string[],
+  columns: Set<string>,
 ): DecorationSet {
   const decorations: any = []
   const modelColumns = model.columns.map(c => c.name)
@@ -135,7 +136,8 @@ function getDecorations(
         )
 
         if (
-          columns.includes(maybeModelOrColumn) &&
+          isFalse(isOriginal) &&
+          columns.has(maybeModelOrColumn) &&
           !modelColumns.includes(maybeModelOrColumn)
         ) {
           isOriginal = true
@@ -166,7 +168,7 @@ function getDecorations(
               column: maybeModelOrColumn,
             },
           }).range(from, to)
-        } else if (columns.includes(maybeModelOrColumn)) {
+        } else if (columns.has(maybeModelOrColumn)) {
           decoration = Decoration.mark({
             attributes: {
               class: `sqlmesh-model__column ${

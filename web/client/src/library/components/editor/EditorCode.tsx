@@ -32,6 +32,7 @@ import {
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
+import { EnumFileExtensions } from '@models/file'
 
 export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const { mode } = useColorScheme()
@@ -74,23 +75,34 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
 
   const extensions = useMemo(() => {
     const model = models.get(tab.file.path)
-    const columns = Object.keys(previewLineage ?? {})
-      .map(model => models.get(model)?.columns.map(c => c.name))
-      .flat()
-      .filter(Boolean) as string[]
+    const columns = new Set(
+      Object.keys(previewLineage ?? {})
+        .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+        .flat()
+        .filter(Boolean) as string[],
+    )
 
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
       HoverTooltip(models),
       events(models, files, selectFile),
       model != null && SqlMeshModel(models, model, columns),
-      tab.file.extension === '.py' && python(),
-      tab.file.extension === '.yaml' && StreamLanguage.define(yaml),
-      tab.file.extension === '.sql' &&
+      tab.file.extension === EnumFileExtensions.Python && python(),
+      tab.file.extension === EnumFileExtensions.YAML &&
+        StreamLanguage.define(yaml),
+      tab.file.extension === EnumFileExtensions.SQL &&
         tab.dialectOptions != null &&
         SqlMeshDialect(models, tab.file, tab.dialectOptions, dialectsTitles),
     ].filter(Boolean) as Extension[]
-  }, [tab.file, tab.dialectOptions, models, mode, files, dialectsTitles])
+  }, [
+    tab.file,
+    tab.dialectOptions,
+    models,
+    mode,
+    files,
+    dialectsTitles,
+    previewLineage,
+  ])
 
   const keymaps = useMemo(
     () => [

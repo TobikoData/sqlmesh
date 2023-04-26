@@ -123,7 +123,6 @@ export function IDE(): JSX.Element {
         <SplitPane
           sizes={[20, 80]}
           minSize={[160]}
-          maxSize={[320]}
           snapOffset={0}
           className="flex w-full h-full overflow-hidden"
         >
