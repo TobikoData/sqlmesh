@@ -633,7 +633,7 @@ def test_multi(mocker):
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
-    context = Context(paths=["examples/multi/repo_1"])
+    context = Context(paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter)
     model = context.models["bronze.a"]
     model.query.select("'c' AS c", copy=False)
     plan = context.plan()
