@@ -3,6 +3,13 @@ import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { isStringEmptyOrNil } from '@utils/index'
 
+export const EnumFileExtensions = {
+  SQL: '.sql',
+  Python: '.py',
+  CSV: '.csv',
+  YAML: '.yaml',
+} as const
+
 export interface InitialFile extends InitialArtifact, File {
   content: string
   extension: string
@@ -23,7 +30,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
         ? (initial as ModelFile).initial
         : {
             ...(initial as File),
-            extension: initial?.extension ?? '.sql',
+            extension: initial?.extension ?? EnumFileExtensions.SQL,
             is_supported: initial?.is_supported ?? true,
             content: initial?.content ?? '',
           },
@@ -54,6 +61,14 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 
   get fingerprint(): string {
     return this._content
+  }
+
+  get isSQLMeshModelPython(): boolean {
+    return this.isSQLMeshModel && this.extension === EnumFileExtensions.Python
+  }
+
+  get isSQLMeshModelSQL(): boolean {
+    return this.isSQLMeshModel && this.extension === EnumFileExtensions.SQL
   }
 
   updateContent(newContent: string = ''): void {
