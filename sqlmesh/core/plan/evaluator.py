@@ -137,6 +137,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 environment=environment.name,
                 on_complete=on_complete,
             )
+            self.state_sync.finalize(environment)
             completed = True
         finally:
             self.console.stop_promotion_progress(success=completed)
