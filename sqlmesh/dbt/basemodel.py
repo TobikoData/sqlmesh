@@ -61,6 +61,16 @@ class Dependencies(PydanticModel):
 
         return dependencies
 
+    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
+        # See https://github.com/pydantic/pydantic/issues/1090
+        exclude = kwargs.pop("exclude", None) or set()
+
+        out = super().dict(*args, **kwargs, exclude={*exclude, "macros"})
+        if "macros" not in exclude:
+            out["macros"] = [macro.dict() for macro in self.macros]
+
+        return out
+
 
 class Materialization(str, Enum):
     """DBT model materializations"""
@@ -109,8 +119,7 @@ class BaseModelConfig(GeneralConfig):
     storage_format: t.Optional[str] = None
     path: Path = Path()
     target_schema: str = ""
-    _dependencies: Dependencies = Dependencies()
-    _variables: t.Dict[str, bool] = {}
+    dependencies: Dependencies = Dependencies()
 
     # DBT configuration fields
     database: t.Optional[str] = None
@@ -236,7 +245,7 @@ class BaseModelConfig(GeneralConfig):
 
     def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
-        jinja_macros = model_context.jinja_macros.trim(self._dependencies.macros)
+        jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {
                 "this": self.relation_info,
@@ -255,7 +264,7 @@ class BaseModelConfig(GeneralConfig):
         return {
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model_context.refs[ref] for ref in self._dependencies.refs},
+            "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs},
             "jinja_macros": jinja_macros,
             "path": self.path,
             "pre": [exp for hook in self.pre_hook for exp in d.parse(hook.sql)],
@@ -267,14 +276,14 @@ class BaseModelConfig(GeneralConfig):
         rendered = super().render_config(context)
         rendered = ModelSqlRenderer(context, rendered).enriched_config
 
-        rendered_dependencies = rendered._dependencies
+        rendered_dependencies = rendered.dependencies
         for dependency in rendered_dependencies.refs:
             model = context.models.get(dependency)
             if model and model.materialized == Materialization.EPHEMERAL:
-                rendered._dependencies = rendered._dependencies.union(
-                    model.render_config(context)._dependencies
+                rendered.dependencies = rendered.dependencies.union(
+                    model.render_config(context).dependencies
                 )
-                rendered._dependencies.refs.discard(dependency)
+                rendered.dependencies.refs.discard(dependency)
 
         return rendered
 
@@ -291,7 +300,7 @@ class BaseModelConfig(GeneralConfig):
         seeds = {}
         sources = {}
 
-        for ref in self._dependencies.refs:
+        for ref in self.dependencies.refs:
             if ref in context.seeds:
                 seeds[ref] = context.seeds[ref]
             elif ref in context.models:
@@ -299,7 +308,7 @@ class BaseModelConfig(GeneralConfig):
             else:
                 raise ConfigError(f"Model '{ref}' was not found for model '{self.table_name}'.")
 
-        for source in self._dependencies.sources:
+        for source in self.dependencies.sources:
             if source in context.sources:
                 sources[source] = context.sources[source]
             else:
@@ -357,11 +366,11 @@ class ModelSqlRenderer(t.Generic[BMC]):
     def enriched_config(self) -> BMC:
         if self._rendered_sql is None:
             self._enriched_config = self._update_with_sql_config(self._enriched_config)
-            self._enriched_config._dependencies = Dependencies(
+            self._enriched_config.dependencies = Dependencies(
                 macros=extract_macro_references(self._enriched_config.all_sql)
             )
             self.render()
-            self._enriched_config._dependencies = self._enriched_config._dependencies.union(
+            self._enriched_config.dependencies = self._enriched_config.dependencies.union(
                 self._captured_dependencies
             )
         return self._enriched_config

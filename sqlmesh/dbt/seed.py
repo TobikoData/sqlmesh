@@ -16,7 +16,7 @@ class SeedConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
-        model_context = self._context_for_dependencies(context, self._dependencies)
+        model_context = self._context_for_dependencies(context, self.dependencies)
 
         return create_seed_model(
             self.model_name,
