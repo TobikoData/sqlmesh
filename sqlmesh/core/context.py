@@ -311,11 +311,7 @@ class Context(BaseContext):
     @property
     def state_sync(self) -> StateSync:
         if not self._state_sync:
-            self._state_sync = self._provided_state_sync or self._scheduler.create_state_sync(self)
-            if not self._state_sync:
-                raise ConfigError(
-                    "The operation is not supported when using a read-only state sync"
-                )
+            self._state_sync = self._new_state_sync()
 
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self._state_sync.migrate()
@@ -838,7 +834,7 @@ class Context(BaseContext):
 
         Please contact your SQLMesh administrator before doing this.
         """
-        self.state_sync.migrate()
+        self._new_state_sync().migrate()
 
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
@@ -942,3 +938,9 @@ class Context(BaseContext):
             )
         except Exception as ex:
             self.console.log_error(f"Connection '{connection_name}' failed. {ex}")
+
+    def _new_state_sync(self) -> StateSync:
+        state_sync = self._provided_state_sync or self._scheduler.create_state_sync(self)
+        if not state_sync:
+            raise ConfigError("The operation is not supported when using a read-only state sync")
+        return state_sync
