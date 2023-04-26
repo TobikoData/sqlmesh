@@ -292,22 +292,18 @@ class Plan:
                 f"A choice can't be changed for the existing version of model '{snapshot.name}'."
             )
 
-        snapshot.change_category = choice
-        if choice in (
-            SnapshotChangeCategory.BREAKING,
-            SnapshotChangeCategory.NON_BREAKING,
-        ):
-            snapshot.set_version()
-        else:
-            snapshot.set_version(snapshot.previous_version)
+        snapshot.categorize_as(choice)
 
         for child in self.indirectly_modified[snapshot.name]:
             child_snapshot = self.context_diff.snapshots[child]
 
-            if choice == SnapshotChangeCategory.BREAKING:
-                child_snapshot.set_version()
+            if choice in (
+                SnapshotChangeCategory.BREAKING,
+                SnapshotChangeCategory.INDIRECT_BREAKING,
+            ):
+                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
-                child_snapshot.set_version(child_snapshot.previous_version)
+                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child
@@ -316,57 +312,12 @@ class Plan:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
-                        child_snapshot.set_version()
+                        child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
                         break
 
         # Invalidate caches.
         self._categorized = None
         self._uncategorized = None
-
-    def snapshot_change_category(self, snapshot: Snapshot) -> SnapshotChangeCategory:
-        """
-        Determines the SnapshotChangeCategory for a modified snapshot using its available history.
-
-        A snapshot may be modified (directly or indirectly) multiple times. Each time
-        it is directly changed, the categorization is stored in its history. Look
-        through the snapshot's history to find where it deviated from the previous
-        snapshot and then find the most conservative categorization recorded.
-
-        Args:
-            snapshot: The snapshot within this plan
-        """
-        if snapshot not in self.snapshots:
-            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} does not exist in this plan.")
-
-        if not snapshot.version:
-            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not be categorized yet.")
-
-        if snapshot.name not in self.context_diff.modified_snapshots:
-            raise SQLMeshError(f"Snapshot {snapshot.snapshot_id} has not been modified.")
-
-        current, previous = self.context_diff.modified_snapshots[snapshot.name]
-        if current.version == previous.version:
-            # Versions match, so no further history to check
-            return SnapshotChangeCategory.FORWARD_ONLY
-        elif previous.data_version in current.all_versions:
-            # Previous snapshot in the current snapshot's history. Get all versions
-            # since the two matched.
-            index = current.all_versions.index(previous.data_version)
-            versions = current.all_versions[index + 1 :]
-        elif current.data_version in previous.all_versions:
-            # Snapshot is a revert. Look through the previous snapshot's history
-            # and get all versions since it matched the current snapshot.
-            index = previous.all_versions.index(current.data_version)
-            versions = previous.all_versions[index:]
-        else:
-            # Insufficient history, so err on the side of safety
-            return SnapshotChangeCategory.BREAKING
-
-        change_categories = [
-            version.change_category for version in versions if version.change_category
-        ]
-        # Return the most conservative categorization found in the snapshot's history
-        return min(change_categories, key=lambda x: x.value)
 
     @property
     def _missing_intervals(self) -> t.Dict[str, Intervals]:
@@ -464,11 +415,9 @@ class Plan:
                         # previous version for non-seed models.
                         # New snapshots of seed models are considered non-breaking ones.
                         if not snapshot.is_seed_kind:
-                            snapshot.set_version(snapshot.previous_version)
-                            snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+                            snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
-                            snapshot.set_version()
-                            snapshot.change_category = SnapshotChangeCategory.NON_BREAKING
+                            snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self.auto_categorization_enabled and is_directly_modified:
                         new, old = self.context_diff.modified_snapshots[model_name]
                         change_category = categorize_change(
@@ -489,10 +438,10 @@ class Plan:
                         for upstream in upstream_model_names
                     )
                 ):
-                    snapshot.set_version()
+                    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
 
             elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
-                snapshot.set_version()
+                snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     def _ensure_no_paused_forward_only_upstream(
         self, model_name: str, upstream_model_names: t.Iterable[str]

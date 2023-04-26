@@ -32,6 +32,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
 from sqlmesh.core.snapshot import (
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
     SnapshotId,
@@ -468,6 +469,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 )
                 for name in _parents_from_model(model, models)
             )
+
+            # Infer the missing change category to account for SQLMesh versions in which
+            # we didn't assign a change category to indirectly modified snapshots.
+            if not new_snapshot.change_category:
+                new_snapshot.change_category = (
+                    SnapshotChangeCategory.INDIRECT_BREAKING
+                    if snapshot.fingerprint.to_version() == snapshot.version
+                    else SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+                )
+
+            if not new_snapshot.temp_version:
+                new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
             if new_snapshot == snapshot:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")

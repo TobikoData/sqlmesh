@@ -42,12 +42,16 @@ class SnapshotChangeCategory(IntEnum):
 
     BREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt
     NON_BREAKING: The change requires that only the snapshot modified be rebuilt
-    NO_CHANGE: The change requires no rebuilding
+    FORWARD_ONLY: The change requires no rebuilding
+    INDIRECT_BREAKING: The change was caused indirectly and is breaking.
+    INDIRECT_FORWARD_ONLY: The change was caused indirectly and is forward-only.
     """
 
     BREAKING = 1
     NON_BREAKING = 2
     FORWARD_ONLY = 3
+    INDIRECT_BREAKING = 4
+    INDIRECT_FORWARD_ONLY = 5
 
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
@@ -88,6 +92,7 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
+    temp_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
 
     def snapshot_id(self, name: str) -> SnapshotId:
@@ -128,6 +133,8 @@ class QualifiedViewName(PydanticModel, frozen=True):
 
 class SnapshotInfoMixin:
     name: str
+    temp_version: t.Optional[str]
+    change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
     physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
@@ -136,7 +143,7 @@ class SnapshotInfoMixin:
         """Provided whether the snapshot is used in a development mode or not, returns True
         if the snapshot targets a temporary table or a clone and False otherwise.
         """
-        return is_dev and not self.is_new_version
+        return is_dev and (self.is_forward_only or self.is_indirect_forward_only)
 
     @property
     def identifier(self) -> str:
@@ -168,7 +175,11 @@ class SnapshotInfoMixin:
 
     @property
     def is_forward_only(self) -> bool:
-        return not self.data_hash_matches(self.previous_version) and not self.is_new_version
+        return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+    @property
+    def is_indirect_forward_only(self) -> bool:
+        return self.change_category == SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
 
     @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
@@ -187,15 +198,18 @@ class SnapshotInfoMixin:
             for_read: Whether the table name will be used for reading by a different snapshot.
         """
         if is_dev and for_read:
-            # If this snapshot is used for reading, return a temporary table
-            # only if this snapshot captures direct changes applied to its model.
-            version = self.fingerprint.to_version() if self.is_forward_only else version
-            is_temp = self.is_temporary_table(True) and self.is_forward_only
+            # If this snapshot is used for **reading**, return a temporary table
+            # only if this snapshot captures a direct forward-only change applied to its model.
+            is_temp = self.is_forward_only
         elif is_dev:
-            version = self.fingerprint.to_version()
-            is_temp = self.is_temporary_table(True)
+            # Use a temporary table in the dev environment when **writing** a forward-only snapshot
+            # which was modified either directly or indirectly.
+            is_temp = self.is_forward_only or self.is_indirect_forward_only
         else:
             is_temp = False
+
+        if is_temp:
+            version = self.temp_version or self.fingerprint.to_version()
 
         return table_name(
             self.physical_schema,
@@ -209,6 +223,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
     fingerprint: SnapshotFingerprint
     version: str
+    temp_version: t.Optional[str]
     physical_schema: str
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
@@ -235,6 +250,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return SnapshotDataVersion(
             fingerprint=self.fingerprint,
             version=self.version,
+            temp_version=self.temp_version,
             change_category=self.change_category,
         )
 
@@ -296,6 +312,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     indirect_versions: t.Dict[str, t.Tuple[SnapshotDataVersion, ...]] = {}
     version: t.Optional[str] = None
+    temp_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
 
@@ -555,21 +572,22 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return missing
 
-    def set_version(
-        self,
-        version: t.Optional[str | SnapshotDataVersion | SnapshotTableInfo | Snapshot] = None,
-    ) -> None:
-        """Set the version of this snapshot.
-
-        If no version is passed, the fingerprint of the snapshot will be used.
+    def categorize_as(self, category: SnapshotChangeCategory) -> None:
+        """Assigns the given category to this snapshot.
 
         Args:
-            version: Either a string or a TableInfo to use.
+            category: The change category to assign to this snapshot.
         """
-        if isinstance(version, (SnapshotDataVersion, SnapshotTableInfo, Snapshot)):
-            self.version = version.data_version.version
+        is_forward_only = category in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_FORWARD_ONLY,
+        )
+        if is_forward_only and self.previous_version:
+            self.version = self.previous_version.data_version.version
         else:
-            self.version = version or self.fingerprint.to_version()
+            self.version = self.fingerprint.to_version()
+
+        self.change_category = category
 
     def set_unpaused_ts(self, unpaused_dt: t.Optional[TimeLike]) -> None:
         """Sets the timestamp for when this snapshot was unpaused.
@@ -586,7 +604,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             is_dev: Whether the table name will be used in development mode.
             for_read: Whether the table name will be used for reading by a different snapshot.
         """
-        self._ensure_version()
+        self._ensure_categorized()
         assert self.version
         return self._table_name(self.version, is_dev, for_read)
 
@@ -596,7 +614,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             is_dev: Whether the table name will be used in development mode.
         """
-        self._ensure_version()
+        self._ensure_categorized()
         assert self.version
 
         if is_dev and self.is_forward_only:
@@ -613,12 +631,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to get the SnapshotTableInfo from the Snapshot."""
-        self._ensure_version()
+        self._ensure_categorized()
         return SnapshotTableInfo(
             physical_schema=self.physical_schema,
             name=self.name,
             fingerprint=self.fingerprint,
             version=self.version,
+            temp_version=self.temp_version,
             parents=self.parents,
             previous_versions=self.previous_versions,
             change_category=self.change_category,
@@ -628,17 +647,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def data_version(self) -> SnapshotDataVersion:
-        self._ensure_version()
+        self._ensure_categorized()
         return SnapshotDataVersion(
             fingerprint=self.fingerprint,
             version=self.version,
+            temp_version=self.temp_version,
             change_category=self.change_category,
         )
 
     @property
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
-        self._ensure_version()
+        self._ensure_categorized()
         return self.fingerprint.to_version() == self.version
 
     @property
@@ -677,7 +697,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def is_paused(self) -> bool:
         return self.unpaused_ts is None
 
-    def _ensure_version(self) -> None:
+    def _ensure_categorized(self) -> None:
+        if not self.change_category:
+            raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been categorized yet.")
         if not self.version:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been versioned yet.")
 

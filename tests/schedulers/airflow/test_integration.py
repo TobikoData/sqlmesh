@@ -8,7 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotNameVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
@@ -40,7 +40,7 @@ def test_apply_plan_create_backfill_promote(
 ):
     model_name = random_name()
     snapshot = make_snapshot(_create_model(model_name))
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     environment_name = _random_environment_name()
     environment = _create_environment(snapshot, name=environment_name)

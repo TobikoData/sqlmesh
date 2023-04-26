@@ -14,7 +14,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     SqlModel,
 )
-from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
@@ -92,8 +92,10 @@ def test_push_snapshots(
     ):
         state_sync.push_snapshots([snapshot_a, snapshot_b])
 
-    snapshot_a.set_version()
-    snapshot_b.set_version("2")
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.version = "2"
+
     state_sync.push_snapshots([snapshot_a, snapshot_b])
 
     assert state_sync.get_snapshots([snapshot_a.snapshot_id, snapshot_b.snapshot_id]) == {
@@ -275,8 +277,9 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
             name="a",
             query=parse_one("select 1, ds"),
         ),
-        version="a",
     )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
     snapshot_b = make_snapshot(
         SqlModel(
             name="b",
@@ -284,15 +287,16 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
             query=parse_one("select * from a"),
         ),
         models={"a": snapshot_a.model},
-        version="b",
     )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
     snapshot_c = make_snapshot(
         SqlModel(
             name="c",
             query=parse_one("select 3, ds"),
         ),
-        version="c",
     )
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
 
     with pytest.raises(
         SQLMeshError,
@@ -345,8 +349,9 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
             name="a",
             query=parse_one("select 2, ds"),
         ),
-        version="d",
     )
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+
     state_sync.push_snapshots([snapshot_d])
     added, removed = promote_snapshots(state_sync, [snapshot_d], "prod")
     assert set(added) == {snapshot_d.table_info}
@@ -361,8 +366,8 @@ def test_promote_snapshots_parent_plan_id_mismatch(
             name="a",
             query=parse_one("select 1, ds"),
         ),
-        version="a",
     )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "prod")
@@ -403,11 +408,13 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     )
 
     snapshot = make_snapshot(model, version="a")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     snapshot.add_interval("2022-01-01", "2022-01-02")
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 
     new_snapshot_same_version = make_snapshot(model, version="a")
+    new_snapshot_same_version.change_category = SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
     new_snapshot_same_version.fingerprint = snapshot.fingerprint.copy(
         update={"data_hash": "new_snapshot_same_version"}
     )
@@ -416,6 +423,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     promote_snapshots(state_sync, [new_snapshot_same_version], "prod", no_gaps=True)
 
     new_snapshot_missing_interval = make_snapshot(model, version="b")
+    new_snapshot_missing_interval.change_category = SnapshotChangeCategory.BREAKING
     new_snapshot_missing_interval.fingerprint = snapshot.fingerprint.copy(
         update={"data_hash": "new_snapshot_missing_interval"}
     )
@@ -428,6 +436,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
         promote_snapshots(state_sync, [new_snapshot_missing_interval], "prod", no_gaps=True)
 
     new_snapshot_same_interval = make_snapshot(model, version="c")
+    new_snapshot_same_interval.change_category = SnapshotChangeCategory.BREAKING
     new_snapshot_same_interval.fingerprint = snapshot.fingerprint.copy(
         update={"data_hash": "new_snapshot_same_interval"}
     )
@@ -446,6 +455,7 @@ def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Cal
     )
 
     snapshot = make_snapshot(model, version="a")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     snapshot.add_interval("2022-01-01", "2022-01-03")
     state_sync.push_snapshots([snapshot])
     promote_snapshots(state_sync, [snapshot], "prod")
@@ -459,6 +469,7 @@ def test_start_date_gap(state_sync: EngineAdapterStateSync, make_snapshot: t.Cal
     )
 
     snapshot = make_snapshot(model, version="b")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     snapshot.add_interval("2022-01-03", "2022-01-04")
     state_sync.push_snapshots([snapshot])
     with pytest.raises(
@@ -477,8 +488,8 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
             name="a",
             query=parse_one("select a, ds"),
         ),
-        version="a",
     )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot])
 

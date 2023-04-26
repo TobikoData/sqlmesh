@@ -172,6 +172,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
 
 def test_add_interval_dev(snapshot: Snapshot):
     snapshot.version = "existing_version"
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
     assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
@@ -472,7 +473,7 @@ def test_table_name(snapshot: Snapshot):
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="1"
     )
-    snapshot.version = snapshot.fingerprint.to_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3078928823"
@@ -481,12 +482,13 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
 
-    # Mimic an indirect non-breaking change.
+    # Mimic an indirect forward-only change.
     previous_data_version = snapshot.data_version
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="2"
     )
     snapshot.previous_versions = (previous_data_version,)
+    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
     assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__781051917__temp"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
@@ -499,6 +501,7 @@ def test_table_name(snapshot: Snapshot):
         data_hash="2", metadata_hash="1", parent_data_hash="1"
     )
     snapshot.previous_versions = (previous_data_version,)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3049392110__temp"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"

@@ -4,7 +4,7 @@ from sqlglot import parse_one
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotFingerprint
 from sqlmesh.utils.date import to_datetime
 
 
@@ -90,6 +90,7 @@ def test_multi_version_snapshots(
         models=sushi_context_fixed_date.models,
         version="1",
     )
+    items_b.change_category = SnapshotChangeCategory.FORWARD_ONLY
     items_b.add_interval("2022-01-20", "2022-01-25")
     sushi_context_fixed_date.state_sync.push_snapshots([items_b])
 

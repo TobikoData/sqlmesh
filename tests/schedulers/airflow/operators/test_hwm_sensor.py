@@ -4,18 +4,18 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.model import SqlModel
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.utils.date import to_datetime
 
 
 @pytest.mark.airflow
 def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
-    this_snapshot = make_snapshot(
-        SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
-    )
-    target_snapshot = make_snapshot(
-        SqlModel(name="target", query=parse_one("select 2, ds")), version="b"
-    )
+    this_snapshot = make_snapshot(SqlModel(name="this", query=parse_one("select 1, ds")))
+    this_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    target_snapshot = make_snapshot(SqlModel(name="target", query=parse_one("select 2, ds")))
+    target_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     task = HighWaterMarkSensor(
         target_snapshot_info=target_snapshot.table_info,
@@ -42,12 +42,17 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
         SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
     )
+    this_snapshot.change_category = SnapshotChangeCategory.BREAKING
+
     target_snapshot_v1 = make_snapshot(
         SqlModel(name="that", query=parse_one("select 2, ds")), version="b"
     )
+    target_snapshot_v1.change_category = SnapshotChangeCategory.BREAKING
+
     target_snapshot_v2 = make_snapshot(
         SqlModel(name="that", query=parse_one("select 3, ds")), version="b"
     )
+    target_snapshot_v2.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     target_snapshot_v2.add_interval("2022-01-01", "2022-01-01")
 
@@ -80,12 +85,17 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     this_snapshot = make_snapshot(
         SqlModel(name="this", query=parse_one("select 1, ds")), version="a"
     )
+    this_snapshot.change_category = SnapshotChangeCategory.BREAKING
+
     target_snapshot_v1 = make_snapshot(
         SqlModel(name="that", query=parse_one("select 2, ds")), version="b"
     )
+    target_snapshot_v1.change_category = SnapshotChangeCategory.BREAKING
+
     target_snapshot_v2 = make_snapshot(
         SqlModel(name="that", query=parse_one("select 3, ds")), version="b"
     )
+    target_snapshot_v2.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     target_snapshot_v2.add_interval("2022-01-01", "2022-01-02")
 
