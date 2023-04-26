@@ -210,7 +210,7 @@ class ModelConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        model_context = self._context_for_dependencies(context, self._dependencies)
+        model_context = self._context_for_dependencies(context, self.dependencies)
         expressions = d.parse(self.sql_no_config)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
