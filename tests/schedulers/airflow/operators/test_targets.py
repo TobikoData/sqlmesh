@@ -8,6 +8,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
@@ -42,7 +43,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
 
     snapshot = make_snapshot(model)
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     parent_snapshots = {snapshot.name: snapshot}
 
     target = targets.SnapshotEvaluationTarget(
@@ -67,7 +68,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
 @pytest.mark.airflow
 def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable, model: Model):
     snapshot = make_snapshot(model)
-    snapshot.version = "test_version"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     environment = Environment(
         name="test_env", snapshots=[snapshot.table_info], start_at="", plan_id="test_plan_id"

@@ -5,6 +5,7 @@ from sqlglot import parse_one
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import ModelKind, ModelKindName, SqlModel
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, Plan
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -45,8 +46,8 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot = snapshots[new_model.name]
     new_view_model_snapshot = snapshots[new_view_model.name]
 
-    new_model_snapshot.version = new_model_snapshot.fingerprint.to_version()
-    new_view_model_snapshot.version = new_view_model_snapshot.fingerprint.to_version()
+    new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     plan = Plan(
         sushi_context._context_diff("prod"),

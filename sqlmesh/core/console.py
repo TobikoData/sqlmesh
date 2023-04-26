@@ -29,9 +29,12 @@ if t.TYPE_CHECKING:
 
 
 SNAPSHOT_CHANGE_CATEGORY_STR = {
+    None: "Unknown",
     SnapshotChangeCategory.BREAKING: "Breaking",
     SnapshotChangeCategory.NON_BREAKING: "Non-breaking",
     SnapshotChangeCategory.FORWARD_ONLY: "Forward-only",
+    SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect breaking",
+    SnapshotChangeCategory.INDIRECT_FORWARD_ONLY: "Indirect forward-only",
 }
 
 
@@ -320,7 +323,7 @@ class TerminalConsole(Console):
             if not context_diff.directly_modified(snapshot.name):
                 continue
 
-            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[plan.snapshot_change_category(snapshot)]
+            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
             syntax_dff = Syntax(context_diff.text_diff(snapshot.name), "sql")
             indirect_tree = None

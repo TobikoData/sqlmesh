@@ -30,7 +30,12 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotId,
+    SnapshotInfoLike,
+)
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
@@ -366,7 +371,7 @@ class SnapshotEvaluator:
 
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
-        is_dev = not snapshot.is_new_version
+        is_dev = snapshot.is_forward_only or snapshot.is_indirect_forward_only
         table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_snapshots_by_name = {
@@ -400,7 +405,10 @@ class SnapshotEvaluator:
                 )
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
-        if not snapshot.is_materialized or snapshot.is_new_version:
+        if (
+            not snapshot.is_materialized
+            or snapshot.change_category != SnapshotChangeCategory.FORWARD_ONLY
+        ):
             return
 
         tmp_table_name = snapshot.table_name(is_dev=True)

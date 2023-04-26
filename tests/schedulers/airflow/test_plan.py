@@ -6,7 +6,12 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, create_sql_model
-from sqlmesh.core.snapshot import Snapshot, SnapshotFingerprint, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotFingerprint,
+    SnapshotTableInfo,
+)
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
 from sqlmesh.utils.date import to_datetime
@@ -15,14 +20,15 @@ from sqlmesh.utils.errors import SQLMeshError
 
 @pytest.fixture
 def snapshot(make_snapshot, random_name) -> Snapshot:
-    return make_snapshot(
+    result = make_snapshot(
         create_sql_model(
             random_name(),
             parse_one("SELECT 1, ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
         ),
-        version="1",
     )
+    result.categorize_as(SnapshotChangeCategory.BREAKING)
+    return result
 
 
 @pytest.mark.airflow
@@ -56,6 +62,7 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         version="test_version",
         physical_schema="test_physical_schema",
         parents=[],
+        change_category=SnapshotChangeCategory.BREAKING,
         is_materialized=True,
         is_embedded_kind=False,
     )

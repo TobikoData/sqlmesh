@@ -20,6 +20,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot import (
     Snapshot,
+    SnapshotChangeCategory,
     SnapshotEvaluator,
     SnapshotFingerprint,
     SnapshotTableInfo,
@@ -38,7 +39,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
     )
 
     snapshot = make_snapshot(model)
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     return snapshot
 
 
@@ -101,7 +102,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.version = snapshot.fingerprint.to_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.create([snapshot], {})
     evaluator.evaluate(
@@ -137,12 +138,13 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
     model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
     snapshot = make_snapshot(model, physical_schema="physical_schema")
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     parent_snapshot = make_snapshot(
         SqlModel(name="test_parent_model", query=parse_one("SELECT b, ds"))
     )
-    parent_snapshot.set_version("test_version")
+    parent_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    parent_snapshot.version = "test_version"
 
     evaluator = SnapshotEvaluator(mocker.Mock())
     with pytest.raises(SQLMeshError, match=r".*Create and apply a new plan to fix this issue."):
@@ -165,15 +167,15 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
 
-    evaluator.promote(
-        [make_snapshot(model, physical_schema="physical_schema", version="1")],
-        "test_env",
-    )
+    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.promote([snapshot], "test_env")
 
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
-        parse_one("SELECT * FROM physical_schema.test_schema__test_model__1"),
+        parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),
     )
 
 
@@ -189,6 +191,7 @@ def test_promote_model_info(mocker: MockerFixture):
                 name="test_schema.test_model",
                 fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
                 version="1",
+                change_category=SnapshotChangeCategory.BREAKING,
                 parents=[],
                 is_materialized=True,
                 is_embedded_kind=False,
@@ -235,6 +238,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
     snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     evaluator.migrate([snapshot])
 
@@ -295,7 +299,8 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     updated_model = SqlModel.parse_obj(updated_model_dict)
 
     new_snapshot = make_snapshot(updated_model)
-    new_snapshot.set_version(snapshot.version)
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
 
     evaluator.create([new_snapshot], {})
     evaluator.migrate([new_snapshot])

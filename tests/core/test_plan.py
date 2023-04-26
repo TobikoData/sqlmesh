@@ -19,7 +19,7 @@ from sqlmesh.utils.errors import PlanError
 
 def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot_a.set_version()
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
     snapshot_b.previous_versions = (
@@ -29,6 +29,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
+            change_category=SnapshotChangeCategory.FORWARD_ONLY,
         ),
     )
     assert not snapshot_b.version
@@ -91,7 +92,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
 def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot_a.set_version()
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
@@ -117,10 +118,10 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
                 metadata_hash="test_metadata_hash",
             ),
             version="test_version",
-            change_category=None,
+            change_category=SnapshotChangeCategory.BREAKING,
         ),
     )
-    snapshot_a.set_version(snapshot_a.previous_version)
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds from a")))
     assert not snapshot_b.version
@@ -251,11 +252,12 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
 
 def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert not snapshot.is_forward_only
 
     forward_only_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
-    forward_only_snapshot.set_version(snapshot.version)
+    forward_only_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    forward_only_snapshot.version = snapshot.version
     assert forward_only_snapshot.is_forward_only
 
     context_diff_mock = mocker.Mock()
@@ -277,7 +279,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     new_version_snapshot = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), stamp="test_stamp")
     )
-    new_version_snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     context_diff_mock.modified_snapshots = {"a": (new_version_snapshot, forward_only_snapshot)}
     context_diff_mock.new_snapshots = {new_version_snapshot.snapshot_id: new_version_snapshot}
     Plan(context_diff_mock, state_reader_mock, forward_only=True)
@@ -292,7 +294,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
             depends_on=set(),
         )
     )
-    snapshot_a.set_version()
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_a_updated = make_snapshot(
         SeedModel(
@@ -323,10 +325,10 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(name="a", query=parse_one("select 1, ds"), start="2022-01-01")
     )
-    snapshot_a.set_version()
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
-    snapshot_b.set_version()
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
@@ -349,7 +351,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
 
 def test_auto_categorization(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot.set_version()
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
 
@@ -405,7 +407,7 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
 
 def test_broken_references(make_snapshot, mocker: MockerFixture):
     snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds FROM a")))
-    snapshot_b.set_version()
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"b": snapshot_b}

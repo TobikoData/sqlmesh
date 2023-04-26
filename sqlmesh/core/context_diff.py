@@ -14,7 +14,12 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotDataVersion, SnapshotId
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotDataVersion,
+    SnapshotId,
+)
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -131,15 +136,17 @@ class ContextDiff(PydanticModel):
                 and snapshot.data_hash_matches(snapshot.previous_version)
             ):
                 remote_versions = snapshot_remote_versions[snapshot.name][0]
-                remote_head = remote_versions[-1].version
-                local_head = snapshot.previous_version.version
+                remote_head = remote_versions[-1]
+                local_head = snapshot.previous_version
 
-                if remote_head in (local.version for local in snapshot.previous_versions):
-                    snapshot.set_version(local_head)
-                elif local_head in (remote.version for remote in remote_versions):
-                    snapshot.set_version(remote_head)
+                if remote_head.version in (local.version for local in snapshot.previous_versions):
+                    snapshot.version = local_head.version
+                    snapshot.change_category = local_head.change_category
+                elif local_head.version in (remote.version for remote in remote_versions):
+                    snapshot.version = remote_head.version
+                    snapshot.change_category = remote_head.change_category
                 else:
-                    snapshot.set_version()
+                    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
         return ContextDiff(
             environment=environment,
