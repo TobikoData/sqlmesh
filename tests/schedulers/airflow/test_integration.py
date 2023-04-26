@@ -77,6 +77,7 @@ def test_mult_snapshots_same_version(airflow_client: AirflowClient, make_snapsho
     model_name = random_name()
 
     snapshot = make_snapshot(_create_model(model_name), version="1")
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     # Presetting the interval here to avoid backfill.
     snapshot.add_interval("2022-01-01", "2022-01-01")
     snapshot.set_unpaused_ts(now())
@@ -93,6 +94,7 @@ def test_mult_snapshots_same_version(airflow_client: AirflowClient, make_snapsho
     new_fingerprint = original_fingerprint.copy(update={"data_hash": "new_snapshot"})
 
     snapshot.fingerprint = new_fingerprint
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
     environment.previous_plan_id = environment.plan_id
     environment.plan_id = "new_plan_id"
     _apply_plan_and_block(airflow_client, [snapshot], environment)
