@@ -5,4 +5,7 @@ connections:
         type: duckdb
         database: db.db
 
+    memory:
+        type: duckdb
+
 default_connection: local
