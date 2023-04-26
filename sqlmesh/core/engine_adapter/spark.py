@@ -59,6 +59,46 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         else:
             super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
 
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        column_names: t.Iterable[str],
+        unique_key: t.Iterable[str],
+    ) -> None:
+        if isinstance(source_table, PySparkDataFrame):
+            self._merge_pyspark_df(target_table, source_table, column_names, unique_key)
+        else:
+            super().merge(target_table, source_table, column_names, unique_key)
+
+    def _merge_pyspark_df(
+        self,
+        target_table: TableName,
+        source_df: PySparkDataFrame,
+        column_names: t.Iterable[str],
+        unique_key: t.Iterable[str],
+    ) -> None:
+        """
+        Merge using DataFrames is only supported for Delta Tables using the Delta Table API.
+        It is not supported in Vanilla Spark. Iceberg only supports merge using SQL.
+        """
+        from delta.tables import DeltaTable  # type: ignore
+
+        if isinstance(target_table, exp.Table):
+            target_table = target_table.sql(dialect=self.dialect)
+        column_mapping = {f"target.`{col}`": f"source.`{col}`" for col in column_names}
+        (
+            DeltaTable.forName(self.spark, target_table)
+            .alias("target")
+            .merge(
+                source_df.alias("source"),
+                condition=" AND ".join([f"target.`{key}` = source.`{key}`" for key in unique_key]),
+            )
+            .whenMatchedUpdate(set=column_mapping)
+            .whenNotMatchedInsert(values=column_mapping)
+            .execute()
+        )
+
     def _insert_append_pandas_df(
         self,
         table_name: TableName,
