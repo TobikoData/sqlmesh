@@ -17,7 +17,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync.base import StateSync
-from sqlmesh.utils.date import TimeLike, now, to_datetime
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -128,6 +128,26 @@ class CommonStateSyncMixin(StateSync):
         table_infos = [s.table_info for s in snapshots]
         self._update_environment(environment)
         return table_infos, [existing_table_infos[name] for name in missing_models]
+
+    @transactional()
+    def finalize(self, environment: Environment) -> None:
+        """Finalize the target environment, indicating that this environment has been
+        fully promoted and is ready for use.
+
+        Args:
+            environment: The target environment to finalize.
+        """
+        logger.info("Finalizing environment '%s'", environment)
+
+        stored_environment = self._get_environment(environment.name, lock_for_update=True)
+        if stored_environment and stored_environment.plan_id != environment.plan_id:
+            raise SQLMeshError(
+                f"Plan '{environment.plan_id}' is no longer valid for the target environment '{environment.name}'. "
+                f"Stored plan ID: '{stored_environment.plan_id}'. Please recreate the plan and try again"
+            )
+
+        environment.finalized_ts = now_timestamp()
+        self._update_environment(environment)
 
     @transactional()
     def delete_expired_snapshots(self) -> t.List[Snapshot]:

@@ -90,6 +90,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "plan_id": exp.DataType.build("text"),
             "previous_plan_id": exp.DataType.build("text"),
             "expiration_ts": exp.DataType.build("bigint"),
+            "finalized_ts": exp.DataType.build("bigint"),
         }
 
     @property
@@ -236,6 +237,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                             environment.plan_id,
                             environment.previous_plan_id,
                             environment.expiration_ts,
+                            environment.finalized_ts,
                         )
                     ],
                     columns_to_types=self.environment_columns_to_types,

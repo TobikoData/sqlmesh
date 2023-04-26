@@ -338,6 +338,15 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def finalize(self, environment: Environment) -> None:
+        """Finalize the target environment, indicating that this environment has been
+        fully promoted and is ready for use.
+
+        Args:
+            environment: The target environment to finalize.
+        """
+
+    @abc.abstractmethod
     def delete_expired_environments(self) -> t.List[Environment]:
         """Removes expired environments.
 
