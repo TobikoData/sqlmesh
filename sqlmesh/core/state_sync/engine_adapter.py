@@ -289,7 +289,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
-        validate_versions: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
@@ -300,9 +299,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        if validate_versions:
-            self.get_versions()
-
         query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
@@ -406,7 +402,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         super().migrate()
 
     def _migrate_rows(self) -> None:
-        all_snapshots = self._get_snapshots(lock_for_update=True, validate_versions=False)
+        all_snapshots = self._get_snapshots(lock_for_update=True)
         environments = self.get_environments()
 
         snapshot_mapping = {}
