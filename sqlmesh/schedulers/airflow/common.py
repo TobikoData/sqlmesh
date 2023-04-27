@@ -49,6 +49,7 @@ class PlanApplicationRequest(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+    forward_only: bool
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):
@@ -74,6 +75,7 @@ class PlanDagSpec(PydanticModel):
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
+    forward_only: t.Optional[bool]
     environment_expiration_ts: t.Optional[int]
 
 

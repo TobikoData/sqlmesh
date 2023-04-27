@@ -54,6 +54,7 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         ddl_concurrent_tasks=1,
         users=[],
         is_dev=False,
+        forward_only=True,
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -102,6 +103,7 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         ddl_concurrent_tasks=1,
         users=[],
         is_dev=False,
+        forward_only=True,
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -133,6 +135,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         ddl_concurrent_tasks=1,
         users=[],
         is_dev=False,
+        forward_only=False,
     )
 
     dag_run_mock = mocker.Mock()
@@ -181,6 +184,7 @@ def test_create_plan_dag_spec_unbounded_end(
         ddl_concurrent_tasks=1,
         users=[],
         is_dev=False,
+        forward_only=False,
     )
 
     state_sync_mock = mocker.Mock()
