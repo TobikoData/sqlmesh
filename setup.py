@@ -85,7 +85,7 @@ setup(
             "types-requests==2.28.8",
         ],
         "dbt": [
-            "dbt-core",
+            "dbt-core==1.4.6",
         ],
         "postgres": [
             "psycopg2",
