@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import logging
 import typing as t
-import uuid
 
 import pandas as pd
 from sqlglot import exp
@@ -144,12 +143,14 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud import bigquery
 
-        table = exp.to_table(table)
         precisionless_col_to_types = {
             col_name: remove_precision_parameterized_types(col_type)
             for col_name, col_type in columns_to_types.items()
         }
-        temp_table_name = f"{self.client.project}.{table.db}.__temp_{table.name}_{uuid.uuid4().hex}"
+
+        temp_table_name = ".".join(
+            [self.client.project, self._get_temp_table(table).sql(dialect=self.dialect)]
+        )
         schema = [
             bigquery.SchemaField(col_name, col_type.sql(dialect=self.dialect))
             for col_name, col_type in precisionless_col_to_types.items()

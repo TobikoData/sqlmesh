@@ -59,7 +59,7 @@ setup(
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
             "black==22.6.0",
-            "dbt-core",
+            "dbt-core<1.5.0",
             "Faker",
             "google-auth",
             "isort==5.10.1",
@@ -85,7 +85,7 @@ setup(
             "types-requests==2.28.8",
         ],
         "dbt": [
-            "dbt-core",
+            "dbt-core<1.5.0",
         ],
         "postgres": [
             "psycopg2",
