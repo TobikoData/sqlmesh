@@ -10,6 +10,8 @@ import EditorInspector from './EditorInspector'
 import './Editor.css'
 import EditorPreview from './EditorPreview'
 import { useStoreEditor } from '~/context/editor'
+import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
+
 import clsx from 'clsx'
 
 export default function Editor(): JSX.Element {
@@ -28,6 +30,9 @@ export default function Editor(): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+
+  const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
+  const clearNodesAndEdges = useStoreReactFlow(s => s.clearNodesAndEdges)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
   const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
@@ -83,6 +88,8 @@ export default function Editor(): JSX.Element {
   }, [files])
 
   useEffect(() => {
+    clearActiveEdges()
+    clearNodesAndEdges()
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
     setPreviewConsole(undefined)

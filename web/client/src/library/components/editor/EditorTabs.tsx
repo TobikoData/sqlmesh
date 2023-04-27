@@ -4,7 +4,6 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
 import clsx from 'clsx'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
-import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
 
 export default function EditorTabs(): JSX.Element {
   const tabs = useStoreEditor(s => s.tabs)
@@ -71,9 +70,6 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
-  const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
-  const clearNodesAndEdges = useStoreReactFlow(s => s.clearNodesAndEdges)
-
   function closeEditorTab(tab: EditorTab): void {
     closeTab(tab.file)
   }
@@ -86,8 +82,6 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
       onClick={(e: MouseEvent) => {
         e.stopPropagation()
 
-        clearActiveEdges()
-        clearNodesAndEdges()
         selectTab(tab)
       }}
     >
