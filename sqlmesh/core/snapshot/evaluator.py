@@ -130,7 +130,7 @@ class SnapshotEvaluator:
                     self.adapter.merge(
                         table_name,
                         query_or_df,
-                        column_names=list(columns_to_types.keys()),
+                        column_names=list(columns_to_types),
                         unique_key=model.unique_key,
                     )
                 else:
