@@ -59,6 +59,21 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         else:
             super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
 
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        column_names: t.Sequence[str],
+        unique_key: t.Sequence[str],
+    ) -> None:
+        if isinstance(source_table, PySparkDataFrame):
+            temp_view_name = self._get_temp_table(target_table).sql(dialect=self.dialect)
+            source_table.createOrReplaceTempView(temp_view_name)
+            query = exp.select(*column_names).from_(temp_view_name)
+            super().merge(target_table, query, column_names, unique_key)
+        else:
+            super().merge(target_table, source_table, column_names, unique_key)
+
     def _insert_append_pandas_df(
         self,
         table_name: TableName,
