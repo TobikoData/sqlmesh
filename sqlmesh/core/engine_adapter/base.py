@@ -12,6 +12,7 @@ import contextlib
 import itertools
 import logging
 import typing as t
+import uuid
 
 import pandas as pd
 from sqlglot import Dialect, exp
@@ -642,8 +643,8 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        column_names: t.Iterable[str],
-        unique_key: t.Iterable[str],
+        column_names: t.Sequence[str],
+        unique_key: t.Sequence[str],
     ) -> None:
         on = exp.and_(
             *(
@@ -793,6 +794,17 @@ class EngineAdapter:
         """
 
         raise NotImplementedError()
+
+    def _get_temp_table(
+        self,
+        table: TableName,
+    ) -> exp.Table:
+        """
+        Returns the name of the temp table that should be used for the given table name.
+        """
+        table = exp.to_table(table)
+        table.set("this", f"__temp_{table.name}_{uuid.uuid4().hex}")
+        return table
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-import uuid
 
 import pandas as pd
 from sqlglot import exp
@@ -64,12 +63,11 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        column_names: t.Iterable[str],
-        unique_key: t.Iterable[str],
+        column_names: t.Sequence[str],
+        unique_key: t.Sequence[str],
     ) -> None:
         if isinstance(source_table, PySparkDataFrame):
-            target_table = exp.to_table(target_table)
-            temp_view_name = f"{target_table.db}.__temp_{target_table.name}_{uuid.uuid4().hex}"
+            temp_view_name = self._get_temp_table(target_table).sql(dialect=self.dialect)
             source_table.createOrReplaceTempView(temp_view_name)
             query = exp.select(*column_names).from_(temp_view_name)
             super().merge(target_table, query, column_names, unique_key)
