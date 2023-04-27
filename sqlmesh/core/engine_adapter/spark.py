@@ -67,7 +67,9 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         unique_key: t.Sequence[str],
     ) -> None:
         if isinstance(source_table, PySparkDataFrame):
-            temp_view_name = self._get_temp_table(target_table).sql(dialect=self.dialect)
+            temp_view_name = self._get_temp_table(target_table, table_only=True).sql(
+                dialect=self.dialect
+            )
             source_table.createOrReplaceTempView(temp_view_name)
             query = exp.select(*column_names).from_(temp_view_name)
             super().merge(target_table, query, column_names, unique_key)

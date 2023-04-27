@@ -798,12 +798,16 @@ class EngineAdapter:
     def _get_temp_table(
         self,
         table: TableName,
+        table_only: bool = False,
     ) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name.
         """
         table = exp.to_table(table)
         table.set("this", f"__temp_{table.name}_{uuid.uuid4().hex}")
+        if table_only:
+            table.set("db", None)
+            table.set("catalog", None)
         return table
 
 
