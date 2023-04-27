@@ -59,32 +59,41 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.console = console or get_console()
 
     def evaluate(self, plan: Plan) -> None:
-        self._push(plan)
+        tasks = (
+            [self._push, self._restate, self._backfill, self._promote]
+            if not plan.forward_only
+            else [self._push, self._restate, self._promote, self._backfill]
+        )
 
-        if plan.restatements:
-            self._restate(plan)
-
-        if plan.requires_backfill:
-            snapshots = plan.snapshots
-            scheduler = Scheduler(
-                snapshots,
-                self.snapshot_evaluator,
-                self.state_sync,
-                max_workers=self.backfill_concurrent_tasks,
-                console=self.console,
-            )
-            is_run_successful = scheduler.run(plan.environment_name, plan.start, plan.end)
-            if not is_run_successful:
-                raise SQLMeshError("Plan application failed.")
-
-        self._promote(plan)
+        for task in tasks:
+            task(plan)
 
         if not plan.requires_backfill:
             self.console.log_success("Virtual Update executed successfully")
 
-    def _push(self, plan: Plan) -> None:
+    def _backfill(self, plan: Plan) -> None:
+        """Backfill missing intervals for snapshots that are part of the given plan.
+
+        Args:
+            plan: The plan to source snapshots from.
         """
-        Push the snapshots to the state sync.
+        if not plan.requires_backfill:
+            return
+
+        snapshots = plan.snapshots
+        scheduler = Scheduler(
+            snapshots,
+            self.snapshot_evaluator,
+            self.state_sync,
+            max_workers=self.backfill_concurrent_tasks,
+            console=self.console,
+        )
+        is_run_successful = scheduler.run(plan.environment_name, plan.start, plan.end)
+        if not is_run_successful:
+            raise SQLMeshError("Plan application failed.")
+
+    def _push(self, plan: Plan) -> None:
+        """Push the snapshots to the state sync.
 
         As a part of plan pushing, snapshot tables are created.
 
@@ -143,6 +152,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.stop_promotion_progress(success=completed)
 
     def _restate(self, plan: Plan) -> None:
+        if not plan.restatements:
+            return
+
         all_snapshots = (
             [s for s in plan.snapshots if s.name in plan.restatements]
             if plan.is_dev
@@ -198,6 +210,7 @@ class AirflowPlanEvaluator(PlanEvaluator):
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=self.users,
             is_dev=plan.is_dev,
+            forward_only=plan.forward_only,
         )
 
         if self.blocking:

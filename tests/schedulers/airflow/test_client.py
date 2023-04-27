@@ -132,6 +132,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "ddl_concurrent_tasks": 1,
         "users": [],
         "is_dev": False,
+        "forward_only": False,
     }
 
 

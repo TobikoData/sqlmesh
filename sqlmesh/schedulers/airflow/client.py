@@ -55,6 +55,7 @@ class AirflowClient:
         ddl_concurrent_tasks: int = 1,
         users: t.Optional[t.List[User]] = None,
         is_dev: bool = False,
+        forward_only: bool = False,
     ) -> None:
         request = common.PlanApplicationRequest(
             new_snapshots=list(new_snapshots),
@@ -68,6 +69,7 @@ class AirflowClient:
             ddl_concurrent_tasks=ddl_concurrent_tasks,
             users=users or [],
             is_dev=is_dev,
+            forward_only=forward_only,
         )
 
         response = self._session.post(
