@@ -15,6 +15,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 def environment(**kwargs: t.Any) -> Environment:
     extensions = kwargs.pop("extensions", [])
     extensions.append("jinja2.ext.do")
+    extensions.append("jinja2.ext.loopcontrols")
     return Environment(extensions=extensions, **kwargs)
 
 
