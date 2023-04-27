@@ -13,7 +13,7 @@ export interface GraphNodeData {
 
 const elk = new ELK()
 
-const NODE_WIDTH = 172
+const NODE_WIDTH = 64
 const NODE_HEIGHT = 32
 
 export function getNodesAndEdges({
@@ -195,7 +195,7 @@ function getNodeMap(
       current[label] ??
       createGraphNode({
         label,
-        width: NODE_WIDTH,
+        width: NODE_WIDTH + label.length * 8,
         height: NODE_HEIGHT + 32 * (models.get(label)?.columns?.length ?? 0),
       })
 
