@@ -166,11 +166,17 @@ class SnapshotDagGenerator:
             ) = self._create_promotion_demotion_tasks(plan_dag_spec)
 
             start_task >> create_start_task
-            create_end_task >> backfill_start_task
-            backfill_end_task >> promote_start_task
+            if not plan_dag_spec.forward_only:
+                create_end_task >> backfill_start_task
+                backfill_end_task >> promote_start_task
+                latest_end_task = promote_end_task
+            else:
+                create_end_task >> promote_start_task
+                promote_end_task >> backfill_start_task
+                latest_end_task = backfill_end_task
 
             self._add_notification_target_tasks(
-                plan_dag_spec, start_task, end_task, promote_end_task
+                plan_dag_spec, start_task, end_task, latest_end_task
             )
             return dag
 
@@ -179,7 +185,7 @@ class SnapshotDagGenerator:
         request: common.PlanDagSpec,
         start_task: BaseOperator,
         end_task: BaseOperator,
-        promote_end_task: BaseOperator,
+        previous_end_task: BaseOperator,
     ) -> None:
         has_success_or_failed_notification = False
         for notification_target in request.notification_targets:
@@ -201,14 +207,14 @@ class SnapshotDagGenerator:
                 start_task >> plan_start_notification_task
             if plan_success_notification_task:
                 has_success_or_failed_notification = True
-                promote_end_task >> plan_success_notification_task
+                previous_end_task >> plan_success_notification_task
                 plan_success_notification_task >> end_task
             if plan_failed_notification_task:
                 has_success_or_failed_notification = True
-                promote_end_task >> plan_failed_notification_task
+                previous_end_task >> plan_failed_notification_task
                 plan_failed_notification_task >> end_task
         if not has_success_or_failed_notification:
-            promote_end_task >> end_task
+            previous_end_task >> end_task
 
     def _create_creation_tasks(
         self, new_snapshots: t.List[Snapshot], ddl_concurrent_tasks: int
