@@ -37,9 +37,7 @@ export default function Editor(): JSX.Element {
   )
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    if (e.data.topic === 'init') {
-      setIsreadyEngine(true)
-    }
+    setIsreadyEngine(true)
 
     if (e.data.topic === 'dialects') {
       setDialects(e.data.payload.dialects ?? [])
