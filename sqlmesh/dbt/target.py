@@ -4,7 +4,7 @@ import abc
 import sys
 import typing as t
 
-from pydantic import Field, root_validator
+from pydantic import Field, root_validator, validator
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -209,6 +209,10 @@ class PostgresConfig(TargetConfig):
         if not values["database"]:
             raise ConfigError("Either database or dbname must be set")
         return values
+
+    @validator("port")
+    def _validate_port(cls, v: t.Union[int, str]) -> int:
+        return int(v)
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert" if kind is IncrementalByUniqueKeyKind else "append"
