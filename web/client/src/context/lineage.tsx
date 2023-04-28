@@ -33,7 +33,6 @@ interface ReactFlowStore {
   onNodesChange: OnNodesChange
   onEdgesChange: OnEdgesChange
   onConnect: OnConnect
-  clearNodesAndEdges: () => void
 }
 
 export const useStoreReactFlow = create<ReactFlowStore>((set, get) => ({
@@ -59,9 +58,6 @@ export const useStoreReactFlow = create<ReactFlowStore>((set, get) => ({
     set({
       edges: addEdge(connection, get().edges),
     })
-  },
-  clearNodesAndEdges() {
-    set({ nodes: [], edges: [] })
   },
 }))
 

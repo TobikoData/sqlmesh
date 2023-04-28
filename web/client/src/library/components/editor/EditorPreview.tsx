@@ -37,6 +37,9 @@ export default function EditorPreview({
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewTable = useStoreEditor(s => s.previewTable)
+  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
   const [modelName, setModelName] = useState<string | undefined>()
@@ -57,7 +60,7 @@ export default function EditorPreview({
       ]
 
     return [EnumEditorPreviewTabs.Console]
-  }, [tab])
+  }, [tab.id, tab.file.fingerprint])
 
   const [headers, data] = useMemo(
     () =>
@@ -84,6 +87,12 @@ export default function EditorPreview({
       ].findIndex(isTrue),
     [previewTable, previewQuery, previewConsole],
   )
+
+  useEffect(() => {
+    setPreviewQuery(undefined)
+    setPreviewTable(undefined)
+    setPreviewConsole(undefined)
+  }, [tab.id])
 
   useEffect(() => {
     setActiveTabIndex(tab.file.isSQLMeshModel ? 3 : -1)
@@ -290,6 +299,8 @@ function EditorPreviewLineage({
 }): JSX.Element {
   const { data: lineage, refetch: getModelLineage } = useApiModelLineage(model)
 
+  const models = useStoreContext(s => s.models)
+
   const previewLineage = useStoreEditor(s => s.previewLineage)
   const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
 
@@ -298,15 +309,18 @@ function EditorPreviewLineage({
     [model, tab.file.path, tab.file.fingerprint],
   )
 
+  const highlightedNodes = useMemo(() => [model], [model])
+
   useEffect(() => {
     void debouncedGetModelLineage()
   }, [debouncedGetModelLineage])
 
   useEffect(() => {
     if (lineage == null) {
-      setPreviewLineage(undefined)
+      setPreviewLineage(models)
     } else {
       setPreviewLineage(
+        models,
         Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
           acc[key] = {
             models: lineage[key] ?? [],
@@ -326,7 +340,7 @@ function EditorPreviewLineage({
   ) : (
     <Graph
       lineage={previewLineage}
-      highlightedNodes={[model]}
+      highlightedNodes={highlightedNodes}
     />
   )
 }

@@ -1,0 +1,8 @@
+.react-flow__node.react-flow__node-model:hover {
+  z-index: 10 !important;
+}
+
+.lineage__column-source b {
+  font-weight: 900;
+  color: var(--color-primary);
+}

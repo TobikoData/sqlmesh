@@ -10,9 +10,10 @@ import EditorInspector from './EditorInspector'
 import './Editor.css'
 import EditorPreview from './EditorPreview'
 import { useStoreEditor } from '~/context/editor'
-import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
-
+import { useStoreLineage } from '@context/lineage'
 import clsx from 'clsx'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 export default function Editor(): JSX.Element {
   const files = useStoreFileTree(s => s.files)
@@ -27,12 +28,8 @@ export default function Editor(): JSX.Element {
   const createTab = useStoreEditor(s => s.createTab)
   const addTab = useStoreEditor(s => s.addTab)
   const setDialects = useStoreEditor(s => s.setDialects)
-  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
-  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
-  const clearNodesAndEdges = useStoreReactFlow(s => s.clearNodesAndEdges)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
   const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
@@ -89,11 +86,7 @@ export default function Editor(): JSX.Element {
 
   useEffect(() => {
     clearActiveEdges()
-    clearNodesAndEdges()
-    setPreviewQuery(undefined)
-    setPreviewTable(undefined)
-    setPreviewConsole(undefined)
-  }, [tab])
+  }, [tab?.file.fingerprint, tab?.id])
 
   useEffect(() => {
     if (selectedFile == null || tab?.file === selectedFile) return
@@ -109,34 +102,41 @@ export default function Editor(): JSX.Element {
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      <EditorTabs />
-      <Divider />
-      {tab == null ? (
+      {isFalse(isReadyEngine) ? (
         <div className="flex justify-center items-center w-full h-full">
-          <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
-            <h2 className="text-3xl">Select File or Add New SQL Tab</h2>
-          </div>
+          <Loading className="inline-block ">
+            <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+            <h3 className="text-xl">Starting Editor...</h3>
+          </Loading>
         </div>
       ) : (
-        <SplitPane
-          key={direction}
-          className={clsx(
-            'w-full h-full overflow-hidden',
-            direction === 'vertical' ? 'flex flex-col' : 'flex',
-          )}
-          sizes={sizesCodeEditorAndPreview}
-          direction={direction}
-          minSize={0}
-          snapOffset={0}
-        >
-          <div
-            className={clsx(
-              'flex flex-col overflow-hidden',
-              direction === 'vertical' ? 'w-full ' : 'h-full',
-            )}
-          >
-            {isReadyEngine && (
-              <>
+        <>
+          <EditorTabs />
+          <Divider />
+          {tab == null ? (
+            <div className="flex justify-center items-center w-full h-full">
+              <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
+                <h2 className="text-3xl">Select File or Add New SQL Tab</h2>
+              </div>
+            </div>
+          ) : (
+            <SplitPane
+              key={direction}
+              className={clsx(
+                'w-full h-full overflow-hidden',
+                direction === 'vertical' ? 'flex flex-col' : 'flex',
+              )}
+              sizes={sizesCodeEditorAndPreview}
+              direction={direction}
+              minSize={0}
+              snapOffset={0}
+            >
+              <div
+                className={clsx(
+                  'flex flex-col overflow-hidden',
+                  direction === 'vertical' ? 'w-full ' : 'h-full',
+                )}
+              >
                 <div className="flex flex-col h-full overflow-hidden">
                   <SplitPane
                     className="flex h-full"
@@ -156,23 +156,22 @@ export default function Editor(): JSX.Element {
                 <div className="px-2 flex justify-between items-center min-h-[2rem]">
                   <EditorFooter tab={tab} />
                 </div>
-              </>
-            )}
-          </div>
-          <div
-            className={clsx(
-              direction === 'vertical' ? 'flex flex-col' : 'flex',
-            )}
-          >
-            {tab != null && (
-              <EditorPreview
-                key={tab.file.id}
-                tab={tab}
-                toggleDirection={toggleDirection}
-              />
-            )}
-          </div>
-        </SplitPane>
+              </div>
+              <div
+                className={clsx(
+                  direction === 'vertical' ? 'flex flex-col' : 'flex',
+                )}
+              >
+                {tab != null && (
+                  <EditorPreview
+                    tab={tab}
+                    toggleDirection={toggleDirection}
+                  />
+                )}
+              </div>
+            </SplitPane>
+          )}
+        </>
       )}
     </div>
   )

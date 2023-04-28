@@ -206,3 +206,10 @@ export function debounceAsync<T = any>(
 
   return callback
 }
+
+export function id(): string {
+  const time = new Date().getTime().toString(36)
+  const random = Math.random().toString(36).substring(2, 8)
+
+  return time + random
+}
