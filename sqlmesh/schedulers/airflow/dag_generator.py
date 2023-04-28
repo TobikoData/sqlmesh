@@ -166,7 +166,7 @@ class SnapshotDagGenerator:
             ) = self._create_promotion_demotion_tasks(plan_dag_spec)
 
             start_task >> create_start_task
-            if not plan_dag_spec.forward_only:
+            if not plan_dag_spec.forward_only or plan_dag_spec.is_dev:
                 create_end_task >> backfill_start_task
                 backfill_end_task >> promote_start_task
                 latest_end_task = promote_end_task

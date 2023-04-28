@@ -61,7 +61,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def evaluate(self, plan: Plan) -> None:
         tasks = (
             [self._push, self._restate, self._backfill, self._promote]
-            if not plan.forward_only
+            if not plan.forward_only or plan.is_dev
             else [self._push, self._restate, self._promote, self._backfill]
         )
 
