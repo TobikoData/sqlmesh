@@ -1,3 +1,5 @@
+import { Button } from '@components/button/Button'
+import TasksOverview from '@components/tasksOverview/TasksOverview'
 import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -13,8 +15,6 @@ import {
   EnumPlanApplyType,
 } from '~/context/plan'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { Button } from '../button/Button'
-import TasksOverview from '../tasksOverview/TasksOverview'
 
 export default function ActivePlan({
   plan,

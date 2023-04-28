@@ -1,5 +1,6 @@
-import { Divider } from '../divider/Divider'
 import { useEffect, useState, lazy, useCallback } from 'react'
+import { Dialog } from '@headlessui/react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useApiFiles,
   useApiEnvironments,
@@ -10,21 +11,21 @@ import {
 } from '../../../api'
 import { EnumPlanAction, useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import SplitPane from '../splitPane/SplitPane'
 import { isArrayEmpty, isFalse, isTrue, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import PlanProvider from '../plan/context'
+import SplitPane from '@components/splitPane/SplitPane'
+import PlanProvider from '@components/plan/context'
+import ModalSidebar from '@components/modal/ModalDrawer'
+import Editor from '@components/editor/Editor'
+import FileTree from '@components/fileTree/FileTree'
+import { Divider } from '@components/divider/Divider'
+import ContainerPage from '@components/container/ContainerPage'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
-import { Dialog } from '@headlessui/react'
-import { useQueryClient } from '@tanstack/react-query'
-import ModalSidebar from '../modal/ModalDrawer'
-import Editor from '../editor/Editor'
-import FileTree from '../fileTree/FileTree'
 
-const Plan = lazy(async () => await import('../plan/Plan'))
+const Plan = lazy(async () => await import('@components/plan/Plan'))
 
-export function IDE(): JSX.Element {
+export default function IDE(): JSX.Element {
   const client = useQueryClient()
 
   const environment = useStoreContext(s => s.environment)
@@ -105,7 +106,7 @@ export function IDE(): JSX.Element {
   }
 
   return (
-    <>
+    <ContainerPage>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold text-primary-500">
@@ -153,6 +154,6 @@ export function IDE(): JSX.Element {
           </PlanProvider>
         </Dialog.Panel>
       </ModalSidebar>
-    </>
+    </ContainerPage>
   )
 }

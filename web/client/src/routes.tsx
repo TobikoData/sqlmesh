@@ -1,9 +1,14 @@
 import { createBrowserRouter } from 'react-router-dom'
-import Root from './library/components/root/Root'
+import IDE from './library/pages/ide/IDE'
+import Docs from './library/pages/docs/Docs'
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Root />,
+    element: <IDE />,
+  },
+  {
+    path: '/docs',
+    element: <Docs />,
   },
 ])

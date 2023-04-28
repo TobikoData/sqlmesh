@@ -1,9 +1,12 @@
 import React, { type HTMLAttributes } from 'react'
+import ThemeProvider from '@context/theme'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Divider } from '@components/divider/Divider'
+import Header from './library/pages/root/Header'
+import Footer from './library/pages/root/Footer'
 import { router } from './routes'
-
 import './index.css'
 
 export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
@@ -21,7 +24,13 @@ const client = new QueryClient({
 ReactDOM.createRoot(getRootNode()).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <Header />
+        <Divider />
+        <RouterProvider router={router} />
+        <Divider />
+        <Footer />
+      </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 )

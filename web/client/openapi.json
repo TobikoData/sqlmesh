@@ -854,7 +854,8 @@
           },
           "plan_id": { "title": "Plan Id", "type": "string" },
           "previous_plan_id": { "title": "Previous Plan Id", "type": "string" },
-          "expiration_ts": { "title": "Expiration Ts", "type": "integer" }
+          "expiration_ts": { "title": "Expiration Ts", "type": "integer" },
+          "finalized_ts": { "title": "Finalized Ts", "type": "integer" }
         },
         "additionalProperties": false,
         "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables."
@@ -1108,9 +1109,9 @@
       },
       "SnapshotChangeCategory": {
         "title": "SnapshotChangeCategory",
-        "enum": [1, 2, 3],
+        "enum": [1, 2, 3, 4, 5],
         "type": "integer",
-        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nNO_CHANGE: The change requires no rebuilding"
+        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_FORWARD_ONLY: The change was caused indirectly and is forward-only."
       },
       "SnapshotDataVersion": {
         "title": "SnapshotDataVersion",
@@ -1119,6 +1120,7 @@
         "properties": {
           "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
           "version": { "title": "Version", "type": "string" },
+          "temp_version": { "title": "Temp Version", "type": "string" },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           }
@@ -1171,6 +1173,7 @@
           "name": { "title": "Name", "type": "string" },
           "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
           "version": { "title": "Version", "type": "string" },
+          "temp_version": { "title": "Temp Version", "type": "string" },
           "physical_schema": { "title": "Physical Schema", "type": "string" },
           "parents": {
             "title": "Parents",
