@@ -4,10 +4,12 @@ import typing as t
 from pathlib import Path
 
 from pydantic import Field, validator
+from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load
 
 if t.TYPE_CHECKING:
@@ -34,7 +36,10 @@ JINJA_ONLY = {
 
 
 def load_yaml(source: str | Path) -> t.OrderedDict:
-    return load(source, render_jinja=False, allow_duplicate_keys=True)
+    try:
+        return load(source, render_jinja=False)
+    except DuplicateKeyError as ex:
+        raise ConfigError(f"{source}: {ex}" if isinstance(source, Path) else f"{ex}")
 
 
 def parse_meta(v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
