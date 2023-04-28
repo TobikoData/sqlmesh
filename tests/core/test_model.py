@@ -37,6 +37,7 @@ def test_load(assert_exp_eq):
             kind INCREMENTAL_BY_TIME_RANGE(
                 time_column a,
             ),
+            tags [tag_foo, tag_bar],
         );
 
         @DEF(x, 1);
@@ -101,6 +102,7 @@ def test_load(assert_exp_eq):
             t1.a = t2.a
     """,
     )
+    assert model.tags == ["tag_foo", "tag_bar"]
 
 
 @pytest.mark.parametrize(
@@ -153,7 +155,7 @@ def test_model_validation_union_query():
         """
     )
 
-    with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'") as ex:
+    with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'"):
         load_model(expressions)
 
 
@@ -890,7 +892,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         MODEL (name db.model2, kind full);
 
         SELECT * FROM db.model1 AS model1
-		"""
+        """
         ),
     )
 
@@ -910,7 +912,7 @@ def test_star_expansion(assert_exp_eq) -> None:
 
     assert_exp_eq(
         context.render("db.model2"),
-        f"""
+        """
         SELECT
           model1.id AS id,
           model1.item_id AS item_id,
@@ -934,7 +936,7 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
     assert_exp_eq(
         context.render("db.model3"),
-        f"""
+        """
         SELECT
           model2.id AS id,
           model2.item_id AS item_id,
@@ -982,7 +984,7 @@ def test_batch_size_validation():
     """
     )
 
-    with pytest.raises(ConfigError) as ex:
+    with pytest.raises(ConfigError):
         load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
 

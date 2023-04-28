@@ -5,6 +5,7 @@ MODEL (
   cron '@daily',
   pre NOOP(x=1),
   post (noop(), noop(y=['a', 2])),
+  tags (pii, fact)
 );
 
 SELECT DISTINCT

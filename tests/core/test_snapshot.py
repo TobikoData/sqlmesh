@@ -101,6 +101,7 @@ def test_json(snapshot: Snapshot):
                 "root_macros": {},
             },
             "source_type": "sql",
+            "tags": [],
         },
         "audits": [],
         "name": "name",

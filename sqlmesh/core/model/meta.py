@@ -61,6 +61,7 @@ class ModelMeta(PydanticModel):
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
+    tags: t.List[str] = []
 
     _croniter: t.Optional[croniter] = None
     _interval_unit: t.Optional[IntervalUnit] = None
@@ -167,7 +168,7 @@ class ModelMeta(PydanticModel):
 
         return v
 
-    @validator("partitioned_by_", pre=True)
+    @validator("partitioned_by_", "tags", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]

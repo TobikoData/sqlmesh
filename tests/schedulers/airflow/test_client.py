@@ -91,6 +91,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "root_macros": {},
                     },
                     "source_type": "sql",
+                    "tags": [],
                 },
                 "audits": [],
                 "name": "test_model",

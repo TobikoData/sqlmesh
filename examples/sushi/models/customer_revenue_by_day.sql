@@ -8,6 +8,7 @@ MODEL (
   owner jen,
   cron '@daily',
   dialect hive,
+  tags expensive,
 );
 
 WITH order_total AS (
