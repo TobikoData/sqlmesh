@@ -67,10 +67,8 @@ SELECT
 The `MODEL` DDL statement takes various properties, which are used for both metadata and controlling behavior.
 
 ### name
-`name` specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.
-
-When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"dev__sushi"."customers"`.
-
+- `name` specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.<br /><br />
+When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"dev__sushi"."customers"`.<br /><br />
 Name is ***required*** and must be ***unique***.
 
 ### kind
@@ -83,7 +81,7 @@ Name is ***required*** and must be ***unique***.
 - Owner specifies who the main point of contact is for the model. It is an important field for organizations that have many data collaborators.
 
 ### stamp
-An optional arbitrary string sequence used to create new model versions without making changes to any of the functional components of the definition.
+- An optional arbitrary string sequence used to create new model versions without making changes to any of the functional components of the definition.
 
 ### start
 - Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
@@ -105,6 +103,9 @@ An optional arbitrary string sequence used to create new model versions without 
 
 ### partitioned_by
 - Partitioned by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key.
+
+### tags
+- Tags are one or more labels used to organize your models.
 
 ## Macros
 Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros.md).
