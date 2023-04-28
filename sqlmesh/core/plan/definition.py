@@ -327,12 +327,20 @@ class Plan:
 
     @property
     def effective_from(self) -> t.Optional[TimeLike]:
-        """The effective date for all new snapshots in the plan."""
+        """The effective date for all new snapshots in the plan.
+
+        Note: this is only applicable for forward-only plans.
+
+        Returns:
+            The effective date.
+        """
         return self._effective_from
 
     @effective_from.setter
     def effective_from(self, effective_from: t.Optional[TimeLike]) -> None:
         """Sets the effective date for all new snapshots in the plan.
+
+        Note: this is only applicable for forward-only plans.
 
         Args:
             effective_from: The effective date to set.

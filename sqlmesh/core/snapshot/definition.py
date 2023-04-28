@@ -296,7 +296,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         unpaused_ts: The timestamp which indicates when this snapshot was unpaused. Unpaused means that
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
-            Applicable to forward-only snapshots only.
+            Applicable for forward-only snapshots only.
     """
 
     name: str
@@ -506,7 +506,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         apply_effective_from = effective_from_ts > 0 and self.fingerprint != other.fingerprint
 
         for start, end in other.intervals:
-            # If the effective_from timestamp is not None, then intervals that come after it must come from
+            # If the effective_from is set, then intervals that come after it must come from
             # the current snapshost.
             if apply_effective_from and start < effective_from_ts:
                 end = min(end, effective_from_ts)
