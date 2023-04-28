@@ -9,6 +9,7 @@ import pandas as pd
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 
+from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.jinja import ENVIRONMENT
 
 
@@ -396,7 +397,7 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
     Returns:
         A list of the expressions, [Model, *Statements, Query | Jinja]
     """
-    match = DIALECT_PATTERN.search(sql[:10000])
+    match = DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
 
     tokens = dialect.tokenizer.tokenize(sql)
