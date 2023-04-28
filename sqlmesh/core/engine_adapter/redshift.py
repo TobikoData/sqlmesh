@@ -18,6 +18,7 @@ if t.TYPE_CHECKING:
 class RedshiftEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
+    ESCAPE_JSON = True
 
     @property
     def cursor(self) -> t.Any:
