@@ -3,8 +3,8 @@ import typing as t
 from datetime import datetime, timedelta
 
 import pandas as pd
+from helper import iter_dates  # type: ignore
 
-from examples.sushi.helper import iter_dates
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind
 from sqlmesh.utils.date import to_ds

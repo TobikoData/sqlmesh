@@ -418,16 +418,11 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
             chunks[-1][0].append(token)
 
     expressions: t.List[exp.Expression] = []
-    sql_lines = None
 
     for chunk, is_jinja in chunks:
         if is_jinja:
             start, *_, end = chunk
-            sql_lines = sql_lines or sql.split("\n")
-            lines = sql_lines[start.line - 1 : end.line]
-            lines[0] = lines[0][start.col - 1 :]
-            lines[-1] = lines[-1][: end.col + len(end.text) - 1]
-            segment = "\n".join(lines)
+            segment = sql[start.start : end.end + 1]
             variables = [
                 exp.Literal.string(var)
                 for var in find_undeclared_variables(ENVIRONMENT.parse(segment))
