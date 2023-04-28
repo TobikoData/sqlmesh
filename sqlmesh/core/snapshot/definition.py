@@ -295,6 +295,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         change_category: User specified change category indicating which models require backfill from model changes made in this snapshot.
         unpaused_ts: The timestamp which indicates when this snapshot was unpaused. Unpaused means that
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
+        effective_from: The timestamp which indicates when this snapshot should be considered effective.
+            Applicable for forward-only snapshots only.
     """
 
     name: str
@@ -315,6 +317,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     temp_version: t.Optional[str] = None
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
+    effective_from: t.Optional[TimeLike] = None
 
     @validator("ttl")
     @classmethod
@@ -499,8 +502,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             other: The target snapshot to inherit intervals from.
         """
+        effective_from_ts = to_timestamp(self.effective_from) if self.effective_from else 0
+        apply_effective_from = effective_from_ts > 0 and self.fingerprint != other.fingerprint
+
         for start, end in other.intervals:
-            self.add_interval(start, end)
+            # If the effective_from is set, then intervals that come after it must come from
+            # the current snapshost.
+            if apply_effective_from and start < effective_from_ts:
+                end = min(end, effective_from_ts)
+            if not apply_effective_from or end <= effective_from_ts:
+                self.add_interval(start, end)
 
     def missing_intervals(
         self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None

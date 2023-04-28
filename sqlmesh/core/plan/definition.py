@@ -60,6 +60,7 @@ class Plan:
         environment_ttl: The period of time that a development environment should exist before being deleted.
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
+        effective_from: The effective date from which to apply forward-only changes on production.
     """
 
     def __init__(
@@ -78,6 +79,7 @@ class Plan:
         environment_ttl: t.Optional[str] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
         auto_categorization_enabled: bool = True,
+        effective_from: t.Optional[TimeLike] = None,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -90,6 +92,7 @@ class Plan:
         self.environment_ttl = environment_ttl
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
+        self._effective_from: t.Optional[TimeLike] = None
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
         self._latest = latest or now()
@@ -132,6 +135,9 @@ class Plan:
 
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
+
+        if effective_from:
+            self._set_effective_from(effective_from)
 
     @property
     def categorized(self) -> t.List[Snapshot]:
@@ -318,6 +324,40 @@ class Plan:
         # Invalidate caches.
         self._categorized = None
         self._uncategorized = None
+
+    @property
+    def effective_from(self) -> t.Optional[TimeLike]:
+        """The effective date for all new snapshots in the plan.
+
+        Note: this is only applicable for forward-only plans.
+
+        Returns:
+            The effective date.
+        """
+        return self._effective_from
+
+    @effective_from.setter
+    def effective_from(self, effective_from: t.Optional[TimeLike]) -> None:
+        """Sets the effective date for all new snapshots in the plan.
+
+        Note: this is only applicable for forward-only plans.
+
+        Args:
+            effective_from: The effective date to set.
+        """
+        self._set_effective_from(effective_from)
+
+    def _set_effective_from(self, effective_from: t.Optional[TimeLike]) -> None:
+        if not self.forward_only:
+            raise PlanError("Effective date can only be set for a forward-only plan.")
+        if effective_from and to_datetime(effective_from) > now():
+            raise PlanError("Effective date cannot be in the future.")
+
+        self.__missing_intervals = None
+        self._effective_from = effective_from
+
+        for snapshot in self.new_snapshots:
+            snapshot.effective_from = effective_from
 
     @property
     def _missing_intervals(self) -> t.Dict[str, Intervals]:

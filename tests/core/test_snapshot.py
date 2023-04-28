@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -843,3 +844,29 @@ col_a,col_b,col_c
         )
         is None
     )
+
+
+def test_effective_from(snapshot: Snapshot):
+    previous_snapshot = deepcopy(snapshot)
+    previous_snapshot.add_interval("2023-01-01", "2023-01-05")
+    previous_snapshot.add_interval("2023-01-07", "2023-01-09")
+
+    new_snapshot_same_fingerprint = deepcopy(snapshot)
+    new_snapshot_same_fingerprint.effective_from = "2023-01-04"
+    new_snapshot_same_fingerprint.merge_intervals(previous_snapshot)
+
+    assert new_snapshot_same_fingerprint.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-10")),
+    ]
+
+    new_snapshot_different_fingerprint = deepcopy(snapshot)
+    new_snapshot_different_fingerprint.fingerprint = SnapshotFingerprint(
+        data_hash="1", metadata_hash="1", parent_data_hash="1"
+    )
+    new_snapshot_different_fingerprint.effective_from = "2023-01-04"
+    new_snapshot_different_fingerprint.merge_intervals(previous_snapshot)
+
+    assert new_snapshot_different_fingerprint.intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
+    ]
