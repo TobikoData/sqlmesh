@@ -192,11 +192,14 @@ def _create_models(models_path: Path) -> None:
     ]:
         _write_file(models_path / f"{model_name.split('.')[-1]}.sql", model_def)
 
+
 def _create_seeds(seeds_path: Path) -> None:
     _write_file(seeds_path / "seed_data.csv", EXAMPLE_SEED_DATA)
 
+
 def _create_tests(tests_path: Path) -> None:
     _write_file(tests_path / "test_example_full_model.yaml", EXAMPLE_TEST)
+
 
 def _write_file(path: Path, payload: str) -> None:
     with open(path, "w", encoding="utf-8") as fd:
