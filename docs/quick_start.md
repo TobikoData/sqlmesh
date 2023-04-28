@@ -38,7 +38,25 @@ This will create the directories and files that you can use to organize your SQL
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
-This example project structure is a three-model pipeline, where `sqlmesh_example.full_model` depends on `sqlmesh_example.incremental_model`, which in turn depends on `sqlmesh_example.seed_model`. 
+This example project structure is a three-model pipeline with a CSV acting as a source data file: 
+
+```
+┌─────────────┐
+│seed_data.csv│
+└────────────┬┘
+             │
+            ┌▼─────────────┐
+            │seed_model.sql│
+            └─────────────┬┘
+                          │
+                         ┌▼────────────────────┐
+                         │incremental_model.sql│
+                         └────────────────────┬┘
+                                              │
+                                             ┌▼─────────────┐
+                                             │full_model.sql│
+                                             └──────────────┘
+```
 
 To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Enter `y`:
 
