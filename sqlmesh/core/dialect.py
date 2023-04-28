@@ -396,7 +396,7 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
     Returns:
         A list of the expressions, [Model, *Statements, Query | Jinja]
     """
-    match = DIALECT_PATTERN.search(sql)
+    match = DIALECT_PATTERN.search(sql[:10000])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
 
     tokens = dialect.tokenizer.tokenize(sql)
