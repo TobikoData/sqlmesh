@@ -198,7 +198,7 @@ def _create_seeds(seeds_path: Path) -> None:
 
 
 def _create_tests(tests_path: Path) -> None:
-    _write_file(tests_path / "test_example_full_model.yaml", EXAMPLE_TEST)
+    _write_file(tests_path / "test_full_model.yaml", EXAMPLE_TEST)
 
 
 def _write_file(path: Path, payload: str) -> None:
