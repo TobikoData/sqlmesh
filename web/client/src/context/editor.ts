@@ -2,7 +2,7 @@ import {
   type Model,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
 } from '@api/client'
-import { id, isObjectEmpty } from '@utils/index'
+import { uid, isObjectEmpty } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
@@ -171,7 +171,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
 function createTab(file: ModelFile = createLocalFile()): EditorTab {
   return {
-    id: id(),
+    id: uid(),
     file,
     isValid: true,
     isSaved: true,
