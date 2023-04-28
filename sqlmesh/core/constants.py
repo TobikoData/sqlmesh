@@ -23,6 +23,8 @@ DATA_VERSION_LIMIT = 10
 """Data version limit"""
 DEFAULT_TIME_COLUMN_FORMAT = "%Y-%m-%d"
 """Default time column format"""
+MAX_MODEL_DEFINITION_SIZE = 10000
+"""Maximum number of characters in a model definition"""
 
 EPOCH = datetime.date(1970, 1, 1)
 
