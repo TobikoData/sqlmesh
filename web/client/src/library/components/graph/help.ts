@@ -11,11 +11,6 @@ export interface GraphNodeData {
   [key: string]: any
 }
 
-const elk = new ELK()
-
-const NODE_WIDTH = 64
-const NODE_HEIGHT = 32
-
 export function getNodesAndEdges({
   lineage,
   highlightedNodes,
@@ -33,6 +28,7 @@ export function getNodesAndEdges({
   edges: Edge[]
   nodes: Node[]
   columns: Record<string, { ins: string[]; outs: string[] }>
+  key: string
 } {
   const currentEdges = edges.reduce(
     (acc: Record<string, Edge>, edge) =>
@@ -55,6 +51,7 @@ export function getNodesAndEdges({
   )
   const outputEdges: Edge[] = []
   const columns: Record<string, { ins: string[]; outs: string[] }> = {}
+  const ids = Object.keys(nodesMap)
 
   for (const modelSource of modelNames) {
     const modelLineage = lineage[modelSource]
@@ -62,7 +59,10 @@ export function getNodesAndEdges({
     if (modelLineage == null) continue
 
     modelLineage.models.forEach(modelTarget => {
-      outputEdges.push(createGraphEdge(modelSource, modelTarget))
+      const edge = createGraphEdge(modelSource, modelTarget)
+
+      ids.push(edge.id)
+      outputEdges.push(edge)
     })
 
     if (modelLineage.columns == null || isObjectEmpty(modelLineage.columns))
@@ -116,23 +116,24 @@ export function getNodesAndEdges({
             targetHandle,
           )
           const currentEdge = currentEdges[edgeId]
-
-          outputEdges.push(
+          const edge =
             currentEdge ??
-              createGraphEdge(
-                modelSource,
-                modelTarget,
-                sourceHandle,
-                targetHandle,
-                false,
-                {
-                  target: modelTarget,
-                  source: modelSource,
-                  columnSource,
-                  columnTarget,
-                },
-              ),
-          )
+            createGraphEdge(
+              modelSource,
+              modelTarget,
+              sourceHandle,
+              targetHandle,
+              false,
+              {
+                target: modelTarget,
+                source: modelSource,
+                columnSource,
+                columnTarget,
+              },
+            )
+
+          ids.push(edge.id)
+          outputEdges.push(edge)
         }
       }
     }
@@ -143,6 +144,7 @@ export function getNodesAndEdges({
     nodes: Object.values(nodesMap),
     nodesMap,
     columns,
+    key: ids.join('-'),
   }
 }
 
@@ -155,6 +157,7 @@ export async function createGraphLayout({
   edges: Edge[]
   nodesMap: Record<string, Node>
 }): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const elk = new ELK()
   const layout = await elk.layout({
     id: 'root',
     layoutOptions: { algorithm: 'layered' },
@@ -184,6 +187,10 @@ function getNodeMap(
   targets: Set<string>,
   nodes: Node[],
 ): Record<string, Node> {
+  const NODE_BALANCE_SPACE = 64
+  const COLUMN_LINE_HEIGHT = 24
+  const CHAR_WIDTH = 8
+
   const current = nodes.reduce(
     (acc: Record<string, Node>, node) =>
       Object.assign(acc, { [node.id]: node }),
@@ -191,14 +198,27 @@ function getNodeMap(
   )
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
-    const node =
-      current[label] ??
-      createGraphNode({
-        label,
-        width: NODE_WIDTH + label.length * 8,
-        height: NODE_HEIGHT + 32 * (models.get(label)?.columns?.length ?? 0),
-      })
+    const node = current[label] ?? createGraphNode({ label })
 
+    const maxWidth =
+      models.get(label)?.columns?.length == null
+        ? 0
+        : Math.max(
+            ...(models
+              .get(label)
+              ?.columns?.map(
+                column =>
+                  (column.name.length + column.type.length) * CHAR_WIDTH +
+                  NODE_BALANCE_SPACE,
+              ) ?? []),
+            label.length * CHAR_WIDTH,
+          )
+    const maxHeight =
+      COLUMN_LINE_HEIGHT * (models.get(label)?.columns?.length ?? 0) +
+      NODE_BALANCE_SPACE
+
+    node.data.width = NODE_BALANCE_SPACE + maxWidth
+    node.data.height = NODE_BALANCE_SPACE + maxHeight
     node.data.isHighlighted = highlightedNodes.includes(label)
     node.data.isInteractive =
       isArrayNotEmpty(highlightedNodes) &&
@@ -230,11 +250,11 @@ function repositionNodes(
     if (output == null) return
 
     if (output.position.x === 0 && node.x != null) {
-      output.position.x = -node.x * 2
+      output.position.x = -node.x
     }
 
     if (output.position.y === 0 && node.y != null) {
-      output.position.y = -node.y * 1.5
+      output.position.y = -node.y
     }
 
     nodes.push(output)
@@ -260,9 +280,7 @@ function createGraphNode(
     selectable: false,
     deletable: false,
     focusable: false,
-    style: {
-      zIndex: 'auto',
-    },
+    zIndex: -1,
   }
 }
 

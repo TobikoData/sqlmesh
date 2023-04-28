@@ -1,5 +1,8 @@
-import { type ColumnLineageApiLineageModelNameColumnNameGet200 } from '@api/client'
-import { isObjectEmpty } from '@utils/index'
+import {
+  type Model,
+  type ColumnLineageApiLineageModelNameColumnNameGet200,
+} from '@api/client'
+import { uid, isObjectEmpty } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { ModelFile } from '~/models'
@@ -42,6 +45,7 @@ interface EditorStore {
   setPreviewTable: (previewTable?: any[]) => void
   setPreviewConsole: (previewConsole?: string) => void
   setPreviewLineage: (
+    models: Map<string, Model>,
     previewLineage?: Record<string, Lineage>,
     columns?: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
@@ -55,6 +59,7 @@ interface EditorPreview<TTable = any> {
 }
 
 export interface EditorTab {
+  id: string
   file: ModelFile
   isValid: boolean
   isSaved: boolean
@@ -153,11 +158,11 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   setPreviewConsole(previewConsole) {
     set(() => ({ previewConsole }))
   },
-  setPreviewLineage(lineage, columns) {
+  setPreviewLineage(models, lineage, columns) {
     const previewLineage = structuredClone(lineage)
 
     if (columns != null && previewLineage != null) {
-      mergeLineageWithColumns(previewLineage, columns)
+      mergeLineageWithColumns(models, previewLineage, columns)
     }
 
     set(() => ({ previewLineage }))
@@ -166,6 +171,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
 function createTab(file: ModelFile = createLocalFile()): EditorTab {
   return {
+    id: uid(),
     file,
     isValid: true,
     isSaved: true,
@@ -185,7 +191,9 @@ function getStoredTabsIds(): ID[] {
   return getStoredTabs()?.ids ?? []
 }
 
+// TODO: use better merge
 function mergeLineageWithColumns(
+  models: Map<string, Model>,
   lineage: Record<string, Lineage>,
   columns: ColumnLineageApiLineageModelNameColumnNameGet200,
 ): Record<string, Lineage> {
@@ -227,6 +235,35 @@ function mergeLineageWithColumns(
             new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
           )
         }
+      }
+    }
+  }
+
+  for (const modelName in lineage) {
+    const model = models.get(modelName)
+    const modelLineage = lineage[modelName]
+
+    if (model == null || modelLineage == null) {
+      delete lineage[modelName]
+
+      continue
+    }
+
+    if (modelLineage.columns == null) continue
+
+    if (model.columns == null) {
+      delete modelLineage.columns
+
+      continue
+    }
+
+    for (const columnName in modelLineage.columns) {
+      const found = model.columns.find(c => c.name === columnName)
+
+      if (found == null) {
+        delete modelLineage.columns[columnName]
+
+        continue
       }
     }
   }
