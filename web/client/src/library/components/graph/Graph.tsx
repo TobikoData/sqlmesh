@@ -1,10 +1,10 @@
 import React, {
+  memo,
   type MouseEvent,
   useEffect,
   useMemo,
   useState,
   useCallback,
-  Fragment,
 } from 'react'
 import ReactFlow, {
   Controls,
@@ -27,21 +27,18 @@ import {
 import { debounceAsync, isArrayNotEmpty, isFalse, isTrue } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
-import {
-  ArrowRightCircleIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/solid'
+import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
 import clsx from 'clsx'
 import { type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
 import { useApiColumnLineage } from '@api/index'
-import { Popover, Transition } from '@headlessui/react'
 import { useStoreEditor, type Lineage } from '@context/editor'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import './Graph.css'
 
-export default function Flow({
+const Flow = memo(function Flow({
   lineage,
   closeGraph,
   highlightedNodes = [],
@@ -64,52 +61,41 @@ export default function Flow({
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
 
+  const [key, setKey] = useState('default')
+
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
-  const nodesAndEdges = useMemo(
-    () =>
-      getNodesAndEdges({
-        lineage,
-        highlightedNodes,
-        models,
-        nodes,
-        edges,
-      }),
-    [lineage, highlightedNodes, models],
-  )
 
   useEffect(() => {
-    let active = true
+    const nodesAndEdges = getNodesAndEdges({
+      lineage,
+      highlightedNodes,
+      models,
+      nodes,
+      edges,
+    })
 
     void load()
 
-    return () => {
-      active = false
-    }
-
     async function load(): Promise<void> {
-      const layout = await createGraphLayout({
-        nodes: nodesAndEdges.nodes,
-        edges: nodesAndEdges.edges,
-        nodesMap: nodesAndEdges.nodesMap,
-      })
-
-      if (isFalse(active)) return
+      const layout = await createGraphLayout(nodesAndEdges)
 
       setNodes(layout.nodes)
-      setEdges(layout.edges)
+      setEdges(toggleEdge(layout.edges))
       setColumns(nodesAndEdges.columns)
+      setKey(nodesAndEdges.key)
     }
-  }, [nodesAndEdges])
+  }, [lineage, highlightedNodes, models])
 
   useEffect(() => {
-    setEdges(toggleEdge(nodesAndEdges.edges))
+    setEdges(toggleEdge(edges))
   }, [activeEdges])
 
   useEffect(() => {
-    setNodes(nodesAndEdges.nodes)
-    setEdges(nodesAndEdges.edges)
-    setColumns(nodesAndEdges.columns)
-  }, [lineage, highlightedNodes, models])
+    nodes.forEach(node => {
+      node.position.x = 0
+      node.position.y = 0
+    })
+  }, [highlightedNodes])
 
   function toggleEdge(edges: Edge[] = []): Edge[] {
     return edges.map(edge => {
@@ -128,12 +114,14 @@ export default function Flow({
   return (
     <div className="px-2 py-1 w-full h-full">
       <ReactFlow
+        key={key}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onConnect={onConnect}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        nodeOrigin={[0.5, 0.5]}
         fitView
       >
         {closeGraph != null && (
@@ -164,7 +152,9 @@ export default function Flow({
       </ReactFlow>
     </div>
   )
-}
+})
+
+export default Flow
 
 function ModelNode({
   id,
@@ -286,7 +276,7 @@ function ModelNode({
       {file != null && (
         <div
           className={clsx(
-            'w-full py-2 bg-theme-lighter opacity-90 cursor-default',
+            'w-full py-2 bg-theme-lighter cursor-default',
             columns.length <= COLUMS_LIMIT_DEFAULT && 'rounded-b-lg',
           )}
         >
@@ -356,16 +346,18 @@ function ModelColumn({
     connections?: { ins: string[]; outs: string[] },
   ) => void
 }): JSX.Element {
-  const { refetch: getColumnLineage, isFetching } = useApiColumnLineage(
-    id,
-    column.name,
-  )
+  const {
+    refetch: getColumnLineage,
+    isFetching,
+    isError,
+  } = useApiColumnLineage(id, column.name)
 
   const debouncedGetColumnLineage = useCallback(
     debounceAsync(getColumnLineage, 1000, true),
     [getColumnLineage],
   )
 
+  const models = useStoreContext(s => s.models)
   const activeEdges = useStoreLineage(s => s.activeEdges)
   const hasActiveEdge = useStoreLineage(s => s.hasActiveEdge)
   const columns = useStoreLineage(s => s.columns)
@@ -377,24 +369,14 @@ function ModelColumn({
   const previewLineage = useStoreEditor(s => s.previewLineage)
   const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
 
-  const [isShowing, setIsShowing] = useState(false)
   const [isActive, setIsActive] = useState(
     hasActiveEdge(sourceId) || hasActiveEdge(targetId),
   )
-  const [shouldUpdate, setShouldUpdate] = useState(false)
 
   useEffect(() => {
     setIsActive(hasActiveEdge(sourceId) || hasActiveEdge(targetId))
   }, [activeEdges])
 
-  useEffect(() => {
-    if (shouldUpdate) {
-      toggleEdgeById('add', [sourceId, targetId], columns?.[columnId])
-      setShouldUpdate(false)
-    }
-  }, [columns, shouldUpdate])
-
-  const lineage = previewLineage?.[id]?.columns?.[column.name]
   const hasTarget = isArrayNotEmpty(columns?.[columnId]?.outs)
   const hasSource = isArrayNotEmpty(columns?.[columnId]?.ins)
 
@@ -403,7 +385,6 @@ function ModelColumn({
       key={column.name}
       className={clsx(
         isActive && 'bg-secondary-10 dark:bg-primary-900',
-        disabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
       onClick={() => {
@@ -411,9 +392,19 @@ function ModelColumn({
 
         if (isFalse(isActive)) {
           void debouncedGetColumnLineage().then(({ data: columnLineage }) => {
-            if (columnLineage?.[id]?.[column.name] != null) {
-              setPreviewLineage(previewLineage, columnLineage)
-              setShouldUpdate(true)
+            const upstreamModels = columnLineage?.[id]?.[column.name]?.models
+            if (upstreamModels != null) {
+              const columns = Object.entries(upstreamModels)
+                .map(([id, columns]) =>
+                  columns.map(column => toNodeOrEdgeId(id, column)),
+                )
+                .flat()
+
+              toggleEdgeById('add', [sourceId, targetId], {
+                ins: columns,
+                outs: [],
+              })
+              setPreviewLineage(models, previewLineage, columnLineage)
             }
           })
         } else {
@@ -427,57 +418,33 @@ function ModelColumn({
         sourcePosition={sourcePosition}
         hasTarget={hasTarget}
         hasSource={hasSource}
-        className={clsx(disabled && 'pointer-events-none')}
+        disabled={disabled}
       >
-        <div className="flex w-full justify-between">
-          <div className={clsx('mr-3 flex')}>
+        <div className="flex w-full items-center">
+          <div className="flex items-center">
             {isFetching && (
-              <Loading className="inline-block mr-3 w-4 h-4">
-                <Spinner className="w-4 h-4 mr-2" />
+              <Loading className="inline-block mr-2">
+                <Spinner className="w-3 h-3 border border-neutral-10" />
               </Loading>
             )}
-            {lineage?.source != null && isFalse(disabled) && (
-              <Popover
-                onMouseEnter={() => {
-                  setIsShowing(true)
-                }}
-                onMouseLeave={() => {
-                  setIsShowing(false)
-                }}
-                className="relative flex"
-              >
-                {() => (
-                  <>
-                    <InformationCircleIcon className="text-secondary-500 dark:text-primary-500 inline-block mr-3 w-4 h-4" />
-                    <Transition
-                      show={isShowing}
-                      as={Fragment}
-                      enter="transition ease-out duration-200"
-                      enterFrom="opacity-0 translate-y-1"
-                      enterTo="opacity-100 translate-y-0"
-                      leave="transition ease-in duration-150"
-                      leaveFrom="opacity-100 translate-y-0"
-                      leaveTo="opacity-0 translate-y-1"
-                    >
-                      <Popover.Panel className="absolute bottom-2 z-10 transform">
-                        <div
-                          className="overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[25vh] max-w-[50vw] rounded-lg bg-theme p-4 border-4 border-primary-20"
-                          dangerouslySetInnerHTML={{
-                            __html: `<pre class='inline-block w-full h-full'>${
-                              lineage.source ?? ''
-                            }</pre>`,
-                          }}
-                        ></div>
-                      </Popover.Panel>
-                    </Transition>
-                  </>
-                )}
-              </Popover>
-            )}
-            {column.name}
           </div>
-          <div className="text-neutral-400 dark:text-neutral-300">
-            {column.type}
+          <div
+            className={clsx(
+              'w-full mr-3 flex justify-between',
+              disabled && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <span
+              className={clsx(
+                'mr-3',
+                isError ? 'text-danger-500' : 'text-neutral-400',
+              )}
+            >
+              {column.name}
+            </span>
+            <div className="text-neutral-400 dark:text-neutral-300">
+              {column.type}
+            </div>
           </div>
         </div>
       </ModelNodeHandles>
@@ -494,6 +461,7 @@ function ModelNodeHandles({
   isLeading = false,
   hasTarget = true,
   hasSource = true,
+  disabled = false,
 }: {
   id: string
   sourcePosition?: Position
@@ -503,12 +471,15 @@ function ModelNodeHandles({
   className?: string
   hasTarget?: boolean
   hasSource?: boolean
+  disabled?: boolean
 }): JSX.Element {
   return (
     <div
       className={clsx(
         'flex w-full !relative px-3 py-1 items-center',
-        isFalse(isLeading) && 'hover:bg-secondary-10 dark:hover:bg-primary-10',
+        isFalse(isLeading) &&
+          isFalse(disabled) &&
+          'hover:bg-secondary-10 dark:hover:bg-primary-10',
         className,
       )}
     >
