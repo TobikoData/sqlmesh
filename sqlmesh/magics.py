@@ -214,6 +214,11 @@ class SQLMeshMagics(Magics):
         help="Create a plan for forward-only changes.",
     )
     @argument(
+        "--effective-from",
+        type=str,
+        help="The effective date from which to apply forward-only changes on production.",
+    )
+    @argument(
         "--no-prompts",
         action="store_true",
         help="Disables interactive prompts for the backfill time range. Please note that if this flag is set and there are uncategorized changes, plan creation will fail.",
@@ -253,6 +258,7 @@ class SQLMeshMagics(Magics):
             no_prompts=args.no_prompts,
             auto_apply=args.auto_apply,
             no_auto_categorization=args.no_auto_categorization,
+            effective_from=args.effective_from,
         )
         self._context.console = console
 

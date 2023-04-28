@@ -60,6 +60,7 @@ class Plan:
         environment_ttl: The period of time that a development environment should exist before being deleted.
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
+        effective_from: The effective date from which to apply forward-only changes on production.
     """
 
     def __init__(

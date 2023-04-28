@@ -352,13 +352,15 @@ class TerminalConsole(Console):
         self._print(backfill)
 
     def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
-        effective_from = self._prompt(
-            "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
-        )
-        if effective_from:
-            plan.effective_from = effective_from
-            if plan.is_dev:
-                plan.set_start(effective_from)
+        if not plan.effective_from:
+            effective_from = self._prompt(
+                "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
+            )
+            if effective_from:
+                plan.effective_from = effective_from
+
+        if plan.is_dev and plan.effective_from:
+            plan.set_start(plan.effective_from)
 
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
