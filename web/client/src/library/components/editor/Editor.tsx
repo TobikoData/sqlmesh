@@ -162,12 +162,10 @@ export default function Editor(): JSX.Element {
                   direction === 'vertical' ? 'flex flex-col' : 'flex',
                 )}
               >
-                {tab != null && (
-                  <EditorPreview
-                    tab={tab}
-                    toggleDirection={toggleDirection}
-                  />
-                )}
+                <EditorPreview
+                  tab={tab}
+                  toggleDirection={toggleDirection}
+                />
               </div>
             </SplitPane>
           )}
