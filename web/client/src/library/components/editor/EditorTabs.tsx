@@ -48,14 +48,14 @@ export default function EditorTabs(): JSX.Element {
       <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
         {tabsLocal.map((tab, idx) => (
           <Tab
-            key={tab.file.id}
+            key={tab.id}
             tab={tab}
             title={`Custom SQL ${idx + 1}`}
           />
         ))}
         {tabsRemote.map(tab => (
           <Tab
-            key={tab.file.id}
+            key={tab.id}
             tab={tab}
             title={tab.file.name}
           />

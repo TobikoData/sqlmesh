@@ -1,5 +1,4 @@
-import { useEffect, useState, lazy, useCallback } from 'react'
-import { Dialog } from '@headlessui/react'
+import { useEffect, useCallback, memo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useApiFiles,
@@ -9,39 +8,36 @@ import {
   useApiModels,
   apiCancelModels,
 } from '../../../api'
-import { EnumPlanAction, useStorePlan } from '../../../context/plan'
+import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import { isArrayEmpty, isFalse, isTrue, debounceAsync } from '~/utils'
+import { isArrayEmpty, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import SplitPane from '@components/splitPane/SplitPane'
-import PlanProvider from '@components/plan/context'
-import ModalSidebar from '@components/modal/ModalDrawer'
-import Editor from '@components/editor/Editor'
-import FileTree from '@components/fileTree/FileTree'
 import { Divider } from '@components/divider/Divider'
 import ContainerPage from '@components/container/ContainerPage'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
+import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
+import { Button } from '@components/button/Button'
+import { EnumSize, EnumVariant } from '~/types/enum'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { EnumRoutes } from '~/routes'
+import { useIDE } from './context'
 
-const Plan = lazy(async () => await import('@components/plan/Plan'))
+const IDE = memo(function IDE(): JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
 
-export default function IDE(): JSX.Element {
   const client = useQueryClient()
 
-  const environment = useStoreContext(s => s.environment)
-  const initialStartDate = useStoreContext(s => s.initialStartDate)
-  const initialEndDate = useStoreContext(s => s.initialEndDate)
+  const { setIsPlanOpen } = useIDE()
+
   const addSyncronizedEnvironments = useStoreContext(
     s => s.addSyncronizedEnvironments,
   )
   const setModels = useStoreContext(s => s.setModels)
 
   const activePlan = useStorePlan(s => s.activePlan)
-  const setPlanAction = useStorePlan(s => s.setAction)
   const updateTasks = useStorePlan(s => s.updateTasks)
-
-  const [isPlanOpen, setIsPlanOpen] = useState(false)
-  const [isClosingModal, setIsClosingModal] = useState(false)
 
   const [subscribe] = useChannelEvents()
 
@@ -62,6 +58,8 @@ export default function IDE(): JSX.Element {
   ])
 
   useEffect(() => {
+    navigate(EnumRoutes.IdeEditor)
+
     const unsubscribeTasks = subscribe('tasks', updateTasks)
     const unsubscribeModels = subscribe('models', setModels)
 
@@ -101,9 +99,7 @@ export default function IDE(): JSX.Element {
     setIsPlanOpen(true)
   }
 
-  function closeModal(): void {
-    setIsClosingModal(true)
-  }
+  const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
 
   return (
     <ContainerPage>
@@ -113,47 +109,29 @@ export default function IDE(): JSX.Element {
             <span className="inline-block">/</span>
             {project?.name}
           </h3>
+          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
+          <Button
+            size={EnumSize.sm}
+            variant={EnumVariant.Neutral}
+          >
+            {isActivePageEditor ? (
+              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
+            ) : (
+              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
+            )}
+          </Button>
         </div>
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          <RunPlan showRunPlan={showRunPlan} />
-          {activePlan != null && <ActivePlan plan={activePlan} />}
-        </div>
+        {isActivePageEditor && (
+          <div className="px-3 flex items-center min-w-[10rem] justify-end">
+            <RunPlan showRunPlan={showRunPlan} />
+            {activePlan != null && <ActivePlan plan={activePlan} />}
+          </div>
+        )}
       </div>
       <Divider />
-      {environment != null && (
-        <SplitPane
-          sizes={[20, 80]}
-          minSize={[160]}
-          snapOffset={0}
-          className="flex w-full h-full overflow-hidden"
-        >
-          <FileTree project={project} />
-          <Editor />
-        </SplitPane>
-      )}
-      <ModalSidebar
-        show={isPlanOpen && isFalse(isClosingModal)}
-        afterLeave={() => {
-          setPlanAction(EnumPlanAction.None)
-          setIsClosingModal(false)
-          setIsPlanOpen(false)
-        }}
-      >
-        <Dialog.Panel className="bg-theme border-8 border-r-0 border-secondary-10 dark:border-primary-10 absolute w-[90%] md:w-[75%] xl:w-[60%] h-full right-0">
-          <PlanProvider>
-            <Plan
-              environment={environment}
-              isInitialPlanRun={
-                environment?.isDefault == null || isTrue(environment?.isDefault)
-              }
-              disabled={isClosingModal}
-              initialStartDate={initialStartDate}
-              initialEndDate={initialEndDate}
-              onClose={closeModal}
-            />
-          </PlanProvider>
-        </Dialog.Panel>
-      </ModalSidebar>
+      <Outlet />
     </ContainerPage>
   )
-}
+})
+
+export default IDE
