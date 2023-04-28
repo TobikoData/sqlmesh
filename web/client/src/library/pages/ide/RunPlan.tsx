@@ -28,15 +28,18 @@ import {
   isStringEmptyOrNil,
   debounceAsync,
 } from '~/utils'
-import { Button, makeButton, type ButtonSize } from '../button/Button'
-import { Divider } from '../divider/Divider'
-import Input from '../input/Input'
-import Spinner from '../logo/Spinner'
+import { Button, makeButton, type ButtonSize } from '@components/button/Button'
+import { Divider } from '@components/divider/Divider'
+import Input from '@components/input/Input'
+import Spinner from '@components/logo/Spinner'
 import ModalConfirmation, {
   type Confirmation,
-} from '../modal/ModalConfirmation'
-import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
-import PlanChangePreview from '../plan/PlanChangePreview'
+} from '@components/modal/ModalConfirmation'
+import {
+  EnumPlanChangeType,
+  type PlanChangeType,
+} from '@components/plan/context'
+import PlanChangePreview from '@components/plan/PlanChangePreview'
 
 export default function RunPlan({
   showRunPlan,
