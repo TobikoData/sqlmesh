@@ -67,6 +67,13 @@ To create a forward-only plan, the `--forward-only` option has to be added to th
 sqlmesh plan --forward-only
 ```
 
+### Effective date
+Changes that are part of the forward-only plan can also be applied retroactively to the production environment by specifying the effective date:
+```bash
+sqlmesh plan --forward-only --effective-from 2023-01-01
+```
+This way SQLMesh will know to recompute data intervals starting from the specified date once forward-only changes are deployed to production.
+
 ## Restatement plans
 There are cases when models need to be re-evaluated for a given time range, even though changes may not have been made to those model definitions. This could be due to an upstream issue with a dataset defined outside the SQLMesh platform, or when a [forward-only plan](#forward-only-plans) change needs to be applied retroactively to a bounded interval of historical data.
 

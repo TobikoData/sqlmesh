@@ -17,7 +17,7 @@ from rich.tree import Tree
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
-from sqlmesh.utils.date import to_date
+from sqlmesh.utils.date import to_date, yesterday_ds
 
 if t.TYPE_CHECKING:
     import ipywidgets as widgets
@@ -292,6 +292,9 @@ class TerminalConsole(Console):
             plan.apply()
 
     def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
+        if plan.forward_only and plan.new_snapshots:
+            self._prompt_effective_from(plan, auto_apply)
+
         if plan.requires_backfill:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, auto_apply)
@@ -348,22 +351,41 @@ class TerminalConsole(Console):
             )
         self._print(backfill)
 
+    def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
+        effective_from = self._prompt(
+            "Enter the effective date (eg. '1 year', '2020-01-01') to apply forward-only changes retroactively or blank to only apply them going forward once changes are deployed to prod"
+        )
+        if effective_from:
+            plan.effective_from = effective_from
+            if plan.is_dev:
+                plan.set_start(effective_from)
+
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"
 
         if plan.is_start_and_end_allowed:
             if not plan.override_start:
-                blank_meaning = (
-                    "to preview starting from yesterday"
-                    if is_forward_only_dev
-                    else "for the beginning of history"
-                )
+                if is_forward_only_dev:
+                    if plan.effective_from:
+                        blank_meaning = (
+                            f"to preview starting from the effective date ('{plan.effective_from}')"
+                        )
+                        default_start = plan.effective_from
+                    else:
+                        blank_meaning = "to preview starting from yesterday"
+                        default_start = yesterday_ds()
+                else:
+                    blank_meaning = "to backfill from the beginning of history"
+                    default_start = None
+
                 start = self._prompt(
                     f"Enter the {backfill_or_preview} start date (eg. '1 year', '2020-01-01') or blank {blank_meaning}",
                 )
                 if start:
                     plan.start = start
+                elif default_start:
+                    plan.start = default_start
 
             if not plan.override_end:
                 end = self._prompt(
@@ -533,6 +555,48 @@ class NotebookMagicConsole(TerminalConsole):
         button.on_click(self._apply)
         button.output = output
 
+    def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
+        import ipywidgets as widgets
+
+        prompt = widgets.VBox()
+
+        def effective_from_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
+            plan.effective_from = change["new"]
+            self._show_options_after_categorization(plan, auto_apply)
+
+        def going_forward_change_callback(change: t.Dict[str, bool]) -> None:
+            checked = change["new"]
+            plan.effective_from = None if checked else yesterday_ds()
+            self._show_options_after_categorization(plan, auto_apply=auto_apply)
+
+        date_picker = widgets.DatePicker(
+            disabled=plan.effective_from is None,
+            value=to_date(plan.effective_from or yesterday_ds()),
+            layout={"width": "auto"},
+        )
+        date_picker.observe(effective_from_change_callback, "value")
+
+        going_forward_checkbox = widgets.Checkbox(
+            value=plan.effective_from is None,
+            description="Apply Going Forward Once Deployed To Prod",
+            disabled=False,
+            indent=False,
+        )
+        going_forward_checkbox.observe(going_forward_change_callback, "value")
+
+        add_to_layout_widget(
+            prompt,
+            widgets.HBox(
+                [
+                    widgets.Label("Effective From Date:", layout={"width": "8rem"}),
+                    date_picker,
+                    going_forward_checkbox,
+                ]
+            ),
+        )
+
+        self._add_to_dynamic_options(prompt)
+
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         import ipywidgets as widgets
 
@@ -551,17 +615,6 @@ class NotebookMagicConsole(TerminalConsole):
 
             picker.observe(on_change, "value")
             return picker
-
-        def _checkbox(description: str, value: bool, on_change: t.Callable) -> widgets.Checkbox:
-            checkbox = widgets.Checkbox(
-                value=value,
-                description=description,
-                disabled=False,
-                indent=False,
-            )
-
-            checkbox.observe(on_change, "value")
-            return checkbox
 
         def start_change_callback(change: t.Dict[str, datetime.datetime]) -> None:
             plan.start = change["new"]
