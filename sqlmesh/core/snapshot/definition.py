@@ -837,6 +837,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         str(model.start) if model.start else None,
         str(model.retention) if model.retention else None,
         str(model.batch_size) if model.batch_size is not None else None,
+        *model.tags,
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):

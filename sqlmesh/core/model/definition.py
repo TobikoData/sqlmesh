@@ -1308,4 +1308,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
+    "tags": lambda value: (
+        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
+    ),
 }
