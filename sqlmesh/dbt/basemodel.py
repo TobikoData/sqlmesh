@@ -102,6 +102,7 @@ class BaseModelConfig(GeneralConfig):
             (eg. 'parquet')
         path: The file path of the model
         target_schema: The schema for the profile target
+        dependencies: The macro, source, var, and ref dependencies used to execute the model and its hooks
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
@@ -222,6 +223,10 @@ class BaseModelConfig(GeneralConfig):
         return Materialization.TABLE
 
     @property
+    def model_dialect(self) -> t.Optional[str]:
+        return None
+
+    @property
     def relation_info(self) -> AttributeDict[str, t.Any]:
         if self.model_materialization == Materialization.VIEW:
             relation_type = RelationType.View
@@ -243,12 +248,16 @@ class BaseModelConfig(GeneralConfig):
     def attribute_dict(self) -> AttributeDict[str, t.Any]:
         return AttributeDict(self.dict())
 
+    def model_function(self) -> AttributeDict[str, t.Any]:
+        return AttributeDict({"config": self.attribute_dict()})
+
     def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {
                 "this": self.relation_info,
+                "model": self.model_function(),
                 "schema": self.table_schema,
                 "config": self.attribute_dict(),
                 **model_context.jinja_globals,  # type: ignore
@@ -267,8 +276,20 @@ class BaseModelConfig(GeneralConfig):
             "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs},
             "jinja_macros": jinja_macros,
             "path": self.path,
-            "pre": [exp for hook in self.pre_hook for exp in d.parse(hook.sql)],
-            "post": [exp for hook in self.post_hook for exp in d.parse(hook.sql)],
+            "pre": [
+                exp
+                for hook in self.pre_hook
+                for exp in d.parse(
+                    hook.sql, default_dialect=self.model_dialect or model_context.dialect
+                )
+            ],
+            "post": [
+                exp
+                for hook in self.post_hook
+                for exp in d.parse(
+                    hook.sql, default_dialect=self.model_dialect or model_context.dialect
+                )
+            ],
             **optional_kwargs,
         }
 
@@ -347,6 +368,7 @@ class ModelSqlRenderer(t.Generic[BMC]):
                 "var": self._var,
                 "source": self._source,
                 "this": self.config.relation_info,
+                "model": self.config.model_function(),
                 "schema": self.config.table_schema,
             },
             engine_adapter=None,

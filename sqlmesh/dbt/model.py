@@ -210,8 +210,9 @@ class ModelConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
+        dialect = self.model_dialect or context.dialect
         model_context = self._context_for_dependencies(context, self.dependencies)
-        expressions = d.parse(self.sql_no_config)
+        expressions = d.parse(self.sql_no_config, default_dialect=dialect)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
 
@@ -229,7 +230,7 @@ class ModelConfig(BaseModelConfig):
         return create_sql_model(
             self.model_name,
             expressions[-1],
-            dialect=self.model_dialect or model_context.dialect,
+            dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,
             statements=expressions[0:-1],
