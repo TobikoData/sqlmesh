@@ -51,13 +51,18 @@ def create_plan_dag_spec(
                     snapshots_for_intervals.pop(sid)
 
     if request.restatements:
+        snapshots_for_restatement = (
+            snapshots_for_intervals.values()
+            if not request.is_dev
+            else [snapshots_for_intervals[s.snapshot_id] for s in request.environment.snapshots]
+        )
         state_sync.remove_interval(
             [],
             start=request.environment.start_at,
             end=end,
             all_snapshots=(
                 snapshot
-                for snapshot in snapshots_for_intervals.values()
+                for snapshot in snapshots_for_restatement
                 if snapshot.name in request.restatements
                 and snapshot.snapshot_id not in new_snapshots
             ),

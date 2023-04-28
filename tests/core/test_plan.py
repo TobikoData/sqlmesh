@@ -13,7 +13,7 @@ from sqlmesh.core.snapshot import (
     SnapshotDataVersion,
     SnapshotFingerprint,
 )
-from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
 
@@ -423,3 +423,43 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
         match=r"Removed models {'a'} are referenced in model 'b'.*",
     ):
         Plan(context_diff_mock, state_reader_mock)
+
+
+def test_effective_from(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM a")))
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot}
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot.snapshot_id: snapshot}
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError,
+        match="Effective date can only be set for a forward-only plan.",
+    ):
+        plan = Plan(context_diff_mock, state_reader_mock)
+        plan.effective_from = "2023-01-01"
+
+    plan = Plan(context_diff_mock, state_reader_mock, forward_only=True)
+
+    with pytest.raises(
+        PlanError,
+        match="Effective date cannot be in the future.",
+    ):
+        plan.effective_from = now() + timedelta(days=1)
+
+    assert plan.effective_from is None
+    assert snapshot.effective_from is None
+
+    plan.effective_from = "2023-01-01"
+    assert plan.effective_from == "2023-01-01"
+    assert snapshot.effective_from == "2023-01-01"
+
+    plan.effective_from = None
+    assert plan.effective_from is None
+    assert snapshot.effective_from is None

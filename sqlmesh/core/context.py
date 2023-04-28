@@ -584,6 +584,7 @@ class Context(BaseContext):
         no_prompts: bool = False,
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
+        effective_from: t.Optional[TimeLike] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -616,6 +617,7 @@ class Context(BaseContext):
             no_auto_categorization: Indicates whether to disable automatic categorization of model
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
+            effective_from: The effective date from which to apply forward-only changes on production.
 
         Returns:
             The populated Plan object.
@@ -645,6 +647,7 @@ class Context(BaseContext):
             environment_ttl=self.environment_ttl,
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
+            effective_from=effective_from,
         )
 
         if not no_prompts:
