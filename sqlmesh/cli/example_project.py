@@ -181,7 +181,7 @@ def _create_macros(macros_path: Path) -> None:
 
 
 def _create_audits(audits_path: Path) -> None:
-    _write_file(audits_path / "example_full_model.sql", EXAMPLE_AUDIT)
+    _write_file(audits_path / "assert_positive_order_ids.sql", EXAMPLE_AUDIT)
 
 
 def _create_models(models_path: Path) -> None:
