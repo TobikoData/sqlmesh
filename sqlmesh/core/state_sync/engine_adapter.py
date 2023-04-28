@@ -359,13 +359,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
+        no_version = Versions(schema_version=0, sqlglot_version="0.0.0")
+
         if not self.engine_adapter.table_exists(self.versions_table):
-            return Versions(schema_version=0, sqlglot_version="0.0.0")
+            return no_version
 
         query = exp.select("*").from_(self.versions_table)
         if lock_for_update:
             query.lock(copy=False)
         row = self.engine_adapter.fetchone(query)
+        if not row:
+            return no_version
         return Versions(schema_version=row[0], sqlglot_version=row[1])
 
     def _get_environment(
