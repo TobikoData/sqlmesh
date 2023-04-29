@@ -45,7 +45,7 @@ Consider the following when using a dbt project:
 
 Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's. 
 
-In dbt, the transformations for all time intervals in the table are computed the first time an incremental model is run. This can be problematic if the table is large, and it means users must determine whether a model has already run to predict what will happen in a new run. SQLMesh incremental models always run incrementally, even the first time a model is run, detecting and backfilling each missing time interval.
+dbt's actions differ based on whether an incremental model has been run before. The first time a model runs dbt computes the transformations for all time intervals at once, which can be problematic if the table is large. In subsequent model runs dbt transforms only the new time intervals. These differences in behavior mean you must know whether a model has already run to predict what will happen in a new run. SQLMesh incremental models allow you to specify how incremental computations are executed with the [`batch_size`](../concepts/models/overview#batch_size) parameter, backfilling missing time intervals in increments of your choice.
 
 This section describes how to implement SQLMesh incremental models in a dbt-formatted project.
 
