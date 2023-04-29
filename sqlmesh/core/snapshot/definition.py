@@ -502,7 +502,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             other: The target snapshot to inherit intervals from.
         """
-        effective_from_ts = to_timestamp(self.effective_from) if self.effective_from else 0
+        effective_from_ts = self.normalized_effective_from_ts or 0
         apply_effective_from = effective_from_ts > 0 and self.fingerprint != other.fingerprint
 
         for start, end in other.intervals:
@@ -707,6 +707,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_paused(self) -> bool:
         return self.unpaused_ts is None
+
+    @property
+    def normalized_effective_from_ts(self) -> t.Optional[int]:
+        return (
+            to_timestamp(self.model.cron_floor(self.effective_from))
+            if self.effective_from
+            else None
+        )
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:
