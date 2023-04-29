@@ -592,6 +592,35 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
 
 
+def test_unpause_snapshots_remove_intervals(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_snapshot",
+            query=parse_one("select 1, ds"),
+            cron="@daily",
+        ),
+        version="a",
+    )
+    snapshot.add_interval("2023-01-01", "2023-01-05")
+    state_sync.push_snapshots([snapshot])
+
+    new_snapshot = make_snapshot(
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
+        version="a",
+    )
+    new_snapshot.effective_from = "2023-01-03"
+    state_sync.push_snapshots([new_snapshot])
+    state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
+
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
+    assert not actual_snapshots[new_snapshot.snapshot_id].intervals
+    assert actual_snapshots[snapshot.snapshot_id].intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+    ]
+
+
 def test_get_version(state_sync: EngineAdapterStateSync) -> None:
     # fresh install should not raise
     assert state_sync.get_versions() == Versions(
