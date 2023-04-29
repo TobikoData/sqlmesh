@@ -222,18 +222,44 @@ class CommonStateSyncMixin(StateSync):
     def unpause_snapshots(
         self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
+        current_ts = now()
+
         target_snapshot_ids = {s.snapshot_id for s in snapshots}
         snapshots = self._get_snapshots_with_same_version(snapshots, lock_for_update=True)
+        target_snapshots_by_version = {
+            (s.name, s.version): s for s in snapshots if s.snapshot_id in target_snapshot_ids
+        }
+
         for snapshot in snapshots:
             is_target_snapshot = snapshot.snapshot_id in target_snapshot_ids
             if is_target_snapshot and not snapshot.unpaused_ts:
-                logger.info(f"Unpausing snapshot %s", snapshot.snapshot_id)
+                logger.info("Unpausing snapshot %s", snapshot.snapshot_id)
                 snapshot.set_unpaused_ts(unpaused_dt)
                 self._update_snapshot(snapshot)
-            elif not is_target_snapshot and snapshot.unpaused_ts:
-                logger.info(f"Pausing snapshot %s", snapshot.snapshot_id)
-                snapshot.set_unpaused_ts(None)
-                self._update_snapshot(snapshot)
+            elif not is_target_snapshot:
+                snapshot_updated = False
+
+                if snapshot.unpaused_ts:
+                    logger.info("Pausing snapshot %s", snapshot.snapshot_id)
+                    snapshot.set_unpaused_ts(None)
+                    snapshot_updated = True
+
+                target_snapshot = target_snapshots_by_version[(snapshot.name, snapshot.version)]
+                if target_snapshot.normalized_effective_from_ts:
+                    # Making sure that there are no overlapping intervals.
+                    effective_from_ts = target_snapshot.normalized_effective_from_ts
+                    if snapshot.intervals and snapshot.intervals[-1][1] > effective_from_ts:
+                        logger.info(
+                            "Removing all intervals after '%s' for snapshot %s, superseded by snapshot %s",
+                            target_snapshot.effective_from,
+                            snapshot.snapshot_id,
+                            target_snapshot.snapshot_id,
+                        )
+                        snapshot.remove_interval(effective_from_ts, current_ts)
+                        snapshot_updated = True
+
+                if snapshot_updated:
+                    self._update_snapshot(snapshot)
 
     def _ensure_no_gaps(
         self, target_snapshots: t.Iterable[Snapshot], target_environment: Environment
