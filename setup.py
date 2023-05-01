@@ -87,6 +87,10 @@ setup(
         "dbt": [
             "dbt-core<1.5.0",
         ],
+        "llm": [
+            "langchain",
+            "openai",
+        ],
         "postgres": [
             "psycopg2",
         ],
