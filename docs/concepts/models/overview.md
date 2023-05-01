@@ -72,7 +72,7 @@ When models are used in non-production environments, SQLMesh automatically prefi
 Name is ***required*** and must be ***unique***.
 
 ### kind
-- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed.
+- Kind specifies what [kind](model_kinds.md) a model is. A model's kind determines how it is computed and stored. The default kind is `VIEW`, which means a view is created and your query is run each time that view is accessed. See [below](#incremental-model-properties) for properties that apply to incremental model kinds.
 
 ### dialect
 - Dialect defines the SQL dialect of the file. By default, this uses the dialect of the SQLMesh `sqlmesh.core.config`.
@@ -89,23 +89,27 @@ Name is ***required*** and must be ***unique***.
 ### cron
 - Cron is used to schedule your model to process or refresh at a certain interval. It uses [croniter](https://github.com/kiorky/croniter) under the hood, so expressions such as `@daily` can be used. A model's `IntervalUnit` is determined implicity by the cron expression.
 
-### batch_size
-- Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
-
-### lookback
-- Lookback is used for [incremental](model_kinds.md#incremental_by_time_range) models to capture late arriving data. This must be a positive integer and refers to the number of units that late arriving data is expected.
-
 ### storage_format
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
-
-### time_column
-- Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Engines that support partitioning such as Spark and Hive also use it as the partition key. Additional partition key columns can be specified with the `partitioned_by` property (see below). Time column can have an optional format string. The format should be in the dialect of the model.
 
 ### partitioned_by
 - Partitioned by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key.
 
 ### tags
 - Tags are one or more labels used to organize your models.
+
+## Incremental Model Properties
+
+For models that are incremental, the following parameters can be specified in the `kind`'s definition.
+
+### time_column
+- Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Engines that support partitioning such as Spark and Hive also use it as the partition key. Additional partition key columns can be specified with the `partitioned_by` property (see below). Time column can have an optional format string. The format should be in the dialect of the model.
+
+### lookback
+- Lookback is used for [incremental](model_kinds.md#incremental_by_time_range) models to capture late arriving data. This must be a positive integer and refers to the number of units that late arriving data is expected.
+
+### batch_size
+- Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
 ## Macros
 Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros.md).
