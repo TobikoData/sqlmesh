@@ -168,6 +168,26 @@ def test_ast_correctness(macro_evaluator):
             "SELECT * FROM city",
             {"do_order": False},
         ),
+        (
+            """select @if(TRUE, 1, 0)""",
+            "SELECT 1",
+            {},
+        ),
+        (
+            """select @if(FALSE, 1, 0)""",
+            "SELECT 0",
+            {},
+        ),
+        (
+            """select @if(1 > 0, 1, 0)""",
+            "SELECT 1",
+            {},
+        ),
+        (
+            """select @if('a' = 'b', c), d""",
+            "SELECT d",
+            {},
+        ),
     ],
 )
 def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
