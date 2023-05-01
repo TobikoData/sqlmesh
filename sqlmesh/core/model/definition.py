@@ -833,12 +833,8 @@ class PythonModel(_Model):
 
                         df = df.where(
                             pyspark.sql.functions.col(self.time_column.column).between(
-                                pyspark.sql.functions.lit(
-                                    self.convert_to_time_column(start).sql("spark")
-                                ),
-                                pyspark.sql.functions.lit(
-                                    self.convert_to_time_column(end).sql("spark")
-                                ),
+                                pyspark.sql.functions.lit(self.convert_to_time_column(start).this),
+                                pyspark.sql.functions.lit(self.convert_to_time_column(end).this),
                             )
                         )
                     else:
