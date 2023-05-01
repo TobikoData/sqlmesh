@@ -829,8 +829,6 @@ class PythonModel(_Model):
                     assert self.time_column
 
                     if PySparkDataFrame is not None and isinstance(df, PySparkDataFrame):
-                        pass
-
                         df = df.where(
                             f"{self.time_column.column} BETWEEN {self.convert_to_time_column(start).sql('spark')} "
                             f"AND {self.convert_to_time_column(end).sql('spark')}"
