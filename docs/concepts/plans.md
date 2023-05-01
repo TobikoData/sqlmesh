@@ -47,6 +47,7 @@ This unique approach to understanding and applying changes is what enables SQLMe
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
 
 At the moment, we are using the term backfilling broadly to describe any situation in which a model is updated. That includes these operations: 
+
 * When a VIEW model is created
 * When a FULL model is built 
 * When an INCREMENTAL model is built for the first time
