@@ -12,12 +12,21 @@ def filter_country(
     return exp.and_(expression, f"country = '{country}'")
 
 
+@macro("UPPER")
+def upper_case(evaluator: MacroEvaluator, expression: exp.Condition, country: str) -> exp.Condition:
+    return exp.true()
+
+
 @pytest.fixture
 def macro_evaluator() -> MacroEvaluator:
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
+
+
+def test_case():
+    assert macro.get_registry()["upper"]
 
 
 def test_macro_var(macro_evaluator):

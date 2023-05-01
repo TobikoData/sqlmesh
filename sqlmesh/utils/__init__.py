@@ -83,7 +83,7 @@ class registry_decorator:
         self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         self.func = func
-        self.registry()[(self.name or func.__name__)] = self
+        self.registry()[(self.name or func.__name__).lower()] = self
 
         @wraps(func)
         def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
