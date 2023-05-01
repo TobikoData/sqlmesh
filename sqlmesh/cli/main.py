@@ -266,7 +266,9 @@ def dag(ctx: click.Context, file: str) -> None:
 
     This command requires a manual install of both the python and system graphviz package.
     """
-    ctx.obj.render_dag(file)
+    rendered_dag_path = ctx.obj.render_dag(file)
+    if rendered_dag_path:
+        ctx.obj.console.log_success(f"Generated the dag to {rendered_dag_path}")
 
 
 @cli.command("test")
