@@ -829,17 +829,9 @@ class PythonModel(_Model):
                     assert self.time_column
 
                     if PySparkDataFrame is not None and isinstance(df, PySparkDataFrame):
-                        import pyspark
-
                         df = df.where(
-                            pyspark.sql.functions.col(self.time_column.column).between(
-                                pyspark.sql.functions.lit(
-                                    self.convert_to_time_column(start).sql("spark")
-                                ),
-                                pyspark.sql.functions.lit(
-                                    self.convert_to_time_column(end).sql("spark")
-                                ),
-                            )
+                            f"{self.time_column.column} BETWEEN {self.convert_to_time_column(start).sql('spark')} "
+                            f"AND {self.convert_to_time_column(end).sql('spark')}"
                         )
                     else:
                         assert self.time_column.format, "Time column format is required."
