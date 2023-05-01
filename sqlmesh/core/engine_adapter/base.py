@@ -643,9 +643,10 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        column_names: t.Sequence[str],
+        columns_to_types: t.Dict[str, exp.DataType],
         unique_key: t.Sequence[str],
     ) -> None:
+        column_names = columns_to_types.keys()
         on = exp.and_(
             *(
                 exp.EQ(

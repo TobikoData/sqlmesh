@@ -582,7 +582,11 @@ def test_merge(mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table="SELECT id, ts, val FROM source",
-        column_names=["id", "ts", "val"],
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "ts": exp.DataType.Type.TIMESTAMP,
+            "val": exp.DataType.Type.INT,
+        },
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
@@ -595,7 +599,11 @@ def test_merge(mocker: MockerFixture):
     adapter.merge(
         target_table="target",
         source_table="SELECT id, ts, val FROM source",
-        column_names=["id", "ts", "val"],
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "ts": exp.DataType.Type.TIMESTAMP,
+            "val": exp.DataType.Type.INT,
+        },
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
