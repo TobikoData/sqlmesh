@@ -188,14 +188,18 @@ class MacroEvaluator:
             return [exp.convert(item) for item in result if item is not None]
         return exp.convert(result)
 
-    def eval_expression(self, node: exp.Expression) -> t.Any:
+    def eval_expression(self, node: t.Any) -> t.Any:
         """Converts a SQLGlot expression into executable Python code and evals it.
+
+        If the node is not an expression, it will simply be returned.
 
         Args:
             node: expression
         Returns:
             The return value of the evaled Python Code.
         """
+        if not isinstance(node, exp.Expression):
+            return node
         code = node.sql()
         try:
             code = self.generator.generate(node)
@@ -331,6 +335,31 @@ def each(
     *items, func = args
     items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
     return [item for item in map(func, ensure_collection(items)) if item is not None]
+
+
+@macro("IF")
+def if_(
+    evaluator: MacroEvaluator,
+    condition: t.Any,
+    true: t.Any,
+    false: t.Any = None,
+) -> t.Any:
+    """Evaluates a given condition and returns the second argument if true or else the third argument.
+
+    If false is not passed in, the default return value will be None.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> MacroEvaluator().transform(parse_one("@IF('a' = 1, a, b)")).sql()
+        'b'
+
+        >>> MacroEvaluator().transform(parse_one("@IF('a' = 1, a)"))
+    """
+
+    if evaluator.eval_expression(condition):
+        return true
+    return false
 
 
 @macro("REDUCE")
