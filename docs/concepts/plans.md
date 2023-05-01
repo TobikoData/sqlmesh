@@ -47,6 +47,7 @@ This unique approach to understanding and applying changes is what enables SQLMe
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
 
 At the moment, we are using the term backfilling broadly to describe any situation in which a model is updated. That includes these operations: 
+
 * When a VIEW model is created
 * When a FULL model is built 
 * When an INCREMENTAL model is built for the first time
@@ -55,7 +56,7 @@ At the moment, we are using the term backfilling broadly to describe any situati
 
 We will be iterating on terminology to better capture the nuances of each type in future versions. 
 
-Note for incremental models: despite the fact that backfilling can happen incrementally, there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
+Note for incremental models: despite the fact that backfilling can happen incrementally (see `batch_size` parameter on models), there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
 
 ### Virtual Update
 Another benefit of the aforementioned approach is that data for a new model version can be fully pre-built while still in a development environment. This means that all changes and their downstream dependencies can be fully previewed before they get promoted to the production environment. Therefore, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.
