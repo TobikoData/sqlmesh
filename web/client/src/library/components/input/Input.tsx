@@ -22,6 +22,7 @@ function Input({
   className,
   size = EnumSize.md,
   disabled = false,
+  autoFocus = false,
   onInput,
 }: PropsInput): JSX.Element {
   return (
@@ -41,6 +42,7 @@ function Input({
         placeholder={placeholder}
         onInput={onInput}
         disabled={disabled}
+        autoFocus={autoFocus}
       />
       {info != null && <InputInfo>{info}</InputInfo>}
     </div>

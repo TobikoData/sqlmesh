@@ -937,6 +937,12 @@
           }
         }
       },
+      "IntervalUnit": {
+        "title": "IntervalUnit",
+        "enum": ["day", "hour", "minute"],
+        "type": "string",
+        "description": "IntervalUnit is the inferred granularity of an incremental model.\n\nIntervalUnit can be one of 4 types, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a model. The minimum time delta between a sample set of dates\nis used to determine which unit a model's schedule is."
+      },
       "LineageColumn": {
         "title": "LineageColumn",
         "type": "object",
@@ -954,7 +960,7 @@
       },
       "Model": {
         "title": "Model",
-        "required": ["name", "path", "dialect", "columns"],
+        "required": ["name", "path", "dialect", "columns", "details"],
         "type": "object",
         "properties": {
           "name": { "title": "Name", "type": "string" },
@@ -966,6 +972,52 @@
             "title": "Columns",
             "type": "array",
             "items": { "$ref": "#/components/schemas/Column" }
+          },
+          "details": { "$ref": "#/components/schemas/ModelDetails" },
+          "sql": { "title": "Sql", "type": "string" }
+        }
+      },
+      "ModelDetails": {
+        "title": "ModelDetails",
+        "type": "object",
+        "properties": {
+          "owner": { "title": "Owner", "type": "string" },
+          "kind": { "title": "Kind", "type": "string" },
+          "batch_size": { "title": "Batch Size", "type": "integer" },
+          "cron": { "title": "Cron", "type": "string" },
+          "stamp": { "title": "Stamp", "type": "string" },
+          "start": { "title": "Start", "type": "string" },
+          "retention": { "title": "Retention", "type": "string" },
+          "storage_format": { "title": "Storage Format", "type": "string" },
+          "time_column": { "title": "Time Column", "type": "string" },
+          "tags": { "title": "Tags", "type": "string" },
+          "partitioned_by": { "title": "Partitioned By", "type": "string" },
+          "lookback": { "title": "Lookback", "type": "integer" },
+          "cron_prev": {
+            "title": "Cron Prev",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "cron_next": {
+            "title": "Cron Next",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
+          "annotated": { "title": "Annotated", "type": "boolean" },
+          "contains_star_query": {
+            "title": "Contains Star Query",
+            "type": "boolean"
           }
         }
       },

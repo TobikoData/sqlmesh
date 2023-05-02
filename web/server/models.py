@@ -7,6 +7,7 @@ import typing as t
 from pydantic import BaseModel, validator
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
 
@@ -173,13 +174,35 @@ class Column(BaseModel):
     description: t.Optional[str]
 
 
+class ModelDetails(BaseModel):
+    owner: t.Optional[str] = None
+    kind: t.Optional[str] = None
+    batch_size: t.Optional[int] = None
+    cron: t.Optional[str] = None
+    stamp: t.Optional[str] = None
+    start: t.Optional[str] = None
+    retention: t.Optional[str] = None
+    storage_format: t.Optional[str] = None
+    time_column: t.Optional[str] = None
+    tags: t.Optional[str] = None
+    partitioned_by: t.Optional[str] = None
+    lookback: t.Optional[int] = None
+    cron_prev: t.Optional[TimeLike] = None
+    cron_next: t.Optional[TimeLike] = None
+    interval_unit: t.Optional[IntervalUnit] = None
+    annotated: t.Optional[bool] = None
+    contains_star_query: t.Optional[bool] = None
+
+
 class Model(BaseModel):
     name: str
     path: str
     dialect: str
-    description: t.Optional[str]
-    owner: t.Optional[str]
     columns: t.List[Column]
+    description: t.Optional[str] = None
+    owner: t.Optional[str] = None
+    details: t.Optional[ModelDetails] = None
+    sql: t.Optional[str] = None
 
 
 class RenderInput(BaseModel):

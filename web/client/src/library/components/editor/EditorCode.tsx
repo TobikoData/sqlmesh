@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
-import { type File } from '~/api/client'
+import { type Model, type File } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
 import {
   events,
@@ -32,7 +32,7 @@ import {
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
-import { EnumFileExtensions } from '@models/file'
+import { EnumFileExtensions, type ModelFile } from '@models/file'
 
 export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const { mode } = useColorScheme()
@@ -343,3 +343,81 @@ function CodeEditorFileRemote({
     />
   )
 }
+
+const CodeEditorDocsReadOnly = memo(function CodeEditorDocsReadOnly({
+  model,
+}: {
+  model: Model
+}): JSX.Element {
+  const { mode } = useColorScheme()
+  const [SqlMeshDialect] = useSqlMeshExtension()
+  const models = useStoreContext(s => s.models)
+  const files = useStoreFileTree(s => s.files)
+  const previewLineage = useStoreEditor(s => s.previewLineage)
+
+  const { refetch: getFileContent } = useApiFileByPath(model.path)
+  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
+
+  const columns = new Set(
+    Object.keys(previewLineage ?? {})
+      .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+      .flat()
+      .filter(Boolean) as string[],
+  )
+
+  const [file, setFile] = useState<ModelFile | undefined>(files.get(model.path))
+
+  useEffect(() => {
+    const file = files.get(model.path)
+
+    if (
+      model == null ||
+      file == null ||
+      isFalse(isStringEmptyOrNil(file.content))
+    )
+      return
+    debouncedGetFileContent({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        file.updateContent(data?.content ?? '')
+
+        setFile(file)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log('getFileContent', 'Request aborted by React Query')
+        } else {
+          console.log('getFileContent', error)
+        }
+      })
+  }, [files, model])
+
+  const extensions = useMemo(
+    () =>
+      [
+        mode === EnumColorScheme.Dark ? dracula : tomorrow,
+        HoverTooltip(models),
+        model != null && SqlMeshModel(models, model, columns),
+        file?.extension === EnumFileExtensions.Python && python(),
+        file?.extension === EnumFileExtensions.SQL &&
+          SqlMeshDialect(models, file),
+      ].filter(Boolean) as Extension[],
+    [file, mode, models, model],
+  )
+
+  console.log({ file })
+
+  return (
+    <CodeMirror
+      height="100%"
+      width="100%"
+      className="w-full h-full overflow-auto text-sm font-mono"
+      value={file?.content ?? ''}
+      extensions={extensions}
+      readOnly
+    />
+  )
+})
+
+export { CodeEditorDocsReadOnly }

@@ -3,6 +3,7 @@ import IDE from './library/pages/ide/IDE'
 import Docs from './library/pages/docs/Docs'
 import Editor from './library/pages/editor/Editor'
 import IDEProvider from './library/pages/ide/context'
+import { Suspense } from 'react'
 
 export const EnumRoutes = {
   Ide: '/',
@@ -16,7 +17,9 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <IDEProvider>
-        <IDE />
+        <Suspense fallback={<span />}>
+          <IDE />
+        </Suspense>
       </IDEProvider>
     ),
     children: [
@@ -29,8 +32,8 @@ export const router = createBrowserRouter([
         element: <Docs />,
         children: [
           {
-            path: 'models/:modelId',
-            element: <div>Getting started</div>,
+            path: 'models',
+            element: <Docs.Content />,
           },
         ],
       },

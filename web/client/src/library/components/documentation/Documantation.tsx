@@ -1,81 +1,139 @@
 import { type Model } from '@api/client'
+import { CodeEditorDocsReadOnly } from '@components/editor/EditorCode'
+import { useStoreLineage } from '@context/lineage'
+import { Tab } from '@headlessui/react'
+import { isString, toDateFormat, isTrue } from '@utils/index'
 import clsx from 'clsx'
-import React from 'react'
+import React, { useEffect } from 'react'
 
 const Documantation = function Documantation({
   model,
+  withCode = true,
+  withQuery = true,
 }: {
   model: Model
+  withCode?: boolean
+  withQuery?: boolean
 }): JSX.Element {
+  const setColumns = useStoreLineage(s => s.setColumns)
+  const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
+
+  useEffect(() => {
+    setColumns(undefined)
+    clearActiveEdges()
+  }, [model])
+
   return (
     <Container>
-      <div className="mb-5">
-        <Headline headline="Model" />
-        <div className="px-2">
-          <ul className="px-2 w-full">
-            <li className=" w-full mb-2 pb-1 border-b border-primary-30">
-              <div className="flex  justify-between mb-2">
-                <h3 className="mr-2">Name</h3>
-                <p className="mt-1 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10 text-xs rounded">
-                  {model.name}
-                </p>
-              </div>
-              {/* <div className='p-4 bg-neutral-10 font-normal rounded-md mb-2'>
-                <p className='text-xs mb-2'>
-                  name specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of schema.view_name. The name of a model must be unique in a SQLMesh project.
-                </p>
-                <p className='text-xs mb-2'>
-                  When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named sushi.customers. In production its view is named sushi.customers, and in dev its view is named dev__sushi.customers.
-                </p>
-                <p className='text-xs mb-2'>
-                  Name is required and must be unique.
-                </p>
-              </div> */}
-            </li>
-            <li className=" w-full  mb-2 pb-1 border-b border-primary-30">
-              <div className="flex justify-between mb-2">
-                <div className="mr-2">Kind</div>
-                <p className="font-normal text-sm">incremental_by_time_range</p>
-              </div>
-              {/* <div className='p-4 bg-neutral-10 opacity-80 font-normal rounded-md mb-2'>
-                <p className='text-xs mb-2'>
-                  Kind specifies what kind a model is. A model&lsquo;s kind determines how it is computed and stored. The default kind is VIEW, which means a view is created and your query is run each time that view is accessed.
-                </p>
-              </div> */}
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div className="mb-5">
-        <Headline headline="Columns" />
+      <Section headline="Model">
         <ul className="px-2 w-full">
-          {model.columns.map(column => (
-            <li
-              key={column.name}
-              className="flex w-full justify-between mb-2 pb-1 border-b border-primary-30"
-            >
-              <div className={clsx('mr-3')}>
-                <span className="inline font-bold text-brand-400 text-sm">
-                  {column.name}
-                </span>
-                <span className="block font-normal text-xs">
-                  {column.description}
-                </span>
-              </div>
-              <div className="text-neutral-300 dark:text-neutral-400 font-normal">
-                {column.type}
-              </div>
-            </li>
+          <DetailsItem
+            name="Path"
+            value={model.path.split('/').slice(0, -1).join('/')}
+          />
+          <DetailsItem
+            name="Name"
+            value={model.name}
+          />
+          <DetailsItem
+            name="Dialect"
+            value={model.dialect}
+          />
+          {Object.entries(model.details).map(([key, value]) => (
+            <DetailsItem
+              key={key}
+              name={key}
+              value={value}
+            />
           ))}
         </ul>
-      </div>
+      </Section>
+      <Section headline="Description">
+        {model.description == null ? 'No description' : model.description}
+      </Section>
+      <Section headline="Columns">
+        <ul className="px-2 w-full">
+          {model.columns.map(column => (
+            <DetailsItem
+              key={column.name}
+              name={column.name}
+              value={column.type}
+              isHighlighted={true}
+            >
+              {column.description}
+            </DetailsItem>
+          ))}
+        </ul>
+      </Section>
+      {(withCode || withQuery) && (
+        <Section headline="SQL">
+          <Tab.Group>
+            <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justigy-between items-center">
+              {withCode && (
+                <Tab
+                  className={({ selected }) =>
+                    clsx(
+                      'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                      selected
+                        ? 'bg-neutral-500 text-neutral-100 cursor-default'
+                        : 'bg-neutral-10 cursor-pointer',
+                    )
+                  }
+                >
+                  Code
+                </Tab>
+              )}
+              {withQuery && (
+                <Tab
+                  className={({ selected }) =>
+                    clsx(
+                      'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                      selected
+                        ? 'bg-neutral-500 text-neutral-100 cursor-default'
+                        : 'bg-neutral-10 cursor-pointer',
+                    )
+                  }
+                >
+                  Query
+                </Tab>
+              )}
+            </Tab.List>
+            <Tab.Panels className="h-full w-full overflow-hidden">
+              {withCode && (
+                <Tab.Panel
+                  className={clsx(
+                    'w-full h-full pt-4 relative px-2',
+                    'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                  )}
+                >
+                  <CodeEditorDocsReadOnly model={model} />
+                </Tab.Panel>
+              )}
+              {withQuery && (
+                <Tab.Panel
+                  className={clsx(
+                    'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                  )}
+                >
+                  <pre className="w-full h-full p-4 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs">
+                    <code>{model.sql}</code>
+                  </pre>
+                </Tab.Panel>
+              )}
+            </Tab.Panels>
+          </Tab.Group>
+        </Section>
+      )}
     </Container>
   )
 }
 
 function Headline({ headline }: { headline: string }): JSX.Element {
   return (
-    <div className="text-lg font-bold whitespace-nowrap">
+    <div
+      className="text-lg font-bold whitespace-nowrap"
+      id={headline}
+    >
       <h3 className="mt-3 mb-1">{headline}</h3>
     </div>
   )
@@ -97,13 +155,71 @@ function Container({
   children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className={clsx('w-full h-full p-2 rounded-xl', className)}>
-      <div className="bg-primary-10 w-full h-full p-4 rounded-xl">
+    <div className={clsx('w-full h-full rounded-xl', className)}>
+      <div className="bg-neutral-10 w-full h-full py-8 px-8 rounded-xl">
         <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
           {children}
         </div>
       </div>
     </div>
+  )
+}
+
+function Section({
+  children,
+  className,
+  headline,
+}: {
+  headline: string
+  className?: string
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <div className={clsx('mb-5', className)}>
+      <Headline headline={headline} />
+      <div className="px-2">{children}</div>
+    </div>
+  )
+}
+
+function DetailsItem({
+  className,
+  name,
+  value,
+  isHighlighted = false,
+  children,
+}: {
+  name: string
+  value: string | boolean | number
+  className?: string
+  isHighlighted?: boolean
+  children?: React.ReactNode
+}): JSX.Element {
+  const maybeDate = new Date(value as string)
+  const isDate = isString(value) && !isNaN(maybeDate.getTime())
+  const isBoolean = typeof value === 'boolean'
+  return (
+    <li
+      className={clsx('w-full border-b border-primary-10 py-1 mb-1', className)}
+    >
+      <div className="flex justify-between text-xs">
+        <strong
+          className={clsx('mr-2 capitalize', isHighlighted && 'text-brand-500')}
+        >
+          {name.replaceAll('_', ' ')}
+        </strong>
+        <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
+          {isBoolean
+            ? isTrue(value)
+              ? 'True'
+              : 'False'
+            : isDate
+            ? toDateFormat(maybeDate)
+            : value}
+        </p>
+      </div>
+      <p className="text-xs ">{children}</p>
+    </li>
   )
 }
 

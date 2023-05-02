@@ -1,4 +1,4 @@
-import { useEffect, useCallback, memo } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useApiFiles,
@@ -22,8 +22,9 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useIDE } from './context'
+import { useStoreFileTree } from '@context/fileTree'
 
-const IDE = memo(function IDE(): JSX.Element {
+export default function IDE(): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -38,6 +39,10 @@ const IDE = memo(function IDE(): JSX.Element {
 
   const activePlan = useStorePlan(s => s.activePlan)
   const updateTasks = useStorePlan(s => s.updateTasks)
+
+  const directory = useStoreFileTree(s => s.project)
+  const setFiles = useStoreFileTree(s => s.setFiles)
+  const setProject = useStoreFileTree(s => s.setProject)
 
   const [subscribe] = useChannelEvents()
 
@@ -58,8 +63,6 @@ const IDE = memo(function IDE(): JSX.Element {
   ])
 
   useEffect(() => {
-    navigate(EnumRoutes.IdeEditor)
-
     const unsubscribeTasks = subscribe('tasks', updateTasks)
     const unsubscribeModels = subscribe('models', setModels)
 
@@ -82,6 +85,12 @@ const IDE = memo(function IDE(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (location.pathname === EnumRoutes.Ide) {
+      navigate(EnumRoutes.IdeEditor)
+    }
+  }, [location])
+
+  useEffect(() => {
     if (
       contextEnvironemnts == null ||
       isArrayEmpty(Object.keys(contextEnvironemnts))
@@ -94,6 +103,14 @@ const IDE = memo(function IDE(): JSX.Element {
   useEffect(() => {
     setModels(dataModels)
   }, [dataModels])
+
+  useEffect(() => {
+    setFiles(directory?.allFiles ?? [])
+  }, [directory])
+
+  useEffect(() => {
+    setProject(project)
+  }, [project])
 
   function showRunPlan(): void {
     setIsPlanOpen(true)
@@ -132,6 +149,4 @@ const IDE = memo(function IDE(): JSX.Element {
       <Outlet />
     </ContainerPage>
   )
-})
-
-export default IDE
+}

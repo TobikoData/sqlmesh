@@ -341,6 +341,7 @@ function EditorPreviewLineage({
     <Graph
       lineage={previewLineage}
       highlightedNodes={highlightedNodes}
+      models={models}
     />
   )
 }

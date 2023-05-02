@@ -157,7 +157,7 @@ function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           className={clsx(
-            'w-full h-full pt-4 relative px-2',
+            'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
         >
@@ -268,7 +268,10 @@ function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
           )}
         >
           {model != null ? (
-            <Documantation model={model} />
+            <Documantation
+              model={model}
+              withCode={false}
+            />
           ) : (
             <Documantation.NotFound />
           )}
