@@ -17,7 +17,7 @@ type ExtensionCleanUp = () => void
 type ExtensionSqlMeshDialect = (
   models: Map<string, Model>,
   file: ModelFile,
-  options: { types: string; keywords: string },
+  options?: { types: string; keywords: string },
   dialects?: string[],
 ) => LanguageSupport
 
@@ -32,8 +32,8 @@ export function useSqlMeshExtension(): [
       options,
       dialects?,
     ): LanguageSupport {
-      const SQLTypes = options.types
-      const SQLKeywords = options.keywords
+      const SQLTypes = options?.types ?? ''
+      const SQLKeywords = options?.keywords ?? ''
       const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
       const SQLMeshKeywords =
         'model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'

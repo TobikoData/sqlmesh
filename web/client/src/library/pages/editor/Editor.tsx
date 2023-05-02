@@ -1,5 +1,4 @@
 import { lazy, useState } from 'react'
-import { useApiFiles } from '@api/index'
 import FileTree from '@components/fileTree/FileTree'
 import PlanProvider from '@components/plan/context'
 import SplitPane from '@components/splitPane/SplitPane'
@@ -10,13 +9,14 @@ import { isFalse, isTrue } from '@utils/index'
 import ModalSidebar from '@components/modal/ModalDrawer'
 import Editor from '@components/editor/Editor'
 import { useIDE } from '../ide/context'
+import { useStoreFileTree } from '@context/fileTree'
 
 const Plan = lazy(async () => await import('@components/plan/Plan'))
 
 export default function PageEditor(): JSX.Element {
   const { isPlanOpen, setIsPlanOpen } = useIDE()
 
-  const { data: project } = useApiFiles()
+  const project = useStoreFileTree(s => s.project)
 
   const environment = useStoreContext(s => s.environment)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
