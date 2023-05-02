@@ -20,13 +20,6 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
 
-    @property
-    def cursor(self) -> t.Any:
-        cursor = self._connection_pool.get_cursor()
-        # The SQLMesh implementation relies on autocommit being set to True
-        cursor.connection.autocommit = True
-        return cursor
-
     def replace_query(
         self,
         table_name: TableName,
