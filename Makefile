@@ -28,7 +28,7 @@ it-test: core-it-test airflow-it-test-with-env
 
 it-test-docker: core-it-test airflow-it-test-docker-with-env
 
-test: unit-test it-test doc-test
+test: unit-test doc-test it-test
 
 package:
 	pip3 install wheel && python3 setup.py sdist bdist_wheel

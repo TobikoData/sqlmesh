@@ -266,7 +266,9 @@ def dag(ctx: click.Context, file: str) -> None:
 
     This command requires a manual install of both the python and system graphviz package.
     """
-    ctx.obj.render_dag(file)
+    rendered_dag_path = ctx.obj.render_dag(file)
+    if rendered_dag_path:
+        ctx.obj.console.log_success(f"Generated the dag to {rendered_dag_path}")
 
 
 @cli.command("test")
@@ -374,6 +376,45 @@ def ide(
 def migrate(ctx: click.Context) -> None:
     """Migrate SQLMesh to the current running version."""
     ctx.obj.migrate()
+
+
+@cli.command("prompt")
+@click.argument("prompt")
+@click.option(
+    "-e",
+    "--evaluate",
+    is_flag=True,
+    help="Evaluate the generated SQL query and display the results.",
+)
+@click.option(
+    "-t",
+    "--temperature",
+    type=float,
+    help="Sampling temperature. 0.0 - precise and predictable, 0.5 - balanced, 1.0 - creative. Default: 0.7",
+    default=0.7,
+)
+@opt.verbose
+@click.pass_context
+@error_handler
+def prompt(
+    ctx: click.Context, prompt: str, evaluate: bool, temperature: float, verbose: bool
+) -> None:
+    """Uses LLM to generate a SQL query from a prompt."""
+    from sqlmesh.integrations.llm import LLMIntegration
+
+    context = ctx.obj
+
+    llm_integration = LLMIntegration(
+        context.models.values(),
+        context.engine_adapter.dialect,
+        temperature=temperature,
+        verbose=verbose,
+    )
+    query = llm_integration.query(prompt)
+
+    context.console.log_status_update(query)
+    if evaluate:
+        context.console.log_success(context.fetchdf(query))
 
 
 if __name__ == "__main__":

@@ -158,7 +158,7 @@ def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date
 
 def date_dict(
     start: TimeLike, end: TimeLike, latest: TimeLike, only_latest: bool = False
-) -> t.Dict[str, t.Union[str, datetime, float, int]]:
+) -> t.Dict[str, t.Union[str, datetime, date, float, int]]:
     """Creates a kwarg dictionary of datetime variables for use in SQL Contexts.
 
     Keys are like start_date, start_ds, end_date, end_ds...
@@ -172,7 +172,7 @@ def date_dict(
     Returns:
         A dictionary with various keys pointing to datetime formats.
     """
-    kwargs: t.Dict[str, t.Union[str, datetime, float, int]] = {}
+    kwargs: t.Dict[str, t.Union[str, datetime, date, float, int]] = {}
 
     prefixes = [("latest", to_datetime(latest))]
 
@@ -183,7 +183,8 @@ def date_dict(
     for prefix, time_like in prefixes:
         dt = to_datetime(time_like)
         millis = to_timestamp(time_like)
-        kwargs[f"{prefix}_date"] = dt
+        kwargs[f"{prefix}_dt"] = dt
+        kwargs[f"{prefix}_date"] = to_date(dt)
         kwargs[f"{prefix}_ds"] = to_ds(time_like)
         kwargs[f"{prefix}_ts"] = dt.isoformat()
         kwargs[f"{prefix}_epoch"] = millis / 1000

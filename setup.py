@@ -43,7 +43,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=11.6.1",
+        "sqlglot~=11.6.3",
         "fsspec",
     ],
     extras_require={
@@ -86,6 +86,10 @@ setup(
         ],
         "dbt": [
             "dbt-core<1.5.0",
+        ],
+        "llm": [
+            "langchain",
+            "openai",
         ],
         "postgres": [
             "psycopg2",

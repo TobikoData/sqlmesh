@@ -12,12 +12,21 @@ def filter_country(
     return exp.and_(expression, f"country = '{country}'")
 
 
+@macro("UPPER")
+def upper_case(evaluator: MacroEvaluator, expression: exp.Condition, country: str) -> exp.Condition:
+    return exp.true()
+
+
 @pytest.fixture
 def macro_evaluator() -> MacroEvaluator:
     return MacroEvaluator(
         "hive",
         {"test": Executable(name="test", payload=f"def test(_):\n    return 'test'")},
     )
+
+
+def test_case():
+    assert macro.get_registry()["upper"]
 
 
 def test_macro_var(macro_evaluator):
@@ -158,6 +167,26 @@ def test_ast_correctness(macro_evaluator):
             """select * from city @ORDER_BY(@do_order) population, name DESC""",
             "SELECT * FROM city",
             {"do_order": False},
+        ),
+        (
+            """select @if(TRUE, 1, 0)""",
+            "SELECT 1",
+            {},
+        ),
+        (
+            """select @if(FALSE, 1, 0)""",
+            "SELECT 0",
+            {},
+        ),
+        (
+            """select @if(1 > 0, 1, 0)""",
+            "SELECT 1",
+            {},
+        ),
+        (
+            """select @if('a' = 'b', c), d""",
+            "SELECT d",
+            {},
         ),
     ],
 )

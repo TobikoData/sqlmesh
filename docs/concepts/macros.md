@@ -50,6 +50,11 @@ Variables:
     * @end_date
     * @latest_date
 
+* datetime
+    * @start_dt
+    * @end_dt
+    * @latest_dt
+
 * ds
     * @start_ds
     * @end_ds

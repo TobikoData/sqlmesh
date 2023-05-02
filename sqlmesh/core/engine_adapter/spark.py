@@ -63,18 +63,19 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        column_names: t.Sequence[str],
+        columns_to_types: t.Dict[str, exp.DataType],
         unique_key: t.Sequence[str],
     ) -> None:
+        column_names = columns_to_types.keys()
         if isinstance(source_table, PySparkDataFrame):
             temp_view_name = self._get_temp_table(target_table, table_only=True).sql(
                 dialect=self.dialect
             )
             source_table.createOrReplaceTempView(temp_view_name)
             query = exp.select(*column_names).from_(temp_view_name)
-            super().merge(target_table, query, column_names, unique_key)
+            super().merge(target_table, query, columns_to_types, unique_key)
         else:
-            super().merge(target_table, source_table, column_names, unique_key)
+            super().merge(target_table, source_table, columns_to_types, unique_key)
 
     def _insert_append_pandas_df(
         self,
