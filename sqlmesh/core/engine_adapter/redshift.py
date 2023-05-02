@@ -22,13 +22,10 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
 
     @property
     def cursor(self) -> t.Any:
-        connection = self._connection_pool.get()
-        # The SQLMesh implementation relies on autocommit being set to True
-        connection.autocommit = True
-        cursor = self._connection_pool.get_cursor()
         # Redshift by default uses a `format` paramstyle that has issues when we try to write our snapshot
         # data to snapshot table. There doesn't seem to be a way to disable parameter overriding so we just
         # set it to `qmark` since that doesn't cause issues.
+        cursor = self._connection_pool.get_cursor()
         cursor.paramstyle = "qmark"
         return cursor
 

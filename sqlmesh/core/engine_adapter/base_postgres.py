@@ -86,6 +86,22 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 **create_kwargs,
             )
 
+    def execute(
+        self,
+        sql: t.Union[str, exp.Expression],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        """
+        To make sure that inserts and updates take effect we need to commit explicitly unless the
+        statement is executed as part of an active transaction.
+
+        Reference: https://www.psycopg.org/psycopg3/docs/basic/transactions.html
+        """
+        super().execute(sql, ignore_unsupported_errors=ignore_unsupported_errors, **kwargs)
+        if not self._connection_pool.is_transaction_active:
+            self._connection_pool.commit()
+
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
     ) -> t.List[DataObject]:
