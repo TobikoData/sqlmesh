@@ -1,6 +1,5 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
-import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
   useState,
@@ -10,12 +9,7 @@ import {
   useMemo,
   useCallback,
 } from 'react'
-import {
-  apiCancelGetEnvironments,
-  apiCancelPlanRun,
-  useApiEnvironments,
-  useApiPlanRun,
-} from '~/api'
+import { useApiEnvironments, useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
@@ -46,8 +40,6 @@ export default function RunPlan({
 }: {
   showRunPlan: () => void
 }): JSX.Element {
-  const client = useQueryClient()
-
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const setPlanState = useStorePlan(s => s.setState)
@@ -96,16 +88,6 @@ export default function RunPlan({
         }
       : undefined
   }, [environment])
-
-  useEffect(() => {
-    return () => {
-      debouncedGetEnvironemnts.cancel()
-      debouncedPlanRun.cancel()
-
-      apiCancelPlanRun(client)
-      apiCancelGetEnvironments(client)
-    }
-  }, [])
 
   useEffect(() => {
     debouncedPlanRun().finally(() => {

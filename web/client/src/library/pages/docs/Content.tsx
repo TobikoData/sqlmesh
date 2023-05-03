@@ -28,29 +28,13 @@ export default function Content(): JSX.Element {
         minSize={0}
         snapOffset={0}
       >
-        <div className="flex flex-col h-full px-4">
+        <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
           <Documantation model={model} />
         </div>
         <div className="flex flex-col h-full px-2">
           <ModelLineage model={model.name} />
         </div>
       </SplitPane>
-
-      {/* <div className="mx-4 min-w-[16vw]">
-          <div className="p-2 border-2 border-primary-10 sticky top-0 rounded-md w-full">
-            <ul className="m-2 w-full">
-              <li className="">
-                <a href="#Model">Model</a>
-              </li>
-              <li className="">
-                <a href="#Description">Description</a>
-              </li>
-              <li className="">
-                <a href="#Columns">Columns</a>
-              </li>
-            </ul>
-          </div>
-        </div> */}
     </div>
   )
 }

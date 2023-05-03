@@ -33,6 +33,7 @@ import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { EnumFileExtensions, type ModelFile } from '@models/file'
+import clsx from 'clsx'
 
 export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   const { mode } = useColorScheme()
@@ -346,8 +347,10 @@ function CodeEditorFileRemote({
 
 const CodeEditorDocsReadOnly = memo(function CodeEditorDocsReadOnly({
   model,
+  className,
 }: {
   model: Model
+  className?: string
 }): JSX.Element {
   const { mode } = useColorScheme()
   const [SqlMeshDialect] = useSqlMeshExtension()
@@ -406,13 +409,14 @@ const CodeEditorDocsReadOnly = memo(function CodeEditorDocsReadOnly({
     [file, mode, models, model],
   )
 
-  console.log({ file })
-
   return (
     <CodeMirror
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto text-sm font-mono"
+      className={clsx(
+        'w-full h-full overflow-auto text-sm font-mono',
+        className,
+      )}
       value={file?.content ?? ''}
       extensions={extensions}
       readOnly

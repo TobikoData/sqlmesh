@@ -14,12 +14,7 @@ import {
   EnumPlanApplyType,
 } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
-import {
-  useApiPlanRun,
-  useApiPlanApply,
-  apiCancelPlanRun,
-  apiCancelPlanApply,
-} from '~/api'
+import { useApiPlanRun, useApiPlanApply, apiCancelPlanApply } from '~/api'
 import {
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
@@ -105,8 +100,6 @@ function Plan({
       debouncedPlanRun.cancel()
 
       unsubscribeTests?.()
-
-      apiCancelPlanRun(client)
     }
   }, [])
 
