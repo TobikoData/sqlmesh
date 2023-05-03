@@ -47,25 +47,25 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class GithubCommitStatus(str, Enum):
+class GithubCheckStatus(str, Enum):
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
 
     @property
     def is_queued(self) -> bool:
-        return self == GithubCommitStatus.QUEUED
+        return self == GithubCheckStatus.QUEUED
 
     @property
     def is_in_progress(self) -> bool:
-        return self == GithubCommitStatus.IN_PROGRESS
+        return self == GithubCheckStatus.IN_PROGRESS
 
     @property
     def is_completed(self) -> bool:
-        return self == GithubCommitStatus.COMPLETED
+        return self == GithubCheckStatus.COMPLETED
 
 
-class GithubCommitConclusion(str, Enum):
+class GithubCheckConclusion(str, Enum):
     SUCCESS = "success"
     FAILURE = "failure"
     NEUTRAL = "neutral"
@@ -76,31 +76,31 @@ class GithubCommitConclusion(str, Enum):
 
     @property
     def is_success(self) -> bool:
-        return self == GithubCommitConclusion.SUCCESS
+        return self == GithubCheckConclusion.SUCCESS
 
     @property
     def is_failure(self) -> bool:
-        return self == GithubCommitConclusion.FAILURE
+        return self == GithubCheckConclusion.FAILURE
 
     @property
     def is_neutral(self) -> bool:
-        return self == GithubCommitConclusion.NEUTRAL
+        return self == GithubCheckConclusion.NEUTRAL
 
     @property
     def is_cancelled(self) -> bool:
-        return self == GithubCommitConclusion.CANCELLED
+        return self == GithubCheckConclusion.CANCELLED
 
     @property
     def is_timed_out(self) -> bool:
-        return self == GithubCommitConclusion.TIMED_OUT
+        return self == GithubCheckConclusion.TIMED_OUT
 
     @property
     def is_action_required(self) -> bool:
-        return self == GithubCommitConclusion.ACTION_REQUIRED
+        return self == GithubCheckConclusion.ACTION_REQUIRED
 
     @property
     def is_skipped(self) -> bool:
-        return self == GithubCommitConclusion.SKIPPED
+        return self == GithubCheckConclusion.SKIPPED
 
 
 class AffectedEnvironmentModel(PydanticModel):
@@ -444,9 +444,9 @@ class GithubController:
     def _update_check(
         self,
         name: str,
-        status: GithubCommitStatus,
+        status: GithubCheckStatus,
         title: str,
-        conclusion: t.Optional[GithubCommitConclusion] = None,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
         summary: t.Optional[str] = None,
     ) -> None:
         """
@@ -478,8 +478,8 @@ class GithubController:
 
     def update_test_check(
         self,
-        status: GithubCommitStatus,
-        conclusion: t.Optional[GithubCommitConclusion] = None,
+        status: GithubCheckStatus,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
         result: t.Optional[unittest.result.TestResult] = None,
         failed_output: t.Optional[str] = None,
     ) -> None:
@@ -487,8 +487,8 @@ class GithubController:
         Updates the status of tests for code in the PR
         """
         status_to_title = {
-            GithubCommitStatus.IN_PROGRESS: "Running Tests",
-            GithubCommitStatus.QUEUED: "Waiting to Run Tests",
+            GithubCheckStatus.IN_PROGRESS: "Running Tests",
+            GithubCheckStatus.QUEUED: "Waiting to Run Tests",
         }
         title = status_to_title.get(status)
         summary = title
@@ -498,10 +498,10 @@ class GithubController:
             else:
                 if result.wasSuccessful():
                     title = "Test Passed"
-                    conclusion = GithubCommitConclusion.SUCCESS
+                    conclusion = GithubCheckConclusion.SUCCESS
                 else:
                     title = "Tests Failed"
-                    conclusion = GithubCommitConclusion.FAILURE
+                    conclusion = GithubCheckConclusion.FAILURE
                 self.console.log_test_results(
                     result, failed_output or "", self._context._test_engine_adapter.dialect
                 )
@@ -515,20 +515,20 @@ class GithubController:
         )
 
     def update_required_approval_check(
-        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+        self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
     ) -> None:
         """
         Updates the status of the merge commit for the required approval.
         """
         status_to_title = {
-            GithubCommitStatus.IN_PROGRESS: "Checking if we have required Approvers",
-            GithubCommitStatus.QUEUED: "Waiting to Check if we have required Approvers",
+            GithubCheckStatus.IN_PROGRESS: "Checking if we have required Approvers",
+            GithubCheckStatus.QUEUED: "Waiting to Check if we have required Approvers",
         }
         title = status_to_title.get(status)
         if not title:
             assert conclusion
             conclusion_to_title = {
-                GithubCommitConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
+                GithubCheckConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
             }
             title = conclusion_to_title.get(conclusion, "Need a Required Approval")
         summary = f"**List of possible required approvers:**\n"
@@ -543,15 +543,15 @@ class GithubController:
         )
 
     def update_pr_environment_check(
-        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+        self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
     ) -> None:
         """
         Updates the status of the merge commit for the PR environment.
         """
         title = f"PR Virtual Data Environment: {self.pr_environment_name}"
         status_to_summary = {
-            GithubCommitStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
-            GithubCommitStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
+            GithubCheckStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
+            GithubCheckStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
         }
         summary = status_to_summary.get(status)
         if summary:
@@ -605,10 +605,10 @@ class GithubController:
             )
         else:
             conclusion_to_summary = {
-                GithubCommitConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
-                GithubCommitConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
-                GithubCommitConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                GithubCommitConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
+                GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
+                GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
             }
             summary = conclusion_to_summary.get(
                 conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
@@ -622,23 +622,23 @@ class GithubController:
             )
 
     def update_prod_environment_check(
-        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+        self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
     ) -> None:
         """
         Updates the status of the merge commit for the prod environment.
         """
         status_to_title = {
-            GithubCommitStatus.IN_PROGRESS: "Deploying to Prod",
-            GithubCommitStatus.QUEUED: "Waiting to see if we can deploy to prod",
+            GithubCheckStatus.IN_PROGRESS: "Deploying to Prod",
+            GithubCheckStatus.QUEUED: "Waiting to see if we can deploy to prod",
         }
         title = summary = status_to_title.get(status)
         if not title:
             assert conclusion
             conclusion_to_title = {
-                GithubCommitConclusion.SUCCESS: "Deployed to Prod",
-                GithubCommitConclusion.CANCELLED: "Cancelled deploying to prod",
-                GithubCommitConclusion.SKIPPED: "Skipped deploying to prod since dependencies were not met",
-                GithubCommitConclusion.FAILURE: "Failed to deploy to prod",
+                GithubCheckConclusion.SUCCESS: "Deployed to Prod",
+                GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
+                GithubCheckConclusion.SKIPPED: "Skipped deploying to prod since dependencies were not met",
+                GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
             }
             title = conclusion_to_title.get(
                 conclusion, f"Got an unexpected conclusion: {conclusion.value}"

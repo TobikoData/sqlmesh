@@ -6,8 +6,8 @@ import click
 
 from sqlmesh.integrations.github.cicd import options as opt
 from sqlmesh.integrations.github.cicd.controller import (
-    GithubCommitConclusion,
-    GithubCommitStatus,
+    GithubCheckConclusion,
+    GithubCheckStatus,
     GithubController,
 )
 from sqlmesh.utils.errors import PlanError
@@ -28,14 +28,14 @@ def github(ctx: click.Context, token: str) -> None:
 
 
 def _check_required_approvers(controller: GithubController) -> bool:
-    controller.update_required_approval_check(status=GithubCommitStatus.IN_PROGRESS)
+    controller.update_required_approval_check(status=GithubCheckStatus.IN_PROGRESS)
     if controller.has_required_approval:
         controller.update_required_approval_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SUCCESS
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
         )
         return True
     controller.update_required_approval_check(
-        status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.NEUTRAL
+        status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.NEUTRAL
     )
     return False
 
@@ -48,18 +48,18 @@ def check_required_approvers(ctx: click.Context) -> None:
 
 
 def _run_tests(controller: GithubController) -> bool:
-    controller.update_test_check(status=GithubCommitStatus.IN_PROGRESS)
+    controller.update_test_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         result, failed_output = controller.run_tests()
         controller.update_test_check(
-            status=GithubCommitStatus.COMPLETED,
+            status=GithubCheckStatus.COMPLETED,
             result=result,
             failed_output=failed_output,
         )
         return result.wasSuccessful()
     except Exception:
         controller.update_test_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.FAILURE
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.FAILURE
         )
         return False
 
@@ -72,16 +72,16 @@ def run_tests(ctx: click.Context) -> None:
 
 
 def _update_pr_environment(controller: GithubController) -> bool:
-    controller.update_pr_environment_check(status=GithubCommitStatus.IN_PROGRESS)
+    controller.update_pr_environment_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         controller.update_pr_environment()
         controller.update_pr_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SUCCESS
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
         )
         return True
     except PlanError:
         controller.update_pr_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.ACTION_REQUIRED
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.ACTION_REQUIRED
         )
         return False
 
@@ -98,11 +98,11 @@ def _deploy_production(
     merge_pr_after_deploy: bool = True,
     delete_environment_after_deploy: bool = True,
 ) -> bool:
-    controller.update_prod_environment_check(status=GithubCommitStatus.IN_PROGRESS)
+    controller.update_prod_environment_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         controller.deploy_to_prod()
         controller.update_prod_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SUCCESS
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
         )
         if merge_pr_after_deploy:
             controller.merge_pr()
@@ -111,7 +111,7 @@ def _deploy_production(
         return True
     except PlanError:
         controller.update_prod_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.ACTION_REQUIRED
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.ACTION_REQUIRED
         )
         return False
 
@@ -134,12 +134,12 @@ def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
 def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Runs all the commands in the correct order."""
     controller = ctx.obj["github"]
-    controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
-    controller.update_prod_environment_check(status=GithubCommitStatus.QUEUED)
-    controller.update_test_check(status=GithubCommitStatus.QUEUED)
+    controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
+    controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
+    controller.update_test_check(status=GithubCheckStatus.QUEUED)
     tests_passed = _run_tests(controller)
     if controller.do_required_approval_check:
-        controller.update_required_approval_check(status=GithubCommitStatus.QUEUED)
+        controller.update_required_approval_check(status=GithubCheckStatus.QUEUED)
         has_required_approval = _check_required_approvers(controller)
     else:
         has_required_approval = True
@@ -150,5 +150,5 @@ def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
         )
     else:
         controller.update_prod_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
         )
