@@ -136,6 +136,9 @@ jobs:
           name: Install envsubst
           command: sudo apt-get update && sudo apt-get install gettext-base
       - run:
+          name: Install ruamel.yaml
+          command: pip3 install ruamel.yaml==0.16.0
+      - run:
           name: Run Airflow integration tests
           command: make airflow-it-test-docker-with-env
       - run:
