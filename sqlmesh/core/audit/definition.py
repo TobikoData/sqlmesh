@@ -184,8 +184,16 @@ class Audit(AuditMeta, frozen=True):
 
         query_renderer = self._create_query_renderer(model)
 
-        this_model_subquery = exp.select("*").from_(exp.to_table(this_model))
-        query_renderer.filter_time_column(this_model_subquery, start or c.EPOCH, end or c.EPOCH)
+        query = (
+            exp.select("*")
+            .from_(this_model)
+            .where(
+                query_renderer.time_column_filter(start or c.EPOCH, end or c.EPOCH)
+                if query_renderer._time_column
+                else None
+            )
+            .subquery()
+        )
 
         return query_renderer.render(
             start=start,
@@ -193,7 +201,7 @@ class Audit(AuditMeta, frozen=True):
             latest=latest,
             snapshots=snapshots,
             is_dev=is_dev,
-            this_model=this_model_subquery.subquery(),
+            this_model=query,
             **kwargs,
         )
 

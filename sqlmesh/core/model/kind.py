@@ -80,6 +80,12 @@ class TimeColumn(PydanticModel):
     column: str
     format: t.Optional[str] = None
 
+    @validator("column", pre=True)
+    def _column_validator(cls, v: str) -> str:
+        if not v:
+            raise ConfigError("Time Column cannot be empty.")
+        return v
+
     @property
     def expression(self) -> exp.Column | exp.Tuple:
         """Convert this pydantic model into a time_column SQLGlot expression."""

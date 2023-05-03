@@ -120,8 +120,7 @@ def test_render(sushi_context, assert_exp_eq):
         GROUP BY
           o.waiter_id,
           o.ds
-        HAVING
-          CAST(o.ds AS TEXT) <= '2021-01-01' AND CAST(o.ds AS TEXT) >= '2021-01-01'
+
         """,
     )
     assert_exp_eq(
@@ -130,24 +129,29 @@ def test_render(sushi_context, assert_exp_eq):
             start=date(2021, 1, 1),
             end=date(2021, 1, 1),
             latest=date(2021, 1, 1),
+            add_incremental_filter=True,
         ),
         f"""
         SELECT
-          CAST(o.waiter_id AS INT) AS waiter_id, -- Waiter id
-          CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, -- Revenue from orders taken by this waiter
-          CAST(o.ds AS TEXT) AS ds, -- Date
-        FROM {sushi_context.snapshots['sushi.orders'].table_name()} AS o
-        LEFT JOIN {sushi_context.snapshots['sushi.order_items'].table_name()} AS oi
-          ON o.ds = oi.ds AND o.id = oi.order_id
-        LEFT JOIN {sushi_context.snapshots['sushi.items'].table_name()} AS i
-          ON oi.ds = i.ds AND oi.item_id = i.id
+          *
+        FROM (
+          SELECT
+            CAST(o.waiter_id AS INT) AS waiter_id, /* Waiter id */
+            CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, /* Revenue from orders taken by this waiter */
+            CAST(o.ds AS TEXT) AS ds /* Date */
+          FROM sqlmesh.sushi__orders__2048186253 AS o
+          LEFT JOIN sqlmesh.sushi__order_items__1680868792 AS oi
+            ON o.ds = oi.ds AND o.id = oi.order_id
+          LEFT JOIN sqlmesh.sushi__items__3758356954 AS i
+            ON oi.ds = i.ds AND oi.item_id = i.id
+          WHERE
+            o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'
+          GROUP BY
+            o.waiter_id,
+            o.ds
+        ) AS _subquery
         WHERE
-          o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'
-        GROUP BY
-          o.waiter_id,
-          o.ds
-        HAVING
-          CAST(o.ds AS TEXT) <= '2021-01-01' AND CAST(o.ds AS TEXT) >= '2021-01-01'
+          ds BETWEEN '2021-01-01' AND '2021-01-01'
         """,
     )
 
@@ -197,10 +201,8 @@ def test_render(sushi_context, assert_exp_eq):
         GROUP BY
           o.waiter_id,
           o.ds
-        HAVING
-          CAST(o.ds AS TEXT) <= '1970-01-01' AND CAST(o.ds AS TEXT) >= '1970-01-01'
         """,
-    ),
+    )
 
 
 def test_diff(sushi_context: Context, mocker: MockerFixture):
