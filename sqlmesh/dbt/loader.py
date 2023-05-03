@@ -101,8 +101,6 @@ class DbtLoader(Loader):
             context.add_seeds(package.seeds)
             context.add_models(package.models)
 
-        logger.info("Done rendering model configs")
-
         logger.info("Converting models to sqlmesh")
         # Now that config is rendered, create the sqlmesh models
         for package in project.packages.values():
@@ -118,7 +116,6 @@ class DbtLoader(Loader):
                 }
             )
 
-        logger.info("Done converting models to sqlmesh format")
         return models
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:

@@ -109,6 +109,5 @@ class Profile:
         target = TargetConfig.load(
             {"name": target_name, "profile_name": context.profile_name, **target_fields}
         )
-        logger.info(f"Done processing profile '{path}'.")
 
         return (target_name, target)

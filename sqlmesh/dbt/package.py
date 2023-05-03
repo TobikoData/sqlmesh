@@ -97,10 +97,8 @@ class PackageLoader:
             for var, value in project_yaml.get("vars", {}).items()
             if not isinstance(value, dict)
         }
-        logger.info(f"Done processing project variables.")
 
         self._load_project_config(project_yaml)
-        logger.info(f"Done processing project file '{project_file_path}'.")
 
         models_dirs = [
             Path(self._context.project_root, self._context.render(dir))
@@ -119,7 +117,6 @@ class PackageLoader:
             for dir in project_yaml.get("macro-paths") or ["macros"]
         ]
         macros = self._load_macros(macros_dirs)
-        logger.info(f"Done loading package at '{self._context.project_root}'.")
 
         return Package(
             models=models,
@@ -217,7 +214,6 @@ class PackageLoader:
                     properties_yaml, scope, self.project_config.source_config
                 )
                 sources.update(source_configs_in_file)
-                logger.info(f"Done processing properties file '{path}'.")
 
             # Layer on configs from the model file and create model configs
             for path in root.glob("**/*.sql"):
@@ -229,7 +225,6 @@ class PackageLoader:
                 model_config.update_with(self._overridden_model_fields(scope))
                 if model_config.enabled and model_config.table_name:
                     models[model_config.table_name] = model_config
-                logger.info(f"Done processing models file '{path}'.")
 
         return (models, sources)
 
@@ -260,7 +255,6 @@ class PackageLoader:
                 self._load_config_section_from_properties(
                     properties_yaml, "seeds", scope, self.project_config.seed_config
                 )
-                logger.info(f"Done processing properties file '{path}'.")
 
             # Layer on configs from the model file and create seed configs
             for path in root.glob("**/*.csv"):
@@ -273,7 +267,6 @@ class PackageLoader:
                 seed_config.path = path
                 if seed_config.enabled:
                     seeds[path.stem] = seed_config
-                logger.info(f"Done processing seed file '{path}'.")
 
         return seeds
 
@@ -284,7 +277,6 @@ class PackageLoader:
             for path in root.glob("**/*.sql"):
                 logger.info(f"Processing macro file '{path}'.")
                 macros.update(self._load_macro_file(path))
-                logger.info(f"Done processing macro file '{path}'.")
 
         return macros
 
