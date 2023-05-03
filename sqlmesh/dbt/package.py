@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from pathlib import Path
 
@@ -21,6 +22,10 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     C = t.TypeVar("C", bound=BaseConfig)
+
+
+logger = logging.getLogger(__name__)
+
 
 Scope = t.Union[t.Tuple[()], t.Tuple[str, ...]]
 ScopedSources = t.Dict[Scope, SourceConfig]
@@ -74,7 +79,9 @@ class PackageLoader:
         Returns:
             Package containing the configuration found within this package
         """
+        logger.info(f"Loading package at '{self._context.project_root}'.")
         project_file_path = Path(self._context.project_root, PROJECT_FILENAME)
+        logger.info(f"Processing project file '{project_file_path}'.")
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {self._context.project_root}")
 
@@ -84,13 +91,16 @@ class PackageLoader:
         self._package_name = self._context.render(project_yaml.get("name", ""))
 
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
+        logger.info(f"Processing project variables.")
         self._context.variables = {
             var: value
             for var, value in project_yaml.get("vars", {}).items()
             if not isinstance(value, dict)
         }
+        logger.info(f"Done processing project variables.")
 
         self._load_project_config(project_yaml)
+        logger.info(f"Done processing project file '{project_file_path}'.")
 
         models_dirs = [
             Path(self._context.project_root, self._context.render(dir))
@@ -109,6 +119,7 @@ class PackageLoader:
             for dir in project_yaml.get("macro-paths") or ["macros"]
         ]
         macros = self._load_macros(macros_dirs)
+        logger.info(f"Done loading package at '{self._context.project_root}'.")
 
         return Package(
             models=models,
@@ -128,6 +139,7 @@ class PackageLoader:
         ) -> t.Dict[Scope, C]:
             """Recursively loads config and nested configs in the provided yaml"""
             scoped_configs = scoped_configs or {}
+            logger.info(f"Processing config at {'-'.join(scope) if scoped_configs else 'root'}")
 
             config_fields = parent.all_fields()
 
@@ -155,14 +167,17 @@ class PackageLoader:
             quoting = target.quoting
 
         scope = ()
+        logger.info("Processing project sources config.")
         self.project_config.source_config = load_config(
             yaml.get("sources", {}), SourceConfig(quoting=quoting), scope
         )
+        logger.info("Processing project seeds config.")
         self.project_config.seed_config = load_config(
             yaml.get("seeds", {}),
             SeedConfig(target_schema=target.schema_, quoting=quoting),
             scope,
         )
+        logger.info("Processing project models config.")
         self.project_config.model_config = load_config(
             yaml.get("models", {}),
             ModelConfig(target_schema=target.schema_, quoting=quoting),
@@ -190,6 +205,7 @@ class PackageLoader:
             for path in root.glob("**/*.yml"):
                 self._config_paths.add(path)
 
+                logger.info(f"Processing properties file '{path}'.")
                 scope = self._scope_from_path(path, root)
                 properties_yaml = load_yaml(path)
 
@@ -201,9 +217,11 @@ class PackageLoader:
                     properties_yaml, scope, self.project_config.source_config
                 )
                 sources.update(source_configs_in_file)
+                logger.info(f"Done processing properties file '{path}'.")
 
             # Layer on configs from the model file and create model configs
             for path in root.glob("**/*.sql"):
+                logger.info(f"Processing models file '{path}'.")
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
@@ -211,6 +229,7 @@ class PackageLoader:
                 model_config.update_with(self._overridden_model_fields(scope))
                 if model_config.enabled and model_config.table_name:
                     models[model_config.table_name] = model_config
+                logger.info(f"Done processing models file '{path}'.")
 
         return (models, sources)
 
@@ -232,6 +251,7 @@ class PackageLoader:
         for root in seeds_dirs:
             # Layer on configs in properties files
             for path in root.glob("**/*.yml"):
+                logger.info(f"Processing properties file '{path}'.")
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
@@ -240,9 +260,11 @@ class PackageLoader:
                 self._load_config_section_from_properties(
                     properties_yaml, "seeds", scope, self.project_config.seed_config
                 )
+                logger.info(f"Done processing properties file '{path}'.")
 
             # Layer on configs from the model file and create seed configs
             for path in root.glob("**/*.csv"):
+                logger.info(f"Processing seed file '{path}'.")
                 self._config_paths.add(path)
 
                 scope = self._scope_from_path(path, root)
@@ -251,6 +273,7 @@ class PackageLoader:
                 seed_config.path = path
                 if seed_config.enabled:
                     seeds[path.stem] = seed_config
+                logger.info(f"Done processing seed file '{path}'.")
 
         return seeds
 
@@ -259,7 +282,9 @@ class PackageLoader:
 
         for root in macros_dirs:
             for path in root.glob("**/*.sql"):
+                logger.info(f"Processing macro file '{path}'.")
                 macros.update(self._load_macro_file(path))
+                logger.info(f"Done processing macro file '{path}'.")
 
         return macros
 
@@ -276,6 +301,7 @@ class PackageLoader:
         scope: Scope,
         scoped_configs: t.Dict[Scope, C],
     ) -> None:
+        logger.info(f"Processing properties - {section_name}.")
         section_yaml = yaml.get(section_name)
         if not section_yaml:
             return
@@ -286,6 +312,7 @@ class PackageLoader:
                 continue
 
             model_scope = (*scope, value["name"])
+            logger.info(f"Processing {'-'.join(model_scope)}.")
             scoped_configs[model_scope] = self._config_for_scope(scope, scoped_configs).update_with(
                 fields
             )
@@ -296,6 +323,7 @@ class PackageLoader:
         scope: Scope,
         scoped_configs: t.Dict[Scope, SourceConfig],
     ) -> t.Dict[str, SourceConfig]:
+        logger.info("Processing sources.")
         sources_yaml = properties_yaml.get("sources")
         if not sources_yaml:
             return {}
@@ -304,6 +332,7 @@ class PackageLoader:
 
         for source in sources_yaml:
             source_name = source["name"]
+            logger.info(f"Processing {source_name}.")
             source_config = self._config_for_scope((*scope, source_name), scoped_configs)
 
             source_config.schema_ = source_name

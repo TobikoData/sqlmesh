@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import typing as t
 from pathlib import Path
@@ -9,6 +10,8 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import dumps as dump_yaml
+
+logger = logging.getLogger(__name__)
 
 
 class Profile:
@@ -83,6 +86,7 @@ class Profile:
     def _read_profile(
         cls, path: Path, context: DbtContext, target_name: t.Optional[str] = None
     ) -> t.Tuple[str, TargetConfig]:
+        logger.info(f"Processing profile '{path}'.")
         project_data = load_yaml(path).get(context.profile_name)
         if not project_data:
             raise ConfigError(f"Profile '{context.profile_name}' not found in profiles.")
@@ -105,5 +109,6 @@ class Profile:
         target = TargetConfig.load(
             {"name": target_name, "profile_name": context.profile_name, **target_fields}
         )
+        logger.info(f"Done processing profile '{path}'.")
 
         return (target_name, target)
