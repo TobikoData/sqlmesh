@@ -47,6 +47,7 @@ class Project:
         context = context.copy()
 
         project_file_path = Path(context.project_root, PROJECT_FILENAME)
+        logger.info(f"Processing project file '{project_file_path}'.")
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
         project_yaml = load_yaml(project_file_path)

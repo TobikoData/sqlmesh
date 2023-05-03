@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
-from sqlmesh.dbt.basemodel import BaseModelConfig
+from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
@@ -19,6 +20,8 @@ from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.cache import FileCache
+
+logger = logging.getLogger(__name__)
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Config:
@@ -80,16 +83,17 @@ class DbtLoader(Loader):
         cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
 
         # First render all the config and discover dependencies
+        logger.info("Rendering model configs")
         for package in project.packages.values():
             context.variables = package.variables
 
             package.sources = {k: v.render_config(context) for k, v in package.sources.items()}
             package.seeds = {
-                k: cache.get_or_load_seed_config(v.path, lambda: v.render_config(context))
+                k: cache.get_or_load_seed_config(v.path, lambda: self._render_config(v, context))
                 for k, v in package.seeds.items()
             }
             package.models = {
-                k: cache.get_or_load_model_config(v.path, lambda: v.render_config(context))
+                k: cache.get_or_load_model_config(v.path, lambda: self._render_config(v, context))
                 for k, v in package.models.items()
             }
 
@@ -97,6 +101,7 @@ class DbtLoader(Loader):
             context.add_seeds(package.seeds)
             context.add_models(package.models)
 
+        logger.info("Converting models to sqlmesh")
         # Now that config is rendered, create the sqlmesh models
         for package in project.packages.values():
             context.variables = package.variables
@@ -105,7 +110,7 @@ class DbtLoader(Loader):
             models.update(
                 {
                     model.model_name: cache.get_or_load_model(
-                        model.path, lambda: model.to_sqlmesh(context)
+                        model.path, lambda: self._to_sqlmesh(model, context)
                     )
                     for model in package_models.values()
                 }
@@ -115,6 +120,16 @@ class DbtLoader(Loader):
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")
+
+    @classmethod
+    def _render_config(cls, config: BMC, context: DbtContext) -> BMC:
+        logger.info(f"Rendering config for {config.model_name}")
+        return config.render_config(context)
+
+    @classmethod
+    def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
+        logger.info(f"Converting {config.model_name} to sqlmesh format")
+        return config.to_sqlmesh(context)
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:
         if not root.is_dir():
