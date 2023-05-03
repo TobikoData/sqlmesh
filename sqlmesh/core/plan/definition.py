@@ -443,13 +443,15 @@ class Plan:
         for model_name, snapshot in self.context_diff.snapshots.items():
             upstream_model_names = self._dag.upstream(model_name)
 
-            if not self.forward_only:
-                self._ensure_no_paused_forward_only_upstream(model_name, upstream_model_names)
-
             if model_name in self.context_diff.modified_snapshots:
                 is_directly_modified = self.context_diff.directly_modified(model_name)
 
                 if self.is_new_snapshot(snapshot):
+                    if not self.forward_only:
+                        self._ensure_no_paused_forward_only_upstream(
+                            model_name, upstream_model_names
+                        )
+
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
                         # previous version for non-seed models.
