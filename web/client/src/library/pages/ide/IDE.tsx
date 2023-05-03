@@ -13,7 +13,7 @@ import { useChannelEvents } from '../../../api/channels'
 import { isArrayEmpty, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { Divider } from '@components/divider/Divider'
-import ContainerPage from '@components/container/ContainerPage'
+import Container from '@components/container/Container'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
@@ -119,7 +119,7 @@ export default function IDE(): JSX.Element {
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
 
   return (
-    <ContainerPage>
+    <Container.Page>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold text-primary-500">
@@ -147,6 +147,6 @@ export default function IDE(): JSX.Element {
       </div>
       <Divider />
       <Outlet />
-    </ContainerPage>
+    </Container.Page>
   )
 }
