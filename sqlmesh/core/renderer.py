@@ -9,7 +9,6 @@ from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
 from sqlglot.optimizer import optimize
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.expand_laterals import expand_laterals
-from sqlglot.optimizer.pushdown_projections import pushdown_projections
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
@@ -20,7 +19,12 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
-from sqlmesh.utils.errors import ConfigError, MacroEvalError, raise_config_error
+from sqlmesh.utils.errors import (
+    ConfigError,
+    MacroEvalError,
+    SQLMeshError,
+    raise_config_error,
+)
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
@@ -31,8 +35,8 @@ RENDER_OPTIMIZER_RULES = (
     qualify_tables,
     qualify_columns,
     expand_laterals,
-    pushdown_projections,
     annotate_types,
+    simplify,
 )
 
 
@@ -235,13 +239,18 @@ class QueryRenderer(ExpressionRenderer):
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
-        if add_incremental_filter:
-            # expansion copies the query for us. if it doesn't occur, make sure to copy.
-            if not expand:
-                query = query.copy()
-            for node, _, _ in query.walk(prune=lambda n, *_: isinstance(n, exp.Select)):
-                if isinstance(node, exp.Select):
-                    self.filter_time_column(node, *dates[0:2])
+        if add_incremental_filter and self._time_column:
+            # expand does a copy already
+            query = t.cast(exp.Subqueryable, query if expand else query.copy())
+            with_ = query.args.pop("with", None)
+            query = (
+                exp.select("*")
+                .from_(query.subquery("_subquery", copy=False), copy=False)
+                .where(self.time_column_filter(*dates[0:2]), copy=False)
+            )
+
+            if with_:
+                query.set("with", with_)
 
         if mapping:
             return exp.replace_tables(query, mapping)
@@ -250,6 +259,17 @@ class QueryRenderer(ExpressionRenderer):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
         return t.cast(exp.Subqueryable, query)
+
+    def time_column_filter(self, start: TimeLike, end: TimeLike) -> exp.Between:
+        """Returns a between statement with the properly formatted time column."""
+        if not self._time_column:
+            raise SQLMeshError(
+                "Cannot produce time column filter because model does not have a time column."
+            )
+
+        return exp.column(self._time_column.column)[
+            self._time_converter(start) : self._time_converter(end)  # type: ignore
+        ]
 
     @property
     def contains_star_query(self) -> bool:
@@ -275,51 +295,9 @@ class QueryRenderer(ExpressionRenderer):
     ) -> None:
         self._query_cache[_dates(start, end, latest)] = query
 
-    def filter_time_column(self, query: exp.Select, start: TimeLike, end: TimeLike) -> None:
-        """Filters a query on the time column to ensure no data leakage when running in incremental mode."""
-        if not self._time_column:
-            return
-
-        low = self._time_converter(start)
-        high = self._time_converter(end)
-
-        time_column_identifier = exp.to_identifier(self._time_column.column)
-        if time_column_identifier is None:
-            raise_config_error(
-                f"Time column '{self._time_column.column}' must be a valid identifier.",
-                self._path,
-            )
-            raise
-
-        time_column_projection = next(
-            (
-                select
-                for select in query.selects
-                if select.alias_or_name == self._time_column.column
-            ),
-            time_column_identifier,
-        )
-
-        if isinstance(time_column_projection, exp.Alias):
-            time_column_projection = time_column_projection.this
-
-        between = exp.Between(this=time_column_projection.copy(), low=low, high=high)
-
-        if not query.args.get("group"):
-            query.where(between, copy=False)
-        else:
-            query.having(between, copy=False)
-
-        simplify(query)
-
     def _optimize_query(self, query: exp.Expression) -> t.Optional[exp.Expression]:
         try:
-            return optimize(
-                query,
-                schema=self._schema,
-                rules=RENDER_OPTIMIZER_RULES,
-                remove_unused_selections=False,
-            )
+            return optimize(query, schema=self._schema, rules=RENDER_OPTIMIZER_RULES)
         except (SchemaError, OptimizeError):
             return None
         except SqlglotError as ex:

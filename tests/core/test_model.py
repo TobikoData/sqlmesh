@@ -551,25 +551,30 @@ def test_render_query(assert_exp_eq):
         WHERE
           x.y <= '2020-10-28'
           AND x.y <= DATE_STR_TO_DATE('2020-10-28')
-          AND x.y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
           AND x.y >= '2020-10-28'
           AND x.y >= DATE_STR_TO_DATE('2020-10-28')
-          AND x.y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
         """,
     )
     assert_exp_eq(
-        model.render_query(start="2020-10-28", end=to_datetime("2020-10-29")),
+        model.render_query(
+            start="2020-10-28", end=to_datetime("2020-10-29"), add_incremental_filter=True
+        ),
         """
         SELECT
-          x.y AS y
-        FROM x AS x
+          *
+        FROM (
+          SELECT
+            x.y AS y
+          FROM x AS x
+          WHERE
+            x.y <= '2020-10-28'
+            AND x.y <= DATE_STR_TO_DATE('2020-10-28')
+            AND x.y >= '2020-10-28'
+            AND x.y >= DATE_STR_TO_DATE('2020-10-28')
+        ) AS _subquery
         WHERE
-          x.y <= '2020-10-28'
-          AND x.y <= DATE_STR_TO_DATE('2020-10-28')
-          AND x.y <= TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
-          AND x.y >= '2020-10-28'
-          AND x.y >= DATE_STR_TO_DATE('2020-10-28')
-          AND x.y >= TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00')
+          y BETWEEN TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00') AND TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
+
         """,
     )
 
@@ -760,16 +765,22 @@ def test_filter_time_column(assert_exp_eq):
     model = load_model(expressions)
 
     assert_exp_eq(
-        model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
+        model.render_query(
+            start="2021-01-01", end="2021-01-01", latest="2021-01-01", add_incremental_filter=True
+        ),
         """
         SELECT
-          items.id::INT AS id,
-          items.name::TEXT AS name,
-          items.price::DOUBLE AS price,
-          items.ds::TEXT AS ds
-        FROM raw.items AS items
+          *
+        FROM (
+          SELECT
+            CAST(items.id AS INT) AS id,
+            CAST(items.name AS TEXT) AS name,
+            CAST(items.price AS DOUBLE) AS price,
+            CAST(items.ds AS TEXT) AS ds
+          FROM raw.items AS items
+        ) AS _subquery
         WHERE
-          CAST(items.ds AS TEXT) <= '20210101' AND CAST(items.ds AS TEXT) >= '20210101'
+          ds BETWEEN '20210101' AND '20210101'
         """,
     )
 
@@ -795,16 +806,24 @@ def test_filter_time_column(assert_exp_eq):
     model = load_model(expressions)
 
     assert_exp_eq(
-        model.render_query(start="2021-01-01", end="2021-01-01", latest="2021-01-01"),
+        model.render_query(
+            start="2021-01-01", end="2021-01-01", latest="2021-01-01", add_incremental_filter=True
+        ),
         """
         SELECT
-          items.id::INT AS id,
-          items.name::TEXT AS name,
-          items.price::DOUBLE AS price,
-          items.ds::TEXT AS ds
-        FROM raw.items AS items
+          *
+        FROM (
+          SELECT
+            CAST(items.id AS INT) AS id,
+            CAST(items.name AS TEXT) AS name,
+            CAST(items.price AS DOUBLE) AS price,
+            CAST(items.ds AS TEXT) AS ds
+          FROM raw.items AS items
+          WHERE
+            CAST(items.ds AS TEXT) <= '20210101' AND CAST(items.ds AS TEXT) >= '20210101'
+        ) AS _subquery
         WHERE
-          CAST(items.ds AS TEXT) <= '20210101' AND CAST(items.ds as TEXT) >= '20210101'
+          ds BETWEEN '20210101' AND '20210101'
         """,
     )
 
