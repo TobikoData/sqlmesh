@@ -10,16 +10,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
-    class Base(EngineAdapter):
-        ...
 
-else:
-
-    class Base:
-        ...
-
-
-class LogicalMergeMixin(Base):
+class LogicalMerge(EngineAdapter):
     def merge(
         self,
         target_table: TableName,
@@ -27,6 +19,16 @@ class LogicalMergeMixin(Base):
         columns_to_types: t.Dict[str, exp.DataType],
         unique_key: t.Sequence[str],
     ) -> None:
+        """
+        Merge implementation for engine adapters that do not support merge natively.
+
+        The merge is executed as follows:
+        1. Create a temporary table containing the new data to merge.
+        2. Delete rows from target table where unique_key cols match a row in the temporary table.
+        3. Insert the temporary table contents into the target table. Any duplicate, non-unique rows
+           within the temporary table are ommitted.
+        4. Drop the temporary table.
+        """
         temp_table = self._get_temp_table(target_table)
         unique_exp: exp.Expression = parse_one("|| '__SQLMESH_DELIM__' ||".join(unique_key))
         with self.transaction(TransactionType.DML):
