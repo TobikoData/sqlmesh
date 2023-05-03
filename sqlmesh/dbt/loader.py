@@ -28,7 +28,7 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
 
     return Config(
         default_gateway=profile.target_name,
-        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh())},
+        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh())},  # type: ignore
         loader=DbtLoader,
         **kwargs,
     )

@@ -142,7 +142,7 @@ def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path
     config = load_config_from_paths(yaml_config_path, python_config_path)
 
     assert config == Config(
-        gateways={
+        gateways={  # type: ignore
             "another_gateway": GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
             "": GatewayConfig(connection=DuckDBConnectionConfig()),
         }
