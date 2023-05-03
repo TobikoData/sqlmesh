@@ -19,7 +19,7 @@
 * The ability to sync your code and your data to ensure what is in your main branch is in production
 
 ## Getting Started
-1. Make sure SQLMesh is added to your project's dependencies.
+1. Make sure SQLMesh is added to your project's dependencies and it includes the github extra (.
 2. Create a new file in `.github/workflows/sqlmesh.yml` with the following contents:
 ```yaml
 name: SQLMesh Bot

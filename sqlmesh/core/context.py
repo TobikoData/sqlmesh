@@ -856,14 +856,17 @@ class Context(BaseContext):
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
 
+    def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
+        test_output_io = StringIO()
+        with contextlib.redirect_stderr(test_output_io):
+            result = self.test()
+        return result, test_output_io.getvalue()
+
     def _run_plan_tests(
         self, skip_tests: bool = False
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         if self._test_engine_adapter and not skip_tests:
-            test_output_io = StringIO()
-            with contextlib.redirect_stderr(test_output_io):
-                result = self.test()
-            test_output = test_output_io.getvalue()
+            result, test_output = self._run_tests()
             self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
             if not result.wasSuccessful():
                 raise PlanError(

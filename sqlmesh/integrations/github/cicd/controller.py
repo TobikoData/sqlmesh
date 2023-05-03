@@ -348,18 +348,11 @@ class GithubController:
         except PlanError:
             return "Plan failed to generate. Check for pending or unresolved changes."
 
-    def run_tests(self) -> t.Tuple[unittest.result.TestResult, t.Optional[str]]:
+    def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         """
         Run tests for the PR
         """
-        import contextlib
-        from io import StringIO
-
-        test_output_io = StringIO()
-        with contextlib.redirect_stderr(test_output_io):
-            result = self._context.test()
-        test_output = test_output_io.getvalue()
-        return result, test_output
+        return self._context._run_tests()
 
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
