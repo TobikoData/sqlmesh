@@ -78,7 +78,9 @@ class ModelTest(unittest.TestCase):
             if depends_on not in inputs:
                 self._raise_error(f"Incomplete test, missing input for table {depends_on}")
 
-        self.query = self.model.render_query(**self.body.get("vars", {}))
+        self.query = self.model.render_query(
+            add_incremental_filter=True, **self.body.get("vars", {})
+        )
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {name: _test_fixture_name(name) for name in models}
         if mapping:
