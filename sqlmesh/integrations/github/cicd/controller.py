@@ -28,7 +28,6 @@ from sqlmesh.core.snapshot.definition import (
     merge_intervals,
 )
 from sqlmesh.core.user import User
-from sqlmesh.integrations.github.shared import PullRequestInfo
 from sqlmesh.utils.date import make_inclusive
 from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -45,6 +44,27 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
 
 logger = logging.getLogger(__name__)
+
+
+class PullRequestInfo(PydanticModel):
+    """Contains information related to a pull request that can be used to construct other objects/URLs"""
+
+    owner: str
+    repo: str
+    pr_number: int
+
+    @property
+    def full_repo_path(self) -> str:
+        return "/".join([self.owner, self.repo])
+
+    @classmethod
+    def create_from_pull_request_url(cls, pull_request_url: str) -> PullRequestInfo:
+        _, _, _, _, owner, repo, _, pr_number = pull_request_url.split("/")
+        return cls(
+            owner=owner,
+            repo=repo,
+            pr_number=pr_number,
+        )
 
 
 class GithubCheckStatus(str, Enum):

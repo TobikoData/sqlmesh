@@ -12,10 +12,9 @@ from pydantic import Field
 from sqlglot import exp
 
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
-from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
 
 NotificationTarget = Annotated[
-    t.Union[ConsoleNotificationTarget, GithubNotificationTarget],
+    t.Union[ConsoleNotificationTarget],
     Field(discriminator="type_"),
 ]
 
