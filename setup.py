@@ -102,9 +102,9 @@ setup(
         ],
         "web": [
             "fastapi==0.95.0",
-            "watchfiles==0.19.0",
+            "watchfiles>=0.19.0",
             "pyarrow==11.0.0",
-            "uvicorn==0.21.1",
+            "uvicorn[standard]==0.22.0",
         ],
     },
     classifiers=[

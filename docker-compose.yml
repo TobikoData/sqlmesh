@@ -31,16 +31,19 @@ services:
   api:
     image: tobiko-api
     container_name: tobiko-api
-    working_dir: /sqlmesh
+    working_dir: /home
     build:
       dockerfile: Dockerfile.api
-    command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-graceful-shutdown 1
     ports:
       - 8000:8000
     volumes:
       - .:/sqlmesh
     networks:
       - tobiko-development
+    environment:
+      - PYTHONPATH=/sqlmesh
+      - PROJECT_PATH=/sqlmesh/examples/sushi
 
 networks:
   tobiko-development:
