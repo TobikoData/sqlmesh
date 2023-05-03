@@ -33,8 +33,8 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.BREAKING: "Breaking",
     SnapshotChangeCategory.NON_BREAKING: "Non-breaking",
     SnapshotChangeCategory.FORWARD_ONLY: "Forward-only",
-    SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect breaking",
-    SnapshotChangeCategory.INDIRECT_FORWARD_ONLY: "Indirect forward-only",
+    SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect Breaking",
+    SnapshotChangeCategory.INDIRECT_NON_BREAKING: "Indirect Forward-only",
 }
 
 
@@ -757,7 +757,157 @@ class NotebookMagicConsole(TerminalConsole):
             self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
-class DatabricksMagicConsole(TerminalConsole):
+class CaptureTerminalConsole(TerminalConsole):
+    """
+    Captures the output of the terminal console so that it can be extracted out and displayed within other interfaces.
+    The captured output is cleared out after it is retrieved.
+
+    Note: `_prompt` and `_confirm` need to also be overriden to work with the custom interface if you want to use
+    this console interactively.
+    """
+
+    def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
+        super().__init__(console=console, **kwargs)
+        self._captured_outputs: t.List[str] = []
+
+    @property
+    def captured_output(self) -> str:
+        return "".join(self._captured_outputs)
+
+    def consume_captured_output(self) -> str:
+        output = self.captured_output
+        self.clear_captured_outputs()
+        return output
+
+    def clear_captured_outputs(self) -> None:
+        self._captured_outputs = []
+
+    def _print(self, value: t.Any, **kwargs: t.Any) -> None:
+        with self.console.capture() as capture:
+            self.console.print(value, **kwargs)
+        self._captured_outputs.append(capture.get())
+
+
+class MarkdownConsole(CaptureTerminalConsole):
+    """
+    A console that outputs markdown. Currently this is only configured for non-interactive use so for use cases
+    where you want to display a plan or test results in markdown.
+    """
+
+    def show_model_difference_summary(
+        self, context_diff: ContextDiff, detailed: bool = False
+    ) -> None:
+        """Shows a summary of the differences.
+
+        Args:
+            context_diff: The context diff to use to print the summary
+            detailed: Show the actual SQL differences if True.
+        """
+        if context_diff.is_new_environment:
+            self._print(
+                f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
+            )
+            if not context_diff.has_snapshot_changes:
+                return
+
+        if not context_diff.has_changes:
+            self._print(f"**No differences when compared to `{context_diff.environment}`**\n\n")
+            return
+
+        self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
+
+        if context_diff.added:
+            self._print(f"**Added Models:**\n")
+            for model in context_diff.added:
+                self._print(f"- {model}\n")
+            self._print("\n")
+
+        if context_diff.removed:
+            self._print(f"**Removed Models:**\n")
+            for model in context_diff.removed:
+                self._print(f"- {model}\n")
+            self._print("\n")
+
+        if context_diff.modified_snapshots:
+            directly_modified = []
+            indirectly_modified = []
+            metadata_modified = []
+            for model in context_diff.modified_snapshots:
+                if context_diff.directly_modified(model):
+                    directly_modified.append(model)
+                elif context_diff.indirectly_modified(model):
+                    indirectly_modified.append(model)
+                elif context_diff.metadata_updated(model):
+                    metadata_modified.append(model)
+            if directly_modified:
+                self._print(f"**Directly Modified:**\n")
+                for model in directly_modified:
+                    self._print(f"- `{model}`\n")
+                    if detailed:
+                        self._print(f"```diff\n{context_diff.text_diff(model)}\n```\n")
+                self._print("\n")
+            if indirectly_modified:
+                self._print(f"**Indirectly Modified:**\n")
+                for model in indirectly_modified:
+                    self._print(f"- `{model}`\n")
+                self._print("\n")
+            if metadata_modified:
+                self._print(f"**Metadata Updated:**\n")
+                for model in metadata_modified:
+                    self._print(f"- `{model}`\n")
+                self._print("\n")
+
+    def _show_missing_dates(self, plan: Plan) -> None:
+        """Displays the models with missing dates"""
+        if not plan.missing_intervals:
+            return
+        self._print("**Models needing backfill (missing dates):**\n\n")
+        for missing in plan.missing_intervals:
+            snapshot = plan.context_diff.snapshots[missing.snapshot_name]
+            view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
+            self._print(
+                f"* `{view_name}`: {missing.format_missing_range(snapshot.model.interval_unit())}\n"
+            )
+        self._print("\n")
+
+    def _show_categorized_snapshots(self, plan: Plan) -> None:
+        context_diff = plan.context_diff
+        for snapshot in plan.categorized:
+            if not context_diff.directly_modified(snapshot.name):
+                continue
+
+            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
+            indirect_tree = None
+            for child in plan.indirectly_modified[snapshot.name]:
+                if not indirect_tree:
+                    indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
+                    tree.add(indirect_tree)
+                indirect_tree.add(f"[indirect]{child}")
+            self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
+            self._print("```\n")
+            self._print(tree)
+            self._print("\n```")
+
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: str, target_dialect: str
+    ) -> None:
+        # import ipywidgets as widgets
+        if result.wasSuccessful():
+            self._print(
+                f"**Successfully Ran `{str(result.testsRun)}` Tests Against `{target_dialect}`**\n\n"
+            )
+        else:
+            self._print(
+                f"**Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}**\n\n"
+            )
+            for test, _ in result.failures + result.errors:
+                if isinstance(test, ModelTest):
+                    self._print(f"* Failure Test: `{test.model_name}` - `{test.test_name}`\n\n")
+            self._print(f"```{output}```\n\n")
+
+
+class DatabricksMagicConsole(CaptureTerminalConsole):
     """
     Note: Databricks Magic Console currently does not support progress bars while a plan is being applied. The
     NotebookMagicConsole does support progress bars, but they will time out after 5 minutes of execution
@@ -765,10 +915,10 @@ class DatabricksMagicConsole(TerminalConsole):
     """
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
-        with self.console.capture() as capture:
-            self.console.print(value, **kwargs)
-        output = capture.get()
-        print(output)
+        super()._print(value, **kwargs)
+        for captured_output in self._captured_outputs:
+            print(captured_output)
+        self.clear_captured_outputs()
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)

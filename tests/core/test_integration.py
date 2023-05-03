@@ -618,7 +618,7 @@ def test_auto_categorization(sushi_context: Context):
 
     assert (
         sushi_context.snapshots["sushi.waiter_as_customer_by_day"].change_category
-        == SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
     )
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint != fingerprint
     assert sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version == version

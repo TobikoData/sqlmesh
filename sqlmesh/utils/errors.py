@@ -73,6 +73,10 @@ class NotFoundError(ApiClientError):
     pass
 
 
+class CICDBotError(SQLMeshError):
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,

@@ -1,9 +1,163 @@
-# GitHub Actions
+# GitHub Actions CI/CD Bot
 
-SQLMesh's Github Actions integration will allow you to add a SQLMesh CI/CD bot to any Github project using [Github Actions](https://github.com/features/actions). The bot will automatically run [plan/apply](../concepts/plans.md) to an [environment](../concepts/environments.md) based on the code in a pull request.
+## Features
+### Automated Unit Tests with Error Summary
+![Automated Unit Tests with Error Summary](images/github_test_summary.png)
+### Automatically create PR Environments that represent the code changes in the PR
+![Environment Summary](images/github_env_summary.png)
+### Enforce that certain reviewers have approved of the PR before it can be merged
+![Required Approver](images/github_reviewers.png)
+### Preview Prod Plans before Deploying
+![Preview Prod Plans](images/github_prod_plan_preview.png)
+### Automatic deployments to production and merge
+![Deployed Plans](images/github_deployed_plans.png)
 
-This will be done without copying or rebuilding data using SQLMesh's [Virtual Data Environments](../concepts/glossary.md#virtual-environments).
-Once approved, the CI/CD bot will automatically run [plan/apply](../concepts/plans.md) to the production environment and merge the PR upon completion.
-This allows you to always have your main branch and prod environments in sync.
+### Combined these feature provide
+* The ability to preview what will be deployed to production before it is deployed
+* Gapless deployments to production by ensuring that dates loaded in dev tables match what is currently in production
+* Full transparency into what exists in PR environment and what will be deployed to production - no surprises!
+* The ability to sync your code and your data to ensure what is in your main branch is in production
 
-We will be launching this CI/CD bot soon &mdash; in the meantime, please leave any feedback or questions in [our Slack channel](https://tobikodata.com/slack)!
+## Getting Started
+1. Make sure SQLMesh is added to your project's dependencies.
+2. Create a new file in `.github/workflows/sqlmesh.yml` with the following contents:
+```yaml
+name: SQLMesh Bot
+run-name: 🚀SQLMesh Bot 🚀
+on:
+  pull_request:
+    types:
+    - synchronize
+    - opened
+    - closed
+  pull_request_review:
+    types:
+    - edited
+    - submitted
+    - dismissed
+# The latest commit is the one that will be used to create the PR environment and deploy to production
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  sqlmesh:
+    name: SQLMesh Actions Workflow
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to access code in PR
+      contents: write
+      # Required to post comments
+      issues: write
+      # Required to update check runs
+      checks: write
+      # Required to merge
+      pull-requests: write
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+      - name: Install SQLMesh + Dependencies
+        run: pip install -r requirements.txt
+        shell: bash
+      - name: Run CI/CD Bot
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all
+```
+3. (Optional) If you want to designate users as required approvers, update your SQLMesh config file to represent this. YAML Example:
+```yaml
+users:
+  - username: <A username to use within SQLMesh to represent the user>
+    github_username: <Github username>
+    roles:
+      - required_approver
+```
+4. You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
+
+Note: Even if using Airflow, the runner will still need access to your engine in order to delete the PR environment.
+
+## Configure Custom Actions
+The example above uses the `run-all` command which will run all of the actions in a single step. You can also configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
+```bash
+  Github Action CI/CD Bot
+
+Options:
+  -t, --token TEXT  The Github Token to be used. Pass in `${{
+                    secrets.GITHUB_TOKEN }}` if you want to use the one
+                    created by Github actions
+  --help            Show this message and exit.
+
+Commands:
+  check-required-approvers  Checks if a required approver has provided...
+  deploy-production         Deploys the production environment
+  run-all                   Runs all the commands in the correct order.
+  run-tests                 Runs the unit tests
+  update-pr-environment     Creates or updates the PR environments
+```
+
+### Example Full Workflow
+This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow)
+```yaml
+name: SQLMesh Bot
+run-name: 🚀SQLMesh Bot 🚀
+on:
+  pull_request:
+    types:
+    - synchronize
+    - opened
+    - closed
+  pull_request_review:
+    types:
+    - edited
+    - submitted
+    - dismissed
+# The latest commit is the one that will be used to create the PR environment and deploy to production
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  sqlmesh:
+    name: SQLMesh Actions Workflow
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Required to post comments
+      issues: write
+      # Required to update check runs
+      checks: write
+      # Required to merge
+      pull-requests: write
+    env:
+      SQLMESH__CONNECTIONS__DATABRICKS__TYPE: "databricks"
+      SQLMESH__CONNECTIONS__DATABRICKS__SERVER_HOSTNAME: "XXXXXXXXXXXXXXX"
+      SQLMESH__CONNECTIONS__DATABRICKS__HTTP_PATH: "XXXXXXXXXXXX"
+      SQLMESH__CONNECTIONS__DATABRICKS__ACCESS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      SQLMESH__DEFAULT_CONNECTION: "databricks"
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+        shell: bash
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+      - name: Run CI/CD Bot
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
+```
+
+## Improvements
+* Currently if you are using the Airflow scheduler and are deploying a job and the workflow gets cancelled then
+the job keeps running. Ideally we would then cancel the Airflow job as well.
+* The Airflow job could take a while and we don't need to be running the Github Action for the entire time. Ideally
+we would have Airflow tag the PR when the job is done which would trigger a follow up action to check status and 
+move to the next step if successful.
+* When using `run_all` ideally we would parallelize the tasks that can be run in parallel. One can work around this 
+though by using the individual commands and running them in parallel from within the workflow.

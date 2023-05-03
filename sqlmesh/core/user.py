@@ -7,16 +7,11 @@ from sqlmesh.utils.pydantic import PydanticModel
 class UserRole(str, Enum):
     """A role to associate the user with"""
 
-    GATEKEEPER = "gatekeeper"
-    BOT = "bot"
+    REQUIRED_APPROVER = "required_approver"
 
     @property
-    def is_gatekeeper(self) -> bool:
-        return self == UserRole.GATEKEEPER
-
-    @property
-    def is_bot(self) -> bool:
-        return self == UserRole.BOT
+    def is_required_approver(self) -> bool:
+        return self == UserRole.REQUIRED_APPROVER
 
 
 class User(PydanticModel):
@@ -34,14 +29,6 @@ class User(PydanticModel):
     """List of roles to associate with the user"""
 
     @property
-    def is_gatekeeper(self) -> bool:
-        """Indicates if this is a gatekeeper for PR approvals.
-        TODO: Users should be able to define this on a "per-project" level but that requires adding the concept of
-        "projects" to SQLMesh so making this a global config for now
-        """
-        return UserRole.GATEKEEPER in self.roles
-
-    @property
-    def is_bot(self) -> bool:
-        """Indicates if this is a CI/CD bot account. There should only be one of these per project"""
-        return UserRole.BOT in self.roles
+    def is_required_approver(self) -> bool:
+        """Indicates if this is a required approver for PR approvals."""
+        return UserRole.REQUIRED_APPROVER in self.roles

@@ -239,6 +239,11 @@ class Context(BaseContext):
 
         self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
+        # Should we dedupe notification_targets? If so how?
+        self.notification_targets = (notification_targets or []) + self.config.notification_targets
+        self.users = (users or []) + self.config.users
+        self.users = list({user.username: user for user in self.users}.values())
+
         if load:
             self.load()
 

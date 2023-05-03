@@ -19,7 +19,7 @@ from sqlmesh.core.model import (
     kind,
     parse_model_name,
 )
-from sqlmesh.core.model.meta import HookCall
+from sqlmesh.core.model.meta import HookCall, IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -27,6 +27,7 @@ from sqlmesh.utils.date import (
     now,
     now_timestamp,
     to_datetime,
+    to_ds,
     to_timestamp,
 )
 from sqlmesh.utils.errors import SQLMeshError
@@ -44,14 +45,34 @@ class SnapshotChangeCategory(IntEnum):
     NON_BREAKING: The change requires that only the snapshot modified be rebuilt
     FORWARD_ONLY: The change requires no rebuilding
     INDIRECT_BREAKING: The change was caused indirectly and is breaking.
-    INDIRECT_FORWARD_ONLY: The change was caused indirectly and is forward-only.
+    INDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change.
     """
 
     BREAKING = 1
     NON_BREAKING = 2
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
-    INDIRECT_FORWARD_ONLY = 5
+    INDIRECT_NON_BREAKING = 5
+
+    @property
+    def is_breaking(self) -> bool:
+        return self == self.BREAKING
+
+    @property
+    def is_non_breaking(self) -> bool:
+        return self == self.NON_BREAKING
+
+    @property
+    def is_forward_only(self) -> bool:
+        return self == self.FORWARD_ONLY
+
+    @property
+    def is_indirect_breaking(self) -> bool:
+        return self == self.INDIRECT_BREAKING
+
+    @property
+    def is_indirect_non_breaking(self) -> bool:
+        return self == self.INDIRECT_NON_BREAKING
 
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
@@ -143,7 +164,7 @@ class SnapshotInfoMixin:
         """Provided whether the snapshot is used in a development mode or not, returns True
         if the snapshot targets a temporary table or a clone and False otherwise.
         """
-        return is_dev and (self.is_forward_only or self.is_indirect_forward_only)
+        return is_dev and (self.is_forward_only or self.is_indirect_non_breaking)
 
     @property
     def identifier(self) -> str:
@@ -178,8 +199,8 @@ class SnapshotInfoMixin:
         return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
     @property
-    def is_indirect_forward_only(self) -> bool:
-        return self.change_category == SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+    def is_indirect_non_breaking(self) -> bool:
+        return self.change_category == SnapshotChangeCategory.INDIRECT_NON_BREAKING
 
     @property
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
@@ -204,7 +225,7 @@ class SnapshotInfoMixin:
         elif is_dev:
             # Use a temporary table in the dev environment when **writing** a forward-only snapshot
             # which was modified either directly or indirectly.
-            is_temp = self.is_forward_only or self.is_indirect_forward_only
+            is_temp = self.is_forward_only or self.is_indirect_non_breaking
         else:
             is_temp = False
 
@@ -591,7 +612,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.INDIRECT_FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
         )
         if is_forward_only and self.previous_version:
             self.version = self.previous_version.data_version.version
@@ -929,6 +950,12 @@ def merge_intervals(intervals: Intervals) -> Intervals:
             merged.append(interval)
 
     return merged
+
+
+def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
+    if unit is None or unit == IntervalUnit.DAY:
+        return to_ds(time_like)
+    return to_datetime(time_like).isoformat()[:19]
 
 
 def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:
