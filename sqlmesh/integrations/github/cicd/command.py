@@ -4,6 +4,7 @@ import logging
 
 import click
 
+from sqlmesh.integrations.github.cicd import options as opt
 from sqlmesh.integrations.github.cicd.controller import (
     GithubCommitConclusion,
     GithubCommitStatus,
@@ -15,12 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @click.group(no_args_is_help=True)
-@click.option(
-    "-t",
-    "--token",
-    type=str,
-    help="The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
-)
+@opt.token
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot"""
@@ -121,18 +117,8 @@ def _deploy_production(
 
 
 @github.command()
-@click.option(
-    "-m",
-    "--merge",
-    is_flag=True,
-    help="Merge the PR after successfully deploying to production",
-)
-@click.option(
-    "-d",
-    "--delete",
-    is_flag=True,
-    help="Delete the PR environment after successfully deploying to production",
-)
+@opt.merge
+@opt.delete
 @click.pass_context
 def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Deploys the production environment"""
@@ -142,8 +128,10 @@ def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
 
 
 @github.command()
+@opt.merge
+@opt.delete
 @click.pass_context
-def run_all(ctx: click.Context) -> None:
+def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Runs all the commands in the correct order."""
     controller = ctx.obj["github"]
     controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
@@ -158,7 +146,7 @@ def run_all(ctx: click.Context) -> None:
     pr_environment_updated = _update_pr_environment(controller)
     if tests_passed and has_required_approval and pr_environment_updated:
         _deploy_production(
-            controller, merge_pr_after_deploy=True, delete_environment_after_deploy=True
+            controller, merge_pr_after_deploy=merge, delete_environment_after_deploy=delete
         )
     else:
         controller.update_prod_environment_check(

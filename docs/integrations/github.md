@@ -62,7 +62,7 @@ jobs:
         shell: bash
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge --delete
 ```
 3. (Optional) If you want to designate users as required approvers, update your SQLMesh config file to represent this. YAML Example:
 ```yaml
@@ -74,10 +74,27 @@ users:
 ```
 4. You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
 
-Note: Even if using Airflow, the runner will still need access to your engine in order to delete the PR environment.
+## Configuration
+### SQLMesh Configuration
+`sqlmesh_cicd` accepts the following config:
+* `-p/--paths` - Path(s) to the SQLMesh config/project. This is the same as the `-p/--paths` flag for `sqlmesh`.
+* `--config` - Name of the config object. Only applicable to configuration defined using Python script. This is the same as the `--config` flag for `sqlmesh`.
 
-## Configure Custom Actions
-The example above uses the `run-all` command which will run all of the actions in a single step. You can also configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
+### Github Configuration
+`sqlmesh_cicd github` accepts the following config:
+* `-t/--token` - The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions
+
+### Run All Configuration
+The `run-all` config command will run all of the actions in a single step. 
+This means it checks for approvers, runs unit tests, creates PR environment, and then deploys to prod.
+It has two boolean flags that can be passed in to enable additional functionality:
+* `--merge` - This will merge the PR after deploying to production in order to keep your main branch in-sync with your data
+* `--delete` - This will delete the PR environment after deploying to production. 
+    * Note: If using `--delete` then the runner will need a connection to the engine even if you are using Airflow. This is because the delete is done outside of Airflow.
+    * Eventually want the SQLMesh Janitor to automatically do this cleanup which would remove the need for this flag.
+
+### Custom Workflow Configuration
+You can configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
 ```bash
   Github Action CI/CD Bot
 
@@ -95,7 +112,7 @@ Commands:
   update-pr-environment     Creates or updates the PR environments
 ```
 
-### Example Full Workflow
+## Example Full Workflow
 This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow)
 ```yaml
 name: SQLMesh Bot
@@ -150,10 +167,10 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
+          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all --merge --delete
 ```
 
-## Improvements
+## Future Improvements
 * Currently if you are using the Airflow scheduler and are deploying a job and the workflow gets cancelled then
 the job keeps running. Ideally we would then cancel the Airflow job as well.
 * The Airflow job could take a while and we don't need to be running the Github Action for the entire time. Ideally
