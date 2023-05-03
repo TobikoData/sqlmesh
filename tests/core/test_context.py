@@ -24,7 +24,7 @@ def test_global_config():
 
 def test_named_config():
     context = Context(paths="examples/sushi", config="local_config")
-    assert len(context.config.connections) == 1
+    assert len(context.config.gateways) == 1
 
 
 def test_invalid_named_config():

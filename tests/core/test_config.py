@@ -4,7 +4,12 @@ from unittest import mock
 
 import pytest
 
-from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
+from sqlmesh.core.config import (
+    Config,
+    DuckDBConnectionConfig,
+    GatewayConfig,
+    ModelDefaultsConfig,
+)
 from sqlmesh.core.config.loader import (
     load_config_from_env,
     load_config_from_paths,
@@ -21,10 +26,11 @@ def yaml_config_path(tmp_path_factory) -> Path:
     with open(config_path, "w") as fd:
         fd.write(
             """
-connections:
-    another_connection:
-        type: duckdb
-        database: test_db
+gateways:
+    another_gateway:
+        connection:
+            type: duckdb
+            database: test_db
         """
         )
     return config_path
@@ -35,32 +41,32 @@ def python_config_path(tmp_path_factory) -> Path:
     config_path = tmp_path_factory.mktemp("python_config") / "config.py"
     with open(config_path, "w") as fd:
         fd.write(
-            """from sqlmesh.core.config import Config, DuckDBConnectionConfig
-config = Config(connection=DuckDBConnectionConfig())
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
+config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
         """
         )
     return config_path
 
 
-def test_update_with_connections():
-    conn0_config = DuckDBConnectionConfig()
-    conn1_config = DuckDBConnectionConfig(database="test")
+def test_update_with_gateways():
+    gateway0_config = GatewayConfig(connection=DuckDBConnectionConfig())
+    gateway1_config = GatewayConfig(connection=DuckDBConnectionConfig(database="test"))
 
-    assert Config(connections=conn0_config).update_with(
-        Config(connections={"conn1": conn1_config})
-    ) == Config(connections={"": conn0_config, "conn1": conn1_config})
+    assert Config(gateways=gateway0_config).update_with(
+        Config(gateways={"gateway1": gateway1_config})
+    ) == Config(gateways={"": gateway0_config, "gateway1": gateway1_config})
 
-    assert Config(connections={"conn1": conn1_config}).update_with(
-        Config(connections=conn0_config)
-    ) == Config(connections={"conn1": conn1_config, "": conn0_config})
+    assert Config(gateways={"gateway1": gateway1_config}).update_with(
+        Config(gateways=gateway0_config)
+    ) == Config(gateways={"gateway1": gateway1_config, "": gateway0_config})
 
-    assert Config(connections=conn0_config).update_with(Config(connections=conn1_config)) == Config(
-        connections=conn1_config
+    assert Config(gateways=gateway0_config).update_with(Config(gateways=gateway1_config)) == Config(
+        gateways=gateway1_config
     )
 
-    assert Config(connections={"conn0": conn0_config}).update_with(
-        Config(connections={"conn1": conn1_config})
-    ) == Config(connections={"conn0": conn0_config, "conn1": conn1_config})
+    assert Config(gateways={"gateway0": gateway0_config}).update_with(
+        Config(gateways={"gateway1": gateway1_config})
+    ) == Config(gateways={"gateway0": gateway0_config, "gateway1": gateway1_config})
 
 
 def test_update_with_users():
@@ -98,47 +104,47 @@ def test_update_with_model_defaults():
     )
 
 
-def test_default_connection():
-    conn_a = DuckDBConnectionConfig(database="test_db_a")
-    conn_b = DuckDBConnectionConfig(database="test_db_b")
-    conn_c = DuckDBConnectionConfig(database="test_db_c")
+def test_default_gateway():
+    gateway_a = GatewayConfig(connection=DuckDBConnectionConfig(database="test_db_a"))
+    gateway_b = GatewayConfig(connection=DuckDBConnectionConfig(database="test_db_b"))
+    gateway_c = GatewayConfig(connection=DuckDBConnectionConfig(database="test_db_c"))
 
     config = Config(
-        connections={
-            "conn1": conn_b,
-            "conn2": conn_c,
-            "": conn_a,
+        gateways={
+            "gateway1": gateway_b,
+            "gateway2": gateway_c,
+            "": gateway_a,
         },
     )
 
-    assert config.get_connection() == conn_a
+    assert config.get_gateway() == gateway_a
 
-    assert config.copy(update={"default_connection": "conn2"}).get_connection() == conn_c
+    assert config.copy(update={"default_gateway": "gateway2"}).get_gateway() == gateway_c
 
     assert (
         Config(
-            connections={
-                "conn1": conn_b,
-                "conn2": conn_c,
+            gateways={
+                "gateway1": gateway_b,
+                "gateway2": gateway_c,
             },
-        ).get_connection()
-        == conn_b
+        ).get_gateway()
+        == gateway_b
     )
 
     with pytest.raises(
         ConfigError,
-        match="Missing connection with name 'missing'",
+        match="Missing gateway with name 'missing'",
     ):
-        config.copy(update={"default_connection": "missing"}).get_connection()
+        config.copy(update={"default_gateway": "missing"}).get_gateway()
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
     config = load_config_from_paths(yaml_config_path, python_config_path)
 
     assert config == Config(
-        connections={
-            "another_connection": DuckDBConnectionConfig(database="test_db"),
-            "": DuckDBConnectionConfig(),
+        gateways={
+            "another_gateway": GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
+            "": GatewayConfig(connection=DuckDBConnectionConfig()),
         }
     )
 
@@ -173,12 +179,12 @@ def test_load_config_from_env():
     with mock.patch.dict(
         os.environ,
         {
-            "SQLMESH__CONNECTION__TYPE": "duckdb",
-            "SQLMESH__CONNECTION__DATABASE": "test_db",
+            "SQLMESH__GATEWAY__CONNECTION__TYPE": "duckdb",
+            "SQLMESH__GATEWAY__CONNECTION__DATABASE": "test_db",
         },
     ):
         assert load_config_from_env() == Config(
-            connections=DuckDBConnectionConfig(database="test_db")
+            gateways=GatewayConfig(connection=DuckDBConnectionConfig(database="test_db"))
         )
 
 

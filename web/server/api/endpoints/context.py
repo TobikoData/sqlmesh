@@ -23,7 +23,7 @@ def get_api_context(
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,
-        scheduler=context.config.scheduler.type_,
+        scheduler=context.config.get_scheduler(context.gateway).type_,
         time_column_format=context.config.time_column_format,
         models=list(context.models),
         config=settings.config,

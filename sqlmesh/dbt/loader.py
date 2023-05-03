@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.config import Config
+from sqlmesh.core.config import Config, GatewayConfig
 from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import Loader
 from sqlmesh.core.macros import MacroRegistry
@@ -27,8 +27,8 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
     profile = Profile.load(context)
 
     return Config(
-        default_connection=profile.target_name,
-        connections={profile.target_name: profile.target.to_sqlmesh()},
+        default_gateway=profile.target_name,
+        gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh())},
         loader=DbtLoader,
         **kwargs,
     )
@@ -53,7 +53,7 @@ class DbtLoader(Loader):
         models: UniqueKeyDict = UniqueKeyDict("models")
 
         project = Project.load(
-            DbtContext(project_root=self._context.path, target_name=self._context.connection)
+            DbtContext(project_root=self._context.path, target_name=self._context.gateway)
         )
         for path in project.project_files:
             self._track_file(path)
