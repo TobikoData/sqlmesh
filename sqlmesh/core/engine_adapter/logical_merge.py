@@ -11,7 +11,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
-class LogicalMerge(EngineAdapter):
+class LogicalMergeAdapter(EngineAdapter):
     def merge(
         self,
         target_table: TableName,

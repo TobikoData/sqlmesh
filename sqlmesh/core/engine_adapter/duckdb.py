@@ -6,15 +6,14 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
-from sqlmesh.core.engine_adapter.logical_merge import LogicalMerge
+from sqlmesh.core.engine_adapter.logical_merge import LogicalMergeAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
 
 
-class DuckDBEngineAdapter(LogicalMerge, EngineAdapter):
+class DuckDBEngineAdapter(LogicalMergeAdapter):
     DIALECT = "duckdb"
 
     def _insert_append_pandas_df(
