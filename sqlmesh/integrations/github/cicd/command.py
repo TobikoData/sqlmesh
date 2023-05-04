@@ -4,7 +4,6 @@ import logging
 
 import click
 
-from sqlmesh.integrations.github.cicd import options as opt
 from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
@@ -15,11 +14,28 @@ from sqlmesh.utils.errors import PlanError
 logger = logging.getLogger(__name__)
 
 
+merge_option = click.option(
+    "--merge",
+    is_flag=True,
+    help="Merge the PR after successfully deploying to production",
+)
+
+delete_option = click.option(
+    "--delete",
+    is_flag=True,
+    help="Delete the PR environment after successfully deploying to production",
+)
+
+
 @click.group(no_args_is_help=True)
-@opt.token
+@click.option(
+    "--token",
+    type=str,
+    help="The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
+)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
-    """Github Action CI/CD Bot"""
+    """Github Action CI/CD Bot. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
     ctx.obj["github"] = GithubController(
         paths=ctx.obj["paths"],
         token=token,
@@ -117,8 +133,8 @@ def _deploy_production(
 
 
 @github.command()
-@opt.merge
-@opt.delete
+@merge_option
+@delete_option
 @click.pass_context
 def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Deploys the production environment"""
@@ -128,8 +144,8 @@ def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
 
 
 @github.command()
-@opt.merge
-@opt.delete
+@merge_option
+@delete_option
 @click.pass_context
 def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Runs all the commands in the correct order."""

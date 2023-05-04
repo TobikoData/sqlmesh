@@ -19,7 +19,7 @@ def bot(
     paths: t.List[str],
     config: t.Optional[str] = None,
 ) -> None:
-    """SQLMesh CI/CD Bot."""
+    """SQLMesh CI/CD Bot. Currently only Github Actions is supported. See https://sqlmesh.readthedocs.io/en/stable/integrations/github/ for details"""
     ctx.obj = {
         "paths": paths,
         "config": config,
