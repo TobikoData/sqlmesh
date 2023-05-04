@@ -497,6 +497,28 @@ class GithubController:
         else:
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
+    def _update_check_handler(
+        self,
+        check_name: str,
+        status: GithubCheckStatus,
+        conclusion: t.Optional[GithubCheckConclusion],
+        status_handler: t.Callable[[GithubCheckStatus], t.Tuple[str, t.Optional[str]]],
+        conclusion_handler: t.Callable[
+            [GithubCheckConclusion], t.Tuple[GithubCheckConclusion, str, t.Optional[str]]
+        ],
+    ) -> None:
+        if conclusion:
+            conclusion, title, summary = conclusion_handler(conclusion)
+        else:
+            title, summary = status_handler(status)
+        self._update_check(
+            name=check_name,
+            status=status,
+            title=title,
+            conclusion=conclusion,
+            summary=summary,
+        )
+
     def update_test_check(
         self,
         status: GithubCheckStatus,
@@ -507,31 +529,37 @@ class GithubController:
         """
         Updates the status of tests for code in the PR
         """
-        status_to_title = {
-            GithubCheckStatus.IN_PROGRESS: "Running Tests",
-            GithubCheckStatus.QUEUED: "Waiting to Run Tests",
-        }
-        title = summary = status_to_title.get(status)
-        if not title:
+
+        def conclusion_handler(
+            _: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
-                title = summary = "Skipped Tests"
+                return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
             else:
-                if result.wasSuccessful():
-                    title = "Test Passed"
-                    conclusion = GithubCheckConclusion.SUCCESS
-                else:
-                    title = "Tests Failed"
-                    conclusion = GithubCheckConclusion.FAILURE
                 self.console.log_test_results(
                     result, failed_output or "", self._context._test_engine_adapter.dialect
                 )
-                summary = self.console.consume_captured_output()
-        self._update_check(
-            name="SQLMesh - Run Unit Tests",
+                test_summary = self.console.consume_captured_output()
+                test_title = "Test Passed" if result.wasSuccessful() else "Test Failed"
+                test_conclusion = (
+                    GithubCheckConclusion.SUCCESS
+                    if result.wasSuccessful()
+                    else GithubCheckConclusion.FAILURE
+                )
+                return test_conclusion, test_title, test_summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - Run Unit Tests",
             status=status,
-            title=title,
             conclusion=conclusion,
-            summary=summary,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Running Tests",
+                    GithubCheckStatus.QUEUED: "Waiting to Run Tests",
+                }[status],
+                None,
+            ),
+            conclusion_handler=conclusion_handler,
         )
 
     def update_required_approval_check(
@@ -540,26 +568,32 @@ class GithubController:
         """
         Updates the status of the merge commit for the required approval.
         """
-        status_to_title = {
-            GithubCheckStatus.IN_PROGRESS: "Checking if we have required Approvers",
-            GithubCheckStatus.QUEUED: "Waiting to Check if we have required Approvers",
-        }
-        title = status_to_title.get(status)
-        if not title:
-            assert conclusion
-            conclusion_to_title = {
-                GithubCheckConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
-            }
-            title = conclusion_to_title.get(conclusion, "Need a Required Approval")
-        summary = f"**List of possible required approvers:**\n"
-        for user in self._required_approvers:
-            summary += f"- `{user.github_username or user.username}`\n"
-        self._update_check(
-            name="SQLMesh - Has Required Approval",
+
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            test_summary = f"**List of possible required approvers:**\n"
+            for user in self._required_approvers:
+                test_summary += f"- `{user.github_username or user.username}`\n"
+            title = (
+                f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}"
+                if conclusion.is_success
+                else "Need a Required Approval"
+            )
+            return conclusion, title, test_summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - Has Required Approval",
             status=status,
             conclusion=conclusion,
-            title=t.cast(str, title),
-            summary=summary,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Checking if we have required Approvers",
+                    GithubCheckStatus.QUEUED: "Waiting to Check if we have required Approvers",
+                }[status],
+                None,
+            ),
+            conclusion_handler=conclusion_handler,
         )
 
     def update_pr_environment_check(
@@ -568,78 +602,69 @@ class GithubController:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        title = f"PR Virtual Data Environment: {self.pr_environment_name}"
-        status_to_summary = {
-            GithubCheckStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
-            GithubCheckStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
-        }
-        summary = status_to_summary.get(status)
-        if summary:
-            self._update_check(
-                name="SQLMesh - PR Environment Synced",
-                status=status,
-                conclusion=conclusion,
-                title=title,
-                summary=summary,
-            )
-            return
-        assert conclusion
-        if conclusion.is_success:
-            pr_affected_models = self.get_pr_affected_models()
-            if not pr_affected_models:
-                summary = "No models were modified in this PR.\n"
-            else:
-                header_rows = [
-                    h("th", {"colspan": "3"}, "PR Environment Summary"),
-                    [
-                        h("th", "Model"),
-                        h("th", "Change Type"),
-                        h("th", "Dates Loaded"),
-                    ],
-                ]
-                body_rows: List[Element | List[Element]] = []
-                for affected_model in pr_affected_models:
-                    model_rows = [
-                        h("td", affected_model.model_name),
-                        h("td", affected_model.change_category_str),
+        check_title_static = "PR Virtual Data Environment: "
+        check_title = check_title_static + self.pr_environment_name
+
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            if conclusion.is_success:
+                pr_affected_models = self.get_pr_affected_models()
+                if not pr_affected_models:
+                    summary = "No models were modified in this PR.\n"
+                else:
+                    header_rows = [
+                        h("th", {"colspan": "3"}, "PR Environment Summary"),
+                        [
+                            h("th", "Model"),
+                            h("th", "Change Type"),
+                            h("th", "Dates Loaded"),
+                        ],
                     ]
-                    if affected_model.intervals:
-                        model_rows.append(h("td", affected_model.formatted_loaded_intervals))
-                    else:
-                        model_rows.append(h("td", "N/A"))
-                    body_rows.append(model_rows)
-                table_header = h("thead", [h("tr", row) for row in header_rows])
-                table_body = h("tbody", [h("tr", row) for row in body_rows])
-                summary = str(h("table", [table_header, table_body]))
-            self._update_check(
-                name="SQLMesh - PR Environment Synced",
-                status=status,
-                conclusion=conclusion,
-                title=title,
-                summary=summary,
-            )
-            self.update_sqlmesh_comment_info(
-                value=f"- PR Virtual Data Environment: `{self.pr_environment_name}`",
-                find_regex=r"- PR Virtual Data Environment: `.*`",
-                replace_if_exists=False,
-            )
-        else:
-            conclusion_to_summary = {
-                GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
-                GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
-                GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
-            }
-            summary = conclusion_to_summary.get(
-                conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
-            )
-            self._update_check(
-                name="SQLMesh - PR Environment Synced",
-                status=status,
-                conclusion=conclusion,
-                title=title,
-                summary=summary,
-            )
+                    body_rows: List[Element | List[Element]] = []
+                    for affected_model in pr_affected_models:
+                        model_rows = [
+                            h("td", affected_model.model_name),
+                            h("td", affected_model.change_category_str),
+                        ]
+                        if affected_model.intervals:
+                            model_rows.append(h("td", affected_model.formatted_loaded_intervals))
+                        else:
+                            model_rows.append(h("td", "N/A"))
+                        body_rows.append(model_rows)
+                    table_header = h("thead", [h("tr", row) for row in header_rows])
+                    table_body = h("tbody", [h("tr", row) for row in body_rows])
+                    summary = str(h("table", [table_header, table_body]))
+                self.update_sqlmesh_comment_info(
+                    value=f"- {check_title}",
+                    find_regex=rf"- {check_title_static}.*",
+                    replace_if_exists=False,
+                )
+            else:
+                conclusion_to_summary = {
+                    GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
+                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                    GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
+                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                }
+                summary = conclusion_to_summary.get(
+                    conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+                )
+            return conclusion, check_title, summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - PR Environment Synced",
+            status=status,
+            conclusion=conclusion,
+            status_handler=lambda status: (
+                check_title,
+                {
+                    GithubCheckStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
+                    GithubCheckStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
+                }[status],
+            ),
+            conclusion_handler=conclusion_handler,
+        )
 
     def update_prod_environment_check(
         self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
@@ -647,13 +672,10 @@ class GithubController:
         """
         Updates the status of the merge commit for the prod environment.
         """
-        status_to_title = {
-            GithubCheckStatus.IN_PROGRESS: "Deploying to Prod",
-            GithubCheckStatus.QUEUED: "Waiting to see if we can deploy to prod",
-        }
-        title = summary = status_to_title.get(status)
-        if not title:
-            assert conclusion
+
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion,
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             conclusion_to_title = {
                 GithubCheckConclusion.SUCCESS: "Deployed to Prod",
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
@@ -663,14 +685,22 @@ class GithubController:
             title = conclusion_to_title.get(
                 conclusion, f"Got an unexpected conclusion: {conclusion.value}"
             )
-            summary = "**Preview of Prod Plan**\n"
-            summary += self._get_plan_summary(self.prod_plan)
-        self._update_check(
-            name="SQLMesh - Prod Environment Synced",
+            plan_preview_summary = "**Preview of Prod Plan**\n"
+            plan_preview_summary += self._get_plan_summary(self.prod_plan)
+            return conclusion, title, plan_preview_summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - Prod Environment Synced",
             status=status,
             conclusion=conclusion,
-            title=t.cast(str, title),
-            summary=summary,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Deploying to Prod",
+                    GithubCheckStatus.QUEUED: "Waiting to see if we can deploy to prod",
+                }[status],
+                None,
+            ),
+            conclusion_handler=conclusion_handler,
         )
 
     def merge_pr(self) -> None:
