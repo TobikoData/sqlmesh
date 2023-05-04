@@ -265,9 +265,9 @@ class QueryRenderer(ExpressionRenderer):
                 "Cannot produce time column filter because model does not have a time column."
             )
 
-        return exp.column(self._time_column.column)[
-            self._time_converter(start) : self._time_converter(end)  # type: ignore
-        ]
+        return exp.column(self._time_column.column).between(
+            self._time_converter(start), self._time_converter(end)  # type: ignore
+        )
 
     @property
     def contains_star_query(self) -> bool:
