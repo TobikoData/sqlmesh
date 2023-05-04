@@ -29,7 +29,6 @@ on:
     types:
     - synchronize
     - opened
-    - closed
   pull_request_review:
     types:
     - edited
@@ -122,7 +121,6 @@ on:
     types:
     - synchronize
     - opened
-    - closed
   pull_request_review:
     types:
     - edited

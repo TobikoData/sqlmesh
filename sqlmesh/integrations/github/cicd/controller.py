@@ -320,7 +320,7 @@ class GithubController:
 
         TODO: Allow defining requiring some number, or all, required approvers.
         """
-        if len(self._required_approvers) == 0:
+        if not self._required_approvers:
             return True
         return bool(self._required_approvers_with_approval)
 
@@ -454,6 +454,7 @@ class GithubController:
             affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
             for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
+                # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
                 affected_env_models.append(
@@ -510,8 +511,7 @@ class GithubController:
             GithubCheckStatus.IN_PROGRESS: "Running Tests",
             GithubCheckStatus.QUEUED: "Waiting to Run Tests",
         }
-        title = status_to_title.get(status)
-        summary = title
+        title = summary = status_to_title.get(status)
         if not title:
             if not result:
                 title = summary = "Skipped Tests"
