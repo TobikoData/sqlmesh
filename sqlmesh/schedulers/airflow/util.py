@@ -5,14 +5,17 @@ import logging
 import typing as t
 from datetime import timedelta
 
+import pydantic
 from airflow import settings
 from airflow.api.common.experimental.delete_dag import delete_dag
 from airflow.exceptions import AirflowException, DagNotFound
 from airflow.models import BaseOperator, DagRun, DagTag, Variable, XCom
+from airflow.models.connection import Connection
 from airflow.utils.session import provide_session
 from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
 
+from sqlmesh.core.config import ConnectionConfig
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow import common
@@ -28,12 +31,28 @@ logger = logging.getLogger(__name__)
 PROVIDED_SESSION: Session = t.cast(Session, None)
 
 
+SQLMESH_STATE_CONN_ID = "sqlmesh_state_db"
+
+
 @contextlib.contextmanager
 def scoped_state_sync() -> t.Generator[StateSync, None, None]:
-    dialect = settings.engine.dialect.name
-    engine_adapter = create_engine_adapter(
-        settings.engine.raw_connection, dialect, multithreaded=True
-    )
+    try:
+        connection = Connection.get_connection_from_secrets(SQLMESH_STATE_CONN_ID)
+
+        logger.info("Using connection '%s' for state sync", connection.conn_id)
+
+        connection_config: ConnectionConfig = pydantic.parse_raw_as(
+            ConnectionConfig, connection.extra  # type: ignore
+        )
+        engine_adapter = connection_config.create_engine_adapter()
+    except AirflowException:
+        logger.info("Using the Airflow database connection for state sync")
+
+        dialect = settings.engine.dialect.name
+        engine_adapter = create_engine_adapter(
+            settings.engine.raw_connection, dialect, multithreaded=True
+        )
+
     try:
         yield EngineAdapterStateSync(engine_adapter)
     finally:
