@@ -188,6 +188,10 @@ class GithubEvent:
         return bool(self.payload.get("pull_request"))
 
     @property
+    def is_pull_request_closed(self) -> bool:
+        return self.is_pull_request and self.payload.get("action") == "closed"
+
+    @property
     def pull_request_url(self) -> str:
         if self.is_review:
             return self.payload["review"]["pull_request_url"]
@@ -408,9 +412,12 @@ class GithubController:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        # If the PR is already merged then we will not deploy to prod.
-        if self._pull_request.merged:
-            raise CICDBotError("PR is already merged. Skipping deploy to prod.")
+        # If the PR is already merged then we will not deploy to prod if this event was triggered prior to the merge.
+        # The deploy can still happen if the workflow is configured to listen for `closed` events.
+        if self._pull_request.merged and not self._event.is_pull_request_closed:
+            raise CICDBotError(
+                "PR is already merged and this event was triggered prior to the merge. So not running."
+            )
         plan_summary = f"""<details>
   <summary>Prod Plan Being Applied</summary>
 
