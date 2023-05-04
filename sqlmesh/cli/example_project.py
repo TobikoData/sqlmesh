@@ -4,16 +4,17 @@ from pathlib import Path
 
 import click
 
-DEFAULT_CONFIG = """connections:
+DEFAULT_CONFIG = """gateways:
     local:
-        type: duckdb
-        database: db.db
+        connection:
+            type: duckdb
+            database: db.db
 
-default_connection: local
+default_gateway: local
 """
 
 
-DEFAULT_AIRFLOW_CONFIG = """scheduler:
+DEFAULT_AIRFLOW_CONFIG = """default_scheduler:
     type: airflow
     airflow_url: http://localhost:8080/
     username: airflow
@@ -74,7 +75,7 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds DATE
+        ds VARCHAR
     )
 );
 """

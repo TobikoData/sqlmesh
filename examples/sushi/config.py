@@ -12,24 +12,24 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 # An in memory DuckDB config.
-config = Config(connections=DuckDBConnectionConfig())
+config = Config(default_connection=DuckDBConnectionConfig())
 
 
 # A configuration used for SQLMesh tests.
 test_config = Config(
-    connections=DuckDBConnectionConfig(),
+    default_connection=DuckDBConnectionConfig(),
     auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI),
 )
 
 # A stateful DuckDB config.
 local_config = Config(
-    connections=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
+    default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
 )
 
 
-airflow_config = Config(**{"scheduler": AirflowSchedulerConfig()})
+airflow_config = Config(default_scheduler=AirflowSchedulerConfig())
 
 
 airflow_config_docker = Config(
-    **{"scheduler": AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/")},
+    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
 )
