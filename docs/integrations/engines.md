@@ -212,9 +212,9 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Redshift - Airflow Scheduler
 **Engine Name:** `redshift`
 
-In order to share a common implementation across local and Airflow, SQLMesh Bigquery implements its own hook and operator.
+In order to share a common implementation across local and Airflow, SQLMesh's Redshift engine implements its own hook and operator.
 
-To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
+To enable support for this operator, the Airflow Redshift provider package should be installed on the target Airflow cluster along with SQLMesh with the Redshift extra:
 ```
 pip install "apache-airflow-providers-amazon"
 pip install "sqlmesh[redshift]"
