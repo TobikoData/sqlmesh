@@ -1,4 +1,7 @@
+from unittest.mock import call
+
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
@@ -69,3 +72,61 @@ def test_transaction(adapter: EngineAdapter, duck_conn):
     except Exception:
         pass
     assert duck_conn.execute("SELECT * FROM test_table").fetchall() == [(1,)]
+
+
+def test_merge(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._get_temp_table")
+    temp_table_mock.return_value = exp.to_table("temporary")
+
+    adapter = DuckDBEngineAdapter(lambda: connection_mock)  # type: ignore
+    adapter.merge(
+        target_table="target",
+        source_table=parse_one("SELECT id, ts, val FROM source"),
+        columns_to_types={
+            "id": exp.DataType(this=exp.DataType.Type.INT),
+            "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
+            "val": exp.DataType(this=exp.DataType.Type.INT),
+        },
+        unique_key=["id"],
+    )
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("CREATE TABLE temporary AS SELECT id, ts, val FROM source"),
+            call(
+                "DELETE FROM target WHERE CONCAT_WS('__SQLMESH_DELIM__', id) IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', id) FROM temporary)"
+            ),
+            call(
+                "INSERT INTO target (id, ts, val) (SELECT DISTINCT ON (id) id, ts, val FROM temporary)"
+            ),
+            call("DROP TABLE IF EXISTS temporary"),
+        ]
+    )
+
+    cursor_mock.reset_mock()
+    adapter.merge(
+        target_table="target",
+        source_table=parse_one("SELECT id, ts, val FROM source"),
+        columns_to_types={
+            "id": exp.DataType(this=exp.DataType.Type.INT),
+            "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
+            "val": exp.DataType(this=exp.DataType.Type.INT),
+        },
+        unique_key=["id", "ts"],
+    )
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("CREATE TABLE temporary AS SELECT id, ts, val FROM source"),
+            call(
+                "DELETE FROM target WHERE CONCAT_WS('__SQLMESH_DELIM__', id, ts) IN (SELECT CONCAT_WS('__SQLMESH_DELIM__', id, ts) FROM temporary)"
+            ),
+            call(
+                "INSERT INTO target (id, ts, val) (SELECT DISTINCT ON (id, ts) id, ts, val FROM temporary)"
+            ),
+            call("DROP TABLE IF EXISTS temporary"),
+        ]
+    )
