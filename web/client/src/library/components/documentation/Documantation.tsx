@@ -1,5 +1,4 @@
 import { type Model } from '@api/client'
-import { Divider } from '@components/divider/Divider'
 import CodeEditor, {
   useSQLMeshModelExtensions,
 } from '@components/editor/EditorCode'
@@ -16,12 +15,18 @@ import { EnumRoutes } from '~/routes'
 
 const Documantation = function Documantation({
   model,
+  withModel = true,
+  withDescription = true,
+  withColumns = true,
   withCode = true,
   withQuery = true,
 }: {
   model: Model
   withCode?: boolean
   withQuery?: boolean
+  withModel?: boolean
+  withDescription?: boolean
+  withColumns?: boolean
 }): JSX.Element {
   const navigate = useNavigate()
   const lineage = useStoreEditor(s => s.previewLineage)
@@ -33,7 +38,9 @@ const Documantation = function Documantation({
     model.path,
     lineage,
     model => {
-      navigate(`${EnumRoutes.IdeDocsModels}?model=${model.name}`)
+      navigate(`${EnumRoutes.IdeDocsModels}?model=${model.name}`, {
+        state: { model },
+      })
     },
   )
 
@@ -44,63 +51,64 @@ const Documantation = function Documantation({
 
   return (
     <Container>
-      <Section
-        headline="Model"
-        defaultOpen={true}
-      >
-        <ul className="px-2 w-full">
-          <DetailsItem
-            name="Path"
-            value={model.path.split('/').slice(0, -1).join('/')}
-          />
-          <DetailsItem
-            name="Name"
-            value={model.name}
-          />
-          <DetailsItem
-            name="Dialect"
-            value={model.dialect}
-          />
-          {Object.entries(model.details).map(([key, value]) => (
+      {withModel && (
+        <Section
+          headline="Model"
+          defaultOpen={true}
+        >
+          <ul className="px-2 w-full">
             <DetailsItem
-              key={key}
-              name={key.replaceAll('_', ' ')}
-              value={value}
-              isCapitalize={true}
+              name="Path"
+              value={model.path.split('/').slice(0, -1).join('/')}
             />
-          ))}
-        </ul>
-      </Section>
-      <Section
-        headline="Description"
-        defaultOpen={true}
-      >
-        {model.description == null ? 'No description' : model.description}
-      </Section>
-      <Section headline="Columns">
-        <ul className="px-2 w-full">
-          {model.columns.map(column => (
             <DetailsItem
-              key={column.name}
-              name={column.name}
-              value={column.type}
-              isHighlighted={true}
-            >
-              {column.description}
-            </DetailsItem>
-          ))}
-        </ul>
-      </Section>
-      <CodeEditor.RemoteFile path={model.path}>
-        {({ file }) => (
-          <>
-            {(withCode || withQuery) && (
-              <Section headline="SQL">
-                <div className="flex justify-between items-center w-full mb-2 mt-4 px-1">
-                  <p className="whitespace-nowrap">Source Code</p>
-                  <Divider className="border-neutral-20 mx-4" />
-                  <p className="whitespace-nowrap">Compiled Query</p>
-                </div>
+              name="Name"
+              value={model.name}
+            />
+            <DetailsItem
+              name="Dialect"
+              value={model.dialect}
+            />
+            {Object.entries(model.details).map(([key, value]) => (
+              <DetailsItem
+                key={key}
+                name={key.replaceAll('_', ' ')}
+                value={value}
+                isCapitalize={true}
+              />
+            ))}
+          </ul>
+        </Section>
+      )}
+      {withDescription && (
+        <Section
+          headline="Description"
+          defaultOpen={true}
+        >
+          {model.description == null ? 'No description' : model.description}
+        </Section>
+      )}
+      {withColumns && (
+        <Section headline="Columns">
+          <ul className="px-2 w-full">
+            {model.columns.map(column => (
+              <DetailsItem
+                key={column.name}
+                name={column.name}
+                value={column.type}
+                isHighlighted={true}
+              >
+                {column.description}
+              </DetailsItem>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {(withCode || withQuery) && (
+        <Section headline="SQL">
+          <CodeEditor.RemoteFile path={model.path}>
+            {({ file }) => (
+              <>
                 <Tab.Group defaultIndex={withQuery ? 1 : 0}>
                   <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justify-center items-center">
                     <Tab
@@ -171,11 +179,11 @@ const Documantation = function Documantation({
                     </Tab.Panel>
                   </Tab.Panels>
                 </Tab.Group>
-              </Section>
+              </>
             )}
-          </>
-        )}
-      </CodeEditor.RemoteFile>
+          </CodeEditor.RemoteFile>
+        </Section>
+      )}
     </Container>
   )
 }
