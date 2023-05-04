@@ -54,7 +54,10 @@ export default function SourceList({
               key={model.name}
               className={clsx('text-sm font-normal w-full')}
             >
-              <Link to={`${EnumRoutes.IdeDocsModels}?model=${model.name}`}>
+              <Link
+                to={`${EnumRoutes.IdeDocsModels}?model=${model.name}`}
+                state={{ model }}
+              >
                 <div
                   className={clsx(
                     'py-1 px-4 rounded-md w-full hover:bg-primary-10',

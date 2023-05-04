@@ -103,7 +103,11 @@ const Button = makeButton(
   React.forwardRef<HTMLButtonElement, PropsButton>(ButtonPlain),
 )
 
-export { VARIANT, SHAPE, SIZE, Button, makeButton }
+const ButtonLink = makeButton(
+  React.forwardRef<HTMLDivElement, PropsButton>(ButtoLinkPlain),
+)
+
+export { VARIANT, SHAPE, SIZE, Button, ButtonLink, makeButton }
 
 function ButtonPlain(
   {
@@ -131,6 +135,22 @@ function ButtonPlain(
     >
       {children}
     </button>
+  )
+}
+
+function ButtoLinkPlain(
+  { children = [], autoFocus, tabIndex, className }: PropsButton,
+  ref?: React.ForwardedRef<HTMLDivElement>,
+): JSX.Element {
+  return (
+    <div
+      ref={ref}
+      autoFocus={autoFocus}
+      tabIndex={tabIndex}
+      className={className}
+    >
+      {children}
+    </div>
   )
 }
 

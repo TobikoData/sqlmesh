@@ -4,6 +4,7 @@ import Docs from './library/pages/docs/Docs'
 import Editor from './library/pages/editor/Editor'
 import IDEProvider from './library/pages/ide/context'
 import { Suspense } from 'react'
+import NotFound from './library/pages/root/NotFound'
 
 export const EnumRoutes = {
   Ide: '/',
@@ -22,6 +23,12 @@ export const router = createBrowserRouter([
         </Suspense>
       </IDEProvider>
     ),
+    errorElement: (
+      <NotFound
+        link={EnumRoutes.Ide}
+        message="Back to main"
+      />
+    ),
     children: [
       {
         path: 'editor',
@@ -34,6 +41,12 @@ export const router = createBrowserRouter([
           {
             path: 'models',
             element: <Docs.Content />,
+            errorElement: (
+              <NotFound
+                link={EnumRoutes.IdeDocs}
+                message="Back to docs"
+              />
+            ),
           },
         ],
       },
