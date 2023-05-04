@@ -12,6 +12,7 @@ import {
   fetchdfApiCommandsFetchdfPost,
   renderApiCommandsRenderPost,
   evaluateApiCommandsEvaluatePost,
+  type Model,
 } from '~/api/client'
 import { type ResponseWithDetail } from '~/api/instance'
 import { useStoreContext } from '~/context/context'
@@ -46,14 +47,20 @@ export default function EditorInspector({
 }: {
   tab: EditorTab
 }): JSX.Element {
+  const models = useStoreContext(s => s.models)
+  const model = useMemo(() => models.get(tab.file.path), [tab, models])
+
   return (
     <div
       className={clsx(
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel ? (
-        <InspectorModel tab={tab} />
+      {tab.file.isSQLMeshModel && model != null ? (
+        <InspectorModel
+          tab={tab}
+          model={model}
+        />
       ) : (
         <InspectorSql tab={tab} />
       )}
@@ -61,14 +68,16 @@ export default function EditorInspector({
   )
 }
 
-function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
-  const models = useStoreContext(s => s.models)
-
+function InspectorModel({
+  tab,
+  model,
+}: {
+  tab: EditorTab
+  model: Model
+}): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
-
-  const model = useMemo(() => models.get(tab.file.path), [tab, models])
 
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
@@ -235,16 +244,7 @@ function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
           </InspectorForm>
           <Divider />
           <InspectorActions>
-            <div className="flex w-full justify-between">
-              <div className="flex">
-                <Button
-                  size={EnumSize.sm}
-                  variant={EnumVariant.Alternative}
-                  disabled={isFalse(shouldEvaluate)}
-                >
-                  Validate
-                </Button>
-              </div>
+            <div className="flex w-full justify-end">
               {tab.file.isSQLMeshModel && (
                 <Button
                   size={EnumSize.sm}
@@ -267,14 +267,13 @@ function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
             'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
           )}
         >
-          {model != null ? (
-            <Documantation
-              model={model}
-              withCode={false}
-            />
-          ) : (
-            <Documantation.NotFound />
-          )}
+          <Documantation
+            model={model}
+            withCode={false}
+            withModel={false}
+            withQuery={tab.file.isSQLMeshModelSQL}
+            withDescription={false}
+          />
         </Tab.Panel>
       </Tab.Panels>
     </Tab.Group>
