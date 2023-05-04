@@ -43,7 +43,7 @@ function CodeEditorDefault({
   children,
 }: {
   type: FileExtensions
-  content?: string
+  content: string
   children: (options: {
     extensions: Extension[]
     content: string
