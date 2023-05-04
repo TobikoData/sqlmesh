@@ -9,12 +9,12 @@ from sqlmesh.utils.metaprogramming import Executable
 def filter_country(
     evaluator: MacroEvaluator, expression: exp.Condition, country: str
 ) -> exp.Condition:
-    return exp.and_(expression, f"country = '{country}'")
+    return exp.and_(expression, exp.column("country").eq(country))
 
 
 @macro("UPPER")
-def upper_case(evaluator: MacroEvaluator, expression: exp.Condition, country: str) -> exp.Condition:
-    return exp.true()
+def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
+    return f"UPPER({expression} + 1)"
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def test_macro_str_replace(macro_evaluator):
 
 
 def test_macro_custom(macro_evaluator, assert_exp_eq):
-    assert_exp_eq(macro_evaluator.transform(parse_one("SELECT @TEST()")), "SELECT 'test'")
+    assert_exp_eq(macro_evaluator.transform(parse_one("SELECT @TEST()")), "SELECT test")
 
 
 def test_ast_correctness(macro_evaluator):
@@ -63,8 +63,18 @@ def test_ast_correctness(macro_evaluator):
     "sql, expected, args",
     [
         (
-            """select @EACH(['a', 'b'], x -> x)""",
-            "SELECT 'a', 'b'",
+            """@UPPER(1 + 1) + 2""",
+            "UPPER(2 + 1) + 2",
+            {},
+        ),
+        (
+            """@UPPER(x) + 2""",
+            "UPPER(x + 1) + 2",
+            {},
+        ),
+        (
+            """select @EACH([a, b], x -> x)""",
+            "SELECT a, b",
             {},
         ),
         (
