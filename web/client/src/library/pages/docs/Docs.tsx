@@ -43,7 +43,7 @@ const Docs = function Docs(): JSX.Element {
         {activePlan != null && (
           <div className="w-full p-4">
             <TasksOverview tasks={activePlan.tasks}>
-              {({ total, completed }) => (
+              {({ total, completed, totalBatches, completedBatches }) => (
                 <>
                   <TasksOverview.Summary
                     environment={environment.name}
@@ -51,6 +51,8 @@ const Docs = function Docs(): JSX.Element {
                     headline="Most Recent Plan"
                     completed={completed}
                     total={total}
+                    totalBatches={totalBatches}
+                    completedBatches={completedBatches}
                     updateType={
                       activePlan.type === EnumPlanApplyType.Virtual
                         ? 'Virtual'

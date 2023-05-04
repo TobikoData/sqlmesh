@@ -21,6 +21,8 @@ interface PropsTasks {
     models?: Array<[string, PlanTaskStatus]>
     completed: number
     total: number
+    completedBatches: number
+    totalBatches: number
   }) => JSX.Element
 }
 
@@ -29,19 +31,28 @@ const TasksOverview = function TasksOverview({
   setRefTasksOverview,
   tasks,
 }: PropsTasks): JSX.Element {
-  const { models, taskCompleted, taskTotal } = useMemo(() => {
-    const models = Object.entries(tasks)
-    const taskCompleted = models.filter(
-      ([_, { completed, total }]) => completed === total,
-    ).length
-    const taskTotal = models.length
+  const { models, taskCompleted, taskTotal, batchesTotal, batchesCompleted } =
+    useMemo(() => {
+      const models = Object.entries(tasks)
+      const taskTotal = models.length
+      let taskCompleted = 0
+      let batchesTotal = 0
+      let batchesCompleted = 0
 
-    return {
-      models,
-      taskCompleted,
-      taskTotal,
-    }
-  }, [tasks])
+      models.forEach(([_, { completed, total }]) => {
+        taskCompleted = completed === total ? taskCompleted + 1 : taskCompleted
+        batchesTotal += total
+        batchesCompleted += completed
+      })
+
+      return {
+        models,
+        taskCompleted,
+        taskTotal,
+        batchesTotal,
+        batchesCompleted,
+      }
+    }, [tasks])
 
   return (
     <div
@@ -52,6 +63,8 @@ const TasksOverview = function TasksOverview({
         models,
         completed: taskCompleted,
         total: taskTotal,
+        totalBatches: batchesTotal,
+        completedBatches: batchesCompleted,
       })}
     </div>
   )
@@ -66,6 +79,8 @@ function TasksSummary({
   total,
   updatedAt,
   updateType,
+  completedBatches,
+  totalBatches,
 }: {
   className?: string
   headline: string
@@ -73,6 +88,8 @@ function TasksSummary({
   planState: PlanState
   completed: number
   total: number
+  completedBatches: number
+  totalBatches: number
   updateType: string
   updatedAt?: string
 }): JSX.Element {
@@ -94,13 +111,19 @@ function TasksSummary({
               unit="task"
             />
             <TaskDivider />
+            <TaskSize
+              completed={completedBatches}
+              total={totalBatches}
+              unit="batches"
+            />
+            <TaskDivider />
             <TaskProgress
-              completed={completed}
-              total={total}
+              completed={completedBatches}
+              total={totalBatches}
             />
           </TaskDetailsProgress>
         </TaskDetails>
-        <Progress progress={toRatio(completed, total)} />
+        <Progress progress={toRatio(completedBatches, totalBatches)} />
         {updatedAt != null && (
           <TaskCompletedMeta
             updatedAt={updatedAt}

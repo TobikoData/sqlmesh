@@ -6,7 +6,6 @@ import {
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
 import { type Model } from '~/api/client'
-import { type ModelFile } from '~/models'
 import { isFalse } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
@@ -16,7 +15,6 @@ const WHITE_SPACE = ' '
 type ExtensionCleanUp = () => void
 type ExtensionSqlMeshDialect = (
   models: Map<string, Model>,
-  file: ModelFile,
   options?: { types: string; keywords: string },
   dialects?: string[],
 ) => LanguageSupport
@@ -28,12 +26,11 @@ export function useSqlMeshExtension(): [
   const SqlMeshDialectExtension: ExtensionSqlMeshDialect =
     function SqlMeshDialectExtension(
       models,
-      file,
       options,
       dialects?,
     ): LanguageSupport {
-      const SQLTypes = options?.types ?? ''
-      const SQLKeywords = options?.keywords ?? ''
+      const SQLTypes = (options?.types ?? '') + WHITE_SPACE
+      const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
       const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
       const SQLMeshKeywords =
         'model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
@@ -41,12 +38,8 @@ export function useSqlMeshExtension(): [
         'seed full incremental_by_time_range incremental_by_unique_key view embedded'
 
       const lang = SQLDialect.define({
-        keywords:
-          SQLKeywords +
-          (file.isSQLMeshModel ? SQLMeshKeywords : '') +
-          WHITE_SPACE,
-        types:
-          SQLTypes + (file.isSQLMeshModel ? SQLMeshTypes : '') + WHITE_SPACE,
+        keywords: SQLKeywords + SQLMeshKeywords + WHITE_SPACE,
+        types: SQLTypes + SQLMeshTypes + WHITE_SPACE,
       })
 
       const tables: Completion[] = Array.from(
@@ -105,7 +98,7 @@ export function useSqlMeshExtension(): [
 
             let suggestions: Completion[] = tables
 
-            if (isFalse(isInsideModel) || isFalse(file.isSQLMeshModel)) {
+            if (isFalse(isInsideModel)) {
               if (keywordFrom != null)
                 return await completeFromList(suggestions)(ctx)
 

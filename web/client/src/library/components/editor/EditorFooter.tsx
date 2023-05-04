@@ -27,7 +27,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   }
 
   return (
-    <div className="flex w-full mr-4 overflow-hidden">
+    <div className="flex w-full mr-4 overflow-hidden items-center">
       <EditorIndicator
         className="mr-2"
         text="Valid"

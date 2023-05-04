@@ -17,7 +17,6 @@ export default function PageEditor(): JSX.Element {
   const { isPlanOpen, setIsPlanOpen } = useIDE()
 
   const project = useStoreFileTree(s => s.project)
-
   const environment = useStoreContext(s => s.environment)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
   const initialEndDate = useStoreContext(s => s.initialEndDate)

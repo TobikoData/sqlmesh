@@ -65,7 +65,13 @@ export default function ActivePlan({
             <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
               <div className="overflow-hidden rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5">
                 <TasksOverview tasks={plan.tasks}>
-                  {({ total, completed, models }) => (
+                  {({
+                    total,
+                    completed,
+                    models,
+                    completedBatches,
+                    totalBatches,
+                  }) => (
                     <>
                       <TasksOverview.Summary
                         environment={environment.name}
@@ -73,6 +79,8 @@ export default function ActivePlan({
                         headline="Most Recent Plan"
                         completed={completed}
                         total={total}
+                        completedBatches={completedBatches}
+                        totalBatches={totalBatches}
                         updateType={
                           plan.type === EnumPlanApplyType.Virtual
                             ? 'Virtual'

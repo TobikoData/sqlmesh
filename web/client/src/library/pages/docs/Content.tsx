@@ -29,7 +29,11 @@ export default function Content(): JSX.Element {
         snapOffset={0}
       >
         <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
-          <Documantation model={model} />
+          <Documantation
+            key={model.name}
+            model={model}
+            withQuery={model.details.type !== 'python'}
+          />
         </div>
         <div className="flex flex-col h-full px-2">
           <ModelLineage model={model.name} />
