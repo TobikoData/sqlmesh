@@ -1,12 +1,18 @@
 import { type Model } from '@api/client'
-import { CodeEditorDocsReadOnly } from '@components/editor/EditorCode'
-import SplitPane from '@components/splitPane/SplitPane'
+import { Divider } from '@components/divider/Divider'
+import CodeEditor, {
+  useSQLMeshModelExtensions,
+} from '@components/editor/EditorCode'
+import { useStoreEditor } from '@context/editor'
 import { useStoreLineage } from '@context/lineage'
-import { Disclosure } from '@headlessui/react'
+import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
-import { isString, toDateFormat, isTrue } from '@utils/index'
+import { EnumFileExtensions } from '@models/file'
+import { isFalse, isString, isTrue, toDateFormat } from '@utils/index'
 import clsx from 'clsx'
 import React, { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { EnumRoutes } from '~/routes'
 
 const Documantation = function Documantation({
   model,
@@ -17,8 +23,19 @@ const Documantation = function Documantation({
   withCode?: boolean
   withQuery?: boolean
 }): JSX.Element {
+  const navigate = useNavigate()
+  const lineage = useStoreEditor(s => s.previewLineage)
+
   const setColumns = useStoreLineage(s => s.setColumns)
   const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
+
+  const modelExtensions = useSQLMeshModelExtensions(
+    model.path,
+    lineage,
+    model => {
+      navigate(`${EnumRoutes.IdeDocsModels}?model=${model.name}`)
+    },
+  )
 
   useEffect(() => {
     setColumns(undefined)
@@ -47,8 +64,9 @@ const Documantation = function Documantation({
           {Object.entries(model.details).map(([key, value]) => (
             <DetailsItem
               key={key}
-              name={key}
+              name={key.replaceAll('_', ' ')}
               value={value}
+              isCapitalize={true}
             />
           ))}
         </ul>
@@ -73,30 +91,91 @@ const Documantation = function Documantation({
           ))}
         </ul>
       </Section>
-      {(withCode || withQuery) && (
-        <Section headline="SQL">
-          <SplitPane
-            className="flex w-full h-full overflow-hidden"
-            sizes={[50, 50]}
-            minSize={0}
-            snapOffset={0}
-          >
-            {withCode && (
-              <CodeEditorDocsReadOnly
-                model={model}
-                className="w-full h-full relative overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs pr-2"
-              />
+      <CodeEditor.RemoteFile path={model.path}>
+        {({ file }) => (
+          <>
+            {(withCode || withQuery) && (
+              <Section headline="SQL">
+                <div className="flex justify-between items-center w-full mb-2 mt-4 px-1">
+                  <p className="whitespace-nowrap">Source Code</p>
+                  <Divider className="border-neutral-20 mx-4" />
+                  <p className="whitespace-nowrap">Compiled Query</p>
+                </div>
+                <Tab.Group defaultIndex={withQuery ? 1 : 0}>
+                  <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justify-center items-center">
+                    <Tab
+                      disabled={isFalse(withCode)}
+                      className={({ selected }) =>
+                        clsx(
+                          'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                          selected
+                            ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                            : 'bg-secondary-10 ',
+                          isFalse(withCode)
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'cursor-pointer',
+                        )
+                      }
+                    >
+                      Source Code
+                    </Tab>
+                    <Tab
+                      disabled={isFalse(withQuery)}
+                      className={({ selected }) =>
+                        clsx(
+                          'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                          selected
+                            ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                            : 'bg-secondary-10 ',
+                          isFalse(withQuery)
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'cursor-pointer',
+                        )
+                      }
+                    >
+                      Compiled Query
+                    </Tab>
+                  </Tab.List>
+                  <Tab.Panels className="h-full w-full overflow-hidden p-2 bg-neutral-10 mt-4 rounded-lg">
+                    <Tab.Panel
+                      className={clsx(
+                        'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
+                        'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                      )}
+                    >
+                      <CodeEditor.SQLMeshDialect content={file.content}>
+                        {({ extensions, content }) => (
+                          <CodeEditor
+                            extensions={extensions.concat(modelExtensions)}
+                            content={content}
+                          />
+                        )}
+                      </CodeEditor.SQLMeshDialect>
+                    </Tab.Panel>
+                    <Tab.Panel
+                      className={clsx(
+                        'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                      )}
+                    >
+                      <CodeEditor.Default
+                        type={EnumFileExtensions.SQL}
+                        content={model.sql}
+                      >
+                        {({ extensions, content }) => (
+                          <CodeEditor
+                            extensions={extensions.concat(modelExtensions)}
+                            content={content}
+                          />
+                        )}
+                      </CodeEditor.Default>
+                    </Tab.Panel>
+                  </Tab.Panels>
+                </Tab.Group>
+              </Section>
             )}
-            {withQuery && (
-              <div className=" pl-2">
-                <pre className="flex w-full h-full bg-primary-10 overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs p-4">
-                  <code>{model.sql}</code>
-                </pre>
-              </div>
-            )}
-          </SplitPane>
-        </Section>
-      )}
+          </>
+        )}
+      </CodeEditor.RemoteFile>
     </Container>
   )
 }
@@ -184,12 +263,14 @@ function DetailsItem({
   name,
   value,
   isHighlighted = false,
+  isCapitalize = false,
   children,
 }: {
   name: string
   value: string | boolean | number
   className?: string
   isHighlighted?: boolean
+  isCapitalize?: boolean
   children?: React.ReactNode
 }): JSX.Element {
   const maybeDate = new Date(value as string)
@@ -201,9 +282,13 @@ function DetailsItem({
     >
       <div className="flex justify-between text-xs">
         <strong
-          className={clsx('mr-2 capitalize', isHighlighted && 'text-brand-500')}
+          className={clsx(
+            'mr-2',
+            isCapitalize && 'capitalize',
+            isHighlighted && 'text-brand-500',
+          )}
         >
-          {name.replaceAll('_', ' ')}
+          {name}
         </strong>
         <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
           {isBoolean

@@ -18,6 +18,10 @@ export function isStringEmptyOrNil(value: unknown): boolean {
   return isNil(value) || value === ''
 }
 
+export function isStringNotEmpty(value: unknown): boolean {
+  return isString(value) && (value as string).trim() !== ''
+}
+
 export function isArrayNotEmpty(value: unknown): boolean {
   return Array.isArray(value) && value.length > 0
 }

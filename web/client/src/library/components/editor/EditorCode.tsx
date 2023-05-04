@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, memo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
+import { sql } from '@codemirror/lang-sql'
 import { StreamLanguage } from '@codemirror/language'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
@@ -16,58 +17,85 @@ import {
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
 
-import {
-  apiCancelFiles,
-  apiCancelPlanRun,
-  useApiFileByPath,
-  useApiPlanRun,
-  useMutationApiSaveFile,
-} from '~/api'
+import { useApiFileByPath, useApiPlanRun, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
   debounceSync,
   isFalse,
   isStringEmptyOrNil,
+  isStringNotEmpty,
 } from '~/utils'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
-import { type EditorTab, useStoreEditor } from '~/context/editor'
-import { EnumFileExtensions, type ModelFile } from '@models/file'
+import { useStoreEditor, type Lineage } from '~/context/editor'
+import {
+  EnumFileExtensions,
+  type ModelFile,
+  type FileExtensions,
+} from '@models/file'
 import clsx from 'clsx'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
-export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
+function CodeEditorDefault({
+  type,
+  content = '',
+  children,
+}: {
+  type: FileExtensions
+  content?: string
+  children: (options: {
+    extensions: Extension[]
+    content: string
+  }) => JSX.Element
+}): JSX.Element {
   const { mode } = useColorScheme()
+
+  const extensions = useMemo(() => {
+    return [
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      type === EnumFileExtensions.Python && python(),
+      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.SQL && sql(),
+    ].filter(Boolean) as Extension[]
+  }, [type, mode])
+
+  return (
+    <div className="flex overflow-auto h-full">
+      {children({ extensions, content })}
+    </div>
+  )
+}
+
+function CodeEditorSQLMesh({
+  content = '',
+  children,
+}: {
+  content?: string
+  children: (options: {
+    extensions: Extension[]
+    content: string
+  }) => JSX.Element
+}): JSX.Element {
+  const { mode } = useColorScheme()
+
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
 
   const models = useStoreContext(s => s.models)
-  const files = useStoreFileTree(s => s.files)
-  const selectFile = useStoreFileTree(s => s.selectFile)
 
-  const previewLineage = useStoreEditor(s => s.previewLineage)
-  const tabs = useStoreEditor(s => s.tabs)
-  const dialects = useStoreEditor(s => s.dialects)
   const engine = useStoreEditor(s => s.engine)
-  const refreshTab = useStoreEditor(s => s.refreshTab)
-  const closeTab = useStoreEditor(s => s.closeTab)
-  const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
+  const dialects = useStoreEditor(s => s.dialects)
 
-  const handleEngineWorkerMessage = useCallback(
-    (e: MessageEvent): void => {
-      const t = tabs.get(tab.file)
+  const [dialectOptions, setDialectOptions] = useState<{
+    types: string
+    keywords: string
+  }>()
 
-      if (t == null) return
-
-      if (e.data.topic === 'parse') {
-        t.isValid = e.data.payload?.type !== 'error' || tab.file.content === ''
-      }
-
-      if (e.data.topic === 'dialect') {
-        t.dialectOptions = e.data.payload
-      }
-    },
-    [tab.file],
-  )
+  const updateDialectOptions = useCallback((e: MessageEvent): void => {
+    if (e.data.topic === 'dialect') {
+      setDialectOptions(e.data.payload)
+    }
+  }, [])
 
   const dialectsTitles = useMemo(
     () => dialects.map(d => d.dialect_title),
@@ -75,151 +103,130 @@ export default function CodeEditor({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const extensions = useMemo(() => {
-    const model = models.get(tab.file.path)
+    return [
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      SqlMeshDialect(models, dialectOptions, dialectsTitles),
+    ]
+  }, [mode, dialectsTitles, dialectOptions])
+
+  useEffect(() => {
+    return () => {
+      SqlMeshDialectCleanUp()
+    }
+  }, [])
+
+  useEffect(() => {
+    engine.addEventListener('message', updateDialectOptions)
+
+    return () => {
+      engine.removeEventListener('message', updateDialectOptions)
+    }
+  }, [updateDialectOptions])
+
+  useEffect(() => {
+    engine.postMessage({
+      topic: 'dialect',
+    })
+  }, [content])
+
+  return (
+    <div className="flex overflow-auto h-full">
+      {children({ extensions, content })}
+    </div>
+  )
+}
+
+function CodeEditorRemoteFile({
+  path,
+  children,
+}: {
+  path: string
+  children: (options: { file: ModelFile }) => JSX.Element
+}): JSX.Element {
+  const files = useStoreFileTree(s => s.files)
+
+  const { refetch: getFileContent } = useApiFileByPath(path)
+  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
+
+  const [file, setFile] = useState<ModelFile>()
+
+  useEffect(() => {
+    const file = files.get(path)
+
+    if (file == null) return
+    if (isStringNotEmpty(file.content)) {
+      setFile(file)
+      return
+    }
+
+    debouncedGetFileContent({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        file.updateContent(data?.content ?? '')
+
+        setFile(file)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log('getFileContent', 'Request aborted by React Query')
+        } else {
+          console.log('getFileContent', error)
+        }
+      })
+  }, [files, path])
+
+  return file == null ? (
+    <div className="flex justify-center items-center w-full h-full">
+      <Loading className="inline-block ">
+        <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+        <h3 className="text-xl">Waiting for file...</h3>
+      </Loading>
+    </div>
+  ) : (
+    children({ file })
+  )
+}
+
+export function useSQLMeshModelExtensions(
+  path?: string,
+  lineage: Record<string, Lineage> = {},
+  handleModelClick?: (model: Model) => void,
+): Extension[] {
+  if (path == null) return []
+
+  const models = useStoreContext(s => s.models)
+  const files = useStoreFileTree(s => s.files)
+
+  const extensions = useMemo(() => {
+    const model = models.get(path)
     const columns = new Set(
-      Object.keys(previewLineage ?? {})
+      Object.keys(lineage)
         .map(modelName => models.get(modelName)?.columns.map(c => c.name))
         .flat()
         .filter(Boolean) as string[],
     )
 
     return [
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
       HoverTooltip(models),
-      events(models, files, selectFile),
+      handleModelClick != null && events(models, handleModelClick),
       model != null && SqlMeshModel(models, model, columns),
-      tab.file.extension === EnumFileExtensions.Python && python(),
-      tab.file.extension === EnumFileExtensions.YAML &&
-        StreamLanguage.define(yaml),
-      tab.file.extension === EnumFileExtensions.SQL &&
-        tab.dialectOptions != null &&
-        SqlMeshDialect(models, tab.file, tab.dialectOptions, dialectsTitles),
     ].filter(Boolean) as Extension[]
-  }, [
-    tab.file,
-    tab.dialectOptions,
-    models,
-    mode,
-    files,
-    dialectsTitles,
-    previewLineage,
-  ])
+  }, [path, models, files])
 
-  const keymaps = useMemo(
-    () => [
-      {
-        key: 'Mod-Alt-[',
-        preventDefault: true,
-        run() {
-          selectTab(createTab())
-
-          return true
-        },
-      },
-      {
-        key: 'Mod-Alt-]',
-        preventDefault: true,
-        run() {
-          closeTab(tab.file)
-
-          return true
-        },
-      },
-    ],
-    [closeTab, selectTab, createTab, tab.file],
-  )
-
-  useEffect(() => {
-    engine.addEventListener('message', handleEngineWorkerMessage)
-
-    return () => {
-      engine.removeEventListener('message', handleEngineWorkerMessage)
-
-      SqlMeshDialectCleanUp()
-    }
-  }, [handleEngineWorkerMessage])
-
-  useEffect(() => {
-    engine.postMessage({
-      topic: 'parse',
-      payload: tab.file.content,
-    })
-  }, [tab.file.content])
-
-  function updateFileContent(value: string): void {
-    tab.file.content = value
-    tab.isSaved = isFalse(tab.file.isChanged)
-
-    refreshTab()
-  }
-
-  return tab.file.isLocal ? (
-    <CodeEditorFileLocal
-      keymaps={keymaps}
-      extensions={extensions}
-      tab={tab}
-      onChange={updateFileContent}
-    />
-  ) : (
-    <CodeEditorFileRemote
-      keymaps={keymaps}
-      extensions={extensions}
-      tab={tab}
-      onChange={updateFileContent}
-    />
-  )
+  return extensions
 }
 
-function CodeEditorFileLocal({
-  keymaps,
-  extensions,
-  tab,
-  onChange,
-}: {
-  keymaps: KeyBinding[]
-  extensions: Extension[]
-  tab: EditorTab
-  onChange: (value: string) => void
-}): JSX.Element {
-  const extensionKeymap = useMemo(() => keymap.of([...keymaps]), [keymaps])
+export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
+  if (file == null) return []
 
-  const extensionsAll = useMemo(
-    () => [...extensions, extensionKeymap],
-    [extensionKeymap, extensions],
-  )
-
-  return (
-    <CodeMirror
-      height="100%"
-      width="100%"
-      className="w-full h-full overflow-auto text-sm font-mono"
-      value={tab.file.content}
-      extensions={extensionsAll}
-      onChange={onChange}
-    />
-  )
-}
-
-function CodeEditorFileRemote({
-  keymaps,
-  extensions,
-  tab,
-  onChange,
-}: {
-  keymaps: KeyBinding[]
-  extensions: Extension[]
-  tab: EditorTab
-  onChange: (value: string) => void
-}): JSX.Element {
   const client = useQueryClient()
 
-  const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
 
-  const engine = useStoreEditor(s => s.engine)
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
-  const { refetch: getFileContent } = useApiFileByPath(tab.file.path)
+  const { refetch: getFileContent } = useApiFileByPath(file.path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
   const mutationSaveFile = useMutationApiSaveFile(client, {
@@ -238,190 +245,98 @@ function CodeEditorFileRemote({
 
   const debouncedSaveChange = useCallback(
     debounceSync(saveChange, 1000, true),
-    [tab],
-  )
-
-  const extensionKeymap = useMemo(
-    () =>
-      keymap.of([
-        ...keymaps,
-        {
-          mac: 'Cmd-s',
-          win: 'Ctrl-s',
-          linux: 'Ctrl-s',
-          preventDefault: true,
-          run() {
-            debouncedSaveChange(tab.file.content)
-
-            return true
-          },
-        },
-      ]),
-    [debouncedSaveChange, keymaps, tab.file.content],
-  )
-
-  const extensionsAll = useMemo(
-    () => [...extensions, extensionKeymap],
-    [extensionKeymap, extensions],
+    [file],
   )
 
   useEffect(() => {
-    return () => {
-      debouncedPlanRun.cancel()
-      debouncedGetFileContent.cancel()
-
-      apiCancelPlanRun(client)
-      apiCancelFiles(client)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isStringEmptyOrNil(tab.file.content)) {
+    if (isStringEmptyOrNil(file.content)) {
       debouncedGetFileContent({
         throwOnError: true,
       })
         .then(({ data }) => {
-          const model = models.get(tab.file.path)
-
-          tab.file.updateContent(data?.content ?? '')
-
-          if (model != null) {
-            tab.dialect = model.dialect
-
-            engine.postMessage({
-              topic: 'dialect',
-              payload: model.dialect,
-            })
-          }
-
-          engine.postMessage({
-            topic: 'parse',
-            payload: tab.file.content,
-          })
+          file.updateContent(data?.content ?? '')
         })
         .catch(error => {
           if (isCancelledError(error)) {
             console.log('getFileContent', 'Request aborted by React Query')
           } else {
             console.log('getFileContent', error)
-
-            tab.isSaved = false
-            tab.isValid = false
           }
         })
         .finally(() => {
           refreshTab()
         })
     }
-  }, [tab.file.path])
+  }, [file.path])
 
   function saveChange(): void {
+    if (file == null) return
+
     mutationSaveFile.mutate({
-      path: tab.file.path,
-      body: { content: tab.file.content },
+      path: file.path,
+      body: { content: file.content },
     })
   }
 
-  function saveChangeSuccess(file: File): void {
-    if (file == null) return
+  function saveChangeSuccess(newfile: File): void {
+    if (newfile == null || file == null) return
 
-    tab.file.updateContent(file.content)
-    tab.isSaved = true
+    file.updateContent(newfile.content)
 
     refreshTab()
 
     void debouncedPlanRun()
   }
 
+  return [
+    {
+      mac: 'Cmd-s',
+      win: 'Ctrl-s',
+      linux: 'Ctrl-s',
+      preventDefault: true,
+      run() {
+        debouncedSaveChange(file.content)
+
+        return true
+      },
+    },
+  ]
+}
+
+const CodeEditor = function CodeEditor({
+  keymaps = [],
+  extensions = [],
+  content = '',
+  onChange,
+  className,
+}: {
+  content?: string
+  keymaps?: KeyBinding[]
+  extensions?: Extension[]
+  onChange?: (value: string) => void
+  className?: string
+}): JSX.Element {
+  const extensionKeymap = useMemo(() => keymap.of([...keymaps]), [keymaps])
+  const extensionsAll = useMemo(
+    () => [...extensions, extensionKeymap],
+    [extensionKeymap, extensions],
+  )
+
   return (
     <CodeMirror
       height="100%"
       width="100%"
-      className="w-full h-full overflow-auto text-sm font-mono"
-      value={tab.file.content}
+      className={clsx('flex w-full h-full text-sm font-mono', className)}
+      value={content}
       extensions={extensionsAll}
       onChange={onChange}
+      readOnly={isFalse(Boolean(onChange))}
     />
   )
 }
 
-const CodeEditorDocsReadOnly = memo(function CodeEditorDocsReadOnly({
-  model,
-  className,
-}: {
-  model: Model
-  className?: string
-}): JSX.Element {
-  const { mode } = useColorScheme()
-  const [SqlMeshDialect] = useSqlMeshExtension()
-  const models = useStoreContext(s => s.models)
-  const files = useStoreFileTree(s => s.files)
-  const previewLineage = useStoreEditor(s => s.previewLineage)
+CodeEditor.Default = CodeEditorDefault
+CodeEditor.SQLMeshDialect = CodeEditorSQLMesh
+CodeEditor.RemoteFile = CodeEditorRemoteFile
 
-  const { refetch: getFileContent } = useApiFileByPath(model.path)
-  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
-
-  const columns = new Set(
-    Object.keys(previewLineage ?? {})
-      .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-      .flat()
-      .filter(Boolean) as string[],
-  )
-
-  const [file, setFile] = useState<ModelFile | undefined>(files.get(model.path))
-
-  useEffect(() => {
-    const file = files.get(model.path)
-
-    if (
-      model == null ||
-      file == null ||
-      isFalse(isStringEmptyOrNil(file.content))
-    )
-      return
-    debouncedGetFileContent({
-      throwOnError: true,
-    })
-      .then(({ data }) => {
-        file.updateContent(data?.content ?? '')
-
-        setFile(file)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('getFileContent', 'Request aborted by React Query')
-        } else {
-          console.log('getFileContent', error)
-        }
-      })
-  }, [files, model])
-
-  const extensions = useMemo(
-    () =>
-      [
-        mode === EnumColorScheme.Dark ? dracula : tomorrow,
-        HoverTooltip(models),
-        model != null && SqlMeshModel(models, model, columns),
-        file?.extension === EnumFileExtensions.Python && python(),
-        file?.extension === EnumFileExtensions.SQL &&
-          SqlMeshDialect(models, file),
-      ].filter(Boolean) as Extension[],
-    [file, mode, models, model],
-  )
-
-  return (
-    <CodeMirror
-      height="100%"
-      width="100%"
-      className={clsx(
-        'w-full h-full overflow-auto text-sm font-mono',
-        className,
-      )}
-      value={file?.content ?? ''}
-      extensions={extensions}
-      readOnly
-    />
-  )
-})
-
-export { CodeEditorDocsReadOnly }
+export default CodeEditor

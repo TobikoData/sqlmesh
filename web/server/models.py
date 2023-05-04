@@ -192,6 +192,7 @@ class ModelDetails(BaseModel):
     interval_unit: t.Optional[IntervalUnit] = None
     annotated: t.Optional[bool] = None
     contains_star_query: t.Optional[bool] = None
+    type: t.Optional[str] = None
 
 
 class Model(BaseModel):
