@@ -9,7 +9,7 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
 ## Airflow cluster configuration
-To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras. 
+To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras.
 
 **Note:** The Airflow Webserver instance(s) must be restarted after installation.
 
@@ -26,6 +26,16 @@ for dag in sqlmesh_airflow.dags:
 The name of the module file can be arbitrary, but we recommend something descriptive such as `sqlmesh.py` or `sqlmesh_integration.py`.
 
 **Note**: The name of the engine operator is the only mandatory parameter needed for `sqlmesh.schedulers.airflow.integration.SQLMeshAirflow`. Currently supported engines are listed in the [Engine support](#engine-support) section.
+
+### State connection
+
+By default, SQLMesh uses the Airflow's database connection to read and write its state.
+
+To configure a different storage backend for the SQLMesh state you need to create a new [Airflow Connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) with ID `sqlmesh_state_db` and type `Generic`. The configuration should be provided in the connection's `extra` field in JSON format.
+
+![SQLMesh state connection](airflow/airflow_sqlmesh_state_connection.png)
+
+Refer to the [Connection Configuration](../reference/configuration.md#connection) for supported fields.
 
 ## SQLMesh client configuration
 In your SQLMesh repository, create the following configuration within config.py:
