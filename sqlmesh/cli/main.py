@@ -20,14 +20,9 @@ from sqlmesh.utils.errors import MissingDependencyError
 @opt.paths
 @opt.config
 @click.option(
-    "--connection",
+    "--gateway",
     type=str,
-    help="The name of the connection.",
-)
-@click.option(
-    "--test-connection",
-    type=str,
-    help="The name of the connection to use for tests.",
+    help="The name of the gateway.",
 )
 @click.pass_context
 @error_handler
@@ -35,8 +30,7 @@ def cli(
     ctx: click.Context,
     paths: t.List[str],
     config: t.Optional[str] = None,
-    connection: t.Optional[str] = None,
-    test_connection: t.Optional[str] = None,
+    gateway: t.Optional[str] = None,
 ) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
@@ -58,8 +52,7 @@ def cli(
     context = Context(
         paths=paths,
         config=config,
-        connection=connection,
-        test_connection=test_connection,
+        gateway=gateway,
     )
 
     if not context.models:

@@ -68,7 +68,11 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
-        return EngineAdapterStateSync(context.engine_adapter)
+        state_connection = context.config.get_state_connection(context.gateway)
+        engine_adapter = (
+            state_connection.create_engine_adapter() if state_connection else context.engine_adapter
+        )
+        return EngineAdapterStateSync(engine_adapter)
 
     def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return BuiltInPlanEvaluator(

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import Field, root_validator, validator
+from pydantic import root_validator, validator
 
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
+from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
@@ -20,11 +21,11 @@ class Config(BaseConfig):
     """An object used by a Context to configure your SQLMesh project.
 
     Args:
-        connections: Supported connections and their configurations. Key represents a unique name of a connection.
-        default_connection: The name of a connection to use by default.
-        test_connection: The connection settings for tests. Can be a name which refers to an existing configuration
-            in `connections`.
-        scheduler: The scheduler configuration.
+        gateways: Supported gateways and their configurations. Key represents a unique name of a gateway.
+        default_connection: The default connection to use if one is not specified in a gateway.
+        default_test_connection: The default connection to use for tests if one is not specified in a gateway.
+        default_scheduler: The default scheduler configuration to use if one is not specified in a gateway.
+        default_gateway: The default gateway.
         notification_targets: The notification targets to use.
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
         physical_schema: The default schema used to store materialized tables.
@@ -40,12 +41,11 @@ class Config(BaseConfig):
         model_defaults: Default values for model definitions.
     """
 
-    connections: t.Union[t.Dict[str, ConnectionConfig], ConnectionConfig] = DuckDBConnectionConfig()
-    default_connection: str = ""
-    test_connection_: t.Union[ConnectionConfig, str] = Field(
-        alias="test_connection", default=DuckDBConnectionConfig()
-    )
-    scheduler: SchedulerConfig = BuiltInSchedulerConfig()
+    gateways: t.Union[t.Dict[str, GatewayConfig], GatewayConfig] = GatewayConfig()
+    default_connection: ConnectionConfig = DuckDBConnectionConfig()
+    default_test_connection: ConnectionConfig = DuckDBConnectionConfig()
+    default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
+    default_gateway: str = ""
     notification_targets: t.List[NotificationTarget] = []
     physical_schema: str = c.SQLMESH
     project: str = ""
@@ -59,7 +59,7 @@ class Config(BaseConfig):
     loader: t.Type[Loader] = SqlMeshLoader
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
-        "connections": UpdateStrategy.KEY_UPDATE,
+        "gateways": UpdateStrategy.KEY_UPDATE,
         "notification_targets": UpdateStrategy.EXTEND,
         "ignore_patterns": UpdateStrategy.EXTEND,
         "users": UpdateStrategy.EXTEND,
@@ -67,52 +67,58 @@ class Config(BaseConfig):
         "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
     }
 
-    @validator("connections", always=True)
-    def _connections_ensure_dict(
-        cls, value: t.Union[t.Dict[str, ConnectionConfig], ConnectionConfig]
-    ) -> t.Dict[str, ConnectionConfig]:
+    @validator("gateways", always=True)
+    def _gateways_ensure_dict(
+        cls, value: t.Union[t.Dict[str, GatewayConfig], GatewayConfig]
+    ) -> t.Dict[str, GatewayConfig]:
         if not isinstance(value, dict):
             return {"": value}
         return value
 
     @root_validator(pre=True)
     def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if "connections" not in values and "connection" in values:
-            values["connections"] = values.pop("connection")
+        if "gateways" not in values and "gateway" in values:
+            values["gateways"] = values.pop("gateway")
 
         return values
 
-    def get_connection(self, name: t.Optional[str] = None) -> ConnectionConfig:
-        if isinstance(self.connections, dict):
+    def get_gateway(self, name: t.Optional[str] = None) -> GatewayConfig:
+        if isinstance(self.gateways, dict):
             if name is None:
-                if self.default_connection:
-                    if self.default_connection not in self.connections:
-                        raise ConfigError(
-                            f"Missing connection with name '{self.default_connection}'"
-                        )
-                    return self.connections[self.default_connection]
+                if self.default_gateway:
+                    if self.default_gateway not in self.gateways:
+                        raise ConfigError(f"Missing gateway with name '{self.default_gateway}'")
+                    return self.gateways[self.default_gateway]
 
-                if "" in self.connections:
-                    return self.connections[""]
+                if "" in self.gateways:
+                    return self.gateways[""]
 
-                return next(iter(self.connections.values()))
+                return next(iter(self.gateways.values()))
 
-            if name not in self.connections:
-                raise ConfigError(f"Missing connection with name '{name}'.")
+            if name not in self.gateways:
+                raise ConfigError(f"Missing gateway with name '{name}'.")
 
-            return self.connections[name]
+            return self.gateways[name]
         else:
             if name is not None:
                 raise ConfigError(
-                    "Connection name is not supported when only one connection is configured."
+                    "Gateway name is not supported when only one gateway is configured."
                 )
-            return self.connections
+            return self.gateways
 
-    @property
-    def test_connection(self) -> ConnectionConfig:
-        if isinstance(self.test_connection_, str):
-            return self.get_connection(self.test_connection_)
-        return self.test_connection_
+    def get_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
+        return self.get_gateway(gateway_name).connection or self.default_connection
+
+    def get_state_connection(
+        self, gateway_name: t.Optional[str] = None
+    ) -> t.Optional[ConnectionConfig]:
+        return self.get_gateway(gateway_name).state_connection
+
+    def get_test_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
+        return self.get_gateway(gateway_name).test_connection or self.default_test_connection
+
+    def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:
+        return self.get_gateway(gateway_name).scheduler or self.default_scheduler
 
     @property
     def dialect(self) -> t.Optional[str]:

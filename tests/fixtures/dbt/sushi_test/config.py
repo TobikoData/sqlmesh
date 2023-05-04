@@ -9,4 +9,4 @@ config = sqlmesh_config(Path(__file__).parent)
 test_config = config
 
 
-airflow_config = sqlmesh_config(Path(__file__).parent, scheduler=AirflowSchedulerConfig())
+airflow_config = sqlmesh_config(Path(__file__).parent, default_scheduler=AirflowSchedulerConfig())

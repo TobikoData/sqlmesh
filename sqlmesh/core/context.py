@@ -191,8 +191,7 @@ class Context(BaseContext):
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str, t.Iterable[str]] = "",
         config: t.Optional[t.Union[Config, str]] = None,
-        connection: t.Optional[str] = None,
-        test_connection: t.Optional[str] = None,
+        gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
         load: bool = True,
@@ -218,20 +217,16 @@ class Context(BaseContext):
         self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
-        self._scheduler = self.config.scheduler
-        self.connection = connection
-        self.test_connection = test_connection
+        self.gateway = gateway
+        self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
         self.auto_categorize_changes = self.config.auto_categorize_changes
-        connection_config = self.config.get_connection(connection)
+
+        connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
         self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
 
-        test_connection_config = (
-            self.config.test_connection
-            if test_connection is None
-            else self.config.get_connection(test_connection)
-        )
+        test_connection_config = self.config.get_test_connection(self.gateway)
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
         self.snapshot_evaluator = SnapshotEvaluator(
@@ -844,18 +839,13 @@ class Context(BaseContext):
         self.console.log_status_update(f"Models: {len(self.models)}")
         self.console.log_status_update(f"Macros: {len(self.macros)}")
 
-        primary_connection_name = self.connection or self.config.default_connection or "default"
-        self._try_connection(primary_connection_name, self._engine_adapter)
+        self._try_connection("data warehouse", self._engine_adapter)
 
-        test_connection_name_in_config = (
-            self.config.test_connection_
-            if isinstance(self.config.test_connection_, str)
-            else "test_default"
-        )
-        if test_connection_name_in_config != primary_connection_name:
-            self._try_connection(
-                self.test_connection or test_connection_name_in_config, self._test_engine_adapter
-            )
+        state_connection = self.config.get_state_connection(self.gateway)
+        if state_connection:
+            self._try_connection("state backend", state_connection.create_engine_adapter())
+
+        self._try_connection("test", self._test_engine_adapter)
 
     def close(self) -> None:
         """Releases all resources allocated by this context."""
@@ -934,13 +924,12 @@ class Context(BaseContext):
         self.snapshot_evaluator.cleanup(expired_snapshots)
 
     def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
+        connection_name = connection_name.capitalize()
         try:
             engine_adapter.fetchall("SELECT 1")
-            self.console.log_status_update(
-                f"Connection '{connection_name}' [green]succeeded[/green]"
-            )
+            self.console.log_status_update(f"{connection_name} connection [green]succeeded[/green]")
         except Exception as ex:
-            self.console.log_error(f"Connection '{connection_name}' failed. {ex}")
+            self.console.log_error(f"{connection_name} connection failed. {ex}")
 
     def _new_state_sync(self) -> StateSync:
         state_sync = self._provided_state_sync or self._scheduler.create_state_sync(self)

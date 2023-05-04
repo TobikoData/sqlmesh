@@ -11,31 +11,43 @@ Configuration options from different sources have the following order of precede
 ## Debug mode
 To enable the debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
 
-## Connections
+## Gateways
 
-A dictionary of supported connections and their configurations. The key represents a unique connection name. If there is only one connection, its configuration can be provided directly, omitting the dictionary.
+A dictionary of supported gateways. Each gateway configuration defines how SQLMesh should connect to the data warehouse, the state backend and the scheduler. The key represents a unique gateway name.
 
 ```yaml linenums="1"
-connections:
-    my_connection:
-        type: snowflake
-        user: <username>
-        password: <password>
-        account: <account>
+gateways:
+    my_gateway:
+        connection:
+            ...
+        state_connection:
+            ...
+        test_connection:
+            ...
+        scheduler:
+            ...
 ```
 
-### Root level connection configuration
-| Option               | Description                                                                                                         |  Type  | Required |
-|----------------------|---------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `default_connection` | The name of a connection to use by default (Default: The connection defined first in the `connections` option)        | string |    N     |
-| `test_connection`    | The name of a connection to use when running tests (Default: A DuckDB connection that creates an in-memory database | string |    N     |
+### Connection
 
-### Shared connection configuration
+Configuration for the data warehouse connection. Default: a DuckDB connection that creates an in-memory database.
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        connection:
+            type: snowflake
+            user: <username>
+            password: <password>
+            account: <account>
+```
+
+#### Shared connection configuration
 | Option             | Description                                                        | Type | Required |
 |--------------------|--------------------------------------------------------------------|:----:|:--------:|
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
-### Engine connection configuration
+#### Engine connection configuration
 * [BigQuery](../integrations/engines.md#bigquery-localbuilt-in-scheduler)
 * [Databricks](../integrations/engines.md#databricks-localbuilt-in-scheduler)
 * [DuckDB](../integrations/engines.md#duckdb-localbuilt-in-scheduler)
@@ -44,27 +56,59 @@ connections:
 * [Snowflake](../integrations/engines.md#snowflake-localbuilt-in-scheduler)
 * [Spark](../integrations/engines.md#spark-localbuilt-in-scheduler)
 
-## Scheduler
+### State connection
+
+Configuration for the state backend connection if different from the data warehouse connection. Default: the data warehouse connection.
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        state_connection:
+            type: postgres
+            host: <host>
+            port: <port>
+            user: <username>
+            password: <password>
+            database: <database>
+```
+
+### Test connection
+
+Configuration for a connection used when running unit tests. Default: a DuckDB connection that creates an in-memory database.
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        test_connection:
+            type: duckdb
+```
+
+
+### Scheduler
 
 Identifies which scheduler backend to use. The scheduler backend is used both for storing metadata and for executing [plans](../concepts/plans.md). By default, the scheduler type is set to `builtin`, which uses the existing SQL engine to store metadata, and that has a simple scheduler. The `airflow` type should be set if you want to integrate with Airflow and is recommended for production deployments.
 
 Below is the list of configuration options specific to each corresponding scheduler type.
 
-### Builtin
+#### Builtin
 ```yaml linenums="1"
-scheduler:
-    type: builtin
+gateways:
+    my_gateway:
+        scheduler:
+            type: builtin
 ```
 
 No additional configuration options are supported by this scheduler type.
 
-### Airflow
+#### Airflow
 ```yaml linenums="1"
-scheduler:
-    type: airflow
-    airflow_url: <airflow_url>
-    username: <username>
-    password: <password>
+gateways:
+    my_gateway:
+        scheduler:
+            type: airflow
+            airflow_url: <airflow_url>
+            username: <username>
+            password: <password>
 ```
 
 | Option                            | Description                                                                                                                        |  Type  | Required |
@@ -80,16 +124,24 @@ scheduler:
 
 See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
 
-### Cloud Composer
+#### Cloud Composer
 ```yaml linenums="1"
 scheduler:
     type: cloud_composer
     airflow_url: <airflow_url>
 ```
-This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. 
+This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`.
 Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
 
 See [Airflow Integration Guide](../integrations/airflow.md) for information on how to integrate Airflow with SQLMesh.
+
+### Root level gateway configuration
+| Option                    | Description                                                                                                                                            | Type       | Required |
+|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
+| `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection | N        |
+| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection | N        |
+| `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          | scheduler  | N        |
+| `default_gateway`         | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option)                           | string     | N        |
 
 ## SQLMesh-specific configurations
 | Option                    | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |

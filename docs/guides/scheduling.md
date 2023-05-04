@@ -68,7 +68,7 @@ After setup is completed, the `sqlmesh_janitor_dag` DAG should become available 
 
 On the client side, you must configure the connection to your Airflow cluster in the `config.yaml` file as follows:
 
-        scheduler:
+        default_scheduler:
             type: airflow
             airflow_url: http://localhost:8080/
             username: airflow
@@ -81,7 +81,7 @@ sqlmesh init -t airflow
 
 For Airflow configuration types specific to Google Cloud Composer, configure the file as follows:
 
-        scheduler:
+        default_scheduler:
             type: cloud_composer
             airflow_url: https:/XXXXXXXX.composer.googleusercontent.com/
 
