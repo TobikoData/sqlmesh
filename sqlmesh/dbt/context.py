@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
@@ -43,9 +44,21 @@ class DbtContext:
 
     _jinja_environment: t.Optional[Environment] = None
 
+    _manifest: t.Optional[ManifestHelper] = None
+
     @property
     def dialect(self) -> str:
         return self.engine_adapter.dialect if self.engine_adapter is not None else ""
+
+    @property
+    def manifest(self) -> ManifestHelper:
+        if self._manifest is None:
+            raise ConfigError("Manifest is not set in the context.")
+        return self._manifest
+
+    @manifest.setter
+    def manifest(self, mainfest: ManifestHelper) -> None:
+        self._manifest = mainfest
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:

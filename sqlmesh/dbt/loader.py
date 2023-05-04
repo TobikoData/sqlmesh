@@ -13,13 +13,10 @@ from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
-from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.cache import FileCache
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +63,10 @@ class DbtLoader(Loader):
         macros_mtimes: t.List[float] = []
 
         for package_name, package in project.packages.items():
+            context.variables = package.variables
+            context.add_sources(package.sources)
+            context.add_seeds(package.seeds)
+            context.add_models(package.models)
             context.jinja_macros.add_macros(
                 package.macro_infos,
                 package=package_name if package_name != context.project_name else None,
@@ -81,25 +82,6 @@ class DbtLoader(Loader):
         macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
         yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(self._context.path)
         cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
-
-        # First render all the config and discover dependencies
-        logger.info("Rendering model configs")
-        for package in project.packages.values():
-            context.variables = package.variables
-
-            package.sources = {k: v.render_config(context) for k, v in package.sources.items()}
-            package.seeds = {
-                k: cache.get_or_load_seed_config(v.path, lambda: self._render_config(v, context))
-                for k, v in package.seeds.items()
-            }
-            package.models = {
-                k: cache.get_or_load_model_config(v.path, lambda: self._render_config(v, context))
-                for k, v in package.models.items()
-            }
-
-            context.add_sources(package.sources)
-            context.add_seeds(package.seeds)
-            context.add_models(package.models)
 
         logger.info("Converting models to sqlmesh")
         # Now that config is rendered, create the sqlmesh models
@@ -120,11 +102,6 @@ class DbtLoader(Loader):
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         return UniqueKeyDict("audits")
-
-    @classmethod
-    def _render_config(cls, config: BMC, context: DbtContext) -> BMC:
-        logger.info(f"Rendering config for {config.model_name}")
-        return config.render_config(context)
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
@@ -167,25 +144,9 @@ class DbtLoader(Loader):
             target = t.cast(TargetConfig, project.context.target)
             cache_path = loader._context.path / c.CACHE / target.name
             self._model_cache = ModelCache(cache_path)
-            self._model_config_cache = FileCache(cache_path, ModelConfig, prefix="model_config")
-            self._seed_config_cache = FileCache(cache_path, SeedConfig, prefix="seed_config")
 
         def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
             return self._model_cache.get_or_load(
-                self._cache_entry_name(target_path), self._cache_entry_id(target_path), loader
-            )
-
-        def get_or_load_model_config(
-            self, target_path: Path, loader: t.Callable[[], ModelConfig]
-        ) -> ModelConfig:
-            return self._model_config_cache.get_or_load(
-                self._cache_entry_name(target_path), self._cache_entry_id(target_path), loader
-            )
-
-        def get_or_load_seed_config(
-            self, target_path: Path, loader: t.Callable[[], SeedConfig]
-        ) -> SeedConfig:
-            return self._seed_config_cache.get_or_load(
                 self._cache_entry_name(target_path), self._cache_entry_id(target_path), loader
             )
 

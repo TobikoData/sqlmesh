@@ -8,6 +8,7 @@ import types
 import typing as t
 import uuid
 from contextlib import contextmanager
+from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 
@@ -62,6 +63,13 @@ class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
 
 class AttributeDict(dict, t.Mapping[KEY, VALUE]):
     __getattr__ = dict.get
+
+    def __deepcopy__(self, memo: t.Dict[t.Any, AttributeDict]) -> AttributeDict:
+        copy: AttributeDict = AttributeDict()
+        memo[id(self)] = copy
+        for k, v in self.items():
+            copy[k] = deepcopy(v, memo)
+        return copy
 
 
 class registry_decorator:

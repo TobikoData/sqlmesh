@@ -4,6 +4,7 @@
         incremental_strategy='delete+insert',
         cluster_by=['ds'],
         time_column='ds',
+        schema='analytics'
     )
 }}
 

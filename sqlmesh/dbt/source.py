@@ -3,10 +3,10 @@ from __future__ import annotations
 import typing as t
 
 from dbt.contracts.relation import RelationType
-from pydantic import Field, validator
+from pydantic import Field
 
 from sqlmesh.core.config.base import UpdateStrategy
-from sqlmesh.dbt.column import ColumnConfig, yaml_to_columns
+from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig, QuotingConfig
 from sqlmesh.utils import AttributeDict
 
@@ -43,13 +43,6 @@ class SourceConfig(GeneralConfig):
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
-
-    @validator("columns", pre=True)
-    def _validate_columns(cls, v: t.Any) -> t.Dict[str, ColumnConfig]:
-        if not isinstance(v, dict) or all(isinstance(col, ColumnConfig) for col in v.values()):
-            return v
-
-        return yaml_to_columns(v)
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,

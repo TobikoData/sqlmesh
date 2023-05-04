@@ -5,7 +5,6 @@ import pytest
 from dbt.exceptions import CompilationError
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.config.connection import DuckDBConnectionConfig
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -13,7 +12,6 @@ from sqlmesh.core.model import (
     ModelKind,
     ModelKindName,
 )
-from sqlmesh.dbt.builtin import create_builtin_globals
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -23,20 +21,13 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
-from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import DuckDbConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 
 
 def test_model_name():
-    assert ModelConfig(target_schema="foo", path="models/bar.sql").model_name == "foo.bar"
-    assert (
-        ModelConfig(target_schema="foo", path="models/bar.sql", alias="baz").model_name == "foo.baz"
-    )
-    assert (
-        ModelConfig(target_schema="foo", path="models/bar.sql", schema_="baz").model_name
-        == "foo_baz.bar"
-    )
+    assert ModelConfig(schema="foo", path="models/bar.sql").model_name == "foo.bar"
+    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").model_name == "foo.baz"
 
 
 def test_model_kind():
@@ -174,75 +165,6 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-def test_config_containing_jinja():
-    model = ModelConfig(
-        **{
-            "pre-hook": "GRANT INSERT ON {{ source('package', 'table') }} TO admin",
-            "post-hook": "GRANT DELETE ON {{ source('package', 'table') }} TO admin",
-        },
-        target_schema="{{ var('schema') }}",
-        table_name="bar",
-        sql="SELECT * FROM {{ source('package', 'table') }}",
-        columns={
-            "address": ColumnConfig(
-                name="address", data_type="text", description="Business address"
-            ),
-            "zipcode": ColumnConfig(
-                name="zipcode",
-                data_type="varchar({{ var('size') }})",
-                description="Business zipcode",
-            ),
-        },
-    )
-
-    context = DbtContext(project_name="Foo")
-    context.target = DuckDbConfig(name="target", schema="foo")
-    context.variables = {"schema": "foo", "size": "5"}
-    model.dependencies.sources = set(["package.table"])
-    context.sources = {"package.table": SourceConfig(schema_="raw", name="baz")}
-
-    rendered = model.render_config(context)
-    assert rendered.pre_hook == model.pre_hook
-    assert rendered.sql == model.sql
-    assert rendered.target_schema != model.target_schema
-    assert rendered.target_schema == "foo"
-    assert rendered.columns["zipcode"] != model.columns["zipcode"]
-    assert rendered.columns["zipcode"].data_type == "varchar(5)"
-
-    sqlmesh_model = rendered.to_sqlmesh(context)
-    assert str(sqlmesh_model.query) == model.sql
-    assert str(sqlmesh_model.render_query()) == 'SELECT * FROM "raw"."baz" AS baz'
-    assert sqlmesh_model.columns_to_types == column_types_to_sqlmesh(rendered.columns)
-
-
-def test_config_containing_missing_dependency():
-    context = DbtContext(project_name="project")
-    context.target = DuckDbConfig(name="target", schema="foo")
-    model = ModelConfig(sql="{{ config(pre_hook=\"{{ print(ref('bar')) }}\") }} SELECT 1 FROM a")
-    with pytest.raises(ConfigError, match="'bar' was not found"):
-        model.render_config(context).to_sqlmesh(context)
-
-    model = ModelConfig(sql='{{ config(pre_hook="{{ get_table_name() }}") }} SELECT 1 FROM a')
-    with pytest.raises(ConfigError, match="get_table_name"):
-        model.render_config(context).to_sqlmesh(context)
-
-    model = ModelConfig(sql="{{ config(alias='{{ get_table_name() }}') }} SELECT 1 FROM a")
-    rendered = model.render_config(context)
-    assert rendered.alias == "{{ get_table_name() }}"
-    assert "get_table_name" not in [macro.name for macro in rendered.dependencies.macros]
-    rendered.to_sqlmesh(context)
-
-
-def test_config_containing_method():
-    context = DbtContext()
-    context.jinja_macros.global_objs.update({"get_table_name": lambda: "foo"})
-    model = ModelConfig(sql="{{ config(alias=get_table_name()) }} SELECT 1 FROM a")
-
-    rendered = model.render_config(context)
-    assert rendered.alias == "foo"
-    assert "get_table_name" not in [macro.name for macro in rendered.dependencies.macros]
-
-
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
 def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     waiters = sushi_test_dbt_context.models[model]
@@ -271,19 +193,9 @@ def test_project_name_jinja(sushi_test_project: Project):
 
 
 def test_schema_jinja(sushi_test_project: Project):
-    model_config = ModelConfig(target_schema="sushi", sql="SELECT 1 AS one FROM {{ schema }}")
+    model_config = ModelConfig(schema="sushi", sql="SELECT 1 AS one FROM {{ schema }}")
     context = sushi_test_project.context
     model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
-
-
-def test_materialized_jinja(sushi_test_project: Project):
-    model_config = ModelConfig(
-        materialized="{{ 'table' if target.type in ['duckdb'] else 'view' }}",
-        sql="SELECT 1 AS one FROM {{ schema }}",
-    )
-    context = sushi_test_project.context
-    rendered = model_config.render_config(context)
-    assert rendered.materialized == "table"
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):
@@ -441,26 +353,3 @@ def test_zip(sushi_test_project: Project):
     assert context.render("{{ zip_strict([1, 2], ['a', 'b']) }}") == "[(1, 'a'), (2, 'b')]"
     with pytest.raises(TypeError):
         context.render("{{ zip_strict(12, ['a', 'b']) }}")
-
-
-def test_dbt_namespace():
-    context = DbtContext()
-    jinja_globals = create_builtin_globals(
-        jinja_macros=context.jinja_macros,
-        jinja_globals={},
-        engine_adapter=DuckDBConnectionConfig().create_engine_adapter(),
-    )
-    jinja_env = context.jinja_macros.build_environment(**jinja_globals)
-
-    assert (
-        jinja_env.from_string("{{ dbt.replace('original sentence', 'original', 'updated') }}")
-        .render()
-        .strip()
-        == """replace(
-        original sentence,
-        original,
-        updated
-    )"""
-    )
-
-    assert jinja_env.from_string("{{ dbt.hash('col')}}").render() == "md5(cast(col as TEXT))"

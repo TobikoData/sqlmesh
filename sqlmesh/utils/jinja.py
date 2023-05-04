@@ -336,13 +336,14 @@ class JinjaMacroRegistry(PydanticModel):
             ):
                 continue
 
+            dependency_package = dependency.package or package
             upstream_callable = self._make_callable(
-                dependency.name, dependency.package or package, callable_cache, macro_vars
+                dependency.name, dependency_package, callable_cache, macro_vars
             )
-            if dependency.package is None:
+            if dependency_package == package:
                 macro_vars[dependency.name] = upstream_callable
-            else:
-                package_macros[dependency.package][dependency.name] = upstream_callable
+            if dependency_package:
+                package_macros[dependency_package][dependency.name] = upstream_callable
 
         macro_vars.update(package_macros)
 

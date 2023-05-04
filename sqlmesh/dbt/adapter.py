@@ -23,11 +23,9 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        dialect: str = "",
     ):
         self.jinja_macros = jinja_macros
         self.jinja_globals = jinja_globals or {}
-        self.dialect = dialect
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -78,20 +76,20 @@ class BaseAdapter(abc.ABC):
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
-        dialect_name = f"{self.dialect}__{name}"
-        default_name = f"default__{name}"
+        macros = (
+            self.jinja_macros.root_macros
+            if package is None
+            else self.jinja_macros.packages[package]
+        )
 
-        references_to_try = [
-            MacroReference(package=package, name=dialect_name),
-            MacroReference(package=package, name=default_name),
-        ]
-
-        for reference in references_to_try:
-            macro_callable = self.jinja_macros.build_macro(
-                reference, **{**self.jinja_globals, "adapter": self}
-            )
-            if macro_callable is not None:
-                return macro_callable
+        for macro_name in macros:
+            if macro_name.endswith(f"__{name}"):
+                reference = MacroReference(package=package, name=macro_name)
+                macro_callable = self.jinja_macros.build_macro(
+                    reference, **{**self.jinja_globals, "adapter": self}
+                )
+                if macro_callable is not None:
+                    return macro_callable
 
         raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
 
@@ -141,7 +139,7 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake
