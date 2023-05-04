@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter, TransactionType
 
@@ -30,43 +30,24 @@ class LogicalMerge(EngineAdapter):
         4. Drop the temporary table.
         """
         temp_table = self._get_temp_table(target_table)
-        unique_exp: exp.Expression = parse_one("|| '__SQLMESH_DELIM__' ||".join(unique_key))
+        unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *unique_key)
         with self.transaction(TransactionType.DML):
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
             self.execute(
-                exp.Delete(
-                    this=target_table,
-                    where=exp.Where(
-                        this=exp.In(
-                            this=unique_exp,
-                            query=exp.Select(expressions=[unique_exp]).from_(temp_table),
-                        )
-                    ),
+                exp.delete(target_table).where(
+                    unique_exp.isin(query=exp.select(unique_exp).from_(temp_table))
                 )
-            )
-            subquery = exp.Subquery(
-                this=exp.Select(
-                    distinct=exp.Distinct(
-                        on=exp.Tuple(
-                            expressions=[
-                                exp.Column(this=exp.Identifier(this=key)) for key in unique_key
-                            ]
-                        )
-                    ),
-                    expressions=[
-                        exp.Column(this=exp.Identifier(this=col)) for col in columns_to_types
-                    ],
-                ).from_(temp_table)
             )
             self.execute(
                 exp.Insert(
                     this=exp.Schema(
-                        this=target_table,
-                        expressions=[
-                            exp.Column(this=exp.Identifier(this=col)) for col in columns_to_types
-                        ],
+                        this=exp.to_table(target_table),
+                        expressions=[exp.column(col) for col in columns_to_types],
                     ),
-                    expression=subquery,
+                    expression=exp.select(*columns_to_types)
+                    .distinct(*unique_key)
+                    .from_(temp_table)
+                    .subquery(),
                 )
             )
             self.drop_table(temp_table)
