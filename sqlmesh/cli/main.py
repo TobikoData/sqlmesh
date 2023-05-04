@@ -361,7 +361,7 @@ def ide(
         import uvicorn
     except ModuleNotFoundError as e:
         raise MissingDependencyError(
-            "Missing IDE dependencies. Run `pip install sqlmesh[web]` to install them."
+            "Missing IDE dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
     host = host or "127.0.0.1"
