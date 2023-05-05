@@ -25,7 +25,6 @@ from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
-    from github import Github
     from github.CheckRun import CheckRun
     from github.Issue import Issue
     from github.PullRequest import PullRequest
@@ -175,6 +174,8 @@ class GithubController:
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
     ) -> None:
+        from github import Github
+
         self._paths = paths
         self._config = config
         self._token = token
