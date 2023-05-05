@@ -27,8 +27,6 @@ models:
       - '{{ log("pre-hook") }}'
     +post-hook: 
       - '{{ log("post-hook") }}'
-  customers:
-    +materialized: table
 
 seeds:
   sushi:
