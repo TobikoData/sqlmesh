@@ -447,8 +447,10 @@ class GithubController:
         """
 
         def conclusion_handler(
-            _: GithubCheckConclusion, result: unittest.result.TestResult
+            _: GithubCheckConclusion, result: unittest.result.TestResult, failed_output: str
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            print("inner result")
+            print(result)
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
             self.console.log_test_results(
@@ -476,7 +478,9 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=functools.partial(conclusion_handler, result=result),
+            conclusion_handler=functools.partial(
+                conclusion_handler, result=result, failed_output=failed_output
+            ),
         )
 
     def update_required_approval_check(

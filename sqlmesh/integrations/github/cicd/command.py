@@ -67,6 +67,8 @@ def _run_tests(controller: GithubController) -> bool:
     controller.update_test_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         result, failed_output = controller.run_tests()
+        print(result)
+        print(failed_output)
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             result=result,
