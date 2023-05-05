@@ -55,6 +55,7 @@ def load_config_from_paths(
 
 def load_config_from_yaml(path: Path) -> Config:
     config_dict = yaml_load(path)
+    print(config_dict)
     return Config.parse_obj(config_dict)
 
 
