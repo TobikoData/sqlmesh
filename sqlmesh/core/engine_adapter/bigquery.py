@@ -22,6 +22,7 @@ from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from google.cloud import bigquery
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.client import Connection as BigQueryConnection
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
@@ -131,15 +132,50 @@ class BigQueryEngineAdapter(EngineAdapter):
         self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return list(self.cursor._query_data)
 
-    def __load_pandas_to_temp_table(
+    def _create_table_from_df(
         self,
-        table: TableName,
-        df: pd.DataFrame,
+        table_name: TableName,
+        df: DF,
         columns_to_types: t.Dict[str, exp.DataType],
-    ) -> t.Tuple[BigQueryQueryResult, str]:
+        exists: bool = True,
+        replace: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
         """
-        Loads a pandas dataframe into a temporary table in BigQuery. Returns the result of the load and the name of the
-        temporary table. The temporary table will be deleted after 3 hours.
+        Creates a table from a pandas dataframe. Will create the table if it doesn't exist. Will replace the contents
+        of the table if `replace` is true.
+        """
+        assert isinstance(df, pd.DataFrame)
+        table = self.__get_bq_table(table_name, columns_to_types)
+        self.__load_pandas_to_table(table, df, exists=exists, replace=replace)
+
+    def __load_pandas_to_table(
+        self,
+        table: bigquery.Table,
+        df: pd.DataFrame,
+        exists: bool = True,
+        replace: bool = False,
+    ) -> BigQueryQueryResult:
+        """
+        Loads a pandas dataframe into a table in BigQuery. Will do an overwrite if replace is True. Note that
+        the replace will replace the entire table, not just the rows that are in the dataframe.
+        """
+        from google.cloud import bigquery
+
+        self.client.create_table(table, exists_ok=exists)
+        job_config = bigquery.job.LoadJobConfig()
+        if replace:
+            job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
+        result = self.client.load_table_from_dataframe(df, table, job_config=job_config).result()
+        if result.errors:
+            raise SQLMeshError(result.errors)
+        return result
+
+    def __get_bq_schema(
+        self, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> t.List[bigquery.SchemaField]:
+        """
+        Returns a bigquery schema object from a dictionary of column names to types.
         """
         from google.cloud import bigquery
 
@@ -147,21 +183,35 @@ class BigQueryEngineAdapter(EngineAdapter):
             col_name: remove_precision_parameterized_types(col_type)
             for col_name, col_type in columns_to_types.items()
         }
-
-        temp_table_name = ".".join(
-            [self.client.project, self._get_temp_table(table).sql(dialect=self.dialect)]
-        )
-        schema = [
+        return [
             bigquery.SchemaField(col_name, col_type.sql(dialect=self.dialect))
             for col_name, col_type in precisionless_col_to_types.items()
         ]
-        bq_table = bigquery.Table(table_ref=temp_table_name, schema=schema)
+
+    def __get_temp_bq_table(
+        self, table: TableName, columns_to_type: t.Dict[str, exp.DataType]
+    ) -> bigquery.Table:
+        """
+        Returns a bigquery table object that is temporary and will expire in 3 hours.
+        """
+        bq_table = self.__get_bq_table(self._get_temp_table(table), columns_to_type)
         bq_table.expires = to_datetime("in 3 hours")
-        self.client.create_table(bq_table)
-        result = self.client.load_table_from_dataframe(df, bq_table).result()
-        if result.errors:
-            raise SQLMeshError(result.errors)
-        return result, temp_table_name
+        return bq_table
+
+    def __get_bq_table(
+        self, table: TableName, columns_to_type: t.Dict[str, exp.DataType]
+    ) -> bigquery.Table:
+        """
+        Returns a bigquery table object with a schema defines that matches the columns_to_type dictionary.
+        """
+        from google.cloud import bigquery
+
+        table_name = ".".join([self.client.project, exp.to_table(table).sql(dialect=self.dialect)])
+        return bigquery.Table(table_ref=table_name, schema=self.__get_bq_schema(columns_to_type))
+
+    @classmethod
+    def __convert_bq_table_to_table(cls, bq_table: bigquery.Table) -> exp.Table:
+        return exp.to_table(".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]))
 
     def _insert_overwrite_by_condition(
         self,
@@ -182,7 +232,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         table = exp.to_table(table_name)
         query: t.Union[Query, exp.Select]
         is_pandas = isinstance(query_or_df, pd.DataFrame)
-        temp_table_name: t.Optional[str] = None
+        temp_table: t.Optional[exp.Table] = None
         if isinstance(query_or_df, DF_TYPES):
             if not is_pandas:
                 raise SQLMeshError("BigQuery only supports pandas DataFrames")
@@ -190,13 +240,13 @@ class BigQueryEngineAdapter(EngineAdapter):
                 raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
             if table.db is None:
                 raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
-            query_or_df = t.cast(pd.DataFrame, query_or_df)
-            result, temp_table_name = self.__load_pandas_to_temp_table(
-                table, query_or_df, columns_to_types
-            )
+            df = t.cast(pd.DataFrame, query_or_df)
+            temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
+            temp_table = self.__convert_bq_table_to_table(temp_bq_table)
+            result = self.__load_pandas_to_table(temp_bq_table, df, replace=False, exists=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
-            query = exp.select(*columns_to_types).from_(exp.to_table(temp_table_name))
+            query = exp.select(*columns_to_types).from_(temp_table)
         else:
             query = t.cast(Query, query_or_df)
         columns = [
@@ -224,8 +274,8 @@ class BigQueryEngineAdapter(EngineAdapter):
             match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
         )
         if is_pandas:
-            assert temp_table_name is not None
-            self.drop_table(temp_table_name)
+            assert temp_table is not None
+            self.drop_table(temp_table)
 
     def table_exists(self, table_name: TableName) -> bool:
         from google.cloud.exceptions import NotFound
