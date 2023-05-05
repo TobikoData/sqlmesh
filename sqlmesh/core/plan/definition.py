@@ -6,6 +6,7 @@ from enum import Enum
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model.meta import IntervalUnit
@@ -271,6 +272,21 @@ class Plan:
     @property
     def restatements(self) -> t.Set[str]:
         return self._restatements
+
+    @property
+    def loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
+        loaded_snapshots = []
+        for snapshot in self.directly_modified:
+            if not snapshot.change_category:
+                continue
+            loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
+            for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
+                downstream_snapshot = self.context_diff.snapshots[downstream_indirect]
+                # We don't want to display indirect non-breaking since to users these are effectively no-op changes
+                if downstream_snapshot.is_indirect_non_breaking:
+                    continue
+                loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(downstream_snapshot))
+        return loaded_snapshots
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
@@ -574,3 +590,28 @@ class SnapshotIntervals(PydanticModel, frozen=True):
 
     def format_intervals(self, unit: t.Optional[IntervalUnit] = None) -> str:
         return format_intervals(self.merged_intervals, unit)
+
+
+class LoadedSnapshotIntervals(SnapshotIntervals):
+    interval_unit: t.Optional[IntervalUnit]
+    model_name: str
+    view_name: str
+    change_category: SnapshotChangeCategory
+
+    @classmethod
+    def from_snapshot(cls, snapshot: Snapshot) -> LoadedSnapshotIntervals:
+        assert snapshot.change_category
+        return cls(
+            snapshot_name=snapshot.name,
+            intervals=snapshot.dev_intervals
+            if snapshot.change_category.is_forward_only
+            else snapshot.intervals,
+            interval_unit=snapshot.model.interval_unit(),
+            model_name=snapshot.model.name,
+            view_name=snapshot.model.view_name,
+            change_category=snapshot.change_category,
+        )
+
+    @property
+    def change_category_str(self) -> str:
+        return SNAPSHOT_CHANGE_CATEGORY_STR[self.change_category]

@@ -14,13 +14,11 @@ from hyperscript import Element, h
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
+from sqlmesh.core.console import MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
-from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.plan import Plan, SnapshotIntervals
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import CICDBotError, PlanError
@@ -35,7 +33,6 @@ if t.TYPE_CHECKING:
     from github.Repository import Repository
 
     from sqlmesh.core.config import Config
-    from sqlmesh.core.snapshot import Snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -117,31 +114,6 @@ class GithubCheckConclusion(str, Enum):
         return self == GithubCheckConclusion.SKIPPED
 
 
-class EnvironmentSnapshotIntervals(SnapshotIntervals):
-    interval_unit: t.Optional[IntervalUnit]
-    model_name: str
-    view_name: str
-    change_category: SnapshotChangeCategory
-
-    @classmethod
-    def from_snapshot(cls, snapshot: Snapshot) -> EnvironmentSnapshotIntervals:
-        assert snapshot.change_category
-        return cls(
-            snapshot_name=snapshot.name,
-            intervals=snapshot.dev_intervals
-            if snapshot.change_category.is_forward_only
-            else snapshot.intervals,
-            interval_unit=snapshot.model.interval_unit(),
-            model_name=snapshot.model.name,
-            view_name=snapshot.model.view_name,
-            change_category=snapshot.change_category,
-        )
-
-    @property
-    def change_category_str(self) -> str:
-        return SNAPSHOT_CHANGE_CATEGORY_STR[self.change_category]
-
-
 class GithubEvent:
     """
     Takes a Github Actions event payload and provides a simple interface to access
@@ -209,6 +181,7 @@ class GithubController:
         self._event = event or GithubEvent.from_env()
         self._pr_plan: t.Optional[Plan] = None
         self._prod_plan: t.Optional[Plan] = None
+        self._prod_plan_with_gaps: t.Optional[Plan] = None
         self._console: t.Optional[MarkdownConsole] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self._client: Github = Github(
@@ -296,6 +269,19 @@ class GithubController:
                 skip_tests=True,
             )
         return self._prod_plan
+
+    @property
+    def prod_plan_with_gaps(self) -> Plan:
+        if not self._prod_plan_with_gaps:
+            self._prod_plan_with_gaps = self._context.plan(
+                c.PROD,
+                auto_apply=False,
+                no_gaps=False,
+                no_prompts=True,
+                no_auto_categorization=True,
+                skip_tests=True,
+            )
+        return self._prod_plan_with_gaps
 
     @property
     def console(self) -> MarkdownConsole:
@@ -388,21 +374,8 @@ class GithubController:
             )
         return
 
-    def get_pr_affected_models(self) -> t.List[EnvironmentSnapshotIntervals]:
-        affected_env_models = []
-        for snapshot in self.prod_plan.directly_modified:
-            if not snapshot.change_category:
-                continue
-            affected_env_models.append(EnvironmentSnapshotIntervals.from_snapshot(snapshot))
-            for downstream_indirect in self.prod_plan.indirectly_modified.get(snapshot.name, set()):
-                downstream_snapshot = self.prod_plan.context_diff.snapshots[downstream_indirect]
-                # We don't want to display indirect non-breaking since to users these are effectively no-op changes
-                if downstream_snapshot.is_indirect_non_breaking:
-                    continue
-                affected_env_models.append(
-                    EnvironmentSnapshotIntervals.from_snapshot(downstream_snapshot)
-                )
-        return affected_env_models
+    def get_loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
+        return self.prod_plan_with_gaps.loaded_snapshot_intervals
 
     def _update_check(
         self,
@@ -550,7 +523,7 @@ class GithubController:
             conclusion: GithubCheckConclusion,
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if conclusion.is_success:
-                pr_affected_models = self.get_pr_affected_models()
+                pr_affected_models = self.get_loaded_snapshot_intervals()
                 if not pr_affected_models:
                     summary = "No models were modified in this PR.\n"
                 else:
