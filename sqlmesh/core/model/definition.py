@@ -258,7 +258,8 @@ class _Model(ModelMeta, frozen=True):
         query = self.render_query(snapshots=snapshots, is_dev=is_dev)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
-            select.where("FALSE", copy=False)
+            if select.args.get("from"):
+                select.where(exp.false(), copy=False)
 
         return query
 
