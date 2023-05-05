@@ -175,18 +175,22 @@ class MacroEvaluator:
             self.locals[node.name] = node.expression
             return node
 
-        if isinstance(node, MacroSQL) or not node.find(exp.Column, exp.Table):
+        if isinstance(node, (MacroSQL, MacroStrReplace)):
+            result: t.Optional[t.Union[exp.Expression | t.List[exp.Expression]]] = exp.convert(
+                self.eval_expression(node)
+            )
+        elif not node.find(exp.Column, exp.Table):
             result = self.eval_expression(node)
         else:
-            func = node.this
+            func = t.cast(exp.Anonymous, node.this)
             result = self.send(func.name, *func.expressions)
 
         if result is None:
             return None
 
-        if isinstance(result, list):
-            return [exp.convert(item) for item in result if item is not None]
-        return exp.convert(result)
+        if isinstance(result, (tuple, list)):
+            return [self.parse_one(item) for item in result if item is not None]
+        return self.parse_one(result)
 
     def eval_expression(self, node: t.Any) -> t.Any:
         """Converts a SQLGlot expression into executable Python code and evals it.
@@ -211,14 +215,14 @@ class MacroEvaluator:
             ) from e
 
     def parse_one(
-        self, sql: str, into: t.Optional[exp.IntoType] = None, **opts: t.Any
+        self, sql: str | exp.Expression, into: t.Optional[exp.IntoType] = None, **opts: t.Any
     ) -> exp.Expression:
         """Parses the given SQL string and returns a syntax tree for the first
         parsed SQL statement.
 
         Args:
-            sql (str): the SQL code string to parse.
-            into (Expression): the Expression to parse into
+            sql: the SQL code or expression to parse.
+            into: the Expression to parse into
             **opts: other options
 
         Returns:
