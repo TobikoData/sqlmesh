@@ -71,6 +71,8 @@ def _run_tests(controller: GithubController) -> bool:
         print(failed_output)
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
+            # Conclusion will be updated with final status based on test results
+            conclusion=GithubCheckConclusion.NEUTRAL,
             result=result,
             failed_output=failed_output,
         )
