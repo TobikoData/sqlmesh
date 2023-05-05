@@ -804,7 +804,7 @@ class EngineAdapter:
         """
         Returns the name of the temp table that should be used for the given table name.
         """
-        table = exp.to_table(table)
+        table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set("this", f"__temp_{table.name}_{uuid.uuid4().hex}")
         if table_only:
             table.set("db", None)

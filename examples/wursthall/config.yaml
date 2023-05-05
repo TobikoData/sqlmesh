@@ -1,4 +1,5 @@
-default_connection: duckdb
-connection:
+default_gateway: duckdb
+gateways:
   duckdb:
-    type: duckdb
+    connection:
+      type: duckdb
