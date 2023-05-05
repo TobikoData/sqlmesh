@@ -1,9 +1,6 @@
 {
   "openapi": "3.0.2",
-  "info": {
-    "title": "FastAPI",
-    "version": "0.1.0"
-  },
+  "info": { "title": "FastAPI", "version": "0.1.0" },
   "paths": {
     "/api/commands/apply": {
       "post": {
@@ -25,9 +22,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplyResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ApplyResponse" }
               }
             }
           },
@@ -35,9 +30,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -52,9 +45,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EvaluateInput"
-              }
+              "schema": { "$ref": "#/components/schemas/EvaluateInput" }
             }
           },
           "required": true
@@ -62,19 +53,13 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -99,19 +84,13 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -126,9 +105,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenderInput"
-              }
+              "schema": { "$ref": "#/components/schemas/RenderInput" }
             }
           },
           "required": true
@@ -138,9 +115,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Query"
-                }
+                "schema": { "$ref": "#/components/schemas/Query" }
               }
             }
           },
@@ -148,9 +123,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -167,9 +140,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Directory"
-                }
+                "schema": { "$ref": "#/components/schemas/Directory" }
               }
             }
           }
@@ -184,10 +155,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Path",
-              "type": "string"
-            },
+            "schema": { "title": "Path", "type": "string" },
             "name": "path",
             "in": "path"
           }
@@ -197,9 +165,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/File"
-                }
+                "schema": { "$ref": "#/components/schemas/File" }
               }
             }
           },
@@ -207,9 +173,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -222,10 +186,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Path",
-              "type": "string"
-            },
+            "schema": { "title": "Path", "type": "string" },
             "name": "path",
             "in": "path"
           }
@@ -244,9 +205,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/File"
-                }
+                "schema": { "$ref": "#/components/schemas/File" }
               }
             }
           },
@@ -254,9 +213,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -269,10 +226,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Path",
-              "type": "string"
-            },
+            "schema": { "title": "Path", "type": "string" },
             "name": "path",
             "in": "path"
           }
@@ -293,9 +247,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -310,10 +262,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Path",
-              "type": "string"
-            },
+            "schema": { "title": "Path", "type": "string" },
             "name": "path",
             "in": "path"
           }
@@ -332,9 +281,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Directory"
-                }
+                "schema": { "$ref": "#/components/schemas/Directory" }
               }
             }
           },
@@ -342,9 +289,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -357,10 +302,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Path",
-              "type": "string"
-            },
+            "schema": { "title": "Path", "type": "string" },
             "name": "path",
             "in": "path"
           }
@@ -368,19 +310,13 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -407,9 +343,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContextEnvironment"
-                }
+                "schema": { "$ref": "#/components/schemas/ContextEnvironment" }
               }
             }
           },
@@ -417,9 +351,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -477,11 +409,7 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           }
         }
       }
@@ -494,19 +422,13 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Column Name",
-              "type": "string"
-            },
+            "schema": { "title": "Column Name", "type": "string" },
             "name": "column_name",
             "in": "path"
           },
           {
             "required": true,
-            "schema": {
-              "title": "Model Name",
-              "type": "string"
-            },
+            "schema": { "title": "Model Name", "type": "string" },
             "name": "model_name",
             "in": "path"
           }
@@ -533,9 +455,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -550,10 +470,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": {
-              "title": "Model Name",
-              "type": "string"
-            },
+            "schema": { "title": "Model Name", "type": "string" },
             "name": "model_name",
             "in": "path"
           }
@@ -569,9 +486,7 @@
                   "additionalProperties": {
                     "uniqueItems": true,
                     "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
+                    "items": { "type": "string" }
                   }
                 }
               }
@@ -581,9 +496,7 @@
             "description": "Validation Error",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -603,9 +516,7 @@
                 "schema": {
                   "title": "Response Get Models Api Models Get",
                   "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Model"
-                  }
+                  "items": { "$ref": "#/components/schemas/Model" }
                 }
               }
             }
@@ -623,9 +534,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Context"
-                }
+                "schema": { "$ref": "#/components/schemas/Context" }
               }
             }
           }
@@ -658,11 +567,7 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           }
         }
       }
@@ -674,11 +579,7 @@
         "title": "ApplyResponse",
         "required": ["type"],
         "type": "object",
-        "properties": {
-          "type": {
-            "$ref": "#/components/schemas/ApplyType"
-          }
-        }
+        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } }
       },
       "ApplyType": {
         "title": "ApplyType",
@@ -691,20 +592,11 @@
         "required": ["environment"],
         "type": "object",
         "properties": {
-          "environment": {
-            "title": "Environment",
-            "type": "string"
-          },
-          "plan_dates": {
-            "$ref": "#/components/schemas/PlanDates"
-          },
+          "environment": { "title": "Environment", "type": "string" },
+          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
           "plan_options": {
             "title": "Plan Options",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
             "default": {
               "skip_tests": false,
               "skip_backfill": false,
@@ -725,32 +617,18 @@
         "title": "Body_fetchdf_api_commands_fetchdf_post",
         "required": ["sql"],
         "type": "object",
-        "properties": {
-          "sql": {
-            "title": "Sql",
-            "type": "string"
-          }
-        }
+        "properties": { "sql": { "title": "Sql", "type": "string" } }
       },
       "Body_run_plan_api_plan_post": {
         "title": "Body_run_plan_api_plan_post",
         "required": ["environment"],
         "type": "object",
         "properties": {
-          "environment": {
-            "title": "Environment",
-            "type": "string"
-          },
-          "plan_dates": {
-            "$ref": "#/components/schemas/PlanDates"
-          },
+          "environment": { "title": "Environment", "type": "string" },
+          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
           "plan_options": {
             "title": "Plan Options",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanOptions"
-              }
-            ],
+            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
             "default": {
               "skip_tests": false,
               "skip_backfill": false,
@@ -764,26 +642,14 @@
       "Body_write_directory_api_directories__path__post": {
         "title": "Body_write_directory_api_directories__path__post",
         "type": "object",
-        "properties": {
-          "new_path": {
-            "title": "New Path",
-            "type": "string"
-          }
-        }
+        "properties": { "new_path": { "title": "New Path", "type": "string" } }
       },
       "Body_write_file_api_files__path__post": {
         "title": "Body_write_file_api_files__path__post",
         "type": "object",
         "properties": {
-          "content": {
-            "title": "Content",
-            "type": "string",
-            "default": ""
-          },
-          "new_path": {
-            "title": "New Path",
-            "type": "string"
-          }
+          "content": { "title": "Content", "type": "string", "default": "" },
+          "new_path": { "title": "New Path", "type": "string" }
         }
       },
       "ChangeDirect": {
@@ -791,20 +657,12 @@
         "required": ["model_name", "diff"],
         "type": "object",
         "properties": {
-          "model_name": {
-            "title": "Model Name",
-            "type": "string"
-          },
-          "diff": {
-            "title": "Diff",
-            "type": "string"
-          },
+          "model_name": { "title": "Model Name", "type": "string" },
+          "diff": { "title": "Diff", "type": "string" },
           "indirect": {
             "title": "Indirect",
             "type": "array",
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "default": []
           },
           "change_category": {
@@ -817,16 +675,11 @@
         "required": ["model_name"],
         "type": "object",
         "properties": {
-          "model_name": {
-            "title": "Model Name",
-            "type": "string"
-          },
+          "model_name": { "title": "Model Name", "type": "string" },
           "direct": {
             "title": "Direct",
             "type": "array",
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "default": []
           }
         }
@@ -836,18 +689,9 @@
         "required": ["name", "type"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          }
+          "name": { "title": "Name", "type": "string" },
+          "type": { "title": "Type", "type": "string" },
+          "description": { "title": "Description", "type": "string" }
         }
       },
       "Context": {
@@ -865,30 +709,19 @@
             "title": "Concurrent Tasks",
             "type": "integer"
           },
-          "engine_adapter": {
-            "title": "Engine Adapter",
-            "type": "string"
-          },
+          "engine_adapter": { "title": "Engine Adapter", "type": "string" },
           "time_column_format": {
             "title": "Time Column Format",
             "type": "string"
           },
-          "scheduler": {
-            "title": "Scheduler",
-            "type": "string"
-          },
+          "scheduler": { "title": "Scheduler", "type": "string" },
           "models": {
             "title": "Models",
             "type": "array",
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "default": []
           },
-          "config": {
-            "title": "Config",
-            "type": "string"
-          }
+          "config": { "title": "Config", "type": "string" }
         }
       },
       "ContextEnvironment": {
@@ -896,52 +729,25 @@
         "required": ["environment", "start", "end"],
         "type": "object",
         "properties": {
-          "environment": {
-            "title": "Environment",
-            "type": "string"
-          },
+          "environment": { "title": "Environment", "type": "string" },
           "start": {
             "title": "Start",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "end": {
             "title": "End",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "changes": {
@@ -962,32 +768,16 @@
         "required": ["model_name", "view_name", "interval", "batches"],
         "type": "object",
         "properties": {
-          "model_name": {
-            "title": "Model Name",
-            "type": "string"
-          },
-          "view_name": {
-            "title": "View Name",
-            "type": "string"
-          },
+          "model_name": { "title": "Model Name", "type": "string" },
+          "view_name": { "title": "View Name", "type": "string" },
           "interval": {
             "title": "Interval",
             "maxItems": 2,
             "minItems": 2,
             "type": "array",
-            "items": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string"
-              }
-            ]
+            "items": [{ "type": "string" }, { "type": "string" }]
           },
-          "batches": {
-            "title": "Batches",
-            "type": "integer"
-          }
+          "batches": { "title": "Batches", "type": "integer" }
         }
       },
       "ContextEnvironmentChanges": {
@@ -999,21 +789,15 @@
             "title": "Added",
             "uniqueItems": true,
             "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "items": { "type": "string" }
           },
           "removed": {
             "title": "Removed",
             "uniqueItems": true,
             "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "items": { "type": "string" }
           },
-          "modified": {
-            "$ref": "#/components/schemas/ModelsDiff"
-          }
+          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
         }
       },
       "Directory": {
@@ -1021,28 +805,18 @@
         "required": ["name", "path"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
+          "name": { "title": "Name", "type": "string" },
+          "path": { "title": "Path", "type": "string" },
           "directories": {
             "title": "Directories",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Directory"
-            },
+            "items": { "$ref": "#/components/schemas/Directory" },
             "default": []
           },
           "files": {
             "title": "Files",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/File"
-            },
+            "items": { "$ref": "#/components/schemas/File" },
             "default": []
           }
         }
@@ -1052,77 +826,36 @@
         "required": ["name", "snapshots", "start_at", "plan_id"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
+          "name": { "title": "Name", "type": "string" },
           "snapshots": {
             "title": "Snapshots",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SnapshotTableInfo"
-            }
+            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" }
           },
           "start_at": {
             "title": "Start At",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "end_at": {
             "title": "End At",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
-          "plan_id": {
-            "title": "Plan Id",
-            "type": "string"
-          },
-          "previous_plan_id": {
-            "title": "Previous Plan Id",
-            "type": "string"
-          },
-          "expiration_ts": {
-            "title": "Expiration Ts",
-            "type": "integer"
-          },
-          "finalized_ts": {
-            "title": "Finalized Ts",
-            "type": "integer"
-          }
+          "plan_id": { "title": "Plan Id", "type": "string" },
+          "previous_plan_id": { "title": "Previous Plan Id", "type": "string" },
+          "expiration_ts": { "title": "Expiration Ts", "type": "integer" },
+          "finalized_ts": { "title": "Finalized Ts", "type": "integer" }
         },
         "additionalProperties": false,
         "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables."
@@ -1132,81 +865,38 @@
         "required": ["model", "start", "end", "latest"],
         "type": "object",
         "properties": {
-          "model": {
-            "title": "Model",
-            "type": "string"
-          },
+          "model": { "title": "Model", "type": "string" },
           "start": {
             "title": "Start",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "end": {
             "title": "End",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "latest": {
             "title": "Latest",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
-          "limit": {
-            "title": "Limit",
-            "type": "integer",
-            "default": 1000
-          }
+          "limit": { "title": "Limit", "type": "integer", "default": 1000 }
         }
       },
       "File": {
@@ -1214,14 +904,8 @@
         "required": ["name", "path"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
+          "name": { "title": "Name", "type": "string" },
+          "path": { "title": "Path", "type": "string" },
           "extension": {
             "title": "Extension",
             "type": "string",
@@ -1232,13 +916,8 @@
             "type": "boolean",
             "default": false
           },
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/FileType"
-          }
+          "content": { "title": "Content", "type": "string" },
+          "type": { "$ref": "#/components/schemas/FileType" }
         }
       },
       "FileType": {
@@ -1254,9 +933,7 @@
           "detail": {
             "title": "Detail",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            }
+            "items": { "$ref": "#/components/schemas/ValidationError" }
           }
         }
       },
@@ -1270,18 +947,13 @@
         "title": "LineageColumn",
         "type": "object",
         "properties": {
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
+          "source": { "title": "Source", "type": "string" },
           "models": {
             "title": "Models",
             "type": "object",
             "additionalProperties": {
               "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "items": { "type": "string" }
             }
           }
         }
@@ -1291,145 +963,59 @@
         "required": ["name", "path", "dialect", "type", "columns"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "dialect": {
-            "title": "Dialect",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          },
+          "name": { "title": "Name", "type": "string" },
+          "path": { "title": "Path", "type": "string" },
+          "dialect": { "title": "Dialect", "type": "string" },
+          "type": { "title": "Type", "type": "string" },
           "columns": {
             "title": "Columns",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Column"
-            }
+            "items": { "$ref": "#/components/schemas/Column" }
           },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "details": {
-            "$ref": "#/components/schemas/ModelDetails"
-          },
-          "sql": {
-            "title": "Sql",
-            "type": "string"
-          }
+          "description": { "title": "Description", "type": "string" },
+          "owner": { "title": "Owner", "type": "string" },
+          "details": { "$ref": "#/components/schemas/ModelDetails" },
+          "sql": { "title": "Sql", "type": "string" }
         }
       },
       "ModelDetails": {
         "title": "ModelDetails",
         "type": "object",
         "properties": {
-          "owner": {
-            "title": "Owner",
-            "type": "string"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "batch_size": {
-            "title": "Batch Size",
-            "type": "integer"
-          },
-          "cron": {
-            "title": "Cron",
-            "type": "string"
-          },
-          "stamp": {
-            "title": "Stamp",
-            "type": "string"
-          },
-          "start": {
-            "title": "Start",
-            "type": "string"
-          },
-          "retention": {
-            "title": "Retention",
-            "type": "string"
-          },
-          "storage_format": {
-            "title": "Storage Format",
-            "type": "string"
-          },
-          "time_column": {
-            "title": "Time Column",
-            "type": "string"
-          },
-          "tags": {
-            "title": "Tags",
-            "type": "string"
-          },
-          "partitioned_by": {
-            "title": "Partitioned By",
-            "type": "string"
-          },
-          "lookback": {
-            "title": "Lookback",
-            "type": "integer"
-          },
+          "owner": { "title": "Owner", "type": "string" },
+          "kind": { "title": "Kind", "type": "string" },
+          "batch_size": { "title": "Batch Size", "type": "integer" },
+          "cron": { "title": "Cron", "type": "string" },
+          "stamp": { "title": "Stamp", "type": "string" },
+          "start": { "title": "Start", "type": "string" },
+          "retention": { "title": "Retention", "type": "string" },
+          "storage_format": { "title": "Storage Format", "type": "string" },
+          "time_column": { "title": "Time Column", "type": "string" },
+          "tags": { "title": "Tags", "type": "string" },
+          "partitioned_by": { "title": "Partitioned By", "type": "string" },
+          "lookback": { "title": "Lookback", "type": "integer" },
           "cron_prev": {
             "title": "Cron Prev",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "cron_next": {
             "title": "Cron Next",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
-          "interval_unit": {
-            "$ref": "#/components/schemas/IntervalUnit"
-          },
-          "annotated": {
-            "title": "Annotated",
-            "type": "boolean"
-          },
+          "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
+          "annotated": { "title": "Annotated", "type": "boolean" },
           "contains_star_query": {
             "title": "Contains Star Query",
             "type": "boolean"
@@ -1443,26 +1029,20 @@
           "direct": {
             "title": "Direct",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChangeDirect"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeDirect" },
             "default": []
           },
           "indirect": {
             "title": "Indirect",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChangeIndirect"
-            },
+            "items": { "$ref": "#/components/schemas/ChangeIndirect" },
             "default": []
           },
           "metadata": {
             "title": "Metadata",
             "uniqueItems": true,
             "type": "array",
-            "items": {
-              "type": "string"
-            },
+            "items": { "type": "string" },
             "default": []
           }
         }
@@ -1474,45 +1054,21 @@
           "start": {
             "title": "Start",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "end": {
             "title": "End",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           }
         }
@@ -1546,150 +1102,78 @@
             "type": "boolean",
             "default": false
           },
-          "create_from": {
-            "title": "Create From",
-            "type": "string"
-          },
-          "restate_models": {
-            "title": "Restate Models",
-            "type": "string"
-          }
+          "create_from": { "title": "Create From", "type": "string" },
+          "restate_models": { "title": "Restate Models", "type": "string" }
         }
       },
       "Query": {
         "title": "Query",
         "required": ["sql"],
         "type": "object",
-        "properties": {
-          "sql": {
-            "title": "Sql",
-            "type": "string"
-          }
-        }
+        "properties": { "sql": { "title": "Sql", "type": "string" } }
       },
       "RenderInput": {
         "title": "RenderInput",
         "required": ["model"],
         "type": "object",
         "properties": {
-          "model": {
-            "title": "Model",
-            "type": "string"
-          },
+          "model": { "title": "Model", "type": "string" },
           "start": {
             "title": "Start",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "end": {
             "title": "End",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "latest": {
             "title": "Latest",
             "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
             ]
           },
           "expand": {
             "title": "Expand",
             "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
+              { "type": "boolean" },
+              { "type": "array", "items": { "type": "string" } }
             ],
             "default": false
           },
-          "pretty": {
-            "title": "Pretty",
-            "type": "boolean",
-            "default": true
-          },
-          "dialect": {
-            "title": "Dialect",
-            "type": "string"
-          }
+          "pretty": { "title": "Pretty", "type": "boolean", "default": true },
+          "dialect": { "title": "Dialect", "type": "string" }
         }
       },
       "SnapshotChangeCategory": {
         "title": "SnapshotChangeCategory",
         "enum": [1, 2, 3, 4, 5],
         "type": "integer",
-        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_FORWARD_ONLY: The change was caused indirectly and is forward-only."
+        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change."
       },
       "SnapshotDataVersion": {
         "title": "SnapshotDataVersion",
         "required": ["fingerprint", "version"],
         "type": "object",
         "properties": {
-          "fingerprint": {
-            "$ref": "#/components/schemas/SnapshotFingerprint"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          },
-          "temp_version": {
-            "title": "Temp Version",
-            "type": "string"
-          },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "title": "Version", "type": "string" },
+          "temp_version": { "title": "Temp Version", "type": "string" },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           }
@@ -1701,14 +1185,8 @@
         "required": ["data_hash", "metadata_hash"],
         "type": "object",
         "properties": {
-          "data_hash": {
-            "title": "Data Hash",
-            "type": "string"
-          },
-          "metadata_hash": {
-            "title": "Metadata Hash",
-            "type": "string"
-          },
+          "data_hash": { "title": "Data Hash", "type": "string" },
+          "metadata_hash": { "title": "Metadata Hash", "type": "string" },
           "parent_data_hash": {
             "title": "Parent Data Hash",
             "type": "string",
@@ -1727,14 +1205,8 @@
         "required": ["name", "identifier"],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "identifier": {
-            "title": "Identifier",
-            "type": "string"
-          }
+          "name": { "title": "Name", "type": "string" },
+          "identifier": { "title": "Identifier", "type": "string" }
         },
         "additionalProperties": false
       },
@@ -1751,51 +1223,27 @@
         ],
         "type": "object",
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "fingerprint": {
-            "$ref": "#/components/schemas/SnapshotFingerprint"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          },
-          "temp_version": {
-            "title": "Temp Version",
-            "type": "string"
-          },
-          "physical_schema": {
-            "title": "Physical Schema",
-            "type": "string"
-          },
+          "name": { "title": "Name", "type": "string" },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "title": "Version", "type": "string" },
+          "temp_version": { "title": "Temp Version", "type": "string" },
+          "physical_schema": { "title": "Physical Schema", "type": "string" },
           "parents": {
             "title": "Parents",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SnapshotId"
-            }
+            "items": { "$ref": "#/components/schemas/SnapshotId" }
           },
           "previous_versions": {
             "title": "Previous Versions",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SnapshotDataVersion"
-            },
+            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
             "default": []
           },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
-          "is_materialized": {
-            "title": "Is Materialized",
-            "type": "boolean"
-          },
-          "is_embedded_kind": {
-            "title": "Is Embedded Kind",
-            "type": "boolean"
-          }
+          "is_materialized": { "title": "Is Materialized", "type": "boolean" },
+          "is_embedded_kind": { "title": "Is Embedded Kind", "type": "boolean" }
         },
         "additionalProperties": false
       },
@@ -1807,25 +1255,10 @@
           "loc": {
             "title": "Location",
             "type": "array",
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            }
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] }
           },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
+          "msg": { "title": "Message", "type": "string" },
+          "type": { "title": "Error Type", "type": "string" }
         }
       }
     }

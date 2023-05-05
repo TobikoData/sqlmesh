@@ -156,19 +156,20 @@ function PlanChangePreviewDirect({
                     if (model == null) return <></>
 
                     return (
-                      <LineageFlowProvider withColumns={false}>
-                        <ModelLineage
-                          model={model}
-                          fingerprint={model.id}
-                          highlightedNodes={{
-                            'border-4 border-secondary-500': [model.name],
-                            'border-4 border-warning-500':
-                              change.indirect ?? [],
-                            '*': ['opacity-50 hover:opacity-100'],
-                          }}
-                          className="h-[20rem]"
-                        />
-                      </LineageFlowProvider>
+                      <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
+                        <LineageFlowProvider withColumns={false}>
+                          <ModelLineage
+                            model={model}
+                            fingerprint={model.id}
+                            highlightedNodes={{
+                              'border-4 border-secondary-500': [model.name],
+                              'border-4 border-warning-500':
+                                change.indirect ?? [],
+                              '*': ['opacity-50 hover:opacity-100'],
+                            }}
+                          />
+                        </LineageFlowProvider>
+                      </div>
                     )
                   })()}
                 </Disclosure.Panel>
