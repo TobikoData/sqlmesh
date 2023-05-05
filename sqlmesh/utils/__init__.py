@@ -161,7 +161,7 @@ def merge_dicts(dict1: t.Dict[str, t.Any], dict2: t.Dict[str, t.Any]) -> t.Dict[
     def _merge_dicts(
         dict1: t.Dict[str, t.Any], dict2: t.Dict[str, t.Any]
     ) -> t.Generator[t.Tuple[str, t.Any], None, None]:
-        for k in set(dict1.keys()).union(dict2.keys()):
+        for k in dict1.keys() | dict2.keys():
             if k in dict1 and k in dict2:
                 if isinstance(dict1[k], dict) and isinstance(dict2[k], dict):
                     yield k, dict(merge_dicts(dict1[k], dict2[k]))
