@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
-from sqlmesh.utils import sys_path
+from sqlmesh.utils import merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import load as yaml_load
@@ -15,9 +15,14 @@ from sqlmesh.utils.yaml import load as yaml_load
 def load_config_from_paths(
     *paths: Path, config_name: str = "config", load_from_env: bool = True
 ) -> Config:
-    config: t.Optional[Config] = None
-
+    """
+    Loads a configuration from a list of paths. First YAML config is loaded and overriden by environment variables
+    and then the Python config is loaded and overrides the YAML + Env config.
+    Therefore the override order is: YAML < Env < Python.
+    """
     visited_folders: t.Set[Path] = set()
+    yaml_dict_config: t.Dict[str, t.Any] = {}
+    python_config: t.Optional[Config] = None
     for path in paths:
         if not path.exists():
             continue
@@ -30,32 +35,32 @@ def load_config_from_paths(
             raise ConfigError(f"Multiple configuration files found in folder '{parent_path}'.")
         visited_folders.add(parent_path)
 
-        extension = path.name.split(".")[-1].lower()
-        if extension in ("yml", "yaml"):
-            next_config = load_config_from_yaml(path)
-        elif extension == "py":
-            next_config = load_config_from_python_module(path, config_name=config_name)
+        extension = path.suffix
+        if extension in (".yml", ".yaml"):
+            yaml_dict_config = merge_dicts(yaml_dict_config, yaml_load(path))
+        elif extension == ".py":
+            new_python_config = load_config_from_python_module(path, config_name=config_name)
+            python_config = (
+                python_config.update_with(new_python_config) if python_config else new_python_config
+            )
         else:
             raise ConfigError(
                 f"Unsupported config file extension '{extension}' in config file '{path}'."
             )
-
-        config = config.update_with(next_config) if config is not None else next_config
+    config: t.Optional[Config] = None
+    if yaml_dict_config:
+        config = Config.parse_obj(
+            merge_dicts(yaml_dict_config, load_config_dict_from_env() if load_from_env else {})
+        )
+    if python_config:
+        config = config.update_with(python_config) if config else python_config
 
     if config is None:
         raise ConfigError(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
-    if load_from_env:
-        config = config.update_with(load_config_from_env())
-
     return config
-
-
-def load_config_from_yaml(path: Path) -> Config:
-    config_dict = yaml_load(path)
-    return Config.parse_obj(config_dict)
 
 
 def load_config_from_python_module(module_path: Path, config_name: str = "config") -> Config:
@@ -78,7 +83,7 @@ def load_config_from_python_module(module_path: Path, config_name: str = "config
     return config_obj
 
 
-def load_config_from_env() -> Config:
+def load_config_dict_from_env() -> t.Dict[str, t.Any]:
     config_dict: t.Dict[str, t.Any] = {}
 
     for key, value in os.environ.items():
@@ -94,5 +99,8 @@ def load_config_from_env() -> Config:
                     target_dict[config_key] = {}
                 target_dict = target_dict[config_key]
             target_dict[segments[-1]] = value
+    return config_dict
 
-    return Config.parse_obj(config_dict)
+
+def load_config_from_env() -> Config:
+    return Config.parse_obj(load_config_dict_from_env())

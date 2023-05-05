@@ -152,3 +152,28 @@ def double_escape(s: str) -> str:
 
 def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
     return join_char.join(filter(None, args))
+
+
+# SO: https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries
+def merge_dicts(dict1: t.Dict[str, t.Any], dict2: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+    """Recursively merge two dictionaries."""
+
+    def _merge_dicts(
+        dict1: t.Dict[str, t.Any], dict2: t.Dict[str, t.Any]
+    ) -> t.Generator[t.Tuple[str, t.Any], None, None]:
+        for k in set(dict1.keys()).union(dict2.keys()):
+            if k in dict1 and k in dict2:
+                if isinstance(dict1[k], dict) and isinstance(dict2[k], dict):
+                    yield k, dict(merge_dicts(dict1[k], dict2[k]))
+                else:
+                    # If one of the values is not a dict, you can't continue merging it.
+                    # Value from second dict overrides one in first and we move on.
+                    yield k, dict2[k]
+            elif k in dict1:
+                yield k, dict1[k]
+            else:
+                yield k, dict2[k]
+
+    if not dict1 or not dict2:
+        return dict1 or dict2
+    return dict(_merge_dicts(dict1, dict2))

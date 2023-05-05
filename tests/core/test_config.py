@@ -6,9 +6,11 @@ import pytest
 
 from sqlmesh.core.config import (
     Config,
+    DatabricksConnectionConfig,
     DuckDBConnectionConfig,
     GatewayConfig,
     ModelDefaultsConfig,
+    SnowflakeConnectionConfig,
 )
 from sqlmesh.core.config.loader import (
     load_config_from_env,
@@ -171,7 +173,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path = tmp_path / "config.txt"
     config_path.touch()
 
-    with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
+    with pytest.raises(ConfigError, match=r"^Unsupported config file extension '.txt'.*"):
         load_config_from_paths(config_path)
 
 
@@ -200,6 +202,60 @@ def test_load_config_from_env_invalid_variable_name():
             match="Invalid SQLMesh configuration variable 'sqlmesh__'.",
         ):
             load_config_from_env()
+
+
+def test_load_yaml_config_with_env_override(tmp_path_factory):
+    config_a_path = tmp_path_factory.mktemp("a_path") / "config.yaml"
+    with open(config_a_path, "w") as fd:
+        fd.write(
+            """
+gateways:
+    snowflake:
+        connection:
+            type: snowflake
+            account: account_a
+            user: user_a
+"""
+        )
+    config_b_path = tmp_path_factory.mktemp("b_path") / "config_b.yml"
+    with open(config_b_path, "w") as fd:
+        fd.write(
+            """
+gateways:
+    databricks:
+        connection:
+            type: databricks
+            server_hostname: host_b
+            access_token: token_b
+            http_path: path_b
+"""
+        )
+    with mock.patch.dict(
+        os.environ,
+        {
+            "SQLMESH__GATEWAYS__DUCKDB__CONNECTION__TYPE": "duckdb",
+            "SQLMESH__GATEWAYS__SNOWFLAKE__CONNECTION__ACCOUNT": "override_account",
+            "SQLMESH__GATEWAYS__SNOWFLAKE__CONNECTION__PASSWORD": "override_password",
+            "SQLMESH__GATEWAYS__DATABRICKS__CONNECTION__SERVER_HOSTNAME": "override_host",
+        },
+    ):
+        config = load_config_from_paths(config_a_path, config_b_path)
+        assert len(config.gateways) == 3
+        assert config.gateways["databricks"].connection == DatabricksConnectionConfig(
+            type="databricks",
+            server_hostname="override_host",
+            access_token="token_b",
+            http_path="path_b",
+        )
+        assert config.gateways["snowflake"].connection == SnowflakeConnectionConfig(
+            type="snowflake",
+            account="override_account",
+            user="user_a",
+            password="override_password",
+        )
+        assert config.gateways["duckdb"].connection == DuckDBConnectionConfig(
+            type="duckdb",
+        )
 
 
 def test_load_config_from_python_module_missing_config(tmp_path):
