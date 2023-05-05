@@ -415,7 +415,7 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     promote_snapshots(state_sync, [snapshot], "prod", no_gaps=True)
 
     new_snapshot_same_version = make_snapshot(model, version="a")
-    new_snapshot_same_version.change_category = SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+    new_snapshot_same_version.change_category = SnapshotChangeCategory.INDIRECT_NON_BREAKING
     new_snapshot_same_version.fingerprint = snapshot.fingerprint.copy(
         update={"data_hash": "new_snapshot_same_version"}
     )

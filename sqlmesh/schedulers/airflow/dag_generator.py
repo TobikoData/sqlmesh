@@ -13,10 +13,6 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
-from sqlmesh.integrations.github.notification_operator_provider import (
-    GithubNotificationOperatorProvider,
-)
-from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
@@ -33,9 +29,7 @@ TASK_ID_DATE_FORMAT = "%Y-%m-%d_%H-%M-%S"
 
 NOTIFICATION_TARGET_TO_OPERATOR_PROVIDER: t.Dict[
     t.Type[NotificationTarget], BaseNotificationOperatorProvider
-] = {
-    GithubNotificationTarget: GithubNotificationOperatorProvider(),
-}
+] = {}
 
 DAG_DEFAULT_ARGS = {
     # `AIRFLOW__CORE__DEFAULT_TASK_RETRY_DELAY` support added in 2.4.0

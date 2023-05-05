@@ -6,6 +6,7 @@ from enum import Enum
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model.meta import IntervalUnit
@@ -17,17 +18,16 @@ from sqlmesh.core.snapshot import (
     categorize_change,
     merge_intervals,
 )
+from sqlmesh.core.snapshot.definition import format_intervals
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive,
     make_inclusive_end,
     now,
     to_date,
     to_datetime,
-    to_ds,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -226,10 +226,10 @@ class Plan:
         return not self.skip_backfill and (bool(self.restatements) or bool(self.missing_intervals))
 
     @property
-    def missing_intervals(self) -> t.List[MissingIntervals]:
+    def missing_intervals(self) -> t.List[SnapshotIntervals]:
         """Returns a list of missing intervals."""
         return [
-            MissingIntervals(
+            SnapshotIntervals(
                 snapshot_name=snapshot.name,
                 intervals=self._missing_intervals[snapshot.version_get_or_generate()],
             )
@@ -273,6 +273,21 @@ class Plan:
     def restatements(self) -> t.Set[str]:
         return self._restatements
 
+    @property
+    def loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
+        loaded_snapshots = []
+        for snapshot in self.directly_modified:
+            if not snapshot.change_category:
+                continue
+            loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
+            for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
+                downstream_snapshot = self.context_diff.snapshots[downstream_indirect]
+                # We don't want to display indirect non-breaking since to users these are effectively no-op changes
+                if downstream_snapshot.is_indirect_non_breaking:
+                    continue
+                loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(downstream_snapshot))
+        return loaded_snapshots
+
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
         return snapshot.snapshot_id in self.context_diff.new_snapshots
@@ -309,7 +324,7 @@ class Plan:
             ):
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
-                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
+                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child
@@ -406,7 +421,7 @@ class Plan:
             self._restatements.update(downstream)
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
-        """Builds collections of directly and inderectly modified snapshots.
+        """Builds collections of directly and indirectly modified snapshots.
 
         Returns:
             The tuple in which the first element contains a list of added and directly modified
@@ -565,7 +580,7 @@ class PlanStatus(str, Enum):
         return self == PlanStatus.FINISHED
 
 
-class MissingIntervals(PydanticModel, frozen=True):
+class SnapshotIntervals(PydanticModel, frozen=True):
     snapshot_name: str
     intervals: Intervals
 
@@ -573,15 +588,30 @@ class MissingIntervals(PydanticModel, frozen=True):
     def merged_intervals(self) -> Intervals:
         return merge_intervals(self.intervals)
 
-    def format_missing_range(self, unit: t.Optional[IntervalUnit] = None) -> str:
-        intervals = [make_inclusive(start, end) for start, end in self.merged_intervals]
-        return ", ".join(
-            f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
-            for start, end in intervals
+    def format_intervals(self, unit: t.Optional[IntervalUnit] = None) -> str:
+        return format_intervals(self.merged_intervals, unit)
+
+
+class LoadedSnapshotIntervals(SnapshotIntervals):
+    interval_unit: t.Optional[IntervalUnit]
+    model_name: str
+    view_name: str
+    change_category: SnapshotChangeCategory
+
+    @classmethod
+    def from_snapshot(cls, snapshot: Snapshot) -> LoadedSnapshotIntervals:
+        assert snapshot.change_category
+        return cls(
+            snapshot_name=snapshot.name,
+            intervals=snapshot.dev_intervals
+            if snapshot.change_category.is_forward_only
+            else snapshot.intervals,
+            interval_unit=snapshot.model.interval_unit(),
+            model_name=snapshot.model.name,
+            view_name=snapshot.model.view_name,
+            change_category=snapshot.change_category,
         )
 
-
-def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
-    if unit is None or unit == IntervalUnit.DAY:
-        return to_ds(time_like)
-    return to_datetime(time_like).isoformat()[:19]
+    @property
+    def change_category_str(self) -> str:
+        return SNAPSHOT_CHANGE_CATEGORY_STR[self.change_category]
