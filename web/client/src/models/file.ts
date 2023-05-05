@@ -8,8 +8,10 @@ export const EnumFileExtensions = {
   Python: '.py',
   CSV: '.csv',
   YAML: '.yaml',
+  YML: '.yml',
 } as const
-
+export type FileExtensions =
+  (typeof EnumFileExtensions)[keyof typeof EnumFileExtensions]
 export interface InitialFile extends InitialArtifact, File {
   content: string
   extension: string
@@ -20,7 +22,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   private _content: string = ''
 
   content: string
-  extension: string
+  extension: FileExtensions
   is_supported: boolean
   type?: FileType
 
@@ -37,7 +39,8 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       parent,
     )
 
-    this.extension = initial?.extension ?? this.initial.extension
+    this.extension = (initial?.extension ??
+      this.initial.extension) as FileExtensions
     this.is_supported = initial?.is_supported ?? this.initial.is_supported
     this._content = this.content = initial?.content ?? this.initial.content
     this.type = initial?.type ?? getFileType(initial?.path)

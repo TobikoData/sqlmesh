@@ -12,6 +12,7 @@ import {
   fetchdfApiCommandsFetchdfPost,
   renderApiCommandsRenderPost,
   evaluateApiCommandsEvaluatePost,
+  type Model,
 } from '~/api/client'
 import { type ResponseWithDetail } from '~/api/instance'
 import { useStoreContext } from '~/context/context'
@@ -22,6 +23,9 @@ import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { getTableDataFromArrowStreamResult } from './help'
+import { Tab } from '@headlessui/react'
+import Documentation from '@components/documentation/Documentation'
+import Banner from '@components/banner/Banner'
 
 interface FormModel {
   model?: string
@@ -43,14 +47,20 @@ export default function EditorInspector({
 }: {
   tab: EditorTab
 }): JSX.Element {
+  const models = useStoreContext(s => s.models)
+  const model = useMemo(() => models.get(tab.file.path), [tab, models])
+
   return (
     <div
       className={clsx(
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel ? (
-        <InspectorModel tab={tab} />
+      {tab.file.isSQLMeshModel && model != null ? (
+        <InspectorModel
+          tab={tab}
+          model={model}
+        />
       ) : (
         <InspectorSql tab={tab} />
       )}
@@ -58,14 +68,16 @@ export default function EditorInspector({
   )
 }
 
-function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
-  const models = useStoreContext(s => s.models)
-
+function InspectorModel({
+  tab,
+  model,
+}: {
+  tab: EditorTab
+  model: Model
+}): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
-
-  const model = useMemo(() => models.get(tab.file.path), [tab, models])
 
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
@@ -124,109 +136,147 @@ function InspectorModel({ tab }: { tab: EditorTab }): JSX.Element {
   }
 
   return (
-    <>
-      <InspectorForm>
-        <form className="my-3">
-          {model != null && (
-            <FormFieldset>
-              <ModelName modelName={model.name} />
-            </FormFieldset>
+    <Tab.Group>
+      <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justigy-between items-center">
+        <Tab
+          className={({ selected }) =>
+            clsx(
+              'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+              selected
+                ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                : 'bg-secondary-10 cursor-pointer',
+            )
+          }
+        >
+          Actions
+        </Tab>
+        <Tab
+          className={({ selected }) =>
+            clsx(
+              'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+              selected
+                ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                : 'bg-secondary-10 cursor-pointer',
+            )
+          }
+        >
+          Docs
+        </Tab>
+      </Tab.List>
+      <Tab.Panels className="h-full w-full overflow-hidden">
+        <Tab.Panel
+          className={clsx(
+            'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
+            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
-          {isFalse(shouldEvaluate) && (
-            <FormFieldset>
-              <Banner action="evaluate the model" />
-            </FormFieldset>
+        >
+          <InspectorForm>
+            <form className="my-3">
+              {isFalse(shouldEvaluate) && (
+                <FormFieldset>
+                  <Banner variant={EnumVariant.Warning}>
+                    <Banner.Description className="w-full mr-2 text-sm">
+                      Please fill out all fields to <b>evaluate the model</b>.
+                    </Banner.Description>
+                  </Banner>
+                </FormFieldset>
+              )}
+              <fieldset className="my-3 px-3">
+                <Input
+                  className="w-full mx-0"
+                  label="Start Date"
+                  placeholder="02/11/2023"
+                  value={form.start}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
+
+                    setForm({
+                      ...form,
+                      start: e.target.value ?? '',
+                    })
+                  }}
+                />
+                <Input
+                  className="w-full mx-0"
+                  label="End Date"
+                  placeholder="02/13/2023"
+                  value={form.end}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
+
+                    setForm({
+                      ...form,
+                      end: e.target.value ?? '',
+                    })
+                  }}
+                />
+                <Input
+                  className="w-full mx-0"
+                  label="Latest Date"
+                  placeholder="02/13/2023"
+                  value={form.latest}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
+
+                    setForm({
+                      ...form,
+                      latest: e.target.value ?? '',
+                    })
+                  }}
+                />
+                <Input
+                  className="w-full mx-0"
+                  type="number"
+                  label="Limit"
+                  placeholder="1000"
+                  value={form.limit}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
+
+                    setForm({
+                      ...form,
+                      limit: e.target.valueAsNumber ?? LIMIT,
+                    })
+                  }}
+                />
+              </fieldset>
+            </form>
+          </InspectorForm>
+          <Divider />
+          <InspectorActions>
+            <div className="flex w-full justify-end">
+              {tab.file.isSQLMeshModel && (
+                <Button
+                  size={EnumSize.sm}
+                  variant={EnumVariant.Alternative}
+                  disabled={isFalse(shouldEvaluate)}
+                  onClick={e => {
+                    e.stopPropagation()
+
+                    evaluateModel()
+                  }}
+                >
+                  Evaluate
+                </Button>
+              )}
+            </div>
+          </InspectorActions>
+        </Tab.Panel>
+        <Tab.Panel
+          className={clsx(
+            'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
           )}
-          <fieldset className="my-3 px-3">
-            <Input
-              className="w-full mx-0"
-              label="Start Date"
-              placeholder="02/11/2023"
-              value={form.start}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  start: e.target.value ?? '',
-                })
-              }}
-            />
-            <Input
-              className="w-full mx-0"
-              label="End Date"
-              placeholder="02/13/2023"
-              value={form.end}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  end: e.target.value ?? '',
-                })
-              }}
-            />
-            <Input
-              className="w-full mx-0"
-              label="Latest Date"
-              placeholder="02/13/2023"
-              value={form.latest}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  latest: e.target.value ?? '',
-                })
-              }}
-            />
-            <Input
-              className="w-full mx-0"
-              type="number"
-              label="Limit"
-              placeholder="1000"
-              value={form.limit}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  limit: e.target.valueAsNumber ?? LIMIT,
-                })
-              }}
-            />
-          </fieldset>
-        </form>
-      </InspectorForm>
-      <Divider />
-      <InspectorActions>
-        <div className="flex w-full justify-between">
-          <div className="flex">
-            <Button
-              size={EnumSize.sm}
-              variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate)}
-            >
-              Validate
-            </Button>
-          </div>
-          {tab.file.isSQLMeshModel && (
-            <Button
-              size={EnumSize.sm}
-              variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate)}
-              onClick={e => {
-                e.stopPropagation()
-
-                evaluateModel()
-              }}
-            >
-              Evaluate
-            </Button>
-          )}
-        </div>
-      </InspectorActions>
-    </>
+        >
+          <Documentation
+            model={model}
+            withCode={false}
+            withModel={false}
+            withQuery={tab.file.isSQLMeshModelSQL}
+            withDescription={false}
+          />
+        </Tab.Panel>
+      </Tab.Panels>
+    </Tab.Group>
   )
 }
 
@@ -270,7 +320,11 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
         <form className="my-3 w-full">
           {isFalse(shouldSendQuery) && (
             <FormFieldset>
-              <Banner action="run the query" />
+              <Banner variant={EnumVariant.Warning}>
+                <Banner.Description className="w-full mr-2 text-sm">
+                  Please fill out all fields to <b>run the query</b>.
+                </Banner.Description>
+              </Banner>
             </FormFieldset>
           )}
           <fieldset className="mb-4">
@@ -337,25 +391,4 @@ function InspectorActions({
   children: React.ReactNode
 }): JSX.Element {
   return <div className="flex w-full py-1 px-2 justify-end">{children}</div>
-}
-
-function Banner({ action }: { action: string }): JSX.Element {
-  return (
-    <div className="p-4 bg-warning-10 text-warning-600 rounded-lg">
-      <p className="text-sm">
-        Please fill out all fields to <b>{action}</b>.
-      </p>
-    </div>
-  )
-}
-
-function ModelName({ modelName }: { modelName: string }): JSX.Element {
-  return (
-    <div className="text-sm font-bold whitespace-nowrap">
-      <h3 className="ml-2">Model Name</h3>
-      <p className="mt-1 px-2 py-1 bg-secondary-10 text-secondary-500 dark:text-primary-500 dark:bg-primary-10 text-xs rounded">
-        {modelName}
-      </p>
-    </div>
-  )
 }

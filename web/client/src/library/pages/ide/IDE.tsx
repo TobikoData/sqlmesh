@@ -1,5 +1,5 @@
-import { Divider } from '../divider/Divider'
-import { useEffect, useState, lazy, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useApiFiles,
   useApiEnvironments,
@@ -8,39 +8,41 @@ import {
   useApiModels,
   apiCancelModels,
 } from '../../../api'
-import { EnumPlanAction, useStorePlan } from '../../../context/plan'
+import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import SplitPane from '../splitPane/SplitPane'
-import { isArrayEmpty, isFalse, isTrue, debounceAsync } from '~/utils'
+import { isArrayEmpty, debounceAsync } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import PlanProvider from '../plan/context'
+import { Divider } from '@components/divider/Divider'
+import Container from '@components/container/Container'
 import RunPlan from './RunPlan'
 import ActivePlan from './ActivePlan'
-import { Dialog } from '@headlessui/react'
-import { useQueryClient } from '@tanstack/react-query'
-import ModalSidebar from '../modal/ModalDrawer'
-import Editor from '../editor/Editor'
-import FileTree from '../fileTree/FileTree'
+import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
+import { Button } from '@components/button/Button'
+import { EnumSize, EnumVariant } from '~/types/enum'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { EnumRoutes } from '~/routes'
+import { useIDE } from './context'
+import { useStoreFileTree } from '@context/fileTree'
 
-const Plan = lazy(async () => await import('../plan/Plan'))
+export default function IDE(): JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
 
-export function IDE(): JSX.Element {
   const client = useQueryClient()
 
-  const environment = useStoreContext(s => s.environment)
-  const initialStartDate = useStoreContext(s => s.initialStartDate)
-  const initialEndDate = useStoreContext(s => s.initialEndDate)
+  const { setIsPlanOpen } = useIDE()
+
   const addSyncronizedEnvironments = useStoreContext(
     s => s.addSyncronizedEnvironments,
   )
   const setModels = useStoreContext(s => s.setModels)
 
   const activePlan = useStorePlan(s => s.activePlan)
-  const setPlanAction = useStorePlan(s => s.setAction)
   const updateTasks = useStorePlan(s => s.updateTasks)
 
-  const [isPlanOpen, setIsPlanOpen] = useState(false)
-  const [isClosingModal, setIsClosingModal] = useState(false)
+  const directory = useStoreFileTree(s => s.project)
+  const setFiles = useStoreFileTree(s => s.setFiles)
+  const setProject = useStoreFileTree(s => s.setProject)
 
   const [subscribe] = useChannelEvents()
 
@@ -83,6 +85,12 @@ export function IDE(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (location.pathname === EnumRoutes.Ide) {
+      navigate(EnumRoutes.IdeEditor)
+    }
+  }, [location])
+
+  useEffect(() => {
     if (
       contextEnvironemnts == null ||
       isArrayEmpty(Object.keys(contextEnvironemnts))
@@ -96,63 +104,49 @@ export function IDE(): JSX.Element {
     setModels(dataModels)
   }, [dataModels])
 
+  useEffect(() => {
+    setFiles(directory?.allFiles ?? [])
+  }, [directory])
+
+  useEffect(() => {
+    setProject(project)
+  }, [project])
+
   function showRunPlan(): void {
     setIsPlanOpen(true)
   }
 
-  function closeModal(): void {
-    setIsClosingModal(true)
-  }
+  const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
 
   return (
-    <>
+    <Container.Page>
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold text-primary-500">
             <span className="inline-block">/</span>
             {project?.name}
           </h3>
+          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
+          <Button
+            size={EnumSize.sm}
+            variant={EnumVariant.Neutral}
+          >
+            {isActivePageEditor ? (
+              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
+            ) : (
+              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
+            )}
+          </Button>
         </div>
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          <RunPlan showRunPlan={showRunPlan} />
-          {activePlan != null && <ActivePlan plan={activePlan} />}
-        </div>
+        {isActivePageEditor && (
+          <div className="px-3 flex items-center min-w-[10rem] justify-end">
+            <RunPlan showRunPlan={showRunPlan} />
+            {activePlan != null && <ActivePlan plan={activePlan} />}
+          </div>
+        )}
       </div>
       <Divider />
-      {environment != null && (
-        <SplitPane
-          sizes={[20, 80]}
-          minSize={[160]}
-          snapOffset={0}
-          className="flex w-full h-full overflow-hidden"
-        >
-          <FileTree project={project} />
-          <Editor />
-        </SplitPane>
-      )}
-      <ModalSidebar
-        show={isPlanOpen && isFalse(isClosingModal)}
-        afterLeave={() => {
-          setPlanAction(EnumPlanAction.None)
-          setIsClosingModal(false)
-          setIsPlanOpen(false)
-        }}
-      >
-        <Dialog.Panel className="bg-theme border-8 border-r-0 border-secondary-10 dark:border-primary-10 absolute w-[90%] md:w-[75%] xl:w-[60%] h-full right-0">
-          <PlanProvider>
-            <Plan
-              environment={environment}
-              isInitialPlanRun={
-                environment?.isDefault == null || isTrue(environment?.isDefault)
-              }
-              disabled={isClosingModal}
-              initialStartDate={initialStartDate}
-              initialEndDate={initialEndDate}
-              onClose={closeModal}
-            />
-          </PlanProvider>
-        </Dialog.Panel>
-      </ModalSidebar>
-    </>
+      <Outlet />
+    </Container.Page>
   )
 }

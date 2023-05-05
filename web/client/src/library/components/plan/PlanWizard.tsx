@@ -333,7 +333,13 @@ export default function PlanWizard({
                                 tasks={tasks}
                                 setRefTasksOverview={setRefTasksOverview}
                               >
-                                {({ total, completed, models }) => (
+                                {({
+                                  total,
+                                  completed,
+                                  models,
+                                  completedBatches,
+                                  totalBatches,
+                                }) => (
                                   <>
                                     <TasksOverview.Summary
                                       environment={environment.name}
@@ -341,6 +347,8 @@ export default function PlanWizard({
                                       headline="Target Environment"
                                       completed={completed}
                                       total={total}
+                                      completedBatches={completedBatches}
+                                      totalBatches={totalBatches}
                                       updateType={
                                         hasVirtualUpdate
                                           ? 'Virtual'

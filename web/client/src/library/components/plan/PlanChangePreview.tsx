@@ -34,7 +34,7 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 overflow-auto',
+        'flex flex-col rounded-md p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
