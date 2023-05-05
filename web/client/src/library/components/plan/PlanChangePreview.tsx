@@ -19,6 +19,9 @@ import {
   type PlanChangeType,
 } from './context'
 import { isArrayNotEmpty } from '@utils/index'
+import LineageFlowProvider from '@components/graph/context'
+import { useStoreContext } from '@context/context'
+import { ModelLineage } from '@components/graph/ModelLineage'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
@@ -112,6 +115,8 @@ function PlanChangePreviewDirect({
 }: {
   changes: ChangeDirect[]
 }): JSX.Element {
+  const models = useStoreContext(s => s.models)
+
   return (
     <ul>
       {changes.map(change => (
@@ -145,6 +150,27 @@ function PlanChangePreviewDirect({
                   {change?.diff != null && (
                     <PlanChangePreviewDiff diff={change?.diff} />
                   )}
+                  {(() => {
+                    const model = models.get(change.model_name)
+
+                    if (model == null) return <></>
+
+                    return (
+                      <LineageFlowProvider withColumns={false}>
+                        <ModelLineage
+                          model={model}
+                          fingerprint={model.id}
+                          highlightedNodes={{
+                            'border-4 border-secondary-500': [model.name],
+                            'border-4 border-warning-500':
+                              change.indirect ?? [],
+                            '*': ['opacity-50 hover:opacity-100'],
+                          }}
+                          className="h-[20rem]"
+                        />
+                      </LineageFlowProvider>
+                    )
+                  })()}
                 </Disclosure.Panel>
               </>
             )}

@@ -59,7 +59,7 @@ const Documantation = function Documantation({
               name="Type"
               value={model.type}
             />
-            {Object.entries(model.details).map(([key, value]) => (
+            {Object.entries(model.details ?? {}).map(([key, value]) => (
               <DetailsItem
                 key={key}
                 name={key.replaceAll('_', ' ')}

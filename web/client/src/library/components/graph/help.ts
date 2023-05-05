@@ -4,11 +4,12 @@ import { type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
 import { type ActiveColumns } from './context'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export interface GraphNodeData {
   label: string
-  isHighlighted?: boolean
   isInteractive?: boolean
+  highlightedNodes?: boolean
   [key: string]: any
 }
 
@@ -52,16 +53,20 @@ async function createGraphLayout({
 
 function getNodesAndEdges({
   models,
-  highlightedNodes = [],
+  highlightedNodes = {},
   lineage = {},
   nodes = [],
   edges = [],
+  model,
+  withColumns = true,
 }: {
   models: Map<string, Model>
-  highlightedNodes?: string[]
+  highlightedNodes?: Record<string, string[]>
   lineage?: Record<string, Lineage>
   nodes?: Node[]
   edges?: Edge[]
+  model: ModelSQLMeshModel
+  withColumns?: boolean
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
@@ -80,14 +85,16 @@ function getNodesAndEdges({
       .flat(),
   )
   const modelNames = Object.keys(lineage)
-  const nodesMap = getNodeMap(
+  const nodesMap = getNodeMap({
     modelNames,
     lineage,
     highlightedNodes,
     models,
     targets,
     nodes,
-  )
+    model,
+    withColumns,
+  })
   const outputEdges: Edge[] = []
   const activeColumns: ActiveColumns = new Map()
   const ids = Object.keys(nodesMap)
@@ -104,7 +111,11 @@ function getNodesAndEdges({
       outputEdges.push(edge)
     })
 
-    if (modelLineage.columns == null || isObjectEmpty(modelLineage.columns))
+    if (
+      modelLineage.columns == null ||
+      isObjectEmpty(modelLineage.columns) ||
+      isFalse(withColumns)
+    )
       continue
 
     for (const columnSource in modelLineage.columns) {
@@ -187,14 +198,25 @@ function getNodesAndEdges({
   }
 }
 
-function getNodeMap(
-  modelNames: string[],
-  lineage: Record<string, Lineage>,
-  highlightedNodes: string[],
-  models: Map<string, Model>,
-  targets: Set<string>,
-  nodes: Node[],
-): Record<string, Node> {
+function getNodeMap({
+  modelNames,
+  lineage,
+  highlightedNodes,
+  models,
+  targets,
+  nodes,
+  model,
+  withColumns,
+}: {
+  modelNames: string[]
+  lineage: Record<string, Lineage>
+  highlightedNodes: Record<string, string[]>
+  models: Map<string, Model>
+  targets: Set<string>
+  nodes: Node[]
+  model: ModelSQLMeshModel
+  withColumns: boolean
+}): Record<string, Node> {
   const NODE_BALANCE_SPACE = 64
   const COLUMN_LINE_HEIGHT = 24
   const CHAR_WIDTH = 8
@@ -207,10 +229,13 @@ function getNodeMap(
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
     const node = current[label] ?? createGraphNode({ label })
+    const columnsFactor = withColumns
+      ? models.get(label)?.columns?.length ?? 0
+      : 0
 
     const maxWidth =
-      models.get(label)?.columns?.length == null
-        ? 0
+      columnsFactor === 0
+        ? label.length * CHAR_WIDTH
         : Math.max(
             ...(models
               .get(label)
@@ -221,16 +246,12 @@ function getNodeMap(
               ) ?? []),
             label.length * CHAR_WIDTH,
           )
-    const maxHeight =
-      COLUMN_LINE_HEIGHT * (models.get(label)?.columns?.length ?? 0) +
-      NODE_BALANCE_SPACE
+    const maxHeight = COLUMN_LINE_HEIGHT * columnsFactor + NODE_BALANCE_SPACE
 
     node.data.width = NODE_BALANCE_SPACE + maxWidth
     node.data.height = NODE_BALANCE_SPACE + maxHeight
-    node.data.isHighlighted = highlightedNodes.includes(label)
-    node.data.isInteractive =
-      isArrayNotEmpty(highlightedNodes) &&
-      isFalse(highlightedNodes.includes(label))
+    node.data.highlightedNodes = highlightedNodes
+    node.data.isInteractive = model.name !== label
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.sourcePosition = Position.Left

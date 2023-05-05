@@ -39,10 +39,15 @@ const KEY_DEFAULT = 'default'
 
 export function ModelColumnLineage({
   model,
+  highlightedNodes,
+  className,
 }: {
   model: ModelSQLMeshModel
+  highlightedNodes?: Record<string, string[]>
+  className?: string
 }): JSX.Element {
   const {
+    withColumns,
     nodes,
     edges,
     setNodes,
@@ -63,10 +68,17 @@ export function ModelColumnLineage({
   useEffect(() => {
     const nodesAndEdges = getNodesAndEdges({
       lineage: model.lineage,
-      highlightedNodes: [model.name],
+      highlightedNodes:
+        highlightedNodes == null
+          ? {
+              'border-4 border-brand-500': [model.name],
+            }
+          : highlightedNodes,
       models,
       nodes,
       edges,
+      model,
+      withColumns,
     })
 
     void load()
@@ -107,7 +119,7 @@ export function ModelColumnLineage({
   }
 
   return (
-    <div className="px-2 py-1 w-full h-full">
+    <div className={clsx('px-2 py-1 w-full h-full', className)}>
       <ReactFlow
         key={key}
         nodes={key === KEY_DEFAULT ? [] : nodes}
@@ -139,7 +151,8 @@ function ModelNode({
   const COLUMS_LIMIT_DEFAULT = 5
   const COLUMS_LIMIT_COLLAPSED = 2
 
-  const { models, activeEdges, handleClickModel } = useLineageFlow()
+  const { models, activeEdges, handleClickModel, withColumns } =
+    useLineageFlow()
 
   const model = models.get(data.label)
   const columns = model != null ? model.columns : []
@@ -165,24 +178,27 @@ function ModelNode({
     return [visible, hidden]
   }, [columns, showColumns, activeEdges])
 
-  useEffect(() => {
-    if (model == null) return
-
-    setFile(files.get(model.path))
-  }, [files, model])
+  const highlighted = Object.keys(data.highlightedNodes ?? {}).find(key =>
+    data.highlightedNodes[key].includes(data.label),
+  )
+  const splat = data.highlightedNodes?.['*']
+  const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
 
   return (
     <div
       className={clsx(
         'text-xs font-semibold text-secondary-500 dark:text-primary-100 rounded-xl shadow-lg relative z-1',
-        isTrue(data.isHighlighted) && 'border-4 border-brand-500',
+        highlighted == null ? splat : highlighted,
       )}
     >
       <div className="drag-handle">
         <ModelNodeHandles
           key={id}
           id={id}
-          className="rounded-t-lg bg-secondary-100 dark:bg-primary-900 py-2"
+          className={clsx(
+            'bg-secondary-100 dark:bg-primary-900 py-2',
+            withColumns ? 'rounded-t-lg' : 'rounded-lg',
+          )}
           sourcePosition={sourcePosition}
           targetPosition={targetPosition}
           isLeading={true}
@@ -198,19 +214,20 @@ function ModelNode({
             >
               {model.type === 'python' && 'Python'}
               {model.type === 'sql' && 'SQL'}
+              {model.type === 'seed' && 'Seed'}
             </span>
           )}
           <span
             className={clsx(
               'inline-block',
-              isTrue(data.isInteractive) && 'cursor-pointer hover:underline',
+              isInteractive && 'cursor-pointer hover:underline',
             )}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
               const model = models.get(id)
 
-              if (isFalse(data.isInteractive) || model == null) return
+              if (isFalse(isInteractive) || model == null) return
 
               handleClickModel?.(model.name)
             }}
@@ -219,7 +236,7 @@ function ModelNode({
           </span>
         </ModelNodeHandles>
       </div>
-      {model != null && (
+      {withColumns && model != null && (
         <div
           className={clsx(
             'w-full py-2 bg-theme-lighter cursor-default',
@@ -279,7 +296,7 @@ function ModelNode({
           ))}
         </div>
       )}
-      {columns.length > COLUMS_LIMIT_DEFAULT && (
+      {withColumns && columns.length > COLUMS_LIMIT_DEFAULT && (
         <div className="flex px-3 py-2 bg-theme-lighter rounded-b-lg cursor-default">
           <Button
             className="w-full"

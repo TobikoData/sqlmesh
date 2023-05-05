@@ -9,9 +9,13 @@ import { type Lineage } from '@context/editor'
 export function ModelLineage({
   model,
   fingerprint,
+  highlightedNodes,
+  className,
 }: {
   model: ModelSQLMeshModel
-  fingerprint: string
+  fingerprint: string | ID
+  highlightedNodes?: Record<string, string[]>
+  className?: string
 }): JSX.Element {
   const { clearActiveEdges, refreshModels, models } = useLineageFlow()
 
@@ -32,18 +36,20 @@ export function ModelLineage({
     if (lineage == null) {
       model.update({ lineage: undefined })
     } else {
-      model.update({
-        lineage: ModelSQLMeshModel.mergeLineage(
-          models,
-          Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
-            acc[key] = {
-              models: lineage[key] ?? [],
-              columns: model.lineage?.[key]?.columns ?? undefined,
-            }
+      const lineageModels = Object.keys(lineage).reduce(
+        (acc: Record<string, Lineage>, key) => {
+          acc[key] = {
+            models: lineage[key] ?? [],
+            columns: model.lineage?.[key]?.columns ?? undefined,
+          }
 
-            return acc
-          }, {}),
-        ),
+          return acc
+        },
+        {},
+      )
+
+      model.update({
+        lineage: ModelSQLMeshModel.mergeLineage(models, lineageModels),
       })
     }
 
@@ -54,5 +60,11 @@ export function ModelLineage({
     clearActiveEdges()
   }, [model])
 
-  return <ModelColumnLineage model={model} />
+  return (
+    <ModelColumnLineage
+      model={model}
+      highlightedNodes={highlightedNodes}
+      className={className}
+    />
+  )
 }

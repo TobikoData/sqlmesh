@@ -30,6 +30,7 @@ interface ReactFlowStore {
 }
 
 interface LineageFlow extends ReactFlowStore {
+  withColumns: boolean
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
   activeColumns: ActiveColumns
@@ -48,6 +49,7 @@ interface LineageFlow extends ReactFlowStore {
 }
 
 export const LineageFlowContext = createContext<LineageFlow>({
+  withColumns: true,
   nodes: [],
   edges: [],
   activeEdges: new Map(),
@@ -73,9 +75,11 @@ export const LineageFlowContext = createContext<LineageFlow>({
 export default function LineageFlowProvider({
   handleClickModel,
   children,
+  withColumns = true,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
+  withColumns?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
   const refreshModels = useStoreContext(s => s.refreshModels)
@@ -126,6 +130,7 @@ export default function LineageFlowProvider({
   return (
     <LineageFlowContext.Provider
       value={{
+        withColumns,
         nodes,
         edges,
         setNodes,
