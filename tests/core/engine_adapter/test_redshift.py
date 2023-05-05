@@ -112,10 +112,7 @@ def test_pandas_to_sql(mocker: MockerFixture):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     results = list(adapter._pandas_to_sql(df=df, columns_to_types={"a": "int", "b": "int"}))
     assert len(results) == 1
-    assert (
-        results[0].sql(dialect="redshift")
-        == "VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)"
-    )
+    assert results[0].sql(dialect="redshift") == "VALUES (1, 4), (2, 5), (3, 6)"
 
 
 def test_replace_query_with_query(mocker: MockerFixture):
@@ -168,9 +165,7 @@ def test_replace_query_with_df_table_exists(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call("CREATE TABLE test_table_temp_1234 (a INTEGER, b INTEGER)"),
-            call(
-                "INSERT INTO test_table_temp_1234 (a, b) VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)"
-            ),
+            call("INSERT INTO test_table_temp_1234 (a, b) VALUES (1, 4), (2, 5), (3, 6)"),
             call("ALTER TABLE test_table RENAME TO test_table_old_1234"),
             call("ALTER TABLE test_table_temp_1234 RENAME TO test_table"),
             call("DROP TABLE IF EXISTS test_table_old_1234"),
@@ -201,9 +196,7 @@ def test_replace_query_with_df_table_not_exists(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call("CREATE TABLE test_table (a INTEGER, b INTEGER)"),
-            call(
-                "INSERT INTO test_table (a, b) VALUES (CAST(1 AS INTEGER), CAST(4 AS INTEGER)), (2, 5), (3, 6)"
-            ),
+            call("INSERT INTO test_table (a, b) VALUES (1, 4), (2, 5), (3, 6)"),
         ]
     )
 
