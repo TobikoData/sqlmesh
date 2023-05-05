@@ -225,10 +225,10 @@ class Plan:
         return not self.skip_backfill and (bool(self.restatements) or bool(self.missing_intervals))
 
     @property
-    def missing_intervals(self) -> t.List[MissingIntervals]:
+    def missing_intervals(self) -> t.List[SnapshotIntervals]:
         """Returns a list of missing intervals."""
         return [
-            MissingIntervals(
+            SnapshotIntervals(
                 snapshot_name=snapshot.name,
                 intervals=self._missing_intervals[snapshot.version_get_or_generate()],
             )
@@ -564,7 +564,7 @@ class PlanStatus(str, Enum):
         return self == PlanStatus.FINISHED
 
 
-class MissingIntervals(PydanticModel, frozen=True):
+class SnapshotIntervals(PydanticModel, frozen=True):
     snapshot_name: str
     intervals: Intervals
 
@@ -572,5 +572,5 @@ class MissingIntervals(PydanticModel, frozen=True):
     def merged_intervals(self) -> Intervals:
         return merge_intervals(self.intervals)
 
-    def format_missing_range(self, unit: t.Optional[IntervalUnit] = None) -> str:
+    def format_intervals(self, unit: t.Optional[IntervalUnit] = None) -> str:
         return format_intervals(self.merged_intervals, unit)

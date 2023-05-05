@@ -20,13 +20,8 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
 from sqlmesh.core.model.meta import IntervalUnit
-from sqlmesh.core.plan import Plan
-from sqlmesh.core.snapshot.definition import (
-    Intervals,
-    SnapshotChangeCategory,
-    format_intervals,
-    merge_intervals,
-)
+from sqlmesh.core.plan import Plan, SnapshotIntervals
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -122,32 +117,25 @@ class GithubCheckConclusion(str, Enum):
         return self == GithubCheckConclusion.SKIPPED
 
 
-class AffectedEnvironmentModel(PydanticModel):
+class EnvironmentSnapshotIntervals(SnapshotIntervals):
+    interval_unit: t.Optional[IntervalUnit]
     model_name: str
     view_name: str
-    intervals: Intervals
     change_category: SnapshotChangeCategory
-    interval_unit: t.Optional[IntervalUnit]
 
     @classmethod
-    def from_snapshot(cls, snapshot: Snapshot) -> AffectedEnvironmentModel:
+    def from_snapshot(cls, snapshot: Snapshot) -> EnvironmentSnapshotIntervals:
         assert snapshot.change_category
         return cls(
-            model_name=snapshot.model.name,
-            view_name=snapshot.model.view_name,
+            snapshot_name=snapshot.name,
             intervals=snapshot.dev_intervals
             if snapshot.change_category.is_forward_only
             else snapshot.intervals,
+            interval_unit=snapshot.model.interval_unit(),
+            model_name=snapshot.model.name,
+            view_name=snapshot.model.view_name,
             change_category=snapshot.change_category,
         )
-
-    @property
-    def merged_intervals(self) -> Intervals:
-        return merge_intervals(self.intervals)
-
-    @property
-    def formatted_loaded_intervals(self) -> str:
-        return format_intervals(self.merged_intervals, self.interval_unit, " - ")
 
     @property
     def change_category_str(self) -> str:
@@ -442,7 +430,7 @@ class GithubController:
             )
         return
 
-    def get_pr_affected_models(self) -> t.List[AffectedEnvironmentModel]:
+    def get_pr_affected_models(self) -> t.List[EnvironmentSnapshotIntervals]:
         plan = self._context.plan(
             c.PROD,
             auto_apply=False,
@@ -455,14 +443,14 @@ class GithubController:
         for snapshot in plan.directly_modified:
             if not snapshot.change_category:
                 continue
-            affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
+            affected_env_models.append(EnvironmentSnapshotIntervals.from_snapshot(snapshot))
             for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
                 affected_env_models.append(
-                    AffectedEnvironmentModel.from_snapshot(downstream_snapshot)
+                    EnvironmentSnapshotIntervals.from_snapshot(downstream_snapshot)
                 )
         return affected_env_models
 
@@ -632,7 +620,7 @@ class GithubController:
                             h("td", affected_model.change_category_str),
                         ]
                         if affected_model.intervals:
-                            model_rows.append(h("td", affected_model.formatted_loaded_intervals))
+                            model_rows.append(h("td", affected_model.format_intervals()))
                         else:
                             model_rows.append(h("td", "N/A"))
                         body_rows.append(model_rows)

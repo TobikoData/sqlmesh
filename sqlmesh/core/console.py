@@ -346,9 +346,7 @@ class TerminalConsole(Console):
         for missing in plan.missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_name]
             view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
-            backfill.add(
-                f"{view_name}: {missing.format_missing_range(snapshot.model.interval_unit())}"
-            )
+            backfill.add(f"{view_name}: {missing.format_intervals(snapshot.model.interval_unit())}")
         self._print(backfill)
 
     def _prompt_effective_from(self, plan: Plan, auto_apply: bool) -> None:
@@ -866,7 +864,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             snapshot = plan.context_diff.snapshots[missing.snapshot_name]
             view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
             self._print(
-                f"* `{view_name}`: {missing.format_missing_range(snapshot.model.interval_unit())}\n"
+                f"* `{view_name}`: {missing.format_intervals(snapshot.model.interval_unit())}\n"
             )
         self._print("\n")
 

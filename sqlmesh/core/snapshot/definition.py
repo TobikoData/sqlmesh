@@ -959,12 +959,10 @@ def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> st
     return to_datetime(time_like).isoformat()[:19]
 
 
-def format_intervals(
-    intervals: Intervals, unit: t.Optional[IntervalUnit], start_end_sep: str = ", "
-) -> str:
+def format_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> str:
     inclusive_intervals = [make_inclusive(start, end) for start, end in intervals]
     return ", ".join(
-        _format_date_time(start, unit) + start_end_sep + _format_date_time(end, unit)
+        " - ".join([_format_date_time(start, unit), _format_date_time(end, unit)])
         for start, end in inclusive_intervals
     )
 
