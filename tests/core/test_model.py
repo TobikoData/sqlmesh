@@ -1037,3 +1037,23 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     assert cache.get_or_load("test_model", "test_entry_a", loader) == model
 
     assert loader.call_count == 3
+
+
+def test_model_ctas_query():
+    expressions = parse(
+        """
+        MODEL (name db.table, kind FULL);
+        SELECT 1 as a
+        """
+    )
+
+    assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a"
+
+    expressions = parse(
+        """
+        MODEL (name db.table, kind FULL);
+        SELECT 1 as a FROM b
+        """
+    )
+
+    assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a FROM b AS b WHERE FALSE"

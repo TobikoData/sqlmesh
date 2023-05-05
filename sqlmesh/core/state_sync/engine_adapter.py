@@ -544,7 +544,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
     ) -> t.Union[exp.Or, exp.Boolean]:
         if not snapshot_ids:
-            return exp.FALSE
+            return exp.false()
 
         return exp.or_(
             *(
@@ -566,7 +566,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike]
     ) -> t.Union[exp.Or, exp.Boolean]:
         if not snapshot_name_versions:
-            return exp.FALSE
+            return exp.false()
 
         return exp.or_(
             *(
