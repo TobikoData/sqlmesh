@@ -8,6 +8,7 @@ export const EnumFileExtensions = {
   Python: '.py',
   CSV: '.csv',
   YAML: '.yaml',
+  YML: '.yml',
 } as const
 export type FileExtensions =
   (typeof EnumFileExtensions)[keyof typeof EnumFileExtensions]
