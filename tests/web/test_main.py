@@ -448,6 +448,7 @@ def test_get_models(web_sushi_context: Context) -> None:
             description=model.description,
             owner=model.owner,
             dialect=model.dialect,
+            type="sql",
             columns=[
                 models.Column(
                     name=name,

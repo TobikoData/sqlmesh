@@ -51,16 +51,16 @@ def get_models(
                 interval_unit=model.interval_unit(),
                 annotated=model.annotated,
                 contains_star_query=model.contains_star_query,
-                type="sql"
-                if model.is_sql
-                else "python"
-                if model.is_python
-                else "seed"
-                if model.is_seed
-                else None,
             ),
             description=model.description,
             sql=model.render_query().sql(pretty=True, dialect=model.dialect),
+            type="sql"
+            if model.is_sql
+            else "python"
+            if model.is_python
+            else "seed"
+            if model.is_seed
+            else None,
         )
         for model in context.models.values()
     ]

@@ -9,16 +9,16 @@ import {
   type Tooltip,
   hoverTooltip,
 } from '@codemirror/view'
-import { type Model } from '~/api/client'
-
 import { useSqlMeshExtension } from './SqlMeshDialect'
 import { isFalse } from '@utils/index'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type Column } from '@api/client'
 
 export { useSqlMeshExtension }
 
 export function SqlMeshModel(
-  models: Map<string, Model>,
-  model: Model,
+  models: Map<string, ModelSQLMeshModel>,
+  model: ModelSQLMeshModel,
   columns: Set<string>,
 ): Extension {
   return ViewPlugin.fromClass(
@@ -43,30 +43,47 @@ export function SqlMeshModel(
   )
 }
 
-export function events(
-  models: Map<string, Model>,
-  handler: (model: Model) => void,
-): Extension {
+export function events(handler: (event: MouseEvent) => void): Extension {
   return EditorView.domEventHandlers({
     click(event: MouseEvent) {
-      if (event.target == null) return
-
-      const el = event.target as HTMLElement
-      const modelName =
-        el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
-
-      if (modelName == null) return
-
-      const model = models.get(modelName)
-
-      if (model == null) return
-
-      handler(model)
+      handler(event)
     },
   })
 }
 
-export function HoverTooltip(models: Map<string, Model>): Extension {
+export function findModel(
+  event: MouseEvent,
+  models: Map<string, ModelSQLMeshModel>,
+): ModelSQLMeshModel | undefined {
+  if (event.target == null) return
+
+  const el = event.target as HTMLElement
+  const modelName =
+    el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
+
+  if (modelName == null) return
+
+  return models.get(modelName)
+}
+
+export function findColumn(
+  event: MouseEvent,
+  model: ModelSQLMeshModel,
+): Column | undefined {
+  if (event.target == null) return
+
+  const el = event.target as HTMLElement
+  const columnName =
+    el.getAttribute('column') ?? el.parentElement?.getAttribute('column')
+
+  if (columnName == null) return
+
+  return model.columns.find(c => c.name === columnName)
+}
+
+export function HoverTooltip(
+  models: Map<string, ModelSQLMeshModel>,
+): Extension {
   return hoverTooltip(
     (view: EditorView, pos: number, side: number): Tooltip | null => {
       const { from, to, text } = view.state.doc.lineAt(pos)
@@ -112,9 +129,9 @@ export function HoverTooltip(models: Map<string, Model>): Extension {
 }
 
 function getDecorations(
-  models: Map<string, Model>,
+  models: Map<string, ModelSQLMeshModel>,
   view: EditorView,
-  model: Model,
+  model: ModelSQLMeshModel,
   columns: Set<string>,
 ): DecorationSet {
   const decorations: any = []

@@ -39,7 +39,11 @@ export const router = createBrowserRouter([
         element: <Docs />,
         children: [
           {
-            path: 'models',
+            path: '',
+            element: <Docs.Welcome />,
+          },
+          {
+            path: 'models/:modelName',
             element: <Docs.Content />,
             errorElement: (
               <NotFound

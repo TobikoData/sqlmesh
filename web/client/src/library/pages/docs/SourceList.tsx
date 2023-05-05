@@ -1,18 +1,17 @@
 import { type Model } from '@api/client'
 import Input from '@components/input/Input'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isArrayEmpty, isArrayNotEmpty } from '@utils/index'
 import clsx from 'clsx'
-import { Link } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { EnumSize } from '~/types/enum'
 
 export default function SourceList({
   models,
   filter,
-  activeModel,
   setFilter,
 }: {
-  activeModel?: string
   models: Map<string, Model>
   filter: string
   setFilter: (filter: string) => void
@@ -52,23 +51,35 @@ export default function SourceList({
           modelsFiltered.map(model => (
             <li
               key={model.name}
-              className={clsx('text-sm font-normal w-full')}
+              className={clsx('text-sm font-normal')}
             >
-              <Link
-                to={`${EnumRoutes.IdeDocsModels}?model=${model.name}`}
-                state={{ model }}
-              >
-                <div
-                  className={clsx(
-                    'py-1 px-4 rounded-md w-full hover:bg-primary-10',
-                    activeModel === model.name
+              <NavLink
+                to={`${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
+                  model.name,
+                )}`}
+                className={({ isActive }) =>
+                  clsx(
+                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1  rounded-md w-full hover:bg-primary-10',
+                    isActive
                       ? 'text-primary-500 bg-primary-10'
                       : 'text-neutral-500 dark:text-neutral-100',
-                  )}
+                  )
+                }
+              >
+                {model.name}
+                <span
+                  title={
+                    model.type === 'python'
+                      ? 'Column lineage disabled for Python models'
+                      : 'SQL Model'
+                  }
+                  className="inline-block ml-2 bg-primary-10 px-2 rounded-md text-[0.65rem]"
                 >
-                  {model.name}
-                </div>
-              </Link>
+                  {model.type === 'python' && 'Python'}
+                  {model.type === 'sql' && 'SQL'}
+                  {model.type === 'seed' && 'Seed'}
+                </span>
+              </NavLink>
             </li>
           ))}
       </ul>

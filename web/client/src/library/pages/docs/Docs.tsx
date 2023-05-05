@@ -1,7 +1,6 @@
 import Container from '@components/container/Container'
 import { useStoreContext } from '@context/context'
 import { Outlet, useLocation } from 'react-router-dom'
-import { EnumRoutes } from '~/routes'
 import Content from './Content'
 import { useEffect, useState } from 'react'
 import SplitPane from '@components/splitPane/SplitPane'
@@ -19,18 +18,13 @@ const Docs = function Docs(): JSX.Element {
   const activePlan = useStorePlan(s => s.activePlan)
   const planState = useStorePlan(s => s.state)
 
-  const searchParams = new URLSearchParams(location.search)
-  const modelName = searchParams.get('model') ?? undefined
-
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
     setFilter('')
     setSearch('')
-  }, [location.search])
-
-  const isActivePageDocs = location.pathname === EnumRoutes.IdeDocs
+  }, [location.pathname])
 
   return (
     <Container.Page>
@@ -76,11 +70,10 @@ const Docs = function Docs(): JSX.Element {
               models={models}
               filter={filter}
               setFilter={setFilter}
-              activeModel={modelName}
             />
           </div>
           <div className="w-full">
-            {isActivePageDocs ? <Welcome /> : <Outlet />}
+            <Outlet />
           </div>
         </SplitPane>
       </div>
@@ -89,6 +82,7 @@ const Docs = function Docs(): JSX.Element {
 }
 
 Docs.Content = Content
+Docs.Welcome = Welcome
 
 export default Docs
 

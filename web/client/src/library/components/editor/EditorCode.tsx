@@ -6,13 +6,15 @@ import { StreamLanguage } from '@codemirror/language'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
-import { type Model, type File } from '~/api/client'
+import { type Column, type File } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
 import {
   events,
   SqlMeshModel,
   HoverTooltip,
   useSqlMeshExtension,
+  findModel,
+  findColumn,
 } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
@@ -27,7 +29,7 @@ import {
 } from '~/utils'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
-import { useStoreEditor, type Lineage } from '~/context/editor'
+import { useStoreEditor } from '~/context/editor'
 import {
   EnumFileExtensions,
   type ModelFile,
@@ -36,6 +38,7 @@ import {
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 function CodeEditorDefault({
   type,
@@ -190,8 +193,8 @@ function CodeEditorRemoteFile({
 
 export function useSQLMeshModelExtensions(
   path?: string,
-  lineage: Record<string, Lineage> = {},
-  handleModelClick?: (model: Model) => void,
+  handleModelClick?: (model: ModelSQLMeshModel) => void,
+  handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
   if (path == null) return []
 
@@ -200,16 +203,35 @@ export function useSQLMeshModelExtensions(
 
   const extensions = useMemo(() => {
     const model = models.get(path)
-    const columns = new Set(
-      Object.keys(lineage)
-        .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-        .flat()
-        .filter(Boolean) as string[],
-    )
+    const columns =
+      model?.lineage == null
+        ? new Set<string>()
+        : new Set(
+            Object.keys(model.lineage)
+              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+              .flat()
+              .filter(Boolean) as string[],
+          )
 
     return [
       HoverTooltip(models),
-      handleModelClick != null && events(models, handleModelClick),
+      handleModelClick != null &&
+        events(event => {
+          const model = findModel(event, models)
+
+          if (model == null) return
+
+          handleModelClick(model)
+        }),
+      handleModelColumn != null &&
+        model != null &&
+        events(event => {
+          const column = findColumn(event, model)
+
+          if (column == null) return
+
+          handleModelColumn(model, column)
+        }),
       model != null && SqlMeshModel(models, model, columns),
     ].filter(Boolean) as Extension[]
   }, [path, models, files])

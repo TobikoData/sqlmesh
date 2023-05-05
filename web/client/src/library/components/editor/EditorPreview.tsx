@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import {
@@ -6,15 +6,14 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { debounceAsync, isNil, isTrue } from '~/utils'
-import { type EditorTab, useStoreEditor, type Lineage } from '~/context/editor'
+import { isNil, isTrue } from '~/utils'
+import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
 import { useStoreContext } from '@context/context'
-import { useApiModelLineage } from '@api/index'
-import Loading from '@components/loading/Loading'
-import Graph from '@components/graph/Graph'
+import { ModelLineage } from '@components/graph/ModelLineage'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -42,7 +41,7 @@ export default function EditorPreview({
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
-  const [modelName, setModelName] = useState<string | undefined>()
+  const [model, setModel] = useState<ModelSQLMeshModel>()
 
   const tabs = useMemo(() => {
     if (tab.file.isLocal)
@@ -99,7 +98,7 @@ export default function EditorPreview({
   }, [previewTable, previewQuery, previewConsole, tab])
 
   useEffect(() => {
-    setModelName(models.get(tab.file.path)?.name)
+    setModel(models.get(tab.file.path))
   }, [models, tab.file])
 
   const table = useReactTable({
@@ -274,74 +273,17 @@ export default function EditorPreview({
               'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
             )}
           >
-            {modelName == null ? (
+            {model == null ? (
               <div>Model Does Not Exist</div>
             ) : (
-              <EditorPreviewLineage
-                key={modelName}
-                model={modelName}
-                tab={tab}
+              <ModelLineage
+                model={model}
+                fingerprint={tab.file.fingerprint}
               />
             )}
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>
     </div>
-  )
-}
-
-function EditorPreviewLineage({
-  model,
-  tab,
-}: {
-  model: string
-  tab: EditorTab
-}): JSX.Element {
-  const { data: lineage, refetch: getModelLineage } = useApiModelLineage(model)
-
-  const models = useStoreContext(s => s.models)
-
-  const previewLineage = useStoreEditor(s => s.previewLineage)
-  const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
-
-  const debouncedGetModelLineage = useCallback(
-    debounceAsync(getModelLineage, 1000, true),
-    [model, tab.file.path, tab.file.fingerprint],
-  )
-
-  const highlightedNodes = useMemo(() => [model], [model])
-
-  useEffect(() => {
-    void debouncedGetModelLineage()
-  }, [debouncedGetModelLineage])
-
-  useEffect(() => {
-    if (lineage == null) {
-      setPreviewLineage(models)
-    } else {
-      setPreviewLineage(
-        models,
-        Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
-          acc[key] = {
-            models: lineage[key] ?? [],
-            columns: previewLineage?.[key]?.columns ?? undefined,
-          }
-
-          return acc
-        }, {}),
-      )
-    }
-  }, [lineage])
-
-  return previewLineage == null ? (
-    <div className="w-full h-full flex items-center justify-center bg-primary-10">
-      <Loading hasSpinner>Loading Lineage...</Loading>
-    </div>
-  ) : (
-    <Graph
-      lineage={previewLineage}
-      highlightedNodes={highlightedNodes}
-      models={models}
-    />
   )
 }
