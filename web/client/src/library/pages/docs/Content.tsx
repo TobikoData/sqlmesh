@@ -1,5 +1,5 @@
 import { useApiModelLineage } from '@api/index'
-import Documantation from '@components/documentation/Documentation'
+import Documentation from '@components/documentation/Documentation'
 import Graph from '@components/graph/Graph'
 import Loading from '@components/loading/Loading'
 import SplitPane from '@components/splitPane/SplitPane'
@@ -21,7 +21,7 @@ export default function Content(): JSX.Element {
         snapOffset={0}
       >
         <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
-          <Documantation
+          <Documentation
             key={state.model.name}
             model={state.model}
             withQuery={state.model.details.type !== 'python'}

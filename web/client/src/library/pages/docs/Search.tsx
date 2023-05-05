@@ -15,11 +15,11 @@ export default function Search({
   search: string
   setSearch: (search: string) => void
 }): JSX.Element {
-  const indeces = useMemo(() => createIndeces(models), [models])
+  const indices = useMemo(() => createIndices(models), [models])
   const showSearchResults = search !== '' && search.length > 1
   const found = isFalse(showSearchResults)
     ? []
-    : filterModelsBySearch(indeces, search)
+    : filterModelsBySearch(indices, search)
 
   return (
     <div className="p-2 relative">
@@ -88,10 +88,10 @@ function highlightMatch(source: string, match: string): JSX.Element {
 }
 
 function filterModelsBySearch(
-  indeces: Array<[Model, string]> = [],
+  indices: Array<[Model, string]> = [],
   search: string,
 ): Array<[Model, string]> {
-  return indeces.reduce((acc: Array<[Model, string]>, [model, index]) => {
+  return indices.reduce((acc: Array<[Model, string]>, [model, index]) => {
     const idx = index.indexOf(search.toLocaleLowerCase())
 
     if (idx > -1) {
@@ -111,8 +111,8 @@ function filterModelsBySearch(
   }, [])
 }
 
-function createIndeces(models: Map<string, Model>): Array<[Model, string]> {
-  const indeces: Array<[Model, string]> = []
+function createIndices(models: Map<string, Model>): Array<[Model, string]> {
+  const indices: Array<[Model, string]> = []
 
   models.forEach((value, key) => {
     if (value.path === key) return
@@ -137,8 +137,8 @@ function createIndeces(models: Map<string, Model>): Array<[Model, string]> {
       return acc + ' ' + String(v ?? '')
     }, '')
 
-    indeces.push([value, index.toLocaleLowerCase() + ' ' + key])
+    indices.push([value, index.toLocaleLowerCase() + ' ' + key])
   })
 
-  return indeces
+  return indices
 }

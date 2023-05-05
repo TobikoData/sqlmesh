@@ -24,7 +24,7 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { getTableDataFromArrowStreamResult } from './help'
 import { Tab } from '@headlessui/react'
-import Documantation from '@components/documentation/Documentation'
+import Documentation from '@components/documentation/Documentation'
 import Banner from '@components/banner/Banner'
 
 interface FormModel {
@@ -267,7 +267,7 @@ function InspectorModel({
             'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
           )}
         >
-          <Documantation
+          <Documentation
             model={model}
             withCode={false}
             withModel={false}

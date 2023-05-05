@@ -13,7 +13,7 @@ import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 
-const Documantation = function Documantation({
+const Documentation = function Documentation({
   model,
   withModel = true,
   withDescription = true,
@@ -315,7 +315,7 @@ function DetailsItem({
   )
 }
 
-Documantation.NotFound = NotFound
-Documantation.Container = Container
+Documentation.NotFound = NotFound
+Documentation.Container = Container
 
-export default Documantation
+export default Documentation
