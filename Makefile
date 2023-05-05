@@ -21,7 +21,10 @@ unit-test:
 doc-test:
 	PYTEST_PLUGINS=tests.common_fixtures pytest --doctest-modules sqlmesh/core sqlmesh/utils
 
-core-it-test:
+dbt-deps:
+	cd tests/fixtures/dbt/sushi_test && dbt deps
+
+core-it-test: dbt-deps
 	pytest -m "core_integration"
 
 it-test: core-it-test airflow-it-test-with-env
