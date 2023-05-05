@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import os
@@ -23,6 +22,7 @@ from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.plan import Plan, SnapshotIntervals
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.user import User
+from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -211,70 +211,28 @@ class GithubController:
         self._prod_plan: t.Optional[Plan] = None
         self._console: t.Optional[MarkdownConsole] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
-        self.__client: t.Optional[Github] = None
-        self.__repo: t.Optional[Repository] = None
-        self.__pull_request: t.Optional[PullRequest] = None
-        self.__issue: t.Optional[Issue] = None
-        self.__reviews: t.Optional[t.Iterable[PullRequestReview]] = None
-        self.__approvers: t.Optional[t.Set[str]] = None
-        self.__context: t.Optional[Context] = None
-
-    @property
-    def _context(self) -> Context:
-        if not self.__context:
-            self.__context = Context(
-                paths=self._paths,
-                config=self._config,
-            )
-        return self.__context
-
-    @property
-    def _client(self) -> Github:
-        from github import Github
-
-        if not self.__client:
-            self.__client = Github(
-                base_url=os.environ["GITHUB_API_URL"],
-                login_or_token=self._token,
-            )
-        return self.__client
-
-    @property
-    def _repo(self) -> Repository:
-        if not self.__repo:
-            self.__repo = self._client.get_repo(
-                self._event.pull_request_info.full_repo_path, lazy=True
-            )
-        return self.__repo
-
-    @property
-    def _pull_request(self) -> PullRequest:
-        if not self.__pull_request:
-            self.__pull_request = self._repo.get_pull(self._event.pull_request_info.pr_number)
-        return self.__pull_request
-
-    @property
-    def _issue(self) -> Issue:
-        if not self.__issue:
-            self.__issue = self._repo.get_issue(self._event.pull_request_info.pr_number)
-        return self.__issue
-
-    @property
-    def _reviews(self) -> t.Iterable[PullRequestReview]:
-        if not self.__reviews:
-            self.__reviews = self._pull_request.get_reviews()
-        return self.__reviews
-
-    @property
-    def _approvers(self) -> t.Set[str]:
-        if not self.__approvers:
-            # TODO: The python module says that user names can be None and this is not currently handled
-            self.__approvers = {
-                review.user.name or "UNKNOWN"
-                for review in self._reviews
-                if review.state.lower() == "approved"
-            }
-        return self.__approvers
+        self._client: Github = Github(
+            base_url=os.environ["GITHUB_API_URL"],
+            login_or_token=self._token,
+        )
+        self._repo: Repository = self._client.get_repo(
+            self._event.pull_request_info.full_repo_path, lazy=True
+        )
+        self._pull_request: PullRequest = self._repo.get_pull(
+            self._event.pull_request_info.pr_number
+        )
+        self._issue: Issue = self._repo.get_issue(self._event.pull_request_info.pr_number)
+        self._reviews: t.Iterable[PullRequestReview] = self._pull_request.get_reviews()
+        # TODO: The python module says that user names can be None and this is not currently handled
+        self._approvers: t.Set[str] = {
+            review.user.name or "UNKNOWN"
+            for review in self._reviews
+            if review.state.lower() == "approved"
+        }
+        self._context: Context = Context(
+            paths=self._paths,
+            config=self._config,
+        )
 
     @property
     def _required_approvers(self) -> t.List[User]:
@@ -309,9 +267,9 @@ class GithubController:
 
         TODO: Allow defining requiring some number, or all, required approvers.
         """
-        if not self._required_approvers:
+        if not self._required_approvers or self._required_approvers_with_approval:
             return True
-        return bool(self._required_approvers_with_approval)
+        return False
 
     @property
     def pr_plan(self) -> Plan:
@@ -354,8 +312,8 @@ class GithubController:
             if not catagorized_snapshots and not missing_dates:
                 return "No changes to apply."
             return f"{catagorized_snapshots}\n{missing_dates}"
-        except PlanError:
-            return "Plan failed to generate. Check for pending or unresolved changes."
+        except PlanError as e:
+            return f"Plan failed to generate. Check for pending or unresolved changes. Error: {e}"
 
     def run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         """
@@ -431,21 +389,13 @@ class GithubController:
         return
 
     def get_pr_affected_models(self) -> t.List[EnvironmentSnapshotIntervals]:
-        plan = self._context.plan(
-            c.PROD,
-            auto_apply=False,
-            no_gaps=False,
-            no_prompts=True,
-            no_auto_categorization=True,
-            skip_tests=True,
-        )
         affected_env_models = []
-        for snapshot in plan.directly_modified:
+        for snapshot in self.prod_plan.directly_modified:
             if not snapshot.change_category:
                 continue
             affected_env_models.append(EnvironmentSnapshotIntervals.from_snapshot(snapshot))
-            for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
-                downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
+            for downstream_indirect in self.prod_plan.indirectly_modified.get(snapshot.name, set()):
+                downstream_snapshot = self.prod_plan.context_diff.snapshots[downstream_indirect]
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
@@ -466,7 +416,7 @@ class GithubController:
         Updates the status of the merge commit.
         """
 
-        current_time = datetime.datetime.now(datetime.timezone.utc)
+        current_time = now()
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
             # Note: The environment variable `GITHUB_SHA` would be the merge commit so that is why instead we
@@ -527,18 +477,17 @@ class GithubController:
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
-            else:
-                self.console.log_test_results(
-                    result, failed_output or "", self._context._test_engine_adapter.dialect
-                )
-                test_summary = self.console.consume_captured_output()
-                test_title = "Test Passed" if result.wasSuccessful() else "Test Failed"
-                test_conclusion = (
-                    GithubCheckConclusion.SUCCESS
-                    if result.wasSuccessful()
-                    else GithubCheckConclusion.FAILURE
-                )
-                return test_conclusion, test_title, test_summary
+            self.console.log_test_results(
+                result, failed_output or "", self._context._test_engine_adapter.dialect
+            )
+            test_summary = self.console.consume_captured_output()
+            test_title = "Test Passed" if result.wasSuccessful() else "Test Failed"
+            test_conclusion = (
+                GithubCheckConclusion.SUCCESS
+                if result.wasSuccessful()
+                else GithubCheckConclusion.FAILURE
+            )
+            return test_conclusion, test_title, test_summary
 
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",
