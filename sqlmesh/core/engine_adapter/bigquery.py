@@ -141,6 +141,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         replace: bool = False,
         **kwargs: t.Any,
     ) -> None:
+        """
+        Creates a table from a pandas dataframe. Will create the table if it doesn't exist. Will replace the contents
+        of the table if `replace` is true.
+        """
         assert isinstance(df, pd.DataFrame)
         table = self.__get_bq_table(table_name, columns_to_types)
         self.__load_pandas_to_table(table, df, exists=exists, replace=replace)
@@ -170,6 +174,9 @@ class BigQueryEngineAdapter(EngineAdapter):
     def __get_bq_schema(
         self, columns_to_types: t.Dict[str, exp.DataType]
     ) -> t.List[bigquery.SchemaField]:
+        """
+        Returns a bigquery schema object from a dictionary of column names to types.
+        """
         from google.cloud import bigquery
 
         precisionless_col_to_types = {
@@ -184,6 +191,9 @@ class BigQueryEngineAdapter(EngineAdapter):
     def __get_temp_bq_table(
         self, table: TableName, columns_to_type: t.Dict[str, exp.DataType]
     ) -> bigquery.Table:
+        """
+        Returns a bigquery table object that is temporary and will expire in 3 hours.
+        """
         bq_table = self.__get_bq_table(self._get_temp_table(table), columns_to_type)
         bq_table.expires = to_datetime("in 3 hours")
         return bq_table
@@ -191,6 +201,11 @@ class BigQueryEngineAdapter(EngineAdapter):
     def __get_bq_table(
         self, table: TableName, columns_to_type: t.Dict[str, exp.DataType]
     ) -> bigquery.Table:
+        """
+        Returns a bigquery table object with a schema defines that matches the columns_to_type dictionary.
+        """
+        from google.cloud import bigquery
+
         table_name = ".".join([self.client.project, exp.to_table(table).sql(dialect=self.dialect)])
         return bigquery.Table(table_ref=table_name, schema=self.__get_bq_schema(columns_to_type))
 
