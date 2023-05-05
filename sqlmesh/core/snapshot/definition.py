@@ -23,6 +23,7 @@ from sqlmesh.core.model.meta import HookCall, IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
+    make_inclusive,
     make_inclusive_end,
     now,
     now_timestamp,
@@ -956,6 +957,16 @@ def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> st
     if unit is None or unit == IntervalUnit.DAY:
         return to_ds(time_like)
     return to_datetime(time_like).isoformat()[:19]
+
+
+def format_intervals(
+    intervals: Intervals, unit: t.Optional[IntervalUnit], start_end_sep: str = ", "
+) -> str:
+    inclusive_intervals = [make_inclusive(start, end) for start, end in intervals]
+    return ", ".join(
+        _format_date_time(start, unit) + start_end_sep + _format_date_time(end, unit)
+        for start, end in inclusive_intervals
+    )
 
 
 def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:

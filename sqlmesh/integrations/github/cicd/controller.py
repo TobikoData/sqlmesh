@@ -24,11 +24,10 @@ from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot.definition import (
     Intervals,
     SnapshotChangeCategory,
-    _format_date_time,
+    format_intervals,
     merge_intervals,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils.date import make_inclusive
 from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -143,14 +142,12 @@ class AffectedEnvironmentModel(PydanticModel):
         )
 
     @property
+    def merged_intervals(self) -> Intervals:
+        return merge_intervals(self.intervals)
+
+    @property
     def formatted_loaded_intervals(self) -> str:
-        merged_inclusive_intervals = [
-            make_inclusive(start, end) for start, end in merge_intervals(self.intervals)
-        ]
-        return ", ".join(
-            f"({_format_date_time(start, self.interval_unit)} - {_format_date_time(end, self.interval_unit)})"
-            for start, end in merged_inclusive_intervals
-        )
+        return format_intervals(self.merged_intervals, self.interval_unit, " - ")
 
     @property
     def change_category_str(self) -> str:
