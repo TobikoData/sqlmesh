@@ -447,7 +447,7 @@ class GithubController:
         """
 
         def conclusion_handler(
-            _: GithubCheckConclusion,
+            _: GithubCheckConclusion, result: unittest.result.TestResult
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
@@ -463,6 +463,8 @@ class GithubController:
             )
             return test_conclusion, test_title, test_summary
 
+        import functools
+
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",
             status=status,
@@ -474,7 +476,7 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=conclusion_handler,
+            conclusion_handler=functools.partial(conclusion_handler, result=result),
         )
 
     def update_required_approval_check(
