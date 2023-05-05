@@ -30,25 +30,26 @@ import { useStoreContext } from '@context/context'
 import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import { useStoreLineage, useStoreReactFlow } from '@context/lineage'
 import clsx from 'clsx'
-import { type Column } from '@api/client'
+import { type Model, type Column } from '@api/client'
 import { useStoreFileTree } from '@context/fileTree'
 import { useApiColumnLineage } from '@api/index'
 import { useStoreEditor, type Lineage } from '@context/editor'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import './Graph.css'
+import { type ModelFile } from '@models/file'
 
 const Flow = memo(function Flow({
   lineage,
   closeGraph,
   highlightedNodes = [],
+  models,
 }: {
   lineage: Record<string, Lineage>
   closeGraph?: () => void
   highlightedNodes?: string[]
+  models: Map<string, Model>
 }): JSX.Element {
-  const models = useStoreContext(s => s.models)
-
   const nodes = useStoreReactFlow(s => s.nodes)
   const edges = useStoreReactFlow(s => s.edges)
   const setNodes = useStoreReactFlow(s => s.setNodes)
@@ -175,12 +176,13 @@ function ModelNode({
   const removeActiveEdges = useStoreLineage(s => s.removeActiveEdges)
 
   const model = models.get(data.label)
-  const file = model != null ? files.get(model.path) : undefined
   const columns = model != null ? model.columns : []
 
   const [showColumns, setShowColumns] = useState(
     columns.length <= COLUMS_LIMIT_DEFAULT,
   )
+  const [file, setFile] = useState<ModelFile>()
+
   const toggleEdgeById = useCallback(
     function toggleEdgeById(
       action: 'add' | 'remove',
@@ -220,6 +222,12 @@ function ModelNode({
 
     return [visible, hidden]
   }, [columns, showColumns, activeEdges])
+
+  useEffect(() => {
+    if (model == null) return
+
+    setFile(files.get(model.path))
+  }, [files, model])
 
   return (
     <div

@@ -10,7 +10,6 @@ import {
   hoverTooltip,
 } from '@codemirror/view'
 import { type Model } from '~/api/client'
-import { type ModelFile } from '~/models'
 
 import { useSqlMeshExtension } from './SqlMeshDialect'
 import { isFalse } from '@utils/index'
@@ -46,12 +45,23 @@ export function SqlMeshModel(
 
 export function events(
   models: Map<string, Model>,
-  files: Map<ID, ModelFile>,
-  selectFile: (file: ModelFile) => void,
+  handler: (model: Model) => void,
 ): Extension {
   return EditorView.domEventHandlers({
     click(event: MouseEvent) {
-      handleClickOnSqlMeshModel(event, models, files, selectFile)
+      if (event.target == null) return
+
+      const el = event.target as HTMLElement
+      const modelName =
+        el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
+
+      if (modelName == null) return
+
+      const model = models.get(modelName)
+
+      if (model == null) return
+
+      handler(model)
     },
   })
 }
@@ -185,30 +195,4 @@ function getDecorations(
   }
 
   return Decoration.set(decorations)
-}
-
-function handleClickOnSqlMeshModel(
-  event: MouseEvent,
-  models: Map<string, Model>,
-  files: Map<ID, ModelFile>,
-  selectFile: (file: ModelFile) => void,
-): void {
-  if (event.target == null) return
-
-  const el = event.target as HTMLElement
-  const modelName =
-    el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
-
-  if (modelName == null) return
-
-  const model = models.get(modelName)
-
-  if (model == null) return
-
-  const id = model.path as ID
-  const file = files.get(id)
-
-  if (file != null) {
-    selectFile(file)
-  }
 }

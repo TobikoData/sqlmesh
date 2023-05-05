@@ -3,7 +3,10 @@ import { Divider } from '../divider/Divider'
 import { useStoreFileTree } from '../../../context/fileTree'
 import SplitPane from '../splitPane/SplitPane'
 import { isFalse, isStringEmptyOrNil } from '../../../utils'
-import CodeEditor from './EditorCode'
+import CodeEditor, {
+  useSQLMeshModelExtensions,
+  useSQLMeshModelKeymaps,
+} from '@components/editor/EditorCode'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
@@ -14,22 +17,41 @@ import { useStoreLineage } from '@context/lineage'
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import { EnumFileExtensions } from '@models/file'
+import { useStoreContext } from '@context/context'
+import { type KeyBinding } from '@codemirror/view'
 
 export default function Editor(): JSX.Element {
+  const models = useStoreContext(s => s.models)
+
   const files = useStoreFileTree(s => s.files)
   const selectedFile = useStoreFileTree(s => s.selectedFile)
+  const selectFile = useStoreFileTree(s => s.selectFile)
 
   const tab = useStoreEditor(s => s.tab)
   const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
+  const lineage = useStoreEditor(s => s.previewLineage)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
+  const closeTab = useStoreEditor(s => s.closeTab)
   const addTab = useStoreEditor(s => s.addTab)
   const setDialects = useStoreEditor(s => s.setDialects)
+  const refreshTab = useStoreEditor(s => s.refreshTab)
 
   const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
+
+  const modelExtensions = useSQLMeshModelExtensions(
+    tab?.file.path,
+    lineage,
+    model => {
+      selectFile(files.get(model.path))
+    },
+  )
+
+  const modelKeymaps = useSQLMeshModelKeymaps(tab?.file)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
   const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
@@ -37,9 +59,7 @@ export default function Editor(): JSX.Element {
   )
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    if (e.data.topic === 'init') {
-      setIsreadyEngine(true)
-    }
+    setIsreadyEngine(true)
 
     if (e.data.topic === 'dialects') {
       setDialects(e.data.payload.dialects ?? [])
@@ -63,6 +83,33 @@ export default function Editor(): JSX.Element {
 
     return showPreview ? [70, 30] : [100, 0]
   }, [tab, previewConsole, previewTable])
+
+  const keymaps: KeyBinding[] = useMemo(
+    () =>
+      tab == null
+        ? []
+        : [
+            {
+              key: 'Mod-Alt-[',
+              preventDefault: true,
+              run() {
+                selectTab(createTab())
+
+                return true
+              },
+            },
+            {
+              key: 'Mod-Alt-]',
+              preventDefault: true,
+              run() {
+                closeTab(tab.file)
+
+                return true
+              },
+            },
+          ],
+    [closeTab, selectTab, createTab, tab?.file],
+  )
 
   useEffect(() => {
     engine.postMessage({
@@ -94,10 +141,34 @@ export default function Editor(): JSX.Element {
     selectTab(createTab(selectedFile))
   }, [selectedFile])
 
+  useEffect(() => {
+    if (tab == null) return
+
+    const model = models.get(tab.file.path)
+
+    if (model == null) return
+
+    tab.dialect = model.dialect
+
+    engine.postMessage({
+      topic: 'dialect',
+      payload: tab.dialect,
+    })
+  }, [tab])
+
   function toggleDirection(): void {
     setDirection(direction =>
       direction === 'vertical' ? 'horizontal' : 'vertical',
     )
+  }
+
+  function updateFileContent(value: string): void {
+    if (tab == null) return
+
+    tab.file.content = value
+    tab.isSaved = isFalse(tab.file.isChanged)
+
+    refreshTab()
   }
 
   return (
@@ -145,7 +216,57 @@ export default function Editor(): JSX.Element {
                     snapOffset={0}
                   >
                     <div className="flex flex-col h-full">
-                      <CodeEditor tab={tab} />
+                      {tab.file.isLocal && (
+                        <CodeEditor.Default
+                          type={EnumFileExtensions.SQL}
+                          content={tab.file.content}
+                        >
+                          {({ extensions, content }) => (
+                            <CodeEditor
+                              extensions={extensions}
+                              content={content}
+                              keymaps={keymaps}
+                              onChange={updateFileContent}
+                            />
+                          )}
+                        </CodeEditor.Default>
+                      )}
+                      {tab.file.isRemote && (
+                        <CodeEditor.RemoteFile path={tab.file.path}>
+                          {({ file }) =>
+                            file.isSQLMeshModelSQL ? (
+                              <CodeEditor.SQLMeshDialect content={file.content}>
+                                {({ extensions, content }) => (
+                                  <CodeEditor
+                                    extensions={extensions.concat(
+                                      modelExtensions,
+                                    )}
+                                    content={content}
+                                    keymaps={keymaps.concat(modelKeymaps)}
+                                    onChange={updateFileContent}
+                                  />
+                                )}
+                              </CodeEditor.SQLMeshDialect>
+                            ) : (
+                              <CodeEditor.Default
+                                type={file.extension}
+                                content={file.content}
+                              >
+                                {({ extensions, content }) => (
+                                  <CodeEditor
+                                    extensions={extensions.concat(
+                                      modelExtensions,
+                                    )}
+                                    content={content}
+                                    keymaps={keymaps.concat(modelKeymaps)}
+                                    onChange={updateFileContent}
+                                  />
+                                )}
+                              </CodeEditor.Default>
+                            )
+                          }
+                        </CodeEditor.RemoteFile>
+                      )}
                     </div>
                     <div className="flex flex-col h-full">
                       <EditorInspector tab={tab} />

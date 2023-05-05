@@ -1,3 +1,5 @@
+import { Button } from '@components/button/Button'
+import TasksOverview from '@components/tasksOverview/TasksOverview'
 import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -13,8 +15,6 @@ import {
   EnumPlanApplyType,
 } from '~/context/plan'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { Button } from '../button/Button'
-import TasksOverview from '../tasksOverview/TasksOverview'
 
 export default function ActivePlan({
   plan,
@@ -65,7 +65,13 @@ export default function ActivePlan({
             <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
               <div className="overflow-hidden rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5">
                 <TasksOverview tasks={plan.tasks}>
-                  {({ total, completed, models }) => (
+                  {({
+                    total,
+                    completed,
+                    models,
+                    completedBatches,
+                    totalBatches,
+                  }) => (
                     <>
                       <TasksOverview.Summary
                         environment={environment.name}
@@ -73,6 +79,8 @@ export default function ActivePlan({
                         headline="Most Recent Plan"
                         completed={completed}
                         total={total}
+                        completedBatches={completedBatches}
+                        totalBatches={totalBatches}
                         updateType={
                           plan.type === EnumPlanApplyType.Virtual
                             ? 'Virtual'
