@@ -201,7 +201,6 @@ class Model(BaseModel):
     dialect: str
     columns: t.List[Column]
     description: t.Optional[str] = None
-    owner: t.Optional[str] = None
     details: t.Optional[ModelDetails] = None
     sql: t.Optional[str] = None
 

@@ -960,19 +960,19 @@
       },
       "Model": {
         "title": "Model",
-        "required": ["name", "path", "dialect", "columns", "details"],
+        "required": ["name", "path", "dialect", "columns"],
         "type": "object",
         "properties": {
           "name": { "title": "Name", "type": "string" },
           "path": { "title": "Path", "type": "string" },
           "dialect": { "title": "Dialect", "type": "string" },
-          "description": { "title": "Description", "type": "string" },
-          "owner": { "title": "Owner", "type": "string" },
           "columns": {
             "title": "Columns",
             "type": "array",
             "items": { "$ref": "#/components/schemas/Column" }
           },
+          "description": { "title": "Description", "type": "string" },
+          "owner": { "title": "Owner", "type": "string" },
           "details": { "$ref": "#/components/schemas/ModelDetails" },
           "sql": { "title": "Sql", "type": "string" }
         }
@@ -1018,7 +1018,8 @@
           "contains_star_query": {
             "title": "Contains Star Query",
             "type": "boolean"
-          }
+          },
+          "type": { "title": "Type", "type": "string" }
         }
       },
       "ModelsDiff": {

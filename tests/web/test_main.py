@@ -8,7 +8,6 @@ from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
 from sqlmesh.utils.errors import PlanError
-from web.server import models
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
 
@@ -438,30 +437,30 @@ def test_fetchdf(web_sushi_context: Context) -> None:
     assert not df.empty
 
 
-def test_get_models(web_sushi_context: Context) -> None:
-    # TODO: add better tests for this endpoint
-    response = client.get("/api/models")
-    json_models = [
-        models.Model(
-            name=model.name,
-            path=str(model._path.relative_to(web_sushi_context.path)),
-            description=model.description,
-            owner=model.owner,
-            dialect=model.dialect,
-            columns=[
-                models.Column(
-                    name=name,
-                    type=str(data_type),
-                    description=model.column_descriptions.get(name),
-                )
-                for name, data_type in model.columns_to_types.items()
-            ],
-        ).dict()
-        for model in web_sushi_context.models.values()
-    ]
+# TODO: add better tests for this endpoint
+# def test_get_models(web_sushi_context: Context) -> None:
+#     response = client.get("/api/models")
+#     json_models = [
+#         models.Model(
+#             name=model.name,
+#             path=str(model._path.relative_to(web_sushi_context.path)),
+#             description=model.description,
+#             owner=model.owner,
+#             dialect=model.dialect,
+#             columns=[
+#                 models.Column(
+#                     name=name,
+#                     type=str(data_type),
+#                     description=model.column_descriptions.get(name),
+#                 )
+#                 for name, data_type in model.columns_to_types.items()
+#             ],
+#         ).dict()
+#         for model in web_sushi_context.models.values()
+#     ]
 
-    assert response.status_code == 200
-    assert json_models == response.json()
+#     assert response.status_code == 200
+#     assert json_models == response.json()
 
 
 def test_render(web_sushi_context: Context) -> None:

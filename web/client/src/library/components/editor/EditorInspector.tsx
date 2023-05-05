@@ -24,7 +24,7 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { getTableDataFromArrowStreamResult } from './help'
 import { Tab } from '@headlessui/react'
-import Documantation from '@components/documentation/Documantation'
+import Documantation from '@components/documentation/Documentation'
 import Banner from '@components/banner/Banner'
 
 interface FormModel {

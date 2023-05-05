@@ -1,5 +1,5 @@
 import { useApiModelLineage } from '@api/index'
-import Documantation from '@components/documentation/Documantation'
+import Documantation from '@components/documentation/Documentation'
 import Graph from '@components/graph/Graph'
 import Loading from '@components/loading/Loading'
 import SplitPane from '@components/splitPane/SplitPane'
