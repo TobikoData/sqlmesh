@@ -5,7 +5,7 @@ import sys
 import typing as t
 from enum import Enum
 
-from pydantic import Field
+from pydantic import Field, root_validator
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -122,16 +122,16 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    # @root_validator()
-    # def _validate_authenticator(
-    #     cls, fields: t.Dict[str, t.Optional[str]]
-    # ) -> t.Dict[str, t.Optional[str]]:
-    #     auth = fields.get("authenticator")
-    #     user = fields.get("user")
-    #     password = fields.get("password")
-    #     if not auth and (not user or not password):
-    #         raise ConfigError("User and password must be provided if using default authentication")
-    #     return fields
+    @root_validator()
+    def _validate_authenticator(
+        cls, fields: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        auth = fields.get("authenticator")
+        user = fields.get("user")
+        password = fields.get("password")
+        if not auth and (not user or not password):
+            raise ConfigError("User and password must be provided if using default authentication")
+        return fields
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -449,8 +450,6 @@ class GithubController:
         def conclusion_handler(
             _: GithubCheckConclusion, result: unittest.result.TestResult, failed_output: str
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
-            print("inner result")
-            print(result)
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
             self.console.log_test_results(
@@ -464,8 +463,6 @@ class GithubController:
                 else GithubCheckConclusion.FAILURE
             )
             return test_conclusion, test_title, test_summary
-
-        import functools
 
         self._update_check_handler(
             check_name="SQLMesh - Run Unit Tests",

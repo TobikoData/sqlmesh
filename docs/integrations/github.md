@@ -2,15 +2,15 @@
 
 ## Features
 ### Automated Unit Tests with Error Summary
-![Automated Unit Tests with Error Summary](images/github_test_summary.png)
+![Automated Unit Tests with Error Summary](github/github_test_summary.png)
 ### Automatically create PR Environments that represent the code changes in the PR
-![Environment Summary](images/github_env_summary.png)
+![Environment Summary](github/github_env_summary.png)
 ### Enforce that certain reviewers have approved of the PR before it can be merged
-![Required Approver](images/github_reviewers.png)
+![Required Approver](github/github_reviewers.png)
 ### Preview Prod Plans before Deploying
-![Preview Prod Plans](images/github_prod_plan_preview.png)
+![Preview Prod Plans](github/github_prod_plan_preview.png)
 ### Automatic deployments to production and merge
-![Deployed Plans](images/github_deployed_plans.png)
+![Deployed Plans](github/github_deployed_plans.png)
 
 ### Combined these feature provide
 * The ability to preview what will be deployed to production before it is deployed
@@ -143,11 +143,11 @@ jobs:
       # Required to merge
       pull-requests: write
     env:
-      SQLMESH__CONNECTIONS__DATABRICKS__TYPE: "databricks"
-      SQLMESH__CONNECTIONS__DATABRICKS__SERVER_HOSTNAME: "XXXXXXXXXXXXXXX"
-      SQLMESH__CONNECTIONS__DATABRICKS__HTTP_PATH: "XXXXXXXXXXXX"
-      SQLMESH__CONNECTIONS__DATABRICKS__ACCESS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-      SQLMESH__DEFAULT_CONNECTION: "databricks"
+      SQLMESH__GATEWAYS__DATABRICKS__CONNECTION__TYPE: "databricks"
+      SQLMESH__GATEWAYS__DATABRICKS__CONNECTION__SERVER_HOSTNAME: "XXXXXXXXXXXXXXX"
+      SQLMESH__GATEWAYS__DATABRICKS__CONNECTION__HTTP_PATH: "XXXXXXXXXXXX"
+      SQLMESH__GATEWAYS__DATABRICKS__CONNECTION__ACCESS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      SQLMESH__DEFAULT_GATEWAY: "databricks"
     steps:
       - name: Setup Python
         uses: actions/setup-python@v4
