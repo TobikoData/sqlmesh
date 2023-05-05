@@ -155,7 +155,7 @@ def test_insert_append_pandas(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS t(a, b)"
+                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(a, b)",
             ),
         ]
     )
@@ -636,7 +636,7 @@ def test_replace_query_pandas(mocker: MockerFixture):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE OR REPLACE TABLE test_table AS SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (CAST(1 AS INT), CAST(4 AS INT)), (2, 5), (3, 6)) AS test_table(a, b)"
+        "CREATE OR REPLACE TABLE test_table AS SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS test_table(a, b)"
     )
 
 
