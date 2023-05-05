@@ -59,6 +59,7 @@ function CodeEditorDefault({
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
       type === EnumFileExtensions.Python && python(),
       type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
       type === EnumFileExtensions.SQL && sql(),
     ].filter(Boolean) as Extension[]
   }, [type, mode])

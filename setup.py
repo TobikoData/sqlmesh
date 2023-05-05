@@ -19,6 +19,7 @@ setup(
     entry_points={
         "console_scripts": [
             "sqlmesh = sqlmesh.cli.main:cli",
+            "sqlmesh_cicd = sqlmesh.cicd.bot:bot",
         ],
         "airflow.plugins": [
             "sqlmesh_airflow = sqlmesh.schedulers.airflow.plugin:SqlmeshAirflowPlugin",
@@ -88,6 +89,9 @@ setup(
         ],
         "dbt": [
             "dbt-core<1.5.0",
+        ],
+        "github": [
+            "PyGithub",
         ],
         "llm": [
             "langchain",

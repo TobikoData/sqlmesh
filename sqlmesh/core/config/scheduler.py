@@ -111,10 +111,10 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
             dag_creation_poll_interval_secs=self.dag_creation_poll_interval_secs,
             dag_creation_max_retry_attempts=self.dag_creation_max_retry_attempts,
             console=context.console,
-            notification_targets=context.config.notification_targets,
+            notification_targets=context.notification_targets,
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
-            users=context.config.users,
+            users=context.users,
         )
 
 

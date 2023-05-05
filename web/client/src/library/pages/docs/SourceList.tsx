@@ -44,7 +44,7 @@ export default function SourceList({
               setFilter('')
             }}
           >
-            No results found
+            No Results Found
           </li>
         )}
         {isArrayNotEmpty(modelsFiltered) &&

@@ -478,7 +478,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 new_snapshot.change_category = (
                     SnapshotChangeCategory.INDIRECT_BREAKING
                     if snapshot.fingerprint.to_version() == snapshot.version
-                    else SnapshotChangeCategory.INDIRECT_FORWARD_ONLY
+                    else SnapshotChangeCategory.INDIRECT_NON_BREAKING
                 )
 
             if not new_snapshot.temp_version:

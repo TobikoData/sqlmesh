@@ -490,7 +490,7 @@ def test_table_name(snapshot: Snapshot):
         data_hash="1", metadata_hash="1", parent_data_hash="2"
     )
     snapshot.previous_versions = (previous_data_version,)
-    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
     assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__781051917__temp"
     assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"

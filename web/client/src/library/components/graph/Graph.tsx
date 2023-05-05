@@ -165,6 +165,12 @@ function ModelNode({
     return [visible, hidden]
   }, [columns, showColumns, activeEdges])
 
+  useEffect(() => {
+    if (model == null) return
+
+    setFile(files.get(model.path))
+  }, [files, model])
+
   return (
     <div
       className={clsx(

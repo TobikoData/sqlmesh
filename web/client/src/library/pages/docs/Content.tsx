@@ -1,4 +1,4 @@
-import Documantation from '@components/documentation/Documantation'
+import Documentation from '@components/documentation/Documentation'
 import { ModelLineage } from '@components/graph/ModelLineage'
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
@@ -44,7 +44,7 @@ export default function Content(): JSX.Element {
             snapOffset={0}
           >
             <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
-              <Documantation
+              <Documentation
                 model={model}
                 withQuery={model.type !== 'python'}
               />
