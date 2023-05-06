@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from dbt import flags
-from dbt.adapters.factory import register_adapter
+from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
@@ -149,11 +149,13 @@ class ManifestHelper:
         profile = self._load_profile()
         project = self._load_project(profile)
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
-        register_adapter(runtime_config)
 
         self._project_name = project.project_name
 
-        return ManifestLoader.get_full_manifest(runtime_config)
+        register_adapter(runtime_config)
+        manifest = ManifestLoader.get_full_manifest(runtime_config)
+        reset_adapters()
+        return manifest
 
     def _load_project(self, profile: Profile) -> Project:
         project_renderer = DbtProjectYamlRenderer(profile)
