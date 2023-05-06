@@ -12,10 +12,6 @@ from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load
 
-if t.TYPE_CHECKING:
-    pass
-
-
 T = t.TypeVar("T", bound="GeneralConfig")
 
 

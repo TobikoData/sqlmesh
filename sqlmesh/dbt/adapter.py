@@ -23,9 +23,12 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
+        dialect: str = "",
     ):
         self.jinja_macros = jinja_macros
-        self.jinja_globals = jinja_globals or {}
+        self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
+        self.jinja_globals["adapter"] = self
+        self.dialect = dialect
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -76,22 +79,31 @@ class BaseAdapter(abc.ABC):
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
-        macros = (
-            self.jinja_macros.root_macros
-            if package is None
-            else self.jinja_macros.packages[package]
+        if self.dialect:
+            references_to_try = [
+                MacroReference(package=package, name=f"{self.dialect}__{name}"),
+                MacroReference(package=package, name=f"default__{name}"),
+            ]
+        else:
+            macros = (
+                self.jinja_macros.root_macros
+                if package is None
+                else self.jinja_macros.packages[package]
+            )
+            references_to_try = []
+            for macro_name in macros:
+                if macro_name.endswith(f"__{name}"):
+                    references_to_try.append(MacroReference(package=package, name=macro_name))
+                    break
+
+        for reference in references_to_try:
+            macro_callable = self.jinja_macros.build_macro(reference, **self.jinja_globals)
+            if macro_callable is not None:
+                return macro_callable
+
+        raise ConfigError(
+            f"Macro '{name}', package '{package}' was not found for dialect '{self.dialect}'."
         )
-
-        for macro_name in macros:
-            if macro_name.endswith(f"__{name}"):
-                reference = MacroReference(package=package, name=macro_name)
-                macro_callable = self.jinja_macros.build_macro(
-                    reference, **{**self.jinja_globals, "adapter": self}
-                )
-                if macro_callable is not None:
-                    return macro_callable
-
-        raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
 
 
 class ParsetimeAdapter(BaseAdapter):
@@ -139,7 +151,7 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake

@@ -56,6 +56,11 @@ def test_adapter_relation(sushi_test_project: Project):
 
 def test_adapter_dispatch(sushi_test_project: Project):
     context = sushi_test_project.context
+    assert context.render("{{ adapter.dispatch('current_engine', 'customers')() }}") == "duckdb"
+
+    assert context.engine_adapter
+    context.engine_adapter.dialect = "unknown"
+    context._jinja_environment = None
     assert context.render("{{ adapter.dispatch('current_engine', 'customers')() }}") == "default"
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
