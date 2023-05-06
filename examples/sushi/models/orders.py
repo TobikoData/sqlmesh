@@ -9,7 +9,7 @@ from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind
 from sqlmesh.utils.date import to_ds
 
-CUSTOMERS = list(range(0, 1001))
+CUSTOMERS = list(range(0, 100))
 WAITERS = list(range(0, 10))
 
 
