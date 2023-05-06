@@ -12,7 +12,10 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 # An in memory DuckDB config.
-config = Config(default_connection=DuckDBConnectionConfig())
+config = Config(
+    default_connection=DuckDBConnectionConfig(),
+    auto_categorize_changes=CategorizerConfig(python=AutoCategorizationMode.FULL),
+)
 
 
 # A configuration used for SQLMesh tests.
@@ -24,6 +27,7 @@ test_config = Config(
 # A stateful DuckDB config.
 local_config = Config(
     default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
+    auto_categorize_changes=CategorizerConfig(python=AutoCategorizationMode.FULL),
 )
 
 

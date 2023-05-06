@@ -109,11 +109,7 @@ class ModelsDiff(BaseModel):
                     ChangeDirect(
                         model_name=snapshot_name,
                         diff=context_diff.text_diff(snapshot_name),
-                        indirect=[
-                            change.model_name
-                            for change in indirect
-                            if snapshot_name in change.direct
-                        ],
+                        indirect=[change.model_name for change in indirect],
                         change_category=current.change_category,
                     )
                 )
@@ -121,6 +117,7 @@ class ModelsDiff(BaseModel):
                 metadata.add(snapshot_name)
 
         direct_change_model_names = [change.model_name for change in direct]
+        indirect_change_model_names = [change.model_name for change in indirect]
 
         return ModelsDiff(
             direct=direct,
@@ -129,8 +126,9 @@ class ModelsDiff(BaseModel):
                     model_name=change.model_name,
                     direct=[
                         model_name
-                        for model_name in change.direct
+                        for model_name in reversed(change.direct)
                         if model_name in direct_change_model_names
+                        or model_name in indirect_change_model_names
                     ],
                 )
                 for change in indirect
