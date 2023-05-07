@@ -371,7 +371,7 @@ class StateSync(StateReader, abc.ABC):
                 were unpaused.
         """
 
-    def migrate(self) -> None:
+    def migrate(self, skip_backup: bool = False) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
@@ -379,12 +379,23 @@ class StateSync(StateReader, abc.ABC):
         if not migrations and major_minor(SQLGLOT_VERSION) == versions.minor_sqlglot_version:
             return
 
+        if not skip_backup:
+            self._backup_state()
+
         for migration in migrations:
             logger.info(f"Applying migration {migration}")
             migration.migrate(self)
 
         self._migrate_rows()
         self._update_versions()
+
+    @abc.abstractmethod
+    def rollback(self, schema_version: int = 0) -> None:
+        """Rollback to previous backed up state."""
+
+    @abc.abstractmethod
+    def _backup_state(self) -> None:
+        """Backup snapshots, environments, and versions."""
 
     @abc.abstractmethod
     def _migrate_rows(self) -> None:

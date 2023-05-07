@@ -70,6 +70,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
         self.versions_table = f"{schema}._versions"
+        self.backups_table = f"{schema}._backups"
 
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build("text"),
@@ -363,9 +364,97 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
+    def _backup_table(self, schema_version: int, table_name: str) -> None:
+        data = self.engine_adapter.fetchdf(exp.select("*").from_(table_name))
+        self.engine_adapter.insert_append(
+            self.backups_table,
+            pd.DataFrame(
+                np.array(
+                    [
+                        (
+                            schema_version,
+                            table_name,
+                            data.to_json(),
+                        )
+                    ],
+                )
+            ),
+            contains_json=True,
+        )
+
+    def _restore_table(
+        self,
+        schema_version: int,
+        table_name: str,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        result = self.engine_adapter.fetchone(
+            exp.select(exp.to_column("data"))
+            .from_(self.backups_table)
+            .where(
+                exp.EQ(
+                    this=exp.to_column("schema_version"),
+                    expression=exp.Literal.number(schema_version),
+                ).and_(
+                    exp.EQ(
+                        this=exp.to_column("table_name"),
+                        expression=exp.Literal.string(table_name),
+                    )
+                )
+            )
+        )
+        if not result:
+            raise SQLMeshError(
+                f"Cannot rollback {table_name} to schema version {schema_version}. Backup data not found."
+            )
+        data = result[0]
+
+        self.engine_adapter.delete_from(table_name, "TRUE")
+        self.engine_adapter.insert_append(
+            table_name,
+            pd.read_json(data, convert_dates=False),
+            columns_to_types,
+        )
+
     @transactional()
-    def migrate(self) -> None:
-        super().migrate()
+    def migrate(self, skip_backup: bool = False) -> None:
+        super().migrate(skip_backup)
+
+    @transactional()
+    def rollback(self, schema_version: int = 0) -> None:
+        if not self.engine_adapter.table_exists(self.backups_table):
+            return
+
+        if schema_version == 0:
+            # Get most recently backed up schema version, i.e. the previous schema version
+            (schema_version,) = self.engine_adapter.fetchone(
+                exp.select(exp.Max(this=exp.to_column("schema_version"))).from_(self.backups_table)
+            )
+            if not schema_version:
+                raise SQLMeshError("There are no prior versions to roll back to.")
+
+        self._restore_table(schema_version, self.snapshots_table, self.snapshot_columns_to_types)
+        self._restore_table(
+            schema_version, self.environments_table, self.environment_columns_to_types
+        )
+        self._restore_table(schema_version, self.versions_table, self.version_columns_to_types)
+
+        self.engine_adapter.delete_from(
+            self.backups_table,
+            exp.EQ(
+                this=exp.to_column("schema_version"), expression=exp.Literal.number(schema_version)
+            ),
+        )
+
+    def _backup_state(self) -> None:
+        if not self.engine_adapter.table_exists(self.backups_table):
+            return
+
+        versions = self._get_versions()
+        schema_version = versions.schema_version
+        self._backup_table(schema_version, self.snapshots_table)
+        self._backup_table(schema_version, self.environments_table)
+        self._backup_table(schema_version, self.versions_table)
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)

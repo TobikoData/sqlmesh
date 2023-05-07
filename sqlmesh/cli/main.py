@@ -371,6 +371,19 @@ def migrate(ctx: click.Context) -> None:
     ctx.obj.migrate()
 
 
+@cli.command("rollback")
+@click.option(
+    "--schema-version",
+    type=int,
+    help="The schema version to rollback to. Default: the previous version",
+)
+@click.pass_obj
+@error_handler
+def rollback(obj: Context, schema_version: t.Optional[int]) -> None:
+    """Rollback SQLMesh to a previous version."""
+    obj.rollback(schema_version or 0)
+
+
 @cli.command("prompt")
 @click.argument("prompt")
 @click.option(
