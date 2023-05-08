@@ -6,11 +6,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from web.server.api.endpoints import api_router
-from web.server.console import ApiConsole
+from web.server.console import api_console
 from web.server.watcher import watch_project
 
 app = FastAPI()
-api_console = ApiConsole()
 
 app.include_router(api_router, prefix="/api")
 WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
