@@ -546,17 +546,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshot_ids:
             return exp.false()
 
-        return exp.In(
-            this=exp.Tuple(expressions=[exp.column("name"), exp.column("identifier")]),
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string(snapshot_id.name),
-                        exp.Literal.string(snapshot_id.identifier),
-                    ]
-                )
-                for snapshot_id in snapshot_ids
-            ],
+        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("identifier")))).isin(
+            *[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids]
         )
 
     def _snapshot_name_version_filter(
@@ -565,17 +556,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshot_name_versions:
             return exp.false()
 
-        return exp.In(
-            this=exp.Tuple(expressions=[exp.column("name"), exp.column("version")]),
-            expressions=[
-                exp.Tuple(
-                    expressions=[
-                        exp.Literal.string(snapshot_name_version.name),
-                        exp.Literal.string(snapshot_name_version.version),
-                    ]
-                )
+        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("version")))).isin(
+            *[
+                (snapshot_name_version.name, snapshot_name_version.version)
                 for snapshot_name_version in snapshot_name_versions
-            ],
+            ]
         )
 
     @contextlib.contextmanager
