@@ -67,16 +67,18 @@ class DbtLoader(Loader):
             context.add_sources(package.sources)
             context.add_seeds(package.seeds)
             context.add_models(package.models)
-            context.jinja_macros.add_macros(
-                package.macro_infos,
-                package=package_name if package_name != context.project_name else None,
-            )
             macros_mtimes.extend(
                 [
                     self._path_mtimes[m.path]
                     for m in package.macros.values()
                     if m.path in self._path_mtimes
                 ]
+            )
+
+        for package_name, macro_infos in context.manifest.all_macros.items():
+            context.jinja_macros.add_macros(
+                macro_infos,
+                package=package_name if package_name != context.project_name else None,
             )
 
         macros_max_mtime = max(macros_mtimes) if macros_mtimes else None

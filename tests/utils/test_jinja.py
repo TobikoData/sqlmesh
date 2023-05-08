@@ -184,3 +184,30 @@ def test_global_objs():
 
     deserialized_registry = JinjaMacroRegistry.parse_raw(original_registry.json())
     assert deserialized_registry.global_objs["target"].test == "value"
+
+
+def test_macro_registry_recursion():
+    macros = """
+{% macro macro_a(n) %} {{ macro_b(n) }} {% endmacro %}
+
+{% macro macro_b(n) %}
+{% if n <= 0 %}
+  end
+{% else %}
+  {{ macro_a(n - 1) }}
+{% endif %}
+{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(macros))
+
+    rendered = registry.build_environment().from_string("{{ macro_a(4) }}").render()
+    assert rendered.strip() == "end"
+
+    assert registry.trim([MacroReference(name="macro_a")]).root_macros.keys() == {
+        "macro_a",
+        "macro_b",
+    }

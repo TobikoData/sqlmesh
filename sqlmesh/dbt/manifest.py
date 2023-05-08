@@ -67,6 +67,15 @@ class ManifestHelper:
         self._load_all()
         return self._macros_per_package[package_name or self._project_name]
 
+    @property
+    def all_macros(self) -> t.Dict[str, t.Dict[str, MacroInfo]]:
+        self._load_all()
+        result: t.Dict[str, t.Dict[str, MacroInfo]] = defaultdict(dict)
+        for package_name, macro_configs in self._macros_per_package.items():
+            for macro_name, macro_config in macro_configs.items():
+                result[package_name][macro_name] = macro_config.info
+        return result
+
     def _load_all(self) -> None:
         if self._is_loaded:
             return

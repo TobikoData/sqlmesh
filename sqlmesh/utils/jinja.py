@@ -4,7 +4,7 @@ import importlib
 import typing as t
 from collections import defaultdict
 
-from jinja2 import Environment, Template, nodes
+from jinja2 import Environment, nodes
 from pydantic import validator
 from sqlglot import Dialect, Parser, TokenType
 
@@ -179,7 +179,7 @@ class JinjaMacroRegistry(PydanticModel):
     global_objs: t.Dict[str, JinjaGlobalAttribute] = {}
     create_builtins_module: t.Optional[str] = None
 
-    _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
+    _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], nodes.Template] = {}
     __environment: t.Optional[Environment] = None
 
     @validator("global_objs", pre=True)
@@ -321,50 +321,65 @@ class JinjaMacroRegistry(PydanticModel):
         package: t.Optional[str],
         callable_cache: t.Dict[t.Tuple[t.Optional[str], str], t.Callable],
         macro_vars: t.Dict[str, t.Any],
+        visited: t.Optional[t.Dict[t.Optional[str], t.Set[str]]] = None,
     ) -> t.Callable:
+        if visited is None:
+            visited = defaultdict(set)
+
         cache_key = (package, name)
         if cache_key in callable_cache:
             return callable_cache[cache_key]
 
         macro_vars = macro_vars.copy()
-        macro = self._get_macro(name, package)
-
         package_macros: t.Dict[str, AttributeDict] = defaultdict(AttributeDict)
+
+        macro = self._get_macro(name, package)
+        parsed_macro = self._parse_macro(name, package)
+        parsed_macro.body = parsed_macro.body.copy()
+
         for dependency in macro.depends_on:
+            dependency_package = dependency.package or package
+
             if (dependency.package is None and dependency.name == name) or not self._macro_exists(
-                dependency.name, dependency.package or package
+                dependency.name, dependency_package
             ):
                 continue
 
-            dependency_package = dependency.package or package
-            upstream_callable = self._make_callable(
-                dependency.name, dependency_package, callable_cache, macro_vars
-            )
-            if dependency_package == package:
-                macro_vars[dependency.name] = upstream_callable
-            if dependency_package:
-                package_macros[dependency_package][dependency.name] = upstream_callable
+            was_visited = dependency.name in visited[dependency_package]
+            visited[dependency_package].add(dependency.name)
+
+            if not was_visited:
+                upstream_callable = self._make_callable(
+                    dependency.name, dependency_package, callable_cache, macro_vars, visited=visited
+                )
+                if dependency_package == package:
+                    macro_vars[dependency.name] = upstream_callable
+                if dependency_package:
+                    package_macros[dependency_package][dependency.name] = upstream_callable
+            else:
+                nested_parsed_macro = self._parser_cache[(dependency_package, dependency.name)]
+                parsed_macro.body.extend(nested_parsed_macro.body)
 
         macro_vars.update(package_macros)
 
-        template = self._parse_macro(name, package)
+        template = self._environment.from_string(parsed_macro)
         macro_callable = macro_return(
             getattr(template.make_module(vars=macro_vars), _non_private_name(name))
         )
         callable_cache[cache_key] = macro_callable
         return macro_callable
 
-    def _parse_macro(self, name: str, package: t.Optional[str]) -> Template:
+    def _parse_macro(self, name: str, package: t.Optional[str]) -> nodes.Template:
         cache_key = (package, name)
         if cache_key not in self._parser_cache:
             macro = self._get_macro(name, package)
 
-            definition: t.Union[str, nodes.Template] = macro.definition
+            definition: nodes.Template = self._environment.parse(macro.definition)
             if _is_private_macro(name):
                 # A workaround to expose private jinja macros.
-                definition = self._to_non_private_macro_def(name, macro.definition)
+                definition = self._to_non_private_macro_def(name, definition)
 
-            self._parser_cache[cache_key] = self._environment.from_string(definition)
+            self._parser_cache[cache_key] = definition
         return self._parser_cache[cache_key]
 
     @property
@@ -374,18 +389,27 @@ class JinjaMacroRegistry(PydanticModel):
             self.__environment.filters.update(self._create_builtin_filters())
         return self.__environment
 
-    def _trim_macros(self, names: t.Set[str], package: t.Optional[str]) -> JinjaMacroRegistry:
+    def _trim_macros(
+        self,
+        names: t.Set[str],
+        package: t.Optional[str],
+        visited: t.Optional[t.Dict[t.Optional[str], t.Set[str]]] = None,
+    ) -> JinjaMacroRegistry:
+        if visited is None:
+            visited = defaultdict(set)
+
         macros = self.packages.get(package, {}) if package is not None else self.root_macros
         trimmed_macros = {}
 
         dependencies: t.Dict[t.Optional[str], t.Set[str]] = defaultdict(set)
 
         for name in names:
-            if name in macros:
+            if name in macros and name not in visited[package]:
                 macro = macros[name]
                 trimmed_macros[name] = macro
                 for dependency in macro.depends_on:
                     dependencies[dependency.package or package].add(dependency.name)
+                visited[package].add(name)
 
         if package is not None:
             result = JinjaMacroRegistry(packages={package: trimmed_macros})
@@ -393,7 +417,9 @@ class JinjaMacroRegistry(PydanticModel):
             result = JinjaMacroRegistry(root_macros=trimmed_macros)
 
         for upstream_package, upstream_names in dependencies.items():
-            result = result.merge(self._trim_macros(upstream_names, upstream_package))
+            result = result.merge(
+                self._trim_macros(upstream_names, upstream_package, visited=visited)
+            )
 
         return result
 
@@ -407,9 +433,7 @@ class JinjaMacroRegistry(PydanticModel):
     def _get_macro(self, name: str, package: t.Optional[str]) -> MacroInfo:
         return self.packages[package][name] if package is not None else self.root_macros[name]
 
-    def _to_non_private_macro_def(self, name: str, definition: str) -> nodes.Template:
-        template = self._environment.parse(definition)
-
+    def _to_non_private_macro_def(self, name: str, template: nodes.Template) -> nodes.Template:
         for node in template.find_all((nodes.Macro, nodes.Call)):
             if isinstance(node, nodes.Macro):
                 node.name = _non_private_name(name)

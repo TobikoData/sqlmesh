@@ -9,7 +9,7 @@ from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     import agate
@@ -81,20 +81,29 @@ class BaseAdapter(abc.ABC):
         """Returns a dialect-specific version of a macro with the given name."""
         if self.dialect:
             references_to_try = [
+                MacroReference(package=f"{package}_{self.dialect}", name=f"{self.dialect}__{name}"),
                 MacroReference(package=package, name=f"{self.dialect}__{name}"),
                 MacroReference(package=package, name=f"default__{name}"),
             ]
         else:
-            macros = (
-                self.jinja_macros.root_macros
+            # In the absence of a dialect pick the first macro that matches the criteria.
+            macros: t.Dict[t.Optional[str], t.Dict[str, MacroInfo]] = (
+                {None: self.jinja_macros.root_macros}
                 if package is None
-                else self.jinja_macros.packages[package]
+                else {
+                    p: macro_configs
+                    for p, macro_configs in self.jinja_macros.packages.items()
+                    if p.startswith(package)
+                }
             )
             references_to_try = []
-            for macro_name in macros:
-                if macro_name.endswith(f"__{name}"):
-                    references_to_try.append(MacroReference(package=package, name=macro_name))
-                    break
+            for existing_package, macro_configs in macros.items():
+                for macro_name in macro_configs:
+                    if macro_name.endswith(f"__{name}"):
+                        references_to_try.append(
+                            MacroReference(package=existing_package, name=macro_name)
+                        )
+                        break
 
         for reference in references_to_try:
             macro_callable = self.jinja_macros.build_macro(reference, **self.jinja_globals)
