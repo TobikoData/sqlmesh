@@ -102,6 +102,8 @@ class ModelsDiff(BaseModel):
         direct: t.List[ChangeDirect] = []
         metadata = set()
 
+        print("indirect", indirect)
+
         for snapshot_name in context_diff.modified_snapshots:
             current, _ = context_diff.modified_snapshots[snapshot_name]
             if context_diff.directly_modified(snapshot_name):
@@ -109,7 +111,11 @@ class ModelsDiff(BaseModel):
                     ChangeDirect(
                         model_name=snapshot_name,
                         diff=context_diff.text_diff(snapshot_name),
-                        indirect=[change.model_name for change in indirect],
+                        indirect=[
+                            change.model_name
+                            for change in indirect
+                            if snapshot_name in change.direct
+                        ],
                         change_category=current.change_category,
                     )
                 )
@@ -119,20 +125,19 @@ class ModelsDiff(BaseModel):
         direct_change_model_names = [change.model_name for change in direct]
         indirect_change_model_names = [change.model_name for change in indirect]
 
+        for change in indirect:
+            _direct = [
+                model_name
+                for model_name in change.direct
+                if model_name in direct_change_model_names
+                or model_name in indirect_change_model_names
+            ]
+            direct.reverse()
+            change.direct = _direct
+
         return ModelsDiff(
             direct=direct,
-            indirect=[
-                ChangeIndirect(
-                    model_name=change.model_name,
-                    direct=[
-                        model_name
-                        for model_name in reversed(change.direct)
-                        if model_name in direct_change_model_names
-                        or model_name in indirect_change_model_names
-                    ],
-                )
-                for change in indirect
-            ],
+            indirect=indirect,
             metadata=metadata,
         )
 
