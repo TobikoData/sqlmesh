@@ -211,3 +211,25 @@ def test_macro_registry_recursion():
         "macro_a",
         "macro_b",
     }
+
+
+def test_macro_registry_recursion_with_package():
+    macros = """
+{% macro macro_a(n) %}{{ sushi.macro_b(n) }}{% endmacro %}
+j
+{% macro macro_b(n) %}
+{% if n <= 0 %}
+end
+{% else %}
+{{ sushi.macro_a(n - 1) }}
+{% endif %}
+{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry(root_package_name="sushi")
+
+    registry.add_macros(extractor.extract(macros))
+
+    rendered = registry.build_environment().from_string("{{ macro_a(4) }}").render()
+    assert rendered.strip() == "end"

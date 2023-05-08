@@ -4,12 +4,11 @@ import importlib
 import typing as t
 from collections import defaultdict
 
-from jinja2 import Environment, nodes
+from jinja2 import Environment, Template, nodes
 from pydantic import validator
 from sqlglot import Dialect, Parser, TokenType
 
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -47,18 +46,6 @@ class MacroInfo(PydanticModel):
 class MacroReturnVal(Exception):
     def __init__(self, val: t.Any):
         self.value = val
-
-
-def macro_return(macro: t.Callable) -> t.Callable:
-    """Decorator to pass data back to the caller"""
-
-    def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
-        try:
-            return macro(*args, **kwargs)
-        except MacroReturnVal as ret:
-            return ret.value
-
-    return wrapper
 
 
 class MacroExtractor(Parser):
@@ -181,7 +168,7 @@ class JinjaMacroRegistry(PydanticModel):
     create_builtins_module: t.Optional[str] = None
     root_package_name: t.Optional[str] = None
 
-    _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], nodes.Template] = {}
+    _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
 
     @validator("global_objs", pre=True)
@@ -219,48 +206,37 @@ class JinjaMacroRegistry(PydanticModel):
         Returns:
             The macro as a Python callable or None if not found.
         """
-        global_vars = self._create_builtin_globals(kwargs)
-        if reference.package is not None and reference.name not in self.packages.get(
-            reference.package, {}
-        ):
-            global_package = global_vars.get(reference.package, {})
-            return global_package.get(reference.name)
-        if reference.package is None and reference.name not in self.root_macros:
-            return global_vars.get(reference.name)
-
-        package = reference.package if reference.package != self.root_package_name else None
-        return self._make_callable(reference.name, package, {}, global_vars)
+        env: Environment = self.build_environment(**kwargs)
+        if reference.package is not None:
+            package = env.globals.get(reference.package, {})
+            return package.get(reference.name)  # type: ignore
+        return env.globals.get(reference.name)  # type: ignore
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
 
-        global_vars = self._create_builtin_globals(kwargs)
-
-        callable_cache: t.Dict[t.Tuple[t.Optional[str], str], t.Callable] = {}
+        context = self._create_builtin_globals(kwargs)
 
         root_macros = {
-            name: self._make_callable(name, None, callable_cache, global_vars)
+            name: self._MacroWrapper(name, None, self, context)
             for name, macro in self.root_macros.items()
         }
 
         package_macros: t.Dict[str, t.Any] = defaultdict(AttributeDict)
         for package_name, macros in self.packages.items():
-            for macro_name, macro in macros.items():
-                package_macros[package_name][macro_name] = self._make_callable(
-                    macro_name, package_name, callable_cache, global_vars
+            for macro_name in macros:
+                package_macros[package_name][macro_name] = self._MacroWrapper(
+                    macro_name, package_name, self, context
                 )
 
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
 
+        context.update(root_macros)
+        context.update(package_macros)
+
         env = environment()
-        env.globals.update(
-            {
-                **root_macros,
-                **package_macros,
-                **global_vars,
-            }
-        )
+        env.globals.update(context)
         env.filters.update(self._environment.filters)
         return env
 
@@ -278,7 +254,9 @@ class JinjaMacroRegistry(PydanticModel):
             dependencies_by_package[dep.package].add(dep.name)
 
         result = JinjaMacroRegistry(
-            global_objs=self.global_objs.copy(), create_builtins_module=self.create_builtins_module
+            global_objs=self.global_objs.copy(),
+            create_builtins_module=self.create_builtins_module,
+            root_package_name=self.root_package_name,
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
@@ -317,65 +295,10 @@ class JinjaMacroRegistry(PydanticModel):
             root_macros=root_macros,
             global_objs=global_objs,
             create_builtins_module=self.create_builtins_module or other.create_builtins_module,
+            root_package_name=self.root_package_name or other.root_package_name,
         )
 
-    def _make_callable(
-        self,
-        name: str,
-        package: t.Optional[str],
-        callable_cache: t.Dict[t.Tuple[t.Optional[str], str], t.Callable],
-        macro_vars: t.Dict[str, t.Any],
-        visited: t.Optional[t.Dict[t.Optional[str], t.Set[str]]] = None,
-    ) -> t.Callable:
-        if visited is None:
-            visited = defaultdict(set)
-
-        cache_key = (package, name)
-        if cache_key in callable_cache:
-            return callable_cache[cache_key]
-
-        macro_vars = macro_vars.copy()
-        package_macros: t.Dict[str, AttributeDict] = defaultdict(AttributeDict)
-
-        macro = self._get_macro(name, package)
-        parsed_macro = self._parse_macro(name, package)
-        parsed_macro.body = parsed_macro.body.copy()
-
-        for dependency in macro.depends_on:
-            dependency_package = dependency.package or package
-
-            if (dependency.package is None and dependency.name == name) or not self._macro_exists(
-                dependency.name, dependency_package
-            ):
-                continue
-
-            was_visited = dependency.name in visited[dependency_package]
-            visited[dependency_package].add(dependency.name)
-
-            if not was_visited:
-                upstream_callable = self._make_callable(
-                    dependency.name, dependency_package, callable_cache, macro_vars, visited=visited
-                )
-                if dependency_package == package:
-                    macro_vars[dependency.name] = upstream_callable
-                if dependency_package:
-                    package_macros[dependency_package][dependency.name] = upstream_callable
-            else:
-                nested_parsed_macro = self._parser_cache[(dependency_package, dependency.name)]
-                parsed_macro.body.extend(nested_parsed_macro.body)
-
-        macro_vars.update(package_macros)
-
-        template = self._environment.from_string(parsed_macro)
-        macro_callable = getattr(template.make_module(vars=macro_vars), _non_private_name(name))
-        if macro_callable is None:
-            raise SQLMeshError(f"Failed to build macro '{name}', package '{package}'")
-
-        macro_callable = macro_return(macro_callable)
-        callable_cache[cache_key] = macro_callable
-        return macro_callable
-
-    def _parse_macro(self, name: str, package: t.Optional[str]) -> nodes.Template:
+    def _parse_macro(self, name: str, package: t.Optional[str]) -> Template:
         cache_key = (package, name)
         if cache_key not in self._parser_cache:
             macro = self._get_macro(name, package)
@@ -385,7 +308,7 @@ class JinjaMacroRegistry(PydanticModel):
                 # A workaround to expose private jinja macros.
                 definition = self._to_non_private_macro_def(name, definition)
 
-            self._parser_cache[cache_key] = definition
+            self._parser_cache[cache_key] = self._environment.from_string(definition)
         return self._parser_cache[cache_key]
 
     @property
@@ -465,6 +388,33 @@ class JinjaMacroRegistry(PydanticModel):
             if hasattr(module, "create_builtin_filters"):
                 return module.create_builtin_filters()
         return {}
+
+    class _MacroWrapper:
+        def __init__(
+            self,
+            name: str,
+            package: t.Optional[str],
+            registry: JinjaMacroRegistry,
+            context: t.Dict[str, t.Any],
+        ):
+            self.name = name
+            self.package = package
+            self.context = context
+            self.registry = registry
+
+        def __call__(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
+            context = self.context.copy()
+            if self.package is not None and self.package in context:
+                context.update(context[self.package])
+
+            template = self.registry._parse_macro(self.name, self.package)
+            macro_callable = getattr(
+                template.make_module(vars=context), _non_private_name(self.name)
+            )
+            try:
+                return macro_callable(*args, **kwargs)
+            except MacroReturnVal as ret:
+                return ret.value
 
 
 def _is_private_macro(name: str) -> bool:
