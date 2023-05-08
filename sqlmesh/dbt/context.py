@@ -5,9 +5,10 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
@@ -24,15 +25,17 @@ class DbtContext:
 
     project_root: Path = Path()
     target_name: t.Optional[str] = None
-    project_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
     jinja_macros: JinjaMacroRegistry = field(
-        default_factory=lambda: JinjaMacroRegistry(create_builtins_module="sqlmesh.dbt")
+        default_factory=lambda: JinjaMacroRegistry(
+            create_builtins_module="sqlmesh.dbt", top_level_packages=["dbt"]
+        )
     )
 
     engine_adapter: t.Optional[EngineAdapter] = None
 
+    _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
@@ -43,9 +46,30 @@ class DbtContext:
 
     _jinja_environment: t.Optional[Environment] = None
 
+    _manifest: t.Optional[ManifestHelper] = None
+
     @property
     def dialect(self) -> str:
         return self.engine_adapter.dialect if self.engine_adapter is not None else ""
+
+    @property
+    def project_name(self) -> t.Optional[str]:
+        return self._project_name
+
+    @project_name.setter
+    def project_name(self, project_name: str) -> None:
+        self._project_name = project_name
+        self.jinja_macros.root_package_name = project_name
+
+    @property
+    def manifest(self) -> ManifestHelper:
+        if self._manifest is None:
+            raise SQLMeshError("Manifest is not set in the context.")
+        return self._manifest
+
+    @manifest.setter
+    def manifest(self, mainfest: ManifestHelper) -> None:
+        self._manifest = mainfest
 
     @property
     def variables(self) -> t.Dict[str, t.Any]:

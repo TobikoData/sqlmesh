@@ -6,7 +6,8 @@ from pathlib import Path
 
 from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.package import Package, PackageLoader, ProjectConfig
+from sqlmesh.dbt.manifest import ManifestHelper
+from sqlmesh.dbt.package import Package, PackageLoader
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.errors import ConfigError
 
@@ -57,16 +58,20 @@ class Project:
             name: var for name, var in variables.items() if not isinstance(var, t.Dict)
         }
 
-        context.project_name = context.render(project_yaml.get("name", ""))
+        project_name = context.render(project_yaml.get("name", ""))
+        context.project_name = project_name
         if not context.project_name:
             raise ConfigError(f"{project_file_path.stem} must include project name.")
 
-        context.profile_name = (
-            context.render(project_yaml.get("profile", "")) or context.project_name
-        )
+        profile_name = context.render(project_yaml.get("profile", "")) or context.project_name
+        context.profile_name = profile_name
 
         profile = Profile.load(context, context.target_name)
         context.target = profile.target
+
+        context.manifest = ManifestHelper(
+            project_file_path.parent, profile.path.parent, profile_name, target=profile.target_name
+        )
 
         extra_fields = profile.target.extra
         if extra_fields:
@@ -76,10 +81,9 @@ class Project:
             )
 
         packages = {}
-        root_loader = PackageLoader(context, ProjectConfig())
+        package_loader = PackageLoader(context)
 
-        packages[context.project_name] = root_loader.load()
-        project_config = root_loader.project_config
+        packages[context.project_name] = package_loader.load(context.project_root)
 
         packages_dir = Path(
             context.render(project_yaml.get("packages-install-path", "dbt_packages"))
@@ -88,16 +92,8 @@ class Project:
             packages_dir = Path(context.project_root, packages_dir)
 
         for path in packages_dir.glob(f"*/{PROJECT_FILENAME}"):
-            name = context.render(load_yaml(path).get("name", ""))
-            if not name:
-                raise ConfigError(f"{path} must include package name")
-
-            package_context = context.copy()
-            package_context.project_root = path.parent
-            package_context.variables = {}
-            packages[name] = PackageLoader(
-                package_context, cls._overrides_for_package(name, project_config)
-            ).load()
+            package = package_loader.load(path.parent)
+            packages[package.name] = package
 
         for name, package in packages.items():
             package_vars = variables.get(name)
@@ -106,36 +102,6 @@ class Project:
                 package.variables.update(package_vars)
 
         return Project(context, profile, packages)
-
-    @classmethod
-    def _overrides_for_package(cls, name: str, config: ProjectConfig) -> ProjectConfig:
-        overrides = ProjectConfig()
-
-        source_overrides = {
-            scope[1:]: value
-            for scope, value in config.source_config.items()
-            if scope and scope[0] == name
-        }
-        if source_overrides:
-            overrides.source_config = source_overrides
-
-        seed_overrides = {
-            scope[1:]: value
-            for scope, value in config.seed_config.items()
-            if scope and scope[0] == name
-        }
-        if seed_overrides:
-            overrides.seed_config = seed_overrides
-
-        model_overrides = {
-            scope[1:]: value
-            for scope, value in config.model_config.items()
-            if scope and scope[0] == name
-        }
-        if model_overrides:
-            overrides.model_config = model_overrides
-
-        return overrides
 
     @property
     def project_files(self) -> t.Set[Path]:
