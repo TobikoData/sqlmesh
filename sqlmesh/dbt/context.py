@@ -8,7 +8,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
@@ -53,7 +53,7 @@ class DbtContext:
     @property
     def manifest(self) -> ManifestHelper:
         if self._manifest is None:
-            raise ConfigError("Manifest is not set in the context.")
+            raise SQLMeshError("Manifest is not set in the context.")
         return self._manifest
 
     @manifest.setter

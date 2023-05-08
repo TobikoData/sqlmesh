@@ -93,7 +93,6 @@ class BaseModelConfig(GeneralConfig):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         path: The file path of the model
-        target_schema: The schema for the profile target
         dependencies: The macro, source, var, and ref dependencies used to execute the model and its hooks
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
@@ -114,8 +113,8 @@ class BaseModelConfig(GeneralConfig):
     dependencies: Dependencies = Dependencies()
 
     # DBT configuration fields
+    schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
-    schema_: t.Optional[str] = Field(None, alias="schema")
     alias: t.Optional[str] = None
     pre_hook: t.List[Hook] = Field([], alias="pre-hook")
     post_hook: t.List[Hook] = Field([], alias="post-hook")
@@ -181,7 +180,7 @@ class BaseModelConfig(GeneralConfig):
         """
         Get the full schema name
         """
-        return self.schema_ or ""
+        return self.schema_
 
     @property
     def table_name(self) -> str:

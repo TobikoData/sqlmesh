@@ -87,7 +87,7 @@ class ManifestHelper:
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
             source_dict = source.to_dict()
-            source_dict.pop("database", None)
+            source_dict.pop("database", None)  # picked up from the `config` attribute
 
             source_config = SourceConfig(
                 **_config(source),
@@ -118,7 +118,7 @@ class ManifestHelper:
             macro_references = _macro_references(self._manifest, node)
 
             node_dict = node.to_dict()
-            node_dict.pop("database", None)
+            node_dict.pop("database", None)  # picked up from the `config` attribute
             base_config = {**_config(node), **node_dict, "path": Path(node.original_file_path)}
 
             if node.resource_type == "model":

@@ -63,7 +63,7 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 def test_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
         alias="model",
-        schema_="custom",
+        schema="custom",
         database="database",
         materialized=Materialization.INCREMENTAL,
         description="test model",
