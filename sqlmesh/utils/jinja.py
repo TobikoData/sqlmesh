@@ -160,6 +160,10 @@ class JinjaMacroRegistry(PydanticModel):
         global_objs: The global objects.
         create_builtins_module: The name of a module which defines the `create_builtins` factory
             function that will be used to construct builtin variables and functions.
+        root_package_name: The name of the root package. If specified root macros will be available
+            as both `root_package_name.macro_name` and `macro_name`.
+        top_level_packages: The list of top-level packages. Macros in this packages will be available
+            as both `package_name.macro_name` and `macro_name`.
     """
 
     packages: t.Dict[str, t.Dict[str, MacroInfo]] = {}
@@ -167,6 +171,7 @@ class JinjaMacroRegistry(PydanticModel):
     global_objs: t.Dict[str, JinjaGlobalAttribute] = {}
     create_builtins_module: t.Optional[str] = None
     root_package_name: t.Optional[str] = None
+    top_level_packages: t.List[str] = []
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
@@ -215,7 +220,7 @@ class JinjaMacroRegistry(PydanticModel):
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
 
-        context = self._create_builtin_globals(kwargs)
+        context: t.Dict[str, t.Any] = {}
 
         root_macros = {
             name: self._MacroWrapper(name, None, self, context)
@@ -232,8 +237,12 @@ class JinjaMacroRegistry(PydanticModel):
         if self.root_package_name is not None:
             package_macros[self.root_package_name].update(root_macros)
 
+        for top_level_package_name in self.top_level_packages:
+            root_macros.update(package_macros.get(top_level_package_name, {}))
+
         context.update(root_macros)
         context.update(package_macros)
+        context.update(self._create_builtin_globals(kwargs))
 
         env = environment()
         env.globals.update(context)
@@ -257,6 +266,7 @@ class JinjaMacroRegistry(PydanticModel):
             global_objs=self.global_objs.copy(),
             create_builtins_module=self.create_builtins_module,
             root_package_name=self.root_package_name,
+            top_level_packages=self.top_level_packages.copy(),
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
@@ -296,6 +306,7 @@ class JinjaMacroRegistry(PydanticModel):
             global_objs=global_objs,
             create_builtins_module=self.create_builtins_module or other.create_builtins_module,
             root_package_name=self.root_package_name or other.root_package_name,
+            top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
 
     def _parse_macro(self, name: str, package: t.Optional[str]) -> Template:

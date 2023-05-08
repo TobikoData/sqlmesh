@@ -100,6 +100,7 @@ def test_json(snapshot: Snapshot):
                 "global_objs": {},
                 "packages": {},
                 "root_macros": {},
+                "top_level_packages": [],
             },
             "source_type": "sql",
             "tags": [],

@@ -233,3 +233,30 @@ end
 
     rendered = registry.build_environment().from_string("{{ macro_a(4) }}").render()
     assert rendered.strip() == "end"
+
+
+def test_macro_registry_top_level_packages():
+    package_a = """
+{% macro macro_a_a() %}
+macro_a_a
+{% endmacro %}"""
+
+    local_macros = "{% macro local_macro() %}{{ macro_a_a() }}{% endmacro %}"
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry(top_level_packages=["package_a"])
+
+    registry.add_macros(extractor.extract(local_macros))
+    registry.add_macros(extractor.extract(package_a), package="package_a")
+
+    rendered = (
+        registry.build_environment()
+        .from_string("{{ local_macro() }}{{ package_a.macro_a_a() }}")
+        .render()
+    )
+    rendered = [r for r in rendered.split("\n") if r]
+
+    assert rendered == [
+        "macro_a_a",
+        "macro_a_a",
+    ]
