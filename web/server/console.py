@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import traceback
 import typing as t
 import unittest
 
@@ -100,3 +101,14 @@ class ApiConsole(TerminalConsole):
     def log_success(self, msg: str) -> None:
         self.queue.put_nowait(self._make_event(msg))
         self.stop_snapshot_progress()
+
+    def log_exception(self, exc: Exception) -> None:
+        """Log an exception."""
+        self.queue.put_nowait(
+            self._make_event(
+                {"details": str(exc), "traceback": traceback.format_exc()}, event="errors", ok=False
+            )
+        )
+
+
+api_console = ApiConsole()
