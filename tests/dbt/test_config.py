@@ -133,6 +133,51 @@ query"""
     )
 
 
+def test_variables(assert_exp_eq, sushi_test_project):
+    # Case 1: using an undefined variable without a default value
+    defined_variables = {}
+
+    context = sushi_test_project.context
+    context.variables = defined_variables
+
+    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
+
+    kwargs = {"context": context}
+
+    # Case 2: using a defined variable without a default value
+    defined_variables["foo"] = 6
+    context.variables = defined_variables
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+
+    # Case 3: using a defined variable with a default value
+    model_config.sql = "SELECT {{ var('foo', 5) }}"
+    model_config._sql_no_config = None
+
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+
+    # Case 4: using an undefined variable with a default value
+    del defined_variables["foo"]
+    context.variables = defined_variables
+
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
+
+    # Finally, check that variable scoping & overwriting (some_var) works as expected
+    expected_sushi_variables = {
+        "top_waiters:limit": 10,
+        "top_waiters:revenue": "revenue",
+        "customers:boo": ["a", "b"],
+    }
+    expected_customer_variables = {
+        "some_var": ["foo", "bar"],
+        "some_other_var": 5,
+        "customers:bla": False,
+        "customers:customer_id": "customer_id",
+    }
+
+    assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
+    assert sushi_test_project.packages["customers"].variables == expected_customer_variables
+
+
 def test_source_config(sushi_test_project: Project):
     source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
