@@ -9,6 +9,7 @@ from pydantic import validator
 from sqlglot import Dialect, Parser, TokenType
 
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -363,9 +364,11 @@ class JinjaMacroRegistry(PydanticModel):
         macro_vars.update(package_macros)
 
         template = self._environment.from_string(parsed_macro)
-        macro_callable = macro_return(
-            getattr(template.make_module(vars=macro_vars), _non_private_name(name))
-        )
+        macro_callable = getattr(template.make_module(vars=macro_vars), _non_private_name(name))
+        if macro_callable is None:
+            raise SQLMeshError(f"Failed to build macro '{name}', package '{package}'")
+
+        macro_callable = macro_return(macro_callable)
         callable_cache[cache_key] = macro_callable
         return macro_callable
 
