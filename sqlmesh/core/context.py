@@ -729,6 +729,9 @@ class Context(BaseContext):
             format: The desired format to use when rending the dag
         """
         graph = self.get_dag(format=format)
+        # We know graphviz is installed because the command above would have failed if it was not. This allows
+        # us to then catch the specific error that occurs when the system install is missing.
+        import graphviz  # type: ignore
 
         try:
             return graph.render(path, format=format)
