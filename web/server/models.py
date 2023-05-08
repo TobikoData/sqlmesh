@@ -121,20 +121,20 @@ class ModelsDiff(BaseModel):
                 metadata.add(snapshot_name)
 
         direct_change_model_names = [change.model_name for change in direct]
+        indirect_change_model_names = [change.model_name for change in indirect]
+
+        for change in indirect:
+            change.direct = [
+                model_name
+                for model_name in change.direct
+                if model_name in direct_change_model_names
+                or model_name in indirect_change_model_names
+            ]
+            change.direct.reverse()
 
         return ModelsDiff(
             direct=direct,
-            indirect=[
-                ChangeIndirect(
-                    model_name=change.model_name,
-                    direct=[
-                        model_name
-                        for model_name in change.direct
-                        if model_name in direct_change_model_names
-                    ],
-                )
-                for change in indirect
-            ],
+            indirect=indirect,
             metadata=metadata,
         )
 
