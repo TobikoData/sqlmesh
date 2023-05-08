@@ -7,6 +7,7 @@ from ast import literal_eval
 
 import agate
 import jinja2
+from dbt import version
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from ruamel.yaml import YAMLError
@@ -248,6 +249,7 @@ def _try_literal_eval(value: str) -> t.Any:
 
 BUILTIN_GLOBALS = {
     "api": Api(),
+    "dbt_version": version.__version__,
     "env_var": env_var,
     "exceptions": Exceptions(),
     "flags": Flags(),

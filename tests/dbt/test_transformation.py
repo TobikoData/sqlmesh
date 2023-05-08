@@ -353,3 +353,9 @@ def test_zip(sushi_test_project: Project):
     assert context.render("{{ zip_strict([1, 2], ['a', 'b']) }}") == "[(1, 'a'), (2, 'b')]"
     with pytest.raises(TypeError):
         context.render("{{ zip_strict(12, ['a', 'b']) }}")
+
+
+def test_dbt_version(sushi_test_project: Project):
+    context = sushi_test_project.context
+
+    assert context.render("{{ dbt_version }}").startswith("1.")
