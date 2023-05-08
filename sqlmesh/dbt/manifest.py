@@ -182,9 +182,7 @@ class ManifestHelper:
 
 
 def _config(node: t.Union[ManifestNode, SourceDefinition]) -> t.Dict[str, t.Any]:
-    rendered_config = node.config.to_dict()
-    unrendered_config = node.unrendered_config
-    return {k: v for k, v in rendered_config.items() if k in unrendered_config}
+    return node.config.to_dict()
 
 
 def _macro_references(
