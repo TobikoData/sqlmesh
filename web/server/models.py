@@ -126,14 +126,13 @@ class ModelsDiff(BaseModel):
         indirect_change_model_names = [change.model_name for change in indirect]
 
         for change in indirect:
-            _direct = [
+            change.direct = [
                 model_name
                 for model_name in change.direct
                 if model_name in direct_change_model_names
                 or model_name in indirect_change_model_names
             ]
-            direct.reverse()
-            change.direct = _direct
+            change.direct.reverse()
 
         return ModelsDiff(
             direct=direct,
