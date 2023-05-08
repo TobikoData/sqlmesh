@@ -5,7 +5,6 @@ import SplitPane from '../splitPane/SplitPane'
 import { isFalse, isStringEmptyOrNil } from '../../../utils'
 import CodeEditor, {
   useSQLMeshModelExtensions,
-  useSQLMeshModelKeymaps,
 } from '@components/editor/EditorCode'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
@@ -48,8 +47,6 @@ export default function Editor(): JSX.Element {
       setManuallySelectedColumn([model, column])
     },
   )
-
-  const modelKeymaps = useSQLMeshModelKeymaps(tab?.file)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
   const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
@@ -106,7 +103,7 @@ export default function Editor(): JSX.Element {
               },
             },
           ],
-    [closeTab, selectTab, createTab, tab?.file],
+    [tab?.file],
   )
 
   useEffect(() => {
@@ -122,6 +119,7 @@ export default function Editor(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    console.log('files')
     files.forEach(file => {
       if (storedTabsIds.includes(file.id)) {
         addTab(createTab(file))
@@ -227,38 +225,23 @@ export default function Editor(): JSX.Element {
                       )}
                       {tab.file.isRemote && (
                         <CodeEditor.RemoteFile path={tab.file.path}>
-                          {({ file }) =>
-                            file.isSQLMeshModelSQL ? (
-                              <CodeEditor.SQLMeshDialect content={file.content}>
-                                {({ extensions, content }) => (
-                                  <CodeEditor
-                                    extensions={extensions.concat(
-                                      modelExtensions,
-                                    )}
-                                    content={content}
-                                    keymaps={keymaps.concat(modelKeymaps)}
-                                    onChange={updateFileContent}
-                                  />
-                                )}
-                              </CodeEditor.SQLMeshDialect>
-                            ) : (
-                              <CodeEditor.Default
-                                type={file.extension}
-                                content={file.content}
-                              >
-                                {({ extensions, content }) => (
-                                  <CodeEditor
-                                    extensions={extensions.concat(
-                                      modelExtensions,
-                                    )}
-                                    content={content}
-                                    keymaps={keymaps.concat(modelKeymaps)}
-                                    onChange={updateFileContent}
-                                  />
-                                )}
-                              </CodeEditor.Default>
-                            )
-                          }
+                          {({ file, keymaps: additional }) => (
+                            <CodeEditor.SQLMeshDialect
+                              type={file.extension}
+                              content={file.content}
+                            >
+                              {({ extensions, content }) => (
+                                <CodeEditor
+                                  extensions={extensions.concat(
+                                    modelExtensions,
+                                  )}
+                                  content={content}
+                                  keymaps={keymaps.concat(additional)}
+                                  onChange={updateFileContent}
+                                />
+                              )}
+                            </CodeEditor.SQLMeshDialect>
+                          )}
                         </CodeEditor.RemoteFile>
                       )}
                     </div>

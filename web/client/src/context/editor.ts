@@ -124,6 +124,10 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
     if (s.tabs.size === 0) {
       s.selectTab(undefined)
+    } else if (s.tabs.size === 1) {
+      const tabs = Array.from(s.tabs.values())
+
+      s.selectTab(tabs.at(0) as EditorTab)
     } else if (file.id === s.tab?.file.id) {
       const tabs = Array.from(s.tabs.values())
       const indexAt = tabs.findIndex(tab => tab.file === file)

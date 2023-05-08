@@ -150,11 +150,15 @@ const Documentation = function Documentation({
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                       )}
                     >
-                      <CodeEditor.SQLMeshDialect content={file.content}>
+                      <CodeEditor.SQLMeshDialect
+                        content={file.content}
+                        type={file.extension}
+                      >
                         {({ extensions, content }) => (
                           <CodeEditor
                             extensions={extensions.concat(modelExtensions)}
                             content={content}
+                            className="!text-xs"
                           />
                         )}
                       </CodeEditor.SQLMeshDialect>
@@ -172,6 +176,7 @@ const Documentation = function Documentation({
                           <CodeEditor
                             extensions={extensions.concat(modelExtensions)}
                             content={content}
+                            className="text-xs"
                           />
                         )}
                       </CodeEditor.Default>
