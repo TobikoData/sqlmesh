@@ -7,7 +7,7 @@ def ensure_bool(val: t.Any) -> bool:
     if isinstance(val, bool):
         return val
 
-    if val.isinstance(val, str):
+    if isinstance(val, str):
         val = try_str_to_bool(val)
 
     return bool(val)

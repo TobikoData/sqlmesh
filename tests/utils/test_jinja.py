@@ -184,3 +184,79 @@ def test_global_objs():
 
     deserialized_registry = JinjaMacroRegistry.parse_raw(original_registry.json())
     assert deserialized_registry.global_objs["target"].test == "value"
+
+
+def test_macro_registry_recursion():
+    macros = """
+{% macro macro_a(n) %} {{ macro_b(n) }} {% endmacro %}
+
+{% macro macro_b(n) %}
+{% if n <= 0 %}
+  end
+{% else %}
+  {{ macro_a(n - 1) }}
+{% endif %}
+{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry()
+
+    registry.add_macros(extractor.extract(macros))
+
+    rendered = registry.build_environment().from_string("{{ macro_a(4) }}").render()
+    assert rendered.strip() == "end"
+
+    assert registry.trim([MacroReference(name="macro_a")]).root_macros.keys() == {
+        "macro_a",
+        "macro_b",
+    }
+
+
+def test_macro_registry_recursion_with_package():
+    macros = """
+{% macro macro_a(n) %}{{ sushi.macro_b(n) }}{% endmacro %}
+j
+{% macro macro_b(n) %}
+{% if n <= 0 %}
+end
+{% else %}
+{{ sushi.macro_a(n - 1) }}
+{% endif %}
+{% endmacro %}
+"""
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry(root_package_name="sushi")
+
+    registry.add_macros(extractor.extract(macros))
+
+    rendered = registry.build_environment().from_string("{{ macro_a(4) }}").render()
+    assert rendered.strip() == "end"
+
+
+def test_macro_registry_top_level_packages():
+    package_a = """
+{% macro macro_a_a() %}
+macro_a_a
+{% endmacro %}"""
+
+    local_macros = "{% macro local_macro() %}{{ macro_a_a() }}{% endmacro %}"
+
+    extractor = MacroExtractor()
+    registry = JinjaMacroRegistry(top_level_packages=["package_a"])
+
+    registry.add_macros(extractor.extract(local_macros))
+    registry.add_macros(extractor.extract(package_a), package="package_a")
+
+    rendered = (
+        registry.build_environment()
+        .from_string("{{ local_macro() }}{{ package_a.macro_a_a() }}")
+        .render()
+    )
+    rendered = [r for r in rendered.split("\n") if r]
+
+    assert rendered == [
+        "macro_a_a",
+        "macro_a_a",
+    ]
