@@ -25,7 +25,6 @@ class DbtContext:
 
     project_root: Path = Path()
     target_name: t.Optional[str] = None
-    project_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
     jinja_macros: JinjaMacroRegistry = field(
@@ -34,6 +33,7 @@ class DbtContext:
 
     engine_adapter: t.Optional[EngineAdapter] = None
 
+    _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
@@ -49,6 +49,15 @@ class DbtContext:
     @property
     def dialect(self) -> str:
         return self.engine_adapter.dialect if self.engine_adapter is not None else ""
+
+    @property
+    def project_name(self) -> t.Optional[str]:
+        return self._project_name
+
+    @project_name.setter
+    def project_name(self, project_name: str) -> None:
+        self._project_name = project_name
+        self.jinja_macros.root_package_name = project_name
 
     @property
     def manifest(self) -> ManifestHelper:

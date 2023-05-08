@@ -77,7 +77,8 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
     )
-    context = DbtContext(project_name="Foo")
+    context = DbtContext()
+    context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
     model = model_config.to_sqlmesh(context)
 

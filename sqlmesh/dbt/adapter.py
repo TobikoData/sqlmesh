@@ -23,12 +23,10 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        dialect: str = "",
     ):
         self.jinja_macros = jinja_macros
         self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
         self.jinja_globals["adapter"] = self
-        self.dialect = dialect
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -91,9 +89,7 @@ class BaseAdapter(abc.ABC):
             if macro_callable is not None:
                 return macro_callable
 
-        raise ConfigError(
-            f"Macro '{name}', package '{package}' was not found for dialect '{self.dialect}'."
-        )
+        raise ConfigError(f"Macro '{name}', package '{package}' was not found.")
 
 
 class ParsetimeAdapter(BaseAdapter):
@@ -141,7 +137,7 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake

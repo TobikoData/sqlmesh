@@ -179,6 +179,7 @@ class JinjaMacroRegistry(PydanticModel):
     root_macros: t.Dict[str, MacroInfo] = {}
     global_objs: t.Dict[str, JinjaGlobalAttribute] = {}
     create_builtins_module: t.Optional[str] = None
+    root_package_name: t.Optional[str] = None
 
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], nodes.Template] = {}
     __environment: t.Optional[Environment] = None
@@ -227,7 +228,8 @@ class JinjaMacroRegistry(PydanticModel):
         if reference.package is None and reference.name not in self.root_macros:
             return global_vars.get(reference.name)
 
-        return self._make_callable(reference.name, reference.package, {}, global_vars)
+        package = reference.package if reference.package != self.root_package_name else None
+        return self._make_callable(reference.name, package, {}, global_vars)
 
     def build_environment(self, **kwargs: t.Any) -> Environment:
         """Builds a new Jinja environment based on this registry."""
@@ -239,16 +241,17 @@ class JinjaMacroRegistry(PydanticModel):
         root_macros = {
             name: self._make_callable(name, None, callable_cache, global_vars)
             for name, macro in self.root_macros.items()
-            if not _is_private_macro(name)
         }
 
         package_macros: t.Dict[str, t.Any] = defaultdict(AttributeDict)
         for package_name, macros in self.packages.items():
             for macro_name, macro in macros.items():
-                if not _is_private_macro(macro_name):
-                    package_macros[package_name][macro_name] = self._make_callable(
-                        macro_name, package_name, callable_cache, global_vars
-                    )
+                package_macros[package_name][macro_name] = self._make_callable(
+                    macro_name, package_name, callable_cache, global_vars
+                )
+
+        if self.root_package_name is not None:
+            package_macros[self.root_package_name].update(root_macros)
 
         env = environment()
         env.globals.update(

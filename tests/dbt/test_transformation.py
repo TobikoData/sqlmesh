@@ -129,7 +129,8 @@ def test_model_columns():
     assert column_types_to_sqlmesh(model.columns) == expected_column_types
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
-    context = DbtContext(project_name="Foo")
+    context = DbtContext()
+    context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
     sqlmesh_model = model.to_sqlmesh(context)
     assert sqlmesh_model.columns_to_types == expected_column_types
