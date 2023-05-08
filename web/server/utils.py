@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import io
 import traceback
 import typing as t
@@ -13,6 +14,7 @@ from starlette.responses import StreamingResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from web.server.console import api_console
 from web.server.settings import get_context
 
 R = t.TypeVar("R")
@@ -26,8 +28,17 @@ class ArrowStreamingResponse(StreamingResponse):
 
 async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
     """Run in the default loop's executor"""
+
+    @functools.wraps(func)
+    def func_wrapper() -> R:
+        try:
+            return func(*args)
+        except Exception as e:
+            api_console.log_exception(traceback.format_exc())
+            raise e
+
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, func, *args)
+    return await loop.run_in_executor(None, func_wrapper)
 
 
 def validate_path(

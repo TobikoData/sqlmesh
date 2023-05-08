@@ -100,3 +100,9 @@ class ApiConsole(TerminalConsole):
     def log_success(self, msg: str) -> None:
         self.queue.put_nowait(self._make_event(msg))
         self.stop_snapshot_progress()
+
+    def log_exception(self, tb: str) -> None:
+        self.queue.put_nowait(self._make_event(tb, event="errors", ok=False))
+
+
+api_console = ApiConsole()
