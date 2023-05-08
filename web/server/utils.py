@@ -34,7 +34,7 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
         try:
             return func(*args)
         except Exception as e:
-            api_console.log_exception(traceback.format_exc())
+            api_console.log_exception(e)
             raise e
 
     loop = asyncio.get_running_loop()
