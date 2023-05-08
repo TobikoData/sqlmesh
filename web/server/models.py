@@ -102,8 +102,6 @@ class ModelsDiff(BaseModel):
         direct: t.List[ChangeDirect] = []
         metadata = set()
 
-        print("indirect", indirect)
-
         for snapshot_name in context_diff.modified_snapshots:
             current, _ = context_diff.modified_snapshots[snapshot_name]
             if context_diff.directly_modified(snapshot_name):
