@@ -3,31 +3,75 @@ import { isArrayNotEmpty, isFalse, isNil, isObjectEmpty } from '../../../utils'
 import { type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
+import { type ActiveColumns } from './context'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export interface GraphNodeData {
   label: string
-  isHighlighted?: boolean
   isInteractive?: boolean
+  highlightedNodes?: boolean
   [key: string]: any
 }
 
-export function getNodesAndEdges({
-  lineage,
-  highlightedNodes,
-  models,
+export {
+  getNodesAndEdges,
+  createGraphLayout,
+  toNodeOrEdgeId,
+  toggleLineageColumn,
+}
+
+async function createGraphLayout({
   nodes = [],
   edges = [],
+  nodesMap,
 }: {
-  lineage: Record<string, Lineage>
-  highlightedNodes: string[]
+  nodes: Node[]
+  edges: Edge[]
+  nodesMap: Record<string, Node>
+}): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const elk = new ELK()
+  const layout = await elk.layout({
+    id: 'root',
+    layoutOptions: { algorithm: 'layered' },
+    children: nodes.map(node => ({
+      id: node.id,
+      width: node.data.width,
+      height: node.data.height,
+    })),
+    edges: edges.map(edge => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target],
+    })),
+  })
+
+  return {
+    edges,
+    nodes: repositionNodes(layout.children, nodesMap),
+  }
+}
+
+function getNodesAndEdges({
+  models,
+  highlightedNodes = {},
+  lineage = {},
+  nodes = [],
+  edges = [],
+  model,
+  withColumns = true,
+}: {
   models: Map<string, Model>
+  highlightedNodes?: Record<string, string[]>
+  lineage?: Record<string, Lineage>
   nodes?: Node[]
   edges?: Edge[]
+  model: ModelSQLMeshModel
+  withColumns?: boolean
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
   nodes: Node[]
-  columns: Record<string, { ins: string[]; outs: string[] }>
+  activeColumns: ActiveColumns
   key: string
 } {
   const currentEdges = edges.reduce(
@@ -41,16 +85,18 @@ export function getNodesAndEdges({
       .flat(),
   )
   const modelNames = Object.keys(lineage)
-  const nodesMap = getNodeMap(
+  const nodesMap = getNodeMap({
     modelNames,
     lineage,
     highlightedNodes,
     models,
     targets,
     nodes,
-  )
+    model,
+    withColumns,
+  })
   const outputEdges: Edge[] = []
-  const columns: Record<string, { ins: string[]; outs: string[] }> = {}
+  const activeColumns: ActiveColumns = new Map()
   const ids = Object.keys(nodesMap)
 
   for (const modelSource of modelNames) {
@@ -65,18 +111,22 @@ export function getNodesAndEdges({
       outputEdges.push(edge)
     })
 
-    if (modelLineage.columns == null || isObjectEmpty(modelLineage.columns))
+    if (
+      modelLineage.columns == null ||
+      isObjectEmpty(modelLineage.columns) ||
+      isFalse(withColumns)
+    )
       continue
 
     for (const columnSource in modelLineage.columns) {
       const sourceId = toNodeOrEdgeId(modelSource, columnSource)
       const modelsTarget = modelLineage.columns[columnSource]?.models
 
-      if (columns[sourceId] == null) {
-        columns[sourceId] = {
+      if (isFalse(activeColumns.has(sourceId))) {
+        activeColumns.set(sourceId, {
           ins: [],
           outs: [],
-        }
+        })
       }
 
       if (modelsTarget == null) continue
@@ -89,15 +139,15 @@ export function getNodesAndEdges({
         for (const columnTarget of columnsTarget) {
           const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
 
-          if (columns[targetId] == null) {
-            columns[targetId] = {
+          if (isFalse(activeColumns.has(targetId))) {
+            activeColumns.set(targetId, {
               ins: [],
               outs: [],
-            }
+            })
           }
 
-          columns[sourceId]?.ins.push(targetId)
-          columns[targetId]?.outs.push(sourceId)
+          activeColumns.get(sourceId)?.ins.push(targetId)
+          activeColumns.get(targetId)?.outs.push(sourceId)
 
           const sourceHandle = toNodeOrEdgeId(
             'source',
@@ -143,50 +193,30 @@ export function getNodesAndEdges({
     edges: outputEdges,
     nodes: Object.values(nodesMap),
     nodesMap,
-    columns,
+    activeColumns,
     key: ids.join('-'),
   }
 }
 
-export async function createGraphLayout({
-  nodes = [],
-  edges = [],
-  nodesMap,
+function getNodeMap({
+  modelNames,
+  lineage,
+  highlightedNodes,
+  models,
+  targets,
+  nodes,
+  model,
+  withColumns,
 }: {
+  modelNames: string[]
+  lineage: Record<string, Lineage>
+  highlightedNodes: Record<string, string[]>
+  models: Map<string, Model>
+  targets: Set<string>
   nodes: Node[]
-  edges: Edge[]
-  nodesMap: Record<string, Node>
-}): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const elk = new ELK()
-  const layout = await elk.layout({
-    id: 'root',
-    layoutOptions: { algorithm: 'layered' },
-    children: nodes.map(node => ({
-      id: node.id,
-      width: node.data.width,
-      height: node.data.height,
-    })),
-    edges: edges.map(edge => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-  })
-
-  return {
-    edges,
-    nodes: repositionNodes(layout.children, nodesMap),
-  }
-}
-
-function getNodeMap(
-  modelNames: string[],
-  lineage: Record<string, Lineage>,
-  highlightedNodes: string[],
-  models: Map<string, Model>,
-  targets: Set<string>,
-  nodes: Node[],
-): Record<string, Node> {
+  model: ModelSQLMeshModel
+  withColumns: boolean
+}): Record<string, Node> {
   const NODE_BALANCE_SPACE = 64
   const COLUMN_LINE_HEIGHT = 24
   const CHAR_WIDTH = 8
@@ -199,10 +229,13 @@ function getNodeMap(
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
     const node = current[label] ?? createGraphNode({ label })
+    const columnsFactor = withColumns
+      ? models.get(label)?.columns?.length ?? 0
+      : 0
 
     const maxWidth =
-      models.get(label)?.columns?.length == null
-        ? 0
+      columnsFactor === 0
+        ? label.length * CHAR_WIDTH
         : Math.max(
             ...(models
               .get(label)
@@ -213,16 +246,12 @@ function getNodeMap(
               ) ?? []),
             label.length * CHAR_WIDTH,
           )
-    const maxHeight =
-      COLUMN_LINE_HEIGHT * (models.get(label)?.columns?.length ?? 0) +
-      NODE_BALANCE_SPACE
+    const maxHeight = COLUMN_LINE_HEIGHT * columnsFactor + NODE_BALANCE_SPACE
 
     node.data.width = NODE_BALANCE_SPACE + maxWidth
     node.data.height = NODE_BALANCE_SPACE + maxHeight
-    node.data.isHighlighted = highlightedNodes.includes(label)
-    node.data.isInteractive =
-      isArrayNotEmpty(highlightedNodes) &&
-      isFalse(highlightedNodes.includes(label))
+    node.data.highlightedNodes = highlightedNodes
+    node.data.isInteractive = model.name !== label
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.sourcePosition = Position.Left
@@ -299,9 +328,9 @@ function createGraphEdge<TData = any>(
     hidden,
     data,
     style: {
-      strokeWidth: isNil(sourceHandle) && isNil(sourceHandle) ? 3 : 1,
+      strokeWidth: isNil(sourceHandle) || isNil(sourceHandle) ? 1 : 3,
       stroke:
-        isNil(sourceHandle) && isNil(sourceHandle)
+        isNil(sourceHandle) || isNil(sourceHandle)
           ? 'var(--color-graph-edge-main)'
           : 'var(--color-graph-edge-secondary)',
     },
@@ -318,6 +347,34 @@ function createGraphEdge<TData = any>(
   return output
 }
 
-export function toNodeOrEdgeId(...args: Array<string | undefined>): string {
+function toNodeOrEdgeId(...args: Array<string | undefined>): string {
   return args.filter(Boolean).join('__')
+}
+
+function toggleLineageColumn(
+  action: 'add' | 'remove',
+  modelName: string,
+  columnName: string,
+  connections: { ins: string[]; outs: string[] } = { ins: [], outs: [] },
+  removeActiveEdges: (edges: string[]) => void,
+  addActiveEdges: (edges: string[]) => void,
+): void {
+  const columnId = toNodeOrEdgeId(modelName, columnName)
+  const sourceId = toNodeOrEdgeId('source', columnId)
+  const targetId = toNodeOrEdgeId('target', columnId)
+
+  const edges = [
+    connections.ins.map(id => toNodeOrEdgeId('source', id)),
+    connections.outs.map(id => toNodeOrEdgeId('target', id)),
+  ]
+    .flat()
+    .concat([sourceId, targetId])
+
+  if (action === 'remove') {
+    removeActiveEdges(edges)
+  }
+
+  if (action === 'add') {
+    addActiveEdges(edges)
+  }
 }

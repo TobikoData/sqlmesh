@@ -63,7 +63,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get fingerprint(): string {
-    return this._content
+    return this._content + this.name + this.path
   }
 
   get isSQLMeshModelPython(): boolean {

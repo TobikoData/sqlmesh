@@ -1,4 +1,4 @@
-let counter = 0
+import { uid } from '@utils/index'
 
 type Initial<T extends object> = T & { id?: ID }
 type InitialWithId<T extends object> = T & { id: ID }
@@ -14,7 +14,7 @@ export class ModelInitial<T extends object = any> {
         ? (initial as InitialWithId<T>)
         : new Proxy<InitialWithId<T>>(
             Object.assign(initial ?? {}, {
-              id: ++counter,
+              id: uid(),
             }),
             {
               set() {

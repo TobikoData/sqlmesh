@@ -1,17 +1,16 @@
-import { type Model } from '@api/client'
+import React from 'react'
 import CodeEditor, {
   useSQLMeshModelExtensions,
 } from '@components/editor/EditorCode'
-import { useStoreEditor } from '@context/editor'
-import { useStoreLineage } from '@context/lineage'
 import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
 import { isFalse, isString, isTrue, toDateFormat } from '@utils/index'
 import clsx from 'clsx'
-import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { ModelColumn } from '@components/graph/Graph'
 
 const Documentation = function Documentation({
   model,
@@ -21,7 +20,7 @@ const Documentation = function Documentation({
   withCode = true,
   withQuery = true,
 }: {
-  model: Model
+  model: ModelSQLMeshModel
   withCode?: boolean
   withQuery?: boolean
   withModel?: boolean
@@ -29,25 +28,12 @@ const Documentation = function Documentation({
   withColumns?: boolean
 }): JSX.Element {
   const navigate = useNavigate()
-  const lineage = useStoreEditor(s => s.previewLineage)
 
-  const setColumns = useStoreLineage(s => s.setColumns)
-  const clearActiveEdges = useStoreLineage(s => s.clearActiveEdges)
-
-  const modelExtensions = useSQLMeshModelExtensions(
-    model.path,
-    lineage,
-    model => {
-      navigate(`${EnumRoutes.IdeDocsModels}?model=${model.name}`, {
-        state: { model },
-      })
-    },
-  )
-
-  useEffect(() => {
-    setColumns(undefined)
-    clearActiveEdges()
-  }, [model])
+  const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
+    navigate(
+      `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(model.name)}`,
+    )
+  })
 
   return (
     <Container>
@@ -68,6 +54,10 @@ const Documentation = function Documentation({
             <DetailsItem
               name="Dialect"
               value={model.dialect}
+            />
+            <DetailsItem
+              name="Type"
+              value={model.type}
             />
             {Object.entries(model.details ?? {}).map(([key, value]) => (
               <DetailsItem
@@ -90,16 +80,25 @@ const Documentation = function Documentation({
       )}
       {withColumns && (
         <Section headline="Columns">
-          <ul className="px-2 w-full">
+          <ul className="w-full">
             {model.columns.map(column => (
-              <DetailsItem
+              <ModelColumn
                 key={column.name}
-                name={column.name}
-                value={column.type}
-                isHighlighted={true}
+                model={model}
+                column={column}
+                disabled={model.type === 'python'}
+                className="px-2 py-1 rounded-md border-b border-primary-10 mb-1"
               >
-                {column.description}
-              </DetailsItem>
+                {({ column, disabled }) => (
+                  <ModelColumn.Display
+                    columnName={column.name}
+                    columnType={column.type}
+                    columnDescription={column.description}
+                    isHighlighted={true}
+                    disabled={disabled}
+                  />
+                )}
+              </ModelColumn>
             ))}
           </ul>
         </Section>
@@ -144,18 +143,22 @@ const Documentation = function Documentation({
                       Compiled Query
                     </Tab>
                   </Tab.List>
-                  <Tab.Panels className="h-full w-full overflow-hidden p-2 bg-neutral-10 mt-4 rounded-lg">
+                  <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
                     <Tab.Panel
                       className={clsx(
                         'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                       )}
                     >
-                      <CodeEditor.SQLMeshDialect content={file.content}>
+                      <CodeEditor.SQLMeshDialect
+                        content={file.content}
+                        type={file.extension}
+                      >
                         {({ extensions, content }) => (
                           <CodeEditor
                             extensions={extensions.concat(modelExtensions)}
                             content={content}
+                            className="!text-xs"
                           />
                         )}
                       </CodeEditor.SQLMeshDialect>
@@ -173,6 +176,7 @@ const Documentation = function Documentation({
                           <CodeEditor
                             extensions={extensions.concat(modelExtensions)}
                             content={content}
+                            className="text-xs"
                           />
                         )}
                       </CodeEditor.Default>
@@ -258,7 +262,7 @@ function Section({
                 )}
               </div>
             </Disclosure.Button>
-            <Disclosure.Panel className="px-4 pb-2 text-sm">
+            <Disclosure.Panel className="pb-2 text-sm overflow-hidden">
               <div className="px-2">{children}</div>
             </Disclosure.Panel>
           </>

@@ -69,7 +69,6 @@ def get_models(
             interval_unit=model.interval_unit(),
             annotated=model.annotated,
             contains_star_query=model.contains_star_query,
-            type=type,
         )
 
         output.append(
@@ -81,6 +80,7 @@ def get_models(
                 details=details,
                 description=model.description,
                 sql=model.render_query().sql(pretty=True, dialect=model.dialect),
+                type=type,
             )
         )
 

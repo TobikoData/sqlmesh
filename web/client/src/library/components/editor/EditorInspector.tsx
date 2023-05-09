@@ -12,7 +12,6 @@ import {
   fetchdfApiCommandsFetchdfPost,
   renderApiCommandsRenderPost,
   evaluateApiCommandsEvaluatePost,
-  type Model,
 } from '~/api/client'
 import { type ResponseWithDetail } from '~/api/instance'
 import { useStoreContext } from '~/context/context'
@@ -24,8 +23,9 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { getTableDataFromArrowStreamResult } from './help'
 import { Tab } from '@headlessui/react'
-import Documentation from '@components/documentation/Documentation'
 import Banner from '@components/banner/Banner'
+import Documentation from '@components/documentation/Documentation'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 interface FormModel {
   model?: string
@@ -73,7 +73,7 @@ function InspectorModel({
   model,
 }: {
   tab: EditorTab
-  model: Model
+  model: ModelSQLMeshModel
 }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)

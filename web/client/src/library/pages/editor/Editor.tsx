@@ -10,12 +10,17 @@ import ModalSidebar from '@components/modal/ModalDrawer'
 import Editor from '@components/editor/Editor'
 import { useIDE } from '../ide/context'
 import { useStoreFileTree } from '@context/fileTree'
+import LineageFlowProvider from '@components/graph/context'
 
 const Plan = lazy(async () => await import('@components/plan/Plan'))
 
 export default function PageEditor(): JSX.Element {
   const { isPlanOpen, setIsPlanOpen } = useIDE()
 
+  const models = useStoreContext(s => s.models)
+
+  const files = useStoreFileTree(s => s.files)
+  const selectFile = useStoreFileTree(s => s.selectFile)
   const project = useStoreFileTree(s => s.project)
   const environment = useStoreContext(s => s.environment)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
@@ -29,6 +34,14 @@ export default function PageEditor(): JSX.Element {
     setIsClosingModal(true)
   }
 
+  function handleClickModel(modelName: string): void {
+    const model = models.get(modelName)
+
+    if (model == null) return
+
+    selectFile(files.get(model.path))
+  }
+
   return (
     <>
       {environment != null && (
@@ -39,7 +52,9 @@ export default function PageEditor(): JSX.Element {
           className="flex w-full h-full overflow-hidden"
         >
           <FileTree project={project} />
-          <Editor />
+          <LineageFlowProvider handleClickModel={handleClickModel}>
+            <Editor />
+          </LineageFlowProvider>
         </SplitPane>
       )}
       <ModalSidebar
