@@ -364,22 +364,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
-    def _backup_table(self, schema_version: int, table_name: str) -> None:
-        data = self.engine_adapter.fetchdf(exp.select("*").from_(table_name))
+    def _backup_table(self, versions: Versions, table_name: str) -> None:
+        backup_table_name = f"{table_name}_{versions.schema_version}"
+        self.engine_adapter.ctas(backup_table_name, exp.select("*").from_(table_name))
         self.engine_adapter.insert_append(
             self.backups_table,
             pd.DataFrame(
                 np.array(
                     [
                         (
-                            schema_version,
+                            versions.schema_version,
+                            versions.sqlglot_version,
                             table_name,
-                            data.to_json(),
+                            backup_table_name,
                         )
                     ],
                 )
             ),
-            contains_json=True,
         )
 
     def _restore_table(
@@ -389,31 +390,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         result = self.engine_adapter.fetchone(
-            exp.select(exp.to_column("data"))
+            exp.select("table_name", "backup_table_name")
             .from_(self.backups_table)
             .where(
-                exp.EQ(
-                    this=exp.to_column("schema_version"),
-                    expression=exp.Literal.number(schema_version),
-                ).and_(
-                    exp.EQ(
-                        this=exp.to_column("table_name"),
-                        expression=exp.Literal.string(table_name),
-                    )
-                )
+                exp.to_column("schema_version")
+                .eq(exp.Literal.number(schema_version))
+                .and_(exp.to_column("table_name").eq(table_name))
             )
         )
         if not result:
             raise SQLMeshError(
-                f"Cannot rollback {table_name} to schema version {schema_version}. Backup data not found."
+                f"Cannot restore {table_name} to schema version {schema_version}. Backup data not found."
             )
-        data = result[0]
+        table_name, backup_table_name = result
 
-        self.engine_adapter.delete_from(table_name, "TRUE")
-        self.engine_adapter.insert_append(
-            table_name,
-            pd.read_json(data, convert_dates=False),
-            columns_to_types,
+        self.engine_adapter.drop_table(table_name)
+        self.engine_adapter.rename_table(
+            old_table_name=backup_table_name,
+            new_table_name=exp.to_table(table_name).name,
         )
 
     @transactional()
@@ -439,11 +433,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         self._restore_table(schema_version, self.versions_table, self.version_columns_to_types)
 
+        # Clean up orphaned backups
+        for (backup_table_name,) in self.engine_adapter.fetchall(
+            exp.select("backup_table_name")
+            .from_(self.backups_table)
+            .where(exp.to_column("schema_version") > exp.Literal.number(schema_version))
+        ):
+            self.engine_adapter.drop_table(backup_table_name)
         self.engine_adapter.delete_from(
             self.backups_table,
-            exp.EQ(
-                this=exp.to_column("schema_version"), expression=exp.Literal.number(schema_version)
-            ),
+            exp.to_column("schema_version") >= exp.Literal.number(schema_version),
         )
 
     def _backup_state(self) -> None:
@@ -451,10 +450,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return
 
         versions = self._get_versions()
-        schema_version = versions.schema_version
-        self._backup_table(schema_version, self.snapshots_table)
-        self._backup_table(schema_version, self.environments_table)
-        self._backup_table(schema_version, self.versions_table)
+        self._backup_table(versions, self.snapshots_table)
+        self._backup_table(versions, self.environments_table)
+        self._backup_table(versions, self.versions_table)
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)

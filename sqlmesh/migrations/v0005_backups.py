@@ -11,8 +11,9 @@ def migrate(state_sync):  # type: ignore
         backups_table,
         {
             "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
             "table_name": exp.DataType.build("text"),
-            "data": exp.DataType.build("text"),
+            "backup_table_name": exp.DataType.build("text"),
         },
         primary_key=("schema_version", "table_name"),
     )

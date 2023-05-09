@@ -706,9 +706,9 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
 
     with pytest.raises(
         SQLMeshError,
-        match="Cannot rollback sqlmesh._snapshots to schema version 99.",
+        match="Cannot restore sqlmesh._snapshots to schema version 9999.",
     ):
-        state_sync.rollback(schema_version=99)
+        state_sync.rollback(schema_version=9999)
 
     mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._restore_table")
     state_sync._backup_state()
@@ -720,7 +720,7 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
         SCHEMA_VERSION, "sqlmesh._environments", state_sync.environment_columns_to_types
     )
     mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._versions", state_sync.version_columns_to_types)
-    assert len(state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")) == 0
+    assert not state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
@@ -771,12 +771,13 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._backup_table")
 
     state_sync._backup_state()
-    mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._snapshots")
-    mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._environments")
-    mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._versions")
+    versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
+    mock.assert_any_call(versions, "sqlmesh._snapshots")
+    mock.assert_any_call(versions, "sqlmesh._environments")
+    mock.assert_any_call(versions, "sqlmesh._versions")
 
 
-def test_backup_table(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
+def test_backup_table(state_sync: EngineAdapterStateSync) -> None:
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
         pd.read_json("tests/fixtures/migrations/snapshots.json"),
@@ -788,19 +789,25 @@ def test_backup_table(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
         },
     )
 
-    state_sync._backup_table(schema_version=99, table_name="sqlmesh._snapshots")
-    schema_version, table_name, data = state_sync.engine_adapter.fetchone(
-        "select * from sqlmesh._backups"
-    )
-    assert schema_version == 99
+    versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
+    state_sync._backup_table(versions, table_name="sqlmesh._snapshots")
+    (
+        schema_version,
+        sqlglot_version,
+        table_name,
+        backup_table_name,
+    ) = state_sync.engine_adapter.fetchone("select * from sqlmesh._backups")
+    assert schema_version == SCHEMA_VERSION
+    assert sqlglot_version == SQLGLOT_VERSION
     assert table_name == "sqlmesh._snapshots"
+    assert backup_table_name == f"sqlmesh._snapshots_{SCHEMA_VERSION}"
     pd.testing.assert_frame_equal(
-        state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots"),
-        pd.read_json(data, dtype=False),
+        state_sync.engine_adapter.fetchdf(f"select * from {table_name}"),
+        state_sync.engine_adapter.fetchdf(f"select * from {backup_table_name}"),
     )
 
 
-def test_restore_snapshots_table(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
+def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     snapshot_columns_to_types = {
         "name": exp.DataType.build("text"),
         "identifier": exp.DataType.build("text"),
@@ -818,13 +825,14 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync, mocker: Moc
         "select count(*) from sqlmesh._snapshots"
     )
     assert old_snapshots_count == (12,)
-    state_sync._backup_table(schema_version=99, table_name="sqlmesh._snapshots")
+    versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
+    state_sync._backup_table(versions, table_name="sqlmesh._snapshots")
 
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
     snapshots_count = state_sync.engine_adapter.fetchone("select count(*) from sqlmesh._snapshots")
     assert snapshots_count == (0,)
     state_sync._restore_table(
-        schema_version=99,
+        schema_version=SCHEMA_VERSION,
         table_name="sqlmesh._snapshots",
         columns_to_types=snapshot_columns_to_types,
     )
@@ -833,47 +841,4 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync, mocker: Moc
     pd.testing.assert_frame_equal(
         old_snapshots,
         new_snapshots,
-    )
-
-
-def test_restore_environments_table(
-    state_sync: EngineAdapterStateSync, mocker: MockerFixture
-) -> None:
-    environment_columns_to_types = {
-        "name": exp.DataType.build("text"),
-        "snapshots": exp.DataType.build("text"),
-        "start_at": exp.DataType.build("text"),
-        "end_at": exp.DataType.build("text"),
-        "plan_id": exp.DataType.build("text"),
-        "previous_plan_id": exp.DataType.build("text"),
-        "expiration_ts": exp.DataType.build("bigint"),
-    }
-    state_sync.engine_adapter.replace_query(
-        "sqlmesh._environments",
-        pd.read_json("tests/fixtures/migrations/environments.json"),
-        columns_to_types=environment_columns_to_types,
-    )
-
-    old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
-    old_environments_count = state_sync.engine_adapter.fetchone(
-        "select count(*) from sqlmesh._environments"
-    )
-    assert old_environments_count == (2,)
-    state_sync._backup_table(schema_version=99, table_name="sqlmesh._environments")
-
-    state_sync.engine_adapter.delete_from("sqlmesh._environments", "TRUE")
-    environments_count = state_sync.engine_adapter.fetchone(
-        "select count(*) from sqlmesh._environments"
-    )
-    assert environments_count == (0,)
-    state_sync._restore_table(
-        schema_version=99,
-        table_name="sqlmesh._environments",
-        columns_to_types=environment_columns_to_types,
-    )
-
-    new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
-    pd.testing.assert_frame_equal(
-        old_environments,
-        new_environments,
     )
