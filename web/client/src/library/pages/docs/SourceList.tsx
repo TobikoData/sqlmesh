@@ -59,7 +59,7 @@ export default function SourceList({
                 )}`}
                 className={({ isActive }) =>
                   clsx(
-                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1  rounded-md w-full hover:bg-primary-10',
+                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full hover:bg-primary-10',
                     isActive
                       ? 'text-primary-500 bg-primary-10'
                       : 'text-neutral-500 dark:text-neutral-100',

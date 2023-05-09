@@ -33,7 +33,10 @@ export default function Content(): JSX.Element {
       {model == null ? (
         <NotFound
           link={EnumRoutes.IdeDocs}
-          message="Back to docs"
+          descritpion={
+            modelName == null ? undefined : `Model ${modelName} Does Not Exist`
+          }
+          message="Back To Docs"
         />
       ) : (
         <LineageFlowProvider handleClickModel={handleClickModel}>

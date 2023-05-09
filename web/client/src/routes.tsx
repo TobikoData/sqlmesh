@@ -47,7 +47,7 @@ export const router = createBrowserRouter([
             element: (
               <NotFound
                 link={EnumRoutes.IdeDocs}
-                message="Back to docs"
+                message="Back To Docs"
               />
             ),
           },
@@ -63,7 +63,7 @@ export const router = createBrowserRouter([
                 element: (
                   <NotFound
                     link={EnumRoutes.IdeDocs}
-                    message="Back to docs"
+                    message="Back To Docs"
                   />
                 ),
               },
@@ -86,7 +86,7 @@ export const router = createBrowserRouter([
     element: (
       <NotFound
         link={EnumRoutes.Ide}
-        message="Back to main"
+        message="Back To Editor"
       />
     ),
   },
