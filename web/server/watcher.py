@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+from fastapi.encoders import jsonable_encoder
 from watchfiles import DefaultFilter, awatch
 
 from sqlmesh.core import constants as c
@@ -28,7 +29,5 @@ async def watch_project(queue: asyncio.Queue) -> None:
             logger.exception("Error loading context")
         else:
             queue.put_nowait(
-                Event(
-                    event="models", data=json.dumps([model.dict() for model in get_models(context)])
-                )
+                Event(event="models", data=json.dumps(jsonable_encoder(get_models(context))))
             )
