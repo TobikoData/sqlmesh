@@ -508,7 +508,7 @@ ModelColumn.Display = function Display({
           <Spinner className="w-3 h-3 border border-neutral-10" />
         </Loading>
       )}
-      <div className={clsx('flex w-full items-center')}>
+      <div className={clsx('w-full items-center')}>
         <div className="w-full flex justify-between items-center">
           <span
             className={clsx(
