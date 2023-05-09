@@ -10,8 +10,6 @@ from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
-from dbt.contracts.graph.manifest import Macro, Manifest
-from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 from dbt.version import get_installed_version
@@ -22,6 +20,10 @@ from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.utils.jinja import MacroInfo, MacroReference
+
+if t.TYPE_CHECKING:
+    from dbt.contracts.graph.manifest import Macro, Manifest
+    from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
 
 ModelConfigs = t.Dict[str, ModelConfig]
 SeedConfigs = t.Dict[str, SeedConfig]
