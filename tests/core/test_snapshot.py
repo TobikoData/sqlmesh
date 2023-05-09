@@ -540,7 +540,11 @@ def test_categorize_change_sql(make_snapshot):
     # A complex projection has been added.
     assert (
         categorize_change(
-            new=make_snapshot(SqlModel(name="a", query=parse_one("select 1, fun(a * 2)::INT, ds"))),
+            new=make_snapshot(
+                SqlModel(
+                    name="a", query=parse_one("select 1, fun(another_fun(a + 1) * 2)::INT, ds")
+                )
+            ),
             old=old_snapshot,
             config=config,
         )
