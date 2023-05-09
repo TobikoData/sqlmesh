@@ -278,7 +278,7 @@ class QueryRenderer(ExpressionRenderer):
         old_schema = self._schema
         self._schema = schema
 
-        if self.contains_star_query and old_schema != schema:
+        if old_schema != schema:
             new_cache = {}
             for cached_key, cached_query in self._query_cache.items():
                 new_cache[cached_key] = self._optimize_query(cached_query) or cached_query
@@ -294,6 +294,9 @@ class QueryRenderer(ExpressionRenderer):
         self._query_cache[_dates(start, end, latest)] = query
 
     def _optimize_query(self, query: exp.Expression) -> t.Optional[exp.Expression]:
+        if not self._schema:
+            return annotate_types(query)
+
         try:
             return optimize(query, schema=self._schema, rules=RENDER_OPTIMIZER_RULES)
         except (SchemaError, OptimizeError):

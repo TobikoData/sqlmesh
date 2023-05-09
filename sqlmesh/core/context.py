@@ -464,6 +464,10 @@ class Context(BaseContext):
             [s.snapshot_id for s in snapshots.values() if not s.version]
         )
 
+        # the model has schema state so we need to bring it back
+        for snapshot in stored_snapshots.values():
+            snapshot.model = self._models[snapshot.name]
+
         return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 
     def render(
