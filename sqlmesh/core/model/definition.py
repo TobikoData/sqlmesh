@@ -674,7 +674,12 @@ class SqlModel(_Model):
         if not isinstance(previous, SqlModel):
             return None
 
-        edits = ChangeDistiller(t=0.5).diff(previous.render_query(), self.render_query())
+        previous_query = previous.render_query()
+        this_query = self.render_query()
+
+        edits = ChangeDistiller(t=0.5).diff(
+            previous_query, this_query, matchings=[(previous_query, this_query)]
+        )
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:
