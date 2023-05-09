@@ -256,7 +256,9 @@ class BaseModelConfig(GeneralConfig):
         return {
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs},
+            "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs}.union(
+                {model_context.sources[source].source_name for source in self.dependencies.sources}
+            ),
             "jinja_macros": jinja_macros,
             "path": self.path,
             "pre": [
