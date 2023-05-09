@@ -17,6 +17,7 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +36,21 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
 
 
 class DbtLoader(Loader):
-    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry]:
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry, JinjaMacroRegistry]:
         macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
+
         for file in macro_files:
             self._track_file(file)
 
+        # This doesn't do anything, the actual content will be loaded from the manifest
         return (
             UniqueKeyDict("macros"),
             UniqueKeyDict("hooks"),
+            JinjaMacroRegistry(),
         )
 
     def _load_models(
-        self,
-        macros: MacroRegistry,
-        hooks: HookRegistry,
+        self, macros: MacroRegistry, hooks: HookRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
