@@ -63,7 +63,7 @@ setup(
             "google-cloud-bigquery-storage",
             "black==22.6.0",
             "dbt-core",
-            "dbt-duckdb",
+            "dbt-duckdb>=1.4.2",
             "Faker",
             "google-auth",
             "isort==5.10.1",
