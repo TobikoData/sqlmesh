@@ -75,13 +75,15 @@ class TableAlterColumn(PydanticModel):
         )
 
     @classmethod
-    def from_struct_kwarg(self, struct: exp.StructKwarg) -> TableAlterColumn:
+    def from_struct_kwarg(self, struct: exp.ColumnDef) -> TableAlterColumn:
         name = struct.alias_or_name
         quoted = struct.this.quoted
-        if struct.expression.is_type(exp.DataType.Type.STRUCT):
+        kwarg_type = struct.args["kind"]
+
+        if kwarg_type.is_type(exp.DataType.Type.STRUCT):
             return self.struct(name, quoted=quoted)
-        elif struct.expression.is_type(exp.DataType.Type.ARRAY):
-            if struct.expression.expressions[0].is_type(exp.DataType.Type.STRUCT):
+        elif kwarg_type.is_type(exp.DataType.Type.ARRAY):
+            if kwarg_type.expressions[0].is_type(exp.DataType.Type.STRUCT):
                 return self.array_of_struct(name, quoted=quoted)
             else:
                 return self.array_of_primitive(name, quoted=quoted)
@@ -128,7 +130,7 @@ class TableAlterColumnPosition(PydanticModel):
     def create(
         self,
         pos: int,
-        current_kwargs: t.List[exp.StructKwarg],
+        current_kwargs: t.List[exp.ColumnDef],
         replacing_col: bool = False,
     ) -> TableAlterColumnPosition:
         is_first = pos == 0
@@ -296,7 +298,7 @@ class SchemaDiffer(PydanticModel):
         return exp.DataType(
             this=exp.DataType.Type.STRUCT,
             expressions=[
-                exp.StructKwarg(this=exp.to_identifier(k), expression=v) for k, v in value.items()
+                exp.ColumnDef(this=exp.to_identifier(k), kind=v) for k, v in value.items()
             ],
             nested=True,
         )
@@ -310,10 +312,10 @@ class SchemaDiffer(PydanticModel):
 
     def _get_matching_kwarg(
         self,
-        current_kwarg: t.Union[str, exp.StructKwarg],
+        current_kwarg: t.Union[str, exp.ColumnDef],
         new_struct: exp.DataType,
         current_pos: int,
-    ) -> t.Tuple[t.Optional[int], t.Optional[exp.StructKwarg]]:
+    ) -> t.Tuple[t.Optional[int], t.Optional[exp.ColumnDef]]:
         current_name = (
             exp.to_identifier(current_kwarg)
             if isinstance(current_kwarg, str)
@@ -346,7 +348,7 @@ class SchemaDiffer(PydanticModel):
         assert column_kwarg
         struct.expressions.pop(column_pos)
         operations.append(
-            TableAlterOperation.drop(columns, root_struct.copy(), column_kwarg.expression)
+            TableAlterOperation.drop(columns, root_struct.copy(), column_kwarg.args["kind"])
         )
         return operations
 
@@ -371,7 +373,7 @@ class SchemaDiffer(PydanticModel):
         self,
         columns: t.List[TableAlterColumn],
         new_pos: int,
-        new_kwarg: exp.StructKwarg,
+        new_kwarg: exp.ColumnDef,
         current_struct: exp.DataType,
         root_struct: exp.DataType,
     ) -> t.List[TableAlterOperation]:
@@ -384,7 +386,7 @@ class SchemaDiffer(PydanticModel):
         return [
             TableAlterOperation.add(
                 columns,
-                new_kwarg.expression,
+                new_kwarg.args["kind"],
                 root_struct.copy(),
                 col_pos,
             )
@@ -415,7 +417,7 @@ class SchemaDiffer(PydanticModel):
         new_type: exp.DataType,
         current_type: t.Union[str, exp.DataType],
         root_struct: exp.DataType,
-        new_kwarg: exp.StructKwarg,
+        new_kwarg: exp.ColumnDef,
     ) -> t.List[TableAlterOperation]:
         current_type = exp.DataType.build(current_type)
         if self.support_nested_operations:
@@ -552,5 +554,5 @@ class SchemaDiffer(PydanticModel):
         )
 
 
-def _get_name_and_type(struct: exp.StructKwarg) -> t.Tuple[exp.Identifier, exp.DataType]:
-    return struct.this, struct.expression
+def _get_name_and_type(struct: exp.ColumnDef) -> t.Tuple[exp.Identifier, exp.DataType]:
+    return struct.this, struct.args["kind"]
