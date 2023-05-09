@@ -960,18 +960,20 @@
       },
       "Model": {
         "title": "Model",
-        "required": ["name", "path", "dialect", "columns"],
+        "required": ["name", "path", "dialect", "type", "columns"],
         "type": "object",
         "properties": {
           "name": { "title": "Name", "type": "string" },
           "path": { "title": "Path", "type": "string" },
           "dialect": { "title": "Dialect", "type": "string" },
+          "type": { "title": "Type", "type": "string" },
           "columns": {
             "title": "Columns",
             "type": "array",
             "items": { "$ref": "#/components/schemas/Column" }
           },
           "description": { "title": "Description", "type": "string" },
+          "owner": { "title": "Owner", "type": "string" },
           "details": { "$ref": "#/components/schemas/ModelDetails" },
           "sql": { "title": "Sql", "type": "string" }
         }
@@ -1017,8 +1019,7 @@
           "contains_star_query": {
             "title": "Contains Star Query",
             "type": "boolean"
-          },
-          "type": { "title": "Type", "type": "string" }
+          }
         }
       },
       "ModelsDiff": {
@@ -1163,7 +1164,7 @@
         "title": "SnapshotChangeCategory",
         "enum": [1, 2, 3, 4, 5],
         "type": "integer",
-        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_FORWARD_ONLY: The change was caused indirectly and is forward-only."
+        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change."
       },
       "SnapshotDataVersion": {
         "title": "SnapshotDataVersion",

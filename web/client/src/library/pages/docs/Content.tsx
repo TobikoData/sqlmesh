@@ -1,86 +1,66 @@
-import { useApiModelLineage } from '@api/index'
 import Documentation from '@components/documentation/Documentation'
-import Graph from '@components/graph/Graph'
-import Loading from '@components/loading/Loading'
+import { ModelLineage } from '@components/graph/ModelLineage'
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
-import { type Lineage, useStoreEditor } from '@context/editor'
-import { debounceAsync } from '@utils/index'
-import { useCallback, useMemo, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import NotFound from '../root/NotFound'
+import { EnumRoutes } from '~/routes'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import LineageFlowProvider from '@components/graph/context'
 
 export default function Content(): JSX.Element {
-  const { state } = useLocation()
+  const { modelName } = useParams()
+  const navigate = useNavigate()
+
+  const models = useStoreContext(s => s.models)
+  const model =
+    modelName == null
+      ? undefined
+      : models.get(ModelSQLMeshModel.decodeName(modelName))
+
+  function handleClickModel(modelName: string): void {
+    const model = models.get(modelName)
+
+    if (model == null) return
+
+    navigate(
+      EnumRoutes.IdeDocsModels + '/' + ModelSQLMeshModel.encodeName(model.name),
+    )
+  }
 
   return (
     <div className="flex overflow-auto w-full h-full">
-      <SplitPane
-        className="flex h-full w-full"
-        sizes={[50, 50]}
-        minSize={0}
-        snapOffset={0}
-      >
-        <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
-          <Documentation
-            key={state.model.name}
-            model={state.model}
-            withQuery={state.model.details.type !== 'python'}
-          />
-        </div>
-        <div className="flex flex-col h-full px-2">
-          <ModelLineage model={state.model.name} />
-        </div>
-      </SplitPane>
-    </div>
-  )
-}
-
-function ModelLineage({ model }: { model: string }): JSX.Element {
-  const { data: lineage, refetch: getModelLineage } = useApiModelLineage(model)
-
-  const models = useStoreContext(s => s.models)
-
-  const previewLineage = useStoreEditor(s => s.previewLineage)
-  const setPreviewLineage = useStoreEditor(s => s.setPreviewLineage)
-
-  const debouncedGetModelLineage = useCallback(
-    debounceAsync(getModelLineage, 1000, true),
-    [model],
-  )
-
-  const highlightedNodes = useMemo(() => [model], [model])
-
-  useEffect(() => {
-    void debouncedGetModelLineage()
-  }, [debouncedGetModelLineage])
-
-  useEffect(() => {
-    if (lineage == null) {
-      setPreviewLineage(models)
-    } else {
-      setPreviewLineage(
-        models,
-        Object.keys(lineage).reduce((acc: Record<string, Lineage>, key) => {
-          acc[key] = {
-            models: lineage[key] ?? [],
-            columns: previewLineage?.[key]?.columns ?? undefined,
+      {model == null ? (
+        <NotFound
+          link={EnumRoutes.IdeDocs}
+          descritpion={
+            modelName == null ? undefined : `Model ${modelName} Does Not Exist`
           }
-
-          return acc
-        }, {}),
-      )
-    }
-  }, [lineage])
-
-  return previewLineage == null ? (
-    <div className="w-full h-full flex items-center justify-center bg-primary-10">
-      <Loading hasSpinner>Loading Lineage...</Loading>
+          message="Back To Docs"
+        />
+      ) : (
+        <LineageFlowProvider handleClickModel={handleClickModel}>
+          <SplitPane
+            className="flex h-full w-full"
+            sizes={[50, 50]}
+            minSize={0}
+            snapOffset={0}
+          >
+            <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
+              <Documentation
+                model={model}
+                withQuery={model.type !== 'python'}
+              />
+            </div>
+            <div className="flex flex-col h-full px-2">
+              <ModelLineage
+                model={model}
+                fingerprint={model.id as string}
+              />
+            </div>
+          </SplitPane>
+        </LineageFlowProvider>
+      )}
     </div>
-  ) : (
-    <Graph
-      lineage={previewLineage}
-      highlightedNodes={highlightedNodes}
-      models={models}
-    />
   )
 }

@@ -1,5 +1,6 @@
 import { type Model } from '@api/client'
 import Input from '@components/input/Input'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isFalse, isArrayEmpty, isArrayNotEmpty } from '@utils/index'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
@@ -50,7 +51,9 @@ export default function Search({
             found.map(([model, index]) => (
               <Link
                 key={model.name}
-                to={`${EnumRoutes.IdeDocsModels}?model=${model.name}`}
+                to={`${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
+                  model.name,
+                )}`}
                 className="text-md font-normal mb-1 w-full"
               >
                 <li className="p-2 cursor-pointer hover:bg-secondary-10">

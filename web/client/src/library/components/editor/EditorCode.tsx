@@ -1,18 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { python } from '@codemirror/lang-python'
-import { sql } from '@codemirror/lang-sql'
 import { StreamLanguage } from '@codemirror/language'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
-import { type Model, type File } from '~/api/client'
+import { type Column, type File } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
 import {
   events,
   SqlMeshModel,
   HoverTooltip,
   useSqlMeshExtension,
+  findModel,
+  findColumn,
 } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
@@ -27,7 +28,7 @@ import {
 } from '~/utils'
 import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
-import { useStoreEditor, type Lineage } from '~/context/editor'
+import { useStoreEditor } from '~/context/editor'
 import {
   EnumFileExtensions,
   type ModelFile,
@@ -36,6 +37,8 @@ import {
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { sql } from '@codemirror/lang-sql'
 
 function CodeEditorDefault({
   type,
@@ -69,9 +72,11 @@ function CodeEditorDefault({
 }
 
 function CodeEditorSQLMesh({
+  type,
   content = '',
   children,
 }: {
+  type: FileExtensions
   content?: string
   children: (options: {
     extensions: Extension[]
@@ -106,8 +111,12 @@ function CodeEditorSQLMesh({
   const extensions = useMemo(() => {
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      type === EnumFileExtensions.Python && python(),
+      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
       SqlMeshDialect(models, dialectOptions, dialectsTitles),
-    ]
+    ].filter(Boolean) as Extension[]
   }, [mode, dialectsTitles, dialectOptions])
 
   useEffect(() => {
@@ -142,13 +151,14 @@ function CodeEditorRemoteFile({
   children,
 }: {
   path: string
-  children: (options: { file: ModelFile }) => JSX.Element
+  children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
   const files = useStoreFileTree(s => s.files)
 
   const { refetch: getFileContent } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
+  const keymaps = useSQLMeshModelKeymaps(path)
   const [file, setFile] = useState<ModelFile>()
 
   useEffect(() => {
@@ -185,32 +195,51 @@ function CodeEditorRemoteFile({
       </Loading>
     </div>
   ) : (
-    children({ file })
+    children({ file, keymaps })
   )
 }
 
 export function useSQLMeshModelExtensions(
   path?: string,
-  lineage: Record<string, Lineage> = {},
-  handleModelClick?: (model: Model) => void,
+  handleModelClick?: (model: ModelSQLMeshModel) => void,
+  handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
-  if (path == null) return []
-
   const models = useStoreContext(s => s.models)
   const files = useStoreFileTree(s => s.files)
 
   const extensions = useMemo(() => {
+    if (path == null) return []
+
     const model = models.get(path)
-    const columns = new Set(
-      Object.keys(lineage)
-        .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-        .flat()
-        .filter(Boolean) as string[],
-    )
+    const columns =
+      model?.lineage == null
+        ? new Set<string>()
+        : new Set(
+            Object.keys(model.lineage)
+              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
+              .flat()
+              .filter(Boolean) as string[],
+          )
 
     return [
       HoverTooltip(models),
-      handleModelClick != null && events(models, handleModelClick),
+      handleModelClick != null &&
+        events(event => {
+          const model = findModel(event, models)
+
+          if (model == null) return
+
+          handleModelClick(model)
+        }),
+      handleModelColumn != null &&
+        model != null &&
+        events(event => {
+          const column = findColumn(event, model)
+
+          if (column == null) return
+
+          handleModelColumn(model, column)
+        }),
       model != null && SqlMeshModel(models, model, columns),
     ].filter(Boolean) as Extension[]
   }, [path, models, files])
@@ -218,16 +247,14 @@ export function useSQLMeshModelExtensions(
   return extensions
 }
 
-export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
-  if (file == null) return []
-
+export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   const client = useQueryClient()
 
   const environment = useStoreContext(s => s.environment)
-
+  const files = useStoreFileTree(s => s.files)
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
-  const { refetch: getFileContent } = useApiFileByPath(file.path)
+  const { refetch: getFileContent } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
   const mutationSaveFile = useMutationApiSaveFile(client, {
@@ -246,10 +273,14 @@ export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
 
   const debouncedSaveChange = useCallback(
     debounceSync(saveChange, 1000, true),
-    [file],
+    [path],
   )
 
   useEffect(() => {
+    const file = files.get(path)
+
+    if (file == null) return
+
     if (isStringEmptyOrNil(file.content)) {
       debouncedGetFileContent({
         throwOnError: true,
@@ -268,9 +299,11 @@ export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
           refreshTab()
         })
     }
-  }, [file.path])
+  }, [path])
 
   function saveChange(): void {
+    const file = files.get(path)
+
     if (file == null) return
 
     mutationSaveFile.mutate({
@@ -280,6 +313,8 @@ export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
   }
 
   function saveChangeSuccess(newfile: File): void {
+    const file = files.get(path)
+
     if (newfile == null || file == null) return
 
     file.updateContent(newfile.content)
@@ -296,7 +331,7 @@ export function useSQLMeshModelKeymaps(file?: ModelFile): KeyBinding[] {
       linux: 'Ctrl-s',
       preventDefault: true,
       run() {
-        debouncedSaveChange(file.content)
+        debouncedSaveChange()
 
         return true
       },
@@ -327,7 +362,7 @@ const CodeEditor = function CodeEditor({
     <CodeMirror
       height="100%"
       width="100%"
-      className={clsx('flex w-full h-full text-sm font-mono', className)}
+      className={clsx('flex w-full h-full font-mono', className)}
       value={content}
       extensions={extensionsAll}
       onChange={onChange}

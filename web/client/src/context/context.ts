@@ -1,3 +1,4 @@
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { create } from 'zustand'
 import {
   type Model,
@@ -17,8 +18,9 @@ interface ContextStore {
   environments: Set<ModelEnvironment>
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
-  models: Map<string, Model>
+  models: Map<string, ModelSQLMeshModel>
   setModels: (models?: Model[]) => void
+  refreshModels: () => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
   ) => boolean
@@ -46,13 +48,28 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialEndDate: undefined,
   models: new Map(),
   setModels(models = []) {
+    const s = get()
+
     set(() => ({
-      models: models.reduce((acc, model) => {
-        acc.set(model.name, model)
-        acc.set(model.path, model)
+      models: models.reduce((acc: Map<string, ModelSQLMeshModel>, model) => {
+        let tempModel = s.models.get(model.path) ?? s.models.get(model.name)
+
+        if (tempModel == null) {
+          tempModel = new ModelSQLMeshModel(model)
+        } else {
+          tempModel.update(model)
+        }
+
+        acc.set(model.name, tempModel)
+        acc.set(model.path, tempModel)
 
         return acc
       }, new Map()),
+    }))
+  },
+  refreshModels() {
+    set(() => ({
+      models: new Map(get().models),
     }))
   },
   getNextEnvironment() {

@@ -1,10 +1,13 @@
 import { createBrowserRouter } from 'react-router-dom'
-import IDE from './library/pages/ide/IDE'
 import Docs from './library/pages/docs/Docs'
 import Editor from './library/pages/editor/Editor'
 import IDEProvider from './library/pages/ide/context'
-import { Suspense } from 'react'
+import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
+
+const IDE = lazy(async () => await import('./library/pages/ide/IDE'))
 
 export const EnumRoutes = {
   Ide: '/',
@@ -17,17 +20,18 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: (
-      <IDEProvider>
-        <Suspense fallback={<span />}>
+      <Suspense
+        fallback={
+          <Loading className="inline-block ">
+            <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+            <h3 className="text-xl">Starting IDE...</h3>
+          </Loading>
+        }
+      >
+        <IDEProvider>
           <IDE />
-        </Suspense>
-      </IDEProvider>
-    ),
-    errorElement: (
-      <NotFound
-        link={EnumRoutes.Ide}
-        message="Back to main"
-      />
+        </IDEProvider>
+      </Suspense>
     ),
     children: [
       {
@@ -39,17 +43,51 @@ export const router = createBrowserRouter([
         element: <Docs />,
         children: [
           {
-            path: 'models',
-            element: <Docs.Content />,
-            errorElement: (
+            path: '*',
+            element: (
               <NotFound
                 link={EnumRoutes.IdeDocs}
-                message="Back to docs"
+                message="Back To Docs"
               />
             ),
+          },
+          {
+            index: true,
+            element: <Docs.Welcome />,
+          },
+          {
+            path: 'models',
+            children: [
+              {
+                path: '*',
+                element: (
+                  <NotFound
+                    link={EnumRoutes.IdeDocs}
+                    message="Back To Docs"
+                  />
+                ),
+              },
+              {
+                index: true,
+                element: <Docs.Welcome />,
+              },
+              {
+                path: ':modelName',
+                element: <Docs.Content />,
+              },
+            ],
           },
         ],
       },
     ],
+  },
+  {
+    path: '*',
+    element: (
+      <NotFound
+        link={EnumRoutes.Ide}
+        message="Back To Editor"
+      />
+    ),
   },
 ])
