@@ -27,6 +27,7 @@ export default function File({
   const tabs = useStoreEditor(s => s.tabs)
   const closeTab = useStoreEditor(s => s.closeTab)
 
+  const files = useStoreFileTree(s => s.files)
   const selectedFile = useStoreFileTree(s => s.selectedFile)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const refreshProject = useStoreFileTree(s => s.refreshProject)
@@ -80,19 +81,28 @@ export default function File({
       file == null ||
       isStringEmptyOrNil(newName) ||
       newName == null
-    )
+    ) {
+      setNewName(undefined)
+
       return
+    }
 
     setIsLoading(true)
 
     const currentName = file.name
     const currentPath = file.path
 
-    file.rename(newName.trim().replace(`.${String(file.extension)}`, ''))
+    file.rename(newName.trim())
 
     void writeFileApiFilesPathPost(currentPath, {
       new_path: file.path,
     })
+      .then(response => {
+        file.update(response)
+
+        files.set(file.path, file)
+        files.delete(currentPath)
+      })
       .catch(error => {
         console.log(error)
 
@@ -135,7 +145,7 @@ export default function File({
             )}
           />
         </div>
-        {isStringEmptyOrNil(newName) ? (
+        {newName == null ? (
           <>
             <FileName
               file={file}
@@ -168,10 +178,11 @@ function FileName({
 
   return (
     <span
+      title={`${file.name}${file.is_supported ? '' : ' - unsupported format'}`}
       onClick={(e: MouseEvent) => {
         e.stopPropagation()
 
-        file.is_supported && file !== selectedFile && selectFile(file)
+        file !== selectedFile && selectFile(file)
       }}
       onDoubleClick={(e: MouseEvent) => {
         e.stopPropagation()
@@ -180,7 +191,7 @@ function FileName({
       }}
       className={clsx(
         'w-full overflow-hidden overflow-ellipsis cursor-default',
-        !file.is_supported && 'opacity-50 cursor-not-allowed',
+        !file.is_supported && 'opacity-50',
       )}
     >
       {file.name}
@@ -196,7 +207,7 @@ function FileRename({
 }: {
   file: ModelFile
   newName?: string
-  setNewName: (name: string) => void
+  setNewName: (name: string | undefined) => void
   rename: () => void
 }): JSX.Element {
   return (
@@ -204,7 +215,7 @@ function FileRename({
       <input
         type="text"
         className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
-        value={newName === '' ? file.name : newName}
+        value={newName}
         onInput={(e: any) => {
           e.stopPropagation()
 
@@ -212,14 +223,25 @@ function FileRename({
         }}
       />
       <div className="flex">
-        <CheckCircleIcon
-          className={`inline-block w-4 h-4 ml-2 text-success-500 cursor-pointer`}
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
+        {file.name === newName?.trim() || newName === '' ? (
+          <XCircleIcon
+            className={`inline-block w-4 h-4 ml-2 text-neutral-500 cursor-pointer`}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-            rename()
-          }}
-        />
+              setNewName(undefined)
+            }}
+          />
+        ) : (
+          <CheckCircleIcon
+            className={`inline-block w-4 h-4 ml-2 text-success-500 cursor-pointer`}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              rename()
+            }}
+          />
+        )}
       </div>
     </div>
   )

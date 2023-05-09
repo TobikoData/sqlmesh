@@ -60,7 +60,7 @@ export class ModelArtifact<
   }
 
   rename(newName: string): void {
-    if (!this.isLocal) {
+    if (this.isRemote) {
       this._path = this.toPath(newName, this._path.replace(this.name, newName))
     }
 

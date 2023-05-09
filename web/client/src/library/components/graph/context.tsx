@@ -41,6 +41,7 @@ interface LineageFlow extends ReactFlowStore {
   setActiveColumns: React.Dispatch<React.SetStateAction<ActiveColumns>>
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   handleClickModel?: (modelName: string) => void
+  handleError?: (error: Error) => void
   refreshModels: () => void
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   setManuallySelectedColumn: React.Dispatch<
@@ -70,15 +71,18 @@ export const LineageFlowContext = createContext<LineageFlow>({
   handleClickModel: () => {},
   manuallySelectedColumn: undefined,
   setManuallySelectedColumn: () => {},
+  handleError: () => {},
 })
 
 export default function LineageFlowProvider({
+  handleError,
   handleClickModel,
   children,
   withColumns = true,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
+  handleError?: (error: Error) => void
   withColumns?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
@@ -151,6 +155,7 @@ export default function LineageFlowProvider({
         handleClickModel,
         manuallySelectedColumn,
         setManuallySelectedColumn,
+        handleError,
       }}
     >
       {children}

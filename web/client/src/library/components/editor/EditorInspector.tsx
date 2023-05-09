@@ -166,7 +166,7 @@ function InspectorModel({
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           className={clsx(
-            'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
+            'flex flex-col w-full h-full relative px-2 overflow-hidden',
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
         >
@@ -184,6 +184,7 @@ function InspectorModel({
               <fieldset className="my-3 px-3">
                 <Input
                   className="w-full mx-0"
+                  size={EnumSize.sm}
                   label="Start Date"
                   placeholder="02/11/2023"
                   value={form.start}
@@ -198,6 +199,7 @@ function InspectorModel({
                 />
                 <Input
                   className="w-full mx-0"
+                  size={EnumSize.sm}
                   label="End Date"
                   placeholder="02/13/2023"
                   value={form.end}
@@ -212,6 +214,7 @@ function InspectorModel({
                 />
                 <Input
                   className="w-full mx-0"
+                  size={EnumSize.sm}
                   label="Latest Date"
                   placeholder="02/13/2023"
                   value={form.latest}
@@ -226,6 +229,7 @@ function InspectorModel({
                 />
                 <Input
                   className="w-full mx-0"
+                  size={EnumSize.sm}
                   type="number"
                   label="Limit"
                   placeholder="1000"
@@ -264,7 +268,7 @@ function InspectorModel({
         </Tab.Panel>
         <Tab.Panel
           className={clsx(
-            'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
           )}
         >
           <Documentation
@@ -317,7 +321,7 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
   return (
     <>
       <InspectorForm>
-        <form className="my-3 w-full">
+        <form className="my-3 w-full px-2">
           {isFalse(shouldSendQuery) && (
             <FormFieldset>
               <Banner variant={EnumVariant.Warning}>
@@ -330,6 +334,7 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
           <fieldset className="mb-4">
             <Input
               className="w-full mx-0"
+              size={EnumSize.sm}
               type="number"
               label="Limit"
               placeholder={String(LIMIT)}
@@ -379,7 +384,7 @@ function InspectorForm({
   children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className="flex w-full h-full py-1 px-3 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
+    <div className="flex w-full h-full py-1 px-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
       {children}
     </div>
   )

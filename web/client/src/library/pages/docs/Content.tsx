@@ -1,5 +1,5 @@
 import Documentation from '@components/documentation/Documentation'
-import { ModelLineage } from '@components/graph/ModelLineage'
+import ModelLineage from '@components/graph/ModelLineage'
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -49,7 +49,7 @@ export default function Content(): JSX.Element {
             <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
               <Documentation
                 model={model}
-                withQuery={model.type !== 'python'}
+                withQuery={model.type === 'sql'}
               />
             </div>
             <div className="flex flex-col h-full px-2">

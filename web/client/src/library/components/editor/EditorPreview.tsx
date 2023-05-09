@@ -11,9 +11,9 @@ import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
-import { useStoreContext } from '@context/context'
-import { ModelLineage } from '@components/graph/ModelLineage'
+import ModelLineage from '@components/graph/ModelLineage'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { useLineageFlow } from '@components/graph/context'
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -31,7 +31,7 @@ export default function EditorPreview({
   tab: EditorTab
   toggleDirection: () => void
 }): JSX.Element {
-  const models = useStoreContext(s => s.models)
+  const { models } = useLineageFlow()
 
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
@@ -99,7 +99,7 @@ export default function EditorPreview({
 
   useEffect(() => {
     setModel(models.get(tab.file.path))
-  }, [models, tab.file])
+  }, [models])
 
   const table = useReactTable({
     data,
@@ -152,20 +152,9 @@ export default function EditorPreview({
                   )
                 }
               >
-                {(tabName === EnumEditorPreviewTabs.Table ||
-                  tabName === EnumEditorPreviewTabs.Query) &&
-                  tab?.file.content !== previewQuery && (
-                    <span
-                      title="Outdated Data. Does not match editor query!"
-                      className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-warning-500"
-                    ></span>
-                  )}
                 {tabName === EnumEditorPreviewTabs.Console &&
                   previewConsole != null && (
-                    <span
-                      title="Outdated Data. Does not match editor query!"
-                      className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"
-                    ></span>
+                    <span className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"></span>
                   )}
                 {tabName}
               </Tab>
@@ -173,11 +162,11 @@ export default function EditorPreview({
           </div>
           <div className="ml-2">
             <Button
-              className="!m-0 !p-0.5 !border-none"
+              className="m-0 py-0.5 px-[0.25rem] border-none"
               variant={EnumVariant.Alternative}
               onClick={toggleDirection}
             >
-              <ViewColumnsIcon className="text-primary-500 w-6 h-6" />
+              <ViewColumnsIcon className="text-primary-500 w-6" />
             </Button>
           </div>
         </Tab.List>

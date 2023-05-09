@@ -973,7 +973,6 @@
             "items": { "$ref": "#/components/schemas/Column" }
           },
           "description": { "title": "Description", "type": "string" },
-          "owner": { "title": "Owner", "type": "string" },
           "details": { "$ref": "#/components/schemas/ModelDetails" },
           "sql": { "title": "Sql", "type": "string" }
         }

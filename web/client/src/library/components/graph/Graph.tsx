@@ -250,7 +250,15 @@ function ModelNode({
               column={column}
               disabled={model.type === 'python'}
             >
-              {({ column, columnId, hasTarget, hasSource, disabled }) => (
+              {({
+                column,
+                columnId,
+                hasTarget,
+                hasSource,
+                disabled,
+                isError,
+                isFetching,
+              }) => (
                 <ModelNodeHandles
                   id={columnId}
                   targetPosition={targetPosition}
@@ -263,6 +271,8 @@ function ModelNode({
                     columnName={column.name}
                     columnType={column.type}
                     disabled={disabled}
+                    isError={isError}
+                    isFetching={isFetching}
                   />
                 </ModelNodeHandles>
               )}
@@ -357,6 +367,7 @@ export function ModelColumn({
     addActiveEdges,
     manuallySelectedColumn,
     setManuallySelectedColumn,
+    handleError,
   } = useLineageFlow()
 
   const columnId = toNodeOrEdgeId(model.name, column.name)
@@ -367,6 +378,7 @@ export function ModelColumn({
     refetch: getColumnLineage,
     isFetching,
     isError,
+    error,
   } = useApiColumnLineage(model.name, column.name)
 
   const debouncedGetColumnLineage = useCallback(
@@ -415,6 +427,10 @@ export function ModelColumn({
     toggleColumnLineage()
     setManuallySelectedColumn(undefined)
   }, [manuallySelectedColumn])
+
+  useEffect(() => {
+    handleError?.(error as Error)
+  }, [error])
 
   const hasTarget = isArrayNotEmpty(activeColumns.get(columnId)?.outs)
   const hasSource = isArrayNotEmpty(activeColumns.get(columnId)?.ins)
@@ -518,7 +534,7 @@ ModelColumn.Display = function Display({
           >
             {columnName}
           </span>
-          <span className="text-neutral-400 dark:text-neutral-300">
+          <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
             {columnType}
           </span>
         </div>

@@ -28,12 +28,14 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
 
   return (
     <div className="flex w-full mr-4 overflow-hidden items-center">
-      <EditorIndicator
-        className="mr-2"
-        text="Valid"
-      >
-        <EditorIndicator.Light ok={tab.isValid} />
-      </EditorIndicator>
+      {tab.file.isSQLMeshModelSQL && (
+        <EditorIndicator
+          className="mr-2"
+          text="Valid"
+        >
+          <EditorIndicator.Light ok={tab.isValid} />
+        </EditorIndicator>
+      )}
       {tab.file.isRemote && (
         <EditorIndicator
           className="mr-2"
@@ -87,7 +89,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           text="SQLMesh Type"
         >
           <EditorIndicator.Text
-            text={tab.file.isSQLMeshModel ? 'Model' : 'Plain'}
+            text={tab.file.isSQLMeshModel ? 'Model' : 'Unsuported'}
           />
         </EditorIndicator>
       )}

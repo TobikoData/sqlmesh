@@ -53,31 +53,44 @@ export default function Editor(): JSX.Element {
     'vertical',
   )
 
-  const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    setIsreadyEngine(true)
+  const handleEngineWorkerMessage = useCallback(
+    (e: MessageEvent): void => {
+      setIsreadyEngine(true)
 
-    if (e.data.topic === 'dialects') {
-      setDialects(e.data.payload.dialects ?? [])
-    }
-  }, [])
+      if (e.data.topic === 'dialects') {
+        setDialects(e.data.payload.dialects ?? [])
+      }
+
+      if (e.data.topic === 'validate') {
+        if (tab == null) return
+
+        tab.isValid = e.data.payload
+
+        refreshTab()
+      }
+    },
+    [tab],
+  )
 
   const sizesCodeEditorAndInspector = useMemo(() => {
+    const model = models.get(tab?.file.path ?? '')
     const showInspector =
       tab != null &&
-      (tab.file.isSQLMeshModel || tab.file.isLocal) &&
+      ((tab.file.isSQLMeshModel && model != null) || tab.file.isLocal) &&
       isFalse(isStringEmptyOrNil(tab.file.content))
 
     return showInspector ? [75, 25] : [100, 0]
-  }, [tab])
+  }, [tab, models])
 
   const sizesCodeEditorAndPreview = useMemo(() => {
+    const model = models.get(tab?.file.path ?? '')
     const showPreview =
       tab != null &&
       ((tab.file.isLocal && [previewTable, previewConsole].some(Boolean)) ||
-        tab.file.isSQLMeshModel)
+        (tab.file.isSQLMeshModel && model != null))
 
     return showPreview ? [70, 30] : [100, 0]
-  }, [tab, previewConsole, previewTable])
+  }, [tab, models, previewConsole, previewTable])
 
   const keymaps: KeyBinding[] = useMemo(
     () =>
@@ -116,10 +129,9 @@ export default function Editor(): JSX.Element {
     return () => {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [])
+  }, [tab])
 
   useEffect(() => {
-    console.log('files')
     files.forEach(file => {
       if (storedTabsIds.includes(file.id)) {
         addTab(createTab(file))
@@ -148,6 +160,19 @@ export default function Editor(): JSX.Element {
     })
   }, [tab])
 
+  useEffect(() => {
+    if (tab == null) return
+
+    tab.isSaved = isFalse(tab.file.isChanged)
+
+    engine.postMessage({
+      topic: 'validate',
+      payload: tab.file.content,
+    })
+
+    refreshTab()
+  }, [tab?.file.fingerprint, tab?.file.content])
+
   function toggleDirection(): void {
     setDirection(direction =>
       direction === 'vertical' ? 'horizontal' : 'vertical',
@@ -158,7 +183,6 @@ export default function Editor(): JSX.Element {
     if (tab == null) return
 
     tab.file.content = value
-    tab.isSaved = isFalse(tab.file.isChanged)
 
     refreshTab()
   }
@@ -210,6 +234,7 @@ export default function Editor(): JSX.Element {
                     <div className="flex flex-col h-full">
                       {tab.file.isLocal && (
                         <CodeEditor.Default
+                          key={tab.id}
                           type={EnumFileExtensions.SQL}
                           content={tab.file.content}
                         >
@@ -261,6 +286,7 @@ export default function Editor(): JSX.Element {
                 )}
               >
                 <EditorPreview
+                  key={tab.id}
                   tab={tab}
                   toggleDirection={toggleDirection}
                 />

@@ -21,7 +21,7 @@ import {
 import { isArrayNotEmpty } from '@utils/index'
 import LineageFlowProvider from '@components/graph/context'
 import { useStoreContext } from '@context/context'
-import { ModelLineage } from '@components/graph/ModelLineage'
+import ModelLineage from '@components/graph/ModelLineage'
 
 interface PropsPlanChangePreview extends React.HTMLAttributes<HTMLElement> {
   headline?: string
