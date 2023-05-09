@@ -834,8 +834,8 @@ class Context(BaseContext):
         """
         self._new_state_sync().migrate()
 
-    def rollback(self, schema_version: int = 0) -> None:
-        """Rolls back SQLMesh to the specified version. The default is the previous version.
+    def rollback(self, schema_version: int) -> None:
+        """Rolls back SQLMesh to the specified version. A schema_version of 0 will rollback to the previous version.
 
         Please contact your SQLMesh administrator before doing this. This action cannot be undone.
         """

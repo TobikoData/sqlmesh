@@ -702,7 +702,7 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
         SQLMeshError,
         match="There are no prior versions to roll back to.",
     ):
-        state_sync.rollback()
+        state_sync.rollback(0)
 
     with pytest.raises(
         SQLMeshError,
@@ -714,7 +714,7 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     state_sync._backup_state()
     assert len(state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")) == 3
 
-    state_sync.rollback()
+    state_sync.rollback(0)
     mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._snapshots", state_sync.snapshot_columns_to_types)
     mock.assert_any_call(
         SCHEMA_VERSION, "sqlmesh._environments", state_sync.environment_columns_to_types

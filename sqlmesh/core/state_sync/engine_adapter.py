@@ -394,7 +394,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .from_(self.backups_table)
             .where(
                 exp.to_column("schema_version")
-                .eq(exp.Literal.number(schema_version))
+                .eq(schema_version)
                 .and_(exp.to_column("table_name").eq(table_name))
             )
         )
@@ -415,14 +415,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         super().migrate(skip_backup)
 
     @transactional()
-    def rollback(self, schema_version: int = 0) -> None:
+    def rollback(self, schema_version: int) -> None:
+        """Rollback to the specified schema version.
+
+        If schema_version is 0, rollback to the previous schema version.
+        """
         if not self.engine_adapter.table_exists(self.backups_table):
             return
 
         if schema_version == 0:
             # Get most recently backed up schema version, i.e. the previous schema version
             (schema_version,) = self.engine_adapter.fetchone(
-                exp.select(exp.Max(this=exp.to_column("schema_version"))).from_(self.backups_table)
+                exp.select("MAX(schema_version)").from_(self.backups_table)
             )
             if not schema_version:
                 raise SQLMeshError("There are no prior versions to roll back to.")
@@ -437,12 +441,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for (backup_table_name,) in self.engine_adapter.fetchall(
             exp.select("backup_table_name")
             .from_(self.backups_table)
-            .where(exp.to_column("schema_version") > exp.Literal.number(schema_version))
+            .where(exp.to_column("schema_version") > schema_version)
         ):
             self.engine_adapter.drop_table(backup_table_name)
         self.engine_adapter.delete_from(
             self.backups_table,
-            exp.to_column("schema_version") >= exp.Literal.number(schema_version),
+            exp.to_column("schema_version") >= schema_version,
         )
 
     def _backup_state(self) -> None:
