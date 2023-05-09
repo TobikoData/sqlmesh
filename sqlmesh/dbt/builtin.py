@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import typing as t
 from ast import literal_eval
-from pathlib import Path
 
 import agate
 import jinja2
+from dbt import version
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
-from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.package import PackageLoader
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
@@ -250,30 +247,9 @@ def _try_literal_eval(value: str) -> t.Any:
         return value
 
 
-def _dbt_macro_registry() -> JinjaMacroRegistry:
-    registry = JinjaMacroRegistry()
-
-    try:
-        site_packages = next(
-            p for p in sys.path if "site-packages" in p and Path(p, "dbt").exists()
-        )
-    except:
-        return registry
-
-    for project_file in Path(site_packages).glob("dbt/include/*/dbt_project.yml"):
-        if project_file.parent.stem == "starter_project":
-            continue
-        context = DbtContext(project_root=project_file.parent, jinja_macros=JinjaMacroRegistry())
-        package = PackageLoader(context).load()
-        registry.add_macros(package.macro_infos, package="dbt")
-
-    return registry
-
-
-DBT_MACRO_REGISTRY = _dbt_macro_registry()
-
 BUILTIN_GLOBALS = {
     "api": Api(),
+    "dbt_version": version.__version__,
     "env_var": env_var,
     "exceptions": Exceptions(),
     "flags": Flags(),
@@ -367,13 +343,7 @@ def create_builtin_globals(
             }
         )
 
-    builtin_globals.update(jinja_globals)
-    if "dbt" not in builtin_globals:
-        builtin_globals["dbt"] = DBT_MACRO_REGISTRY.build_environment(
-            **builtin_globals
-        ).globals.get("dbt", {})
-
-    return builtin_globals
+    return {**builtin_globals, **jinja_globals}
 
 
 def create_builtin_filters() -> t.Dict[str, t.Callable]:

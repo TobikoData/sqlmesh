@@ -23,11 +23,10 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        dialect: str = "",
     ):
         self.jinja_macros = jinja_macros
-        self.jinja_globals = jinja_globals or {}
-        self.dialect = dialect
+        self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
+        self.jinja_globals["adapter"] = self
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -78,18 +77,15 @@ class BaseAdapter(abc.ABC):
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
-        dialect_name = f"{self.dialect}__{name}"
-        default_name = f"default__{name}"
-
+        target_type = self.jinja_globals["target"]["type"]
         references_to_try = [
-            MacroReference(package=package, name=dialect_name),
-            MacroReference(package=package, name=default_name),
+            MacroReference(package=f"{package}_{target_type}", name=f"{target_type}__{name}"),
+            MacroReference(package=package, name=f"{target_type}__{name}"),
+            MacroReference(package=package, name=f"default__{name}"),
         ]
 
         for reference in references_to_try:
-            macro_callable = self.jinja_macros.build_macro(
-                reference, **{**self.jinja_globals, "adapter": self}
-            )
+            macro_callable = self.jinja_macros.build_macro(reference, **self.jinja_globals)
             if macro_callable is not None:
                 return macro_callable
 
@@ -141,7 +137,7 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake

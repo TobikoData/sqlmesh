@@ -12,10 +12,6 @@ from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load
 
-if t.TYPE_CHECKING:
-    from sqlmesh.dbt.context import DbtContext
-
-
 T = t.TypeVar("T", bound="GeneralConfig")
 
 
@@ -65,6 +61,10 @@ class QuotingConfig(DbtConfig):
     database: bool = True
     schema_: bool = Field(True, alias="schema")
     identifier: bool = True
+
+    @validator("database", "schema_", "identifier", pre=True)
+    def _validate_bool(cls, v: str) -> bool:
+        return ensure_bool(v)
 
 
 class GeneralConfig(DbtConfig):
@@ -137,31 +137,3 @@ class GeneralConfig(DbtConfig):
         """
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
-
-    def render_config(self: T, context: DbtContext) -> T:
-        def render_value(val: t.Any) -> t.Any:
-            if type(val) is not SqlStr and type(val) is str:
-                val = context.render(val)
-            elif isinstance(val, GeneralConfig):
-                for name in val.__fields__:
-                    setattr(val, name, render_value(getattr(val, name)))
-            elif isinstance(val, list):
-                for i in range(len(val)):
-                    val[i] = render_value(val[i])
-            elif isinstance(val, set):
-                for set_val in val:
-                    val.remove(set_val)
-                    val.add(render_value(set_val))
-            elif isinstance(val, dict):
-                for k in val:
-                    val[k] = render_value(val[k])
-
-            return val
-
-        rendered = self.copy(deep=True)
-        for name in rendered.__fields__:
-            value = getattr(rendered, name)
-            if value is not None:
-                setattr(rendered, name, render_value(value))
-
-        return rendered

@@ -60,49 +60,10 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_config(sushi_test_project: Project):
-    assert set(sushi_test_project.packages["sushi"].models) == {
-        "waiters",
-        "top_waiters",
-        "waiter_revenue_by_day",
-        "waiter_as_customer_by_day",
-    }
-
-    assert set(sushi_test_project.packages["customers"].models) == {
-        "customers",
-        "customer_revenue_by_day",
-    }
-
-    customer_revenue_by_day_config = sushi_test_project.packages["customers"].models[
-        "customer_revenue_by_day"
-    ]
-
-    context = sushi_test_project.context
-    context.sources = {
-        "raw.order_items": SourceConfig(target_schema="raw", name="order_items"),
-        "raw.items": SourceConfig(target_schema="raw", name="items"),
-        "raw.orders": SourceConfig(target_schema="raw", name="orders"),
-    }
-    context.variables = {}
-    rendered = customer_revenue_by_day_config.render_config(context)
-
-    expected_config = {
-        "materialized": Materialization.INCREMENTAL,
-        "incremental_strategy": "delete+insert",
-        "cluster_by": ["ds"],
-        "target_schema": "sushi",
-    }
-    actual_config = {k: getattr(rendered, k) for k, v in expected_config.items()}
-    assert actual_config == expected_config
-
-    assert rendered.model_name == "sushi.customer_revenue_by_day"
-
-
 def test_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
         alias="model",
-        target_schema="schema",
-        schema_="custom",
+        schema="custom",
         database="database",
         materialized=Materialization.INCREMENTAL,
         description="test model",
@@ -116,12 +77,13 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
     )
-    context = DbtContext(project_name="Foo")
+    context = DbtContext()
+    context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
-    assert model.name == "database.schema_custom.model"
+    assert model.name == "database.custom.model"
     assert model.description == "test model"
     assert model.query.sql() == "SELECT 1 AS a FROM foo"
     assert model.start == "Jan 1 2023"
@@ -136,7 +98,6 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
 
 
 def test_model_config_sql_no_config():
-    context = DbtContext()
     assert (
         ModelConfig(
             sql="""{{
@@ -146,13 +107,10 @@ def test_model_config_sql_no_config():
   )
 }}
 query"""
-        )
-        .render_config(context)
-        .sql_no_config.strip()
+        ).sql_no_config.strip()
         == "query"
     )
 
-    context.variables = {"new": "old"}
     assert (
         ModelConfig(
             sql="""{{
@@ -163,18 +121,14 @@ query"""
   )
 }}
 query"""
-        )
-        .render_config(context)
-        .sql_no_config.strip()
+        ).sql_no_config.strip()
         == "query"
     )
 
     assert (
         ModelConfig(
             sql="""before {{config(materialized='table', post_hook=" {{ var('new') }} ")}} after"""
-        )
-        .render_config(context)
-        .sql_no_config.strip()
+        ).sql_no_config.strip()
         == "before  after"
     )
 
@@ -190,28 +144,22 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     kwargs = {"context": context}
 
-    with pytest.raises(ConfigError, match=r".*Variable 'foo' was not found.*"):
-        rendered = model_config.render_config(context)
-        model_config.to_sqlmesh(**kwargs)
-
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
     context.variables = defined_variables
-    rendered = model_config.render_config(context)
-    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
+    model_config._sql_no_config = None
 
-    rendered = model_config.render_config(context)
-    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
     context.variables = defined_variables
 
-    rendered = model_config.render_config(context)
-    assert_exp_eq(rendered.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
@@ -257,7 +205,7 @@ def test_seed_config(sushi_test_project: Project):
 
     expected_config = {
         "path": Path(sushi_test_project.context.project_root, "seeds/waiter_names.csv"),
-        "target_schema": "sushi",
+        "schema_": "sushi",
     }
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
