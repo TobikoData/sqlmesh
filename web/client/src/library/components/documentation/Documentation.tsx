@@ -130,7 +130,7 @@ const Documentation = function Documentation({
                       disabled={isFalse(withQuery)}
                       className={({ selected }) =>
                         clsx(
-                          'inline-block  font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                          'inline-block font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
                           selected
                             ? 'bg-secondary-500 text-secondary-100 cursor-default'
                             : 'bg-secondary-10 ',
