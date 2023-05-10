@@ -380,6 +380,9 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     snapshots = list(snapshots)
     earliest = to_datetime(yesterday().date())
     if snapshots:
+        for snapshot in snapshots:
+            if not snapshot.parents and not snapshot.start:
+                snapshot._start = earliest
         return min(start_date(snapshot, snapshots) or earliest for snapshot in snapshots)
     return earliest
 
