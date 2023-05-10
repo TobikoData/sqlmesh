@@ -205,7 +205,7 @@ function Headline({ headline }: { headline: string }): JSX.Element {
 
 function NotFound(): JSX.Element {
   return (
-    <Container className=" font-bold whitespace-nowrap w-full h-full">
+    <Container className="font-bold whitespace-nowrap w-full h-full">
       <div className="flex items-center justify-center w-full h-full">
         Documentation Not Found
       </div>
