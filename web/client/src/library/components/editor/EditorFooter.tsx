@@ -89,7 +89,7 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           text="SQLMesh Type"
         >
           <EditorIndicator.Text
-            text={tab.file.isSQLMeshModel ? 'Model' : 'Unsuported'}
+            text={tab.file.isSQLMeshModel ? 'Model' : 'Unsupported'}
           />
         </EditorIndicator>
       )}
