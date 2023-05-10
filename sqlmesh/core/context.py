@@ -398,16 +398,6 @@ class Context(BaseContext):
         return MappingProxyType(self._models)
 
     @property
-    def macros(self) -> MappingProxyType[str, ExecutableOrMacro]:
-        """Returns all registered macros in this context."""
-        return MappingProxyType(self._macros)
-
-    @property
-    def hooks(self) -> MappingProxyType[str, hook]:
-        """Returns all registered hooks in this context."""
-        return MappingProxyType(self._hooks)
-
-    @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
         """Generates and returns snapshots based on models registered in this context.
 
@@ -847,7 +837,7 @@ class Context(BaseContext):
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")
-        self.console.log_status_update(f"Macros: {len(self.macros)}")
+        self.console.log_status_update(f"Macros: {len(self._macros)}")
 
         self._try_connection("data warehouse", self._engine_adapter)
 
