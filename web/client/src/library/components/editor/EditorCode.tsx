@@ -194,7 +194,7 @@ function CodeEditorRemoteFile({
     <div className="flex justify-center items-center w-full h-full">
       <Loading className="inline-block ">
         <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-        <h3 className="text-xl">Waiting for file...</h3>
+        <h3 className="text-xl">Waiting for File...</h3>
       </Loading>
     </div>
   ) : file == null ? (
