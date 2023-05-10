@@ -1,6 +1,12 @@
-import { type Column } from '@api/client'
+import {
+  type Model,
+  type Column,
+  type ColumnLineageApiLineageModelNameColumnNameGet200,
+} from '@api/client'
 import { useStoreContext } from '@context/context'
+import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { isObjectEmpty } from '@utils/index'
 import { createContext, useState, useContext } from 'react'
 import {
   applyNodeChanges,
@@ -30,6 +36,7 @@ interface ReactFlowStore {
 }
 
 interface LineageFlow extends ReactFlowStore {
+  lineage?: Record<string, Lineage>
   withColumns: boolean
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
@@ -40,8 +47,11 @@ interface LineageFlow extends ReactFlowStore {
   clearActiveEdges: () => void
   setActiveColumns: React.Dispatch<React.SetStateAction<ActiveColumns>>
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
+  setLineage: React.Dispatch<
+    React.SetStateAction<Record<string, Lineage> | undefined>
+  >
   handleClickModel?: (modelName: string) => void
-  refreshModels: () => void
+  handleError?: (error: Error) => void
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   setManuallySelectedColumn: React.Dispatch<
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
@@ -49,6 +59,7 @@ interface LineageFlow extends ReactFlowStore {
 }
 
 export const LineageFlowContext = createContext<LineageFlow>({
+  lineage: {},
   withColumns: true,
   nodes: [],
   edges: [],
@@ -66,23 +77,25 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setActiveColumns: () => {},
   setActiveEdges: () => {},
   models: new Map(),
-  refreshModels: () => {},
   handleClickModel: () => {},
   manuallySelectedColumn: undefined,
   setManuallySelectedColumn: () => {},
+  handleError: () => {},
+  setLineage: () => {},
 })
 
 export default function LineageFlowProvider({
+  handleError,
   handleClickModel,
   children,
   withColumns = true,
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
+  handleError?: (error: Error) => void
   withColumns?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)
-  const refreshModels = useStoreContext(s => s.refreshModels)
 
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
@@ -90,6 +103,7 @@ export default function LineageFlowProvider({
   const [edges, setEdges] = useState<Edge[]>([])
   const [activeEdges, setActiveEdges] = useState<ActiveEdges>(new Map())
   const [activeColumns, setActiveColumns] = useState<ActiveColumns>(new Map())
+  const [lineage, setLineage] = useState<Record<string, Lineage> | undefined>()
 
   function onNodesChange(changes: NodeChange[]): void {
     setNodes(applyNodeChanges(changes, nodes))
@@ -130,6 +144,8 @@ export default function LineageFlowProvider({
   return (
     <LineageFlowContext.Provider
       value={{
+        setLineage,
+        lineage,
         withColumns,
         nodes,
         edges,
@@ -147,10 +163,10 @@ export default function LineageFlowProvider({
         removeActiveEdges,
         hasActiveEdge,
         models,
-        refreshModels,
         handleClickModel,
         manuallySelectedColumn,
         setManuallySelectedColumn,
+        handleError,
       }}
     >
       {children}
@@ -160,4 +176,86 @@ export default function LineageFlowProvider({
 
 export function useLineageFlow(): LineageFlow {
   return useContext(LineageFlowContext)
+}
+
+// TODO: use better merge
+export function mergeLineage(
+  models: Map<string, Model>,
+  lineage: Record<string, Lineage> = {},
+  columns: ColumnLineageApiLineageModelNameColumnNameGet200 = {},
+): Record<string, Lineage> {
+  lineage = structuredClone(lineage)
+
+  for (const model in columns) {
+    const lineageModel = lineage[model]
+    const columnsModel = columns[model]
+
+    if (lineageModel == null || columnsModel == null) continue
+
+    if (lineageModel.columns == null) {
+      lineageModel.columns = {}
+    }
+
+    for (const columnName in columnsModel) {
+      const columnsModelColumn = columnsModel[columnName]
+
+      if (columnsModelColumn == null) continue
+
+      const lineageModelColumn = lineageModel.columns[columnName] ?? {}
+
+      lineageModelColumn.source = columnsModelColumn.source
+      lineageModelColumn.models = {}
+
+      lineageModel.columns[columnName] = lineageModelColumn
+
+      if (isObjectEmpty(columnsModelColumn.models)) continue
+
+      for (const columnModel in columnsModelColumn.models) {
+        const columnsModelColumnModel = columnsModelColumn.models[columnModel]
+
+        if (columnsModelColumnModel == null) continue
+
+        const lineageModelColumnModel = lineageModelColumn.models[columnModel]
+
+        if (lineageModelColumnModel == null) {
+          lineageModelColumn.models[columnModel] = columnsModelColumnModel
+        } else {
+          lineageModelColumn.models[columnModel] = Array.from(
+            new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
+          )
+        }
+      }
+    }
+  }
+
+  for (const modelName in lineage) {
+    const model = models.get(modelName)
+    const modelLineage = lineage[modelName]
+
+    if (model == null || modelLineage == null) {
+      delete lineage[modelName]
+
+      continue
+    }
+
+    if (modelLineage.columns == null) continue
+
+    if (model.columns == null) {
+      delete modelLineage.columns
+
+      continue
+    }
+
+    for (const columnName in modelLineage.columns) {
+      const found = model.columns.find(c => c.name === columnName)
+
+      if (found == null) {
+        delete modelLineage.columns[columnName]
+
+        continue
+      }
+    }
+  }
+
+  return lineage
 }

@@ -78,8 +78,9 @@ export default function Directory({
         }
 
         directory.addDirectory(new ModelDirectory(created, directory))
-
         directory.open()
+
+        refreshProject()
       })
       .catch(error => {
         // TODO: Show error notification
@@ -108,8 +109,12 @@ export default function Directory({
           return
         }
 
-        directory.addFile(new ModelFile(created, directory))
+        const file = new ModelFile(created, directory)
+
+        directory.addFile(file)
         directory.open()
+
+        refreshProject()
       })
       .catch(error => {
         // TODO: Show error notification

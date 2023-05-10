@@ -1,12 +1,12 @@
 import { useApiModelLineage } from '@api/index'
 import { debounceAsync } from '@utils/index'
-import { useCallback, useEffect } from 'react'
+import { memo, useCallback, useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useLineageFlow } from './context'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { mergeLineage, useLineageFlow } from './context'
 import { type Lineage } from '@context/editor'
 
-export function ModelLineage({
+const ModelLineage = memo(function ModelLineage({
   model,
   fingerprint,
   highlightedNodes,
@@ -17,15 +17,15 @@ export function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, refreshModels, models } = useLineageFlow()
+  const { clearActiveEdges, models, lineage, setLineage } = useLineageFlow()
 
-  const { data: lineage, refetch: getModelLineage } = useApiModelLineage(
+  const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
     model.name,
   )
 
   const debouncedGetModelLineage = useCallback(
-    debounceAsync(getModelLineage, 1000, true),
-    [model, fingerprint],
+    debounceAsync(getModelLineage, 500),
+    [model.name, fingerprint],
   )
 
   useEffect(() => {
@@ -33,14 +33,16 @@ export function ModelLineage({
   }, [debouncedGetModelLineage])
 
   useEffect(() => {
-    if (lineage == null) {
-      model.update({ lineage: undefined })
+    if (dataLineage == null) {
+      setLineage(undefined)
     } else {
-      const lineageModels = Object.keys(lineage).reduce(
+      const lineageModels = Object.keys(dataLineage).reduce(
         (acc: Record<string, Lineage>, key) => {
-          acc[key] = {
-            models: lineage[key] ?? [],
-            columns: model.lineage?.[key]?.columns ?? undefined,
+          if (models.has(key)) {
+            acc[key] = {
+              models: (dataLineage[key] ?? []).filter(name => models.has(name)),
+              columns: lineage?.[key]?.columns ?? undefined,
+            }
           }
 
           return acc
@@ -48,17 +50,13 @@ export function ModelLineage({
         {},
       )
 
-      model.update({
-        lineage: ModelSQLMeshModel.mergeLineage(models, lineageModels),
-      })
+      setLineage(mergeLineage(models, lineageModels))
     }
-
-    refreshModels()
-  }, [lineage])
+  }, [dataLineage])
 
   useEffect(() => {
     clearActiveEdges()
-  }, [model])
+  }, [model.name])
 
   return (
     <ModelColumnLineage
@@ -67,4 +65,6 @@ export function ModelLineage({
       className={className}
     />
   )
-}
+})
+
+export default ModelLineage

@@ -11,6 +11,7 @@ import Editor from '@components/editor/Editor'
 import { useIDE } from '../ide/context'
 import { useStoreFileTree } from '@context/fileTree'
 import LineageFlowProvider from '@components/graph/context'
+import { useStoreEditor } from '@context/editor'
 
 const Plan = lazy(async () => await import('@components/plan/Plan'))
 
@@ -22,6 +23,9 @@ export default function PageEditor(): JSX.Element {
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
   const project = useStoreFileTree(s => s.project)
+
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+
   const environment = useStoreContext(s => s.environment)
   const initialStartDate = useStoreContext(s => s.initialStartDate)
   const initialEndDate = useStoreContext(s => s.initialEndDate)
@@ -42,6 +46,10 @@ export default function PageEditor(): JSX.Element {
     selectFile(files.get(model.path))
   }
 
+  function handleError(error?: Error): void {
+    setPreviewConsole(error?.message)
+  }
+
   return (
     <>
       {environment != null && (
@@ -52,7 +60,10 @@ export default function PageEditor(): JSX.Element {
           className="flex w-full h-full overflow-hidden"
         >
           <FileTree project={project} />
-          <LineageFlowProvider handleClickModel={handleClickModel}>
+          <LineageFlowProvider
+            handleClickModel={handleClickModel}
+            handleError={handleError}
+          >
             <Editor />
           </LineageFlowProvider>
         </SplitPane>
