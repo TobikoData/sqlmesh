@@ -2,8 +2,8 @@ import { useApiModelLineage } from '@api/index'
 import { debounceAsync } from '@utils/index'
 import { memo, useCallback, useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useLineageFlow } from './context'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { mergeLineage, useLineageFlow } from './context'
 import { type Lineage } from '@context/editor'
 
 const ModelLineage = memo(function ModelLineage({
@@ -17,9 +17,9 @@ const ModelLineage = memo(function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, refreshModels, models } = useLineageFlow()
+  const { clearActiveEdges, models, lineage, setLineage } = useLineageFlow()
 
-  const { data: lineage, refetch: getModelLineage } = useApiModelLineage(
+  const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
     model.name,
   )
 
@@ -33,15 +33,15 @@ const ModelLineage = memo(function ModelLineage({
   }, [debouncedGetModelLineage])
 
   useEffect(() => {
-    if (lineage == null) {
-      model.update({ lineage: undefined })
+    if (dataLineage == null) {
+      setLineage(undefined)
     } else {
-      const lineageModels = Object.keys(lineage).reduce(
+      const lineageModels = Object.keys(dataLineage).reduce(
         (acc: Record<string, Lineage>, key) => {
           if (models.has(key)) {
             acc[key] = {
-              models: (lineage[key] ?? []).filter(name => models.has(name)),
-              columns: model.lineage?.[key]?.columns ?? undefined,
+              models: (dataLineage[key] ?? []).filter(name => models.has(name)),
+              columns: lineage?.[key]?.columns ?? undefined,
             }
           }
 
@@ -50,17 +50,13 @@ const ModelLineage = memo(function ModelLineage({
         {},
       )
 
-      model.update({
-        lineage: ModelSQLMeshModel.mergeLineage(models, lineageModels),
-      })
+      setLineage(mergeLineage(models, lineageModels))
     }
-
-    refreshModels()
-  }, [lineage])
+  }, [dataLineage])
 
   useEffect(() => {
     clearActiveEdges()
-  }, [model])
+  }, [model.name])
 
   return (
     <ModelColumnLineage

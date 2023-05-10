@@ -39,6 +39,7 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { sql } from '@codemirror/lang-sql'
+import { useLineageFlow } from '@components/graph/context'
 
 function CodeEditorDefault({
   type,
@@ -210,7 +211,7 @@ export function useSQLMeshModelExtensions(
   handleModelClick?: (model: ModelSQLMeshModel) => void,
   handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
-  const models = useStoreContext(s => s.models)
+  const { models, lineage } = useLineageFlow()
   const files = useStoreFileTree(s => s.files)
 
   const extensions = useMemo(() => {
@@ -218,10 +219,10 @@ export function useSQLMeshModelExtensions(
 
     const model = models.get(path)
     const columns =
-      model?.lineage == null
+      lineage == null
         ? new Set<string>()
         : new Set(
-            Object.keys(model.lineage)
+            Object.keys(lineage)
               .map(modelName => models.get(modelName)?.columns.map(c => c.name))
               .flat()
               .filter(Boolean) as string[],

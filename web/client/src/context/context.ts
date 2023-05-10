@@ -20,7 +20,6 @@ interface ContextStore {
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
   setModels: (models?: Model[]) => void
-  refreshModels: () => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
   ) => boolean
@@ -65,11 +64,6 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
         return acc
       }, new Map()),
-    }))
-  },
-  refreshModels() {
-    set(() => ({
-      models: new Map(get().models),
     }))
   },
   getNextEnvironment() {

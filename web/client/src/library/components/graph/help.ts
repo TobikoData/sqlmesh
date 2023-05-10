@@ -72,7 +72,6 @@ function getNodesAndEdges({
   edges: Edge[]
   nodes: Node[]
   activeColumns: ActiveColumns
-  key: string
 } {
   const currentEdges = edges.reduce(
     (acc: Record<string, Edge>, edge) =>
@@ -97,7 +96,6 @@ function getNodesAndEdges({
   })
   const outputEdges: Edge[] = []
   const activeColumns: ActiveColumns = new Map()
-  const ids = Object.keys(nodesMap)
 
   for (const modelSource of modelNames) {
     const modelLineage = lineage[modelSource]
@@ -107,7 +105,6 @@ function getNodesAndEdges({
     modelLineage.models.forEach(modelTarget => {
       const edge = createGraphEdge(modelSource, modelTarget)
 
-      ids.push(edge.id)
       outputEdges.push(edge)
     })
 
@@ -182,7 +179,6 @@ function getNodesAndEdges({
               },
             )
 
-          ids.push(edge.id)
           outputEdges.push(edge)
         }
       }
@@ -194,7 +190,6 @@ function getNodesAndEdges({
     nodes: Object.values(nodesMap),
     nodesMap,
     activeColumns,
-    key: ids.join('-'),
   }
 }
 

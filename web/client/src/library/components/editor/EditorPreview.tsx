@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import {
@@ -24,7 +24,7 @@ export const EnumEditorPreviewTabs = {
 
 export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
 
-export default function EditorPreview({
+const EditorPreview = memo(function EditorPreview({
   tab,
   toggleDirection,
 }: {
@@ -95,11 +95,13 @@ export default function EditorPreview({
 
   useEffect(() => {
     setActiveTabIndex(tab.file.isSQLMeshModel ? 3 : -1)
-  }, [previewTable, previewQuery, previewConsole, tab])
+  }, [tab.id, previewTable, previewQuery, previewConsole])
 
   useEffect(() => {
+    if (model?.path === tab.file.path) return
+
     setModel(models.get(tab.file.path))
-  }, [models])
+  }, [models, tab.id])
 
   const table = useReactTable({
     data,
@@ -162,7 +164,7 @@ export default function EditorPreview({
           </div>
           <div className="ml-2">
             <Button
-              className="m-0 py-0.5 px-[0.25rem] border-none"
+              className="!m-0 !py-0.5 px-[0.25rem] border-none"
               variant={EnumVariant.Alternative}
               onClick={toggleDirection}
             >
@@ -263,7 +265,7 @@ export default function EditorPreview({
             )}
           >
             {model == null ? (
-              <div>Model Does Not Exist</div>
+              <EditorPreviewEmpty />
             ) : (
               <ModelLineage
                 model={model}
@@ -275,4 +277,16 @@ export default function EditorPreview({
       </Tab.Group>
     </div>
   )
+})
+
+function EditorPreviewEmpty(): JSX.Element {
+  return (
+    <div className="flex justify-center items-center w-full h-full">
+      <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
+        <h2 className="text-3xl">Model Does Not Exist</h2>
+      </div>
+    </div>
+  )
 }
+
+export default EditorPreview
