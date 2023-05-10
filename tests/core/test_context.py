@@ -56,7 +56,7 @@ def test_config_not_found():
 
 
 def test_custom_macros(sushi_context):
-    assert "add_one" in sushi_context.macros
+    assert "add_one" in sushi_context._macros
 
 
 def test_dag(sushi_context):
@@ -311,7 +311,7 @@ def test():
     context = Context(paths=str(tmpdir), config=config)
 
     assert ["db.actual_test"] == list(context.models)
-    assert "test" == list(context.macros)[-1]
+    assert "test" == list(context._macros)[-1]
 
 
 def test_plan_apply(sushi_context) -> None:
