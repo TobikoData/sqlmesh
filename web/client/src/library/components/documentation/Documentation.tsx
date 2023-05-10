@@ -249,7 +249,7 @@ function Section({
           <>
             <Disclosure.Button
               className={clsx(
-                'flex items-center justify-between rounded-lg text-left  w-full bg-neutral-10 px-3 mb-2',
+                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2',
                 className,
               )}
             >
