@@ -542,46 +542,25 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]
-    ) -> t.Union[exp.Or, exp.Boolean]:
+    ) -> t.Union[exp.In, exp.Boolean]:
         if not snapshot_ids:
             return exp.false()
 
-        return exp.or_(
-            *(
-                exp.and_(
-                    exp.EQ(
-                        this=exp.to_column("name"),
-                        expression=exp.Literal.string(snapshot_id.name),
-                    ),
-                    exp.EQ(
-                        this=exp.to_column("identifier"),
-                        expression=exp.Literal.string(snapshot_id.identifier),
-                    ),
-                )
-                for snapshot_id in snapshot_ids
-            )
+        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("identifier")))).isin(
+            *[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids]
         )
 
     def _snapshot_name_version_filter(
         self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike]
-    ) -> t.Union[exp.Or, exp.Boolean]:
+    ) -> t.Union[exp.In, exp.Boolean]:
         if not snapshot_name_versions:
             return exp.false()
 
-        return exp.or_(
-            *(
-                exp.and_(
-                    exp.EQ(
-                        this=exp.to_column("name"),
-                        expression=exp.Literal.string(snapshot_name_version.name),
-                    ),
-                    exp.EQ(
-                        this=exp.to_column("version"),
-                        expression=exp.Literal.string(snapshot_name_version.version),
-                    ),
-                )
+        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("version")))).isin(
+            *[
+                (snapshot_name_version.name, snapshot_name_version.version)
                 for snapshot_name_version in snapshot_name_versions
-            )
+            ]
         )
 
     @contextlib.contextmanager
