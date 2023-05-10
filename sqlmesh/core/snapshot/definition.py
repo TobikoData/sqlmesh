@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 import zlib
 from collections import defaultdict
+from datetime import datetime
 from enum import IntEnum
 
 from pydantic import validator
@@ -340,7 +341,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
-    _start: t.Optional[TimeLike] = None
+    _start: t.Optional[datetime] = None
 
     @validator("ttl")
     @classmethod
@@ -740,8 +741,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
-    def start(self) -> t.Optional[TimeLike]:
-        return self.model.start or self._start
+    def start(self) -> t.Optional[datetime]:
+        time = self.model.start or self._start
+        if time:
+            return to_datetime(time)
+        return None
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:

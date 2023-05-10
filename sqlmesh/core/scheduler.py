@@ -344,7 +344,7 @@ def start_date(
         Start datetime object.
     """
     if snapshot.start:
-        return to_datetime(snapshot.start)
+        return snapshot.start
 
     if not isinstance(snapshots, dict):
         snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
@@ -363,7 +363,6 @@ def start_date(
             earliest = min(earliest, start_dt)
 
     if earliest:
-        earliest = to_datetime(earliest)
         snapshot._start = earliest
 
     return earliest
