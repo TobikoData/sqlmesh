@@ -90,7 +90,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   refreshTab() {
     const tab = get().tab
 
-    tab != null && get().selectTab({ ...tab })
+    if (tab == null) return
+
+    get().selectTab({ ...tab })
   },
   setDialects(dialects) {
     set(() => ({

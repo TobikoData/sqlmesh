@@ -114,7 +114,7 @@ const Documentation = function Documentation({
                       disabled={isFalse(withCode)}
                       className={({ selected }) =>
                         clsx(
-                          'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                          'inline-block font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
                           selected
                             ? 'bg-secondary-500 text-secondary-100 cursor-default'
                             : 'bg-secondary-10 ',
@@ -130,7 +130,7 @@ const Documentation = function Documentation({
                       disabled={isFalse(withQuery)}
                       className={({ selected }) =>
                         clsx(
-                          'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                          'inline-block font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
                           selected
                             ? 'bg-secondary-500 text-secondary-100 cursor-default'
                             : 'bg-secondary-10 ',
@@ -146,7 +146,7 @@ const Documentation = function Documentation({
                   <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
                     <Tab.Panel
                       className={clsx(
-                        'flex flex-col w-full h-full pt-4 relative px-2 overflow-hidden',
+                        'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                       )}
                     >
@@ -158,7 +158,7 @@ const Documentation = function Documentation({
                           <CodeEditor
                             extensions={extensions.concat(modelExtensions)}
                             content={content}
-                            className="!text-xs"
+                            className="text-xs"
                           />
                         )}
                       </CodeEditor.SQLMeshDialect>
@@ -205,7 +205,7 @@ function Headline({ headline }: { headline: string }): JSX.Element {
 
 function NotFound(): JSX.Element {
   return (
-    <Container className="text-sm font-bold whitespace-nowrap w-full h-full">
+    <Container className="font-bold whitespace-nowrap w-full h-full">
       <div className="flex items-center justify-center w-full h-full">
         Documentation Not Found
       </div>
@@ -249,7 +249,7 @@ function Section({
           <>
             <Disclosure.Button
               className={clsx(
-                'flex items-center justify-between rounded-lg text-left text-sm w-full bg-neutral-10 px-3 mb-2',
+                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2',
                 className,
               )}
             >
@@ -262,7 +262,7 @@ function Section({
                 )}
               </div>
             </Disclosure.Button>
-            <Disclosure.Panel className="pb-2 text-sm overflow-hidden">
+            <Disclosure.Panel className="pb-2 overflow-hidden">
               <div className="px-2">{children}</div>
             </Disclosure.Panel>
           </>

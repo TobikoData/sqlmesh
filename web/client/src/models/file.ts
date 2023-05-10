@@ -9,6 +9,7 @@ export const EnumFileExtensions = {
   CSV: '.csv',
   YAML: '.yaml',
   YML: '.yml',
+  None: '',
 } as const
 export type FileExtensions =
   (typeof EnumFileExtensions)[keyof typeof EnumFileExtensions]
@@ -20,11 +21,11 @@ export interface InitialFile extends InitialArtifact, File {
 
 export class ModelFile extends ModelArtifact<InitialFile> {
   private _content: string = ''
+  private _type?: FileType
 
   content: string
-  extension: FileExtensions
   is_supported: boolean
-  type?: FileType
+  extension: FileExtensions
 
   constructor(initial?: File | ModelFile, parent?: ModelDirectory) {
     super(
@@ -39,11 +40,21 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       parent,
     )
 
-    this.extension = (initial?.extension ??
-      this.initial.extension) as FileExtensions
-    this.is_supported = initial?.is_supported ?? this.initial.is_supported
-    this._content = this.content = initial?.content ?? this.initial.content
-    this.type = initial?.type ?? getFileType(initial?.path)
+    this.extension =
+      ((initial?.extension ?? this.initial.extension) as FileExtensions) ?? ''
+    this.is_supported =
+      initial?.is_supported ?? this.initial.is_supported ?? false
+    this._content = this.content =
+      initial?.content ?? this.initial.content ?? ''
+    this.type = initial?.type
+  }
+
+  get type(): FileType | undefined {
+    return this._type
+  }
+
+  set type(newType: FileType | undefined) {
+    this._type = newType ?? getFileType(this.path)
   }
 
   get isEmpty(): boolean {
@@ -59,7 +70,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get isSQLMeshModel(): boolean {
-    return this.type === 'model'
+    return this.is_supported && this.type === 'model'
   }
 
   get fingerprint(): string {
@@ -77,6 +88,19 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   updateContent(newContent: string = ''): void {
     this._content = newContent
     this.content = newContent
+  }
+
+  update(newFile?: File): void {
+    if (newFile == null) {
+      this.updateContent('')
+    } else {
+      this.is_supported = newFile.is_supported ?? false
+      this.extension =
+        (newFile.extension as FileExtensions) ?? EnumFileExtensions.None
+      this.type = newFile.type as FileType
+
+      this.updateContent(newFile.content)
+    }
   }
 }
 

@@ -27,20 +27,18 @@ const pyodideReadyPromise = loadPyodideAndPackages()
 scope.onmessage = async (e: MessageEvent) => {
   const [parse, get_dialect, dialects] = await pyodideReadyPromise
 
-  if (e.data.topic === 'parse') {
+  if (e.data.topic === 'validate') {
     let payload
 
     try {
-      payload = JSON.parse(parse(e.data.payload))
+      const parsed = JSON.parse(parse(e.data.payload)).filter(Boolean)
+      payload = Boolean(parsed) && parsed.length > 0
     } catch (error) {
-      payload = {
-        type: 'error',
-        message: 'Invalid JSON',
-      }
+      payload = false
     }
 
     scope.postMessage({
-      topic: 'parse',
+      topic: 'validate',
       payload,
     })
   }

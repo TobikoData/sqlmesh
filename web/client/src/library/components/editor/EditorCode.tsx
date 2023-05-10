@@ -39,6 +39,7 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { sql } from '@codemirror/lang-sql'
+import { useLineageFlow } from '@components/graph/context'
 
 function CodeEditorDefault({
   type,
@@ -155,18 +156,20 @@ function CodeEditorRemoteFile({
 }): JSX.Element {
   const files = useStoreFileTree(s => s.files)
 
-  const { refetch: getFileContent } = useApiFileByPath(path)
+  const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
   const keymaps = useSQLMeshModelKeymaps(path)
   const [file, setFile] = useState<ModelFile>()
 
   useEffect(() => {
-    const file = files.get(path)
+    setFile(undefined)
 
-    if (file == null) return
-    if (isStringNotEmpty(file.content)) {
-      setFile(file)
+    const tempFile = files.get(path)
+
+    if (tempFile == null) return
+    if (isStringNotEmpty(tempFile.content)) {
+      setFile(tempFile)
       return
     }
 
@@ -174,9 +177,9 @@ function CodeEditorRemoteFile({
       throwOnError: true,
     })
       .then(({ data }) => {
-        file.updateContent(data?.content ?? '')
+        tempFile.update(data)
 
-        setFile(file)
+        setFile(tempFile)
       })
       .catch(error => {
         if (isCancelledError(error)) {
@@ -185,14 +188,18 @@ function CodeEditorRemoteFile({
           console.log('getFileContent', error)
         }
       })
-  }, [files, path])
+  }, [path])
 
-  return file == null ? (
+  return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">
       <Loading className="inline-block ">
         <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-        <h3 className="text-xl">Waiting for file...</h3>
+        <h3 className="text-xl">Waiting for File...</h3>
       </Loading>
+    </div>
+  ) : file == null ? (
+    <div className="flex justify-center items-center w-full h-full">
+      <h3 className="text-xl">File Not Found</h3>
     </div>
   ) : (
     children({ file, keymaps })
@@ -204,7 +211,7 @@ export function useSQLMeshModelExtensions(
   handleModelClick?: (model: ModelSQLMeshModel) => void,
   handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
-  const models = useStoreContext(s => s.models)
+  const { models, lineage } = useLineageFlow()
   const files = useStoreFileTree(s => s.files)
 
   const extensions = useMemo(() => {
@@ -212,10 +219,10 @@ export function useSQLMeshModelExtensions(
 
     const model = models.get(path)
     const columns =
-      model?.lineage == null
+      lineage == null
         ? new Set<string>()
         : new Set(
-            Object.keys(model.lineage)
+            Object.keys(lineage)
               .map(modelName => models.get(modelName)?.columns.map(c => c.name))
               .flat()
               .filter(Boolean) as string[],
@@ -286,7 +293,7 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
         throwOnError: true,
       })
         .then(({ data }) => {
-          file.updateContent(data?.content ?? '')
+          file.update(data)
         })
         .catch(error => {
           if (isCancelledError(error)) {
@@ -317,7 +324,7 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
 
     if (newfile == null || file == null) return
 
-    file.updateContent(newfile.content)
+    file.update(newfile)
 
     refreshTab()
 

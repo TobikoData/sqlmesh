@@ -32,10 +32,8 @@ import { useApiColumnLineage } from '@api/index'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import './Graph.css'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useLineageFlow } from './context'
-
-const KEY_DEFAULT = 'default'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { mergeLineage, useLineageFlow } from './context'
 
 export function ModelColumnLineage({
   model,
@@ -59,21 +57,19 @@ export function ModelColumnLineage({
     onNodesChange,
     onEdgesChange,
     models,
+    lineage,
   } = useLineageFlow()
-
-  const [key, setKey] = useState(KEY_DEFAULT)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [ModelNode])
 
   useEffect(() => {
+    const highlightedNodesDefault = {
+      'border-4 border-brand-500': [model.name],
+    }
+
     const nodesAndEdges = getNodesAndEdges({
-      lineage: model.lineage,
-      highlightedNodes:
-        highlightedNodes == null
-          ? {
-              'border-4 border-brand-500': [model.name],
-            }
-          : highlightedNodes,
+      lineage,
+      highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
       models,
       nodes,
       edges,
@@ -89,20 +85,12 @@ export function ModelColumnLineage({
       setNodes(layout.nodes)
       setEdges(toggleEdge(layout.edges))
       setActiveColumns(nodesAndEdges.activeColumns)
-      setKey(nodesAndEdges.key)
     }
-  }, [model, models])
+  }, [model.name, models, highlightedNodes, lineage])
 
   useEffect(() => {
     setEdges(toggleEdge(edges))
   }, [activeEdges])
-
-  useEffect(() => {
-    nodes.forEach(node => {
-      node.position.x = 0
-      node.position.y = 0
-    })
-  }, [model])
 
   function toggleEdge(edges: Edge[] = []): Edge[] {
     return edges.map(edge => {
@@ -121,9 +109,8 @@ export function ModelColumnLineage({
   return (
     <div className={clsx('px-2 py-1 w-full h-full', className)}>
       <ReactFlow
-        key={key}
-        nodes={key === KEY_DEFAULT ? [] : nodes}
-        edges={key === KEY_DEFAULT ? [] : edges}
+        nodes={nodes}
+        edges={edges}
         nodeTypes={nodeTypes}
         onConnect={onConnect}
         onNodesChange={onNodesChange}
@@ -250,7 +237,15 @@ function ModelNode({
               column={column}
               disabled={model.type === 'python'}
             >
-              {({ column, columnId, hasTarget, hasSource, disabled }) => (
+              {({
+                column,
+                columnId,
+                hasTarget,
+                hasSource,
+                disabled,
+                isError,
+                isFetching,
+              }) => (
                 <ModelNodeHandles
                   id={columnId}
                   targetPosition={targetPosition}
@@ -263,6 +258,8 @@ function ModelNode({
                     columnName={column.name}
                     columnType={column.type}
                     disabled={disabled}
+                    isError={isError}
+                    isFetching={isFetching}
                   />
                 </ModelNodeHandles>
               )}
@@ -349,7 +346,6 @@ export function ModelColumn({
 }): JSX.Element {
   const {
     models,
-    refreshModels,
     activeEdges,
     hasActiveEdge,
     activeColumns,
@@ -357,6 +353,9 @@ export function ModelColumn({
     addActiveEdges,
     manuallySelectedColumn,
     setManuallySelectedColumn,
+    handleError,
+    lineage,
+    setLineage,
   } = useLineageFlow()
 
   const columnId = toNodeOrEdgeId(model.name, column.name)
@@ -367,6 +366,7 @@ export function ModelColumn({
     refetch: getColumnLineage,
     isFetching,
     isError,
+    error,
   } = useApiColumnLineage(model.name, column.name)
 
   const debouncedGetColumnLineage = useCallback(
@@ -416,6 +416,10 @@ export function ModelColumn({
     setManuallySelectedColumn(undefined)
   }, [manuallySelectedColumn])
 
+  useEffect(() => {
+    handleError?.(error as Error)
+  }, [error])
+
   const hasTarget = isArrayNotEmpty(activeColumns.get(columnId)?.outs)
   const hasSource = isArrayNotEmpty(activeColumns.get(columnId)?.ins)
 
@@ -438,15 +442,7 @@ export function ModelColumn({
             outs: [],
           })
 
-          model.update({
-            lineage: ModelSQLMeshModel.mergeLineage(
-              models,
-              model.lineage,
-              columnLineage,
-            ),
-          })
-
-          refreshModels()
+          setLineage(mergeLineage(models, lineage, columnLineage))
         }
       })
     } else {
@@ -518,7 +514,7 @@ ModelColumn.Display = function Display({
           >
             {columnName}
           </span>
-          <span className="text-neutral-400 dark:text-neutral-300">
+          <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
             {columnType}
           </span>
         </div>
