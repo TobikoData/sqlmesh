@@ -40,19 +40,21 @@ def health() -> str:
     return "ok"
 
 
-@app.get("/")
-def index() -> HTMLResponse:
-    with open(WEB_DIRECTORY / "client/dist/index.html", "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
-
-
 app.mount(
     "/assets",
     StaticFiles(directory=WEB_DIRECTORY / "client/dist/assets", check_dir=False),
     name="assets",
 )
+
+
 app.mount(
     "/favicons",
     StaticFiles(directory=WEB_DIRECTORY / "client/dist/favicons", check_dir=False),
     name="favicons",
 )
+
+
+@app.get("/{full_path:path}")
+async def index(full_path: str = "") -> HTMLResponse:
+    with open(WEB_DIRECTORY / "client/dist/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
