@@ -125,7 +125,7 @@ class ManifestHelper:
 
             if node.resource_type == "model":
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
-                    sql=node.raw_code,
+                    sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
                     dependencies=Dependencies(
                         macros=macro_references,
                         refs=_refs(node),
