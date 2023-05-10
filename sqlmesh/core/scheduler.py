@@ -343,8 +343,8 @@ def start_date(
     Returns:
         Start datetime object.
     """
-    if snapshot.model.start:
-        return to_datetime(snapshot.model.start)
+    if snapshot.start:
+        return snapshot.start
 
     if not isinstance(snapshots, dict):
         snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
@@ -362,6 +362,9 @@ def start_date(
         elif start_dt:
             earliest = min(earliest, start_dt)
 
+    if earliest:
+        snapshot._start = earliest
+
     return earliest
 
 
@@ -376,6 +379,9 @@ def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
     snapshots = list(snapshots)
     earliest = to_datetime(yesterday().date())
     if snapshots:
+        for snapshot in snapshots:
+            if not snapshot.parents and not snapshot.start:
+                snapshot._start = earliest
         return min(start_date(snapshot, snapshots) or earliest for snapshot in snapshots)
     return earliest
 
