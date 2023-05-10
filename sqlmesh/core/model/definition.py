@@ -31,7 +31,7 @@ from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import (
     Executable,
     build_env,
@@ -874,6 +874,7 @@ def load_model(
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
     hooks: t.Optional[HookRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -946,6 +947,9 @@ def load_model(
             time_column_format=time_column_format,
             macros=macros,
             hooks=hooks,
+            jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(
+                extract_macro_references(query.sql())
+            ),
             python_env=python_env,
             **meta_fields,
         )

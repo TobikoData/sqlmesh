@@ -72,6 +72,7 @@ from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import graphviz
@@ -214,6 +215,7 @@ class Context(BaseContext):
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
+        self._jinja_macros = JinjaMacroRegistry()
         self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
