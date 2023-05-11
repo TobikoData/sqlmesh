@@ -706,20 +706,20 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
 
     with pytest.raises(
         SQLMeshError,
-        match="Cannot restore sqlmesh._snapshots to schema version 9999.",
+        match="Cannot restore sqlmesh._snapshots to version 9999.",
     ):
-        state_sync.rollback(schema_version=9999)
+        state_sync.rollback(version=9999)
 
     mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._restore_table")
     state_sync._backup_state()
     assert len(state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")) == 3
 
     state_sync.rollback(0)
-    mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._snapshots", state_sync.snapshot_columns_to_types)
+    mock.assert_any_call(1, "sqlmesh._snapshots", state_sync.snapshot_columns_to_types)
     mock.assert_any_call(
-        SCHEMA_VERSION, "sqlmesh._environments", state_sync.environment_columns_to_types
+        1, "sqlmesh._environments", state_sync.environment_columns_to_types
     )
-    mock.assert_any_call(SCHEMA_VERSION, "sqlmesh._versions", state_sync.version_columns_to_types)
+    mock.assert_any_call(1, "sqlmesh._versions", state_sync.version_columns_to_types)
     assert not state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")
 
 
@@ -772,9 +772,9 @@ def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     state_sync._backup_state()
     versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
-    mock.assert_any_call(versions, "sqlmesh._snapshots")
-    mock.assert_any_call(versions, "sqlmesh._environments")
-    mock.assert_any_call(versions, "sqlmesh._versions")
+    mock.assert_any_call(1, versions, "sqlmesh._snapshots")
+    mock.assert_any_call(1, versions, "sqlmesh._environments")
+    mock.assert_any_call(1, versions, "sqlmesh._versions")
 
 
 def test_backup_table(state_sync: EngineAdapterStateSync) -> None:
@@ -790,17 +790,19 @@ def test_backup_table(state_sync: EngineAdapterStateSync) -> None:
     )
 
     versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
-    state_sync._backup_table(versions, table_name="sqlmesh._snapshots")
+    state_sync._backup_table(1, versions, table_name="sqlmesh._snapshots")
     (
+        version,
         schema_version,
         sqlglot_version,
         table_name,
         backup_table_name,
     ) = state_sync.engine_adapter.fetchone("select * from sqlmesh._backups")
+    assert version == 1
     assert schema_version == SCHEMA_VERSION
     assert sqlglot_version == SQLGLOT_VERSION
     assert table_name == "sqlmesh._snapshots"
-    assert backup_table_name == f"sqlmesh._snapshots_{SCHEMA_VERSION}"
+    assert backup_table_name == "sqlmesh._snapshots_1"
     pd.testing.assert_frame_equal(
         state_sync.engine_adapter.fetchdf(f"select * from {table_name}"),
         state_sync.engine_adapter.fetchdf(f"select * from {backup_table_name}"),
@@ -826,13 +828,13 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     )
     assert old_snapshots_count == (12,)
     versions = Versions(schema_version=SCHEMA_VERSION, sqlglot_version=SQLGLOT_VERSION)
-    state_sync._backup_table(versions, table_name="sqlmesh._snapshots")
+    state_sync._backup_table(1, versions, table_name="sqlmesh._snapshots")
 
     state_sync.engine_adapter.delete_from("sqlmesh._snapshots", "TRUE")
     snapshots_count = state_sync.engine_adapter.fetchone("select count(*) from sqlmesh._snapshots")
     assert snapshots_count == (0,)
     state_sync._restore_table(
-        schema_version=SCHEMA_VERSION,
+        version=1,
         table_name="sqlmesh._snapshots",
         columns_to_types=snapshot_columns_to_types,
     )

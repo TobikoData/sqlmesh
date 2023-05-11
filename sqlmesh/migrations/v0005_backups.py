@@ -10,6 +10,7 @@ def migrate(state_sync):  # type: ignore
     engine_adapter.create_state_table(
         backups_table,
         {
+            "version": exp.DataType.build("int"),
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build("text"),
             "table_name": exp.DataType.build("text"),
