@@ -37,6 +37,50 @@ commands:
             - run: circleci-agent step halt
 
 jobs:
+  publish:
+    docker:
+      - image: cimg/python:3.10
+    resource_class: small
+    steps:
+      - checkout
+      - attach_workspace:
+          at: web/client
+      - run:
+          name: Publish Python package
+          command: make publish
+
+  gh-release:
+    docker:
+      - image: cimg/node:16.14
+    resource_class: small
+    steps:
+      - run:
+          name: Create release on GitHub
+          command: |
+            GITHUB_TOKEN="$GITHUB_TOKEN" \
+            TARGET_TAG="$CIRCLE_TAG" \
+            REPO_OWNER="$CIRCLE_PROJECT_USERNAME" \
+            REPO_NAME="$CIRCLE_PROJECT_REPONAME" \
+            CONTINUE_ON_ERROR="false" \
+            npx https://github.com/TobikoData/circleci-gh-conventional-release
+
+  ide-build:
+    docker:
+      - image: cimg/node:19.8
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: Install packages
+          command: npm --prefix web/client ci
+      - run:
+          name: Build IDE
+          command: npm --prefix web/client run build
+      - persist_to_workspace:
+          root: web/client
+          paths:
+            - dist
+
   style_and_unit_tests:
     parameters:
       python_version:
@@ -152,7 +196,7 @@ jobs:
           path: /tmp/airflow_logs
 
 workflows:
-  main_pr_core:
+  main_pr:
     jobs:
       - style_and_unit_tests:
           matrix:
@@ -169,3 +213,16 @@ workflows:
                 - main
       - ui_style
       - ui_test
+
+  release:
+    jobs:
+      - gh-release:
+          <<: *on_tag_filter
+      - ide-build:
+          <<: *on_tag_filter
+          requires:
+            - gh-release
+      - publish:
+          <<: *on_tag_filter
+          requires:
+            - ide-build
