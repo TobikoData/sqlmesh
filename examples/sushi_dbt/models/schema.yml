@@ -2,8 +2,78 @@ version: 2
 
 models:
   - name: customers
+    columns:
+      - name: customer_id
+        description: Customer id
+        tests:
+          - not_null
   - name: customer_revenue_by_day
+    columns:
+      - name: customer_id
+        description: Customer id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('customers')
+              field: customer_id
+      - name: revenue
+        description: Revenue from orders made by this customer
+        tests:
+          - revenue_less_than:
+              amount: 1000
+      - name: ds
+        description: Date
   - name: top_waiters
+    columns:
+      - name: waiter_id
+        description: Waiter id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('waiters')
+              field: waiter_id
+      - name: revenue
+        description: Revenue from orders served by this waiter
   - name: waiters
+    columns:
+      - name: waiter_id
+        description: Waiter id
+        tests:
+          - not_null
+      - name: ds
+        description: Date
   - name: waiter_as_customer_by_day
+    columns:
+      - name: ds
+        description: Date
+      - name: waiter_id
+        description: Waiter id
+        tests:
+          - not_null:
+              config:
+                where: "waiter_id > 1"
+          - relationships:
+              to: ref('waiters')
+              field: waiter_id
+      - name: waiter_name
+        description: The name of the waiter
+        tests:
+          - relationships:
+              to: ref('waiter_names')
+              field: name
   - name: waiter_revenue_by_day
+    columns:
+      - name: waiter_id
+        description: Waiter id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('waiters')
+              field: waiter_id
+      - name: revenue
+        description: Revenue from orders taken by this waiter
+        tests:
+          - revenue_less_than:
+              amount: 10000
+      - name: ds
+        description: Date

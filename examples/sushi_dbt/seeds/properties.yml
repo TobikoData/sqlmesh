@@ -2,6 +2,64 @@ version: 2
 
 seeds:
   - name: waiter_names
+    columns:
+      - name: id
+        description: Waiter id
+        tests:
+          - not_null
+      - name: name
+        description: Waiter's name
   - name: items
+    columns:
+      - name: id
+        description: Item id
+        tests:
+          - not_null
+      - name: name
+        description: Name of the item
+      - name: price
+        description: Price of the item
+      - name: ds
+        description: Date
   - name: orders
+    columns:
+      - name: id
+        description: Order id
+        tests:
+          - not_null
+      - name: customer_id
+        description: Customer id
+      - name: waiter_id
+        description: Waiter id
+        tests:
+          - relationships:
+              to: ref('waiters')
+              field: waiter_id
+      - name: start_ts
+        description: When the order was taken
+      - name: end_ts
+        description: When the check was paid
+      - name: ds
+        description: Date
   - name: order_items
+    columns:
+      - name: id
+        description: Order item id
+        tests:
+          - not_null
+      - name: order_id
+        description: Order id
+        tests:
+          - relationships:
+              to: ref('orders')
+              field: id
+      - name: item_id
+        description: Item id
+        tests:
+          - relationships:
+              to: ref('items')
+              field: id
+      - name: quantity
+        description: Number of item ordered
+      - name: ds
+        description: Date
