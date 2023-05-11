@@ -137,7 +137,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self,
         table_name: TableName,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
         **kwargs: t.Any,
@@ -147,7 +147,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         of the table if `replace` is true.
         """
         assert isinstance(df, pd.DataFrame)
-        table = self.__get_bq_table(table_name, columns_to_types)
+        table = self.__get_bq_table(table_name, columns_to_types or columns_to_types_from_df(df))
         self.client.create_table(table, exists_ok=exists)
         self.__load_pandas_to_table(table, df, replace=replace)
 
