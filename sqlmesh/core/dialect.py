@@ -11,6 +11,7 @@ from sqlglot import Dialect, Generator, Parser, TokenType, exp
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.jinja import ENVIRONMENT
+from sqlmesh.utils.pandas import columns_to_types_from_df
 
 
 class Model(exp.Expression):
@@ -525,7 +526,7 @@ def select_from_values(
 
 def pandas_to_sql(
     df: pd.DataFrame,
-    columns_to_types: t.Dict[str, exp.DataType],
+    columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     batch_size: int = 0,
     alias: str = "t",
 ) -> t.Generator[exp.Select, None, None]:
@@ -542,7 +543,7 @@ def pandas_to_sql(
     """
     yield from select_from_values(
         values=df.itertuples(index=False, name=None),
-        columns_to_types=columns_to_types,
+        columns_to_types=columns_to_types or columns_to_types_from_df(df),
         batch_size=batch_size,
         alias=alias,
     )

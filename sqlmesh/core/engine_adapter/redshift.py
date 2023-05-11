@@ -84,7 +84,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
     def _pandas_to_sql(
         cls,
         df: pd.DataFrame,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int = 0,
         alias: str = "t",
     ) -> t.Generator[exp.Select, None, None]:
