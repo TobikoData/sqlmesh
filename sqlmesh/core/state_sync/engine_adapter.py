@@ -21,13 +21,13 @@ import logging
 import typing as t
 from copy import deepcopy
 
+import numpy as np
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.dialect import select_from_values
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model
@@ -72,35 +72,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.environments_table = f"{schema}._environments"
         self.versions_table = f"{schema}._versions"
 
-    @property
-    def snapshot_columns_to_types(self) -> t.Dict[str, exp.DataType]:
-        return {
-            "name": exp.DataType.build("text"),
-            "identifier": exp.DataType.build("text"),
-            "version": exp.DataType.build("text"),
-            "snapshot": exp.DataType.build("text"),
-        }
-
-    @property
-    def environment_columns_to_types(self) -> t.Dict[str, exp.DataType]:
-        return {
-            "name": exp.DataType.build("text"),
-            "snapshots": exp.DataType.build("text"),
-            "start_at": exp.DataType.build("text"),
-            "end_at": exp.DataType.build("text"),
-            "plan_id": exp.DataType.build("text"),
-            "previous_plan_id": exp.DataType.build("text"),
-            "expiration_ts": exp.DataType.build("bigint"),
-            "finalized_ts": exp.DataType.build("bigint"),
-        }
-
-    @property
-    def version_columns_to_types(self) -> t.Dict[str, exp.DataType]:
-        return {
-            "schema_version": exp.DataType.build("int"),
-            "sqlglot_version": exp.DataType.build("text"),
-        }
-
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
@@ -138,7 +109,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.insert_append(
             self.snapshots_table,
             _snapshots_to_df(snapshots),
-            columns_to_types=self.snapshot_columns_to_types,
             contains_json=True,
         )
 
@@ -151,10 +121,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.versions_table,
-            next(
-                select_from_values(
+            pd.DataFrame(
+                np.array(
                     [(schema_version, sqlglot_version)],
-                    columns_to_types=self.version_columns_to_types,
+                    dtype=[("schema_version", "int32"), ("sqlglot_version", "object")],
                 )
             ),
         )
@@ -216,7 +186,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.insert_append(
             self.environments_table,
             _environment_to_df(environment),
-            columns_to_types=self.environment_columns_to_types,
             contains_json=True,
         )
 
