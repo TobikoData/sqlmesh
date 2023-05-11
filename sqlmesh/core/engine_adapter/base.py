@@ -35,6 +35,7 @@ from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -267,8 +268,6 @@ class EngineAdapter:
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
-        if not columns_to_types:
-            raise ValueError("columns_to_types must be provided for dataframes")
         if not isinstance(df, pd.DataFrame):
             raise ValueError("df must be a pandas DataFrame")
         expression = next(
@@ -382,10 +381,9 @@ class EngineAdapter:
             if not isinstance(query_or_df, pd.DataFrame):
                 raise SQLMeshError("Can only create views with pandas dataframes.")
 
-            if not columns_to_types:
-                raise SQLMeshError(
-                    "Creating a view with a dataframe requires passing in columns_to_types."
-                )
+            if columns_to_types is None:
+                columns_to_types = columns_to_types_from_df(query_or_df)
+
             schema = exp.Schema(
                 this=schema,
                 expressions=[exp.column(column) for column in columns_to_types],
@@ -544,10 +542,6 @@ class EngineAdapter:
                 method="multi",
             )
         else:
-            if not columns_to_types:
-                raise SQLMeshError(
-                    "Column Mapping must be specified when using a Pandas DataFrame and not using SQLAlchemy"
-                )
             with self.transaction():
                 for i, expression in enumerate(
                     self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE)
@@ -584,7 +578,7 @@ class EngineAdapter:
     def _pandas_to_sql(
         cls,
         df: pd.DataFrame,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int = 0,
         alias: str = "t",
     ) -> t.Generator[exp.Select, None, None]:
