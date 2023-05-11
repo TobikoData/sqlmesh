@@ -13,8 +13,8 @@ import pandas as pd
 from astor import to_source
 from pandas.core.dtypes.common import is_numeric_dtype
 from pydantic import Field
-from sqlglot import exp
-from sqlglot.diff import ChangeDistiller, Insert, Keep
+from sqlglot import diff, exp
+from sqlglot.diff import Insert, Keep
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
@@ -677,9 +677,7 @@ class SqlModel(_Model):
         previous_query = previous.render_query()
         this_query = self.render_query()
 
-        edits = ChangeDistiller(t=0.5).diff(
-            previous_query, this_query, matchings=[(previous_query, this_query)]
-        )
+        edits = diff(previous_query, this_query, matchings=[(previous_query, this_query)])
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:
