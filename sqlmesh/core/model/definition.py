@@ -16,7 +16,6 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.optimizer.scope import traverse_scope
-from sqlglot.schema import MappingSchema
 from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
@@ -103,11 +102,13 @@ class _Model(ModelMeta, frozen=True):
         post: Post-hooks to run after the model executes.
         expressions: All of the expressions between the model definition and final query, used for setting certain variables or environments.
         python_env: Dictionary containing all global variables needed to render the model's macros.
+        mapping_schema: The schema of table names to column and types.
     """
 
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    mapping_schema: t.Dict[str, t.Any] = {}
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -318,13 +319,6 @@ class _Model(ModelMeta, frozen=True):
                 )
         return referenced_audits
 
-    def update_schema(self, schema: MappingSchema) -> None:
-        """Updates the schema associated with this model.
-
-        Args:
-            schema: The new schema.
-        """
-
     def text_diff(self, other: Model) -> str:
         """Produce a text diff against another model.
 
@@ -442,11 +436,6 @@ class _Model(ModelMeta, frozen=True):
     @property
     def python_env(self) -> t.Dict[str, Executable]:
         return self.python_env_ or {}
-
-    @property
-    def contains_star_query(self) -> bool:
-        """Returns True if the model's query contains a star projection."""
-        return False
 
     @property
     def is_sql(self) -> bool:
@@ -608,13 +597,6 @@ class SqlModel(_Model):
         return True
 
     @property
-    def contains_star_query(self) -> bool:
-        return self._query_renderer.contains_star_query
-
-    def update_schema(self, schema: MappingSchema) -> None:
-        self._query_renderer.update_schema(schema)
-
-    @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
@@ -699,6 +681,7 @@ class SqlModel(_Model):
                 self.query,
                 self.dialect,
                 self.macro_definitions,
+                schema=self.mapping_schema,
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,

@@ -68,7 +68,6 @@ def get_models(
             cron_next=to_datetime(model.cron_next(value=now())),
             interval_unit=model.interval_unit(),
             annotated=model.annotated,
-            contains_star_query=model.contains_star_query,
         )
 
         output.append(

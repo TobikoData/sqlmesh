@@ -191,7 +191,6 @@ class ModelDetails(BaseModel):
     cron_next: t.Optional[TimeLike] = None
     interval_unit: t.Optional[IntervalUnit] = None
     annotated: t.Optional[bool] = None
-    contains_star_query: t.Optional[bool] = None
 
 
 class Model(BaseModel):
