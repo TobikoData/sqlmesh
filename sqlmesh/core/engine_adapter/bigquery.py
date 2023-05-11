@@ -20,6 +20,7 @@ from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from google.cloud import bigquery
@@ -147,13 +148,25 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         assert isinstance(df, pd.DataFrame)
         table = self.__get_bq_table(table_name, columns_to_types)
-        self.__load_pandas_to_table(table, df, exists=exists, replace=replace)
+        self.client.create_table(table, exists_ok=exists)
+        self.__load_pandas_to_table(table, df, replace=replace)
+
+    def _insert_append_pandas_df(
+        self,
+        table_name: TableName,
+        df: pd.DataFrame,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        """
+        Appends to a table from a pandas dataframe. Will create the table if it doesn't exist.
+        """
+        table = self.__get_bq_table(table_name, columns_to_types or columns_to_types_from_df(df))
+        self.__load_pandas_to_table(table, df, replace=False)
 
     def __load_pandas_to_table(
         self,
         table: bigquery.Table,
         df: pd.DataFrame,
-        exists: bool = True,
         replace: bool = False,
     ) -> BigQueryQueryResult:
         """
@@ -162,7 +175,6 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud import bigquery
 
-        self.client.create_table(table, exists_ok=exists)
         job_config = bigquery.job.LoadJobConfig()
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
@@ -240,12 +252,16 @@ class BigQueryEngineAdapter(EngineAdapter):
                 raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
             if table.db is None:
                 raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
-            df = t.cast(pd.DataFrame, query_or_df)
+
             temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
-            temp_table = self.__convert_bq_table_to_table(temp_bq_table)
-            result = self.__load_pandas_to_table(temp_bq_table, df, replace=False, exists=False)
+            self.client.create_table(temp_bq_table, exists_ok=False)
+
+            df = t.cast(pd.DataFrame, query_or_df)
+            result = self.__load_pandas_to_table(temp_bq_table, df, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
+
+            temp_table = self.__convert_bq_table_to_table(temp_bq_table)
             query = exp.select(*columns_to_types).from_(temp_table)
         else:
             query = t.cast(Query, query_or_df)
