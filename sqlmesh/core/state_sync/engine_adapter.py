@@ -21,6 +21,7 @@ import logging
 import typing as t
 from copy import deepcopy
 
+import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
@@ -136,20 +137,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.snapshots_table,
-            next(
-                select_from_values(
-                    [
-                        (
-                            snapshot.name,
-                            snapshot.identifier,
-                            snapshot.version,
-                            snapshot.json(),
-                        )
-                        for snapshot in snapshots
-                    ],
-                    columns_to_types=self.snapshot_columns_to_types,
-                )
-            ),
+            _snapshots_to_df(snapshots),
+            columns_to_types=self.snapshot_columns_to_types,
             contains_json=True,
         )
 
@@ -226,23 +215,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.environments_table,
-            next(
-                select_from_values(
-                    [
-                        (
-                            environment.name,
-                            json.dumps([snapshot.dict() for snapshot in environment.snapshots]),
-                            environment.start_at,
-                            environment.end_at,
-                            environment.plan_id,
-                            environment.previous_plan_id,
-                            environment.expiration_ts,
-                            environment.finalized_ts,
-                        )
-                    ],
-                    columns_to_types=self.environment_columns_to_types,
-                )
-            ),
+            _environment_to_df(environment),
             columns_to_types=self.environment_columns_to_types,
             contains_json=True,
         )
@@ -567,3 +540,34 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
         with self.engine_adapter.transaction(transaction_type=transaction_type):
             yield
+
+
+def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "name": snapshot.name,
+                "identifier": snapshot.identifier,
+                "version": snapshot.version,
+                "snapshot": snapshot.json(),
+            }
+            for snapshot in snapshots
+        ]
+    )
+
+
+def _environment_to_df(environment: Environment) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "name": environment.name,
+                "snapshots": json.dumps([snapshot.dict() for snapshot in environment.snapshots]),
+                "start_at": environment.start_at,
+                "end_at": environment.end_at,
+                "plan_id": environment.plan_id,
+                "previous_plan_id": environment.previous_plan_id,
+                "expiration_ts": environment.expiration_ts,
+                "finalized_ts": environment.finalized_ts,
+            }
+        ]
+    )
