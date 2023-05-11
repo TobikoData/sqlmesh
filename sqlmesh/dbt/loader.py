@@ -8,7 +8,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, GatewayConfig
 from sqlmesh.core.hooks import HookRegistry
-from sqlmesh.core.loader import Loader
+from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
 from sqlmesh.dbt.basemodel import BMC, BaseModelConfig
@@ -20,6 +20,9 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core.context import Context
 
 
 def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Config:
@@ -36,6 +39,14 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
 
 
 class DbtLoader(Loader):
+    def __init__(self) -> None:
+        self._project: t.Optional[Project] = None
+        super().__init__()
+
+    def load(self, context: Context) -> LoadedProject:
+        self._Project = None
+        return super().load(context)
+
     def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry, JinjaMacroRegistry]:
         macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
 
@@ -54,12 +65,7 @@ class DbtLoader(Loader):
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 
-        project = Project.load(
-            DbtContext(project_root=self._context.path, target_name=self._context.gateway)
-        )
-        for path in project.project_files:
-            self._track_file(path)
-
+        project = self._load_project()
         context = project.context.copy()
 
         macros_mtimes: t.List[float] = []
@@ -105,7 +111,31 @@ class DbtLoader(Loader):
         return models
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
-        return UniqueKeyDict("audits")
+        audits: UniqueKeyDict = UniqueKeyDict("audits")
+
+        project = self._load_project()
+        context = project.context
+
+        logger.info("Converting audits to sqlmesh")
+        # Now that config is rendered, create the sqlmesh models
+        for package in project.packages.values():
+            context.variables = package.variables
+
+            audits.update({test.name: test.to_sqlmesh(context) for test in package.tests.values()})
+
+        return audits
+
+    def _load_project(self) -> Project:
+        if self._project:
+            return self._project
+
+        self._project = Project.load(
+            DbtContext(project_root=self._context.path, target_name=self._context.gateway)
+        )
+        for path in self._project.project_files:
+            self._track_file(path)
+
+        return self._project
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:

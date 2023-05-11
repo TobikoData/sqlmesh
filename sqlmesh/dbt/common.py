@@ -10,6 +10,8 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import MacroReference
+from sqlmesh.utils.pydantic import PydanticModel
 from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
@@ -83,8 +85,6 @@ class GeneralConfig(DbtConfig):
 
     start: t.Optional[str] = None
     description: t.Optional[str] = None
-    # TODO add test support
-    tests: t.List[t.Any] = []
     enabled: bool = True
     docs: t.Dict[str, t.Any] = {"show": True}
     persist_docs: t.Dict[str, t.Any] = {}
@@ -137,3 +137,36 @@ class GeneralConfig(DbtConfig):
         """
         for field in other.__fields_set__:
             setattr(self, field, getattr(other, field))
+
+
+class Dependencies(PydanticModel):
+    """
+    DBT dependencies for a model, macro, etc.
+
+    Args:
+        macros: The references to macros
+        sources: The "source_name.table_name" for source tables used
+        refs: The table_name for models used
+    """
+
+    macros: t.Set[MacroReference] = set()
+    sources: t.Set[str] = set()
+    refs: t.Set[str] = set()
+
+    def union(self, other: Dependencies) -> Dependencies:
+        dependencies = Dependencies()
+        dependencies.macros = self.macros | other.macros
+        dependencies.sources = self.sources | other.sources
+        dependencies.refs = self.refs | other.refs
+
+        return dependencies
+
+    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
+        # See https://github.com/pydantic/pydantic/issues/1090
+        exclude = kwargs.pop("exclude", None) or set()
+
+        out = super().dict(*args, **kwargs, exclude={*exclude, "macros"})
+        if "macros" not in exclude:
+            out["macros"] = [macro.dict() for macro in self.macros]
+
+        return out

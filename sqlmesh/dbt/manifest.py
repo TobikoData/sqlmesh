@@ -19,12 +19,14 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
-    from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
+    from dbt.contracts.graph.nodes import HasTestMetadata, ManifestNode, SourceDefinition
 
+TestConfigs = t.Dict[str, TestConfig]
 ModelConfigs = t.Dict[str, ModelConfig]
 SeedConfigs = t.Dict[str, SeedConfig]
 SourceConfigs = t.Dict[str, SourceConfig]
@@ -48,10 +50,15 @@ class ManifestHelper:
         self._project_name: str = ""
 
         self._is_loaded: bool = False
+        self._tests_per_package: t.Dict[str, TestConfigs] = defaultdict(dict)
         self._models_per_package: t.Dict[str, ModelConfigs] = defaultdict(dict)
         self._seeds_per_package: t.Dict[str, SeedConfigs] = defaultdict(dict)
         self._sources_per_package: t.Dict[str, SourceConfigs] = defaultdict(dict)
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
+
+    def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
+        self._load_all()
+        return self._tests_per_package[package_name or self._project_name]
 
     def models(self, package_name: t.Optional[str] = None) -> ModelConfigs:
         self._load_all()
@@ -81,6 +88,7 @@ class ManifestHelper:
     def _load_all(self) -> None:
         if self._is_loaded:
             return
+        self._load_tests()
         self._load_models_and_seeds()
         self._load_sources()
         self._load_macros()
@@ -101,15 +109,29 @@ class ManifestHelper:
 
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():
-            if macro.name.startswith("test_"):
-                continue
-
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
                     depends_on=list(_macro_references(self._manifest, macro)),
                 ),
                 path=Path(macro.original_file_path),
+            )
+
+    def _load_tests(self) -> None:
+        for node in self._manifest.nodes.values():
+            if node.resource_type != "test":
+                continue
+
+            self._tests_per_package[node.package_name][node.name] = TestConfig(
+                sql=node.raw_code,
+                model_name=_test_model_name(node),
+                test_kwargs=node.test_metadata.kwargs if isinstance(node, HasTestMetadata) else {},
+                dependencies=Dependencies(
+                    macros=_macro_references(self._manifest, node),
+                    refs=_refs(node),
+                    sources=_sources(node),
+                ),
+                **_node_base_config(node),
             )
 
     def _load_models_and_seeds(self) -> None:
@@ -119,10 +141,6 @@ class ManifestHelper:
 
             macro_references = _macro_references(self._manifest, node)
 
-            node_dict = node.to_dict()
-            node_dict.pop("database", None)  # picked up from the `config` attribute
-            base_config = {**_config(node), **node_dict, "path": Path(node.original_file_path)}
-
             if node.resource_type == "model":
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
                     sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
@@ -131,12 +149,14 @@ class ManifestHelper:
                         refs=_refs(node),
                         sources=_sources(node),
                     ),
-                    **base_config,
+                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    **_node_base_config(node),
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
-                    **base_config,
+                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    **_node_base_config(node),
                 )
 
     @property
@@ -219,6 +239,29 @@ def _model_node_id(model_name: str, package: str) -> str:
 def _get_dbt_version() -> t.Tuple[int, int]:
     dbt_version = get_installed_version()
     return (int(dbt_version.major or "0"), int(dbt_version.minor or "0"))
+
+
+def _test_model_name(node: ManifestNode) -> str:
+    fullname = (
+        getattr(node, "attached_node", None)
+        or getattr(node, "file_key_name", None)
+        or node.depends_on.nodes[0]  # type: ignore
+    )
+    return fullname.split(".")[-1]
+
+
+def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
+    node_dict = node.to_dict()
+    node_dict.pop("database", None)  # picked up from the `config` attribute
+    return {
+        **_config(node),
+        **node_dict,
+        "path": Path(node.original_file_path),
+    }
+
+
+def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[str]:
+    return [test.name for test in tests.values() if test.model_name == node.name]
 
 
 DBT_VERSION = _get_dbt_version()
