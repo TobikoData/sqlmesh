@@ -1,5 +1,12 @@
 version: 2.1
 
+on_tag_filter: &on_tag_filter
+  filters:
+    branches:
+      ignore: /.*/
+    tags:
+      only: /^v.+/
+
 orbs:
   python: circleci/python@1.5.0
 

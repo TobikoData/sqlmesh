@@ -2,13 +2,6 @@ version: 2.1
 
 setup: true
 
-on_tag_filter: &on_tag_filter
-  filters:
-    branches:
-      ignore: /.*/
-    tags:
-      only: /^v.+/
-
 orbs:
   path-filtering: circleci/path-filtering@0.1.3
 
