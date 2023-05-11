@@ -408,7 +408,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.drop_table(table_name)
         self.engine_adapter.rename_table(
             old_table_name=backup_table_name,
-            new_table_name=exp.to_table(table_name).name,
+            new_table_name=table_name,
         )
 
     @transactional()
