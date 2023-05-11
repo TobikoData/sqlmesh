@@ -24,7 +24,11 @@ from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
-    from dbt.contracts.graph.nodes import HasTestMetadata, ManifestNode, SourceDefinition
+    from dbt.contracts.graph.nodes import (
+        HasTestMetadata,
+        ManifestNode,
+        SourceDefinition,
+    )
 
 TestConfigs = t.Dict[str, TestConfig]
 ModelConfigs = t.Dict[str, ModelConfig]
