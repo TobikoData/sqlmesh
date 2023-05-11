@@ -167,8 +167,5 @@ workflows:
             branches:
               only:
                 - main
-
-  main_pr_web_client:
-    jobs:
       - ui_style
       - ui_test
