@@ -263,17 +263,14 @@ class EngineAdapter:
         replace: bool = False,
         **kwargs: t.Any,
     ) -> None:
-        table = exp.to_table(table_name)
         if not isinstance(df, pd.DataFrame):
             raise ValueError("df must be a pandas DataFrame")
-        expression = next(
-            self._pandas_to_sql(
-                df,
-                alias=table.alias_or_name,
-                columns_to_types=columns_to_types,
-            )
-        )
-        self._create_table(table_name, expression, exists=exists, replace=replace, **kwargs)
+        columns_to_types = columns_to_types or columns_to_types_from_df(df)
+        with self.transaction():
+            if replace:
+                self.drop_table(table_name)
+            self._create_table_from_columns(table_name, columns_to_types)
+            self._insert_append_pandas_df(table_name, df, columns_to_types)
 
     def _create_table(
         self,
