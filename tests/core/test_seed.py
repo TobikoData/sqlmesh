@@ -33,3 +33,29 @@ def test_read():
 
     with pytest.raises(StopIteration):
         next(dfs)
+
+
+def test_column_hashes():
+    content = """key,value,ds
+1,one,2022-01-01
+2,two,2022-01-02
+3,three,2022-01-03
+"""
+    seed = Seed(content=content)
+    assert seed.column_hashes == {
+        "key": "bfb77520994c313d1abff83000f19dc3",
+        "value": "f1bba2f7f1a564b158924169ae92fbbf",
+        "ds": "cd71bd56275d646ca9f258cda24f4172",
+    }
+
+    content_column_changed = """key,value,ds
+1,one,2022-01-01
+2,two,2022-01-05
+3,three,2022-01-03
+
+"""
+    seed_column_changed = Seed(content=content_column_changed)
+    assert seed_column_changed.column_hashes == {
+        **seed.column_hashes,
+        "ds": "e9597f19bbdb41a7d52eddaf01ba0b73",
+    }

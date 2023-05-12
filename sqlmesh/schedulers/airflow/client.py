@@ -28,6 +28,7 @@ DAG_RUN_PATH_TEMPLATE = "api/v1/dags/{}/dagRuns"
 PLANS_PATH = f"{common.SQLMESH_API_BASE_PATH}/plans"
 ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
 SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
+SEEDS_PATH = f"{common.SQLMESH_API_BASE_PATH}/seeds"
 VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 
 
@@ -78,12 +79,18 @@ class AirflowClient:
         )
         self._raise_for_status(response)
 
-    def get_snapshots(self, snapshot_ids: t.Optional[t.List[SnapshotId]]) -> t.List[Snapshot]:
+    def get_snapshots(
+        self, snapshot_ids: t.Optional[t.List[SnapshotId]], hydrate_seeds: bool = False
+    ) -> t.List[Snapshot]:
         params: t.Dict[str, str] = {}
         if snapshot_ids is not None:
             params["ids"] = _list_to_json(snapshot_ids)
 
-        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH, **params)).snapshots
+        flags = ["hydrate_seeds"] if hydrate_seeds else []
+
+        return common.SnapshotsResponse.parse_obj(
+            self._get(SNAPSHOTS_PATH, *flags, **params)
+        ).snapshots
 
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
         return set(

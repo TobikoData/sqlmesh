@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import typing as t
 from io import StringIO
 from pathlib import Path
@@ -23,6 +24,16 @@ class Seed(PydanticModel):
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         return columns_to_types_from_df(self._get_df())
+
+    @property
+    def column_hashes(self) -> t.Dict[str, str]:
+        df = self._get_df()
+        return {
+            column_name: hashlib.md5(  # type: ignore
+                df[column_name].to_string(index=False).encode("utf-8")  # type: ignore
+            ).hexdigest()
+            for column_name in df.columns
+        }
 
     def read(self, batch_size: t.Optional[int] = None) -> t.Generator[pd.DataFrame, None, None]:
         df = self._get_df()

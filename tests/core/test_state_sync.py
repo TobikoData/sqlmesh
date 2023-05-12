@@ -13,6 +13,9 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
     ModelKindName,
+    Seed,
+    SeedKind,
+    SeedModel,
     SqlModel,
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotTableInfo
@@ -812,3 +815,38 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
         old_snapshots,
         new_snapshots,
     )
+
+
+def test_seed_hydration(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+):
+    snapshot = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="header\n1\n2"),
+            column_hashes={"header": "hash"},
+            depends_on=set(),
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    assert snapshot.model.is_hydrated
+    assert snapshot.model.seed.content == "header\n1\n2"
+
+    stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id], hydrate_seeds=False)[
+        snapshot.snapshot_id
+    ]
+    assert isinstance(stored_snapshot.model, SeedModel)
+    assert not stored_snapshot.model.is_hydrated
+    assert stored_snapshot.model.seed.content == ""
+
+    stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id], hydrate_seeds=True)[
+        snapshot.snapshot_id
+    ]
+    assert isinstance(stored_snapshot.model, SeedModel)
+    assert stored_snapshot.model.is_hydrated
+    assert stored_snapshot.model.seed.content == "header\n1\n2"

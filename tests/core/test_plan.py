@@ -291,6 +291,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
             name="a",
             kind=SeedKind(path="./path/to/seed"),
             seed=Seed(content="content"),
+            column_hashes={"col": "hash1"},
             depends_on=set(),
         )
     )
@@ -301,6 +302,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
             name="a",
             kind=SeedKind(path="./path/to/seed"),
             seed=Seed(content="new_content"),
+            column_hashes={"col": "hash2"},
             depends_on=set(),
         )
     )

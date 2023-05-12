@@ -341,6 +341,35 @@ def test_model_hooks():
     assert model.post == expected_post
 
 
+def test_seed_hydration():
+    expressions = parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    assert model.is_hydrated
+
+    column_hashes = model.column_hashes
+
+    dehydrated_model = model.dehydrated
+    assert not dehydrated_model.is_hydrated
+    assert dehydrated_model.column_hashes == column_hashes
+    assert dehydrated_model.seed.content == ""
+
+    hydrated_model = dehydrated_model.hydrated(model.seed.content)
+    assert hydrated_model.is_hydrated
+    assert hydrated_model.column_hashes == column_hashes
+    assert hydrated_model.seed.content == model.seed.content
+
+
 def test_seed():
     expressions = parse(
         """
