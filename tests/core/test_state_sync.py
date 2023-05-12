@@ -715,11 +715,9 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     assert len(state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")) == 3
 
     state_sync.rollback(0)
-    mock.assert_any_call(1, "sqlmesh._snapshots", state_sync.snapshot_columns_to_types)
-    mock.assert_any_call(
-        1, "sqlmesh._environments", state_sync.environment_columns_to_types
-    )
-    mock.assert_any_call(1, "sqlmesh._versions", state_sync.version_columns_to_types)
+    mock.assert_any_call(1, "sqlmesh._snapshots")
+    mock.assert_any_call(1, "sqlmesh._environments")
+    mock.assert_any_call(1, "sqlmesh._versions")
     assert not state_sync.engine_adapter.fetchall("select * from sqlmesh._backups")
 
 
@@ -836,7 +834,6 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     state_sync._restore_table(
         version=1,
         table_name="sqlmesh._snapshots",
-        columns_to_types=snapshot_columns_to_types,
     )
 
     new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")

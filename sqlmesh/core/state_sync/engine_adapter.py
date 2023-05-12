@@ -95,6 +95,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "sqlglot_version": exp.DataType.build("text"),
         }
 
+        self._backup_columns_to_types = {
+            "version": exp.DataType.build("int"),
+            "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+            "table_name": exp.DataType.build("text"),
+            "backup_table_name": exp.DataType.build("text"),
+        }
+
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
@@ -370,17 +378,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.insert_append(
             self.backups_table,
             pd.DataFrame(
-                np.array(
-                    [
-                        (
-                            version,
-                            versions.schema_version,
-                            versions.sqlglot_version,
-                            table_name,
-                            backup_table_name,
-                        )
-                    ],
-                )
+                [
+                    {
+                        "version": version,
+                        "schema_version": versions.schema_version,
+                        "sqlglot_version": versions.sqlglot_version,
+                        "table_name": table_name,
+                        "backup_table_name": backup_table_name,
+                    }
+                ],
             ),
         )
 
@@ -388,7 +394,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         version: int,
         table_name: str,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         result = self.engine_adapter.fetchone(
             exp.select("table_name", "backup_table_name")
@@ -422,7 +427,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         If version is 0, rollback to the previous version.
         """
         if not self.engine_adapter.table_exists(self.backups_table):
-            return
+            raise SQLMeshError("There are no prior versions to roll back to.")
 
         if version == 0:
             # Get most recently backed up version, i.e. the previous version
@@ -430,9 +435,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if not version:
                 raise SQLMeshError("There are no prior versions to roll back to.")
 
-        self._restore_table(version, self.snapshots_table, self.snapshot_columns_to_types)
-        self._restore_table(version, self.environments_table, self.environment_columns_to_types)
-        self._restore_table(version, self.versions_table, self.version_columns_to_types)
+        self._restore_table(version, self.snapshots_table)
+        self._restore_table(version, self.environments_table)
+        self._restore_table(version, self.versions_table)
 
         # Clean up orphaned backups
         for (backup_table_name,) in self.engine_adapter.fetchall(
