@@ -21,7 +21,6 @@ import logging
 import typing as t
 from copy import deepcopy
 
-import numpy as np
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
@@ -72,6 +71,29 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.environments_table = f"{schema}._environments"
         self.versions_table = f"{schema}._versions"
 
+        self._snapshot_columns_to_types = {
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "snapshot": exp.DataType.build("text"),
+        }
+
+        self._environment_columns_to_types = {
+            "name": exp.DataType.build("text"),
+            "snapshots": exp.DataType.build("text"),
+            "start_at": exp.DataType.build("text"),
+            "end_at": exp.DataType.build("text"),
+            "plan_id": exp.DataType.build("text"),
+            "previous_plan_id": exp.DataType.build("text"),
+            "expiration_ts": exp.DataType.build("bigint"),
+            "finalized_ts": exp.DataType.build("bigint"),
+        }
+
+        self._version_columns_to_types = {
+            "schema_version": exp.DataType.build("int"),
+            "sqlglot_version": exp.DataType.build("text"),
+        }
+
     @transactional()
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         """Pushes snapshots to the state store, merging them with existing ones.
@@ -109,6 +131,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.insert_append(
             self.snapshots_table,
             _snapshots_to_df(snapshots),
+            columns_to_types=self._snapshot_columns_to_types,
             contains_json=True,
         )
 
@@ -121,12 +144,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         self.engine_adapter.insert_append(
             self.versions_table,
-            pd.DataFrame(
-                np.array(
-                    [(schema_version, sqlglot_version)],
-                    dtype=[("schema_version", "int32"), ("sqlglot_version", "object")],
-                )
-            ),
+            pd.DataFrame([{"schema_version": schema_version, "sqlglot_version": sqlglot_version}]),
+            columns_to_types=self._version_columns_to_types,
         )
 
     def delete_expired_environments(self) -> t.List[Environment]:
@@ -186,6 +205,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.insert_append(
             self.environments_table,
             _environment_to_df(environment),
+            columns_to_types=self._environment_columns_to_types,
             contains_json=True,
         )
 
