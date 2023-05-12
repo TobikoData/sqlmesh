@@ -70,7 +70,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
         self.versions_table = f"{schema}._versions"
-        self.backups_table = f"{schema}._backups"
 
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build("text"),
@@ -93,13 +92,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self._version_columns_to_types = {
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build("text"),
-        }
-
-        self._backup_columns_to_types = {
-            "schema_version": exp.DataType.build("int"),
-            "sqlglot_version": exp.DataType.build("text"),
-            "table_name": exp.DataType.build("text"),
-            "backup_table_name": exp.DataType.build("text"),
         }
 
     @transactional()
@@ -371,23 +363,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
-    def _backup_table(self, versions: Versions, table_name: str) -> None:
-        backup_table_name = f"{table_name}_backup"
-        self.engine_adapter.ctas(backup_table_name, exp.select("*").from_(table_name), replace=True)
-        self.engine_adapter.insert_append(
-            self.backups_table,
-            pd.DataFrame(
-                [
-                    {
-                        "schema_version": versions.schema_version,
-                        "sqlglot_version": versions.sqlglot_version,
-                        "table_name": table_name,
-                        "backup_table_name": backup_table_name,
-                    }
-                ],
-            ),
-        )
-
     def _restore_table(
         self,
         table_name: str,
@@ -406,29 +381,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     @transactional()
     def rollback(self) -> None:
         """Rollback to the previous migration."""
-        if not self.engine_adapter.table_exists(self.backups_table):
+        tables = (self.snapshots_table, self.environments_table, self.versions_table)
+        if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
             raise SQLMeshError("There are no prior migrations to roll back to.")
-
-        rows = self.engine_adapter.fetchall(
-            exp.select("table_name", "backup_table_name").from_(self.backups_table)
-        )
-        if not rows:
-            raise SQLMeshError("There are no prior migrations to roll back to.")
-
-        for table_name, backup_table_name in rows:
-            self._restore_table(table_name, backup_table_name)
-
-        self.engine_adapter.delete_from(self.backups_table, "TRUE")
+        for table in tables:
+            self._restore_table(table, f"{table}_backup")
 
     def _backup_state(self) -> None:
-        if not self.engine_adapter.table_exists(self.backups_table):
-            return
-
-        self.engine_adapter.delete_from(self.backups_table, "TRUE")
-
-        versions = self._get_versions()
         for table in (self.snapshots_table, self.environments_table, self.versions_table):
-            self._backup_table(versions, table)
+            if self.engine_adapter.table_exists(table):
+                self.engine_adapter.ctas(
+                    f"{table}_backup", exp.select("*").from_(table), replace=True
+                )
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)
