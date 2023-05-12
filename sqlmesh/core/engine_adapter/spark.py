@@ -109,7 +109,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         self,
         table_name: TableName,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = True,
         **kwargs: t.Any,
