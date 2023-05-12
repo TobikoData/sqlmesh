@@ -17,6 +17,15 @@ PANDAS_TYPE_MAPPINGS = {
     np.dtype("float64"): exp.DataType.build("double"),
     np.dtype("O"): exp.DataType.build("varchar"),
     np.dtype("bool"): exp.DataType.build("boolean"),
+    pd.Int8Dtype(): exp.DataType.build("tinyint"),
+    pd.Int16Dtype(): exp.DataType.build("smallint"),
+    pd.Int32Dtype(): exp.DataType.build("int"),
+    pd.Int64Dtype(): exp.DataType.build("bigint"),
+    pd.Float32Dtype(): exp.DataType.build("float"),
+    pd.Float64Dtype(): exp.DataType.build("double"),
+    pd.StringDtype(storage="python"): exp.DataType.build("varchar"),
+    pd.StringDtype(storage="pyarrow"): exp.DataType.build("varchar"),
+    pd.BooleanDtype(): exp.DataType.build("boolean"),
 }
 
 
