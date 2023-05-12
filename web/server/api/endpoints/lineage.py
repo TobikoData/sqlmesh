@@ -53,7 +53,11 @@ def _process_downstream(
     return graph
 
 
-@router.get("/{model_name:str}/{column_name:str}")
+@router.get(
+    "/{model_name:str}/{column_name:str}",
+    response_model_exclude_unset=True,
+    response_model_exclude_none=True,
+)
 async def column_lineage(
     column_name: str,
     model_name: str,
@@ -86,7 +90,6 @@ async def column_lineage(
             column_name = cache_column_names[column_name]
         graph[table] = {
             column_name: LineageColumn(
-                source=_get_node_source(node=node, dialect=context.models[table].dialect),
                 models=_process_downstream(
                     node.downstream,
                     column_name,

@@ -3,8 +3,9 @@ import { debounceAsync } from '@utils/index'
 import { memo, useCallback, useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { mergeLineage, useLineageFlow } from './context'
+import { useLineageFlow } from './context'
 import { type Lineage } from '@context/editor'
+import { mergeLineage } from './help'
 
 const ModelLineage = memo(function ModelLineage({
   model,

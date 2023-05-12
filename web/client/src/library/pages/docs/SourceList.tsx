@@ -20,7 +20,7 @@ export default function SourceList({
     filter === '' ? true : model.name.includes(filter),
   )
   return (
-    <div>
+    <div className="flex flex-col w-full h-full">
       <div className="px-2 w-full flex justify-between">
         <Input
           className="w-full !m-0"

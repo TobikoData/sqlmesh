@@ -11,6 +11,10 @@
     width: 0.2rem;
   }
 
+  .scrollbar--vertical-md::-webkit-scrollbar {
+    width: 0.4rem;
+  }
+
   .scrollbar::-webkit-scrollbar-track {
     background-color: transparent;
   }
