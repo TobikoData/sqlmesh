@@ -113,8 +113,6 @@ class EngineAdapter:
         """
         table = exp.to_table(table_name)
         if isinstance(query_or_df, pd.DataFrame):
-            if not columns_to_types:
-                raise ValueError("columns_to_types must be provided for dataframes")
             return self._create_table_from_df(table, query_or_df, columns_to_types, replace=True)
         else:
             query_or_df = t.cast(Query, query_or_df)
@@ -190,8 +188,6 @@ class EngineAdapter:
             query_or_df = t.cast(Query, query_or_df)
             self._create_table_from_query(table_name, query_or_df, exists, **kwargs)
         else:
-            if not columns_to_types:
-                raise SQLMeshError("Must provide a column type map to do a CTAS with a DataFrame.")
             query_or_df = t.cast(pd.DataFrame, query_or_df)
             self._create_table_from_df(table_name, query_or_df, columns_to_types, exists, **kwargs)
 
@@ -262,7 +258,7 @@ class EngineAdapter:
         self,
         table_name: TableName,
         df: DF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
         **kwargs: t.Any,
