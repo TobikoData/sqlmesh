@@ -156,6 +156,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         """
         Appends to a table from a pandas dataframe. Will create the table if it doesn't exist.

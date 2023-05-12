@@ -87,12 +87,15 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int = 0,
         alias: str = "t",
+        contains_json: bool = False,
     ) -> t.Generator[exp.Select, None, None]:
         """
         Extracts the `VALUES` expression from the SELECT statement and also removes the alias.
         """
         for expression in pandas_to_sql(df, columns_to_types, batch_size, alias):
             values_expression = t.cast(exp.Select, expression.find(exp.Values))
+            if contains_json:
+                values_expression = t.cast(exp.Select, cls._escape_json(values_expression))
             values_expression.parent = None
             values_expression.set("alias", None)
             yield values_expression
