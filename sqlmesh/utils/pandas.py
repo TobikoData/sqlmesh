@@ -23,8 +23,7 @@ PANDAS_TYPE_MAPPINGS = {
     pd.Int64Dtype(): exp.DataType.build("bigint"),
     pd.Float32Dtype(): exp.DataType.build("float"),
     pd.Float64Dtype(): exp.DataType.build("double"),
-    pd.StringDtype(storage="python"): exp.DataType.build("varchar"),
-    pd.StringDtype(storage="pyarrow"): exp.DataType.build("varchar"),
+    pd.StringDtype(): exp.DataType.build("varchar"),  # type: ignore
     pd.BooleanDtype(): exp.DataType.build("boolean"),
 }
 
