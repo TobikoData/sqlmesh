@@ -834,6 +834,13 @@ class Context(BaseContext):
         """
         self._new_state_sync().migrate()
 
+    def rollback(self) -> None:
+        """Rolls back SQLMesh to the previous migration.
+
+        Please contact your SQLMesh administrator before doing this. This action cannot be undone.
+        """
+        self._new_state_sync().rollback()
+
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""
         self.console.log_status_update(f"Models: {len(self.models)}")

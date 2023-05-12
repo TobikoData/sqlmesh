@@ -363,9 +363,36 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
+    def _restore_table(
+        self,
+        table_name: str,
+        backup_table_name: str,
+    ) -> None:
+        self.engine_adapter.drop_table(table_name)
+        self.engine_adapter.rename_table(
+            old_table_name=backup_table_name,
+            new_table_name=table_name,
+        )
+
     @transactional()
-    def migrate(self) -> None:
-        super().migrate()
+    def migrate(self, skip_backup: bool = False) -> None:
+        super().migrate(skip_backup)
+
+    @transactional()
+    def rollback(self) -> None:
+        """Rollback to the previous migration."""
+        tables = (self.snapshots_table, self.environments_table, self.versions_table)
+        if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
+            raise SQLMeshError("There are no prior migrations to roll back to.")
+        for table in tables:
+            self._restore_table(table, f"{table}_backup")
+
+    def _backup_state(self) -> None:
+        for table in (self.snapshots_table, self.environments_table, self.versions_table):
+            if self.engine_adapter.table_exists(table):
+                self.engine_adapter.ctas(
+                    f"{table}_backup", exp.select("*").from_(table), replace=True
+                )
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)

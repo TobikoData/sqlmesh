@@ -371,6 +371,14 @@ def migrate(ctx: click.Context) -> None:
     ctx.obj.migrate()
 
 
+@cli.command("rollback")
+@click.pass_obj
+@error_handler
+def rollback(obj: Context) -> None:
+    """Rollback SQLMesh to the previous migration."""
+    obj.rollback()
+
+
 @cli.command("prompt")
 @click.argument("prompt")
 @click.option(
