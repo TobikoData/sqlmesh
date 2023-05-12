@@ -96,7 +96,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         }
 
         self._backup_columns_to_types = {
-            "version": exp.DataType.build("int"),
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build("text"),
             "table_name": exp.DataType.build("text"),
@@ -372,15 +371,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
-    def _backup_table(self, version: int, versions: Versions, table_name: str) -> None:
-        backup_table_name = f"{table_name}_{version}"
-        self.engine_adapter.ctas(backup_table_name, exp.select("*").from_(table_name))
+    def _backup_table(self, versions: Versions, table_name: str) -> None:
+        backup_table_name = f"{table_name}_backup"
+        self.engine_adapter.ctas(backup_table_name, exp.select("*").from_(table_name), replace=True)
         self.engine_adapter.insert_append(
             self.backups_table,
             pd.DataFrame(
                 [
                     {
-                        "version": version,
                         "schema_version": versions.schema_version,
                         "sqlglot_version": versions.sqlglot_version,
                         "table_name": table_name,
@@ -392,24 +390,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _restore_table(
         self,
-        version: int,
         table_name: str,
+        backup_table_name: str,
     ) -> None:
-        result = self.engine_adapter.fetchone(
-            exp.select("table_name", "backup_table_name")
-            .from_(self.backups_table)
-            .where(
-                exp.to_column("version")
-                .eq(version)
-                .and_(exp.to_column("table_name").eq(table_name))
-            )
-        )
-        if not result:
-            raise SQLMeshError(
-                f"Cannot restore {table_name} to version {version}. Backup data not found."
-            )
-        table_name, backup_table_name = result
-
         self.engine_adapter.drop_table(table_name)
         self.engine_adapter.rename_table(
             old_table_name=backup_table_name,
@@ -421,46 +404,31 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         super().migrate(skip_backup)
 
     @transactional()
-    def rollback(self, version: int) -> None:
-        """Rollback to the specified migration version.
-
-        If version is 0, rollback to the previous version.
-        """
+    def rollback(self) -> None:
+        """Rollback to the previous migration."""
         if not self.engine_adapter.table_exists(self.backups_table):
-            raise SQLMeshError("There are no prior versions to roll back to.")
+            raise SQLMeshError("There are no prior migrations to roll back to.")
 
-        if version == 0:
-            # Get most recently backed up version, i.e. the previous version
-            version = self._get_last_backup_version()
-            if not version:
-                raise SQLMeshError("There are no prior versions to roll back to.")
-
-        self._restore_table(version, self.snapshots_table)
-        self._restore_table(version, self.environments_table)
-        self._restore_table(version, self.versions_table)
-
-        # Clean up orphaned backups
-        for (backup_table_name,) in self.engine_adapter.fetchall(
-            exp.select("backup_table_name")
-            .from_(self.backups_table)
-            .where(exp.to_column("version") > version)
-        ):
-            self.engine_adapter.drop_table(backup_table_name)
-        self.engine_adapter.delete_from(
-            self.backups_table,
-            exp.to_column("version") >= version,
+        rows = self.engine_adapter.fetchall(
+            exp.select("table_name", "backup_table_name").from_(self.backups_table)
         )
+        if not rows:
+            raise SQLMeshError("There are no prior migrations to roll back to.")
+
+        for table_name, backup_table_name in rows:
+            self._restore_table(table_name, backup_table_name)
+
+        self.engine_adapter.delete_from(self.backups_table, "TRUE")
 
     def _backup_state(self) -> None:
         if not self.engine_adapter.table_exists(self.backups_table):
             return
 
-        last_backup_version = self._get_last_backup_version() or 0
-        next_backup_version = last_backup_version + 1
+        self.engine_adapter.delete_from(self.backups_table, "TRUE")
+
         versions = self._get_versions()
-        self._backup_table(next_backup_version, versions, self.snapshots_table)
-        self._backup_table(next_backup_version, versions, self.environments_table)
-        self._backup_table(next_backup_version, versions, self.versions_table)
+        for table in (self.snapshots_table, self.environments_table, self.versions_table):
+            self._backup_table(versions, table)
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)
@@ -624,12 +592,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
         with self.engine_adapter.transaction(transaction_type=transaction_type):
             yield
-
-    def _get_last_backup_version(self) -> int:
-        (version,) = self.engine_adapter.fetchone(
-            exp.select("MAX(version)").from_(self.backups_table)
-        )
-        return version
 
 
 def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:

@@ -390,7 +390,7 @@ class StateSync(StateReader, abc.ABC):
         self._update_versions()
 
     @abc.abstractmethod
-    def rollback(self, schema_version: int) -> None:
+    def rollback(self) -> None:
         """Rollback to previous backed up state."""
 
     @abc.abstractmethod
