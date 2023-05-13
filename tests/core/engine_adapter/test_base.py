@@ -635,8 +635,14 @@ def test_replace_query_pandas(mocker: MockerFixture):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    cursor_mock.execute.assert_called_once_with(
-        "CREATE OR REPLACE TABLE test_table AS SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS test_table(a, b)"
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("DROP TABLE IF EXISTS test_table"),
+            call("CREATE TABLE IF NOT EXISTS test_table (a int, b int)"),
+            call(
+                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(a, b)"
+            ),
+        ]
     )
 
 
