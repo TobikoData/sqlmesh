@@ -71,6 +71,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         from snowflake.connector.pandas_tools import write_pandas
 
