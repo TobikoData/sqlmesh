@@ -4,6 +4,7 @@ import typing as t
 
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
+from sqlmesh.dbt.common import context_for_dependencies
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -20,7 +21,7 @@ class SeedConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt seed into a SQLMesh model."""
-        model_context = self._context_for_dependencies(context, self.dependencies)
+        model_context = context_for_dependencies(context, self.dependencies)
 
         return create_seed_model(
             self.model_name,

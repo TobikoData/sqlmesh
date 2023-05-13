@@ -12,6 +12,7 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model
+from sqlmesh.core.model.meta import AuditReference
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -225,7 +226,10 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
+        audits: t.List[AuditReference] = [(test, {}) for test in self.tests]
+
         return {
+            "audits": audits,
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs}.union(
@@ -253,32 +257,3 @@ class BaseModelConfig(GeneralConfig):
     @abstractmethod
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Convert DBT model into sqlmesh Model"""
-
-    def _context_for_dependencies(
-        self, context: DbtContext, dependencies: Dependencies
-    ) -> DbtContext:
-        model_context = context.copy()
-
-        models = {}
-        seeds = {}
-        sources = {}
-
-        for ref in self.dependencies.refs:
-            if ref in context.seeds:
-                seeds[ref] = context.seeds[ref]
-            elif ref in context.models:
-                models[ref] = context.models[ref]
-            else:
-                raise ConfigError(f"Model '{ref}' was not found for model '{self.table_name}'.")
-
-        for source in self.dependencies.sources:
-            if source in context.sources:
-                sources[source] = context.sources[source]
-            else:
-                raise ConfigError(f"Source '{source}' was not found for model '{self.table_name}'.")
-
-        model_context.sources = sources
-        model_context.seeds = seeds
-        model_context.models = models
-
-        return model_context

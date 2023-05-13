@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import typing as t
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
@@ -16,6 +18,8 @@ from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.context import DbtContext
 
 PROJECT_FILENAME = "dbt_project.yml"
 
@@ -128,6 +132,9 @@ class GeneralConfig(DbtConfig):
 
     _SQL_FIELDS: t.ClassVar[t.List[str]] = []
 
+    def attribute_dict(self) -> AttributeDict[str, t.Any]:
+        return AttributeDict(self.dict())
+
     def replace(self, other: T) -> None:
         """
         Replace the contents of this instance with the passed in instance.
@@ -170,3 +177,60 @@ class Dependencies(PydanticModel):
             out["macros"] = [macro.dict() for macro in self.macros]
 
         return out
+
+
+def context_for_dependencies(context: DbtContext, dependencies: Dependencies) -> DbtContext:
+    dependency_context = context.copy()
+
+    models = {}
+    seeds = {}
+    sources = {}
+
+    for ref in dependencies.refs:
+        if ref in context.seeds:
+            seeds[ref] = context.seeds[ref]
+        elif ref in context.models:
+            models[ref] = context.models[ref]
+        else:
+            raise ConfigError(f"Model '{ref}' was not found.")
+
+    for source in dependencies.sources:
+        if source in context.sources:
+            sources[source] = context.sources[source]
+        else:
+            raise ConfigError(f"Source '{source}' was not found.")
+
+    dependency_context.sources = sources
+    dependency_context.seeds = seeds
+    dependency_context.models = models
+
+    return dependency_context
+
+
+def extract_jinja_config(input: str) -> t.Tuple[str, str]:
+    def jinja_end(sql: str, start: int) -> int:
+        cursor = start
+        quote = None
+        while cursor < len(sql):
+            if sql[cursor] in ('"', "'"):
+                if quote is None:
+                    quote = sql[cursor]
+                elif quote == sql[cursor]:
+                    quote = None
+            if sql[cursor : cursor + 2] == "}}" and quote is None:
+                return cursor + 2
+            cursor += 1
+        return cursor
+
+    no_config = input
+    only_config = ""
+    matches = re.findall(r"{{\s*config\s*\(", no_config)
+    for match in matches:
+        start = no_config.find(match)
+        if start == -1:
+            continue
+        extracted = no_config[start : jinja_end(no_config, start)]
+        only_config = SqlStr("\n".join([only_config, extracted]) if only_config else extracted)
+        no_config = SqlStr(no_config.replace(extracted, "").strip())
+
+    return (no_config, only_config)

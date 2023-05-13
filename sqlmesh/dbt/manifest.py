@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import typing as t
 from argparse import Namespace
 from collections import defaultdict
@@ -10,6 +11,7 @@ from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
+from dbt.contracts.graph.nodes import GenericTestNode, HasTestMetadata, SingularTestNode
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 from dbt.version import get_installed_version
@@ -24,11 +26,7 @@ from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
-    from dbt.contracts.graph.nodes import (
-        HasTestMetadata,
-        ManifestNode,
-        SourceDefinition,
-    )
+    from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
 
 TestConfigs = t.Dict[str, TestConfig]
 ModelConfigs = t.Dict[str, ModelConfig]
@@ -113,6 +111,9 @@ class ManifestHelper:
 
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():
+            if macro.name.startswith("test_"):
+                macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
+
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
@@ -126,13 +127,23 @@ class ManifestHelper:
             if node.resource_type != "test":
                 continue
 
+            macro_references = _macro_references(self._manifest, node)
+            model_references = _refs(node)
+            model_name = _test_model_name(node)
+
+            if isinstance(node, GenericTestNode) and DBT_VERSION < (1, 5):
+                macro_references.add(MacroReference(package="dbt", name="get_where_subquery"))
+                macro_references.add(MacroReference(package="dbt", name="should_store_failures"))
+            if isinstance(node, SingularTestNode):
+                model_references.add(model_name)
+
             self._tests_per_package[node.package_name][node.name] = TestConfig(
                 sql=node.raw_code,
-                model_name=_test_model_name(node),
+                model_name=model_name,
                 test_kwargs=node.test_metadata.kwargs if isinstance(node, HasTestMetadata) else {},
                 dependencies=Dependencies(
-                    macros=_macro_references(self._manifest, node),
-                    refs=_refs(node),
+                    macros=macro_references,
+                    refs=model_references,
                     sources=_sources(node),
                 ),
                 **_node_base_config(node),
@@ -266,6 +277,16 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
 
 def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[str]:
     return [test.name for test in tests.values() if test.model_name == node.name]
+
+
+def _convert_jinja_test_to_macro(test_jinja: str) -> str:
+    TEST_TAG_REGEX = "\s*{%\s*test\s+"
+    ENDTEST_REGEX = "{%\s*endtest\s*%}"
+    match = re.match(TEST_TAG_REGEX, test_jinja)
+    assert match  # TODO
+
+    macro = "{% macro test_" + test_jinja[match.span()[-1] :]
+    return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
 
 
 DBT_VERSION = _get_dbt_version()

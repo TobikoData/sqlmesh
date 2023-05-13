@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import typing as t
 
 from pydantic import validator
@@ -17,7 +16,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
-from sqlmesh.dbt.common import SqlStr
+from sqlmesh.dbt.common import SqlStr, context_for_dependencies, extract_jinja_config
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 
@@ -182,38 +181,14 @@ class ModelConfig(BaseModelConfig):
         return self._sql_embedded_config
 
     def _extract_sql_config(self) -> None:
-        def jinja_end(sql: str, start: int) -> int:
-            cursor = start
-            quote = None
-            while cursor < len(sql):
-                if sql[cursor] in ('"', "'"):
-                    if quote is None:
-                        quote = sql[cursor]
-                    elif quote == sql[cursor]:
-                        quote = None
-                if sql[cursor : cursor + 2] == "}}" and quote is None:
-                    return cursor + 2
-                cursor += 1
-            return cursor
-
-        self._sql_no_config = self.sql
-        matches = re.findall(r"{{\s*config\s*\(", self._sql_no_config)
-        for match in matches:
-            start = self._sql_no_config.find(match)
-            if start == -1:
-                continue
-            extracted = self._sql_no_config[start : jinja_end(self._sql_no_config, start)]
-            self._sql_embedded_config = SqlStr(
-                "\n".join([self._sql_embedded_config, extracted])
-                if self._sql_embedded_config
-                else extracted
-            )
-            self._sql_no_config = SqlStr(self._sql_no_config.replace(extracted, "").strip())
+        no_config, embedded_config = extract_jinja_config(self.sql)
+        self._sql_no_config = SqlStr(no_config)
+        self._sql_embedded_config = SqlStr(embedded_config)
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = self.model_dialect or context.dialect
-        model_context = self._context_for_dependencies(context, self.dependencies)
+        model_context = context_for_dependencies(context, self.dependencies)
         expressions = d.parse(self.sql_no_config, default_dialect=dialect)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
