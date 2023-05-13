@@ -468,10 +468,13 @@ class EngineAdapter:
             query = t.cast(Query, query_or_df)
             if contains_json:
                 query = self._escape_json(query)
-            return self._insert_append_query(table_name, query, columns_to_types)
-        if isinstance(query_or_df, pd.DataFrame):
-            return self._insert_append_pandas_df(table_name, query_or_df, columns_to_types)
-        raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
+            self._insert_append_query(table_name, query, columns_to_types)
+        elif isinstance(query_or_df, pd.DataFrame):
+            self._insert_append_pandas_df(
+                table_name, query_or_df, columns_to_types, contains_json=contains_json
+            )
+        else:
+            raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
 
     @t.overload
     @classmethod
@@ -518,6 +521,7 @@ class EngineAdapter:
         table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         connection = self._connection_pool.get()
         table = exp.to_table(table_name)
@@ -537,7 +541,9 @@ class EngineAdapter:
         else:
             with self.transaction():
                 for i, expression in enumerate(
-                    self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE)
+                    self._pandas_to_sql(
+                        df, columns_to_types, self.DEFAULT_BATCH_SIZE, contains_json=contains_json
+                    )
                 ):
                     self.execute(
                         exp.Insert(
@@ -574,8 +580,12 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int = 0,
         alias: str = "t",
+        contains_json: bool = False,
     ) -> t.Generator[exp.Select, None, None]:
-        yield from pandas_to_sql(df, columns_to_types, batch_size, alias)
+        for expression in pandas_to_sql(df, columns_to_types, batch_size, alias):
+            yield expression if not contains_json else t.cast(
+                exp.Select, cls._escape_json(expression)
+            )
 
     def _insert_overwrite_by_condition(
         self,

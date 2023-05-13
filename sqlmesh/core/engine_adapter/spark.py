@@ -82,6 +82,7 @@ class SparkEngineAdapter(BaseSparkEngineAdapter):
         table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=False)
 
