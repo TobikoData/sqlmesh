@@ -21,6 +21,7 @@ class DuckDBEngineAdapter(LogicalMergeAdapter):
         table_name: TableName,
         df: pd.DataFrame,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        contains_json: bool = False,
     ) -> None:
         self.execute(
             exp.Insert(
