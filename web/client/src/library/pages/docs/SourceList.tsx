@@ -1,4 +1,3 @@
-import { type Model } from '@api/client'
 import Input from '@components/input/Input'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isArrayEmpty, isArrayNotEmpty } from '@utils/index'
@@ -12,7 +11,7 @@ export default function SourceList({
   filter,
   setFilter,
 }: {
-  models: Map<string, Model>
+  models: Map<string, ModelSQLMeshModel>
   filter: string
   setFilter: (filter: string) => void
 }): JSX.Element {

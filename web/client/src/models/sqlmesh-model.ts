@@ -42,6 +42,22 @@ export class ModelSQLMeshModel<
     this.details = this.initial.details ?? {}
   }
 
+  get index(): string {
+    return [
+      this.path,
+      this.name,
+      this.dialect,
+      this.type,
+      this.description,
+      this.columns.map(column => String(Object.values(column))),
+      Object.values(this.details),
+    ]
+      .flat()
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase()
+  }
+
   update(initial: Partial<InitialSQLMeshModel> = {}): void {
     for (const [key, value] of Object.entries(initial)) {
       if (key === 'columns') {

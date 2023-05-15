@@ -1,16 +1,17 @@
 import Container from '@components/container/Container'
 import { useStoreContext } from '@context/context'
-import { Outlet, useLocation } from 'react-router-dom'
-import Content from './Content'
+import { Outlet, useLocation, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import SplitPane from '@components/splitPane/SplitPane'
 import Search from './Search'
 import SourceList from './SourceList'
 import TasksOverview from '@components/tasksOverview/TasksOverview'
 import { EnumPlanApplyType, useStorePlan } from '@context/plan'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 
-const Docs = function Docs(): JSX.Element {
+export default function Docs(): JSX.Element {
   const location = useLocation()
+  const { modelName } = useParams()
 
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
@@ -21,6 +22,20 @@ const Docs = function Docs(): JSX.Element {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
 
+  const filtered = Array.from(models.entries()).reduce(
+    (acc: ModelSQLMeshModel[], [key, model]) => {
+      if (model.name === key) return acc
+      if (modelName == null) {
+        acc.push(model)
+      } else if (model.name !== ModelSQLMeshModel.decodeName(modelName)) {
+        acc.push(model)
+      }
+
+      return acc
+    },
+    [],
+  )
+
   useEffect(() => {
     setFilter('')
     setSearch('')
@@ -30,7 +45,7 @@ const Docs = function Docs(): JSX.Element {
     <Container.Page>
       <div className="p-4 flex flex-col w-full h-full overflow-hidden">
         <Search
-          models={models}
+          models={filtered}
           search={search}
           setSearch={setSearch}
         />
@@ -78,21 +93,5 @@ const Docs = function Docs(): JSX.Element {
         </SplitPane>
       </div>
     </Container.Page>
-  )
-}
-
-Docs.Content = Content
-Docs.Welcome = Welcome
-
-export default Docs
-
-function Welcome(): JSX.Element {
-  return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold">Welcome to the documentation</h1>
-      <p className="text-lg mt-4">
-        Here you can find all the information about the models and their fields.
-      </p>
-    </div>
   )
 }

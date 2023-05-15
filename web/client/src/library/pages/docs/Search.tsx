@@ -1,4 +1,3 @@
-import { type Model } from '@api/client'
 import Input from '@components/input/Input'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isFalse, isArrayEmpty, isArrayNotEmpty } from '@utils/index'
@@ -12,11 +11,14 @@ export default function Search({
   search,
   setSearch,
 }: {
-  models: Map<string, Model>
+  models: ModelSQLMeshModel[]
   search: string
   setSearch: (search: string) => void
 }): JSX.Element {
-  const indices = useMemo(() => createIndices(models), [models])
+  const indices: Array<[ModelSQLMeshModel, string]> = useMemo(
+    () => models.map(model => [model, model.index]),
+    [models],
+  )
   const showSearchResults = search !== '' && search.length > 1
   const found = isFalse(showSearchResults)
     ? []
@@ -35,7 +37,7 @@ export default function Search({
         autoFocus
       />
       {showSearchResults && (
-        <ul className="p-4 bg-theme-lighter absolute z-10 w-full top-16 left-0 right-0 rounded-lg max-h-[25vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+        <ul className="p-4 bg-theme dark:bg-theme-lighter absolute z-10 w-full top-16 left-0 right-0 rounded-lg max-h-[25vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl">
           {isArrayEmpty(found) && (
             <li
               key="not-found"
@@ -57,7 +59,7 @@ export default function Search({
                 className="text-md font-normal mb-1 w-full"
               >
                 <li className="p-2 cursor-pointer hover:bg-secondary-10">
-                  <span>{model.name}</span>
+                  <span className="font-bold">{model.name}</span>
                   <small className="block text-neutral-600 p-2 italic">
                     {highlightMatch(index, search)}
                   </small>
@@ -91,57 +93,28 @@ function highlightMatch(source: string, match: string): JSX.Element {
 }
 
 function filterModelsBySearch(
-  indices: Array<[Model, string]> = [],
+  indices: Array<[ModelSQLMeshModel, string]> = [],
   search: string,
-): Array<[Model, string]> {
-  return indices.reduce((acc: Array<[Model, string]>, [model, index]) => {
-    const idx = index.indexOf(search.toLocaleLowerCase())
+): Array<[ModelSQLMeshModel, string]> {
+  return indices.reduce(
+    (acc: Array<[ModelSQLMeshModel, string]>, [model, index]) => {
+      const idx = index.indexOf(search.toLocaleLowerCase())
 
-    if (idx > -1) {
-      const SIZE = 40
-      const min = Math.max(0, idx - SIZE)
-      const max = Math.min(index.length - 1, idx + search.length + SIZE)
+      if (idx > -1) {
+        const SIZE = 40
+        const min = Math.max(0, idx - SIZE)
+        const max = Math.min(index.length - 1, idx + search.length + SIZE)
 
-      acc.push([
-        model,
-        (min > 0 ? '... ' : '') +
-          index.slice(min, max) +
-          (max < index.length ? ' ...' : ''),
-      ])
-    }
-
-    return acc
-  }, [])
-}
-
-function createIndices(models: Map<string, Model>): Array<[Model, string]> {
-  const indices: Array<[Model, string]> = []
-
-  models.forEach((value, key) => {
-    if (value.path === key) return
-
-    const index = Object.entries(value).reduce((acc, [k, v]) => {
-      if (k === 'sql') return acc
-
-      if (k === 'details' && v != null) {
-        return acc + ' ' + Object.values(v).join(' ')
+        acc.push([
+          model,
+          (min > 0 ? '... ' : '') +
+            index.slice(min, max) +
+            (max < index.length ? ' ...' : ''),
+        ])
       }
 
-      if (k === 'columns' && v != null) {
-        return (
-          acc +
-          ' ' +
-          (v as Array<Record<string, unknown>>)
-            .map(column => String(Object.values(column).join(' ')))
-            .join(' ')
-        )
-      }
-
-      return acc + ' ' + String(v ?? '')
-    }, '')
-
-    indices.push([value, index.toLocaleLowerCase() + ' ' + key])
-  })
-
-  return indices
+      return acc
+    },
+    [],
+  )
 }

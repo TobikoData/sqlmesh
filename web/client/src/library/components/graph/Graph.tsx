@@ -63,54 +63,27 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
   columnType,
   columnDescription,
-  isFetching = false,
-  isError = false,
-  disabled = false,
-  isHighlighted = false,
   className,
 }: {
   columnName: string
   columnType: string
   columnDescription?: string
-  isFetching?: boolean
-  isError?: boolean
   disabled?: boolean
-  isHighlighted?: boolean
   className?: string
 }): JSX.Element {
   return (
-    <div
-      className={clsx(
-        'flex w-full items-center',
-        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-        className,
-      )}
-    >
-      {isFetching && (
-        <Loading className="inline-block mr-2">
-          <Spinner className="w-3 h-3 border border-neutral-10" />
-        </Loading>
-      )}
-      <div className={clsx('w-full items-center')}>
-        <div className="w-full flex justify-between items-center">
-          <span
-            className={clsx(
-              isError && 'text-danger-500',
-              isHighlighted && 'text-brand-500',
-            )}
-          >
-            {columnName}
-          </span>
-          <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
-            {columnType}
-          </span>
-        </div>
-        {columnDescription != null && (
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">
-            {columnDescription}
-          </p>
-        )}
+    <div className={clsx('w-full items-center', className)}>
+      <div className="w-full flex justify-between items-center">
+        <span>{columnName}</span>
+        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
+          {columnType}
+        </span>
       </div>
+      {columnDescription != null && (
+        <p className="text-neutral-600 dark:text-neutral-400 mt-1">
+          {columnDescription}
+        </p>
+      )}
     </div>
   )
 })
@@ -249,7 +222,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   )
 })
 
-const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
+const ModelColumn = memo(function ModelColumn({
   id,
   nodeId,
   column,
@@ -263,6 +236,7 @@ const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
   updateColumnLineage,
   removeEdges,
   selectManually,
+  withHandles = false,
 }: {
   id: string
   nodeId: string
@@ -271,6 +245,7 @@ const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
   isActive?: boolean
   hasLeft?: boolean
   hasRight?: boolean
+  withHandles?: boolean
   getColumnLineage: (
     columnName: string,
   ) => Promise<
@@ -295,6 +270,7 @@ const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
 
   const [isFetching, setIsFetching] = useState(false)
   const [isError, setIsError] = useState(false)
+  const [isEmpty, setIsEmpty] = useState(false)
 
   useEffect(() => {
     if (selectManually == null) return
@@ -311,9 +287,33 @@ const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
     } else {
       setIsFetching(true)
       setIsError(false)
+      setIsEmpty(false)
 
       debouncedGetColumnLineage(column.name)
-        .then(updateColumnLineage)
+        .then(data => {
+          const models =
+            data as ColumnLineageApiLineageModelNameColumnNameGet200
+
+          setIsEmpty(() => {
+            for (const modelName in models) {
+              const model = models[modelName]
+
+              if (model == null) continue
+
+              for (const columnName in model) {
+                const lineage = model[columnName]
+
+                if (lineage == null) continue
+
+                return Object.keys(lineage.models ?? {}).length === 0
+              }
+            }
+
+            return false
+          })
+
+          updateColumnLineage(data)
+        })
         .catch(error => {
           setIsError(true)
           handleError?.(error as Error)
@@ -328,113 +328,53 @@ const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
     <div
       className={clsx(
         isActive && 'bg-secondary-10 dark:bg-primary-900',
+        withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
         className,
       )}
       onClick={debounceSync(toggleColumnLineage, 500)}
     >
-      <ModelNodeHandles
-        id={id}
-        nodeId={nodeId}
-        hasLeft={hasLeft}
-        hasRight={hasRight}
-        disabled={disabled}
+      <div
+        className={clsx(
+          'flex w-full items-center',
+          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          className,
+        )}
       >
-        <ModelColumnDisplay
-          columnName={column.name}
-          columnType={column.type}
-          disabled={disabled}
-          isError={isError}
-          isFetching={isFetching}
-        />
-      </ModelNodeHandles>
-    </div>
-  )
-})
-
-const ModelColumn = memo(function ModelColumn({
-  id,
-  column,
-  className,
-  disabled = false,
-  isActive = false,
-  getColumnLineage,
-  handleError,
-  updateColumnLineage,
-  removeEdges,
-  selectManually,
-}: {
-  id: string
-  column: Column
-  disabled?: boolean
-  isActive?: boolean
-  getColumnLineage: (
-    columnName: string,
-  ) => Promise<
-    ColumnLineageApiLineageModelNameColumnNameGet200 & ResponseWithDetail
-  >
-  updateColumnLineage: (
-    lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
-  ) => void
-  removeEdges: (columnId: string) => void
-  handleError?: (error: Error) => void
-  selectManually?: React.Dispatch<
-    React.SetStateAction<
-      [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
-    >
-  >
-  className?: string
-}): JSX.Element {
-  const debouncedGetColumnLineage = useCallback(
-    debounceAsync(getColumnLineage, 1000, true),
-    [getColumnLineage],
-  )
-
-  const [isFetching, setIsFetching] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  useEffect(() => {
-    if (selectManually == null) return
-
-    toggleColumnLineage()
-    selectManually(undefined)
-  }, [selectManually])
-
-  function toggleColumnLineage(): void {
-    if (disabled) return
-
-    if (isActive) {
-      removeEdges(id)
-    } else {
-      setIsFetching(true)
-      setIsError(false)
-
-      debouncedGetColumnLineage(column.name)
-        .then(updateColumnLineage)
-        .catch(error => {
-          setIsError(true)
-          handleError?.(error as Error)
-        })
-        .finally(() => {
-          setIsFetching(false)
-        })
-    }
-  }
-
-  return (
-    <div
-      className={clsx(
-        isActive && 'bg-secondary-10 dark:bg-primary-900',
-        className,
-      )}
-      onClick={debounceSync(toggleColumnLineage, 500)}
-    >
-      <ModelColumnDisplay
-        columnName={column.name}
-        columnType={column.type}
-        disabled={disabled}
-        isError={isError}
-        isFetching={isFetching}
-      />
+        {isFetching && (
+          <Loading className="inline-block mr-2">
+            <Spinner className="w-3 h-3 border border-neutral-10" />
+          </Loading>
+        )}
+        {withHandles ? (
+          <ModelNodeHandles
+            id={id}
+            nodeId={nodeId}
+            hasLeft={hasLeft}
+            hasRight={hasRight}
+            disabled={disabled}
+          >
+            <ModelColumnDisplay
+              columnName={column.name}
+              columnType={column.type}
+              disabled={disabled}
+              className={clsx(
+                isError && 'text-danger-500',
+                isEmpty && 'text-neutral-400 dark:text-neutral-600',
+              )}
+            />
+          </ModelNodeHandles>
+        ) : (
+          <ModelColumnDisplay
+            columnName={column.name}
+            columnType={column.type}
+            disabled={disabled}
+            className={clsx(
+              isError && 'text-danger-500',
+              isEmpty && 'text-neutral-400 dark:text-neutral-600',
+            )}
+          />
+        )}
+      </div>
     </div>
   )
 })
@@ -445,12 +385,14 @@ const ModelColumns = memo(function ModelColumns({
   disabled,
   className,
   limit = 5,
+  withHandles = false,
 }: {
   nodeId: string
   columns: Column[]
   disabled?: boolean
   className?: string
   limit?: number
+  withHandles?: boolean
 }): JSX.Element {
   const queryClient = useQueryClient()
 
@@ -621,12 +563,12 @@ const ModelColumns = memo(function ModelColumns({
         <div
           className={clsx(
             'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md',
-            'w-full bg-theme-lighter cursor-default',
+            withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
             className,
           )}
         >
           {columnsSelected.map(column => (
-            <ModelColumnWithHandles
+            <ModelColumn
               key={toNodeOrEdgeId(nodeId, column.name)}
               id={toNodeOrEdgeId(nodeId, column.name)}
               nodeId={nodeId}
@@ -648,6 +590,7 @@ const ModelColumns = memo(function ModelColumns({
                   ? setManuallySelectedColumn
                   : undefined
               }
+              withHandles={withHandles}
             />
           ))}
         </div>
@@ -667,13 +610,13 @@ const ModelColumns = memo(function ModelColumns({
       )}
       <div
         className={clsx(
-          'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md',
-          'w-full py-2 bg-theme-lighter cursor-default',
+          'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md py-2',
+          withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
           className,
         )}
       >
         {columnsRest.map(column => (
-          <ModelColumnWithHandles
+          <ModelColumn
             key={toNodeOrEdgeId(nodeId, column.name)}
             id={toNodeOrEdgeId(nodeId, column.name)}
             nodeId={nodeId}
@@ -697,6 +640,7 @@ const ModelColumns = memo(function ModelColumns({
                 ? 'opacity-100'
                 : 'opacity-0 h-0 overflow-hidden',
             )}
+            withHandles={withHandles}
           />
         ))}
       </div>
@@ -887,6 +831,7 @@ function ModelNode({
             nodeId={id}
             columns={columns}
             disabled={model?.type === 'python'}
+            withHandles={true}
           />
           <div className="rounded-b-lg bg-secondary-100 dark:bg-primary-900 py-1"></div>
         </>
@@ -895,4 +840,4 @@ function ModelNode({
   )
 }
 
-export { ModelColumnLineage, ModelColumn, ModelColumnWithHandles }
+export { ModelColumnLineage, ModelColumns }

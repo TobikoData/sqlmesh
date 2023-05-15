@@ -54,6 +54,12 @@ function Editor(): JSX.Element {
   )
 
   useEffect(() => {
+    engine.postMessage({
+      topic: 'dialects',
+    })
+  }, [])
+
+  useEffect(() => {
     files.forEach(file => {
       if (storedTabsIds.includes(file.id)) {
         addTab(createTab(file))
