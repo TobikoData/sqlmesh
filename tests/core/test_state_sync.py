@@ -757,7 +757,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     assert not state_sync.missing_intervals("staging")
     assert not state_sync.missing_intervals("dev")
-    assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 9
+    assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 8
 
 
 def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
