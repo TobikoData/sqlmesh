@@ -81,6 +81,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                         "name": "INCREMENTAL_BY_TIME_RANGE",
                         "time_column": {"column": "ds"},
                     },
+                    "mapping_schema": {},
                     "name": "test_model",
                     "partitioned_by": ["a"],
                     "query": "SELECT a, ds FROM tbl",

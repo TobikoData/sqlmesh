@@ -1014,11 +1014,7 @@
             ]
           },
           "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
-          "annotated": { "title": "Annotated", "type": "boolean" },
-          "contains_star_query": {
-            "title": "Contains Star Query",
-            "type": "boolean"
-          }
+          "annotated": { "title": "Annotated", "type": "boolean" }
         }
       },
       "ModelsDiff": {

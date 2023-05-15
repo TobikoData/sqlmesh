@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sqlglot.errors import SqlglotError
-from sqlglot.schema import MappingSchema
+from sqlglot.optimizer.qualify_columns import validate_qualify_columns
+from sqlglot.schema import MappingSchema, _nested_set
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
@@ -34,6 +35,7 @@ if t.TYPE_CHECKING:
 
 def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
     schema = MappingSchema()
+
     for name in dag.sorted():
         model = models.get(name)
 
@@ -41,13 +43,34 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
         if not model:
             continue
 
-        if model.contains_star_query and any(dep not in models for dep in model.depends_on):
-            raise ConfigError(
-                f"Can't expand SELECT * expression for model '{name}'. Projections for models that use external sources must be specified explicitly at '{model._path}'"
-            )
+        external = False
 
-        model.update_schema(schema)
+        for dep in model.depends_on:
+            external = external or dep not in models
+            table = schema._normalize_table(schema._ensure_table(dep))
+            mapping_schema = schema.find(table)
+
+            if mapping_schema:
+                _nested_set(
+                    model.mapping_schema,
+                    tuple(str(part) for part in table.parts),
+                    {k: str(v) for k, v in mapping_schema.items()},
+                )
+
         schema.add_table(name, model.columns_to_types)
+
+        if external:
+            if "*" in model.columns_to_types:
+                raise ConfigError(
+                    f"Can't expand SELECT * expression for model '{name}'. Projections for models that use external sources must be specified explicitly at '{model._path}'"
+                )
+        elif model.mapping_schema:
+            try:
+                validate_qualify_columns(model.render_query())
+            except SqlglotError as e:
+                raise ConfigError(
+                    f"Column references could not be resolved for model '{name}' at '{model._path}'. {e}"
+                )
 
 
 @dataclass

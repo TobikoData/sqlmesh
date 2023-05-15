@@ -54,7 +54,7 @@ def test_get_files(project_tmp_path: Path) -> None:
     models_dir = project_tmp_path / "models"
     models_dir.mkdir()
     sql_file = models_dir / "foo.sql"
-    sql_file.write_text("MODEL (name foo); SELECT ds;")
+    sql_file.write_text("MODEL (name foo); SELECT 1 ds;")
 
     response = client.get("/api/files")
     assert response.status_code == 200

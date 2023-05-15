@@ -221,7 +221,7 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
         )
     )
 
-    sushi_context.upsert_model("sushi.customers", query=parse_one("select 1"))
+    sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
     assert mock_console.show_model_difference_summary.called
 
@@ -271,7 +271,7 @@ def test_ignore_files(mocker: MockerFixture, tmpdir):
     ignore_model_file = create_temp_file(
         tmpdir,
         pathlib.Path(models_dir, "ignore", "ignore_model.sql"),
-        "MODEL(name ignore.ignore_model); SELECT cola::bigint AS cola FROM db.other_table",
+        "MODEL(name ignore.ignore_model); SELECT 1 AS cola",
     )
     ignore_macro_file = create_temp_file(
         tmpdir,
@@ -292,7 +292,7 @@ def test():
     create_temp_file(
         tmpdir,
         pathlib.Path(models_dir, "db", "actual_test.sql"),
-        "MODEL(name db.actual_test, kind full); SELECT cola::bigint AS cola FROM db.other_table",
+        "MODEL(name db.actual_test, kind full); SELECT 1 AS cola",
     )
     create_temp_file(
         tmpdir,

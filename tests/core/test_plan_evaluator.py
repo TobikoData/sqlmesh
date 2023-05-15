@@ -39,8 +39,8 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
         query=parse_one("SELECT 1::INT AS one FROM sushi.new_test_model, sushi.waiters"),
     )
 
-    sushi_context.upsert_model(new_view_model)
     sushi_context.upsert_model(new_model)
+    sushi_context.upsert_model(new_view_model)
 
     snapshots = sushi_context.snapshots
     new_model_snapshot = snapshots[new_model.name]
