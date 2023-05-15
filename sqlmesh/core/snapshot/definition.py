@@ -518,7 +518,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
-            raise ValueError("`end` must be greater than `start`")
+            raise ValueError(
+                f"`end` ({to_datetime(end_ts)}) must be greater than `start` ({to_datetime(start_ts)})"
+            )
         return (start_ts, end_ts)
 
     def merge_intervals(self, other: Snapshot) -> None:
