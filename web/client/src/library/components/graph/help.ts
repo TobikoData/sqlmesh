@@ -6,7 +6,6 @@ import {
 } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
-import { type ActiveColumns } from './context'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export interface GraphNodeData {
@@ -69,7 +68,6 @@ function getNodesAndEdges({
   nodesMap: Record<string, Node>
   edges: Edge[]
   nodes: Node[]
-  activeColumns: ActiveColumns
 } {
   const currentEdges = edges.reduce(
     (acc: Record<string, Edge>, edge) =>
@@ -93,7 +91,6 @@ function getNodesAndEdges({
     withColumns,
   })
   const outputEdges: Edge[] = []
-  const activeColumns: ActiveColumns = new Map()
 
   for (const modelSource of modelNames) {
     const modelLineage = lineage[modelSource]
@@ -114,15 +111,7 @@ function getNodesAndEdges({
       continue
 
     for (const columnSource in modelLineage.columns) {
-      const sourceId = toNodeOrEdgeId(modelSource, columnSource)
       const modelsTarget = modelLineage.columns[columnSource]?.models
-
-      if (isFalse(activeColumns.has(sourceId))) {
-        activeColumns.set(sourceId, {
-          ins: [],
-          outs: [],
-        })
-      }
 
       if (modelsTarget == null) continue
 
@@ -132,35 +121,17 @@ function getNodesAndEdges({
         if (columnsTarget == null) continue
 
         for (const columnTarget of columnsTarget) {
-          const targetId = toNodeOrEdgeId(modelTarget, columnTarget)
-
-          if (isFalse(activeColumns.has(targetId))) {
-            activeColumns.set(targetId, {
-              ins: [],
-              outs: [],
-            })
-          }
-
-          activeColumns.get(sourceId)?.ins.push(targetId)
-          activeColumns.get(targetId)?.outs.push(sourceId)
-
-          const sourceHandle = toNodeOrEdgeId(
-            'source',
-            modelSource,
-            columnSource,
-          )
+          const sourceHandle = toNodeOrEdgeId('left', modelSource, columnSource)
           const targetHandle = toNodeOrEdgeId(
-            'target',
+            'right',
             modelTarget,
             columnTarget,
           )
-          const edgeId = toNodeOrEdgeId(
-            modelSource,
-            modelTarget,
-            sourceHandle,
-            targetHandle,
-          )
+
+          const edgeId = toNodeOrEdgeId(sourceHandle, targetHandle)
+
           const currentEdge = currentEdges[edgeId]
+
           const edge =
             currentEdge ??
             createGraphEdge(
@@ -168,10 +139,8 @@ function getNodesAndEdges({
               modelTarget,
               sourceHandle,
               targetHandle,
-              false,
+              true,
               {
-                target: modelTarget,
-                source: modelSource,
                 columnSource,
                 columnTarget,
               },
@@ -187,7 +156,6 @@ function getNodesAndEdges({
     edges: outputEdges,
     nodes: Object.values(nodesMap),
     nodesMap,
-    activeColumns,
   }
 }
 
@@ -352,6 +320,7 @@ export function mergeLineage(
   columns: ColumnLineageApiLineageModelNameColumnNameGet200 = {},
 ): Record<string, Lineage> {
   lineage = structuredClone(lineage)
+  columns = structuredClone(columns)
 
   for (const model in columns) {
     const lineageModel = lineage[model]

@@ -116,27 +116,27 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
 })
 
 const ModelNodeHandles = memo(function ModelNodeHandles({
-  scope,
+  nodeId,
   id,
-  hasTarget = false,
-  hasSource = false,
+  hasLeft = false,
+  hasRight = false,
   disabled = false,
   children,
   className,
 }: {
-  scope: string
+  nodeId: string
   id: string
   children: React.ReactNode
   className?: string
-  hasTarget?: boolean
-  hasSource?: boolean
+  hasLeft?: boolean
+  hasRight?: boolean
   disabled?: boolean
 }): JSX.Element {
   const updateNodeInternals = useUpdateNodeInternals()
 
   useEffect(() => {
-    updateNodeInternals(scope)
-  }, [hasTarget, hasSource])
+    updateNodeInternals(nodeId)
+  }, [hasLeft, hasRight])
 
   return (
     <div
@@ -146,10 +146,10 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
         className,
       )}
     >
-      {hasSource && (
+      {hasRight && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId('target', id)}
+          id={toNodeOrEdgeId('right', id)}
           position={Position.Right}
           isConnectable={false}
           className={clsx(
@@ -158,10 +158,10 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
         />
       )}
       {children}
-      {hasTarget && (
+      {hasLeft && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId('source', id)}
+          id={toNodeOrEdgeId('left', id)}
           position={Position.Left}
           isConnectable={false}
           className={clsx(
@@ -176,9 +176,8 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
 const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   id,
   className,
-  hasTarget = true,
-  hasSource = true,
-  count = 0,
+  hasLeft = false,
+  hasRight = false,
   label,
   type,
   handleClick,
@@ -186,8 +185,8 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   id: string
   label: string
   type?: string
-  hasTarget?: boolean
-  hasSource?: boolean
+  hasLeft?: boolean
+  hasRight?: boolean
   count?: number
   className?: string
   handleClick?: (e: MouseEvent) => void
@@ -199,10 +198,10 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
         className,
       )}
     >
-      {hasTarget && (
+      {hasRight && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId('target', id)}
+          id={toNodeOrEdgeId('right', id)}
           position={Position.Right}
           isConnectable={false}
           className={clsx(
@@ -235,13 +234,10 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           {label}
         </span>
       </span>
-      <span className="inline-block bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem] ml-3">
-        {count}
-      </span>
-      {hasSource && (
+      {hasLeft && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId('source', id)}
+          id={toNodeOrEdgeId('left', id)}
           position={Position.Left}
           isConnectable={false}
           className={clsx('!bg-transparent -ml-2 dark:text-primary-500')}
@@ -253,14 +249,15 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   )
 })
 
-const ModelColumn = memo(function ModelColumn({
+const ModelColumnWithHandles = memo(function ModelColumnWithHandles({
   id,
-  scope,
+  nodeId,
   column,
   className,
   disabled = false,
   isActive = false,
-  connections = { ins: [], outs: [] },
+  hasLeft = false,
+  hasRight = false,
   getColumnLineage,
   handleError,
   updateColumnLineage,
@@ -268,10 +265,12 @@ const ModelColumn = memo(function ModelColumn({
   selectManually,
 }: {
   id: string
-  scope: string
+  nodeId: string
   column: Column
   disabled?: boolean
   isActive?: boolean
+  hasLeft?: boolean
+  hasRight?: boolean
   getColumnLineage: (
     columnName: string,
   ) => Promise<
@@ -280,11 +279,7 @@ const ModelColumn = memo(function ModelColumn({
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
-  removeEdges: (
-    columnId: string,
-    connections: { ins: string[]; outs: string[] },
-  ) => void
-  connections?: { ins: string[]; outs: string[] }
+  removeEdges: (columnId: string) => void
   handleError?: (error: Error) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
@@ -312,7 +307,7 @@ const ModelColumn = memo(function ModelColumn({
     if (disabled) return
 
     if (isActive) {
-      removeEdges(id, connections)
+      removeEdges(id)
     } else {
       setIsFetching(true)
       setIsError(false)
@@ -329,8 +324,6 @@ const ModelColumn = memo(function ModelColumn({
     }
   }
 
-  console.log('ModelColumn')
-
   return (
     <div
       className={clsx(
@@ -341,9 +334,9 @@ const ModelColumn = memo(function ModelColumn({
     >
       <ModelNodeHandles
         id={id}
-        scope={scope}
-        hasTarget={isActive}
-        hasSource={isActive}
+        nodeId={nodeId}
+        hasLeft={hasLeft}
+        hasRight={hasRight}
         disabled={disabled}
       >
         <ModelColumnDisplay
@@ -358,14 +351,102 @@ const ModelColumn = memo(function ModelColumn({
   )
 })
 
+const ModelColumn = memo(function ModelColumn({
+  id,
+  column,
+  className,
+  disabled = false,
+  isActive = false,
+  getColumnLineage,
+  handleError,
+  updateColumnLineage,
+  removeEdges,
+  selectManually,
+}: {
+  id: string
+  column: Column
+  disabled?: boolean
+  isActive?: boolean
+  getColumnLineage: (
+    columnName: string,
+  ) => Promise<
+    ColumnLineageApiLineageModelNameColumnNameGet200 & ResponseWithDetail
+  >
+  updateColumnLineage: (
+    lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
+  ) => void
+  removeEdges: (columnId: string) => void
+  handleError?: (error: Error) => void
+  selectManually?: React.Dispatch<
+    React.SetStateAction<
+      [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
+    >
+  >
+  className?: string
+}): JSX.Element {
+  const debouncedGetColumnLineage = useCallback(
+    debounceAsync(getColumnLineage, 1000, true),
+    [getColumnLineage],
+  )
+
+  const [isFetching, setIsFetching] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  useEffect(() => {
+    if (selectManually == null) return
+
+    toggleColumnLineage()
+    selectManually(undefined)
+  }, [selectManually])
+
+  function toggleColumnLineage(): void {
+    if (disabled) return
+
+    if (isActive) {
+      removeEdges(id)
+    } else {
+      setIsFetching(true)
+      setIsError(false)
+
+      debouncedGetColumnLineage(column.name)
+        .then(updateColumnLineage)
+        .catch(error => {
+          setIsError(true)
+          handleError?.(error as Error)
+        })
+        .finally(() => {
+          setIsFetching(false)
+        })
+    }
+  }
+
+  return (
+    <div
+      className={clsx(
+        isActive && 'bg-secondary-10 dark:bg-primary-900',
+        className,
+      )}
+      onClick={debounceSync(toggleColumnLineage, 500)}
+    >
+      <ModelColumnDisplay
+        columnName={column.name}
+        columnType={column.type}
+        disabled={disabled}
+        isError={isError}
+        isFetching={isFetching}
+      />
+    </div>
+  )
+})
+
 const ModelColumns = memo(function ModelColumns({
-  scope,
+  nodeId,
   columns,
   disabled,
   className,
   limit = 5,
 }: {
-  scope: string
+  nodeId: string
   columns: Column[]
   disabled?: boolean
   className?: string
@@ -375,14 +456,14 @@ const ModelColumns = memo(function ModelColumns({
 
   const {
     models,
+    connections,
     isActiveColumn,
-    // activeEdges,
-    activeColumns,
+    setConnections,
     manuallySelectedColumn,
     setManuallySelectedColumn,
     handleError,
     setLineage,
-    toggleLineageColumn,
+    removeActiveEdges,
     hasActiveEdge,
     addActiveEdges,
   } = useLineageFlow()
@@ -395,7 +476,7 @@ const ModelColumns = memo(function ModelColumns({
     const rest: Column[] = []
 
     columns.forEach(column => {
-      if (isActiveColumn(scope, column.name)) {
+      if (isActiveColumn(nodeId, column.name)) {
         active.push(column)
       } else {
         if (showColumns) {
@@ -407,7 +488,7 @@ const ModelColumns = memo(function ModelColumns({
     })
 
     return [active, rest]
-  }, [scope, columns, showColumns, isActiveColumn, hasActiveEdge])
+  }, [nodeId, columns, showColumns, isActiveColumn, hasActiveEdge])
 
   const getColumnLineage = useCallback(
     async function getColumnLineage(
@@ -416,10 +497,10 @@ const ModelColumns = memo(function ModelColumns({
       ColumnLineageApiLineageModelNameColumnNameGet200 & ResponseWithDetail
     > {
       return await queryClient.fetchQuery({
-        queryKey: [`/api/lineage`, scope, columnName],
+        queryKey: [`/api/lineage`, nodeId, columnName],
         queryFn: async ({ signal }) =>
           await columnLineageApiLineageModelNameColumnNameGet(
-            scope,
+            nodeId,
             columnName,
             {
               signal,
@@ -428,46 +509,80 @@ const ModelColumns = memo(function ModelColumns({
         cacheTime: 0,
       })
     },
-    [scope],
+    [nodeId],
   )
 
   const updateColumnLineage = useCallback(
     function updateColumnLineage(
       columnLineage: ColumnLineageApiLineageModelNameColumnNameGet200,
     ): void {
-      for (const modelName in columnLineage) {
-        const model = columnLineage[modelName]
+      setLineage(lineage => mergeLineage(models, lineage, columnLineage))
+      setConnections(connections => {
+        for (const modelName in columnLineage) {
+          const model = columnLineage[modelName]
 
-        if (model == null) continue
+          if (model == null) continue
 
-        for (const columnName in model) {
-          const column = model[columnName]
+          for (const columnName in model) {
+            const column = model[columnName]
 
-          if (column?.models == null) continue
+            if (column?.models == null) continue
 
-          const sources = Object.entries(column.models)
+            const connectionSource = connections.get(
+              toNodeOrEdgeId(modelName, columnName),
+            ) ?? {
+              left: [],
+              right: [],
+            }
 
-          const columns = new Set(
-            sources
-              .map(([id, columns]) =>
-                columns.map(column => toNodeOrEdgeId('source', id, column)),
-              )
-              .flat(),
-          )
+            Object.entries(column.models).forEach(([id, columns]) => {
+              columns.forEach(column => {
+                const connectionTarget = connections.get(
+                  toNodeOrEdgeId(id, column),
+                ) ?? {
+                  left: [],
+                  right: [],
+                }
 
-          const output = Array.from(columns)
+                connectionTarget.right = Array.from(
+                  new Set(
+                    connectionTarget.right.concat(
+                      toNodeOrEdgeId(modelName, columnName),
+                    ),
+                  ),
+                )
+                connectionSource.left = Array.from(
+                  new Set(
+                    connectionSource.left.concat(toNodeOrEdgeId(id, column)),
+                  ),
+                )
 
-          if (sources.length > 0) {
-            output.push(toNodeOrEdgeId('target', modelName, columnName))
+                connections.set(toNodeOrEdgeId(id, column), connectionTarget)
+                connections.set(
+                  toNodeOrEdgeId(modelName, columnName),
+                  connectionSource,
+                )
+              })
+            })
+
+            const modelColumnConnectionsLeft = (
+              connections.get(toNodeOrEdgeId(modelName, columnName))?.left ?? []
+            ).map(id => toNodeOrEdgeId('right', id))
+            const modelColumnConnectionsRight = (
+              connections.get(toNodeOrEdgeId(modelName, columnName))?.right ??
+              []
+            ).map(id => toNodeOrEdgeId('left', id))
+
+            addActiveEdges(
+              modelColumnConnectionsLeft.concat(modelColumnConnectionsRight),
+            )
           }
-
-          addActiveEdges(output)
-
-          setLineage(lineage => mergeLineage(models, lineage, columnLineage))
         }
-      }
+
+        return new Map(connections)
+      })
     },
-    [models, addActiveEdges],
+    [models, addActiveEdges, setConnections],
   )
 
   const isSelectManually = useCallback(
@@ -478,20 +593,26 @@ const ModelColumns = memo(function ModelColumns({
 
       if (selectedModel == null || selectedColumn == null) return false
 
-      return selectedModel.name === scope && selectedColumn.name === columnName
+      return selectedModel.name === nodeId && selectedColumn.name === columnName
     },
-    [scope, manuallySelectedColumn],
+    [nodeId, manuallySelectedColumn],
   )
 
   const removeEdges = useCallback(
-    function removeEdges(
-      columnId: string,
-      connections: { ins: string[]; outs: string[] },
-    ): void {
-      console.log('removeEdges', columnId, connections)
-      toggleLineageColumn('remove', columnId, connections)
+    function removeEdges(columnId: string): void {
+      removeActiveEdges(
+        [columnId, walk(columnId, 'left'), walk(columnId, 'right')].flat(),
+      )
+
+      function walk(id: string, side: 'left' | 'right'): string[] {
+        const edges = connections.get(id)?.[side] ?? []
+
+        return [id, edges.map(edge => walk(edge, side))].flat(
+          Infinity,
+        ) as string[]
+      }
     },
-    [toggleLineageColumn],
+    [removeActiveEdges, connections],
   )
 
   return (
@@ -500,15 +621,15 @@ const ModelColumns = memo(function ModelColumns({
         <div
           className={clsx(
             'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md',
-            'w-full py-2 bg-theme-lighter cursor-default',
+            'w-full bg-theme-lighter cursor-default',
             className,
           )}
         >
           {columnsSelected.map(column => (
-            <ModelColumn
-              key={toNodeOrEdgeId(scope, column.name)}
-              id={toNodeOrEdgeId(scope, column.name)}
-              scope={scope}
+            <ModelColumnWithHandles
+              key={toNodeOrEdgeId(nodeId, column.name)}
+              id={toNodeOrEdgeId(nodeId, column.name)}
+              nodeId={nodeId}
               column={column}
               disabled={disabled}
               handleError={handleError}
@@ -516,14 +637,17 @@ const ModelColumns = memo(function ModelColumns({
               updateColumnLineage={updateColumnLineage}
               removeEdges={removeEdges}
               isActive={true}
+              hasLeft={isArrayNotEmpty(
+                connections.get(toNodeOrEdgeId(nodeId, column.name))?.left,
+              )}
+              hasRight={isArrayNotEmpty(
+                connections.get(toNodeOrEdgeId(nodeId, column.name))?.right,
+              )}
               selectManually={
                 isSelectManually(column.name)
                   ? setManuallySelectedColumn
                   : undefined
               }
-              connections={activeColumns.get(
-                toNodeOrEdgeId(scope, column.name),
-              )}
             />
           ))}
         </div>
@@ -549,10 +673,10 @@ const ModelColumns = memo(function ModelColumns({
         )}
       >
         {columnsRest.map(column => (
-          <ModelColumn
-            key={toNodeOrEdgeId(scope, column.name)}
-            id={toNodeOrEdgeId(scope, column.name)}
-            scope={scope}
+          <ModelColumnWithHandles
+            key={toNodeOrEdgeId(nodeId, column.name)}
+            id={toNodeOrEdgeId(nodeId, column.name)}
+            nodeId={nodeId}
             column={column}
             disabled={disabled}
             handleError={handleError}
@@ -560,12 +684,13 @@ const ModelColumns = memo(function ModelColumns({
             updateColumnLineage={updateColumnLineage}
             removeEdges={removeEdges}
             isActive={false}
+            hasLeft={false}
+            hasRight={false}
             selectManually={
               isSelectManually(column.name)
                 ? setManuallySelectedColumn
                 : undefined
             }
-            connections={activeColumns.get(toNodeOrEdgeId(scope, column.name))}
             className={clsx(
               filter === '' ||
                 (showColumns ? column.name.includes(filter) : true)
@@ -577,25 +702,23 @@ const ModelColumns = memo(function ModelColumns({
       </div>
       <Divider className="border-primary-500" />
       {columns.length > limit && (
-        <>
-          <div className="py-2 flex justify-center bg-theme-lighter">
-            <Button
-              size={EnumSize.xs}
-              variant={EnumVariant.Neutral}
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
+        <div className="py-2 flex justify-center bg-theme-lighter">
+          <Button
+            size={EnumSize.xs}
+            variant={EnumVariant.Neutral}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
 
-                setShowColumns(prev => !prev)
-              }}
-            >
-              {showColumns
-                ? 'Hide'
-                : `Show ${
-                    columns.length - columnsSelected.length - columnsRest.length
-                  } More`}
-            </Button>
-          </div>
-        </>
+              setShowColumns(prev => !prev)
+            }}
+          >
+            {showColumns
+              ? 'Hide'
+              : `Show ${
+                  columns.length - columnsSelected.length - columnsRest.length
+                } More`}
+          </Button>
+        </div>
       )}
     </>
   )
@@ -610,20 +733,31 @@ function ModelColumnLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const {
-    withColumns,
-    activeEdges,
-    setActiveColumns,
-    hasActiveEdge,
-    models,
-    lineage,
-  } = useLineageFlow()
+  const { withColumns, hasActiveEdge, models, lineage } = useLineageFlow()
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
+
+  const toggleEdge = useCallback(
+    function toggleEdge(edges: Edge[] = []): Edge[] {
+      return edges.map(edge => {
+        if (edge.sourceHandle == null && edge.targetHandle == null) {
+          edge.hidden = false
+        } else {
+          edge.hidden = isFalse(
+            hasActiveEdge(edge.sourceHandle) &&
+              hasActiveEdge(edge.targetHandle),
+          )
+        }
+
+        return edge
+      })
+    },
+    [hasActiveEdge],
+  )
 
   useEffect(() => {
     setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
@@ -645,8 +779,6 @@ function ModelColumnLineage({
         withColumns,
       })
 
-      setActiveColumns(nodesAndEdges.activeColumns)
-
       void createGraphLayout(nodesAndEdges).then(layout => {
         setNodes(layout.nodes)
         setEdges(toggleEdge(layout.edges))
@@ -659,7 +791,7 @@ function ModelColumnLineage({
 
   useEffect(() => {
     setEdges(toggleEdge(edges))
-  }, [activeEdges])
+  }, [toggleEdge])
 
   function onNodesChange(changes: NodeChange[]): void {
     setNodes(applyNodeChanges(changes, nodes))
@@ -667,20 +799,6 @@ function ModelColumnLineage({
 
   function onEdgesChange(changes: EdgeChange[]): void {
     setEdges(applyEdgeChanges(changes, edges))
-  }
-
-  function toggleEdge(edges: Edge[] = []): Edge[] {
-    return edges.map(edge => {
-      if (edge.sourceHandle != null && edge.targetHandle != null) {
-        edge.hidden =
-          isFalse(hasActiveEdge(edge.sourceHandle)) &&
-          isFalse(hasActiveEdge(edge.targetHandle))
-      } else {
-        edge.hidden = false
-      }
-
-      return edge
-    })
   }
 
   return (
@@ -753,13 +871,12 @@ function ModelNode({
           id={id}
           type={model?.type}
           label={data.label}
-          count={columns.length}
           className={clsx(
             'bg-secondary-100 dark:bg-primary-900 py-2',
             withColumns ? 'rounded-t-lg' : 'rounded-lg',
           )}
-          hasSource={sourcePosition === Position.Left}
-          hasTarget={targetPosition === Position.Right}
+          hasLeft={sourcePosition === Position.Left}
+          hasRight={targetPosition === Position.Right}
           handleClick={isInteractive ? handleClick : undefined}
         />
       </div>
@@ -767,7 +884,7 @@ function ModelNode({
         <>
           <ModelColumns
             className="max-h-[15rem]"
-            scope={id}
+            nodeId={id}
             columns={columns}
             disabled={model?.type === 'python'}
           />
@@ -778,4 +895,4 @@ function ModelNode({
   )
 }
 
-export { ModelColumnLineage, ModelColumn }
+export { ModelColumnLineage, ModelColumn, ModelColumnWithHandles }

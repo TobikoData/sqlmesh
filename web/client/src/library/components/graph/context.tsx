@@ -5,6 +5,10 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { createContext, useState, useContext, useCallback } from 'react'
 import { toNodeOrEdgeId } from './help'
 
+export interface Connections {
+  left: string[]
+  right: string[]
+}
 export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
 export type ActiveEdges = Map<string, number>
 
@@ -13,17 +17,12 @@ interface LineageFlow {
   withColumns: boolean
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
-  activeColumns: ActiveColumns
-  hasActiveEdge: (edge: string) => boolean
-  toggleLineageColumn: (
-    action: 'add' | 'remove',
-    columnId: string,
-    connections?: { ins: string[]; outs: string[] },
-  ) => void
+  connections: Map<string, Connections>
+  setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
+  hasActiveEdge: (edge?: string | null) => boolean
   addActiveEdges: (edges: string[]) => void
   removeActiveEdges: (edges: string[]) => void
   clearActiveEdges: () => void
-  setActiveColumns: React.Dispatch<React.SetStateAction<ActiveColumns>>
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   setLineage: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
@@ -41,14 +40,11 @@ export const LineageFlowContext = createContext<LineageFlow>({
   lineage: {},
   withColumns: true,
   activeEdges: new Map(),
-  activeColumns: new Map(),
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
   removeActiveEdges: () => {},
   clearActiveEdges: () => {},
-  setActiveColumns: () => {},
   setActiveEdges: () => {},
-  toggleLineageColumn: () => {},
   models: new Map(),
   handleClickModel: () => {},
   manuallySelectedColumn: undefined,
@@ -56,6 +52,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   handleError: () => {},
   setLineage: () => {},
   isActiveColumn: () => false,
+  setConnections: () => {},
+  connections: new Map(),
 })
 
 export default function LineageFlowProvider({
@@ -74,12 +72,14 @@ export default function LineageFlowProvider({
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
   const [activeEdges, setActiveEdges] = useState<ActiveEdges>(new Map())
-  const [activeColumns, setActiveColumns] = useState<ActiveColumns>(new Map())
   const [lineage, setLineage] = useState<Record<string, Lineage> | undefined>()
+  const [connections, setConnections] = useState<Map<string, Connections>>(
+    new Map(),
+  )
 
   const hasActiveEdge = useCallback(
-    function hasActiveEdge(edge: string): boolean {
-      return (activeEdges.get(edge) ?? 0) > 0
+    function hasActiveEdge(edge?: string | null): boolean {
+      return edge == null ? false : (activeEdges.get(edge) ?? 0) > 0
     },
     [activeEdges],
   )
@@ -89,80 +89,63 @@ export default function LineageFlowProvider({
   ): void {
     setActiveEdges(activeEdges => {
       edges.forEach(edge => {
-        activeEdges.set(edge, (activeEdges.get(edge) ?? 0) + 1)
+        activeEdges.set(edge, 1)
       })
 
       return new Map(activeEdges)
     })
   }, [])
 
-  const removeActiveEdges = useCallback(function removeActiveEdges(
-    edges: string[],
-  ): void {
-    setActiveEdges(activeEdges => {
-      edges.forEach(edge => {
-        activeEdges.set(edge, Math.max((activeEdges.get(edge) ?? 0) - 1, 0))
+  const removeActiveEdges = useCallback(
+    function removeActiveEdges(edges: string[]): void {
+      setActiveEdges(activeEdges => {
+        edges.forEach(edge => {
+          activeEdges.set(toNodeOrEdgeId('left', edge), 0)
+          activeEdges.set(toNodeOrEdgeId('right', edge), 0)
+        })
+
+        return new Map(activeEdges)
       })
 
-      return new Map(activeEdges)
-    })
-  }, [])
+      setConnections(connections => {
+        edges.forEach(edge => {
+          connections.delete(edge)
+        })
+
+        return new Map(connections)
+      })
+    },
+    [setActiveEdges, setConnections],
+  )
 
   const clearActiveEdges = useCallback(function clearActiveEdges(): void {
     setActiveEdges(new Map())
   }, [])
 
-  const toggleLineageColumn = useCallback(function toggleLineageColumn(
-    action: 'add' | 'remove',
-    columnId: string,
-    connections: { ins: string[]; outs: string[] } = { ins: [], outs: [] },
-  ): void {
-    const sourceId = toNodeOrEdgeId('source', columnId)
-    const targetId = toNodeOrEdgeId('target', columnId)
-
-    const edges = new Set(
-      [
-        connections.ins.map(id => toNodeOrEdgeId('source', id)),
-        connections.outs.map(id => toNodeOrEdgeId('target', id)),
-      ]
-        .flat()
-        .concat([sourceId, targetId]),
-    )
-
-    if (action === 'remove') {
-      removeActiveEdges(Array.from(edges))
-    }
-
-    if (action === 'add') {
-      addActiveEdges(Array.from(edges))
-    }
-  }, [])
-
   const isActiveColumn = useCallback(
     function isActive(modelName: string, columnName: string): boolean {
       return (
-        hasActiveEdge(toNodeOrEdgeId('source', modelName, columnName)) ||
-        hasActiveEdge(toNodeOrEdgeId('target', modelName, columnName))
+        hasActiveEdge(toNodeOrEdgeId('left', modelName, columnName)) ||
+        hasActiveEdge(toNodeOrEdgeId('right', modelName, columnName))
       )
     },
-    [activeEdges, activeColumns],
+    [hasActiveEdge],
   )
 
   return (
     <LineageFlowContext.Provider
       value={{
+        connections,
+        setConnections,
         setLineage,
         lineage,
         withColumns,
         activeEdges,
-        activeColumns,
         setActiveEdges,
-        setActiveColumns,
         addActiveEdges,
         clearActiveEdges,
         removeActiveEdges,
         hasActiveEdge,
-        toggleLineageColumn,
         models,
         handleClickModel,
         manuallySelectedColumn,
