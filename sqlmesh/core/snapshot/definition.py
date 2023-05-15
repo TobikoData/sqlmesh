@@ -554,7 +554,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
-        if self.is_embedded_kind:
+        if self.is_embedded_kind or (self.is_seed_kind and self.intervals):
             return []
 
         latest = make_inclusive_end(latest or now())
