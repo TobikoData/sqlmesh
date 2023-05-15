@@ -29,12 +29,14 @@ local_config = Config(
 
 
 # Bug in mypy 1.0.1 that makes us have to ignore
-airflow_config = Config(default_scheduler=AirflowSchedulerConfig())  # type: ignore
+airflow_config = Config(**dict(default_scheduler=AirflowSchedulerConfig()))
 
 
 # Bug in mypy 1.0.1 that makes us have to ignore
-airflow_config_docker = Config(  # type: ignore
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+airflow_config_docker = Config(
+    **dict(
+        default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+    )
 )
 
 
