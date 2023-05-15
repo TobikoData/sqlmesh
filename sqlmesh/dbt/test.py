@@ -82,6 +82,9 @@ class TestConfig(GeneralConfig):
             query=expressions[-1],
             expressions=expressions[0:-1],
             jinja_macros=jinja_macros,
+            depends_on={test_context.refs[ref] for ref in self.dependencies.refs}.union(
+                {test_context.sources[source].source_name for source in self.dependencies.sources}
+            ),
         )
 
     def _kwargs(self) -> str:

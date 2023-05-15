@@ -667,7 +667,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         cache=fingerprint_cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_model(model, models)
+                for name in _parents_from_model(model, models, audits)
             )
 
             # Infer the missing change category to account for SQLMesh versions in which

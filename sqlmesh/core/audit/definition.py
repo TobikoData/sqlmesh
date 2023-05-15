@@ -9,7 +9,12 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.definition import Model, _Model, expression_validator
+from sqlmesh.core.model.definition import (
+    Model,
+    _find_tables,
+    _Model,
+    expression_validator,
+)
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, raise_config_error
@@ -31,6 +36,8 @@ class AuditMeta(PydanticModel):
     """Setting this to `true` will cause this audit to be skipped. Defaults to `false`."""
     blocking: bool = True
     """Setting this to `true` will cause the pipeline execution to stop if this audit fails. Defaults to `true`."""
+    depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
+    """Models the audit query uses"""
 
     @validator("name", "dialect", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
@@ -58,6 +65,7 @@ class Audit(AuditMeta, frozen=True):
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
     _path: t.Optional[pathlib.Path] = None
+    _depends_on: t.Optional[t.Set[str]] = None
 
     _query_validator = expression_validator
 
@@ -215,6 +223,22 @@ class Audit(AuditMeta, frozen=True):
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
+
+    def depends_on(self, model: Model) -> t.Set[str]:
+        """All of the upstream dependencies referenced in the model's query, excluding self references.
+
+        Returns:
+            A list of all the upstream table names.
+        """
+        if self.depends_on_ is not None:
+            return self.depends_on_
+
+        if self._depends_on is None:
+            _name, args = next(ref for ref in model.audits if ref[0] == self.name)
+            self._depends_on = _find_tables(
+                self.render_query(model, **t.cast(t.Dict[str, t.Any], args))
+            )
+        return self._depends_on
 
     def _create_query_renderer(self, model: Model) -> QueryRenderer:
         return QueryRenderer(

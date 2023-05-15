@@ -31,10 +31,6 @@ seeds:
         description: Customer id
       - name: waiter_id
         description: Waiter id
-        tests:
-          - relationships:
-              to: ref('waiters')
-              field: waiter_id
       - name: start_ts
         description: When the order was taken
       - name: end_ts
