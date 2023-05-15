@@ -1,0 +1,9 @@
+{
+  "action": "comment",
+  "comment": "something",
+  "issue": {
+    "pull_request": {
+      "url": "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+    }
+  }
+}

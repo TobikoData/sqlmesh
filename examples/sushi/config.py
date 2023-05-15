@@ -7,6 +7,7 @@ from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
 )
+from sqlmesh.core.user import User, UserRole
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
@@ -32,4 +33,10 @@ airflow_config = Config(default_scheduler=AirflowSchedulerConfig())
 
 airflow_config_docker = Config(
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+)
+
+
+required_approvers_config = Config(
+    default_connection=DuckDBConnectionConfig(),
+    users=[User(username="test", roles=[UserRole.REQUIRED_APPROVER])],
 )
