@@ -5,13 +5,13 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlglot import exp, parse_one
-from sqlglot.errors import OptimizeError, SchemaError, SqlglotError
-from sqlglot.optimizer import optimize
+from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.lower_identities import lower_identities
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
-from sqlglot.schema import MappingSchema
+from sqlglot.schema import ensure_schema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -29,13 +29,6 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
-
-RENDER_OPTIMIZER_RULES = (
-    qualify_tables,
-    qualify_columns,
-    annotate_types,
-    simplify,
-)
 
 
 def _dates(
@@ -136,6 +129,7 @@ class QueryRenderer(ExpressionRenderer):
         query: exp.Expression,
         dialect: str,
         macro_definitions: t.List[d.MacroDef],
+        schema: t.Optional[t.Dict[str, t.Any]] = None,
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
@@ -157,7 +151,7 @@ class QueryRenderer(ExpressionRenderer):
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
         self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
-        self._schema: t.Optional[MappingSchema] = None
+        self.schema = {} if schema is None else schema
 
     def render(
         self,
@@ -208,9 +202,9 @@ class QueryRenderer(ExpressionRenderer):
             if not query:
                 raise ConfigError(f"Failed to render query {query}")
 
-            self._query_cache[cache_key] = self._optimize_query(query) or query
+            self._query_cache[cache_key] = query
 
-        query = self._query_cache[cache_key]
+        query = self._optimize_query(self._query_cache[cache_key])
 
         if expand:
 
@@ -233,17 +227,17 @@ class QueryRenderer(ExpressionRenderer):
                         )
                 return node
 
-            query = query.transform(_expand)
+            query = query.transform(_expand, copy=False)
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
         if add_incremental_filter and self._time_column:
-            # expand does a copy already
-            query = t.cast(exp.Subqueryable, query if expand else query.copy())
             with_ = query.args.pop("with", None)
             query = (
                 exp.select("*")
-                .from_(query.subquery("_subquery", copy=False), copy=False)
+                .from_(
+                    t.cast(exp.Subqueryable, query).subquery("_subquery", copy=False), copy=False
+                )
                 .where(self.time_column_filter(*dates[0:2]), copy=False)
             )
 
@@ -269,21 +263,6 @@ class QueryRenderer(ExpressionRenderer):
             self._time_converter(start), self._time_converter(end)  # type: ignore
         )
 
-    @property
-    def contains_star_query(self) -> bool:
-        """Returns True if the model's query contains a star projection."""
-        return any(isinstance(expression, exp.Star) for expression in self.render().expressions)
-
-    def update_schema(self, schema: MappingSchema) -> None:
-        old_schema = self._schema
-        self._schema = schema
-
-        if self.contains_star_query and old_schema != schema:
-            new_cache = {}
-            for cached_key, cached_query in self._query_cache.items():
-                new_cache[cached_key] = self._optimize_query(cached_query) or cached_query
-            self._query_cache = new_cache
-
     def update_cache(
         self,
         query: exp.Expression,
@@ -293,11 +272,17 @@ class QueryRenderer(ExpressionRenderer):
     ) -> None:
         self._query_cache[_dates(start, end, latest)] = query
 
-    def _optimize_query(self, query: exp.Expression) -> t.Optional[exp.Expression]:
+    def _optimize_query(self, query: exp.Expression) -> exp.Expression:
+        schema = ensure_schema(self.schema)
+        query = query.copy()
+        lower_identities(query)
+        qualify_tables(query)
         try:
-            return optimize(query, schema=self._schema, rules=RENDER_OPTIMIZER_RULES)
-        except (SchemaError, OptimizeError):
-            return None
+            if not schema.empty:
+                qualify_columns(query, schema=schema, infer_schema=False)
         except SqlglotError as ex:
-            raise_config_error(f"Invalid model query. {ex}", self._path)
-            raise
+            raise_config_error(
+                f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",
+                self._path,
+            )
+        return annotate_types(simplify(query))

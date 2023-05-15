@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import typing as t
 import zlib
 from collections import defaultdict
@@ -887,6 +888,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         str(model.start) if model.start else None,
         str(model.retention) if model.retention else None,
         str(model.batch_size) if model.batch_size is not None else None,
+        json.dumps(model.mapping_schema, sort_keys=True),
         *model.tags,
     ]
 
