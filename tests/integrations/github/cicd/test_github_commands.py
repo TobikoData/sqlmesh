@@ -77,7 +77,7 @@ def test_run_all_success_with_approvers_approved(
     controller = get_mocked_controller(github_pr_synchronized_approvers_controller, mocker)
     command._run_all(controller, merge=False, delete=False)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -126,7 +126,7 @@ def test_run_all_success_no_approvers(
     )
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -166,7 +166,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
     controller = get_mocked_controller(github_pr_synchronized_approvers_controller, mocker)
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -215,7 +215,7 @@ def test_run_all_success_with_approvers_none_approved(
     )
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -263,7 +263,7 @@ def test_run_all_test_failed(
     )
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -311,7 +311,7 @@ def test_pr_update_failure(
     )
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
@@ -353,7 +353,7 @@ def test_deploy_to_prod_failure(
     )
     command._run_all(controller, merge=True, delete=True)
     assert [
-        (x.kwargs["name"], x.kwargs["status"], x.kwargs["conclusion"])
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
     ] == [
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
