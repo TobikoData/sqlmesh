@@ -13,6 +13,8 @@ from sqlmesh.integrations.github.cicd.controller import (
 )
 from sqlmesh.utils.errors import PlanError
 
+pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
+
 
 def get_mocked_controller(
     controller: GithubController,

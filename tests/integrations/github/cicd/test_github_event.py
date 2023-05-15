@@ -1,9 +1,6 @@
-import typing as t
+from sqlmesh.integrations.github.cicd.controller import GithubEvent, PullRequestInfo
 
-from tests.integrations.github.cicd.fixtures import *  # type: ignore
-
-if t.TYPE_CHECKING:
-    from sqlmesh.integrations.github.cicd.controller import GithubEvent, PullRequestInfo
+pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 
 
 def test_pull_request_review_submit_event(github_pull_request_review_submit_event: GithubEvent):

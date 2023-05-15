@@ -9,6 +9,8 @@ from sqlmesh.integrations.github.cicd.controller import GithubController
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import CICDBotError
 
+pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
+
 
 def test_github_controller_approvers(github_pr_synchronized_approvers_controller: GithubController):
     controller = github_pr_synchronized_approvers_controller

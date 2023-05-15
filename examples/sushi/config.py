@@ -33,8 +33,8 @@ airflow_config = Config(default_scheduler=AirflowSchedulerConfig())  # type: ign
 
 
 # Bug in mypy 1.0.1 that makes us have to ignore
-airflow_config_docker = Config(
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),  # type: ignore
+airflow_config_docker = Config(  # type: ignore
+    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
 )
 
 
