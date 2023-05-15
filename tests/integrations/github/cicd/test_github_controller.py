@@ -1,16 +1,13 @@
 # type: ignore
-import typing as t
 from unittest.mock import Mock, call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
+from sqlmesh.integrations.github.cicd.controller import GithubController
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import CICDBotError
-
-if t.TYPE_CHECKING:
-    from sqlmesh.integrations.github.cicd.controller import GithubController
 
 
 def test_github_controller_approvers(github_pr_synchronized_approvers_controller: GithubController):
