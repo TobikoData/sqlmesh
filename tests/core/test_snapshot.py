@@ -298,9 +298,7 @@ def test_seed_intervals(make_snapshot):
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
     ]
     snapshot_a.add_interval("2020-01-01", "2020-01-01")
-    assert snapshot_a.missing_intervals("2020-01-02", "2020-01-02") == [
-        (to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))
-    ]
+    assert snapshot_a.missing_intervals("2020-01-02", "2020-01-02") == []
 
 
 def test_remove_intervals(snapshot: Snapshot):
