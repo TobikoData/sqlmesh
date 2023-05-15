@@ -8,7 +8,6 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.core import constants as c
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import CICDBotError
-from tests.integrations.github.cicd.fixtures import *  # type: ignore
 
 if t.TYPE_CHECKING:
     from sqlmesh.integrations.github.cicd.controller import GithubController
