@@ -145,13 +145,7 @@ def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
     )
 
 
-@github.command()
-@merge_option
-@delete_option
-@click.pass_context
-def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
-    """Runs all the commands in the correct order."""
-    controller = ctx.obj["github"]
+def _run_all(controller: GithubController, merge: bool, delete: bool) -> None:
     controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
     controller.update_test_check(status=GithubCheckStatus.QUEUED)
@@ -170,3 +164,12 @@ def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
         controller.update_prod_environment_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
         )
+
+
+@github.command()
+@merge_option
+@delete_option
+@click.pass_context
+def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
+    """Runs all the commands in the correct order."""
+    return _run_all(ctx.obj["github"], merge, delete)

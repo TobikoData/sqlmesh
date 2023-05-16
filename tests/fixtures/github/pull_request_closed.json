@@ -1,0 +1,10 @@
+{
+  "action": "closed",
+  "pull_request": {
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+      }
+    }
+  }
+}
