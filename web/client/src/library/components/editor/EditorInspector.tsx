@@ -56,11 +56,15 @@ export default function EditorInspector({
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel && model != null ? (
-        <InspectorModel
-          tab={tab}
-          model={model}
-        />
+      {tab.file.isSQLMeshModel ? (
+        <>
+          {model != null && (
+            <InspectorModel
+              tab={tab}
+              model={model}
+            />
+          )}
+        </>
       ) : (
         <InspectorSql tab={tab} />
       )}
