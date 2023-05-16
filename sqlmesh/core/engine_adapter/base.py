@@ -444,19 +444,6 @@ class EngineAdapter:
     def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
         self.execute(exp.delete(table_name, where))
 
-    @classmethod
-    def _insert_into_expression(
-        cls,
-        table_name: TableName,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ) -> t.Optional[exp.Table] | exp.Schema:
-        if not columns_to_types:
-            return exp.to_table(table_name)
-        return exp.Schema(
-            this=exp.to_table(table_name),
-            expressions=[exp.column(c) for c in columns_to_types],
-        )
-
     def insert_append(
         self,
         table_name: TableName,
@@ -508,13 +495,8 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self.execute(
-            exp.Insert(
-                this=self._insert_into_expression(table_name, columns_to_types),
-                expression=query,
-                overwrite=False,
-            )
-        )
+        column_names = list(columns_to_types or [])
+        self.execute(exp.insert(query, table_name, columns=column_names))
 
     def _insert_append_pandas_df(
         self,
@@ -525,7 +507,6 @@ class EngineAdapter:
     ) -> None:
         connection = self._connection_pool.get()
         table = exp.to_table(table_name)
-        into = self._insert_into_expression(table_name, columns_to_types)
 
         sqlalchemy = optional_import("sqlalchemy")
         # pandas to_sql doesn't support insert overwrite, it only supports deleting the table or appending
@@ -539,19 +520,14 @@ class EngineAdapter:
                 method="multi",
             )
         else:
+            column_names = list(columns_to_types or [])
             with self.transaction():
                 for i, expression in enumerate(
                     self._pandas_to_sql(
                         df, columns_to_types, self.DEFAULT_BATCH_SIZE, contains_json=contains_json
                     )
                 ):
-                    self.execute(
-                        exp.Insert(
-                            this=into,
-                            expression=expression,
-                            overwrite=False,
-                        )
-                    )
+                    self.execute(exp.insert(expression, table_name, columns=column_names))
 
     def insert_overwrite_by_time_partition(
         self,
@@ -643,7 +619,7 @@ class EngineAdapter:
         columns_to_types: t.Dict[str, exp.DataType],
         unique_key: t.Sequence[str],
     ) -> None:
-        column_names = columns_to_types.keys()
+        column_names = list(columns_to_types or [])
         on = exp.and_(
             *(
                 exp.EQ(

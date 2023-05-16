@@ -31,6 +31,8 @@ class LogicalMergeAdapter(EngineAdapter):
         """
         temp_table = self._get_temp_table(target_table)
         unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *unique_key)
+        column_names = list(columns_to_types or [])
+
         with self.transaction(TransactionType.DML):
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
             self.execute(
@@ -39,15 +41,13 @@ class LogicalMergeAdapter(EngineAdapter):
                 )
             )
             self.execute(
-                exp.Insert(
-                    this=exp.Schema(
-                        this=exp.to_table(target_table),
-                        expressions=[exp.column(col) for col in columns_to_types],
-                    ),
-                    expression=exp.select(*columns_to_types)
+                exp.insert(
+                    exp.select(*columns_to_types)
                     .distinct(*unique_key)
                     .from_(temp_table)
                     .subquery(),
+                    target_table,
+                    columns=column_names,
                 )
             )
             self.drop_table(temp_table)
