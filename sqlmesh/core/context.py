@@ -622,7 +622,7 @@ class Context(BaseContext):
                 "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
 
-        self._run_plan_tests(skip_tests)
+        self._run_plan_tests(skip_tests=skip_tests)
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),

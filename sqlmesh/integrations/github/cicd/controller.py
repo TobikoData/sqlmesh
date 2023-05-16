@@ -28,6 +28,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 if t.TYPE_CHECKING:
     from github.CheckRun import CheckRun
     from github.Issue import Issue
+    from github.IssueComment import IssueComment
     from github.PullRequest import PullRequest
     from github.PullRequestReview import PullRequestReview
     from github.Repository import Repository
@@ -184,8 +185,8 @@ class GithubController:
         self._pr_plan: t.Optional[Plan] = None
         self._prod_plan: t.Optional[Plan] = None
         self._prod_plan_with_gaps: t.Optional[Plan] = None
-        self._console: t.Optional[MarkdownConsole] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
+        self._console = MarkdownConsole()
         self._client: Github = Github(
             base_url=os.environ["GITHUB_API_URL"],
             login_or_token=self._token,
@@ -207,11 +208,12 @@ class GithubController:
         self._context: Context = Context(
             paths=self._paths,
             config=self._config,
+            console=self._console,
         )
 
     @property
     def _required_approvers(self) -> t.List[User]:
-        return [user for user in self._context.config.users if user.is_required_approver]
+        return [user for user in self._context.users if user.is_required_approver]
 
     @property
     def _required_approvers_with_approval(self) -> t.List[User]:
@@ -285,18 +287,12 @@ class GithubController:
             )
         return self._prod_plan_with_gaps
 
-    @property
-    def console(self) -> MarkdownConsole:
-        if not self._console:
-            self._console = MarkdownConsole()
-        return self._console
-
     def _get_plan_summary(self, plan: Plan) -> str:
         try:
-            self.console._show_categorized_snapshots(plan)
-            catagorized_snapshots = self.console.consume_captured_output()
-            self.console._show_missing_dates(plan)
-            missing_dates = self.console.consume_captured_output()
+            self._console._show_categorized_snapshots(plan)
+            catagorized_snapshots = self._console.consume_captured_output()
+            self._console._show_missing_dates(plan)
+            missing_dates = self._console.consume_captured_output()
             if not catagorized_snapshots and not missing_dates:
                 return "No changes to apply."
             return f"{catagorized_snapshots}\n{missing_dates}"
@@ -309,28 +305,32 @@ class GithubController:
         """
         return self._context._run_tests()
 
+    def _get_or_create_comment(self, header: str = "**SQLMesh Bot Info**") -> IssueComment:
+        comment = seq_get(
+            [comment for comment in self._issue.get_comments() if header in comment.body],
+            0,
+        )
+        if not comment:
+            comment = self._issue.create_comment(header)
+        return comment
+
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
-    ) -> None:
+    ) -> IssueComment:
         """
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
         it creates one. It determines the comment to update by looking for a comment with the header. If the lookup key
         already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
         not update the comment. If no `find_regex` is provided then it will just append the value to the comment.
         """
-        comment_header = "**SQLMesh Bot Info**"
-        comment = seq_get(
-            [comment for comment in self._issue.get_comments() if comment_header in comment.body],
-            0,
-        )
-        if not comment:
-            comment = self._issue.create_comment(comment_header)
+        comment = self._get_or_create_comment()
         existing_value = seq_get(re.findall(find_regex, comment.body), 0) if find_regex else None
         if existing_value:
             if replace_if_exists:
-                comment.edit(re.sub(t.cast(str, find_regex), value, comment.body))
+                comment.edit(body=re.sub(t.cast(str, find_regex), value, comment.body))
         else:
-            comment.edit(f"{comment.body}\n{value}")
+            comment.edit(body=f"{comment.body}\n{value}")
+        return comment
 
     def update_pr_environment(self) -> None:
         """
@@ -347,7 +347,7 @@ class GithubController:
         # The deploy can still happen if the workflow is configured to listen for `closed` events.
         if self._pull_request.merged and not self._event.is_pull_request_closed:
             raise CICDBotError(
-                "PR is already merged and this event was triggered prior to the merge. So not running."
+                "PR is already merged and this event was triggered prior to the merge."
             )
         plan_summary = f"""<details>
   <summary>Prod Plan Being Applied</summary>
@@ -452,11 +452,11 @@ class GithubController:
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
-            self.console.log_test_results(
+            self._console.log_test_results(
                 result, failed_output or "", self._context._test_engine_adapter.dialect
             )
-            test_summary = self.console.consume_captured_output()
-            test_title = "Test Passed" if result.wasSuccessful() else "Test Failed"
+            test_summary = self._console.consume_captured_output()
+            test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"
             test_conclusion = (
                 GithubCheckConclusion.SUCCESS
                 if result.wasSuccessful()
