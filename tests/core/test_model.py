@@ -359,12 +359,12 @@ def test_seed_hydration():
 
     column_hashes = model.column_hashes
 
-    dehydrated_model = model.dehydrated
+    dehydrated_model = model.to_dehydrated()
     assert not dehydrated_model.is_hydrated
     assert dehydrated_model.column_hashes == column_hashes
     assert dehydrated_model.seed.content == ""
 
-    hydrated_model = dehydrated_model.hydrated(model.seed.content)
+    hydrated_model = dehydrated_model.to_hydrated(model.seed.content)
     assert hydrated_model.is_hydrated
     assert hydrated_model.column_hashes == column_hashes
     assert hydrated_model.seed.content == model.seed.content

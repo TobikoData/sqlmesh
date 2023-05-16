@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import hashlib
 import typing as t
+import zlib
 from io import StringIO
 from pathlib import Path
 
@@ -29,9 +29,9 @@ class Seed(PydanticModel):
     def column_hashes(self) -> t.Dict[str, str]:
         df = self._get_df()
         return {
-            column_name: hashlib.md5(  # type: ignore
-                df[column_name].to_string(index=False).encode("utf-8")  # type: ignore
-            ).hexdigest()
+            column_name: str(  # type: ignore
+                zlib.crc32(df[column_name].to_string(index=False).encode("utf-8"))  # type: ignore
+            )
             for column_name in df.columns
         }
 

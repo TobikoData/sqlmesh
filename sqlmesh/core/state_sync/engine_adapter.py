@@ -147,7 +147,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         "content": snapshot.model.seed.content,
                     }
                 )
-                snapshot = snapshot.copy(update={"model": snapshot.model.dehydrated})
+                snapshot = snapshot.copy(update={"model": snapshot.model.to_dehydrated()})
             snapshots_to_store.append(snapshot)
 
         self.engine_adapter.insert_append(
@@ -321,7 +321,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 snapshots[snapshot_id] = snapshot
 
             if hydrate_seeds and isinstance(snapshot.model, SeedModel) and row[1]:
-                snapshot.model = snapshot.model.hydrated(row[1])
+                snapshot.model = snapshot.model.to_hydrated(row[1])
 
         if duplicates:
             self._push_snapshots(duplicates.values(), overwrite=True)

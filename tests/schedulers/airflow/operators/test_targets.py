@@ -7,7 +7,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model, SqlModel
+from sqlmesh.core.model import Model, Seed, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
@@ -63,6 +63,61 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     add_interval_mock.assert_called_once_with(
         snapshot.snapshot_id, interval_ds, interval_ds, is_dev=False
     )
+
+
+@pytest.mark.airflow
+def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapshot: t.Callable):
+    interval_ds = to_datetime("2022-01-01")
+    logical_ds = to_datetime("2022-01-02")
+
+    dag_run_mock = mocker.Mock()
+    dag_run_mock.data_interval_start = interval_ds
+    dag_run_mock.data_interval_end = interval_ds
+    dag_run_mock.logical_date = logical_ds
+
+    context = Context(dag_run=dag_run_mock)  # type: ignore
+
+    snapshot = make_snapshot(
+        SeedModel(
+            name="a",
+            kind=SeedKind(path="./path/to/seed"),
+            seed=Seed(content="content"),
+            column_hashes={"col": "hash1"},
+            depends_on=set(),
+        ).to_dehydrated()
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator_evaluate_mock = mocker.patch(
+        "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.evaluate"
+    )
+
+    add_interval_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
+    )
+
+    get_snapshots_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
+    )
+    get_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
+
+    target = targets.SnapshotEvaluationTarget(snapshot=snapshot, parent_snapshots={}, is_dev=False)
+    target.execute(context, lambda: mocker.Mock(), "spark")
+
+    evaluator_evaluate_mock.assert_called_once_with(
+        snapshot,
+        interval_ds,
+        interval_ds,
+        logical_ds,
+        snapshots={snapshot.name: snapshot},
+        is_dev=False,
+    )
+
+    add_interval_mock.assert_called_once_with(
+        snapshot.snapshot_id, interval_ds, interval_ds, is_dev=False
+    )
+
+    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
 
 
 @pytest.mark.airflow

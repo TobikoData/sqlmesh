@@ -762,8 +762,7 @@ class SeedModel(_Model):
             return self._path.parent / seed_path
         return seed_path
 
-    @property
-    def dehydrated(self) -> SeedModel:
+    def to_dehydrated(self) -> SeedModel:
         """Creates a dehydrated copy of this model.
 
         The dehydrated seed model will not contain the seed content, but will contain
@@ -783,7 +782,7 @@ class SeedModel(_Model):
             }
         )
 
-    def hydrated(self, content: str) -> SeedModel:
+    def to_hydrated(self, content: str) -> SeedModel:
         """Creates a hydrated copy of this model with the given seed content.
 
         Returns:

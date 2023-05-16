@@ -399,7 +399,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1254170009",
+        data_hash="4143164165",
         metadata_hash="1120323454",
     )
 
@@ -408,7 +408,7 @@ def test_fingerprint_seed_model():
     assert actual_fingerprint == expected_fingerprint
 
     # Make sure that the fingerprint doesn't change when the model is dehydrated.
-    dehydrated_model = model.dehydrated
+    dehydrated_model = model.to_dehydrated()
     assert fingerprint_from_model(dehydrated_model, models={}) == expected_fingerprint
 
     updated_model = model.copy(
