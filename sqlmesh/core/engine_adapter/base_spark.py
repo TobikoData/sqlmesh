@@ -6,6 +6,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
+from sqlmesh.core.engine_adapter._typing import Query
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
@@ -54,12 +55,10 @@ class BaseSparkEngineAdapter(EngineAdapter):
                     columns_to_types=columns_to_types,
                 )
             )
+
+        column_names = list(columns_to_types or [])
         self.execute(
-            exp.Insert(
-                this=self._insert_into_expression(table_name, columns_to_types),
-                expression=query_or_df,
-                overwrite=True,
-            )
+            exp.insert(t.cast(Query, query_or_df), table, columns=column_names, overwrite=True)
         )
 
     def create_state_table(

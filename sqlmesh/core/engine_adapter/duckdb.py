@@ -23,13 +23,8 @@ class DuckDBEngineAdapter(LogicalMergeAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         contains_json: bool = False,
     ) -> None:
-        self.execute(
-            exp.Insert(
-                this=self._insert_into_expression(table_name, columns_to_types),
-                expression="SELECT * FROM df",
-                overwrite=False,
-            )
-        )
+        column_names = list(columns_to_types or [])
+        self.execute(exp.insert("SELECT * FROM df", table_name, columns=column_names))
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
