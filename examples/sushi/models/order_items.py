@@ -63,14 +63,22 @@ def execute(
             """
         )
 
+        dfs = []
+
         for order_id in orders["id"]:
             n = random.randint(1, 5)
 
-            yield pd.DataFrame(
-                {
-                    "order_id": order_id,
-                    "item_id": items.sample(n=n)["id"],
-                    "quantity": np.random.randint(1, 10, n),
-                    "ds": to_ds(dt),
-                }
-            ).reset_index().rename(columns={"index": "id"})
+            dfs.append(
+                pd.DataFrame(
+                    {
+                        "order_id": order_id,
+                        "item_id": items.sample(n=n)["id"],
+                        "quantity": np.random.randint(1, 10, n),
+                        "ds": to_ds(dt),
+                    }
+                )
+                .reset_index()
+                .rename(columns={"index": "id"})
+            )
+
+        yield pd.concat(dfs)
