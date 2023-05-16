@@ -27,11 +27,12 @@ local_config = Config(
     default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
 )
 
+# Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
+airflow_config = Config(default_scheduler=AirflowSchedulerConfig())  # type: ignore
 
-airflow_config = Config(default_scheduler=AirflowSchedulerConfig())
 
-
-airflow_config_docker = Config(
+# Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
+airflow_config_docker = Config(  # type: ignore
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/")
 )
 
