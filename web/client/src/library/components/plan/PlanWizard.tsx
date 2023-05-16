@@ -202,7 +202,7 @@ export default function PlanWizard({
                     <div className="flex">
                       {isArrayNotEmpty(added) && (
                         <PlanChangePreview
-                          className="w-full m-2"
+                          className="w-full m-2 max-h-[30vh]"
                           headline="Added Models"
                           type={EnumPlanChangeType.Add}
                         >
@@ -214,7 +214,7 @@ export default function PlanWizard({
                       )}
                       {isArrayNotEmpty(removed) && (
                         <PlanChangePreview
-                          className="w-full m-2"
+                          className="w-full m-2 max-h-[30vh]"
                           headline="Removed Models"
                           type={EnumPlanChangeType.Remove}
                         >
@@ -230,8 +230,8 @@ export default function PlanWizard({
                     <>
                       {isArrayNotEmpty(modified?.direct) && (
                         <PlanChangePreview
-                          className="m-2"
-                          headline="Modified Directly"
+                          className="m-2 max-h-[30vh]"
+                          headline="Modified Directly "
                           type={EnumPlanChangeType.Direct}
                         >
                           <PlanChangePreview.Direct
@@ -241,7 +241,7 @@ export default function PlanWizard({
                       )}
                       {isArrayNotEmpty(modified.indirect) && (
                         <PlanChangePreview
-                          className="m-2"
+                          className="m-2 max-h-[30vh]"
                           headline="Modified Indirectly"
                           type={EnumPlanChangeType.Indirect}
                         >
@@ -252,7 +252,7 @@ export default function PlanWizard({
                       )}
                       {isArrayNotEmpty(modified?.metadata) && (
                         <PlanChangePreview
-                          className="m-2"
+                          className="m-2 max-h-[30vh]"
                           headline="Modified Metadata"
                           type={EnumPlanChangeType.Metadata}
                         >

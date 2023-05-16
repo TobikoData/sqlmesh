@@ -28,6 +28,10 @@ export default function Content(): JSX.Element {
     )
   }
 
+  function handleError(error?: Error): void {
+    console.log(error?.message)
+  }
+
   return (
     <div className="flex overflow-auto w-full h-full">
       {model == null ? (
@@ -39,14 +43,17 @@ export default function Content(): JSX.Element {
           message="Back To Docs"
         />
       ) : (
-        <LineageFlowProvider handleClickModel={handleClickModel}>
+        <LineageFlowProvider
+          handleClickModel={handleClickModel}
+          handleError={handleError}
+        >
           <SplitPane
             className="flex h-full w-full"
             sizes={[50, 50]}
             minSize={0}
             snapOffset={0}
           >
-            <div className="flex flex-col h-full bg-theme-darker dark:bg-theme-lighter round">
+            <div className="flex flex-col h-full dark:bg-theme-lighter round">
               <Documentation
                 model={model}
                 withQuery={model.type === 'sql'}

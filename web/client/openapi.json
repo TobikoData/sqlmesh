@@ -560,14 +560,30 @@
         }
       }
     },
-    "/": {
+    "/{full_path}": {
       "get": {
         "summary": "Index",
-        "operationId": "index__get",
+        "operationId": "index__full_path__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "title": "Full Path", "type": "string" },
+            "name": "full_path",
+            "in": "path"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
           }
         }
       }

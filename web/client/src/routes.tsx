@@ -1,13 +1,15 @@
 import { createBrowserRouter } from 'react-router-dom'
-import Docs from './library/pages/docs/Docs'
 import Editor from './library/pages/editor/Editor'
 import IDEProvider from './library/pages/ide/context'
 import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import DocsWelcome from './library/pages/docs/Welcome'
+import DocsContent from './library/pages/docs/Content'
 
 const IDE = lazy(async () => await import('./library/pages/ide/IDE'))
+const Docs = lazy(async () => await import('./library/pages/docs/Docs'))
 
 export const EnumRoutes = {
   Ide: '/',
@@ -40,7 +42,18 @@ export const router = createBrowserRouter([
       },
       {
         path: 'docs',
-        element: <Docs />,
+        element: (
+          <Suspense
+            fallback={
+              <Loading className="inline-block">
+                <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+                <h3 className="text-xl">Looking...</h3>
+              </Loading>
+            }
+          >
+            <Docs />
+          </Suspense>
+        ),
         children: [
           {
             path: '*',
@@ -53,7 +66,7 @@ export const router = createBrowserRouter([
           },
           {
             index: true,
-            element: <Docs.Welcome />,
+            element: <DocsWelcome />,
           },
           {
             path: 'models',
@@ -69,11 +82,22 @@ export const router = createBrowserRouter([
               },
               {
                 index: true,
-                element: <Docs.Welcome />,
+                element: <DocsWelcome />,
               },
               {
                 path: ':modelName',
-                element: <Docs.Content />,
+                element: (
+                  <Suspense
+                    fallback={
+                      <Loading className="inline-block">
+                        <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
+                        <h3 className="text-xl">Loading Content...</h3>
+                      </Loading>
+                    }
+                  >
+                    <DocsContent />
+                  </Suspense>
+                ),
               },
             ],
           },

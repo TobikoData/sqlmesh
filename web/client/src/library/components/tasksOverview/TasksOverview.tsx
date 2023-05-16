@@ -245,7 +245,16 @@ function TasksBlock({
   className?: string
   children: React.ReactNode
 }): JSX.Element {
-  return <div className={clsx('my-3 mx-4', className)}>{children}</div>
+  return (
+    <div
+      className={clsx(
+        'my-3 mx-4 max-h-[50vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 function Task({
