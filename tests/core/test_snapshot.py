@@ -291,6 +291,7 @@ def test_seed_intervals(make_snapshot):
             name="a",
             kind=SeedKind(path="./path/to/seed"),
             seed=Seed(content="content"),
+            column_hashes={"col": "hash"},
             depends_on=set(),
         )
     )
@@ -398,13 +399,17 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="3896405490",
+        data_hash="4143164165",
         metadata_hash="1120323454",
     )
 
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     actual_fingerprint = fingerprint_from_model(model, models={})
     assert actual_fingerprint == expected_fingerprint
+
+    # Make sure that the fingerprint doesn't change when the model is dehydrated.
+    dehydrated_model = model.to_dehydrated()
+    assert fingerprint_from_model(dehydrated_model, models={}) == expected_fingerprint
 
     updated_model = model.copy(
         update={

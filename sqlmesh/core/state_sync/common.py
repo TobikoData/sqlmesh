@@ -42,9 +42,9 @@ def transactional(
 
 class CommonStateSyncMixin(StateSync):
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
     ) -> t.Dict[SnapshotId, Snapshot]:
-        return self._get_snapshots(snapshot_ids)
+        return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
 
     def get_snapshots_with_same_version(
         self, snapshots: t.Iterable[SnapshotNameVersionLike]
@@ -335,12 +335,14 @@ class CommonStateSyncMixin(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
 
         Args:
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
+            hydrate_seeds: Whether to hydrate seed snapshots with the content.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.

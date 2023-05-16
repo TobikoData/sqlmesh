@@ -412,7 +412,11 @@ class Plan:
                 downstream.append(table)
 
             snapshots = self.context_diff.snapshots
-            downstream = [d for d in downstream if snapshots[d].is_materialized]
+            downstream = [
+                d
+                for d in downstream
+                if snapshots[d].is_materialized and not snapshots[d].is_seed_kind
+            ]
 
             if not downstream:
                 raise PlanError(

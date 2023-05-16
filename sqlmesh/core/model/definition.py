@@ -8,10 +8,7 @@ from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 from astor import to_source
-from pandas.core.dtypes.common import is_numeric_dtype
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
@@ -704,6 +701,8 @@ class SeedModel(_Model):
 
     kind: SeedKind
     seed: Seed
+    column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
+    is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
 
     def render(
@@ -716,11 +715,15 @@ class SeedModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
+        self._ensure_hydrated()
         yield from self.seed.read(batch_size=self.kind.batch_size)
 
     def text_diff(self, other: Model) -> str:
         if not isinstance(other, SeedModel):
             return super().text_diff(other)
+
+        other._ensure_hydrated()
+        self._ensure_hydrated()
 
         meta_a = self.render_definition()[0]
         meta_b = other.render_definition()[0]
@@ -738,7 +741,15 @@ class SeedModel(_Model):
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
+        self._ensure_hydrated()
         return self.seed.columns_to_types
+
+    @property
+    def column_hashes(self) -> t.Dict[str, str]:
+        if self.column_hashes_ is not None:
+            return self.column_hashes_
+        self._ensure_hydrated()
+        return self.seed.column_hashes
 
     @property
     def is_seed(self) -> bool:
@@ -751,30 +762,59 @@ class SeedModel(_Model):
             return self._path.parent / seed_path
         return seed_path
 
+    def to_dehydrated(self) -> SeedModel:
+        """Creates a dehydrated copy of this model.
+
+        The dehydrated seed model will not contain the seed content, but will contain
+        the column hashes. This is useful for comparing two seed models without
+        having to read the seed content from disk.
+
+        Returns:
+            A dehydrated copy of this model.
+        """
+        if not self.is_hydrated:
+            return self
+        return self.copy(
+            update={
+                "seed": Seed(content=""),
+                "is_hydrated": False,
+                "column_hashes_": self.column_hashes,
+            }
+        )
+
+    def to_hydrated(self, content: str) -> SeedModel:
+        """Creates a hydrated copy of this model with the given seed content.
+
+        Returns:
+            A hydrated copy of this model.
+        """
+        if self.is_hydrated:
+            return self
+        return self.copy(update={"seed": Seed(content=content), "is_hydrated": True})
+
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
-        if not isinstance(previous, SeedModel):
+        if (
+            not isinstance(previous, SeedModel)
+            or self.column_hashes is None
+            or previous.column_hashes is None
+        ):
             return None
 
-        new_df = pd.concat([df for df in self.seed.read()])
-        old_df = pd.concat([df for df in previous.seed.read()])
-
-        new_columns = set(new_df.columns)
-        old_columns = set(old_df.columns)
+        new_columns = set(self.column_hashes)
+        old_columns = set(previous.column_hashes)
 
         if not new_columns.issuperset(old_columns):
             return None
 
         for col in old_columns:
-            if new_df[col].dtype != old_df[col].dtype or new_df[col].shape != old_df[col].shape:
+            if self.column_hashes[col] != previous.column_hashes[col]:
                 return None
-            elif is_numeric_dtype(new_df[col]):
-                if not all(np.isclose(new_df[col], old_df[col])):
-                    return None
-            else:
-                if not new_df[col].equals(old_df[col]):
-                    return None
 
         return False
+
+    def _ensure_hydrated(self) -> None:
+        if not self.is_hydrated:
+            raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
@@ -1044,6 +1084,7 @@ def create_seed_model(
         path=path,
         seed=seed,
         kind=seed_kind,
+        depends_on=kwargs.pop("depends_on", set()),
         **kwargs,
     )
 

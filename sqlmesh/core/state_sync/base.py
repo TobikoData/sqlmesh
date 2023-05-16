@@ -51,13 +51,14 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Bulk fetch snapshots given the corresponding snapshot ids.
 
         Args:
             snapshot_ids: Iterable of snapshot ids to get. If not provided all
                 available snapshots will be returned.
+            hydrate_seeds: Whether to hydrate seed snapshots with the content.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
