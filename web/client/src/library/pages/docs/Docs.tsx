@@ -25,9 +25,10 @@ export default function Docs(): JSX.Element {
   const filtered = Array.from(models.entries()).reduce(
     (acc: ModelSQLMeshModel[], [key, model]) => {
       if (model.name === key) return acc
-      if (modelName == null) {
-        acc.push(model)
-      } else if (model.name !== ModelSQLMeshModel.decodeName(modelName)) {
+      if (
+        modelName == null ||
+        model.name !== ModelSQLMeshModel.decodeName(modelName)
+      ) {
         acc.push(model)
       }
 

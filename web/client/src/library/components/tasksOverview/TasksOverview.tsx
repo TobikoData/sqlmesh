@@ -248,7 +248,7 @@ function TasksBlock({
   return (
     <div
       className={clsx(
-        'my-3 mx-4  max-h-[50vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
+        'my-3 mx-4 max-h-[50vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >

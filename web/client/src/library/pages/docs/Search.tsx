@@ -96,14 +96,18 @@ function filterModelsBySearch(
   indices: Array<[ModelSQLMeshModel, string]> = [],
   search: string,
 ): Array<[ModelSQLMeshModel, string]> {
+  const DISPLAYED_MATCH_LENGTH = 40
+
   return indices.reduce(
     (acc: Array<[ModelSQLMeshModel, string]>, [model, index]) => {
       const idx = index.indexOf(search.toLocaleLowerCase())
 
       if (idx > -1) {
-        const SIZE = 40
-        const min = Math.max(0, idx - SIZE)
-        const max = Math.min(index.length - 1, idx + search.length + SIZE)
+        const min = Math.max(0, idx - DISPLAYED_MATCH_LENGTH)
+        const max = Math.min(
+          index.length - 1,
+          idx + search.length + DISPLAYED_MATCH_LENGTH,
+        )
 
         acc.push([
           model,

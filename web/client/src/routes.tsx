@@ -45,7 +45,7 @@ export const router = createBrowserRouter([
         element: (
           <Suspense
             fallback={
-              <Loading className="inline-block ">
+              <Loading className="inline-block">
                 <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
                 <h3 className="text-xl">Looking...</h3>
               </Loading>
@@ -89,7 +89,7 @@ export const router = createBrowserRouter([
                 element: (
                   <Suspense
                     fallback={
-                      <Loading className="inline-block ">
+                      <Loading className="inline-block">
                         <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
                         <h3 className="text-xl">Loading Content...</h3>
                       </Loading>
