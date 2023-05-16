@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, memo, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import {
@@ -11,9 +11,12 @@ import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
-import ModelLineage from '@components/graph/ModelLineage'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
+
+const ModelLineage = lazy(
+  async () => await import('@components/graph/ModelLineage'),
+)
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
@@ -31,7 +34,7 @@ const EditorPreview = memo(function EditorPreview({
   tab: EditorTab
   toggleDirection: () => void
 }): JSX.Element {
-  const { models } = useLineageFlow()
+  const { models, setLineage } = useLineageFlow()
 
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
@@ -91,6 +94,7 @@ const EditorPreview = memo(function EditorPreview({
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
     setPreviewConsole(undefined)
+    setLineage(undefined)
   }, [tab.id])
 
   useEffect(() => {
@@ -267,10 +271,12 @@ const EditorPreview = memo(function EditorPreview({
             {model == null ? (
               <EditorPreviewEmpty />
             ) : (
-              <ModelLineage
-                model={model}
-                fingerprint={tab.file.fingerprint}
-              />
+              <Suspense fallback={<div>Loading....</div>}>
+                <ModelLineage
+                  model={model}
+                  fingerprint={tab.file.fingerprint}
+                />
+              </Suspense>
             )}
           </Tab.Panel>
         </Tab.Panels>

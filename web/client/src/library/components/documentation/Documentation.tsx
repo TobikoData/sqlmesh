@@ -10,7 +10,7 @@ import clsx from 'clsx'
 import { useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { ModelColumn } from '@components/graph/Graph'
+import { ModelColumns } from '@components/graph/Graph'
 
 const Documentation = function Documentation({
   model,
@@ -80,27 +80,14 @@ const Documentation = function Documentation({
       )}
       {withColumns && (
         <Section headline="Columns">
-          <ul className="w-full">
-            {model.columns.map(column => (
-              <ModelColumn
-                key={column.name}
-                model={model}
-                column={column}
-                disabled={model.type === 'python'}
-                className="px-2 py-1 rounded-md border-b border-primary-10 mb-1"
-              >
-                {({ column, disabled }) => (
-                  <ModelColumn.Display
-                    columnName={column.name}
-                    columnType={column.type}
-                    columnDescription={column.description}
-                    isHighlighted={true}
-                    disabled={disabled}
-                  />
-                )}
-              </ModelColumn>
-            ))}
-          </ul>
+          <ModelColumns
+            className="max-h-[15rem]"
+            nodeId={model.name}
+            columns={model.columns}
+            disabled={model?.type === 'python'}
+            withHandles={false}
+            limit={10}
+          />
         </Section>
       )}
       {(withCode || withQuery) && (
