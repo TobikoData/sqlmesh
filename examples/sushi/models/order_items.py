@@ -55,7 +55,7 @@ def execute(
             """
         )
         # Normalize column names to support Snowflake.
-        orders = orders.rename(columns={col: col.lower() for col in orders.columns})
+        orders = orders.rename(columns={col: col.lower() for col in orders.columns})  # type: ignore
 
         items = context.fetchdf(
             f"""
@@ -65,7 +65,7 @@ def execute(
             """
         )
         # Normalize column names to support Snowflake.
-        items = items.rename(columns={col: col.lower() for col in items.columns})
+        items = items.rename(columns={col: col.lower() for col in items.columns})  # type: ignore
 
         dfs = []
 
