@@ -577,7 +577,6 @@ class Context(BaseContext):
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
-        apply: t.Optional[t.Callable[[Plan], None]] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -611,7 +610,6 @@ class Context(BaseContext):
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
-            apply: The callback to apply the plan. Defaults to context's apply method
 
         Returns:
             The populated Plan object.
@@ -632,7 +630,7 @@ class Context(BaseContext):
             start=start,
             end=end,
             latest=latest,
-            apply=apply or self.apply,
+            apply=self.apply,
             restate_models=restate_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
@@ -647,7 +645,7 @@ class Context(BaseContext):
         if not no_prompts:
             self.console.plan(plan, auto_apply)
         elif auto_apply:
-            plan.apply()
+            self.apply(plan)
 
         return plan
 
