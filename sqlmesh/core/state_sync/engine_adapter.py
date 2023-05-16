@@ -29,7 +29,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, SeedModel
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -69,6 +69,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter = engine_adapter
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
+        self.seeds_table = f"{schema}._seeds"
         self.versions_table = f"{schema}._versions"
 
         self._snapshot_columns_to_types = {
@@ -87,6 +88,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "previous_plan_id": exp.DataType.build("text"),
             "expiration_ts": exp.DataType.build("bigint"),
             "finalized_ts": exp.DataType.build("bigint"),
+        }
+
+        self._seed_columns_to_types = {
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "content": exp.DataType.build("text"),
         }
 
         self._version_columns_to_types = {
@@ -128,12 +135,35 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshots = tuple(snapshots)
             self.delete_snapshots(snapshots)
 
+        seed_contents = []
+        snapshots_to_store = []
+
+        for snapshot in snapshots:
+            if isinstance(snapshot.model, SeedModel):
+                seed_contents.append(
+                    {
+                        "name": snapshot.name,
+                        "identifier": snapshot.identifier,
+                        "content": snapshot.model.seed.content,
+                    }
+                )
+                snapshot = snapshot.copy(update={"model": snapshot.model.to_dehydrated()})
+            snapshots_to_store.append(snapshot)
+
         self.engine_adapter.insert_append(
             self.snapshots_table,
-            _snapshots_to_df(snapshots),
+            _snapshots_to_df(snapshots_to_store),
             columns_to_types=self._snapshot_columns_to_types,
             contains_json=True,
         )
+
+        if seed_contents:
+            self.engine_adapter.insert_append(
+                self.seeds_table,
+                pd.DataFrame(seed_contents),
+                columns_to_types=self._seed_columns_to_types,
+                contains_json=True,
+            )
 
     def _update_versions(
         self,
@@ -251,12 +281,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
         Args:
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
+            hydrate_seeds: Whether to hydrate seed snapshots with the content.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
@@ -266,7 +298,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .from_(self.snapshots_table)
             .where(None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids))
         )
-        if lock_for_update:
+        if hydrate_seeds:
+            query = query.select("content").join(
+                self.seeds_table, using=["name", "identifier"], join_type="left outer"
+            )
+        elif lock_for_update:
             query = query.lock(copy=False)
 
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
@@ -283,6 +319,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 snapshots[snapshot_id] = duplicates[snapshot_id]
             else:
                 snapshots[snapshot_id] = snapshot
+
+            if hydrate_seeds and isinstance(snapshot.model, SeedModel) and row[1]:
+                snapshot.model = snapshot.model.to_hydrated(row[1])
 
         if duplicates:
             self._push_snapshots(duplicates.values(), overwrite=True)
@@ -387,8 +426,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for table in tables:
             self._restore_table(table, f"{table}_backup")
 
+        if self.engine_adapter.table_exists(f"{self.seeds_table}_backup"):
+            self._restore_table(self.seeds_table, f"{self.seeds_table}_backup")
+
     def _backup_state(self) -> None:
-        for table in (self.snapshots_table, self.environments_table, self.versions_table):
+        for table in (
+            self.snapshots_table,
+            self.environments_table,
+            self.versions_table,
+            self.seeds_table,
+        ):
             if self.engine_adapter.table_exists(table):
                 self.engine_adapter.ctas(
                     f"{table}_backup", exp.select("*").from_(table), replace=True
