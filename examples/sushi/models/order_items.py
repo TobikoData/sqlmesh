@@ -54,6 +54,8 @@ def execute(
             WHERE ds = '{to_ds(dt)}'
             """
         )
+        # Normalize column names to support Snowflake.
+        orders = orders.rename(columns={col: col.lower() for col in orders.columns})
 
         items = context.fetchdf(
             f"""
@@ -62,6 +64,8 @@ def execute(
             WHERE ds = '{to_ds(dt)}'
             """
         )
+        # Normalize column names to support Snowflake.
+        items = items.rename(columns={col: col.lower() for col in items.columns})
 
         dfs = []
 
