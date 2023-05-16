@@ -426,8 +426,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for table in tables:
             self._restore_table(table, f"{table}_backup")
 
+        if self.engine_adapter.table_exists(f"{self.seeds_table}_backup"):
+            self._restore_table(self.seeds_table, f"{self.seeds_table}_backup")
+
     def _backup_state(self) -> None:
-        for table in (self.snapshots_table, self.environments_table, self.versions_table):
+        for table in (
+            self.snapshots_table,
+            self.environments_table,
+            self.versions_table,
+            self.seeds_table,
+        ):
             if self.engine_adapter.table_exists(table):
                 self.engine_adapter.ctas(
                     f"{table}_backup", exp.select("*").from_(table), replace=True
