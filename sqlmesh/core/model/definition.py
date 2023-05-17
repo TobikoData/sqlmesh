@@ -17,7 +17,6 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator, parse_model_name
@@ -40,6 +39,7 @@ from sqlmesh.utils.pandas import filter_df_by_timelike
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
     from sqlmesh.core.context import ExecutionContext
+    from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
 
@@ -837,6 +837,8 @@ class PythonModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[DF, None, None]:
+        from sqlmesh.core.engine_adapter import EngineAdapter
+
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         latest = to_datetime(latest or c.EPOCH)

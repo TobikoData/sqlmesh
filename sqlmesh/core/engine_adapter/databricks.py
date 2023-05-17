@@ -42,15 +42,25 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         self._spark: t.Optional[PySparkSession] = None
 
     @classproperty
-    def has_spark_session_support(cls) -> bool:
+    def can_access_spark_session(cls) -> bool:
         from sqlmesh import runtime_env
 
         if runtime_env.is_databricks:
             return True
         try:
+            from databricks.connect import DatabricksSession  # type: ignore
+
             return True
         except ImportError:
             return False
+
+    @property
+    def _use_spark_session(self) -> bool:
+        return self.can_access_spark_session and {
+            "databricks_connect_server_hostname",
+            "databricks_connect_access_token",
+            "databricks_connect_cluster_id",
+        }.issubset(self._extra_config)
 
     @property
     def is_spark_session_cursor(self) -> bool:
@@ -60,10 +70,11 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @property
     def spark(self) -> PySparkSession:
-        from databricks.connect import DatabricksSession
-
         if self.is_spark_session_cursor:
             return self._connection_pool.get().spark
+
+        from databricks.connect import DatabricksSession
+
         if self._spark is None:
             self._spark = DatabricksSession.builder.remote(
                 host=self._extra_config["databricks_connect_server_hostname"],
@@ -79,7 +90,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_cursor:
             return super()._fetch_native_df(query)
-        if self.has_spark_session_support:
+        if self.can_access_spark_session:
             logger.debug(f"Executing SQL:\n{query}")
             return self.spark.sql(
                 self._to_sql(query) if isinstance(query, exp.Expression) else query

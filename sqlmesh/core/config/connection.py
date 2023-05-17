@@ -255,7 +255,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
             raise ValueError(
                 "`server_hostname`, `http_path`, and `access_token` are required for Databricks connections when not running in a notebook"
             )
-        if DatabricksEngineAdapter.has_spark_session_support:
+        if DatabricksEngineAdapter.can_access_spark_session:
             if not values.get("databricks_connect_server_hostname"):
                 values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
             if not values.get("databricks_connect_access_token"):

@@ -5,13 +5,14 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
     TransactionType,
 )
-from sqlmesh.utils import classproperty, nullsafe_join
+from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -20,6 +21,7 @@ if t.TYPE_CHECKING:
         DF,
         PySparkDataFrame,
         PySparkSession,
+        Query,
         QueryOrDF,
     )
     from sqlmesh.core.model.meta import IntervalUnit
@@ -27,7 +29,7 @@ if t.TYPE_CHECKING:
 
 def use_sql_if_no_spark_session_support(func: t.Callable) -> t.Callable:
     def wrapper(self: SparkEngineAdapter, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        if not self.has_spark_session_support:
+        if not self._use_spark_session:
             return getattr(super(type(self), self), func.__name__)(*args, **kwargs)
         return func(self, *args, **kwargs)
 
@@ -42,8 +44,8 @@ class SparkEngineAdapter(EngineAdapter):
     def spark(self) -> PySparkSession:
         return self._connection_pool.get().spark
 
-    @classproperty
-    def has_spark_session_support(cls) -> bool:
+    @property
+    def _use_spark_session(self) -> bool:
         return True
 
     def _ensure_pyspark_df(self, generic_df: DF) -> PySparkDataFrame:
@@ -61,7 +63,6 @@ class SparkEngineAdapter(EngineAdapter):
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         return self._ensure_pyspark_df(self._fetch_native_df(query))
 
-    @use_sql_if_no_spark_session_support
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -69,11 +70,29 @@ class SparkEngineAdapter(EngineAdapter):
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        df = self.try_get_df(query_or_df)
-        if df is not None:
-            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=True)
+        table = exp.to_table(table_name)
+        df = self.try_get_pandas_df(query_or_df)
+        pyspark_df = self.try_get_pyspark_df(query_or_df)
+        if self._use_spark_session and (df is not None or pyspark_df):
+            if df is not None:
+                pyspark_df = self._ensure_pyspark_df(df)
+            assert pyspark_df
+            self._insert_pyspark_df(table_name, pyspark_df, overwrite=True)
         else:
-            super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
+            if df is not None:
+                query_or_df = next(
+                    pandas_to_sql(
+                        df,
+                        alias=table.alias_or_name,
+                        columns_to_types=columns_to_types,
+                    )
+                )
+            column_names = list(columns_to_types or [])
+            self.execute(
+                exp.insert(
+                    t.cast("Query", query_or_df), table, columns=column_names, overwrite=True
+                )
+            )
 
     @use_sql_if_no_spark_session_support
     def insert_append(
@@ -162,7 +181,7 @@ class SparkEngineAdapter(EngineAdapter):
         sql = f"SHOW TABLE EXTENDED IN {target} LIKE '*'"
         results = (
             self.fetch_pyspark_df(sql).collect()
-            if self.has_spark_session_support
+            if self._use_spark_session
             else self.fetchdf(sql).to_dict("records")
         )
         return [
