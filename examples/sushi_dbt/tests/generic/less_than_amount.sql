@@ -1,4 +1,4 @@
-{% test revenue_less_than(model, column_name, amount) %}
+{% test less_than_amount(model, column_name, amount) %}
 	select *
 	from {{ model }}
 	where {{ column_name }} >= {{ amount }}

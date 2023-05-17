@@ -132,6 +132,7 @@ class GeneralConfig(DbtConfig):
 
     _SQL_FIELDS: t.ClassVar[t.List[str]] = []
 
+    @property
     def attribute_dict(self) -> AttributeDict[str, t.Any]:
         return AttributeDict(self.dict())
 
@@ -161,12 +162,11 @@ class Dependencies(PydanticModel):
     refs: t.Set[str] = set()
 
     def union(self, other: Dependencies) -> Dependencies:
-        dependencies = Dependencies()
-        dependencies.macros = self.macros | other.macros
-        dependencies.sources = self.sources | other.sources
-        dependencies.refs = self.refs | other.refs
-
-        return dependencies
+        return Dependencies(
+            macros=self.macros | other.macros,
+            sources=self.sources | other.sources,
+            refs=self.refs | other.refs,
+        )
 
     def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
         # See https://github.com/pydantic/pydantic/issues/1090

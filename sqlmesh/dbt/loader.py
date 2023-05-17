@@ -44,7 +44,7 @@ class DbtLoader(Loader):
         super().__init__()
 
     def load(self, context: Context) -> LoadedProject:
-        self._Project = None
+        self._project = None
         return super().load(context)
 
     def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry, JinjaMacroRegistry]:

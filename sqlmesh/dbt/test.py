@@ -98,7 +98,7 @@ class TestConfig(GeneralConfig):
         jinja_macros = test_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {
-                "config": self.attribute_dict(),
+                "config": self.attribute_dict,
                 **test_context.jinja_globals,  # type: ignore
             }
         )

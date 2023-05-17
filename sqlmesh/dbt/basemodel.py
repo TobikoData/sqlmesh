@@ -203,11 +203,8 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
-    def attribute_dict(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict(self.dict())
-
     def model_function(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict({"config": self.attribute_dict()})
+        return AttributeDict({"config": self.attribute_dict})
 
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
@@ -218,7 +215,7 @@ class BaseModelConfig(GeneralConfig):
                 "this": self.relation_info,
                 "model": self.model_function(),
                 "schema": self.table_schema,
-                "config": self.attribute_dict(),
+                "config": self.attribute_dict,
                 **model_context.jinja_globals,  # type: ignore
             }
         )

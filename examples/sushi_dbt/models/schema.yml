@@ -19,7 +19,7 @@ models:
       - name: revenue
         description: Revenue from orders made by this customer
         tests:
-          - revenue_less_than:
+          - less_than_amount:
               amount: 1000
       - name: ds
         description: Date
@@ -73,7 +73,7 @@ models:
       - name: revenue
         description: Revenue from orders taken by this waiter
         tests:
-          - revenue_less_than:
+          - less_than_amount:
               amount: 10000
       - name: ds
         description: Date
