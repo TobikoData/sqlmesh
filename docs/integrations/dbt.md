@@ -17,7 +17,7 @@ SQLMesh will use the data warehouse connection target in your dbt project `profi
 
 ### Setting model backfill start dates
 
-Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model, or globally in the `dbt_project.yml` file as follows:
+Models **require** a start date for backfilling data through use of the `start` configuration parameter. `start` can be defined individually for each model in its `config` block or globally in the `dbt_project.yml` file as follows:
 
 ```
 > models:
@@ -43,9 +43,9 @@ Consider the following when using a dbt project:
 
 ## How to use SQLMesh incremental models with dbt projects
 
-Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's in that SQLMesh will always run incrementally, even the first time, detecting and backfilling each missing time interval.
+Incremental loading is a powerful technique when datasets are large and recomputing tables is expensive. SQLMesh offers first-class support for incremental models, and its approach differs from dbt's. 
 
-This section describes how to implement SQLMesh incremental models in a dbt-formatted project.
+This section describes how to adapt dbt's incremental models to run on sqlmesh and maintain backwards compatibility with dbt.
 
 ### Incremental types
 
@@ -56,27 +56,30 @@ SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.m
 
 #### Incremental by unique key
 
-To enable incremental_by_unique_key incrementality, make sure the model configuration contains the following:
+To enable incremental_by_unique_key incrementality, the model configuration should contain:
 
-* `unique_key`
-* `materialized` type of `incremental`
-* Either no `incremental_strategy` or `incremental_strategy` of `merge`
+* The `unique_key` key with the model's unique key field name or names as the value
+* The `materialized` key with value `'incremental'`
+* Either:
+    * No `incremental_strategy` key or 
+    * The `incremental_strategy` key with value `'merge'`
 
 #### Incremental by time range
 
-To enable incremental_by_time_range incrementality, make sure the model configuration contains the following:
+To enable incremental_by_time_range incrementality, the model configuration should contain:
 
-* `time_column` (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
-* `materialized` type of `incremental`
-* `incremental_strategy` of either `insert_ovewrite` or `delete+insert`
-
-Note: SQLMesh will use the [`best incremental strategy`](../concepts/models/model_kinds.md#materialization-strategy) for the target engine.
+* The `time_column` key with the model's time column field name as the value (see [`time column`](../concepts/models/model_kinds.md#time-column) for details)
+* The `materialized` key with value `'incremental'`
+* Either:
+    * The `incremental_strategy` key with value `'insert_overwrite'` or 
+    * The `incremental_strategy` key with value `'delete+insert'`
+    * Note: in this context, these two strategies are synonyms. Regardless of which one is specified SQLMesh will use the [`best incremental strategy`](../concepts/models/model_kinds.md#materialization-strategy) for the target engine.
 
 ### Incremental logic
 
-SQLMesh's incremental logic will ignore dbt's incremental jinja block `{% if is_incremental() %}`, to maintain backwards compatibility, and instead use a new jinja block gated by `{% if sqlmesh is defined %}`. The new block will contain the where clause selecting the time interval.
+SQLMesh will ignore dbt's incremental jinja block `{% if is_incremental() %}` and requires a new jinja block gated by `{% if sqlmesh is defined %}`. The new block should contain the `WHERE` clause selecting the time interval. 
 
-For example, the SQL `WHERE` clause with the "ds" column goes in a jinja block gated by `{% if sqlmesh is defined %}` as follows:
+For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja block gated by `{% if sqlmesh is defined %}` as follows:
 
 ```bash
 > {% if sqlmesh is defined %}
@@ -85,7 +88,15 @@ For example, the SQL `WHERE` clause with the "ds" column goes in a jinja block g
 > {% endif %}
 ```
 
-`{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalent of SQLMesh's `@start_ds` and `@end_ds` predefined time variables. See all [`predefined time variables`](../concepts/macros.md#predefined-variables) available in jinja.
+`{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalents of SQLMesh's `@start_ds` and `@end_ds` predefined time macro variables. See all [predefined time variables](../concepts/macros.md#predefined-variables) available in jinja.
+
+### Incremental model configuration
+
+SQLMesh provides configuration parameters that enable control over how incremental computations occur. These parameters are set in the model's `config` block.
+
+The [`batch_size` parameter](../concepts/models/overview.md#batch_size) determines the maximum number of time intervals to run in a single job.
+
+The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to capture late arriving data. It sets the number of units of late arriving data the model should expect and must be a positive integer.
 
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
