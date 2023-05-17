@@ -1,3 +1,4 @@
+import { type LineageColumn } from '@api/client'
 import { uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
@@ -11,13 +12,7 @@ export interface Dialect {
 
 export interface Lineage {
   models: string[]
-  columns?: Record<
-    string,
-    {
-      source?: string
-      models?: Record<string, string[]>
-    }
-  >
+  columns?: Record<string, LineageColumn>
 }
 
 interface EditorStore {
