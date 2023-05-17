@@ -54,7 +54,7 @@ class TestConfig(GeneralConfig):
     """
 
     # SQLMesh fields
-    path: Path
+    path: Path = Path()
     name: str
     sql: SqlStr
     test_kwargs: t.Dict[str, t.Any] = {}
@@ -71,9 +71,9 @@ class TestConfig(GeneralConfig):
     store_failures: t.Optional[bool] = None
     where: t.Optional[str] = None
     limit: t.Optional[str] = None
-    fail_calc: str
-    warn_if: str
-    error_if: str
+    fail_calc: str = "count(*)"
+    warn_if: str = "!=0"
+    error_if: str = "!=0"
 
     @validator("severity", pre=True)
     def _validate_severity(cls, v: t.Union[Severity, str]) -> Severity:
@@ -86,6 +86,13 @@ class TestConfig(GeneralConfig):
         return v.lower()
 
     def to_sqlmesh(self, context: DbtContext) -> Audit:
+        """Convert dbt Test to SQLMesh Audit
+
+        Args:
+            context: Context for the dbt project
+        Returns:
+            SQLMesh Audit for this test
+        """
         test_context = context_for_dependencies(context, self.dependencies)
 
         jinja_macros = test_context.jinja_macros.trim(self.dependencies.macros)
