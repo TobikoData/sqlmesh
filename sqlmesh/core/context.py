@@ -943,7 +943,7 @@ class Context(BaseContext):
     def _add_model_to_dag(self, model: Model) -> None:
         self.dag.graph[model.name] = set()
 
-        self.dag.add(model.name, model.model_and_audits_depends_on(self._audits))
+        self.dag.add(model.name, model.depends_on)
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()

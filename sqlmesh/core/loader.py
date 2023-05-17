@@ -126,11 +126,11 @@ class Loader(abc.ABC):
 
         macros, hooks, jinja_macros = self._load_scripts()
         models = self._load_models(macros, hooks, jinja_macros)
-        audits = self._load_audits()
-
         for model in models.values():
-            self._add_model_to_dag(model, audits)
+            self._add_model_to_dag(model)
         update_model_schemas(self._dag, models)
+
+        audits = self._load_audits()
 
         project = LoadedProject(
             macros=macros,
@@ -169,9 +169,9 @@ class Loader(abc.ABC):
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
-    def _add_model_to_dag(self, model: Model, audits: t.Dict[str, Audit]) -> None:
+    def _add_model_to_dag(self, model: Model) -> None:
         self._dag.graph[model.name] = set()
-        self._dag.add(model.name, model.model_and_audits_depends_on(audits))
+        self._dag.add(model.name, model.depends_on)
 
     def _track_file(self, path: Path) -> None:
         """Project file to track for modifications"""

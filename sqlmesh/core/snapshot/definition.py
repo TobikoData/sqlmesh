@@ -490,7 +490,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                         cache=cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_model(model, models, audits)
+                for name in _parents_from_model(model, models)
             ),
             audits=tuple(model.referenced_audits(audits)),
             intervals=[],
@@ -966,14 +966,13 @@ def _hash(data: t.Iterable[t.Optional[str]]) -> str:
 def _parents_from_model(
     model: Model,
     models: t.Dict[str, Model],
-    audits: t.Dict[str, Audit],
 ) -> t.Set[str]:
     parent_tables = set()
-    for table in model.model_and_audits_depends_on(audits):
+    for table in model.depends_on:
         if table in models:
             parent_tables.add(table)
             if models[table].kind.is_embedded:
-                parent_tables.update(_parents_from_model(models[table], models, audits))
+                parent_tables.update(_parents_from_model(models[table], models))
 
     return parent_tables
 

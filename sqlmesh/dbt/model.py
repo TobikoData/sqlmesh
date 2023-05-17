@@ -16,7 +16,7 @@ from sqlmesh.core.model import (
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
-from sqlmesh.dbt.common import SqlStr, context_for_dependencies, extract_jinja_config
+from sqlmesh.dbt.common import SqlStr, extract_jinja_config
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 
@@ -188,7 +188,6 @@ class ModelConfig(BaseModelConfig):
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = self.model_dialect or context.dialect
-        model_context = context_for_dependencies(context, self.dependencies)
         expressions = d.parse(self.sql_no_config, default_dialect=dialect)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
@@ -212,5 +211,5 @@ class ModelConfig(BaseModelConfig):
             start=self.start,
             statements=expressions[0:-1],
             **optional_kwargs,
-            **self.sqlmesh_model_kwargs(model_context),
+            **self.sqlmesh_model_kwargs(context),
         )

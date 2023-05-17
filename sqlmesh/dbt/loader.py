@@ -117,11 +117,11 @@ class DbtLoader(Loader):
         context = project.context
 
         logger.info("Converting audits to sqlmesh")
-        # Now that config is rendered, create the sqlmesh models
         for package in project.packages.values():
             context.variables = package.variables
-
-            audits.update({test.name: test.to_sqlmesh(context) for test in package.tests.values()})
+            for test in package.tests.values():
+                logger.info(f"Converting {test.name} to sqlmesh format")
+                audits[test.name] = test.to_sqlmesh(context)
 
         return audits
 

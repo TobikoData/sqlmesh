@@ -24,7 +24,9 @@ from sqlmesh.dbt.common import (
     GeneralConfig,
     QuotingConfig,
     SqlStr,
+    context_for_dependencies,
 )
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
@@ -94,7 +96,7 @@ class BaseModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
-    tests: t.List[str] = []
+    tests: t.List[TestConfig] = []
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -207,8 +209,9 @@ class BaseModelConfig(GeneralConfig):
     def model_function(self) -> AttributeDict[str, t.Any]:
         return AttributeDict({"config": self.attribute_dict()})
 
-    def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
+    def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
+        model_context = context_for_dependencies(context, self.dependencies)
         jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {
@@ -226,14 +229,17 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
-        audits: t.List[AuditReference] = [(test, {}) for test in self.tests]
+        audits: t.List[AuditReference] = [(test.name, {}) for test in self.tests]
+        dependencies = self.dependencies
+        for test in self.tests:
+            dependencies = dependencies.union(test.dependencies)
 
         return {
             "audits": audits,
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs}.union(
-                {model_context.sources[source].source_name for source in self.dependencies.sources}
+            "depends_on": {context.refs[ref] for ref in dependencies.refs}.union(
+                {context.sources[source].source_name for source in dependencies.sources}
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,

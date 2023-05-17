@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import typing as t
 from argparse import Namespace
@@ -11,7 +12,6 @@ from dbt.adapters.factory import register_adapter, reset_adapters
 from dbt.config import Profile, Project, RuntimeConfig
 from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
-from dbt.contracts.graph.nodes import GenericTestNode, HasTestMetadata, SingularTestNode
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 from dbt.version import get_installed_version
@@ -22,11 +22,14 @@ from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
     from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
+
+logger = logging.getLogger(__name__)
 
 TestConfigs = t.Dict[str, TestConfig]
 ModelConfigs = t.Dict[str, ModelConfig]
@@ -127,25 +130,39 @@ class ManifestHelper:
             if node.resource_type != "test":
                 continue
 
-            macro_references = _macro_references(self._manifest, node)
-            model_references = _refs(node)
-            model_name = _test_model_name(node)
+            dependencies = Dependencies(
+                macros=_macro_references(self._manifest, node),
+                refs=_refs(node),
+                sources=_sources(node),
+            )
+            # Implicit dependencies for model test arg
+            dependencies.macros.add(MacroReference(package="dbt", name="get_where_subquery"))
+            dependencies.macros.add(MacroReference(package="dbt", name="should_store_failures"))
 
-            if isinstance(node, GenericTestNode) and DBT_VERSION < (1, 5):
-                macro_references.add(MacroReference(package="dbt", name="get_where_subquery"))
-                macro_references.add(MacroReference(package="dbt", name="should_store_failures"))
-            if isinstance(node, SingularTestNode):
-                model_references.add(model_name)
+            test_owner = _test_owner(node)
+            if not test_owner:
+                if not dependencies.refs and not dependencies.sources:
+                    raise ConfigError(
+                        f"Audit '{node.name}' is not associated with any models or sources"
+                    )
 
-            self._tests_per_package[node.package_name][node.name] = TestConfig(
-                sql=node.raw_code,
-                model_name=model_name,
-                test_kwargs=node.test_metadata.kwargs if isinstance(node, HasTestMetadata) else {},
-                dependencies=Dependencies(
-                    macros=macro_references,
-                    refs=model_references,
-                    sources=_sources(node),
-                ),
+                if len(dependencies.refs) == 1:
+                    test_owner = list(dependencies.refs)[0]
+                else:
+                    logger.info(
+                        f"Skipping audit '{node.name}'. Multi-owner audits not supported yet."
+                    )
+                    continue
+
+            if test_owner in dependencies.sources or not test_owner:
+                logger.info(f"Skipping audit '{node.name}'. Source audits not supported yet")
+                continue
+
+            self._tests_per_package[node.package_name][node.name.lower()] = TestConfig(
+                sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
+                owner=test_owner,
+                test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
+                dependencies=dependencies,
                 **_node_base_config(node),
             )
 
@@ -256,13 +273,26 @@ def _get_dbt_version() -> t.Tuple[int, int]:
     return (int(dbt_version.major or "0"), int(dbt_version.minor or "0"))
 
 
-def _test_model_name(node: ManifestNode) -> str:
-    fullname = (
-        getattr(node, "attached_node", None)
-        or getattr(node, "file_key_name", None)
-        or node.depends_on.nodes[0]  # type: ignore
+def _test_owner(node: ManifestNode) -> t.Optional[str]:
+    attached_node = getattr(node, "attached_node", None)
+    if attached_node:
+        return attached_node.split(".")[-1]
+
+    if not hasattr(node, "test_metadata"):
+        return None
+
+    model_kwarg = node.test_metadata.kwargs.get("model")
+    if not model_kwarg:
+        return None
+
+    return next((ref for ref in _refs(node) if f"'{ref}'" in model_kwarg), None) or next(
+        (
+            ".".join(source)
+            for source in node.sources or []
+            if f"'{source[0]}'" in model_kwarg and f"'{source[1]}'" in model_kwarg
+        ),
+        None,
     )
-    return fullname.split(".")[-1]
 
 
 def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
@@ -275,15 +305,17 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
     }
 
 
-def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[str]:
-    return [test.name for test in tests.values() if test.model_name == node.name]
+def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[TestConfig]:
+    return [test for test in tests.values() if test.owner == node.name]
 
 
 def _convert_jinja_test_to_macro(test_jinja: str) -> str:
     TEST_TAG_REGEX = "\s*{%\s*test\s+"
     ENDTEST_REGEX = "{%\s*endtest\s*%}"
     match = re.match(TEST_TAG_REGEX, test_jinja)
-    assert match  # TODO
+    if not match:
+        # already a macro
+        return test_jinja
 
     macro = "{% macro test_" + test_jinja[match.span()[-1] :]
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)

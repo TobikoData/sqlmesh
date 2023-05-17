@@ -387,18 +387,6 @@ class _Model(ModelMeta, frozen=True):
             self._depends_on = _find_tables(self.render_query()) - {self.name}
         return self._depends_on
 
-    def model_and_audits_depends_on(self, audits: t.Dict[str, Audit]) -> t.Set[str]:
-        """All of the upstream dependencies referenced in the model's query and audits, excluding self references
-
-        Args:
-            audits: Dictionary of audits
-        Returns:
-            A list of all the upstream tables names.
-        """
-        return self.depends_on.union(
-            *[audit.depends_on(t.cast(Model, self)) for audit in self.referenced_audits(audits)]
-        ) - {self.name}
-
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
         """Returns the mapping of column names to types of this model."""

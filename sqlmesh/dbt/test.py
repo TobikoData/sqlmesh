@@ -29,16 +29,41 @@ class Severity(str, Enum):
 
 
 class TestConfig(GeneralConfig):
-    path: Path = Path()
+    """
+    TestConfig contains all the config paramters for a dbt test.
 
+    Args:
+        path: The file path to the test.
+        name: The name of the test.
+        sql: The test sql.
+        test_kwargs: The kwargs passed into the test.
+        owner: The name of the model under test.
+        column_name: The name of the column under test.
+        dependencies: The macros, refs, and sources the test depends upon.
+        dialect: The sql dialect of the test.
+        alias: The alias for the materialized table where failures are stored (Not supported).
+        schema: The schema for the materialized table where the failures are stored (Not supported).
+        database: The database for the materilized table where the failures are stored (Not supported).
+        severity: The severity of a failure: ERROR blocks execution and WARN continues execution.
+        store_failures: Failures are stored in a materialized table when True (Not supported).
+        where: Additional where clause to add to the test.
+        limit: Additional limit clause to add to the test (Not supported).
+        fail_calc: Custom calculation to use (default "count(*)") for displaying test failure (Not supported).
+        warn_if: Conditional expression (default "!=0") to detect if warn condition met (Not supported).
+        error_if: Conditional expression (default "!=0") to detect if error condition met (Not supported).
+    """
+
+    # SQLMesh fields
+    path: Path
     name: str
     sql: SqlStr
     test_kwargs: t.Dict[str, t.Any] = {}
-    model_name: str
+    owner: str
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
     dialect: str = ""
 
+    # dbt fields
     alias: t.Optional[str] = None
     schema_: t.Optional[str] = Field("", alias="schema")
     database: t.Optional[str] = None
@@ -56,6 +81,10 @@ class TestConfig(GeneralConfig):
             return v
         return Severity(v.lower())
 
+    @validator("name", pre=True)
+    def _lowercase_name(cls, v: str) -> str:
+        return v.lower()
+
     def to_sqlmesh(self, context: DbtContext) -> Audit:
         test_context = context_for_dependencies(context, self.dependencies)
 
@@ -67,7 +96,7 @@ class TestConfig(GeneralConfig):
             }
         )
 
-        sql_no_config, sql_config_only = extract_jinja_config(self.sql)
+        sql_no_config, _sql_config_only = extract_jinja_config(self.sql)
         sql_no_config = sql_no_config.replace("**_dbt_generic_test_kwargs", self._kwargs())
         expressions = d.parse(sql_no_config, default_dialect=self.dialect or context.dialect)
 
@@ -82,9 +111,6 @@ class TestConfig(GeneralConfig):
             query=expressions[-1],
             expressions=expressions[0:-1],
             jinja_macros=jinja_macros,
-            depends_on={test_context.refs[ref] for ref in self.dependencies.refs}.union(
-                {test_context.sources[source].source_name for source in self.dependencies.sources}
-            ),
         )
 
     def _kwargs(self) -> str:
@@ -99,7 +125,7 @@ class TestConfig(GeneralConfig):
                 ):
                     kwargs[key] = no_braces
                 else:
-                    kwargs[key] = f"'{value}'"
+                    kwargs[key] = f'"{value}"'
             else:
                 kwargs[key] = value
 
