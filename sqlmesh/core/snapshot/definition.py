@@ -115,6 +115,18 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
     version: str
 
 
+class SnapshotIntervals(PydanticModel, frozen=True):
+    name: str
+    identifier: str
+    version: str
+    intervals: Intervals
+    dev_intervals: Intervals
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
@@ -334,8 +346,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     model: Model
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
-    intervals: Intervals
-    dev_intervals: Intervals
+    intervals: Intervals = []
+    dev_intervals: Intervals = []
     project: str = ""
     created_ts: int
     updated_ts: int
@@ -360,40 +372,69 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return v
 
     @staticmethod
-    def merge_snapshots(
-        targets: t.Iterable[SnapshotIdLike],
-        snapshots: t.Dict[SnapshotId, Snapshot],
+    def hydrate_with_intervals_by_version(
+        snapshots: t.Iterable[Snapshot],
+        intervals: t.Iterable[SnapshotIntervals],
+        is_dev: bool = False,
     ) -> t.List[Snapshot]:
-        """Merge target snapshots with others so that each target snapshot has intervals from all other snapshots with the same version.
+        """Hydrates target snapshots with given intervals.
+
+        This will match snapshots with intervals by name and version rather than identifiers.
 
         Args:
-            targets: Iterable of snapshot-like objects
-            snapshots: Dictionary of snapshot ids to snapshot.
+            snapshots: Target snapshots.
+            intervals: Target snapshot intervals.
+            is_dev: If in development mode ignores same version intervals for paused forward-only snapshots.
 
         Returns:
-            List of target snapshots with merged intervals.
+            List of target snapshots with hydrated intervals.
         """
-        merged = []
-        snapshots_by_name_version = defaultdict(list)
+        intervals_by_name_version = defaultdict(list)
+        for interval in intervals:
+            intervals_by_name_version[(interval.name, interval.version)].append(interval)
 
-        for s in snapshots.values():
-            snapshots_by_name_version[(s.name, s.version)].append(s)
+        result = []
+        for snapshot in snapshots:
+            snapshot_intervals = intervals_by_name_version.get(
+                (snapshot.name, snapshot.version_get_or_generate()), []
+            )
+            for interval in snapshot_intervals:
+                if (
+                    not is_dev
+                    or not snapshot.is_forward_only
+                    or not snapshot.is_paused
+                    or snapshot.identifier == interval.identifier
+                ):
+                    snapshot.merge_intervals(interval)
+            result.append(snapshot)
 
-        for snapshot_like in targets:
-            snapshot_id = snapshot_like.snapshot_id
-            snapshot = snapshots.get(snapshot_id)
-            if not snapshot:
-                raise SQLMeshError(f"The snapshot {snapshot_id} was not found")
+        return result
 
-            snapshot = snapshot.copy()
-            snapshot.intervals = []
+    @staticmethod
+    def hydrate_with_intervals_by_identifier(
+        snapshots: t.Iterable[Snapshot],
+        intervals: t.Iterable[SnapshotIntervals],
+    ) -> t.List[Snapshot]:
+        """Hydrates target snapshots with given intervals.
 
-            for other in snapshots_by_name_version[(snapshot.name, snapshot.version)]:
-                snapshot.merge_intervals(other)
+        This will match snapshots with intervals by name and identifier rather than versions.
 
-            merged.append(snapshot)
+        Args:
+            snapshots: Target snapshots.
+            intervals: Target snapshot intervals.
 
-        return merged
+        Returns:
+            List of target snapshots with hydrated intervals.
+        """
+        intervals_by_snapshot_id = {i.snapshot_id: i for i in intervals}
+
+        result = []
+        for snapshot in snapshots:
+            if snapshot.snapshot_id in intervals_by_snapshot_id:
+                snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
+            result.append(snapshot)
+
+        return result
 
     @classmethod
     def from_model(
@@ -482,7 +523,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         is_temp_table = self.is_temporary_table(is_dev)
         intervals = self.dev_intervals if is_temp_table else self.intervals
 
-        intervals.append(self._inclusive_exclusive(start, end))
+        intervals.append(self.inclusive_exclusive(start, end))
 
         if len(intervals) < 2:
             return
@@ -500,11 +541,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: Start interval to remove.
             end: End interval to remove.
         """
-        interval = self._inclusive_exclusive(start, end)
+        interval = self.inclusive_exclusive(start, end)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
-    def _inclusive_exclusive(
+    def inclusive_exclusive(
         self, start: TimeLike, end: TimeLike, strict: bool = True
     ) -> t.Tuple[int, int]:
         """Transform the inclusive start and end into a [start, end) pair.
@@ -528,14 +569,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
         return (start_ts, end_ts)
 
-    def merge_intervals(self, other: Snapshot) -> None:
+    def merge_intervals(self, other: t.Union[Snapshot, SnapshotIntervals]) -> None:
         """Inherits intervals from the target snapshot.
 
         Args:
             other: The target snapshot to inherit intervals from.
         """
         effective_from_ts = self.normalized_effective_from_ts or 0
-        apply_effective_from = effective_from_ts > 0 and self.fingerprint != other.fingerprint
+        apply_effective_from = effective_from_ts > 0 and self.identifier != other.identifier
 
         for start, end in other.intervals:
             # If the effective_from is set, then intervals that come after it must come from
@@ -544,6 +585,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 end = min(end, effective_from_ts)
             if not apply_effective_from or end <= effective_from_ts:
                 self.add_interval(start, end)
+
+        if self.identifier == other.identifier:
+            for start, end in other.dev_intervals:
+                self.add_interval(start, end, is_dev=True)
 
     def missing_intervals(
         self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
@@ -569,7 +614,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         missing = []
 
         start_dt, end_dt = (
-            to_datetime(ts) for ts in self._inclusive_exclusive(start, end, strict=False)
+            to_datetime(ts) for ts in self.inclusive_exclusive(start, end, strict=False)
         )
 
         croniter = self.model.croniter(start_dt)
@@ -695,6 +740,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             version=self.version,
             temp_version=self.temp_version,
             change_category=self.change_category,
+        )
+
+    @property
+    def snapshot_intervals(self) -> SnapshotIntervals:
+        self._ensure_categorized()
+        return SnapshotIntervals(
+            name=self.name,
+            identifier=self.identifier,
+            version=self.version,
+            intervals=self.intervals.copy(),
+            dev_intervals=self.dev_intervals.copy(),
         )
 
     @property

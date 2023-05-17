@@ -10,7 +10,12 @@ from requests.models import Response
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotNameVersion
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIntervals,
+    SnapshotNameVersion,
+)
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
@@ -29,6 +34,7 @@ PLANS_PATH = f"{common.SQLMESH_API_BASE_PATH}/plans"
 ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
 SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
 SEEDS_PATH = f"{common.SQLMESH_API_BASE_PATH}/seeds"
+INTERVALS_PATH = f"{common.SQLMESH_API_BASE_PATH}/intervals"
 VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 
 
@@ -99,12 +105,12 @@ class AirflowClient:
             ).snapshot_ids
         )
 
-    def get_snapshots_with_same_version(
+    def get_snapshot_intervals(
         self, snapshot_name_versions: t.List[SnapshotNameVersion]
-    ) -> t.List[Snapshot]:
-        return common.SnapshotsResponse.parse_obj(
-            self._get(SNAPSHOTS_PATH, versions=_list_to_json(snapshot_name_versions))
-        ).snapshots
+    ) -> t.List[SnapshotIntervals]:
+        return common.SnapshotIntervalsResponse.parse_obj(
+            self._get(INTERVALS_PATH, versions=_list_to_json(snapshot_name_versions))
+        ).snapshot_intervals
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         try:

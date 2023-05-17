@@ -19,6 +19,7 @@ import contextlib
 import json
 import logging
 import typing as t
+from collections import defaultdict
 from copy import deepcopy
 
 import pandas as pd
@@ -31,19 +32,27 @@ from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SeedModel
 from sqlmesh.core.snapshot import (
+    Intervals,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotInfoLike,
+    SnapshotIntervals,
     SnapshotNameVersionLike,
     fingerprint_from_model,
 )
-from sqlmesh.core.snapshot.definition import _parents_from_model
+from sqlmesh.core.snapshot.definition import (
+    _parents_from_model,
+    merge_intervals,
+    remove_interval,
+)
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils.date import now_timestamp, time_like_to_str
+from sqlmesh.utils import random_id
+from sqlmesh.utils.date import TimeLike, now_timestamp, timelike_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -70,6 +79,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
         self.seeds_table = f"{schema}._seeds"
+        self.intervals_table = f"{schema}._intervals"
         self.versions_table = f"{schema}._versions"
 
         self._snapshot_columns_to_types = {
@@ -94,6 +104,19 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
             "content": exp.DataType.build("text"),
+        }
+
+        self._interval_columns_to_types = {
+            "id": exp.DataType.build("text"),
+            "created_ts": exp.DataType.build("bigint"),
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "start_ts": exp.DataType.build("bigint"),
+            "end_ts": exp.DataType.build("bigint"),
+            "is_dev": exp.DataType.build("boolean"),
+            "is_removed": exp.DataType.build("boolean"),
+            "is_compacted": exp.DataType.build("boolean"),
         }
 
         self._version_columns_to_types = {
@@ -402,6 +425,109 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         env = self._environment_from_row(row)
         return env
 
+    @transactional()
+    def add_interval(
+        self,
+        snapshot: Snapshot,
+        start: TimeLike,
+        end: TimeLike,
+        is_dev: bool = False,
+    ) -> None:
+        logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
+
+        self.engine_adapter.insert_append(
+            self.intervals_table,
+            _intervals_to_df([snapshot], start, end, is_dev, False),
+            columns_to_types=self._interval_columns_to_types,
+        )
+
+    @transactional()
+    def remove_interval(
+        self,
+        snapshots: t.Iterable[SnapshotInfoLike],
+        start: TimeLike,
+        end: TimeLike,
+        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
+    ) -> None:
+        all_snapshots = all_snapshots or self._get_snapshots_with_same_version(snapshots)
+
+        if logger.isEnabledFor(logging.INFO):
+            snapshot_ids = ", ".join([str(s.snapshot_id) for s in snapshots])
+            logger.info("Removing interval for snapshots: %s", snapshot_ids)
+
+        self.engine_adapter.insert_append(
+            self.intervals_table,
+            _intervals_to_df(all_snapshots, start, end, False, True),
+            columns_to_types=self._interval_columns_to_types,
+        )
+
+    @transactional()
+    def compact_intervals(self) -> None:
+        query = (
+            exp.select(
+                "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
+            )
+            .from_(self.intervals_table)
+            .join(
+                exp.select("name", "identifier")
+                .from_(self.intervals_table)
+                .where(exp.column("is_compacted").not_())
+                .distinct(),
+                using=["name", "identifier"],
+            )
+            .order_by(
+                "name", "identifier", "is_dev", "created_ts", "is_removed", "start_ts", "end_ts"
+            )
+        )
+
+        rows = self.engine_adapter.fetchall(query)
+        interval_ids = {row[0] for row in rows}
+        snapshot_intervals = _rows_to_snapshot_intervals(rows)
+
+        self._push_intervals(snapshot_intervals)
+
+        if interval_ids:
+            self.engine_adapter.delete_from(
+                self.intervals_table, exp.column("id").isin(*interval_ids)
+            )
+
+    def get_snapshot_intervals(
+        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
+    ) -> t.List[SnapshotIntervals]:
+        query = (
+            exp.select(
+                "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
+            )
+            .from_(self.intervals_table)
+            .order_by(
+                "name", "identifier", "is_dev", "created_ts", "is_removed", "start_ts", "end_ts"
+            )
+        )
+        if snapshots is not None:
+            query = query.where(self._snapshot_name_version_filter(snapshots))
+
+        return _rows_to_snapshot_intervals(self.engine_adapter.fetchall(query))
+
+    def _push_intervals(self, snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]]) -> None:
+        new_intervals = []
+        for snapshot in snapshots:
+            logger.info("Pushing intervals for snapshot %s", snapshot.snapshot_id)
+            for start_ts, end_ts in snapshot.intervals:
+                new_intervals.append(
+                    _interval_to_df(snapshot, start_ts, end_ts, is_dev=False, is_compacted=True)
+                )
+            for start_ts, end_ts in snapshot.dev_intervals:
+                new_intervals.append(
+                    _interval_to_df(snapshot, start_ts, end_ts, is_dev=True, is_compacted=True)
+                )
+
+        if new_intervals:
+            self.engine_adapter.insert_append(
+                self.intervals_table,
+                pd.DataFrame(new_intervals),
+                columns_to_types=self._interval_columns_to_types,
+            )
+
     def _restore_table(
         self,
         table_name: str,
@@ -424,10 +550,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
             raise SQLMeshError("There are no prior migrations to roll back to.")
         for table in tables:
-            self._restore_table(table, f"{table}_backup")
+            self._restore_table(table, _backup_table_name(table))
 
-        if self.engine_adapter.table_exists(f"{self.seeds_table}_backup"):
-            self._restore_table(self.seeds_table, f"{self.seeds_table}_backup")
+        if self.engine_adapter.table_exists(_backup_table_name(self.seeds_table)):
+            self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
+
+        if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
+            self._restore_table(self.seeds_table, _backup_table_name(self.intervals_table))
 
     def _backup_state(self) -> None:
         for table in (
@@ -435,17 +564,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.environments_table,
             self.versions_table,
             self.seeds_table,
+            self.intervals_table,
         ):
             if self.engine_adapter.table_exists(table):
                 with self.engine_adapter.transaction(TransactionType.DDL):
-                    backup_name = f"{table}_backup"
+                    backup_name = _backup_table_name(table)
                     self.engine_adapter.drop_table(backup_name)
                     self.engine_adapter.ctas(
                         backup_name, exp.select("*").from_(table), exists=False
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = self._get_snapshots(lock_for_update=True, hydrate_seeds=True)
+        all_snapshots = {
+            s.snapshot_id: s
+            for s in Snapshot.hydrate_with_intervals_by_identifier(
+                self._get_snapshots(lock_for_update=True, hydrate_seeds=True).values(),
+                self.get_snapshot_intervals(None),
+            )
+        }
         environments = self.get_environments()
 
         snapshot_mapping = {}
@@ -456,7 +592,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             model = snapshot.model
             models: t.Dict[str, Model] = {}
             audits: t.Dict[str, Audit] = {}
-            env: t.Dict[str, t.Dict] = {"models": models, "audits": audits}
 
             while queue:
                 snapshot_id = queue.pop()
@@ -548,8 +683,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
+        delete_filter = self._snapshot_id_filter(snapshot_mapping)
+        self.engine_adapter.delete_from(self.seeds_table, delete_filter)
+        self.engine_adapter.delete_from(self.intervals_table, delete_filter)
         self.delete_snapshots(snapshot_mapping)
-        self._push_snapshots(set(snapshot_mapping.values()), overwrite=True)
+
+        new_snapshots = set(snapshot_mapping.values())
+        self._push_snapshots(new_snapshots, overwrite=True)
+        self._push_intervals(new_snapshots)
 
         updated_environments = []
 
@@ -597,6 +738,79 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             yield
 
 
+def _rows_to_snapshot_intervals(rows: t.Iterable[t.Tuple]) -> t.List[SnapshotIntervals]:
+    intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+    dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+    for row in rows:
+        _, name, identifier, version, start, end, is_dev, is_removed = row
+        intervals_key = (name, identifier, version)
+        target_intervals = intervals if not is_dev else dev_intervals
+        if is_removed:
+            target_intervals[intervals_key] = remove_interval(
+                target_intervals[intervals_key], start, end
+            )
+        else:
+            target_intervals[intervals_key] = merge_intervals(
+                [*target_intervals[intervals_key], (start, end)]
+            )
+
+    result = []
+    for name, identifier, version in {**intervals, **dev_intervals}:
+        result.append(
+            SnapshotIntervals(
+                name=name,
+                identifier=identifier,
+                version=version,
+                intervals=intervals.get((name, identifier, version), []),
+                dev_intervals=dev_intervals.get((name, identifier, version), []),
+            )
+        )
+
+    return result
+
+
+def _intervals_to_df(
+    snapshots: t.Iterable[Snapshot],
+    start: TimeLike,
+    end: TimeLike,
+    is_dev: bool,
+    is_removed: bool,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            _interval_to_df(
+                snapshot,
+                *snapshot.inclusive_exclusive(start, end),
+                is_dev=is_dev,
+                is_removed=is_removed,
+            )
+            for snapshot in snapshots
+        ]
+    )
+
+
+def _interval_to_df(
+    snapshot: t.Union[Snapshot, SnapshotIntervals],
+    start_ts: int,
+    end_ts: int,
+    is_dev: bool = False,
+    is_removed: bool = False,
+    is_compacted: bool = False,
+) -> t.Dict[str, t.Any]:
+    return {
+        "id": random_id(),
+        "created_ts": now_timestamp(),
+        "name": snapshot.name,
+        "identifier": snapshot.identifier,
+        "version": snapshot.version,
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "is_dev": is_dev,
+        "is_removed": is_removed,
+        "is_compacted": is_compacted,
+    }
+
+
 def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -604,7 +818,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(),
+                "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
             }
             for snapshot in snapshots
         ]
@@ -626,3 +840,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
             }
         ]
     )
+
+
+def _backup_table_name(table_name: str) -> str:
+    return f"{table_name}_backup"

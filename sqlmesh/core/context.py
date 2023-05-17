@@ -953,6 +953,8 @@ class Context(BaseContext):
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(expired_snapshots)
 
+        self.state_sync.compact_intervals()
+
     def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
         connection_name = connection_name.capitalize()
         try:

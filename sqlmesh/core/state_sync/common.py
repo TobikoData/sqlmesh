@@ -46,11 +46,6 @@ class CommonStateSyncMixin(StateSync):
     ) -> t.Dict[SnapshotId, Snapshot]:
         return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
 
-    def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotNameVersionLike]
-    ) -> t.List[Snapshot]:
-        return self._get_snapshots_with_same_version(snapshots)
-
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self._get_environment(environment)
 
@@ -185,40 +180,6 @@ class CommonStateSyncMixin(StateSync):
         return expired_snapshots
 
     @transactional()
-    def add_interval(
-        self,
-        snapshot_id: SnapshotIdLike,
-        start: TimeLike,
-        end: TimeLike,
-        is_dev: bool = False,
-    ) -> None:
-        snapshot_id = snapshot_id.snapshot_id
-        stored_snapshots = self._get_snapshots([snapshot_id], lock_for_update=True)
-        if snapshot_id not in stored_snapshots:
-            raise SQLMeshError(f"Snapshot {snapshot_id} was not found")
-
-        logger.info("Adding interval for snapshot %s", snapshot_id)
-        stored_snapshot = stored_snapshots[snapshot_id]
-        stored_snapshot.add_interval(start, end, is_dev=is_dev)
-        self._update_snapshot(stored_snapshot)
-
-    @transactional()
-    def remove_interval(
-        self,
-        snapshots: t.Iterable[SnapshotInfoLike],
-        start: TimeLike,
-        end: TimeLike,
-        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
-    ) -> None:
-        all_snapshots = all_snapshots or self._get_snapshots_with_same_version(
-            snapshots, lock_for_update=True
-        )
-        for snapshot in all_snapshots:
-            logger.info("Removing interval for snapshot %s", snapshot.snapshot_id)
-            snapshot.remove_interval(start, end)
-            self._update_snapshot(snapshot)
-
-    @transactional()
     def unpause_snapshots(
         self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
@@ -237,28 +198,23 @@ class CommonStateSyncMixin(StateSync):
                 snapshot.set_unpaused_ts(unpaused_dt)
                 self._update_snapshot(snapshot)
             elif not is_target_snapshot:
-                snapshot_updated = False
-
-                if snapshot.unpaused_ts:
-                    logger.info("Pausing snapshot %s", snapshot.snapshot_id)
-                    snapshot.set_unpaused_ts(None)
-                    snapshot_updated = True
-
                 target_snapshot = target_snapshots_by_version[(snapshot.name, snapshot.version)]
                 if target_snapshot.normalized_effective_from_ts:
                     # Making sure that there are no overlapping intervals.
                     effective_from_ts = target_snapshot.normalized_effective_from_ts
-                    if snapshot.intervals and snapshot.intervals[-1][1] > effective_from_ts:
-                        logger.info(
-                            "Removing all intervals after '%s' for snapshot %s, superseded by snapshot %s",
-                            target_snapshot.effective_from,
-                            snapshot.snapshot_id,
-                            target_snapshot.snapshot_id,
-                        )
-                        snapshot.remove_interval(effective_from_ts, current_ts)
-                        snapshot_updated = True
+                    logger.info(
+                        "Removing all intervals after '%s' for snapshot %s, superseded by snapshot %s",
+                        target_snapshot.effective_from,
+                        snapshot.snapshot_id,
+                        target_snapshot.snapshot_id,
+                    )
+                    self.remove_interval(
+                        [], effective_from_ts, current_ts, all_snapshots=[snapshot]
+                    )
 
-                if snapshot_updated:
+                if snapshot.unpaused_ts:
+                    logger.info("Pausing snapshot %s", snapshot.snapshot_id)
+                    snapshot.set_unpaused_ts(None)
                     self._update_snapshot(snapshot)
 
     def _ensure_no_gaps(
@@ -279,26 +235,21 @@ class CommonStateSyncMixin(StateSync):
             t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
         ]
 
-        all_snapshots = {
-            s.snapshot_id: s
-            for s in self._get_snapshots_with_same_version(
-                [
-                    *changed_version_prev_snapshots_by_name.values(),
-                    *changed_version_target_snapshots,
-                ]
-            )
-        }
-
-        merged_prev_snapshots = Snapshot.merge_snapshots(
-            changed_version_prev_snapshots_by_name.values(), all_snapshots
+        all_snapshot_intervals = self.get_snapshot_intervals(
+            [*changed_version_prev_snapshots_by_name.values(), *changed_version_target_snapshots],
         )
-        merged_target_snapshots = Snapshot.merge_snapshots(
-            changed_version_target_snapshots, all_snapshots
-        )
-        merged_target_snapshots_by_name = {s.name: s for s in merged_target_snapshots}
 
-        for prev_snapshot in merged_prev_snapshots:
-            target_snapshot = merged_target_snapshots_by_name[prev_snapshot.name]
+        hydrated_prev_snapshots = Snapshot.hydrate_with_intervals_by_version(
+            self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values(),
+            all_snapshot_intervals,
+        )
+        hydrated_target_snapshots = Snapshot.hydrate_with_intervals_by_version(
+            changed_version_target_snapshots, all_snapshot_intervals
+        )
+        hydrated_target_snapshots_by_name = {s.name: s for s in hydrated_target_snapshots}
+
+        for prev_snapshot in hydrated_prev_snapshots:
+            target_snapshot = hydrated_target_snapshots_by_name[prev_snapshot.name]
             if (
                 target_snapshot.is_incremental_by_time_range
                 and prev_snapshot.is_incremental_by_time_range
