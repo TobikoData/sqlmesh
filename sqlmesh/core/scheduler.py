@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -115,6 +116,11 @@ class Scheduler:
             **{p_sid.name: self.snapshots[p_sid] for p_sid in snapshot.parents},
             snapshot.name: snapshot,
         }
+
+        if isinstance(snapshot.model, SeedModel) and not snapshot.model.is_hydrated:
+            snapshot = self.state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
+                snapshot.snapshot_id
+            ]
 
         self.snapshot_evaluator.evaluate(
             snapshot,
