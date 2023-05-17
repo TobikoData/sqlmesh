@@ -56,6 +56,10 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @property
     def _use_spark_session(self) -> bool:
+        from sqlmesh import runtime_env
+
+        if runtime_env.is_databricks:
+            return True
         return self.can_access_spark_session and {
             "databricks_connect_server_hostname",
             "databricks_connect_access_token",

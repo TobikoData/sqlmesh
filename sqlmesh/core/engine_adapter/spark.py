@@ -27,15 +27,6 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.model.meta import IntervalUnit
 
 
-def use_sql_if_no_spark_session_support(func: t.Callable) -> t.Callable:
-    def wrapper(self: SparkEngineAdapter, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        if not self._use_spark_session:
-            return getattr(super(type(self), self), func.__name__)(*args, **kwargs)
-        return func(self, *args, **kwargs)
-
-    return wrapper
-
-
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
@@ -94,7 +85,6 @@ class SparkEngineAdapter(EngineAdapter):
                 )
             )
 
-    @use_sql_if_no_spark_session_support
     def insert_append(
         self,
         table_name: TableName,
@@ -103,12 +93,11 @@ class SparkEngineAdapter(EngineAdapter):
         contains_json: bool = False,
     ) -> None:
         df = self.try_get_df(query_or_df)
-        if df is not None:
-            self._insert_append_pyspark_df(table_name, self._ensure_pyspark_df(df))
-        else:
+        if df is None or not self._use_spark_session:
             super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
+        else:
+            self._insert_append_pyspark_df(table_name, self._ensure_pyspark_df(df))
 
-    @use_sql_if_no_spark_session_support
     def merge(
         self,
         target_table: TableName,
@@ -118,7 +107,9 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         column_names = columns_to_types.keys()
         df = self.try_get_df(source_table)
-        if df is not None:
+        if df is None or not self._use_spark_session:
+            super().merge(target_table, source_table, columns_to_types, unique_key)
+        else:
             df = self._ensure_pyspark_df(df)
             temp_view_name = self._get_temp_table(target_table, table_only=True).sql(
                 dialect=self.dialect
@@ -126,10 +117,7 @@ class SparkEngineAdapter(EngineAdapter):
             df.createOrReplaceTempView(temp_view_name)
             query = exp.select(*column_names).from_(temp_view_name)
             super().merge(target_table, query, columns_to_types, unique_key)
-        else:
-            super().merge(target_table, source_table, columns_to_types, unique_key)
 
-    @use_sql_if_no_spark_session_support
     def _insert_append_pandas_df(
         self,
         table_name: TableName,
@@ -137,7 +125,10 @@ class SparkEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         contains_json: bool = False,
     ) -> None:
-        self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=False)
+        if not self._use_spark_session:
+            super()._insert_append_pandas_df(table_name, df, columns_to_types, contains_json)
+        else:
+            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=False)
 
     def _insert_append_pyspark_df(
         self,
@@ -159,7 +150,6 @@ class SparkEngineAdapter(EngineAdapter):
             table_name, overwrite=overwrite
         )
 
-    @use_sql_if_no_spark_session_support
     def _create_table_from_df(
         self,
         table_name: TableName,
@@ -169,10 +159,13 @@ class SparkEngineAdapter(EngineAdapter):
         replace: bool = True,
         **kwargs: t.Any,
     ) -> None:
-        df = self._ensure_pyspark_df(df)
-        if isinstance(table_name, exp.Table):
-            table_name = table_name.sql(dialect=self.dialect)
-        df.write.saveAsTable(table_name, mode="overwrite")
+        if not self._use_spark_session:
+            super()._create_table_from_df(table_name, df, columns_to_types, exists, replace)
+        else:
+            df = self._ensure_pyspark_df(df)
+            if isinstance(table_name, exp.Table):
+                table_name = table_name.sql(dialect=self.dialect)
+            df.write.saveAsTable(table_name, mode="overwrite")
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
