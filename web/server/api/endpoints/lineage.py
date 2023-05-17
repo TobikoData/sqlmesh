@@ -67,6 +67,7 @@ async def column_lineage(
             sources={
                 model: context.models[model].render_query()
                 for model in context.dag.upstream(model_name)
+                if model in context.models
             },
         )
     except Exception:
@@ -84,9 +85,10 @@ async def column_lineage(
             column_name = exp.to_column(node.name).name
         if column_name in cache_column_names:
             column_name = cache_column_names[column_name]
+        dialect = context.models[table].dialect if table in context.models else ""
         graph[table] = {
             column_name: LineageColumn(
-                source=_get_node_source(node=node, dialect=context.models[table].dialect),
+                source=_get_node_source(node=node, dialect=dialect),
                 models=_process_downstream(
                     node.downstream,
                     column_name,
