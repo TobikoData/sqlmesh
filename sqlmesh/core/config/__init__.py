@@ -4,7 +4,6 @@ from sqlmesh.core.config.connection import (
     ConnectionConfig,
     DatabricksConnectionConfig,
     DatabricksSparkSessionConnectionConfig,
-    DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
     PostgresConnectionConfig,
     RedshiftConnectionConfig,

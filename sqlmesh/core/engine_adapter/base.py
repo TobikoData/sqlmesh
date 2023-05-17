@@ -19,15 +19,6 @@ from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.dialect import pandas_to_sql
-from sqlmesh.core.engine_adapter._typing import (
-    DF_TYPES,
-    QUERY_TYPES,
-    SOURCE_ALIAS,
-    TARGET_ALIAS,
-    PySparkDataFrame,
-    PySparkSession,
-    Query,
-)
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
@@ -39,10 +30,20 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import (
+        DF,
+        PySparkDataFrame,
+        PySparkSession,
+        Query,
+        QueryOrDF,
+    )
     from sqlmesh.core.model.meta import IntervalUnit
 
 logger = logging.getLogger(__name__)
+
+
+MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
+MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
 
 class EngineAdapter:
@@ -78,6 +79,36 @@ class EngineAdapter:
         self.sql_gen_kwargs = sql_gen_kwargs or {}
         self._extra_config = kwargs
 
+    @classmethod
+    def is_pandas_df(cls, value: t.Any) -> bool:
+        return isinstance(value, pd.DataFrame)
+
+    @classmethod
+    def is_pyspark_df(cls, value: t.Any) -> bool:
+        return hasattr(value, "sparkSession")
+
+    @classmethod
+    def is_df(self, value: t.Any) -> bool:
+        return self.is_pandas_df(value) or self.is_pyspark_df(value)
+
+    @classmethod
+    def try_get_df(cls, value: t.Any) -> t.Optional[DF]:
+        if cls.is_df(value):
+            return value
+        return None
+
+    @classmethod
+    def try_get_pyspark_df(cls, value: t.Any) -> t.Optional[PySparkDataFrame]:
+        if cls.is_pyspark_df(value):
+            return value
+        return None
+
+    @classmethod
+    def try_get_pandas_df(cls, value: t.Any) -> t.Optional[pd.DataFrame]:
+        if cls.is_pandas_df(value):
+            return value
+        return None
+
     @property
     def cursor(self) -> t.Any:
         return self._connection_pool.get_cursor()
@@ -112,10 +143,11 @@ class EngineAdapter:
                 Expected to be ordered to match the order of values in the dataframe.
         """
         table = exp.to_table(table_name)
-        if isinstance(query_or_df, pd.DataFrame):
-            return self._create_table_from_df(table, query_or_df, columns_to_types, replace=True)
+        df = self.try_get_pandas_df(query_or_df)
+        if df is not None:
+            return self._create_table_from_df(table, df, columns_to_types, replace=True)
         else:
-            query_or_df = t.cast(Query, query_or_df)
+            query_or_df = t.cast("Query", query_or_df)
             return self._create_table_from_query(table, query_or_df, replace=True)
 
     def create_index(
@@ -184,12 +216,12 @@ class EngineAdapter:
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        if isinstance(query_or_df, QUERY_TYPES):
-            query_or_df = t.cast(Query, query_or_df)
-            self._create_table_from_query(table_name, query_or_df, exists, **kwargs)
+        df = self.try_get_pandas_df(query_or_df)
+        if df is not None:
+            self._create_table_from_df(table_name, df, columns_to_types, exists, **kwargs)
         else:
-            query_or_df = t.cast(pd.DataFrame, query_or_df)
-            self._create_table_from_df(table_name, query_or_df, columns_to_types, exists, **kwargs)
+            query_or_df = t.cast("Query", query_or_df)
+            self._create_table_from_query(table_name, query_or_df, exists, **kwargs)
 
     def create_state_table(
         self,
@@ -366,22 +398,20 @@ class EngineAdapter:
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
-
-        if isinstance(query_or_df, DF_TYPES):
-            if PySparkDataFrame is not None and isinstance(query_or_df, PySparkDataFrame):
-                query_or_df = query_or_df.toPandas()
-
-            if not isinstance(query_or_df, pd.DataFrame):
-                raise SQLMeshError("Can only create views with pandas dataframes.")
-
+        df = self.try_get_pandas_df(query_or_df)
+        pyspark_df = self.try_get_pyspark_df(query_or_df)
+        if df is not None or pyspark_df:
+            if pyspark_df:
+                df = pyspark_df.toPandas()
+            assert df is not None
             if columns_to_types is None:
-                columns_to_types = columns_to_types_from_df(query_or_df)
+                columns_to_types = columns_to_types_from_df(df)
 
             schema = exp.Schema(
                 this=schema,
                 expressions=[exp.column(column) for column in columns_to_types],
             )
-            query_or_df = next(self._pandas_to_sql(query_or_df, columns_to_types=columns_to_types))
+            query_or_df = next(self._pandas_to_sql(df, columns_to_types=columns_to_types))
 
         self.execute(
             exp.Create(
@@ -451,17 +481,16 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         contains_json: bool = False,
     ) -> None:
-        if isinstance(query_or_df, QUERY_TYPES):
-            query = t.cast(Query, query_or_df)
+        df = self.try_get_pandas_df(query_or_df)
+        if df is not None:
+            self._insert_append_pandas_df(
+                table_name, df, columns_to_types, contains_json=contains_json
+            )
+        else:
+            query = t.cast("Query", query_or_df)
             if contains_json:
                 query = self._escape_json(query)
             self._insert_append_query(table_name, query, columns_to_types)
-        elif isinstance(query_or_df, pd.DataFrame):
-            self._insert_append_pandas_df(
-                table_name, query_or_df, columns_to_types, contains_json=contains_json
-            )
-        else:
-            raise SQLMeshError(f"Unsupported type for insert_append: {type(query_or_df)}")
 
     @t.overload
     @classmethod
@@ -601,8 +630,8 @@ class EngineAdapter:
         on: exp.Expression,
         match_expressions: t.List[exp.When],
     ) -> None:
-        this = exp.alias_(exp.to_table(target_table), alias=TARGET_ALIAS, table=True)
-        using = exp.Subquery(this=source_table, alias=SOURCE_ALIAS)
+        this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
+        using = exp.Subquery(this=source_table, alias=MERGE_SOURCE_ALIAS)
         self.execute(
             exp.Merge(
                 this=this,
@@ -623,8 +652,8 @@ class EngineAdapter:
         on = exp.and_(
             *(
                 exp.EQ(
-                    this=exp.column(part, TARGET_ALIAS),
-                    expression=exp.column(part, SOURCE_ALIAS),
+                    this=exp.column(part, MERGE_TARGET_ALIAS),
+                    expression=exp.column(part, MERGE_SOURCE_ALIAS),
                 )
                 for part in unique_key
             )
@@ -635,7 +664,8 @@ class EngineAdapter:
             then=exp.Update(
                 expressions=[
                     exp.EQ(
-                        this=exp.column(col, TARGET_ALIAS), expression=exp.column(col, SOURCE_ALIAS)
+                        this=exp.column(col, MERGE_TARGET_ALIAS),
+                        expression=exp.column(col, MERGE_SOURCE_ALIAS),
                     )
                     for col in column_names
                 ],
@@ -647,7 +677,7 @@ class EngineAdapter:
             then=exp.Insert(
                 this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
                 expression=exp.Tuple(
-                    expressions=[exp.column(col, SOURCE_ALIAS) for col in column_names]
+                    expressions=[exp.column(col, MERGE_SOURCE_ALIAS) for col in column_names]
                 ),
             ),
         )

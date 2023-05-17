@@ -77,9 +77,8 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import graphviz
-    import pyspark
 
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
 
@@ -98,7 +97,7 @@ class BaseContext(abc.ABC):
         """Returns an engine adapter."""
 
     @property
-    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
+    def spark(self) -> t.Optional[PySparkSession]:
         """Returns the spark session if it exists."""
         return self.engine_adapter.spark
 
@@ -124,7 +123,7 @@ class BaseContext(abc.ABC):
         """
         return self.engine_adapter.fetchdf(query)
 
-    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> pyspark.sql.DataFrame:
+    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
 
         Args:
