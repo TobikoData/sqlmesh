@@ -4,8 +4,7 @@ import { memo, useCallback, useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from './context'
-import { type Lineage } from '@context/editor'
-import { mergeLineage } from './help'
+import { mergeLineageWithModels } from './help'
 
 const ModelLineage = memo(function ModelLineage({
   model,
@@ -18,7 +17,7 @@ const ModelLineage = memo(function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, models, lineage, setLineage } = useLineageFlow()
+  const { clearActiveEdges, setLineage } = useLineageFlow()
 
   const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
     model.name,
@@ -37,21 +36,9 @@ const ModelLineage = memo(function ModelLineage({
     if (dataLineage == null) {
       setLineage(undefined)
     } else {
-      const lineageModels = Object.keys(dataLineage).reduce(
-        (acc: Record<string, Lineage>, key) => {
-          if (models.has(key)) {
-            acc[key] = {
-              models: (dataLineage[key] ?? []).filter(name => models.has(name)),
-              columns: lineage?.[key]?.columns ?? undefined,
-            }
-          }
-
-          return acc
-        },
-        {},
+      setLineage(lineage =>
+        mergeLineageWithModels(structuredClone(lineage), dataLineage),
       )
-
-      setLineage(mergeLineage(models, lineageModels))
     }
   }, [dataLineage])
 

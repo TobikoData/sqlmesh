@@ -28,7 +28,9 @@ import {
   createGraphLayout,
   toNodeOrEdgeId,
   type GraphNodeData,
-  mergeLineage,
+  mergeLineageWithColumns,
+  hasNoModels,
+  mergeConnections,
 } from './help'
 import {
   debounceAsync,
@@ -36,6 +38,7 @@ import {
   isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
+  isNil,
   isTrue,
 } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -45,6 +48,7 @@ import {
   type Column,
   columnLineageApiLineageModelNameColumnNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
+  type LineageColumn,
 } from '@api/client'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
@@ -57,7 +61,6 @@ import { useLineageFlow } from './context'
 import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
-import { Divider } from '@components/divider/Divider'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -108,7 +111,10 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
   const updateNodeInternals = useUpdateNodeInternals()
 
   useEffect(() => {
-    updateNodeInternals(nodeId)
+    // TODO: This is a hack to fix the issue where the handles are not rendered yet
+    setTimeout(() => {
+      updateNodeInternals(nodeId)
+    }, 100)
   }, [hasLeft, hasRight])
 
   return (
@@ -140,7 +146,7 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
           className={clsx(
             'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
           )}
-        ></Handle>
+        />
       )}
     </div>
   )
@@ -291,27 +297,7 @@ const ModelColumn = memo(function ModelColumn({
 
       debouncedGetColumnLineage(column.name)
         .then(data => {
-          const models =
-            data as ColumnLineageApiLineageModelNameColumnNameGet200
-
-          setIsEmpty(() => {
-            for (const modelName in models) {
-              const model = models[modelName]
-
-              if (model == null) continue
-
-              for (const columnName in model) {
-                const lineage = model[columnName]
-
-                if (lineage == null) continue
-
-                return Object.keys(lineage.models ?? {}).length === 0
-              }
-            }
-
-            return false
-          })
-
+          setIsEmpty(hasNoModels())
           updateColumnLineage(data)
         })
         .catch(error => {
@@ -397,7 +383,6 @@ const ModelColumns = memo(function ModelColumns({
   const queryClient = useQueryClient()
 
   const {
-    models,
     connections,
     isActiveColumn,
     setConnections,
@@ -456,75 +441,16 @@ const ModelColumns = memo(function ModelColumns({
 
   const updateColumnLineage = useCallback(
     function updateColumnLineage(
-      columnLineage: ColumnLineageApiLineageModelNameColumnNameGet200,
+      columnLineage: Record<string, Record<string, LineageColumn>> = {},
     ): void {
-      setLineage(lineage => mergeLineage(models, lineage, columnLineage))
-      setConnections(connections => {
-        for (const modelName in columnLineage) {
-          const model = columnLineage[modelName]
-
-          if (model == null) continue
-
-          for (const columnName in model) {
-            const column = model[columnName]
-
-            if (column?.models == null) continue
-
-            const connectionSource = connections.get(
-              toNodeOrEdgeId(modelName, columnName),
-            ) ?? {
-              left: [],
-              right: [],
-            }
-
-            Object.entries(column.models).forEach(([id, columns]) => {
-              columns.forEach(column => {
-                const connectionTarget = connections.get(
-                  toNodeOrEdgeId(id, column),
-                ) ?? {
-                  left: [],
-                  right: [],
-                }
-
-                connectionTarget.right = Array.from(
-                  new Set(
-                    connectionTarget.right.concat(
-                      toNodeOrEdgeId(modelName, columnName),
-                    ),
-                  ),
-                )
-                connectionSource.left = Array.from(
-                  new Set(
-                    connectionSource.left.concat(toNodeOrEdgeId(id, column)),
-                  ),
-                )
-
-                connections.set(toNodeOrEdgeId(id, column), connectionTarget)
-                connections.set(
-                  toNodeOrEdgeId(modelName, columnName),
-                  connectionSource,
-                )
-              })
-            })
-
-            const modelColumnConnectionsLeft = (
-              connections.get(toNodeOrEdgeId(modelName, columnName))?.left ?? []
-            ).map(id => toNodeOrEdgeId('right', id))
-            const modelColumnConnectionsRight = (
-              connections.get(toNodeOrEdgeId(modelName, columnName))?.right ??
-              []
-            ).map(id => toNodeOrEdgeId('left', id))
-
-            addActiveEdges(
-              modelColumnConnectionsLeft.concat(modelColumnConnectionsRight),
-            )
-          }
-        }
-
-        return new Map(connections)
-      })
+      setLineage(lineage =>
+        mergeLineageWithColumns(structuredClone(lineage), columnLineage),
+      )
+      setConnections(connections =>
+        mergeConnections(columnLineage, connections, addActiveEdges),
+      )
     },
-    [models, addActiveEdges, setConnections],
+    [addActiveEdges, setConnections],
   )
 
   const isSelectManually = useCallback(
@@ -644,7 +570,6 @@ const ModelColumns = memo(function ModelColumns({
           />
         ))}
       </div>
-      <Divider className="border-primary-500" />
       {columns.length > limit && (
         <div className="py-2 flex justify-center bg-theme-lighter">
           <Button
@@ -710,27 +635,23 @@ function ModelColumnLineage({
       'border-4 border-brand-500': [model.name],
     }
 
-    void load()
+    const nodesAndEdges = getNodesAndEdges({
+      lineage,
+      highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
+      models,
+      nodes,
+      edges,
+      model,
+      withColumns,
+    })
 
-    async function load(): Promise<void> {
-      const nodesAndEdges = getNodesAndEdges({
-        lineage,
-        highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
-        models,
-        nodes,
-        edges,
-        model,
-        withColumns,
-      })
-
-      void createGraphLayout(nodesAndEdges).then(layout => {
-        setNodes(layout.nodes)
-        setEdges(toggleEdge(layout.edges))
-        setIsBuildingLayout(
-          isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
-        )
-      })
-    }
+    void createGraphLayout(nodesAndEdges).then(layout => {
+      setNodes(layout.nodes)
+      setEdges(toggleEdge(layout.edges))
+      setIsBuildingLayout(
+        isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
+      )
+    })
   }, [model.name, models, highlightedNodes, lineage])
 
   useEffect(() => {
@@ -777,16 +698,30 @@ function ModelNode({
   sourcePosition,
   targetPosition,
 }: NodeProps & { data: GraphNodeData }): JSX.Element {
-  const { models, withColumns, handleClickModel } = useLineageFlow()
+  const {
+    models,
+    withColumns,
+    handleClickModel,
+    lineage = {},
+  } = useLineageFlow()
 
   const { model, columns } = useMemo(() => {
     const model = models.get(id)
+    const columns = model?.columns ?? []
+
+    Object.keys(lineage[id]?.columns ?? {}).forEach((column: string) => {
+      const found = columns.find(({ name }) => name === column)
+
+      if (isNil(found)) {
+        columns.push({ name: column, type: 'UNKNOWN' })
+      }
+    })
 
     return {
       model,
-      columns: model?.columns ?? [],
+      columns,
     }
-  }, [id, models])
+  }, [id, models, lineage])
 
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -802,12 +737,15 @@ function ModelNode({
   )
   const splat = data.highlightedNodes?.['*']
   const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
+  const isTable = data.type === 'table'
+  const showColumns = withColumns && isArrayNotEmpty(columns)
 
   return (
     <div
       className={clsx(
-        'text-xs font-semibold text-secondary-500 dark:text-primary-100 rounded-xl shadow-lg relative z-1',
+        'text-xs font-semibold rounded-xl shadow-lg relative z-1',
         highlighted == null ? splat : highlighted,
+        isTable ? '' : 'text-secondary-500 dark:text-primary-100',
       )}
     >
       <div className="drag-handle">
@@ -816,24 +754,32 @@ function ModelNode({
           type={model?.type}
           label={data.label}
           className={clsx(
-            'bg-secondary-100 dark:bg-primary-900 py-2',
-            withColumns ? 'rounded-t-lg' : 'rounded-lg',
+            'py-2',
+            showColumns ? 'rounded-t-lg' : 'rounded-lg',
+            isTable ? 'bg-neutral-600' : 'bg-secondary-100 dark:bg-primary-900',
           )}
           hasLeft={sourcePosition === Position.Left}
           hasRight={targetPosition === Position.Right}
           handleClick={isInteractive ? handleClick : undefined}
         />
       </div>
-      {withColumns && isArrayNotEmpty(columns) && (
+      {showColumns && isArrayNotEmpty(columns) && (
         <>
           <ModelColumns
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={model?.type === 'python'}
+            disabled={model?.type === 'python' || data.type !== 'model'}
             withHandles={true}
           />
-          <div className="rounded-b-lg bg-secondary-100 dark:bg-primary-900 py-1"></div>
+          <div
+            className={clsx(
+              'rounded-b-lg py-1',
+              isTable
+                ? 'bg-neutral-600'
+                : 'bg-secondary-100 dark:bg-primary-900',
+            )}
+          ></div>
         </>
       )}
     </div>

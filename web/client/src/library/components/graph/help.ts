@@ -1,21 +1,28 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { isArrayNotEmpty, isFalse, isNil, isObjectEmpty } from '../../../utils'
-import {
-  type ColumnLineageApiLineageModelNameColumnNameGet200,
-  type Model,
-} from '@api/client'
+import { type LineageColumn, type Column, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type Connections } from './context'
 
 export interface GraphNodeData {
+  type: string
   label: string
   isInteractive?: boolean
-  highlightedNodes?: boolean
+  highlightedNodes?: Record<string, string[]>
   [key: string]: any
 }
 
-export { getNodesAndEdges, createGraphLayout, toNodeOrEdgeId }
+export {
+  getNodesAndEdges,
+  createGraphLayout,
+  toNodeOrEdgeId,
+  mergeLineageWithModels,
+  mergeLineageWithColumns,
+  hasNoModels,
+  mergeConnections,
+}
 
 async function createGraphLayout({
   nodes = [],
@@ -93,22 +100,13 @@ function getNodesAndEdges({
   const outputEdges: Edge[] = []
 
   for (const modelSource of modelNames) {
-    const modelLineage = lineage[modelSource]
-
-    if (modelLineage == null) continue
+    const modelLineage = lineage[modelSource]!
 
     modelLineage.models.forEach(modelTarget => {
-      const edge = createGraphEdge(modelSource, modelTarget)
-
-      outputEdges.push(edge)
+      outputEdges.push(createGraphEdge(modelSource, modelTarget))
     })
 
-    if (
-      modelLineage.columns == null ||
-      isObjectEmpty(modelLineage.columns) ||
-      isFalse(withColumns)
-    )
-      continue
+    if (isObjectEmpty(modelLineage?.columns) || isFalse(withColumns)) continue
 
     for (const columnSource in modelLineage.columns) {
       const modelsTarget = modelLineage.columns[columnSource]?.models
@@ -127,13 +125,9 @@ function getNodesAndEdges({
             modelTarget,
             columnTarget,
           )
-
           const edgeId = toNodeOrEdgeId(sourceHandle, targetHandle)
-
-          const currentEdge = currentEdges[edgeId]
-
           const edge =
-            currentEdge ??
+            currentEdges[edgeId] ??
             createGraphEdge(
               modelSource,
               modelTarget,
@@ -181,6 +175,7 @@ function getNodeMap({
   const NODE_BALANCE_SPACE = 64
   const COLUMN_LINE_HEIGHT = 24
   const CHAR_WIDTH = 8
+  const MAX_VISIBLE_COLUMNS = 5
 
   const current = nodes.reduce(
     (acc: Record<string, Node>, node) =>
@@ -189,31 +184,20 @@ function getNodeMap({
   )
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
-    const node = current[label] ?? createGraphNode({ label })
-    const columnsFactor = withColumns
+    const node =
+      current[label] ??
+      createGraphNode({ label, type: models.has(label) ? 'model' : 'table' })
+    const columnsCount = withColumns
       ? models.get(label)?.columns?.length ?? 0
       : 0
 
-    const maxWidth =
-      columnsFactor === 0
-        ? label.length * CHAR_WIDTH
-        : Math.max(
-            ...(models
-              .get(label)
-              ?.columns?.map(
-                column =>
-                  (column.name.length + column.type.length) * CHAR_WIDTH +
-                  NODE_BALANCE_SPACE,
-              ) ?? []),
-            label.length * CHAR_WIDTH,
-          )
-    const maxHeight =
-      COLUMN_LINE_HEIGHT * Math.min(columnsFactor, 5) + NODE_BALANCE_SPACE
+    const maxWidth = getNodeMaxWidth(label, columnsCount === 0)
+    const maxHeight = getNodeMaxHeight(columnsCount)
 
     node.data.width = NODE_BALANCE_SPACE + maxWidth
     node.data.height = NODE_BALANCE_SPACE + maxHeight
     node.data.highlightedNodes = highlightedNodes
-    node.data.isInteractive = model.name !== label
+    node.data.isInteractive = model.name !== label && models.has(label)
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.sourcePosition = Position.Left
@@ -227,6 +211,29 @@ function getNodeMap({
 
     return acc
   }, {})
+
+  function getNodeMaxWidth(label: string, hasColumns: boolean = false): number {
+    const defaultWidth = label.length * CHAR_WIDTH
+    const columns = models.get(label)?.columns ?? []
+
+    return hasColumns
+      ? Math.max(...columns.map(getColumnWidth), defaultWidth)
+      : defaultWidth
+  }
+
+  function getNodeMaxHeight(columnsCount: number): number {
+    return (
+      COLUMN_LINE_HEIGHT * Math.min(columnsCount, MAX_VISIBLE_COLUMNS) +
+      NODE_BALANCE_SPACE
+    )
+  }
+
+  function getColumnWidth(column: Column): number {
+    return (
+      (column.name.length + column.type.length) * CHAR_WIDTH +
+      NODE_BALANCE_SPACE
+    )
+  }
 }
 
 function repositionNodes(
@@ -313,85 +320,147 @@ function toNodeOrEdgeId(...args: Array<string | undefined>): string {
   return args.filter(Boolean).join('__')
 }
 
-// TODO: use better merge
-export function mergeLineage(
-  models: Map<string, Model>,
-  lineage: Record<string, Lineage> = {},
-  columns: ColumnLineageApiLineageModelNameColumnNameGet200 = {},
+function mergeLineageWithModels(
+  currentLineage: Record<string, Lineage> = {},
+  data: Record<string, string[]> = {},
 ): Record<string, Lineage> {
-  lineage = structuredClone(lineage)
-  columns = structuredClone(columns)
+  return Object.entries(data).reduce(
+    (acc: Record<string, Lineage>, [key, models = []]) => {
+      acc[key] = {
+        models,
+        columns: currentLineage?.[key]?.columns ?? undefined,
+      }
 
-  for (const model in columns) {
-    const lineageModel = lineage[model]
-    const columnsModel = columns[model]
+      return acc
+    },
+    {},
+  )
+}
 
-    if (lineageModel == null || columnsModel == null) continue
-
-    if (lineageModel.columns == null) {
-      lineageModel.columns = {}
+function mergeLineageWithColumns(
+  currentLineage: Record<string, Lineage> = {},
+  newLineage: Record<string, Record<string, LineageColumn>> = {},
+): Record<string, Lineage> {
+  for (const modelName in newLineage) {
+    if (currentLineage[modelName] == null) {
+      currentLineage[modelName] = { columns: {}, models: [] }
     }
 
-    for (const columnName in columnsModel) {
-      const columnsModelColumn = columnsModel[columnName]
+    const currentLineageModel = currentLineage[modelName]!
+    const newLineageModel = newLineage[modelName]!
 
-      if (columnsModelColumn == null) continue
+    for (const columnName in newLineageModel) {
+      const newLineageModelColumn = newLineageModel[columnName]!
 
-      const lineageModelColumn = lineageModel.columns[columnName] ?? {}
+      if (currentLineageModel.columns == null) {
+        currentLineageModel.columns = {}
+      }
 
-      lineageModelColumn.source = columnsModelColumn.source
-      lineageModelColumn.models = {}
+      // New Column Lineage delivers fresh data, so we can just assign it
+      currentLineageModel.columns[columnName] = {
+        source: newLineageModelColumn.source,
+        models: {},
+      }
 
-      lineageModel.columns[columnName] = lineageModelColumn
+      // If there are no models in new lineage, skip
+      if (isObjectEmpty(newLineageModelColumn.models)) continue
 
-      if (isObjectEmpty(columnsModelColumn.models)) continue
+      const currentLineageModelColumn = currentLineageModel.columns[columnName]!
+      const currentLineageModelColumnModels = currentLineageModelColumn.models!
 
-      for (const columnModel in columnsModelColumn.models) {
-        const columnsModelColumnModel = columnsModelColumn.models[columnModel]
+      for (const columnModelName in newLineageModelColumn.models) {
+        const currentLineageModelColumnModel =
+          currentLineageModelColumnModels[columnModelName]!
+        const newLineageModelColumnModel =
+          newLineageModelColumn.models[columnModelName]!
 
-        if (columnsModelColumnModel == null) continue
-
-        const lineageModelColumnModel = lineageModelColumn.models[columnModel]
-
-        if (lineageModelColumnModel == null) {
-          lineageModelColumn.models[columnModel] = columnsModelColumnModel
-        } else {
-          lineageModelColumn.models[columnModel] = Array.from(
-            new Set(lineageModelColumnModel.concat(columnsModelColumnModel)),
-          )
-        }
+        currentLineageModelColumnModels[columnModelName] =
+          currentLineageModelColumnModel == null
+            ? newLineageModelColumnModel
+            : Array.from(
+                new Set(
+                  currentLineageModelColumnModel.concat(
+                    newLineageModelColumnModel,
+                  ),
+                ),
+              )
       }
     }
   }
 
+  return currentLineage
+}
+
+function hasNoModels(
+  models: Record<string, Record<string, LineageColumn>> = {},
+): boolean {
+  for (const modelName in models) {
+    const model = models[modelName]
+
+    if (models[modelName] == null) continue
+
+    for (const columnName in model) {
+      const lineage = model[columnName]
+
+      if (lineage == null) continue
+
+      return Object.keys(lineage.models ?? {}).length === 0
+    }
+  }
+
+  return false
+}
+
+function mergeConnections(
+  lineage: Record<string, Record<string, LineageColumn>> = {},
+  connections: Map<string, Connections>,
+  addActiveEdges: (edges: string[]) => void,
+): Map<string, Connections> {
   for (const modelName in lineage) {
-    const model = models.get(modelName)
-    const modelLineage = lineage[modelName]
+    const model = lineage[modelName]!
 
-    if (model == null || modelLineage == null) {
-      delete lineage[modelName]
+    for (const columnName in model) {
+      const column = model[columnName]
 
-      continue
-    }
+      // We don't have any connectins so we skip
+      if (column?.models == null) continue
 
-    if (modelLineage.columns == null) continue
-
-    if (model.columns == null) {
-      delete modelLineage.columns
-
-      continue
-    }
-
-    for (const columnName in modelLineage.columns) {
-      const found = model.columns.find(c => c.name === columnName)
-
-      if (found == null) {
-        delete modelLineage.columns[columnName]
-
-        continue
+      const columnId = toNodeOrEdgeId(modelName, columnName)
+      const connectionSource = connections.get(columnId) ?? {
+        left: [],
+        right: [],
       }
+
+      Object.entries(column.models).forEach(([id, columns]) => {
+        columns.forEach(column => {
+          const connectionTarget = connections.get(
+            toNodeOrEdgeId(id, column),
+          ) ?? { left: [], right: [] }
+
+          connectionTarget.right = Array.from(
+            new Set(connectionTarget.right.concat(columnId)),
+          )
+          connectionSource.left = Array.from(
+            new Set(connectionSource.left.concat(toNodeOrEdgeId(id, column))),
+          )
+
+          connections.set(toNodeOrEdgeId(id, column), connectionTarget)
+          connections.set(columnId, connectionSource)
+        })
+      })
+
+      const modelColumnConnectionsLeft = connectionSource.left.map(id =>
+        toNodeOrEdgeId('right', id),
+      )
+      const modelColumnConnectionsRight = connectionSource.right.map(id =>
+        toNodeOrEdgeId('left', id),
+      )
+
+      addActiveEdges(
+        modelColumnConnectionsLeft.concat(modelColumnConnectionsRight),
+      )
     }
   }
 
-  return lineage
+  return new Map(connections)
 }
