@@ -297,12 +297,13 @@ class DatabricksConnectionConfig(_ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from databricks import sql
-
         if self.use_spark_session_only:
             from sqlmesh.engines.spark.db_api.spark_session import connection
 
             return connection
+
+        from databricks import sql
+
         return sql.connect
 
     @property
