@@ -108,9 +108,9 @@ setup(
             "snowflake-connector-python[pandas]",
         ],
         "web": [
-            "fastapi==0.95.0",
+            "fastapi==0.95.2",
             "watchfiles>=0.19.0",
-            "pyarrow==11.0.0",
+            "pyarrow==12.0.0",
             "uvicorn[standard]==0.22.0",
         ],
     },
