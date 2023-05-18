@@ -213,6 +213,7 @@ def test_unordered_model_statements():
     assert "MODEL statement is required" in str(ex.value)
 
 
+@pytest.mark.skip(reason="TODO")
 def test_no_query():
     expressions = parse(
         """

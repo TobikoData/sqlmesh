@@ -138,9 +138,6 @@ class SnapshotEvaluator:
                 else:
                     raise SQLMeshError(f"Unexpected SnapshotKind: {snapshot.model.kind}")
 
-        for sql_statement in model.sql_statements:
-            self.adapter.execute(sql_statement)
-
         from sqlmesh.core.context import ExecutionContext
 
         context = ExecutionContext(self.adapter, snapshots, is_dev)

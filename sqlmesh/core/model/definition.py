@@ -945,8 +945,19 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    query = expressions[-1] if len(expressions) > 1 else None
-    statements = expressions[1:-1]
+
+    if any(isinstance(e, (exp.Subqueryable, d.Jinja)) for e in expressions):
+        try:
+            # Extract the query and any pre/post statements
+            query, prehooks, posthooks = extract_sql_model_select(expressions[1:])
+        except Exception as e:
+            raise_config_error(f"Invalid model definition: {e}", path)
+        statements = prehooks + posthooks
+    else:
+        # Assume this is a different model type (seed, python, etc.)
+        query = expressions[-1] if isinstance(expressions[-1], d.MacroVar) else None
+        prehooks, posthooks = [], []
+        statements = expressions[1:-1]
 
     if not isinstance(meta, d.Model):
         raise_config_error(
@@ -982,6 +993,15 @@ def load_model(
             **meta_fields,
         )
     elif query is not None:
+        # Inject preceding and following statements into the model's meta fields.
+        meta_prehooks = meta_fields.setdefault("pre", [])
+        meta_posthooks = meta_fields.setdefault("post", [])
+        if not isinstance(meta_prehooks, list):
+            meta_fields["pre"] = meta_prehooks = [meta_prehooks]
+        if not isinstance(meta_posthooks, list):
+            meta_fields["post"] = meta_posthooks = [meta_posthooks]
+        meta_prehooks.extend([s for s in prehooks if not isinstance(s, d.MacroDef)])
+        meta_posthooks.extend([s for s in posthooks if not isinstance(s, d.MacroDef)])
         return create_sql_model(
             name,
             query,
@@ -1016,6 +1036,34 @@ def load_model(
                 path,
             )
             raise
+
+
+def extract_sql_model_select(
+    expressions: t.List[exp.Expression],
+) -> t.Tuple[t.Optional[exp.Select], t.List[exp.Expression], t.List[exp.Expression]]:
+    """Extracts the SELECT query from a sequence of expressions.
+
+    Args:
+        expressions: The list of all SQL statements in the model definition.
+
+    Returns:
+        A tuple containing the extracted SELECT query, the statements before the query, and
+        the statements after the query.
+
+    Raises:
+        ValueError: If the model definition contains more than one SELECT query.
+    """
+    query_positions = [
+        (e, ix) for ix, e in enumerate(expressions) if isinstance(e, (exp.Subqueryable, d.Jinja))
+    ]
+
+    if not query_positions:
+        return None, [], []
+    elif len(query_positions) > 1:
+        raise ValueError("Only one SELECT query is allowed per model")
+
+    query, pos = query_positions[0]
+    return query, expressions[:pos], expressions[pos + 1 :]
 
 
 def create_sql_model(

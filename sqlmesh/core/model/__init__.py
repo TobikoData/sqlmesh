@@ -10,6 +10,7 @@ from sqlmesh.core.model.definition import (
     create_python_model,
     create_seed_model,
     create_sql_model,
+    extract_sql_model_select,
     load_model,
 )
 from sqlmesh.core.model.kind import (
