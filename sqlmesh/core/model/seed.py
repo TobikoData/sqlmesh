@@ -29,9 +29,7 @@ class Seed(PydanticModel):
     def column_hashes(self) -> t.Dict[str, str]:
         df = self._get_df()
         return {
-            column_name: str(  # type: ignore
-                zlib.crc32(df[column_name].to_string(index=False).encode("utf-8"))  # type: ignore
-            )
+            column_name: str(zlib.crc32(df[column_name].to_json().encode("utf-8")))
             for column_name in df.columns
         }
 

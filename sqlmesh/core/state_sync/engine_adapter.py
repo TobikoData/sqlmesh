@@ -449,7 +449,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         environments = self.get_environments()
 
         snapshot_mapping = {}
-        cache: t.Dict[SnapshotId, t.Dict] = {}
 
         for snapshot in all_snapshots.values():
             seen = set()
@@ -473,18 +472,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     continue
 
                 queue.update(s.parents)
-                cached_env = cache.get(snapshot_id)
-
-                if cached_env:
-                    models.update(cached_env["models"])
-                    audits.update(cached_env["audits"])
-                else:
-                    models[s.name] = s.model
-
-                    for audit in s.audits:
-                        audits[audit.name] = audit
-
-            cache[snapshot_id] = env
+                models[s.name] = s.model
+                for audit in s.audits:
+                    audits[audit.name] = audit
 
             new_snapshot = deepcopy(snapshot)
 
@@ -496,7 +486,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 models=models,
                 audits=audits,
             )
-
             new_snapshot.parents = tuple(
                 SnapshotId(
                     name=name,
@@ -560,7 +549,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             }
 
         self.delete_snapshots(snapshot_mapping)
-        self._push_snapshots(snapshot_mapping.values())
+        self._push_snapshots(set(snapshot_mapping.values()), overwrite=True)
 
         updated_environments = []
 
