@@ -372,7 +372,7 @@ class Context(BaseContext):
         environment = environment or c.PROD
         self.scheduler(environment=environment).run(environment, start, end, latest)
 
-        if not skip_janitor:
+        if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
     def get_model(self, name: str) -> t.Optional[Model]:
