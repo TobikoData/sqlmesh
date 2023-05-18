@@ -445,7 +445,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = self._get_snapshots(lock_for_update=True)
+        all_snapshots = self._get_snapshots(lock_for_update=True, hydrate_seeds=True)
         environments = self.get_environments()
 
         snapshot_mapping = {}
