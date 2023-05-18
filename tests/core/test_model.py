@@ -368,6 +368,7 @@ def test_seed_hydration():
     assert hydrated_model.is_hydrated
     assert hydrated_model.column_hashes == column_hashes
     assert hydrated_model.seed.content == model.seed.content
+    assert hydrated_model.column_hashes_ is None
 
 
 def test_seed():

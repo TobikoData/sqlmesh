@@ -790,7 +790,9 @@ class SeedModel(_Model):
         """
         if self.is_hydrated:
             return self
-        return self.copy(update={"seed": Seed(content=content), "is_hydrated": True})
+        return self.copy(
+            update={"seed": Seed(content=content), "is_hydrated": True, "column_hashes_": None}
+        )
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, SeedModel):
