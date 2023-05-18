@@ -43,9 +43,9 @@ def test_column_hashes():
 """
     seed = Seed(content=content)
     assert seed.column_hashes == {
-        "key": "1460551213",
-        "value": "3337736980",
-        "ds": "1377719241",
+        "key": "122302783",
+        "value": "1969959181",
+        "ds": "725407375",
     }
 
     content_column_changed = """key,value,ds
@@ -57,5 +57,5 @@ def test_column_hashes():
     seed_column_changed = Seed(content=content_column_changed)
     assert seed_column_changed.column_hashes == {
         **seed.column_hashes,
-        "ds": "646363718",
+        "ds": "3396890652",
     }
