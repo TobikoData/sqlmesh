@@ -437,7 +437,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.seeds_table,
         ):
             if self.engine_adapter.table_exists(table):
-                self.engine_adapter.replace_query(f"{table}_backup", exp.select("*").from_(table))
+                with self.engine_adapter.transaction(TransactionType.DDL):
+                    backup_name = f"{table}_backup"
+                    self.engine_adapter.drop_table(backup_name)
+                    self.engine_adapter.ctas(
+                        backup_name, exp.select("*").from_(table), exists=False
+                    )
 
     def _migrate_rows(self) -> None:
         all_snapshots = self._get_snapshots(lock_for_update=True)
