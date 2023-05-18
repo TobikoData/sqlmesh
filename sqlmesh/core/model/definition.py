@@ -919,8 +919,8 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    query = expressions[-1] if len(expressions) > 1 else None
-    statements = expressions[1:-1]
+    query, pre, post = extract_sql_model_select(expressions)
+    statements = pre + post
 
     if not isinstance(meta, d.Model):
         raise_config_error(
@@ -936,6 +936,8 @@ def load_model(
         **{prop.name.lower(): prop.args.get("value") for prop in meta.expressions},
         **kwargs,
     }
+    meta_fields.setdefault("pre", []).extend([s for s in pre if not isinstance(s, d.MacroDef)])
+    meta_fields.setdefault("post", []).extend([s for s in post if not isinstance(s, d.MacroDef)])
 
     name = meta_fields.pop("name", "")
     if not name:
@@ -990,6 +992,32 @@ def load_model(
                 path,
             )
             raise
+
+
+def extract_sql_model_select(
+    expressions: t.List[exp.Expression],
+) -> t.Tuple[t.Optional[exp.Select], t.List[exp.Expression], t.List[exp.Expression]]:
+    """Extracts the SELECT query from a sequence of expressions.
+
+    Args:
+        expressions: The list of all SQL statements in the model definition.
+
+    Returns:
+        A tuple containing the extracted SELECT query, the statements before the query, and
+        the statements after the query.
+
+    Raises:
+        ConfigError: If the model definition contains more than one SELECT query.
+    """
+    query_positions = [(e, ix) for ix, e in enumerate(expressions) if isinstance(e, exp.Select)]
+
+    if not query_positions:
+        return None, [], []
+    elif len(query_positions) > 1:
+        raise_config_error("Only one SELECT query is allowed per model")
+
+    query, pos = query_positions[0]
+    return query, expressions[:pos], expressions[pos + 1 :]
 
 
 def create_sql_model(
