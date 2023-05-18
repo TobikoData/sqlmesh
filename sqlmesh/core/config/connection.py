@@ -150,52 +150,6 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         return connector.connect
 
 
-class DatabricksSparkSessionConnectionConfig(_ConnectionConfig):
-    """
-    Configuration for the Databricks connection. This connection is used to access the Databricks
-    when you have access to a SparkSession. Ex: Running in a Databricks notebook or cluster
-
-    Args:
-        spark_config: An optional dictionary of Spark session parameters. Defaults to None.
-    """
-
-    spark_config: t.Optional[t.Dict[str, str]] = None
-
-    concurrent_tasks: Literal[1] = 1
-
-    type_: Literal["databricks_spark_session"] = Field(
-        alias="type", default="databricks_spark_session"
-    )
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return set()
-
-    @property
-    def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DatabricksEngineAdapter
-
-    @property
-    def _connection_factory(self) -> t.Callable:
-        from sqlmesh.engines.spark.db_api.spark_session import connection
-
-        return connection
-
-    @property
-    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        from pyspark import SparkConf
-        from pyspark.sql import SparkSession
-
-        spark_config = SparkConf()
-        if self.spark_config:
-            for k, v in self.spark_config.items():
-                spark_config.set(k, v)
-
-        return dict(
-            spark=SparkSession.builder.config(conf=spark_config).enableHiveSupport().getOrCreate()
-        )
-
-
 class DatabricksConnectionConfig(_ConnectionConfig):
     """
     Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations
@@ -209,8 +163,6 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         catalog: Default catalog to use for SQL models. Defaults to None which means it will use the default set in
                  the Databricks cluster (most likely `hive_metastore`).
         http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
-        session_configuration: An optional dictionary of Spark session parameters. Defaults to None.
-                   Execute the SQL command `SET -v` to get a full list of available commands.
         databricks_connect_server_hostname: The hostname to use when establishing a connecting using Databricks Connect.
                    Defaults to the `server_hostname` value.
         databricks_connect_access_token: The access token to use when establishing a connecting using Databricks Connect.
@@ -599,7 +551,6 @@ class PostgresConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
-        DatabricksSparkSessionConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,

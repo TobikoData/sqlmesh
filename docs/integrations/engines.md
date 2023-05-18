@@ -68,6 +68,7 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 | `databricks_connect_server_hostname` | Databricks Connect Only: Databricks Connect server hostname. Uses `server_hostname` if not set.                                                                                          | string |    N     |
 | `databricks_connect_access_token`    | Databricks Connect Only: Databricks Connect access token. Uses `access_token` if not set.                                                                                                | string |    N     |
 | `databricks_connect_cluster_id`      | Databricks Connect Only: Databricks Connect cluster ID. Uses `http_path` if not set. Cannot be a Databricks SQL Warehouse.                                                               | string |    N     |
+| `force_databricks_connect`           | When running locally, force the use of Databricks Connect for all model operations (so don't use SQL Connector for SQL models)                                                           |  bool  |    N     |
 
 ## Databricks - Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.
