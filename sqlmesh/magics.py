@@ -66,7 +66,7 @@ class SQLMeshMagics(Magics):
     def model(self, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
-        model = self._context.get_model(args.model)
+        model = self._context.get_model(t.cast(str, args.model))
 
         if not model:
             raise SQLMeshError(f"Cannot find {model}")
