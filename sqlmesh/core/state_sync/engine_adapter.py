@@ -463,26 +463,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     @transactional()
     def compact_intervals(self) -> None:
-        query = (
-            exp.select(
-                "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
-            )
-            .from_(self.intervals_table)
-            .join(
+        def query_modifier(query: exp.Select) -> exp.Select:
+            return query.join(
                 exp.select("name", "identifier")
                 .from_(self.intervals_table)
                 .where(exp.column("is_compacted").not_())
                 .distinct(),
                 using=["name", "identifier"],
             )
-            .order_by("name", "identifier", "created_ts", "is_removed")
-        )
 
-        rows = self.engine_adapter.fetchall(query)
-        interval_ids = {row[0] for row in rows}
-        snapshot_intervals = _rows_to_snapshot_intervals(rows)
+        interval_ids, snapshot_intervals = self._get_snapshot_intervals(query_modifier)
 
-        self._push_intervals(snapshot_intervals)
+        self._push_snapshot_intervals(snapshot_intervals)
 
         if interval_ids:
             self.engine_adapter.delete_from(
@@ -492,6 +484,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def get_snapshot_intervals(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
     ) -> t.List[SnapshotIntervals]:
+        def query_modifier(query: exp.Select) -> exp.Select:
+            if snapshots is None:
+                return query
+            return query.where(self._snapshot_name_version_filter(snapshots))
+
+        return self._get_snapshot_intervals(query_modifier)[1]
+
+    def _get_snapshot_intervals(
+        self, query_modifier: t.Optional[t.Callable[[exp.Select], exp.Select]]
+    ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
         query = (
             exp.select(
                 "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
@@ -499,12 +501,44 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .from_(self.intervals_table)
             .order_by("name", "identifier", "created_ts", "is_removed")
         )
-        if snapshots is not None:
-            query = query.where(self._snapshot_name_version_filter(snapshots))
+        if query_modifier is not None:
+            query = query_modifier(query)
 
-        return _rows_to_snapshot_intervals(self.engine_adapter.fetchall(query))
+        rows = self.engine_adapter.fetchall(query)
+        interval_ids = {row[0] for row in rows}
 
-    def _push_intervals(self, snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]]) -> None:
+        intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+        dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+        for row in rows:
+            _, name, identifier, version, start, end, is_dev, is_removed = row
+            intervals_key = (name, identifier, version)
+            target_intervals = intervals if not is_dev else dev_intervals
+            if is_removed:
+                target_intervals[intervals_key] = remove_interval(
+                    target_intervals[intervals_key], start, end
+                )
+            else:
+                target_intervals[intervals_key] = merge_intervals(
+                    [*target_intervals[intervals_key], (start, end)]
+                )
+
+        snapshot_intervals = []
+        for name, identifier, version in {**intervals, **dev_intervals}:
+            snapshot_intervals.append(
+                SnapshotIntervals(
+                    name=name,
+                    identifier=identifier,
+                    version=version,
+                    intervals=intervals.get((name, identifier, version), []),
+                    dev_intervals=dev_intervals.get((name, identifier, version), []),
+                )
+            )
+
+        return interval_ids, snapshot_intervals
+
+    def _push_snapshot_intervals(
+        self, snapshots: t.Iterable[t.Union[Snapshot, SnapshotIntervals]]
+    ) -> None:
         new_intervals = []
         for snapshot in snapshots:
             logger.info("Pushing intervals for snapshot %s", snapshot.snapshot_id)
@@ -686,7 +720,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         new_snapshots = set(snapshot_mapping.values())
         self._push_snapshots(new_snapshots, overwrite=True)
-        self._push_intervals(new_snapshots)
+        self._push_snapshot_intervals(new_snapshots)
 
         updated_environments = []
 
@@ -732,37 +766,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
         with self.engine_adapter.transaction(transaction_type=transaction_type):
             yield
-
-
-def _rows_to_snapshot_intervals(rows: t.Iterable[t.Tuple]) -> t.List[SnapshotIntervals]:
-    intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-    dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-    for row in rows:
-        _, name, identifier, version, start, end, is_dev, is_removed = row
-        intervals_key = (name, identifier, version)
-        target_intervals = intervals if not is_dev else dev_intervals
-        if is_removed:
-            target_intervals[intervals_key] = remove_interval(
-                target_intervals[intervals_key], start, end
-            )
-        else:
-            target_intervals[intervals_key] = merge_intervals(
-                [*target_intervals[intervals_key], (start, end)]
-            )
-
-    result = []
-    for name, identifier, version in {**intervals, **dev_intervals}:
-        result.append(
-            SnapshotIntervals(
-                name=name,
-                identifier=identifier,
-                version=version,
-                intervals=intervals.get((name, identifier, version), []),
-                dev_intervals=dev_intervals.get((name, identifier, version), []),
-            )
-        )
-
-    return result
 
 
 def _intervals_to_df(
