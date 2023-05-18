@@ -452,7 +452,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         all_snapshots = all_snapshots or self._get_snapshots_with_same_version(snapshots)
 
         if logger.isEnabledFor(logging.INFO):
-            snapshot_ids = ", ".join([str(s.snapshot_id) for s in snapshots])
+            snapshot_ids = ", ".join(str(s.snapshot_id) for s in snapshots)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
         self.engine_adapter.insert_append(
@@ -475,9 +475,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 .distinct(),
                 using=["name", "identifier"],
             )
-            .order_by(
-                "name", "identifier", "is_dev", "created_ts", "is_removed", "start_ts", "end_ts"
-            )
+            .order_by("name", "identifier", "created_ts", "is_removed")
         )
 
         rows = self.engine_adapter.fetchall(query)
@@ -499,9 +497,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
             )
             .from_(self.intervals_table)
-            .order_by(
-                "name", "identifier", "is_dev", "created_ts", "is_removed", "start_ts", "end_ts"
-            )
+            .order_by("name", "identifier", "created_ts", "is_removed")
         )
         if snapshots is not None:
             query = query.where(self._snapshot_name_version_filter(snapshots))

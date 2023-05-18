@@ -23,4 +23,9 @@ def migrate(state_sync):  # type: ignore
         primary_key=("id",),
     )
 
-    engine_adapter.create_index(intervals_table, "name_version_idx", ("name", "version"))
+    engine_adapter.create_index(
+        intervals_table, "name_version_idx", ("name", "version", "created_ts")
+    )
+    engine_adapter.create_index(
+        intervals_table, "name_identifier_idx", ("name", "identifier", "created_ts")
+    )
