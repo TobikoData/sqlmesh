@@ -9,6 +9,7 @@ from sqlglot import Dialect, exp
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession
@@ -60,11 +61,15 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
         if runtime_env.is_databricks:
             return True
-        return self.can_access_spark_session and {
-            "databricks_connect_server_hostname",
-            "databricks_connect_access_token",
-            "databricks_connect_cluster_id",
-        }.issubset(self._extra_config)
+        return (
+            self.can_access_spark_session
+            and {
+                "databricks_connect_server_hostname",
+                "databricks_connect_access_token",
+                "databricks_connect_cluster_id",
+            }.issubset(self._extra_config)
+            and not self._extra_config.get("disable_databricks_connect")
+        )
 
     @property
     def is_spark_session_cursor(self) -> bool:
@@ -74,6 +79,13 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
 
     @property
     def spark(self) -> PySparkSession:
+        if not self._use_spark_session:
+            raise SQLMeshError(
+                "SparkSession is not available. "
+                "Either run from a Databricks Notebook or "
+                "install `databricks-connect` and configure it to connect to your Databricks cluster."
+            )
+
         if self.is_spark_session_cursor:
             return self._connection_pool.get().spark
 
@@ -94,7 +106,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_cursor:
             return super()._fetch_native_df(query)
-        if self.can_access_spark_session:
+        if self._use_spark_session:
             logger.debug(f"Executing SQL:\n{query}")
             return self.spark.sql(
                 self._to_sql(query) if isinstance(query, exp.Expression) else query

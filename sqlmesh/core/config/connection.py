@@ -170,6 +170,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         databricks_connect_cluster_id: The cluster id to use when establishing a connecting using Databricks Connect.
                    Defaults to deriving the cluster id from the `http_path` value.
         force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.
+        disable_databricks_connect: Even if databricks connect is installed, do not use it.
     """
 
     server_hostname: t.Optional[str]
@@ -181,6 +182,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     databricks_connect_access_token: t.Optional[str]
     databricks_connect_cluster_id: t.Optional[str]
     force_databricks_connect: bool = False
+    disable_databricks_connect: bool = False
 
     # Concurrent tasks can cause an issue due to simultaneous updates to intervals.
     # Bump this back up when the separate table for intervals is implemented.
@@ -238,7 +240,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         return {
             k: v
             for k, v in self.dict().items()
-            if k.startswith("databricks_connect_") or k == "catalog"
+            if k.startswith("databricks_connect_") or k in ("catalog", "disable_databricks_connect")
         }
 
     @property
@@ -269,7 +271,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
             from pyspark.sql import SparkSession
 
             return dict(
-                spark=SparkSession.builder.enableHiveSupport().getOrCreate(),
+                spark=SparkSession.getActiveSession(),
                 catalog=self.catalog,
             )
 

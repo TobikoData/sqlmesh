@@ -45,7 +45,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         underlying table without dropping the view first. This is a problem for us since we want to be able to
         swap tables out from under views. Therefore we create the view as non-binding.
         """
-        if self.try_get_df(query_or_df) is not None:
+        if self.is_df(query_or_df):
             raise NotImplementedError(
                 "DataFrames are not supported for Redshift views because Redshift doesn't"
                 "support using `VALUES` in a `CREATE VIEW` statement."

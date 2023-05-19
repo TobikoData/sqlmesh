@@ -213,6 +213,31 @@ class SparkEngineAdapter(EngineAdapter):
             partitioned_by=primary_key,
         )
 
+    def create_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """Create a view with a query or dataframe.
+
+        If a dataframe is passed in, it will be converted into a literal values statement.
+        This should only be done if the dataframe is very small!
+
+        Args:
+            view_name: The view name.
+            query_or_df: A query or dataframe.
+            columns_to_types: Columns to use in the view statement.
+            replace: Whether or not to replace an existing view defaults to True.
+            create_kwargs: Additional kwargs to pass into the Create expression
+        """
+        pyspark_df = self.try_get_pyspark_df(query_or_df)
+        if pyspark_df:
+            query_or_df = pyspark_df.toPandas()
+        super().create_view(view_name, query_or_df, columns_to_types, replace, **create_kwargs)
+
     def _create_table_properties(
         self,
         storage_format: t.Optional[str] = None,

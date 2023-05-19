@@ -399,11 +399,7 @@ class EngineAdapter:
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
         df = self.try_get_pandas_df(query_or_df)
-        pyspark_df = self.try_get_pyspark_df(query_or_df)
-        if df is not None or pyspark_df:
-            if pyspark_df:
-                df = pyspark_df.toPandas()
-            assert df is not None
+        if df is not None:
             if columns_to_types is None:
                 columns_to_types = columns_to_types_from_df(df)
 

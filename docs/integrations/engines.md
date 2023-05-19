@@ -52,7 +52,7 @@ If your project contains PySpark DataFrames in Python models then it will use [D
 SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
 
 Databricks connect execution can be routed to a different cluster than the SQL Connector by setting the `databricks_connect_*` properties.
-For example this allows SQLMesh to be confiured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster. 
+For example this allows SQLMesh to be configured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster. 
 
 If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook) then the only relevant configuration is `catalog` and it is optional.
 
@@ -69,6 +69,7 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 | `databricks_connect_access_token`    | Databricks Connect Only: Databricks Connect access token. Uses `access_token` if not set.                                                                                                | string |    N     |
 | `databricks_connect_cluster_id`      | Databricks Connect Only: Databricks Connect cluster ID. Uses `http_path` if not set. Cannot be a Databricks SQL Warehouse.                                                               | string |    N     |
 | `force_databricks_connect`           | When running locally, force the use of Databricks Connect for all model operations (so don't use SQL Connector for SQL models)                                                           |  bool  |    N     |
+| `disable_databricks_connect`         | When running locally, disable the use of Databricks Connect for all model operations (so use SQL Connector for all models)                                                               |  bool  |    N     |
 
 ## Databricks - Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.
