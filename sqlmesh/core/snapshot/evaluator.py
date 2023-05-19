@@ -470,6 +470,11 @@ class SnapshotEvaluator:
             table_names.append(snapshot.table_name(is_dev=True))
 
         for table_name in table_names:
+            if not table_name.startswith(snapshot.physical_schema):
+                raise SQLMeshError(
+                    f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
+                )
+
             if snapshot.is_materialized:
                 self.adapter.drop_table(table_name)
                 logger.info("Dropped table '%s'", table_name)

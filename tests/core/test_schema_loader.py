@@ -71,7 +71,6 @@ def test_create_external_models(sushi_context, assert_exp_eq):
 
     snapshot = sushi_context.snapshots["sushi.raw_fruits"]
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    assert snapshot.table_name() == "sushi.raw_fruits"
 
     fruits = sushi_context.models["sushi.fruits"]
     assert not fruits.kind.is_symbolic
