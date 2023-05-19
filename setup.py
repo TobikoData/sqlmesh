@@ -110,7 +110,7 @@ setup(
         "web": [
             "fastapi==0.95.2",
             "watchfiles>=0.19.0",
-            "pyarrow==12.0.0",
+            "pyarrow>=10.0.1",
             "uvicorn[standard]==0.22.0",
         ],
     },
