@@ -9,7 +9,6 @@ from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
-from sqlmesh.utils.date import now
 
 
 def create_schema_file(

@@ -6,7 +6,7 @@ import pandas as pd
 from sqlglot import exp
 
 
-def _hash(data):
+def _hash(data):  # type: ignore
     return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
 
 
@@ -16,14 +16,25 @@ def migrate(state_sync):  # type: ignore
     environments_table = f"{schema}._environments"
     snapshots_to_kind = {}
 
-    for name, identifier, snapshot in engine_adapter.fetchall(f"SELECT name, identifier, snapshot FROM {schema}._snapshots"):
+    for name, identifier, snapshot in engine_adapter.fetchall(
+        f"SELECT name, identifier, snapshot FROM {schema}._snapshots"
+    ):
         snapshot = json.loads(snapshot)
         snapshots_to_kind[(name, identifier)] = snapshot["model"]["kind"]["name"]
 
     environments = engine_adapter.fetchall(f"SELECT * FROM {environments_table}")
     new_environments = []
 
-    for name, snapshots, start_at, end_at, plan_id, previous_plan_id, expiration_ts, finalized_ts in environments:
+    for (
+        name,
+        snapshots,
+        start_at,
+        end_at,
+        plan_id,
+        previous_plan_id,
+        expiration_ts,
+        finalized_ts,
+    ) in environments:
         new_snapshots = []
 
         for snapshot in json.loads(snapshots):
