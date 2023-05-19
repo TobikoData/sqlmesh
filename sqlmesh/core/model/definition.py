@@ -919,8 +919,20 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    query, pre, post = extract_sql_model_select(expressions[1:])
-    statements = pre + post
+    is_sql_model = any(isinstance(e, (exp.Subqueryable, d.Jinja)) for e in expressions)
+
+    if is_sql_model:
+        try:
+            # Extract the query and any pre/post statements
+            query, pre, post = extract_sql_model_select(expressions[1:])
+        except Exception as e:
+            raise_config_error(f"Invalid model definition: {e}", path)
+        statements = pre + post
+    else:
+        # Assume this is a different model type (seed, python, etc.)
+        query = expressions[-1] if len(expressions) > 1 else None
+        statements = expressions[1:-1]
+        pre, post = [], []
 
     if not isinstance(meta, d.Model):
         raise_config_error(
@@ -1020,7 +1032,7 @@ def extract_sql_model_select(
         the statements after the query.
 
     Raises:
-        ConfigError: If the model definition contains more than one SELECT query.
+        ValueError: If the model definition contains more than one SELECT query.
     """
     query_positions = [
         (e, ix) for ix, e in enumerate(expressions) if isinstance(e, (exp.Subqueryable, d.Jinja))
@@ -1029,7 +1041,7 @@ def extract_sql_model_select(
     if not query_positions:
         return None, [], []
     elif len(query_positions) > 1:
-        raise_config_error("Only one SELECT query is allowed per model")
+        raise ValueError("Only one SELECT query is allowed per model")
 
     query, pos = query_positions[0]
     return query, expressions[:pos], expressions[pos + 1 :]
