@@ -15,6 +15,8 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit
 from sqlmesh.core.model import (
     Model,
+    ModelKindMixin,
+    ModelKindName,
     PythonModel,
     SeedModel,
     SqlModel,
@@ -155,7 +157,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
         return schema
 
 
-class SnapshotInfoMixin:
+class SnapshotInfoMixin(ModelKindMixin):
     name: str
     temp_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
@@ -252,8 +254,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
-    is_materialized: bool
-    is_embedded_kind: bool
+    kind_name: ModelKindName
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -282,6 +283,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
+
+    @property
+    def model_kind_name(self) -> ModelKindName:
+        return self.kind_name
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
@@ -557,7 +562,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
-        if self.is_embedded_kind or (self.is_seed_kind and self.intervals):
+        if self.is_symbolic or (self.is_seed and self.intervals):
             return []
 
         latest = make_inclusive_end(latest or now())
@@ -679,8 +684,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             parents=self.parents,
             previous_versions=self.previous_versions,
             change_category=self.change_category,
-            is_materialized=self.is_materialized,
-            is_embedded_kind=self.is_embedded_kind,
+            kind_name=self.model_kind_name,
         )
 
     @property
@@ -700,38 +704,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.fingerprint.to_version() == self.version
 
     @property
-    def is_full_kind(self) -> bool:
-        return self.model.kind.is_full
-
-    @property
-    def is_view_kind(self) -> bool:
-        return self.model.kind.is_view
-
-    @property
-    def is_incremental_by_time_range_kind(self) -> bool:
-        return self.model.kind.is_incremental_by_time_range
-
-    @property
-    def is_incremental_by_unique_key_kind(self) -> bool:
-        return self.model.kind.is_incremental_by_unique_key
-
-    # @property
-    # def is_snapshot_kind(self) -> bool:
-    #     return self.model.kind.is_snapshot
-
-    @property
-    def is_embedded_kind(self) -> bool:
-        return self.model.kind.is_embedded
-
-    @property
-    def is_seed_kind(self) -> bool:
-        return self.model.kind.is_seed
-
-    @property
-    def is_materialized(self) -> bool:
-        return self.model.kind.is_materialized
-
-    @property
     def is_paused(self) -> bool:
         return self.unpaused_ts is None
 
@@ -749,6 +721,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if time:
             return to_datetime(time)
         return None
+
+    @property
+    def model_kind_name(self) -> ModelKindName:
+        return self.model.kind.name
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:
@@ -1016,5 +992,5 @@ def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[st
     return {
         snapshot.name: snapshot.table_name_for_mapping(is_dev=is_dev)
         for snapshot in snapshots
-        if snapshot.version and not snapshot.is_embedded_kind
+        if snapshot.version and not snapshot.is_symbolic
     }

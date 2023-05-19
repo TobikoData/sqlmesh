@@ -285,4 +285,4 @@ class QueryRenderer(ExpressionRenderer):
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",
                 self._path,
             )
-        return annotate_types(simplify(query))
+        return annotate_types(simplify(query), schema=schema)

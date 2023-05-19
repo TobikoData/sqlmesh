@@ -5,7 +5,11 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import IncrementalByTimeRangeKind, create_sql_model
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    ModelKindName,
+    create_sql_model,
+)
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -64,8 +68,7 @@ def test_create_plan_dag_spec(mocker: MockerFixture, snapshot: Snapshot, random_
         physical_schema="test_physical_schema",
         parents=[],
         change_category=SnapshotChangeCategory.BREAKING,
-        is_materialized=True,
-        is_embedded_kind=False,
+        kind_name=ModelKindName.FULL,
     )
     old_environment = Environment(
         name=environment_name,

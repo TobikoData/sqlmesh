@@ -374,6 +374,12 @@ class SQLMeshMagics(Magics):
         self._context.migrate()
         self.display("Migration complete")
 
+    @magic_arguments()
+    @line_magic
+    def create_external_models(self, line: str) -> None:
+        """Create a schema file containing external model schemas."""
+        self._context.create_external_models()
+
     @property
     def _shell(self) -> t.Any:
         # Make mypy happy.

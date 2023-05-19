@@ -117,8 +117,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "version": snapshot.version,
                     "change_category": snapshot.change_category,
                     "parents": [],
-                    "is_materialized": True,
-                    "is_embedded_kind": False,
+                    "kind_name": "INCREMENTAL_BY_TIME_RANGE",
                 }
             ],
             "start_at": "2022-01-01",
