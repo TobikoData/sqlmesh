@@ -1144,7 +1144,7 @@ def create_external_model(
     path: Path = Path(),
     **kwargs: t.Any,
 ) -> Model:
-    """Creates a Seed model.
+    """Creates an external model.
 
     Args:
         name: The name of the model, which is of the form [catalog].[db].table.
