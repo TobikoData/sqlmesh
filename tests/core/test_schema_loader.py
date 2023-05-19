@@ -16,7 +16,7 @@ def cleanup(sushi_context):
     os.remove(sushi_context.path / c.SCHEMA_YAML)
 
 
-def test_create_external_models(sushi_context):
+def test_create_external_models(sushi_context, assert_exp_eq):
     fruits = pd.DataFrame(
         [
             {"id": 1, "name": "apple"},
@@ -80,3 +80,12 @@ def test_create_external_models(sushi_context):
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }
+    assert_exp_eq(
+        fruits.render_query(snapshots=sushi_context.snapshots),
+        """
+        SELECT
+          raw_fruits.id AS id,
+          raw_fruits.name AS name
+        FROM sushi.raw_fruits AS raw_fruits
+        """,
+    )
