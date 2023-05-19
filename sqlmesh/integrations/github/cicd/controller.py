@@ -127,7 +127,7 @@ class BotCommand(Enum):
         }
         if namespace:
             command_aliases = {
-                command: {f"#{namespace}{alias}" for alias in alias_values}
+                command: {namespace + alias for alias in alias_values}
                 for command, alias_values in command_aliases.items()
             }
         for command, aliases in command_aliases.items():

@@ -190,7 +190,7 @@ def _run_all(
 @click.option(
     "--command_namespace",
     type=str,
-    help="Namespace to use for SQLMesh commands. For example if you provide `SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`. The `#` prefix is automatically added.",
+    help="Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`.",
 )
 @click.pass_context
 def run_all(
