@@ -242,4 +242,4 @@ FROM db.employees;
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
 
 ## EXTERNAL
-The `EXTERNAL` model kind is used to specify [external models](./external_models.md). External models represent tables outside of SQLMesh. They are optional but useful in order to propogate column and type information throughout your models.
+The EXTERNAL model kind is used to specify [external models](./external_models.md) that store metadata about external tables. External models are special; they are not specified in .sql files like the other model kinds. They are optional but useful for propagating column and type information for external tables queried in your SQLMesh project.
