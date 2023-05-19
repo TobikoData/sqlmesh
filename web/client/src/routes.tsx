@@ -5,11 +5,15 @@ import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import DocsWelcome from './library/pages/docs/Welcome'
-import DocsContent from './library/pages/docs/Content'
 
 const IDE = lazy(async () => await import('./library/pages/ide/IDE'))
 const Docs = lazy(async () => await import('./library/pages/docs/Docs'))
+const DocsContent = lazy(
+  async () => await import('./library/pages/docs/Content'),
+)
+const DocsWelcome = lazy(
+  async () => await import('./library/pages/docs/Welcome'),
+)
 
 export const EnumRoutes = {
   Ide: '/',

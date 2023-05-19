@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   debounceAsync,
   includes,
-  isArrayNotEmpty,
   isFalse,
   isObjectNotEmpty,
   isTrue,
@@ -30,6 +29,7 @@ import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
 import SplitPane from '../splitPane/SplitPane'
+import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 
 function Plan({
   environment,
@@ -49,6 +49,7 @@ function Plan({
   const client = useQueryClient()
 
   const dispatch = usePlanDispatch()
+  const { errors, removeError } = useIDE()
 
   const {
     auto_apply,
@@ -56,12 +57,12 @@ function Plan({
     hasBackfills,
     hasVirtualUpdate,
     testsReportErrors,
-    errors,
   } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const activePlan = useStorePlan(s => s.activePlan)
+  const setActivePlan = useStorePlan(s => s.setActivePlan)
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
 
@@ -142,9 +143,11 @@ function Plan({
       setPlanAction(EnumPlanAction.Run)
     } else if (
       (isFalse(hasChanges || hasBackfills) && isFalse(hasVirtualUpdate)) ||
-      includes([EnumPlanState.Finished, EnumPlanState.Failed], planState)
+      planState === EnumPlanState.Finished
     ) {
       setPlanAction(EnumPlanAction.Done)
+    } else if (planState === EnumPlanState.Failed) {
+      setPlanAction(EnumPlanAction.None)
     } else {
       setPlanAction(EnumPlanAction.Apply)
     }
@@ -158,6 +161,14 @@ function Plan({
       activeBackfill: activePlan,
     })
   }, [activePlan])
+
+  useEffect(() => {
+    if (errors.size === 0) return
+
+    setPlanAction(EnumPlanAction.None)
+    setPlanState(EnumPlanState.Failed)
+    setActivePlan(undefined)
+  }, [errors])
 
   function testsReport(data: { ok: boolean } & any): void {
     dispatch([
@@ -197,6 +208,7 @@ function Plan({
   function reset(): void {
     setPlanAction(EnumPlanAction.Resetting)
 
+    removeError(EnumErrorKey.General)
     cleanUp()
     setPlanState(EnumPlanState.Init)
 
@@ -204,14 +216,14 @@ function Plan({
   }
 
   function close(): void {
+    removeError(EnumErrorKey.General)
+    removeError(EnumErrorKey.RunPlan)
+    removeError(EnumErrorKey.ApplyPlan)
     onClose()
   }
 
   function cancel(): void {
     dispatch([
-      {
-        type: EnumPlanActions.ResetErrors,
-      },
       {
         type: EnumPlanActions.ResetTestsReport,
       },
@@ -229,12 +241,6 @@ function Plan({
           console.log('apiCancelPlanApply', 'Request aborted by React Query')
         } else {
           console.log('apiCancelPlanApply', error)
-          dispatch([
-            {
-              type: EnumPlanActions.Errors,
-              errors: [error.message],
-            },
-          ])
           reset()
         }
       })
@@ -242,9 +248,6 @@ function Plan({
 
   function apply(): void {
     dispatch([
-      {
-        type: EnumPlanActions.ResetErrors,
-      },
       {
         type: EnumPlanActions.ResetTestsReport,
       },
@@ -265,12 +268,6 @@ function Plan({
           console.log('planApply', 'Request aborted by React Query')
         } else {
           console.log('planApply', error)
-          dispatch([
-            {
-              type: EnumPlanActions.Errors,
-              errors: [error.message],
-            },
-          ])
           reset()
         }
       })
@@ -284,9 +281,6 @@ function Plan({
 
   function run(): void {
     dispatch([
-      {
-        type: EnumPlanActions.ResetErrors,
-      },
       {
         type: EnumPlanActions.ResetTestsReport,
       },
@@ -328,19 +322,12 @@ function Plan({
           console.log('planRun', 'Request aborted by React Query')
         } else {
           console.log('planRun', error)
-          dispatch([
-            {
-              type: EnumPlanActions.Errors,
-              errors: [error.message],
-            },
-          ])
           reset()
         }
       })
   }
 
-  const shouldSplitPane =
-    isObjectNotEmpty(testsReportErrors) || isArrayNotEmpty(errors)
+  const shouldSplitPane = isObjectNotEmpty(testsReportErrors)
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">

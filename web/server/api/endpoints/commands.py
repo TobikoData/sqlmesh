@@ -11,8 +11,10 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import PlanError
 from web.server import models
+from web.server.models import Error
 from web.server.settings import get_loaded_context
 from web.server.utils import (
     ArrowStreamingResponse,
@@ -37,7 +39,12 @@ async def apply(
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Plan/apply is already running.",
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Plan/apply is already running.",
+                origin="API -> commands -> apply",
+            ).dict(),
         )
 
     plan_func = functools.partial(

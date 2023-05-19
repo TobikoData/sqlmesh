@@ -1,20 +1,34 @@
 import { createContext, type ReactNode, useState, useContext } from 'react'
 
-export const ERROR_KEY_GENERAL = 'general'
+export const EnumErrorKey = {
+  General: 'general',
+  RunPlan: 'run-plan',
+  Environments: 'environments',
+  Models: 'models',
+  ApplyPlan: 'apply-plan',
+} as const
 
-export interface Error {
-  origin?: string
-  message?: string
-  traceback?: string
+type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
+
+export interface ErrorIDE {
+  key: ErrorKey
+  status: number
   timestamp: number
+  message: string
+  type?: string
+  origin?: string
+  trigger?: string
+  description?: string
+  traceback?: string
+  stack?: string[]
 }
 
 interface IDE {
   isPlanOpen: boolean
   setIsPlanOpen: (isPlanOpen: boolean) => void
-  errors: Map<string, Error>
-  addError: (key: string, error: Error) => void
-  removeError: (key: string) => void
+  errors: Map<ErrorKey, ErrorIDE>
+  addError: (key: ErrorKey, error: ErrorIDE) => void
+  removeError: (key: ErrorKey) => void
 }
 
 export const IDEContext = createContext<IDE>({
@@ -31,29 +45,32 @@ export default function IDEProvider({
   children: ReactNode
 }): JSX.Element {
   const [isPlanOpen, setIsPlanOpen] = useState(false)
-  const [errors, setErrors] = useState<Map<string, Error>>(new Map())
+  const [errors, setErrors] = useState<Map<ErrorKey, ErrorIDE>>(new Map())
 
-  function addError(key: string, error: Error): void {
+  function addError(key: ErrorKey, error: ErrorIDE): void {
     setErrors(errors => {
-      if (errors.has(ERROR_KEY_GENERAL)) {
-        errors.delete(ERROR_KEY_GENERAL)
+      if (errors.has(EnumErrorKey.General)) {
+        errors.delete(EnumErrorKey.General)
       }
 
       return new Map(
         errors.set(key, {
-          origin: key,
-          message: (error as any).message,
-          traceback:
-            (error as any).traceback ??
-            (error as any).stack ??
-            (error as any).detail,
-          timestamp: Date.now(),
+          key,
+          status: error.status,
+          timestamp: error.timestamp ?? Date.now(),
+          message: error.message,
+          description: error.description,
+          type: error.type,
+          origin: error.origin,
+          trigger: error.trigger,
+          stack: error.stack,
+          traceback: error.traceback,
         }),
       )
     })
   }
 
-  function removeError(key: string): void {
+  function removeError(key: ErrorKey): void {
     setErrors(errors => {
       errors.delete(key)
 

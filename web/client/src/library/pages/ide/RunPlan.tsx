@@ -36,12 +36,8 @@ import {
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
 
-export default function RunPlan({
-  showRunPlan,
-}: {
-  showRunPlan: () => void
-}): JSX.Element {
-  const { errors, addError, removeError } = useIDE()
+export default function RunPlan(): JSX.Element {
+  const { errors, setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -57,13 +53,11 @@ export default function RunPlan({
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
     useState(false)
 
-  const { refetch: getEnvironments, error: errorEnvironments } =
-    useApiEnvironments()
+  const { refetch: getEnvironments } = useApiEnvironments()
   const {
     refetch: planRun,
     data: plan,
     isLoading,
-    error: errorPlan,
   } = useApiPlanRun(environment.name, {
     planOptions: {
       skip_tests: true,
@@ -112,21 +106,11 @@ export default function RunPlan({
     setInitialDates(plan?.start, plan?.end)
   }, [plan])
 
-  useEffect(() => {
-    if (errorPlan != null) {
-      addError('run-plan', errorPlan)
-    }
-
-    if (errorEnvironments != null) {
-      addError('environmnets', errorEnvironments)
-    }
-  }, [errorPlan, errorEnvironments])
-
   function startPlan(): void {
     setActivePlan(undefined)
     setPlanState(EnumPlanState.Init)
     setPlanAction(EnumPlanAction.Run)
-    showRunPlan()
+    setIsPlanOpen(true)
   }
 
   const hasChanges = [

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import sys
 import traceback
 import typing as t
 
@@ -10,7 +11,8 @@ from sqlglot.lineage import Node, lineage
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from web.server.models import LineageColumn
+from sqlmesh.utils.date import now_timestamp
+from web.server.models import Error, LineageColumn
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -71,8 +73,20 @@ async def column_lineage(
             },
         )
     except Exception:
+        error_type, error_value, error_traceback = sys.exc_info()
+
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to get column lineage",
+                origin="API -> lineage -> column_lineage",
+                description=str(error_value),
+                type=str(error_type),
+                traceback=traceback.format_exc(),
+                stack=traceback.format_tb(error_traceback),
+            ).dict(),
         )
 
     graph = {}

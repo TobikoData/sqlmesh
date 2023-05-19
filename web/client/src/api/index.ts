@@ -4,6 +4,7 @@ import {
   type UseMutationResult,
   useQuery,
   useMutation,
+  isCancelledError,
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
@@ -29,6 +30,11 @@ import {
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   columnLineageApiLineageModelNameColumnNameGet,
 } from './client'
+import {
+  useIDE,
+  type ErrorIDE,
+  EnumErrorKey,
+} from '~/library/pages/ide/context'
 
 export function useApiModelLineage(
   modelName: string,
@@ -68,16 +74,32 @@ export function useApiFileByPath(path: string): UseQueryResult<File> {
 }
 
 export function useApiModels(): UseQueryResult<Model[]> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<Model[], ErrorIDE>({
     queryKey: ['/api/models'],
-    queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.Models)
+
+      return await getModelsApiModelsGet({ signal })
+    },
     cacheTime: 0,
     enabled: false,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log(
+          'getEnvironmentsApiEnvironmentsGet',
+          'Request aborted by React Query',
+        )
+      } else {
+        addError(EnumErrorKey.Models, error)
+      }
+    },
   })
 }
 
 export function useApiFiles(): UseQueryResult<Directory> {
-  return useQuery({
+  return useQuery<Directory, ErrorIDE>({
     queryKey: ['/api/files'],
     queryFn: async ({ signal }) => await getFilesApiFilesGet({ signal }),
     cacheTime: 0,
@@ -86,12 +108,27 @@ export function useApiFiles(): UseQueryResult<Directory> {
 }
 
 export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>({
     queryKey: ['/api/environments'],
-    queryFn: async ({ signal }) =>
-      await getEnvironmentsApiEnvironmentsGet({ signal }),
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.Environments)
+
+      return await getEnvironmentsApiEnvironmentsGet({ signal })
+    },
     cacheTime: 0,
     enabled: false,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log(
+          'getEnvironmentsApiEnvironmentsGet',
+          'Request aborted by React Query',
+        )
+      } else {
+        addError(EnumErrorKey.Environments, error)
+      }
+    },
   })
 }
 
@@ -102,19 +139,31 @@ export function useApiPlanRun(
     planOptions?: PlanOptions
   },
 ): UseQueryResult<ContextEnvironment> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<ContextEnvironment, ErrorIDE>({
     queryKey: ['/api/plan', environment],
-    queryFn: async ({ signal }) =>
-      await runPlanApiPlanPost(
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.RunPlan)
+
+      return await runPlanApiPlanPost(
         {
           environment,
           plan_dates: options?.planDates,
           plan_options: options?.planOptions,
         },
         { signal },
-      ),
+      )
+    },
     enabled: false,
     cacheTime: 0,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log('runPlanApiPlanPost', 'Request aborted by React Query')
+      } else {
+        addError(EnumErrorKey.RunPlan, error)
+      }
+    },
   })
 }
 

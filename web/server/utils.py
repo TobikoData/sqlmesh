@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import io
+import sys
 import traceback
 import typing as t
 from pathlib import Path, PurePath
@@ -14,7 +15,9 @@ from starlette.responses import StreamingResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.date import now_timestamp
 from web.server.console import api_console
+from web.server.models import Error
 from web.server.settings import get_context
 
 R = t.TypeVar("R")
@@ -34,7 +37,7 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
         try:
             return func(*args)
         except Exception as e:
-            api_console.log_exception(e)
+            api_console.log_exception()
             raise e
 
     loop = asyncio.get_running_loop()
@@ -68,8 +71,20 @@ def replace_file(src: Path, dst: Path) -> None:
         except FileNotFoundError:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND)
         except OSError:
+            error_type, error_value, error_traceback = sys.exc_info()
+
             raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=Error(
+                    timestamp=now_timestamp(),
+                    status=HTTP_422_UNPROCESSABLE_ENTITY,
+                    message="Unable to move file",
+                    origin="replace_file",
+                    description=str(error_value),
+                    type=str(error_type),
+                    traceback=traceback.format_exc(),
+                    stack=traceback.format_tb(error_traceback),
+                ).dict(),
             )
 
 

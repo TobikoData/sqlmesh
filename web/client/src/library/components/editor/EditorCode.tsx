@@ -17,7 +17,6 @@ import {
 } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
-
 import { useApiFileByPath, useApiPlanRun, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
