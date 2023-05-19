@@ -8,7 +8,7 @@ Models of the `INCREMENTAL_BY_TIME_RANGE` kind are computed incrementally based 
 
 Only missing time intervals are processed during each execution for `INCREMENTAL_BY_TIME_RANGE` models. This is in contrast to the [FULL](#full) model kind, where the entire dataset is recomputed every time the model is executed.
 
-An `INCREMENTAL_BY_TIME_RANGE` model query must contain an expression in its SQL `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. 
+An `INCREMENTAL_BY_TIME_RANGE` model query must contain an expression in its SQL `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`.
 
 Refer to [Macros](../macros.md#predefined-variables) for more information.
 
@@ -30,7 +30,7 @@ WHERE
 ```
 
 ### Time column
-SQLMesh needs to know which column in the model's output represents the timestamp or date associated with each record. 
+SQLMesh needs to know which column in the model's output represents the timestamp or date associated with each record.
 
 The `time_column` is used to determine which records will be overridden during data [restatement](../plans.md#restatement-plans) and provides a partition key for engines that support partitioning (such as Apache Spark):
 
@@ -85,7 +85,7 @@ WHERE
 ```
 
 ### Idempotency
-It is recommended that queries of models of this kind are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans). 
+It is recommended that queries of models of this kind are [idempotent](../glossary.md#idempotency) to prevent unexpected results during data [restatement](../plans.md#restatement-plans).
 
 Note, however, that upstream models and tables can impact a model's idempotency. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically causes the model to be non-idempotent.
 
@@ -167,7 +167,7 @@ Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind a
 | DuckDB     | not supported       |
 
 ## FULL
-Models of the `FULL` kind cause the dataset associated with a model to be fully refreshed (rewritten) upon each model evaluation. 
+Models of the `FULL` kind cause the dataset associated with a model to be fully refreshed (rewritten) upon each model evaluation.
 
 The `FULL` model kind is somewhat easier to use than incremental kinds due to the lack of special settings or additional query considerations. This makes it suitable for smaller datasets, where recomputing data from scratch is relatively cheap and doesn't require preservation of processing history. However, using this kind with datasets containing a large volume of records will result in significant runtime and compute costs.
 
@@ -201,7 +201,7 @@ Depending on the target engine, models of the `FULL` kind are materialized using
 | DuckDB     | CREATE OR REPLACE TABLE          |
 
 ## VIEW
-The model kinds described so far cause the output of a model query to be materialized and stored in a physical table. 
+The model kinds described so far cause the output of a model query to be materialized and stored in a physical table.
 
 The `VIEW` kind is different, because no data is actually written during model execution. Instead, a non-materialized view (or "virtual table") is created or replaced based on the model's query.
 
@@ -222,7 +222,7 @@ FROM db.employees;
 ```
 
 ## EMBEDDED
-Embedded models are a way to share common logic between different models of other kinds. 
+Embedded models are a way to share common logic between different models of other kinds.
 
 There are no data assets (tables or views) associated with `EMBEDDED` models in the data warehouse. Instead, an `EMBEDDED` model's query is injected directly into the query of each downstream model that references it.
 
@@ -240,3 +240,6 @@ FROM db.employees;
 
 ## SEED
 The `SEED` model kind is used to specify [seed models](./seed_models.md) for using static CSV datasets in your SQLMesh project.
+
+## EXTERNAL
+The `EXTERNAL` model kind is used to specify [external models](./external_models.md). External models represent tables outside of SQLMesh. They are optional but useful in order to propogate column and type information throughout your models.

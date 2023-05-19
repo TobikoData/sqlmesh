@@ -180,3 +180,10 @@ Usage: sqlmesh migrate
 
   Please contact your SQLMesh administrator before doing this.
 ```
+
+## create_external_models
+```
+Usage: sqlmesh create_external_models [OPTIONS]
+
+  Create a schema file containing external model schemas.
+```
