@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +16,7 @@ def cleanup(sushi_context):
     os.remove(sushi_context.path / c.SCHEMA_YAML)
 
 
-def test_create_external_models(sushi_context):
+def test_create_external_models(sushi_context, assert_exp_eq):
     fruits = pd.DataFrame(
         [
             {"id": 1, "name": "apple"},
@@ -60,12 +61,31 @@ def test_create_external_models(sushi_context):
     )
 
     sushi_context.upsert_model(model)
-    assert sushi_context.models["sushi.raw_fruits"].columns_to_types == {
+    raw_fruits = sushi_context.models["sushi.raw_fruits"]
+    assert raw_fruits.kind.is_symbolic
+    assert raw_fruits.kind.is_external
+    assert raw_fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }
 
-    assert sushi_context.models["sushi.fruits"].columns_to_types == {
+    snapshot = sushi_context.snapshots["sushi.raw_fruits"]
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_name() == "sushi.raw_fruits"
+
+    fruits = sushi_context.models["sushi.fruits"]
+    assert not fruits.kind.is_symbolic
+    assert not fruits.kind.is_external
+    assert fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }
+    assert_exp_eq(
+        fruits.render_query(snapshots=sushi_context.snapshots),
+        """
+        SELECT
+          raw_fruits.id AS id,
+          raw_fruits.name AS name
+        FROM sushi.raw_fruits AS raw_fruits
+        """,
+    )

@@ -424,13 +424,18 @@ class SnapshotEvaluator:
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
+        if snapshot.is_external:
+            if on_complete is not None:
+                on_complete(snapshot)
+            return
+
         qualified_view_name = snapshot.qualified_view_name
         schema = qualified_view_name.schema_for_environment(environment=environment)
         if schema is not None:
             self.adapter.create_schema(schema)
 
         view_name = qualified_view_name.for_environment(environment=environment)
-        if not snapshot.is_symbolic:
+        if not snapshot.is_embedded:
             table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
             logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
             self.adapter.create_view(view_name, exp.select("*").from_(table_name))
@@ -447,9 +452,10 @@ class SnapshotEvaluator:
         environment: str,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
-        logger.info("Dropping view '%s'", view_name)
-        self.adapter.drop_view(view_name)
+        if not snapshot.is_external:
+            view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+            logger.info("Dropping view '%s'", view_name)
+            self.adapter.drop_view(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
