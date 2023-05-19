@@ -283,7 +283,7 @@ class Scheduler:
             ]
             for i, interval in enumerate(intervals):
                 dag.add((snapshot, interval), upstream_dependencies)
-                if snapshot.is_incremental_by_unique_key_kind:
+                if snapshot.is_incremental_by_unique_key:
                     dag.add(
                         (snapshot, interval),
                         [(snapshot, _interval) for _interval in intervals[:i]],

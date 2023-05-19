@@ -12,16 +12,23 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from ruamel.yaml import YAML
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.qualify_columns import validate_qualify_columns
-from sqlglot.schema import MappingSchema, _nested_set
+from sqlglot.schema import MappingSchema, nested_set
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model import Model, ModelCache, SeedModel, load_model
+from sqlmesh.core.model import (
+    Model,
+    ModelCache,
+    SeedModel,
+    create_external_model,
+    load_model,
+)
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
@@ -51,7 +58,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
             mapping_schema = schema.find(table)
 
             if mapping_schema:
-                _nested_set(
+                nested_set(
                     model.mapping_schema,
                     tuple(str(part) for part in table.parts),
                     {k: str(v) for k, v in mapping_schema.items()},
@@ -228,8 +235,27 @@ class SqlMeshLoader(Loader):
         audits into a Dict and creates the dag
         """
         models = self._load_sql_models(macros, hooks, jinja_macros)
+        models.update(self._load_external_models())
         models.update(self._load_python_models())
 
+        return models
+
+    def _load_external_models(self) -> UniqueKeyDict[str, Model]:
+        models: UniqueKeyDict = UniqueKeyDict("models")
+        for context_path, config in self._context.configs.items():
+            path = Path(context_path / c.SCHEMA_YAML)
+
+            if path.exists():
+                self._track_file(path)
+
+                with open(path, "r", encoding="utf-8") as file:
+                    for row in YAML().load(file.read()):
+                        model = create_external_model(
+                            **row,
+                            dialect=config.model_defaults.dialect,
+                            path=path,
+                        )
+                        models[model.name] = model
         return models
 
     def _load_sql_models(

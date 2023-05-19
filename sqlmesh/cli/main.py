@@ -379,6 +379,14 @@ def rollback(obj: Context) -> None:
     obj.rollback()
 
 
+@cli.command("create_external_models")
+@click.pass_obj
+@error_handler
+def create_external_models(obj: Context) -> None:
+    """Create a schema file containing external model schemas."""
+    obj.create_external_models()
+
+
 @cli.command("prompt")
 @click.argument("prompt")
 @click.option(

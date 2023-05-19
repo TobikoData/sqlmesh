@@ -13,8 +13,56 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-# TODO: switch to autoname when sqlglot is typed
-class ModelKindName(str, Enum):
+class ModelKindMixin:
+    @property
+    def model_kind_name(self) -> ModelKindName:
+        """Returns the model kind name."""
+        raise NotImplementedError
+
+    @property
+    def is_incremental_by_time_range(self) -> bool:
+        return self.model_kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE
+
+    @property
+    def is_incremental_by_unique_key(self) -> bool:
+        return self.model_kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
+
+    @property
+    def is_full(self) -> bool:
+        return self.model_kind_name == ModelKindName.FULL
+
+    @property
+    def is_view(self) -> bool:
+        return self.model_kind_name == ModelKindName.VIEW
+
+    @property
+    def is_embedded(self) -> bool:
+        return self.model_kind_name == ModelKindName.EMBEDDED
+
+    @property
+    def is_seed(self) -> bool:
+        return self.model_kind_name == ModelKindName.SEED
+
+    @property
+    def is_external(self) -> bool:
+        return self.model_kind_name == ModelKindName.EXTERNAL
+
+    @property
+    def is_symbolic(self) -> bool:
+        """A symbolic model is one that doesn't execute at all."""
+        return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
+
+    @property
+    def is_materialized(self) -> bool:
+        return not (self.is_symbolic or self.is_view)
+
+    @property
+    def only_latest(self) -> bool:
+        """Whether or not this model only cares about latest date to render."""
+        return self.model_kind_name in (ModelKindName.VIEW, ModelKindName.FULL)
+
+
+class ModelKindName(str, ModelKindMixin, Enum):
     """The kind of model, determining how this data is computed and stored in the warehouse."""
 
     INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
@@ -23,57 +71,22 @@ class ModelKindName(str, Enum):
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
-    # TODO: Add support for snapshots
-    # SNAPSHOT = "SNAPSHOT"
+    EXTERNAL = "EXTERNAL"
+
+    @property
+    def model_kind_name(self) -> ModelKindName:
+        return self
 
 
-class ModelKind(PydanticModel):
+class ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
-
-    @property
-    def is_incremental_by_time_range(self) -> bool:
-        return self.name == ModelKindName.INCREMENTAL_BY_TIME_RANGE
-
-    @property
-    def is_incremental_by_unique_key(self) -> bool:
-        return self.name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
-
-    @property
-    def is_incremental(self) -> bool:
-        """Whether or not this model is incremental."""
-        return isinstance(self, _Incremental)
-
-    @property
-    def is_full(self) -> bool:
-        return self.name == ModelKindName.FULL
-
-    # @property
-    # def is_snapshot(self) -> bool:
-    #     return self.name == ModelKindName.SNAPSHOT
-
-    @property
-    def is_view(self) -> bool:
-        return self.name == ModelKindName.VIEW
-
-    @property
-    def is_embedded(self) -> bool:
-        return self.name == ModelKindName.EMBEDDED
-
-    @property
-    def is_seed(self) -> bool:
-        return self.name == ModelKindName.SEED
-
-    @property
-    def is_materialized(self) -> bool:
-        return self.name not in (ModelKindName.VIEW, ModelKindName.EMBEDDED)
-
-    @property
-    def only_latest(self) -> bool:
-        """Whether or not this model only cares about latest date to render."""
-        return self.name in (ModelKindName.VIEW, ModelKindName.FULL)
 
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
         return d.ModelKind(this=self.name.value.upper(), **kwargs)
+
+    @property
+    def model_kind_name(self) -> ModelKindName:
+        return self.name
 
 
 class TimeColumn(PydanticModel):
