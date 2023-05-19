@@ -212,7 +212,12 @@ class QueryRenderer(ExpressionRenderer):
                 if isinstance(node, exp.Table) and snapshots:
                     name = exp.table_name(node)
                     model = snapshots[name].model if name in snapshots else None
-                    if name in expand and model and not model.is_seed:
+                    if (
+                        name in expand
+                        and model
+                        and not model.is_seed
+                        and not model.kind.is_external
+                    ):
                         return model.render_query(
                             start=start,
                             end=end,
