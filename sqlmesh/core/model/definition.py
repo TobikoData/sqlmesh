@@ -919,7 +919,7 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    query, pre, post = extract_sql_model_select(expressions)
+    query, pre, post = extract_sql_model_select(expressions[1:])
     statements = pre + post
 
     if not isinstance(meta, d.Model):
@@ -936,8 +936,6 @@ def load_model(
         **{prop.name.lower(): prop.args.get("value") for prop in meta.expressions},
         **kwargs,
     }
-    meta_fields.setdefault("pre", []).extend([s for s in pre if not isinstance(s, d.MacroDef)])
-    meta_fields.setdefault("post", []).extend([s for s in post if not isinstance(s, d.MacroDef)])
 
     name = meta_fields.pop("name", "")
     if not name:
@@ -958,6 +956,21 @@ def load_model(
             **meta_fields,
         )
     elif query is not None:
+        # Inject preceding and following statements into the model's meta fields.
+        meta_pre: HookCall = meta_fields.setdefault("pre", exp.Tuple())
+        if hasattr(meta_pre, "expressions"):
+            meta_pre.expressions.extend([s for s in pre if not isinstance(s, (d.MacroDef))])
+        elif isinstance(meta_pre, exp.Expression):
+            meta_fields["pre"] = exp.Tuple(
+                expressions=[meta_pre] + [s for s in pre if not isinstance(s, d.MacroDef)]
+            )
+        meta_post: HookCall = meta_fields.setdefault("post", exp.Tuple())
+        if hasattr(meta_post, "expressions"):
+            meta_post.expressions.extend([s for s in post if not isinstance(s, d.MacroDef)])
+        elif isinstance(meta_post, exp.Expression):
+            meta_fields["post"] = exp.Tuple(
+                expressions=[meta_post] + [s for s in post if not isinstance(s, d.MacroDef)]
+            )
         return create_sql_model(
             name,
             query,
@@ -1009,7 +1022,9 @@ def extract_sql_model_select(
     Raises:
         ConfigError: If the model definition contains more than one SELECT query.
     """
-    query_positions = [(e, ix) for ix, e in enumerate(expressions) if isinstance(e, exp.Select)]
+    query_positions = [
+        (e, ix) for ix, e in enumerate(expressions) if isinstance(e, (exp.Subqueryable, d.Jinja))
+    ]
 
     if not query_positions:
         return None, [], []
