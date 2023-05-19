@@ -1,4 +1,4 @@
-"""Create a dedicated table to store the content of seeds."""
+"""Change environments because snapshot table info now stores model kind name."""
 import json
 import zlib
 
@@ -51,7 +51,7 @@ def migrate(state_sync):  # type: ignore
                 ]
             )
 
-            snapshot["kind_name"] = snapshots_to_kind[(snapshot["name"], identifier)]
+            snapshot["kind_name"] = snapshots_to_kind.get((snapshot["name"], identifier), "VIEW")
             new_snapshots.append(snapshot)
 
         new_environments.append(

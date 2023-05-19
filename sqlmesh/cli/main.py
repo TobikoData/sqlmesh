@@ -382,7 +382,7 @@ def rollback(obj: Context) -> None:
 @cli.command("create_external_models")
 @click.pass_obj
 @error_handler
-def create_schema_file(obj: Context) -> None:
+def create_external_models(obj: Context) -> None:
     """Create a schema file containing external model schemas."""
     obj.create_external_models()
 
