@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ruamel.yaml import YAML
-from sqlglot.dialects.dialect import DialectType as DialectType
+from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
