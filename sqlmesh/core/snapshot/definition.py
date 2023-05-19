@@ -223,9 +223,6 @@ class SnapshotInfoMixin(ModelKindMixin):
             is_dev: Whether the table name will be used in development mode.
             for_read: Whether the table name will be used for reading by a different snapshot.
         """
-        if self.is_external:
-            return self.name
-
         if is_dev and for_read:
             # If this snapshot is used for **reading**, return a temporary table
             # only if this snapshot captures a direct forward-only change applied to its model.
