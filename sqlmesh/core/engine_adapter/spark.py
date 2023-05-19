@@ -247,7 +247,7 @@ class SparkEngineAdapter(EngineAdapter):
         format_property = None
         partition_columns_property = None
         if storage_format:
-            format_property = exp.TableFormatProperty(this=exp.Var(this=storage_format))
+            format_property = exp.FileFormatProperty(this=exp.Var(this=storage_format))
         if partitioned_by:
             partition_columns_property = exp.PartitionedByProperty(
                 this=exp.Schema(
