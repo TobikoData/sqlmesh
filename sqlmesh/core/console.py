@@ -423,7 +423,7 @@ class TerminalConsole(Console):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"Failure Test: {test.model_name} {test.test_name}")
+                    self._print(f"Failure Test: {test.model.name} {test.test_name}")
             self._print("=" * divider_length)
             self._print(output)
 
@@ -742,7 +742,7 @@ class NotebookMagicConsole(TerminalConsole):
                             h(
                                 "span",
                                 {"style": fail_shared_style},
-                                f"Failure Test: {test.model_name} {test.test_name}",
+                                f"Failure Test: {test.model.name} {test.test_name}",
                             )
                         )
                     )
@@ -901,7 +901,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"* Failure Test: `{test.model_name}` - `{test.test_name}`\n\n")
+                    self._print(f"* Failure Test: `{test.model.name}` - `{test.test_name}`\n\n")
             self._print(f"```{output}```\n\n")
 
 
