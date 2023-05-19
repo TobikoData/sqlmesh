@@ -147,17 +147,11 @@ def test_bot_command_parsing(
     comment_raw["comment"]["body"] = "/deploy"
     controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
     assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
-    assert (
-        controller.get_command_from_comment(GithubController.DEFAULT_COMMAND_NAMESPACE)
-        == BotCommand.INVALID
-    )
+    assert controller.get_command_from_comment("SQLMesh") == BotCommand.INVALID
     comment_raw["comment"]["body"] = "#SQLMesh/deploy"
     controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
     assert controller.get_command_from_comment() == BotCommand.INVALID
-    assert (
-        controller.get_command_from_comment(GithubController.DEFAULT_COMMAND_NAMESPACE)
-        == BotCommand.DEPLOY_PROD
-    )
+    assert controller.get_command_from_comment("SQLMesh") == BotCommand.DEPLOY_PROD
     comment_raw["comment"]["body"] = "Something Something /deploy"
     controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
     assert controller.get_command_from_comment() == BotCommand.INVALID

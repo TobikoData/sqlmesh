@@ -214,8 +214,6 @@ class GithubEvent:
 
 
 class GithubController:
-    DEFAULT_COMMAND_NAMESPACE = "SQLMesh"
-
     def __init__(
         self,
         paths: t.Union[str, t.Iterable[str]],
