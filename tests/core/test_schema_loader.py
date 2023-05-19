@@ -60,12 +60,18 @@ def test_create_external_models(sushi_context):
     )
 
     sushi_context.upsert_model(model)
-    assert sushi_context.models["sushi.raw_fruits"].columns_to_types == {
+    raw_fruits = sushi_context.models["sushi.raw_fruits"]
+    assert raw_fruits.kind.is_symbolic
+    assert raw_fruits.kind.is_external
+    assert raw_fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }
 
-    assert sushi_context.models["sushi.fruits"].columns_to_types == {
+    fruits = sushi_context.models["sushi.fruits"]
+    assert not fruits.kind.is_symbolic
+    assert not fruits.kind.is_external
+    assert fruits.columns_to_types == {
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }

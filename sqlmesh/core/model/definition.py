@@ -1157,6 +1157,7 @@ def create_external_model(
         name,
         dialect=dialect,
         path=path,
+        kind="EXTERNAL",
         **kwargs,
     )
 
