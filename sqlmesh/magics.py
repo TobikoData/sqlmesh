@@ -376,9 +376,9 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @line_magic
-    def create_schema_file(self, line: str) -> None:
+    def create_external_models(self, line: str) -> None:
         """Create a schema file containing external model schemas."""
-        self._context.create_schema_file()
+        self._context.create_external_models()
 
     @property
     def _shell(self) -> t.Any:

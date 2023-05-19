@@ -15,7 +15,7 @@ from pathlib import Path
 from ruamel.yaml import YAML
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.qualify_columns import validate_qualify_columns
-from sqlglot.schema import MappingSchema, _nested_set
+from sqlglot.schema import MappingSchema, nested_set
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
@@ -58,7 +58,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
             mapping_schema = schema.find(table)
 
             if mapping_schema:
-                _nested_set(
+                nested_set(
                     model.mapping_schema,
                     tuple(str(part) for part in table.parts),
                     {k: str(v) for k, v in mapping_schema.items()},
@@ -243,7 +243,7 @@ class SqlMeshLoader(Loader):
     def _load_external_models(self) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
         for context_path, config in self._context.configs.items():
-            path = Path(context_path / c.SCHEMA)
+            path = Path(context_path / c.SCHEMA_YAML)
 
             if path.exists():
                 self._track_file(path)

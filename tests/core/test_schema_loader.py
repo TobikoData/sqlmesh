@@ -12,10 +12,10 @@ from sqlmesh.core.model import load_model
 @pytest.fixture(autouse=True)
 def cleanup(sushi_context):
     yield
-    os.remove(sushi_context.path / c.SCHEMA)
+    os.remove(sushi_context.path / c.SCHEMA_YAML)
 
 
-def test_create_schema_file(sushi_context):
+def test_create_external_models(sushi_context):
     fruits = pd.DataFrame(
         [
             {"id": 1, "name": "apple"},
@@ -40,7 +40,7 @@ def test_create_schema_file(sushi_context):
     )
 
     sushi_context.upsert_model(model)
-    sushi_context.create_schema_file()
+    sushi_context.create_external_models()
     assert sushi_context.models["sushi.fruits"].columns_to_types == {
         "name": exp.DataType.build("UNKNOWN")
     }

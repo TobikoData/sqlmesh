@@ -842,7 +842,7 @@ class Context(BaseContext):
         """
         self._new_state_sync().rollback()
 
-    def create_schema_file(self) -> None:
+    def create_external_models(self) -> None:
         """Create a schema file with all external models.
 
         The schema file contains all columns and types of external models, allowing for more robust
@@ -850,7 +850,7 @@ class Context(BaseContext):
         """
         for path, config in self.configs.items():
             create_schema_file(
-                path=path / c.SCHEMA,
+                path=path / c.SCHEMA_YAML,
                 models={
                     name: model
                     for name, model in self._models.items()

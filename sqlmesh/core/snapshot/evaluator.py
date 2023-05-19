@@ -88,7 +88,6 @@ class SnapshotEvaluator:
             kwargs: Additional kwargs to pass to the renderer.
         """
         if snapshot.is_symbolic:
-            print(f"*** {snapshot.name} {snapshot.model_kind_name} {snapshot.is_symbolic}")
             return None
 
         if not limit and not snapshot.is_forward_only:

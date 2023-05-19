@@ -475,7 +475,7 @@ class TerminalConsole(Console):
                 SnapshotChangeCategory.BREAKING: f"Update {direct} and backfill {indirect}",
                 SnapshotChangeCategory.NON_BREAKING: f"Update {direct} but don't backfill {indirect}",
             }
-        elif snapshot.is_embedded:
+        elif snapshot.is_symbolic:
             choices = {
                 SnapshotChangeCategory.BREAKING: f"Backfill {indirect}",
                 SnapshotChangeCategory.NON_BREAKING: f"Don't backfill {indirect}",

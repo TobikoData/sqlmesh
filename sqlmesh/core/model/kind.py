@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import typing as t
 from enum import Enum
 
@@ -13,10 +14,10 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 
-class ModelKindMixin:
-    @property
+class ModelKindMixin(abc.ABC):
+    @abc.abstractmethod
     def model_kind_name(self) -> ModelKindName:
-        raise NotImplementedError
+        """Returns the model kind name."""
 
     @property
     def is_incremental_by_time_range(self) -> bool:
