@@ -929,7 +929,7 @@ def load_model(
         statements = prehooks + posthooks
     else:
         # Assume this is a different model type (seed, python, etc.)
-        query = None
+        query = expressions[-1] if isinstance(expressions[-1], d.MacroVar) else None
         prehooks, posthooks = [], []
         statements = expressions[1:-1]
 
@@ -971,9 +971,9 @@ def load_model(
         meta_prehooks = meta_fields.setdefault("pre", [])
         meta_posthooks = meta_fields.setdefault("post", [])
         if not isinstance(meta_prehooks, list):
-            meta_fields["pre"] = meta_prehooks = list(meta_prehooks)
+            meta_fields["pre"] = meta_prehooks = [meta_prehooks]
         if not isinstance(meta_posthooks, list):
-            meta_fields["post"] = meta_posthooks = list(meta_posthooks)
+            meta_fields["post"] = meta_posthooks = [meta_posthooks]
         meta_prehooks.extend([s for s in prehooks if not isinstance(s, d.MacroDef)])
         meta_posthooks.extend([s for s in posthooks if not isinstance(s, d.MacroDef)])
         return create_sql_model(
