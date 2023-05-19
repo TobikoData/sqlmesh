@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import typing as t
+from pathlib import Path
 from shutil import rmtree
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 import duckdb
 import pytest
@@ -17,6 +20,15 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike
 
 pytest_plugins = ["tests.common_fixtures"]
+
+
+# Ignore all local config files
+@pytest.fixture(scope="session", autouse=True)
+def ignore_local_config_files():
+    mock_home = mock.Mock()
+    mock_home.return_value = Path(TemporaryDirectory().name)
+    with mock.patch("pathlib.Path.home", mock_home):
+        yield
 
 
 @pytest.fixture
