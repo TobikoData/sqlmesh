@@ -21,6 +21,7 @@ nav:
       - concepts/models/sql_models.md
       - concepts/models/python_models.md
       - concepts/models/seed_models.md
+      - concepts/models/external_models.md
     - concepts/plans.md
     - concepts/environments.md
     - concepts/tests.md
