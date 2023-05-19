@@ -20,6 +20,7 @@ import json
 import logging
 import typing as t
 from copy import deepcopy
+from datetime import date
 
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
@@ -43,7 +44,7 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.snapshot.definition import _parents_from_model
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils.date import now_timestamp
+from sqlmesh.utils.date import TimeLike, now_timestamp, to_datetime, to_ds
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -617,8 +618,8 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
             {
                 "name": environment.name,
                 "snapshots": json.dumps([snapshot.dict() for snapshot in environment.snapshots]),
-                "start_at": environment.start_at,
-                "end_at": environment.end_at,
+                "start_at": _time_like_to_str(environment.start_at),
+                "end_at": _time_like_to_str(environment.end_at) if environment.end_at else None,
                 "plan_id": environment.plan_id,
                 "previous_plan_id": environment.previous_plan_id,
                 "expiration_ts": environment.expiration_ts,
@@ -626,3 +627,11 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
             }
         ]
     )
+
+
+def _time_like_to_str(time_like: TimeLike) -> str:
+    if isinstance(time_like, str):
+        return time_like
+    if isinstance(time_like, date):
+        return to_ds(time_like)
+    return to_datetime(time_like).isoformat()
