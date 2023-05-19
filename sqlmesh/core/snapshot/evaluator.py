@@ -425,7 +425,10 @@ class SnapshotEvaluator:
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         if snapshot.is_external:
+            if on_complete is not None:
+                on_complete(snapshot)
             return
+
         qualified_view_name = snapshot.qualified_view_name
         schema = qualified_view_name.schema_for_environment(environment=environment)
         if schema is not None:
@@ -449,11 +452,10 @@ class SnapshotEvaluator:
         environment: str,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        if snapshot.is_external:
-            return
-        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
-        logger.info("Dropping view '%s'", view_name)
-        self.adapter.drop_view(view_name)
+        if not snapshot.is_external:
+            view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+            logger.info("Dropping view '%s'", view_name)
+            self.adapter.drop_view(view_name)
 
         if on_complete is not None:
             on_complete(snapshot)
