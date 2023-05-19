@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +68,10 @@ def test_create_external_models(sushi_context):
         "id": exp.DataType.build("BIGINT"),
         "name": exp.DataType.build("VARCHAR"),
     }
+
+    snapshot = sushi_context.snapshots["sushi.raw_fruits"]
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.table_name() == "sushi.raw_fruits"
 
     fruits = sushi_context.models["sushi.fruits"]
     assert not fruits.kind.is_symbolic
