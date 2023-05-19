@@ -52,7 +52,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import TimeLike, now_timestamp, timelike_to_str
+from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -468,11 +468,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 exp.select("name", "identifier")
                 .from_(self.intervals_table)
                 .where(exp.column("is_compacted").not_())
-                .distinct(),
+                .distinct()
+                .subquery(alias="uncompacted"),
                 using=["name", "identifier"],
             )
 
         interval_ids, snapshot_intervals = self._get_snapshot_intervals(query_modifier)
+
+        logger.info(
+            "Compacting %s intervals for %s snapshots", len(interval_ids), len(snapshot_intervals)
+        )
 
         self._push_snapshot_intervals(snapshot_intervals)
 
