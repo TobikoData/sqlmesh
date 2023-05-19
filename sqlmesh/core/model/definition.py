@@ -919,9 +919,8 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    is_sql_model = any(isinstance(e, (exp.Subqueryable, d.Jinja)) for e in expressions)
 
-    if is_sql_model:
+    if any(isinstance(e, (exp.Subqueryable, d.Jinja)) for e in expressions):
         try:
             # Extract the query and any pre/post statements
             query, pre, post = extract_sql_model_select(expressions[1:])
@@ -931,8 +930,8 @@ def load_model(
     else:
         # Assume this is a different model type (seed, python, etc.)
         query = expressions[-1] if len(expressions) > 1 else None
-        statements = expressions[1:-1]
         pre, post = [], []
+        statements = expressions[1:-1]
 
     if not isinstance(meta, d.Model):
         raise_config_error(
@@ -970,14 +969,18 @@ def load_model(
     elif query is not None:
         # Inject preceding and following statements into the model's meta fields.
         meta_pre: HookCall = meta_fields.setdefault("pre", exp.Tuple())
-        if hasattr(meta_pre, "expressions"):
+        if not pre:
+            pass  # Nothing parsed to inject
+        elif hasattr(meta_pre, "expressions"):
             meta_pre.expressions.extend([s for s in pre if not isinstance(s, (d.MacroDef))])
         elif isinstance(meta_pre, exp.Expression):
             meta_fields["pre"] = exp.Tuple(
                 expressions=[meta_pre] + [s for s in pre if not isinstance(s, d.MacroDef)]
             )
         meta_post: HookCall = meta_fields.setdefault("post", exp.Tuple())
-        if hasattr(meta_post, "expressions"):
+        if not post:
+            pass  # Nothing parsed to inject
+        elif hasattr(meta_post, "expressions"):
             meta_post.expressions.extend([s for s in post if not isinstance(s, d.MacroDef)])
         elif isinstance(meta_post, exp.Expression):
             meta_fields["post"] = exp.Tuple(
