@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useParams } from 'react-router-dom'
-import { lazy, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isArrayNotEmpty } from '@utils/index'
 import { useStoreContext } from '@context/context'
 import { EnumPlanApplyType, useStorePlan } from '@context/plan'
@@ -8,10 +8,7 @@ import Container from '@components/container/Container'
 import SplitPane from '@components/splitPane/SplitPane'
 import Search from './Search'
 import SourceList from './SourceList'
-
-const TasksOverview = lazy(
-  async () => await import('@components/tasksOverview/TasksOverview'),
-)
+import TasksOverview from '@components/tasksOverview/TasksOverview'
 
 export default function Docs(): JSX.Element {
   const location = useLocation()

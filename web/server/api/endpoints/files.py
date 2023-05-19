@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import traceback
 import typing as t
 from pathlib import Path
 
@@ -111,26 +110,20 @@ async def write_file(
     path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.File:
     """Create, update, or rename a file."""
+    path_or_new_path = path
+    if new_path:
+        path_or_new_path = validate_path(new_path, context)
+        replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
+    else:
+        (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
 
-    try:
-        path_or_new_path = path
-        if new_path:
-            path_or_new_path = validate_path(new_path, context)
-            replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
-        else:
-            (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
-
-        content = (settings.project_path / path_or_new_path).read_text()
-        return models.File(
-            name=os.path.basename(path_or_new_path),
-            path=path_or_new_path,
-            content=content,
-            type=path_mapping.get(Path(path)),
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
-        )
+    content = (settings.project_path / path_or_new_path).read_text()
+    return models.File(
+        name=os.path.basename(path_or_new_path),
+        path=path_or_new_path,
+        content=content,
+        type=path_mapping.get(Path(path)),
+    )
 
 
 @router.delete("/{path:path}")

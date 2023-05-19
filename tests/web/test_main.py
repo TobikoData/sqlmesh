@@ -391,10 +391,10 @@ def test_plan(web_sushi_context: Context) -> None:
 
 
 def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
-    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
+    mocker.patch.object(web_sushi_context, "_run_plan_tests")
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 422
-    assert response.json()["detail"] == "foo"
+    assert response.json()["detail"]["message"] == "Unable to run plan"
 
 
 @pytest.mark.asyncio
@@ -409,7 +409,7 @@ async def test_cancel() -> None:
 def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
-    assert response.json() == {"detail": "No active task found."}
+    assert response.json()["detail"]["message"] == "Plan/apply is already running."
 
 
 def test_evaluate(web_sushi_context: Context) -> None:
