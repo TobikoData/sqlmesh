@@ -1,5 +1,5 @@
-import os
-from unittest import mock
+import json
+import typing as t
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -9,6 +9,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubEvent,
     PullRequestInfo,
 )
+from tests.integrations.github.cicd.helper import get_mocked_controller
 
 
 @pytest.fixture
@@ -22,8 +23,19 @@ def github_pull_request_synchronized_event() -> GithubEvent:
 
 
 @pytest.fixture
+def github_pull_request_comment_raw() -> t.Dict[str, t.Any]:
+    with open("tests/fixtures/github/pull_request_comment.json") as f:
+        return json.load(f)
+
+
+@pytest.fixture
 def github_pull_request_comment_event() -> GithubEvent:
     return GithubEvent.from_path("tests/fixtures/github/pull_request_comment.json")
+
+
+@pytest.fixture
+def github_pull_request_command_deploy_prod_event() -> GithubEvent:
+    return GithubEvent.from_path("tests/fixtures/github/pull_request_command_deploy.json")
 
 
 @pytest.fixture
@@ -44,36 +56,27 @@ def github_pull_request_synchronized_info(
 def github_pr_synchronized_approvers_controller(
     github_pull_request_synchronized_event: GithubEvent, mocker: MockerFixture
 ) -> GithubController:
-    mocker.patch("github.Github", mocker.MagicMock())
-    mocker.patch("sqlmesh.core.context.Context._run_plan_tests", mocker.MagicMock())
-    mocker.patch("sqlmesh.core.context.Context._run_tests", mocker.MagicMock())
-    with mock.patch.dict(
-        os.environ, {"GITHUB_API_URL": "https://api.github.com/repos/Codertocat/Hello-World"}
-    ):
-        controller = GithubController(
-            paths=["examples/sushi"],
-            config="required_approvers_config",
-            token="abc",
-            event=github_pull_request_synchronized_event,
-        )
-        controller._console = mocker.MagicMock()
-        return controller
+    return get_mocked_controller(
+        github_pull_request_synchronized_event, mocker, config="required_approvers_config"
+    )
 
 
 @pytest.fixture
 def github_pr_closed_controller(
     github_pull_request_closed_event: GithubEvent, mocker: MockerFixture
 ):
-    mocker.patch("github.Github", mocker.MagicMock())
-    mocker.patch("sqlmesh.core.context.Context._run_plan_tests", mocker.MagicMock())
-    mocker.patch("sqlmesh.core.context.Context._run_tests", mocker.MagicMock())
-    with mock.patch.dict(
-        os.environ, {"GITHUB_API_URL": "https://api.github.com/repos/Codertocat/Hello-World"}
-    ):
-        controller = GithubController(
-            paths=["examples/sushi"],
-            token="abc",
-            event=github_pull_request_closed_event,
-        )
-        controller._console = mocker.MagicMock()
-        return controller
+    return get_mocked_controller(github_pull_request_closed_event, mocker)
+
+
+@pytest.fixture
+def github_pr_invalid_command_controller(
+    github_pull_request_comment_event: GithubEvent, mocker: MockerFixture
+):
+    return get_mocked_controller(github_pull_request_comment_event, mocker)
+
+
+@pytest.fixture
+def github_pr_command_deploy_prod_controller(
+    github_pull_request_command_deploy_prod_event: GithubEvent, mocker: MockerFixture
+):
+    return get_mocked_controller(github_pull_request_command_deploy_prod_event, mocker)

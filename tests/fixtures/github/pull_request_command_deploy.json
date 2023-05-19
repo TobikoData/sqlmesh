@@ -1,7 +1,7 @@
 {
   "action": "created",
   "comment": {
-    "body": "example_comment"
+    "body": "/deploy"
   },
   "issue": {
     "pull_request": {

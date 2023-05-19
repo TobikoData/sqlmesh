@@ -115,6 +115,35 @@ class GithubCheckConclusion(str, Enum):
         return self == GithubCheckConclusion.SKIPPED
 
 
+class BotCommand(Enum):
+    INVALID = 1
+    DEPLOY_PROD = 2
+
+    @classmethod
+    def from_comment_body(cls, body: str, namespace: t.Optional[str] = None) -> BotCommand:
+        body = body.strip()
+        command_aliases = {
+            cls.DEPLOY_PROD: {"/deploy_prod", "/deploy-prod", "/deployprod", "/deploy"},
+        }
+        if namespace:
+            command_aliases = {
+                command: {f"#{namespace}{alias}" for alias in alias_values}
+                for command, alias_values in command_aliases.items()
+            }
+        for command, aliases in command_aliases.items():
+            if body in aliases:
+                return command
+        return cls.INVALID
+
+    @property
+    def is_invalid(self) -> bool:
+        return self == self.INVALID
+
+    @property
+    def is_deploy_prod(self) -> bool:
+        return self == self.DEPLOY_PROD
+
+
 class GithubEvent:
     """
     Takes a Github Actions event payload and provides a simple interface to access
@@ -125,9 +154,13 @@ class GithubEvent:
         self._pull_request_info: t.Optional[PullRequestInfo] = None
 
     @classmethod
+    def from_obj(cls, obj: t.Dict[str, t.Any]) -> GithubEvent:
+        return cls(payload=obj)
+
+    @classmethod
     def from_path(cls, path: t.Union[str, pathlib.Path]) -> GithubEvent:
         with open(path) as f:
-            return cls(payload=json.load(f))
+            return cls.from_obj(json.load(f))
 
     @classmethod
     def from_env(cls) -> GithubEvent:
@@ -139,7 +172,13 @@ class GithubEvent:
 
     @property
     def is_comment(self) -> bool:
-        return bool(self.payload.get("comment"))
+        comment = self.payload.get("comment")
+        if not comment:
+            return False
+        body = comment.get("body")
+        if not body:
+            return False
+        return self.payload.get("action") != "deleted"
 
     @property
     def is_pull_request(self) -> bool:
@@ -167,8 +206,16 @@ class GithubEvent:
             )
         return self._pull_request_info
 
+    @property
+    def pull_request_comment_body(self) -> t.Optional[str]:
+        if self.is_comment:
+            return self.payload["comment"]["body"]
+        return None
+
 
 class GithubController:
+    DEFAULT_COMMAND_NAMESPACE = "SQLMesh"
+
     def __init__(
         self,
         paths: t.Union[str, t.Iterable[str]],
@@ -210,6 +257,10 @@ class GithubController:
             config=self._config,
             console=self._console,
         )
+
+    @property
+    def is_comment_triggered(self) -> bool:
+        return self._event.is_comment
 
     @property
     def _required_approvers(self) -> t.List[User]:
@@ -626,3 +677,12 @@ class GithubController:
         Merges the PR
         """
         self._pull_request.merge()
+
+    def get_command_from_comment(self, namespace: t.Optional[str] = None) -> BotCommand:
+        """
+        Gets the command from the comment
+        """
+        if not self._event.is_comment:
+            return BotCommand.INVALID
+        assert self._event.pull_request_comment_body is not None
+        return BotCommand.from_comment_body(self._event.pull_request_comment_body, namespace)
