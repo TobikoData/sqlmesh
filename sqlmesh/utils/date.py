@@ -257,3 +257,11 @@ def validate_date_range(
         raise ValueError(
             f"Start date / time ({start}) can't be greater than end date / time ({end})"
         )
+
+
+def time_like_to_str(time_like: TimeLike) -> str:
+    if isinstance(time_like, str):
+        return time_like
+    if is_date(time_like):
+        return to_ds(time_like)
+    return to_datetime(time_like).isoformat()

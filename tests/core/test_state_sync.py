@@ -551,6 +551,37 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
     assert state_sync.get_environment(env_b.name) == env_b
 
 
+def test_environment_start_as_timestamp(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    now_ts = now_timestamp()
+
+    env = Environment(
+        name="test_environment_a",
+        snapshots=[snapshot.table_info],
+        start_at=now_ts,
+        end_at=None,
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=now_ts - 1000,
+    )
+    state_sync.promote(env)
+
+    stored_env = state_sync.get_environment(env.name)
+    assert stored_env
+    assert stored_env.start_at == to_datetime(now_ts).isoformat()
+
+
 def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:
     sushi_context = sushi_context_pre_scheduling
     state_sync = sushi_context.state_reader
