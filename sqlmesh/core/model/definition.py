@@ -21,7 +21,7 @@ from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator, parse_model_name
-from sqlmesh.core.model.kind import SeedKind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import HookCall, ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -1157,7 +1157,7 @@ def create_external_model(
         name,
         dialect=dialect,
         path=path,
-        kind="EXTERNAL",
+        kind=ModelKindName.EXTERNAL.value,
         **kwargs,
     )
 
