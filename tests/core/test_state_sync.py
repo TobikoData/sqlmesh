@@ -692,7 +692,7 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
     state_sync.get_versions(validate=False)
 
     # patch version sqlglot doesn't matter
-    major, minor, patch = SQLGLOT_VERSION.split(".")
+    major, minor, patch, *_ = SQLGLOT_VERSION.split(".")
     sqlglot_version = f"{major}.{minor}.{int(patch) + 1}"
     state_sync._update_versions(sqlglot_version=sqlglot_version)
     state_sync.get_versions(validate=False)

@@ -300,8 +300,8 @@ class CommonStateSyncMixin(StateSync):
         for prev_snapshot in merged_prev_snapshots:
             target_snapshot = merged_target_snapshots_by_name[prev_snapshot.name]
             if (
-                target_snapshot.is_incremental_by_time_range_kind
-                and prev_snapshot.is_incremental_by_time_range_kind
+                target_snapshot.is_incremental_by_time_range
+                and prev_snapshot.is_incremental_by_time_range
                 and prev_snapshot.intervals
             ):
                 missing_intervals = target_snapshot.missing_intervals(

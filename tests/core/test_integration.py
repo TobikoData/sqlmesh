@@ -764,7 +764,7 @@ def validate_state_sync_environment(
 def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        table_should_exist = not snapshot.is_embedded_kind
+        table_should_exist = not snapshot.is_embedded
         assert adapter.table_exists(snapshot.table_name()) == table_should_exist
         if table_should_exist:
             assert select_all(snapshot.table_name(), adapter)
@@ -775,7 +775,7 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_embedded_kind:
+        if snapshot.is_embedded:
             continue
 
         view_name = snapshot.qualified_view_name.for_environment(environment=environment)

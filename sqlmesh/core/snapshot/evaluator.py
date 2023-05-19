@@ -87,7 +87,8 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        if snapshot.is_embedded_kind:
+        if snapshot.is_symbolic:
+            print(f"*** {snapshot.name} {snapshot.model_kind_name} {snapshot.is_symbolic}")
             return None
 
         if not limit and not snapshot.is_forward_only:
@@ -100,7 +101,7 @@ class SnapshotEvaluator:
         table_name = "" if limit else snapshot.table_name(is_dev=is_dev)
 
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
-            if snapshot.is_view_kind:
+            if snapshot.is_view:
                 if index > 0:
                     raise ConfigError("Cannot batch view creation.")
                 logger.info("Replacing view '%s'", table_name)
@@ -109,11 +110,11 @@ class SnapshotEvaluator:
                 self.adapter.insert_append(
                     table_name, query_or_df, columns_to_types=columns_to_types
                 )
-            elif snapshot.is_full_kind or snapshot.is_seed_kind:
+            elif snapshot.is_full or snapshot.is_seed:
                 self.adapter.replace_query(table_name, query_or_df, columns_to_types)
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
-                if snapshot.is_incremental_by_time_range_kind:
+                if snapshot.is_incremental_by_time_range:
                     # A model's time_column could be None but
                     # it shouldn't be for an incremental by time range model
                     assert model.time_column
@@ -126,7 +127,7 @@ class SnapshotEvaluator:
                         time_column=model.time_column,
                         columns_to_types=columns_to_types,
                     )
-                elif snapshot.is_incremental_by_unique_key_kind:
+                elif snapshot.is_incremental_by_unique_key:
                     self.adapter.merge(
                         table_name,
                         query_or_df,
@@ -364,7 +365,7 @@ class SnapshotEvaluator:
             logger.exception("Failed to close Snapshot Evaluator")
 
     def _create_snapshot(self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]) -> None:
-        if snapshot.is_embedded_kind:
+        if snapshot.is_symbolic:
             return
 
         self.adapter.create_schema(snapshot.physical_schema)
@@ -378,7 +379,7 @@ class SnapshotEvaluator:
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
         }
 
-        if snapshot.is_view_kind:
+        if snapshot.is_view:
             logger.info("Creating view '%s'", table_name)
             self.adapter.create_view(
                 table_name,
@@ -430,7 +431,7 @@ class SnapshotEvaluator:
             self.adapter.create_schema(schema)
 
         view_name = qualified_view_name.for_environment(environment=environment)
-        if not snapshot.is_embedded_kind:
+        if not snapshot.is_symbolic:
             table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
             logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
             self.adapter.create_view(view_name, exp.select("*").from_(table_name))
@@ -455,7 +456,7 @@ class SnapshotEvaluator:
             on_complete(snapshot)
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
-        if snapshot.is_embedded_kind:
+        if snapshot.is_symbolic:
             return
 
         snapshot = snapshot.table_info

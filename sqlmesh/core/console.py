@@ -470,12 +470,12 @@ class TerminalConsole(Console):
         indirect = "indirectly modified children"
         if use_rich_formatting:
             indirect = f"[indirect]{indirect}[/indirect]"
-        if snapshot.is_view_kind:
+        if snapshot.is_view:
             choices = {
                 SnapshotChangeCategory.BREAKING: f"Update {direct} and backfill {indirect}",
                 SnapshotChangeCategory.NON_BREAKING: f"Update {direct} but don't backfill {indirect}",
             }
-        elif snapshot.is_embedded_kind:
+        elif snapshot.is_embedded:
             choices = {
                 SnapshotChangeCategory.BREAKING: f"Backfill {indirect}",
                 SnapshotChangeCategory.NON_BREAKING: f"Don't backfill {indirect}",

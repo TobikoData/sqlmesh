@@ -59,6 +59,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
+from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -840,6 +841,25 @@ class Context(BaseContext):
         Please contact your SQLMesh administrator before doing this. This action cannot be undone.
         """
         self._new_state_sync().rollback()
+
+    def create_schema_file(self) -> None:
+        """Create a schema file with all external models.
+
+        The schema file contains all columns and types of external models, allowing for more robust
+        lineage, validation, and optimizations.
+        """
+        for path, config in self.configs.items():
+            create_schema_file(
+                path=path / c.SCHEMA,
+                models={
+                    name: model
+                    for name, model in self._models.items()
+                    if self.config_for_model(model) is config
+                },
+                adapter=self._engine_adapter,
+                dialect=config.model_defaults.dialect,
+                max_workers=self.concurrent_tasks,
+            )
 
     def print_info(self) -> None:
         """Prints information about connections, models, macros, etc. to the console."""

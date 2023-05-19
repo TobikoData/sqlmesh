@@ -413,9 +413,7 @@ class Plan:
 
             snapshots = self.context_diff.snapshots
             downstream = [
-                d
-                for d in downstream
-                if snapshots[d].is_materialized and not snapshots[d].is_seed_kind
+                d for d in downstream if snapshots[d].is_materialized and not snapshots[d].is_seed
             ]
 
             if not downstream:
@@ -475,7 +473,7 @@ class Plan:
                         # In case of the forward only plan any modifications result in reuse of the
                         # previous version for non-seed models.
                         # New snapshots of seed models are considered non-breaking ones.
-                        if not snapshot.is_seed_kind:
+                        if not snapshot.is_seed:
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)

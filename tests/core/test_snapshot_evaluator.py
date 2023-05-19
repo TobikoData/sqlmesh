@@ -193,8 +193,7 @@ def test_promote_model_info(mocker: MockerFixture):
                 version="1",
                 change_category=SnapshotChangeCategory.BREAKING,
                 parents=[],
-                is_materialized=True,
-                is_embedded_kind=False,
+                kind_name=ModelKindName.FULL,
             )
         ],
         "test_env",

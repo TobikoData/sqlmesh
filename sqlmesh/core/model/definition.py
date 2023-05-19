@@ -881,7 +881,15 @@ class PythonModel(_Model):
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
 
-Model = Annotated[t.Union[SqlModel, SeedModel, PythonModel], Field(discriminator="source_type")]
+class ExternalModel(_Model):
+    """The model definition which represents an external source/table."""
+
+    source_type: Literal["external"] = "external"
+
+
+Model = Annotated[
+    t.Union[SqlModel, SeedModel, PythonModel, ExternalModel], Field(discriminator="source_type")
+]
 
 
 def load_model(
@@ -1125,6 +1133,30 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        **kwargs,
+    )
+
+
+def create_external_model(
+    name: str,
+    *,
+    dialect: t.Optional[str] = None,
+    path: Path = Path(),
+    **kwargs: t.Any,
+) -> Model:
+    """Creates a Seed model.
+
+    Args:
+        name: The name of the model, which is of the form [catalog].[db].table.
+            The catalog and db are optional.
+        dialect: The dialect to serialize.
+        path: An optional path to the model definition file.
+    """
+    return _create_model(
+        ExternalModel,
+        name,
+        dialect=dialect,
+        path=path,
         **kwargs,
     )
 

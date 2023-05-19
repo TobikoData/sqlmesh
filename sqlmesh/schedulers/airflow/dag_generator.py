@@ -63,7 +63,7 @@ class SnapshotDagGenerator:
         return [
             self._create_cadence_dag_for_snapshot(s)
             for s in self._snapshots.values()
-            if s.unpaused_ts and not s.is_embedded_kind and not s.is_seed_kind
+            if s.unpaused_ts and not s.is_symbolic and not s.is_seed
         ]
 
     def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> DAG:
@@ -341,7 +341,7 @@ class SnapshotDagGenerator:
             snapshot_end_task = EmptyOperator(
                 task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__end"
             )
-            if snapshot.is_incremental_by_unique_key_kind:
+            if snapshot.is_incremental_by_unique_key:
                 baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
             else:
                 snapshot_start_task >> tasks >> snapshot_end_task
@@ -473,7 +473,7 @@ class SnapshotDagGenerator:
         output = []
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            if not upstream_snapshot.is_embedded_kind and not upstream_snapshot.is_seed_kind:
+            if not upstream_snapshot.is_symbolic and not upstream_snapshot.is_seed:
                 output.append(
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
