@@ -47,7 +47,7 @@ repos:
         require_serial: true
         language: node
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: "9636d51"
+    rev: "aaf3076"
     hooks:
       - id: eslint
         name: eslint
@@ -58,11 +58,11 @@ repos:
           [
             "@typescript-eslint/eslint-plugin",
             "@typescript-eslint/parser",
-            eslint@8.36.0,
-            eslint-config-prettier@8.7.0,
+            eslint@8.40.0,
+            eslint-config-prettier@8.8.0,
             eslint-config-standard-with-typescript@34.0.1,
             eslint-plugin-import@2.27.4,
-            eslint-plugin-n@15.6.1,
+            eslint-plugin-n@15.7.0,
             eslint-plugin-promise@6.1.1,
             eslint-plugin-react@7.32.2,
           ]
