@@ -2,6 +2,7 @@ import { type LineageColumn } from '@api/client'
 import { uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
+import { type ErrorKey, type ErrorIDE } from '~/library/pages/ide/context'
 import { ModelFile } from '~/models'
 import { sqlglotWorker } from '~/workers'
 
@@ -23,7 +24,9 @@ interface EditorStore {
   dialects: Dialect[]
   previewQuery?: string
   previewTable?: any[]
-  previewConsole?: string
+  previewConsole?: [ErrorKey, ErrorIDE]
+  direction: 'vertical' | 'horizontal'
+  setDirection: (direction: 'vertical' | 'horizontal') => void
   selectTab: (tab?: EditorTab) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
@@ -33,7 +36,7 @@ interface EditorStore {
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: any[]) => void
-  setPreviewConsole: (previewConsole?: string) => void
+  setPreviewConsole: (previewConsole?: [ErrorKey, ErrorIDE]) => void
 }
 
 interface EditorPreview<TTable = any> {
@@ -71,6 +74,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewQuery: undefined,
   previewTable: undefined,
   previewConsole: undefined,
+  direction: 'vertical',
   updateStoredTabsIds() {
     setStoredTabs({
       ids: Array.from(get().tabs.values())
@@ -147,6 +151,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   setPreviewConsole(previewConsole) {
     set(() => ({ previewConsole }))
+  },
+  setDirection(direction) {
+    set(() => ({ direction }))
   },
 }))
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import sys
 import traceback
 import typing as t
 
@@ -90,7 +91,10 @@ async def evaluate(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
+
     try:
+        context.load()
+
         df = context.evaluate(
             options.model,
             start=options.start,
@@ -99,8 +103,20 @@ async def evaluate(
             limit=options.limit,
         )
     except Exception:
+        error_type, error_value, error_traceback = sys.exc_info()
+
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to evaluate model",
+                origin="API -> commands -> evaluate",
+                description=str(error_value),
+                type=str(error_type),
+                traceback=traceback.format_exc(),
+                stack=traceback.format_tb(error_traceback),
+            ).dict(),
         )
     if not isinstance(df, pd.DataFrame):
         df = df.toPandas()
@@ -113,11 +129,26 @@ async def fetchdf(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Fetches a dataframe given a sql string"""
+
     try:
+        context.load()
+
         df = context.fetchdf(sql)
     except Exception:
+        error_type, error_value, error_traceback = sys.exc_info()
+
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to fecth dataframe from given sql string",
+                origin="API -> commands -> fetchdf",
+                description=str(error_value),
+                type=str(error_type),
+                traceback=traceback.format_exc(),
+                stack=traceback.format_tb(error_traceback),
+            ).dict(),
         )
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
 
@@ -128,17 +159,64 @@ async def render(
     context: Context = Depends(get_loaded_context),
 ) -> models.Query:
     """Renders a model's query, optionally expanding referenced models"""
+
+    try:
+        context.load()
+    except Exception:
+        error_type, error_value, error_traceback = sys.exc_info()
+
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to render model query",
+                origin="API -> commands -> render",
+                description=str(error_value),
+                type=str(error_type),
+                traceback=traceback.format_exc(),
+                stack=traceback.format_tb(error_traceback),
+            ).dict(),
+        )
+
     snapshot = context.snapshots.get(options.model)
 
     if not snapshot:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to find model",
+                origin="API -> commands -> render",
+                traceback=traceback.format_exc(),
+            ).dict(),
+        )
 
-    rendered = context.render(
-        snapshot,
-        start=options.start,
-        end=options.end,
-        latest=options.latest,
-        expand=options.expand,
-    )
-    dialect = options.dialect or context.config.dialect
-    return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))
+    try:
+        rendered = context.render(
+            snapshot,
+            start=options.start,
+            end=options.end,
+            latest=options.latest,
+            expand=options.expand,
+        )
+        dialect = options.dialect or context.config.dialect
+
+        return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))
+    except Exception:
+        error_type, error_value, error_traceback = sys.exc_info()
+
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=Error(
+                timestamp=now_timestamp(),
+                status=HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Unable to render model query",
+                origin="API -> commands -> render",
+                description=str(error_value),
+                type=str(error_type),
+                traceback=traceback.format_exc(),
+                stack=traceback.format_tb(error_traceback),
+            ).dict(),
+        )

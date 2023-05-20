@@ -79,7 +79,7 @@ def replace_file(src: Path, dst: Path) -> None:
                     timestamp=now_timestamp(),
                     status=HTTP_422_UNPROCESSABLE_ENTITY,
                     message="Unable to move file",
-                    origin="replace_file",
+                    origin="API -> utils -> replace_file",
                     description=str(error_value),
                     type=str(error_type),
                     traceback=traceback.format_exc(),

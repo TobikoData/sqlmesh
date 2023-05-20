@@ -29,7 +29,6 @@ const PlanSidebar = memo(function PlanSidebar(): JSX.Element {
     <ModalSidebar
       show={shouldShow}
       afterLeave={() => {
-        console.log('afterLeave')
         setPlanAction(EnumPlanAction.None)
         setIsClosingModal(false)
         setIsPlanOpen(false)

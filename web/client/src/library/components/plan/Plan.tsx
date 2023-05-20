@@ -165,9 +165,8 @@ function Plan({
   useEffect(() => {
     if (errors.size === 0) return
 
-    setPlanAction(EnumPlanAction.None)
-    setPlanState(EnumPlanState.Failed)
     setActivePlan(undefined)
+    setPlanState(EnumPlanState.Failed)
   }, [errors])
 
   function testsReport(data: { ok: boolean } & any): void {
@@ -247,13 +246,14 @@ function Plan({
   }
 
   function apply(): void {
+    setPlanAction(EnumPlanAction.Applying)
+    setPlanState(EnumPlanState.Applying)
+
     dispatch([
       {
         type: EnumPlanActions.ResetTestsReport,
       },
     ])
-    setPlanAction(EnumPlanAction.Applying)
-    setPlanState(EnumPlanState.Applying)
 
     planApply({
       throwOnError: true,

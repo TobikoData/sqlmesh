@@ -460,7 +460,7 @@ def test_render(web_sushi_context: Context) -> None:
 def test_render_invalid_model(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/render", json={"model": "foo.bar"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Model not found."}
+    assert response.json()["detail"]["message"] == "Unable to find model"
 
 
 def test_get_environments(project_context: Context) -> None:

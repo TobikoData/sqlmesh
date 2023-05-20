@@ -94,17 +94,15 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
 
     s.setActivePlan(plan)
 
-    setTimeout(() => {
-      if (isFalse(data.ok)) {
-        s.setState(EnumPlanState.Failed)
-        s.setActivePlan(undefined)
-      } else if (isAllTasksCompleted(data.tasks)) {
-        s.setState(EnumPlanState.Finished)
-        s.setActivePlan(undefined)
-      } else {
-        s.setState(EnumPlanState.Applying)
-      }
-    }, 300)
+    if (isFalse(data.ok)) {
+      s.setState(EnumPlanState.Failed)
+      s.setActivePlan(undefined)
+    } else if (isAllTasksCompleted(data.tasks)) {
+      s.setState(EnumPlanState.Finished)
+      s.setActivePlan(undefined)
+    } else {
+      s.setState(EnumPlanState.Applying)
+    }
   },
 }))
 

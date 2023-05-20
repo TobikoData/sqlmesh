@@ -6,9 +6,12 @@ export const EnumErrorKey = {
   Environments: 'environments',
   Models: 'models',
   ApplyPlan: 'apply-plan',
+  Fetchdf: 'fetchdf',
+  EvaluateModel: 'evaluate-model',
+  RenderModel: 'render-model',
 } as const
 
-type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
+export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
 
 export interface ErrorIDE {
   key: ErrorKey

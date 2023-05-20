@@ -116,7 +116,7 @@ class ApiConsole(TerminalConsole):
                 data=Error(
                     timestamp=now_timestamp(),
                     status=HTTP_422_UNPROCESSABLE_ENTITY,
-                    message="Task failed to run",
+                    message="Tasks failed to run",
                     origin="API -> console -> log_exception",
                     description=str(error_value),
                     type=str(error_type),

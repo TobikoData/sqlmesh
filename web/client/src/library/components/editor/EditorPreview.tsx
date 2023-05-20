@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useEffect, useMemo, useState } from 'react'
+import { lazy, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import {
@@ -6,13 +6,18 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { isNil, isTrue } from '~/utils'
+import { isArrayEmpty } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumVariant } from '~/types/enum'
-import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
+import { EnumFileExtensions } from '@models/file'
+import CodeEditor, { useSQLMeshModelExtensions } from './EditorCode'
+import { EnumRoutes } from '~/routes'
+import { useNavigate } from 'react-router-dom'
+import { DisplayError } from '~/library/pages/ide/ErrorsReport'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -20,49 +25,48 @@ const ModelLineage = lazy(
 
 export const EnumEditorPreviewTabs = {
   Query: 'Query',
-  Table: 'Table',
-  Console: 'Console',
+  Table: 'Data Preview',
+  Console: 'Logs',
   Lineage: 'Lineage',
 } as const
 
 export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
 
-const EditorPreview = memo(function EditorPreview({
+export default function EditorPreview({
   tab,
-  toggleDirection,
+  className,
 }: {
   tab: EditorTab
-  toggleDirection: () => void
+  className?: string
 }): JSX.Element {
-  const { models, setLineage } = useLineageFlow()
+  const navigate = useNavigate()
 
+  const { models } = useLineageFlow()
+
+  const direction = useStoreEditor(s => s.direction)
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewTable = useStoreEditor(s => s.previewTable)
-  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
-  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+  const setDirection = useStoreEditor(s => s.setDirection)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
-  const [model, setModel] = useState<ModelSQLMeshModel>()
 
-  const tabs = useMemo(() => {
-    if (tab.file.isLocal)
-      return [
-        EnumEditorPreviewTabs.Table,
-        EnumEditorPreviewTabs.Query,
-        EnumEditorPreviewTabs.Console,
-      ]
-    if (tab.file.isSQLMeshModel)
-      return [
-        EnumEditorPreviewTabs.Table,
-        EnumEditorPreviewTabs.Query,
-        EnumEditorPreviewTabs.Console,
-        EnumEditorPreviewTabs.Lineage,
-      ]
+  const modelExtensions = useSQLMeshModelExtensions(tab.file.path, model => {
+    navigate(
+      `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(model.name)}`,
+    )
+  })
 
-    return [EnumEditorPreviewTabs.Console]
-  }, [tab.id, tab.file.fingerprint])
+  const tabs: string[] = useMemo(
+    () =>
+      [
+        previewTable != null && EnumEditorPreviewTabs.Table,
+        previewConsole != null && EnumEditorPreviewTabs.Console,
+        previewQuery != null && EnumEditorPreviewTabs.Query,
+        tab.file.isSQLMeshModel && EnumEditorPreviewTabs.Lineage,
+      ].filter(Boolean) as string[],
+    [tab.id, previewTable, previewConsole, previewQuery],
+  )
 
   const [headers, data] = useMemo(
     () =>
@@ -80,219 +84,200 @@ const EditorPreview = memo(function EditorPreview({
     [headers],
   )
 
-  const activeTab = useMemo(
-    () =>
-      [
-        Boolean(previewTable),
-        Boolean(previewQuery),
-        Boolean(previewConsole),
-      ].findIndex(isTrue),
-    [previewTable, previewQuery, previewConsole],
-  )
-
   useEffect(() => {
-    setPreviewQuery(undefined)
-    setPreviewTable(undefined)
-    setPreviewConsole(undefined)
-    setLineage(undefined)
-  }, [tab.id])
-
-  useEffect(() => {
-    setActiveTabIndex(tab.file.isSQLMeshModel ? 3 : -1)
-  }, [tab.id, previewTable, previewQuery, previewConsole])
-
-  useEffect(() => {
-    if (model?.path === tab.file.path) return
-
-    setModel(models.get(tab.file.path))
-  }, [models, tab.id])
+    if (previewConsole != null) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Console))
+    } else if (previewTable != null) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
+    } else if (tab.file.isSQLMeshModel) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
+    }
+  }, [tabs])
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
-
-  function isDisabledPreviewTable(tabName: string): boolean {
-    return tabName === EnumEditorPreviewTabs.Table && isNil(previewTable)
-  }
-
-  function isDisabledPreviewConsole(tabName: string): boolean {
-    return tabName === EnumEditorPreviewTabs.Console && isNil(previewConsole)
-  }
-
-  function isDisabledPreviewQuery(tabName: string): boolean {
-    return tabName === EnumEditorPreviewTabs.Query && isNil(previewQuery)
-  }
+  const model = models.get(tab.file.path)
 
   return (
     <div
       className={clsx(
         'w-full h-full flex flex-col text-prose overflow-auto scrollbar scrollbar--vertical',
+        className,
       )}
     >
-      <Tab.Group
-        onChange={setActiveTabIndex}
-        selectedIndex={activeTabIndex < 0 ? activeTab : activeTabIndex}
-      >
-        <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justigy-between items-center">
-          <div className="w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
-            {tabs.map(tabName => (
-              <Tab
-                key={tabName}
-                disabled={
-                  isDisabledPreviewTable(tabName) ||
-                  isDisabledPreviewConsole(tabName) ||
-                  isDisabledPreviewQuery(tabName)
-                }
-                className={({ selected }) =>
-                  clsx(
-                    'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                    isDisabledPreviewTable(tabName) ||
-                      isDisabledPreviewConsole(tabName) ||
-                      isDisabledPreviewQuery(tabName)
-                      ? 'cursor-not-allowed opacity-50 bg-neutral-10'
-                      : selected
-                      ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                      : 'bg-secondary-10 cursor-pointer',
+      {isArrayEmpty(tabs) ? (
+        <div>
+          <div className="flex items-center justify-center h-full">
+            No data to preview
+          </div>
+        </div>
+      ) : (
+        <Tab.Group
+          key={tabs.join('-')}
+          onChange={setActiveTabIndex}
+          selectedIndex={activeTabIndex}
+        >
+          <Tab.List className="w-full whitespace-nowrap p-2 flex justigy-between items-center">
+            <div className="w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
+              {tabs.map(tabName => (
+                <Tab
+                  key={tabName}
+                  className={({ selected }) =>
+                    clsx(
+                      'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
+                      selected
+                        ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                        : 'bg-secondary-10 cursor-pointer',
+                    )
+                  }
+                >
+                  {tabName}
+                </Tab>
+              ))}
+            </div>
+            <div className="ml-2">
+              <Button
+                className="!m-0 !py-0.5 px-[0.25rem] border-none"
+                variant={EnumVariant.Alternative}
+                onClick={() => {
+                  setDirection(
+                    direction === 'horizontal' ? 'vertical' : 'horizontal',
                   )
-                }
+                }}
               >
-                {tabName === EnumEditorPreviewTabs.Console &&
-                  previewConsole != null && (
-                    <span className="absolute right-[-0.25rem] top-[-0.25rem] rounded-xl w-2 h-2 bg-danger-500"></span>
-                  )}
-                {tabName}
-              </Tab>
-            ))}
-          </div>
-          <div className="ml-2">
-            <Button
-              className="!m-0 !py-0.5 px-[0.25rem] border-none"
-              variant={EnumVariant.Alternative}
-              onClick={toggleDirection}
-            >
-              <ViewColumnsIcon className="text-primary-500 w-6" />
-            </Button>
-          </div>
-        </Tab.List>
-        <Tab.Panels className="h-full w-full overflow-hidden">
-          <Tab.Panel
-            className={clsx(
-              'w-full h-full pt-4 relative px-2',
-              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-            )}
-          >
-            {table != null && (
-              <div className="w-full h-full overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
-                <table className="w-full h-full">
-                  <thead className="sticky top-0 bg-theme">
-                    {table.getHeaderGroups().map(headerGroup => (
-                      <tr key={headerGroup.id}>
-                        {headerGroup.headers.map(header => (
-                          <th
-                            key={header.id}
-                            className="px-2 text-sm text-left border-b-2 border-neutral-50"
-                          >
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
+                <ViewColumnsIcon className="text-primary-500 w-6" />
+              </Button>
+            </div>
+          </Tab.List>
+          <Tab.Panels className="h-full w-full overflow-hidden">
+            {previewTable != null && (
+              <Tab.Panel
+                unmount={false}
+                className={clsx(
+                  'w-full h-full pt-4 relative px-2',
+                  'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                )}
+              >
+                {table != null && (
+                  <div className="w-full h-full overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                    <table className="w-full h-full">
+                      <thead className="sticky top-0 bg-theme">
+                        {table.getHeaderGroups().map(headerGroup => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map(header => (
+                              <th
+                                key={header.id}
+                                className="px-2 text-sm text-left border-b-2 border-neutral-50"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
+                              </th>
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody>
+                        {table.getRowModel().rows.map(row => (
+                          <tr key={row.id}>
+                            {row.getVisibleCells().map(cell => (
+                              <td
+                                key={cell.id}
+                                className="px-2 py-1 text-sm text-left border-b border-neutral-50 whitespace-nowrap"
+                              >
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext(),
                                 )}
-                          </th>
+                              </td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <tbody>
-                    {table.getRowModel().rows.map(row => (
-                      <tr key={row.id}>
-                        {row.getVisibleCells().map(cell => (
-                          <td
-                            key={cell.id}
-                            className="px-2 py-1 text-sm text-left border-b border-neutral-50 whitespace-nowrap"
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext(),
-                            )}
-                          </td>
+                      </tbody>
+                      <tfoot className="text-left sticky bottom-0 bg-neutral-50">
+                        {table.getFooterGroups().map(footerGroup => (
+                          <tr key={footerGroup.id}>
+                            {footerGroup.headers.map(header => (
+                              <th
+                                key={header.id}
+                                className="px-3"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(
+                                      header.column.columnDef.footer,
+                                      header.getContext(),
+                                    )}
+                              </th>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="text-left sticky bottom-0 bg-neutral-50">
-                    {table.getFooterGroups().map(footerGroup => (
-                      <tr key={footerGroup.id}>
-                        {footerGroup.headers.map(header => (
-                          <th
-                            key={header.id}
-                            className="px-3"
-                          >
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.footer,
-                                  header.getContext(),
-                                )}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </tfoot>
-                </table>
-              </div>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </Tab.Panel>
             )}
-          </Tab.Panel>
-          <Tab.Panel
-            className={clsx(
-              'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+            {previewConsole != null && (
+              <Tab.Panel
+                unmount={false}
+                className={clsx(
+                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                )}
+              >
+                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                  <DisplayError
+                    scope={previewConsole[0]}
+                    error={previewConsole[1]}
+                  />
+                </div>
+              </Tab.Panel>
             )}
-          >
-            <pre className="w-full h-full p-4 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical text-xs">
-              {previewQuery}
-            </pre>
-          </Tab.Panel>
-          <Tab.Panel
-            className={clsx(
-              'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+            {previewQuery != null && (
+              <Tab.Panel
+                unmount={false}
+                className={clsx(
+                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                )}
+              >
+                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                  <CodeEditor.Default
+                    type={EnumFileExtensions.SQL}
+                    content={previewQuery ?? ''}
+                  >
+                    {({ extensions, content }) => (
+                      <CodeEditor
+                        extensions={extensions.concat(modelExtensions)}
+                        content={content}
+                        className="text-xs"
+                      />
+                    )}
+                  </CodeEditor.Default>
+                </div>
+              </Tab.Panel>
             )}
-          >
-            <pre className="w-full h-full p-4 bg-primary-10 rounded-lg text-danger-500 overflow-auto text-xs scrollbar scrollbar--horizontal scrollbar--vertical">
-              {previewConsole}
-            </pre>
-          </Tab.Panel>
-          <Tab.Panel
-            className={clsx(
-              'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
-            )}
-          >
-            {model == null ? (
-              <EditorPreviewEmpty />
-            ) : (
-              <Suspense fallback={<div>Loading....</div>}>
+            {model != null && (
+              <Tab.Panel
+                unmount={false}
+                className={clsx(
+                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
+                )}
+              >
                 <ModelLineage
                   model={model}
                   fingerprint={tab.file.fingerprint}
                 />
-              </Suspense>
+              </Tab.Panel>
             )}
-          </Tab.Panel>
-        </Tab.Panels>
-      </Tab.Group>
-    </div>
-  )
-})
-
-function EditorPreviewEmpty(): JSX.Element {
-  return (
-    <div className="flex justify-center items-center w-full h-full">
-      <div className="p-4 text-center text-theme-darker dark:text-theme-lighter">
-        <h2 className="text-3xl">Model Does Not Exist</h2>
-      </div>
+          </Tab.Panels>
+        </Tab.Group>
+      )}
     </div>
   )
 }
-
-export default EditorPreview

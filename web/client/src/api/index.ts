@@ -29,6 +29,12 @@ import {
   modelLineageApiLineageModelNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   columnLineageApiLineageModelNameColumnNameGet,
+  fetchdfApiCommandsFetchdfPost,
+  renderApiCommandsRenderPost,
+  type RenderInput,
+  type Query,
+  evaluateApiCommandsEvaluatePost,
+  type EvaluateInput,
 } from './client'
 import {
   useIDE,
@@ -192,6 +198,38 @@ export function useApiPlanApply(
   })
 }
 
+export function useApiFetchdf(sql: string): UseQueryResult<unknown> {
+  return useQuery<unknown, ErrorIDE>({
+    queryKey: ['/api/commands/fetchd'],
+    queryFn: async ({ signal }) =>
+      await fetchdfApiCommandsFetchdfPost({ sql }, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiRender(options: RenderInput): UseQueryResult<Query> {
+  return useQuery<Query, ErrorIDE>({
+    queryKey: ['/api/commands/render'],
+    queryFn: async ({ signal }) =>
+      await renderApiCommandsRenderPost(options, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiEvaluate(
+  options: EvaluateInput,
+): UseQueryResult<unknown> {
+  return useQuery<unknown, ErrorIDE>({
+    queryKey: ['/api/commands/evaluate'],
+    queryFn: async ({ signal }) =>
+      await evaluateApiCommandsEvaluatePost(options, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
 export function useMutationApiSaveFile(
   client: QueryClient,
   callbacks: {
@@ -228,6 +266,18 @@ export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
 
   return await cancelPlanApiPlanCancelPost()
+}
+
+export function apiCancelFetchdf(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/fetchdf'] })
+}
+
+export function apiCancelRender(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/render'] })
+}
+
+export function apiCancelEvaluate(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/evaluate'] })
 }
 
 export function apiCancelLineage(client: QueryClient): void {

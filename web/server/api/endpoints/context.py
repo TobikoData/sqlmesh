@@ -18,7 +18,7 @@ def get_api_context(
 ) -> models.Context:
     """Get the context"""
 
-    context.refresh()
+    context.load()
 
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,

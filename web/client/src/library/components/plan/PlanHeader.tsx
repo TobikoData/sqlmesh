@@ -33,7 +33,7 @@ export default function PlanHeader(): JSX.Element {
               {({ open }) => (
                 <>
                   <div className="flex items-center">
-                    <Banner.Headline className="w-full mr-2 text-sm">
+                    <Banner.Headline className="w-full mr-2 text-sm mb-0">
                       Initializing Prod Environment
                     </Banner.Headline>
                     <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
@@ -44,7 +44,7 @@ export default function PlanHeader(): JSX.Element {
                       )}
                     </Disclosure.Button>
                   </div>
-                  <Disclosure.Panel className="px-4 pb-2 text-sm">
+                  <Disclosure.Panel className="px-4 pb-2 text-sm mt-2">
                     <Banner.Description>
                       Prod will be completely backfilled in order to ensure
                       there are no data gaps. After this is applied, it is

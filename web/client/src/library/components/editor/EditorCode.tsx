@@ -368,7 +368,7 @@ const CodeEditor = function CodeEditor({
     <CodeMirror
       height="100%"
       width="100%"
-      className={clsx('flex w-full h-full font-mono', className)}
+      className={clsx('flex w-full h-full font-mono text-sm', className)}
       value={content}
       extensions={extensionsAll}
       onChange={onChange}

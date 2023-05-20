@@ -121,6 +121,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const files = useStoreFileTree(s => s.files)
   const selectFile = useStoreFileTree(s => s.selectFile)
 
+  const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
@@ -128,6 +129,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const createTab = useStoreEditor(s => s.createTab)
   const closeTab = useStoreEditor(s => s.closeTab)
   const refreshTab = useStoreEditor(s => s.refreshTab)
+  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const { models, setManuallySelectedColumn } = useLineageFlow()
 
@@ -141,8 +145,15 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     },
   )
 
-  const [direction, setDirection] = useState<'vertical' | 'horizontal'>(
-    'vertical',
+  const updateFileContent = useCallback(
+    debounceSync(function updateFileContent(value: string): void {
+      if (tab == null) return
+
+      tab.file.content = value
+
+      refreshTab()
+    }),
+    [tab.id],
   )
 
   const sizesCodeEditorAndInspector = useMemo(() => {
@@ -220,19 +231,11 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     })
   }, [tab.file.fingerprint, tab.file.content])
 
-  function toggleDirection(): void {
-    setDirection(direction =>
-      direction === 'vertical' ? 'horizontal' : 'vertical',
-    )
-  }
-
-  function updateFileContent(value: string): void {
-    if (tab == null) return
-
-    tab.file.content = value
-
-    refreshTab()
-  }
+  useEffect(() => {
+    setPreviewQuery(undefined)
+    setPreviewTable(undefined)
+    setPreviewConsole(undefined)
+  }, [tab.id, tab.file.fingerprint])
 
   return (
     <SplitPane
@@ -272,7 +275,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                       extensions={extensions}
                       content={content}
                       keymaps={keymaps}
-                      onChange={debounceSync(updateFileContent, 500)}
+                      onChange={updateFileContent}
                     />
                   )}
                 </CodeEditor.Default>
@@ -289,7 +292,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                           extensions={extensions.concat(modelExtensions)}
                           content={content}
                           keymaps={keymaps.concat(additional)}
-                          onChange={debounceSync(updateFileContent, 500)}
+                          onChange={updateFileContent}
                         />
                       )}
                     </CodeEditor.SQLMeshDialect>
@@ -307,14 +310,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
           <EditorFooter tab={tab} />
         </div>
       </div>
-      <div
+      <EditorPreview
+        tab={tab}
         className={clsx(direction === 'vertical' ? 'flex flex-col' : 'flex')}
-      >
-        <EditorPreview
-          tab={tab}
-          toggleDirection={toggleDirection}
-        />
-      </div>
+      />
     </SplitPane>
   )
 }

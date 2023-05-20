@@ -41,9 +41,9 @@ async def run_plan(
             ).dict(),
         )
 
-    context.refresh()
-
     try:
+        context.load()
+
         plan = context.plan(
             environment=environment,
             no_prompts=True,
