@@ -17,51 +17,24 @@ from sqlmesh.dbt.column import (
     column_descriptions_to_sqlmesh,
     column_types_to_sqlmesh,
 )
-from sqlmesh.dbt.common import DbtConfig, GeneralConfig, QuotingConfig, SqlStr
+from sqlmesh.dbt.common import (
+    DbtConfig,
+    Dependencies,
+    GeneralConfig,
+    QuotingConfig,
+    SqlStr,
+    context_for_dependencies,
+)
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroReference
-from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
 
 
 BMC = t.TypeVar("BMC", bound="BaseModelConfig")
-
-
-class Dependencies(PydanticModel):
-    """
-    DBT dependencies for a model, macro, etc.
-
-    Args:
-        macros: The references to macros
-        sources: The "source_name.table_name" for source tables used
-        refs: The table_name for models used
-    """
-
-    macros: t.Set[MacroReference] = set()
-    sources: t.Set[str] = set()
-    refs: t.Set[str] = set()
-
-    def union(self, other: Dependencies) -> Dependencies:
-        dependencies = Dependencies()
-        dependencies.macros = self.macros | other.macros
-        dependencies.sources = self.sources | other.sources
-        dependencies.refs = self.refs | other.refs
-
-        return dependencies
-
-    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
-        # See https://github.com/pydantic/pydantic/issues/1090
-        exclude = kwargs.pop("exclude", None) or set()
-
-        out = super().dict(*args, **kwargs, exclude={*exclude, "macros"})
-        if "macros" not in exclude:
-            out["macros"] = [macro.dict() for macro in self.macros]
-
-        return out
 
 
 class Materialization(str, Enum):
@@ -122,6 +95,7 @@ class BaseModelConfig(GeneralConfig):
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
+    tests: t.List[TestConfig] = []
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -228,21 +202,19 @@ class BaseModelConfig(GeneralConfig):
             }
         )
 
-    def attribute_dict(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict(self.dict())
-
     def model_function(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict({"config": self.attribute_dict()})
+        return AttributeDict({"config": self.attribute_dict})
 
-    def sqlmesh_model_kwargs(self, model_context: DbtContext) -> t.Dict[str, t.Any]:
+    def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
+        model_context = context_for_dependencies(context, self.dependencies)
         jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {
                 "this": self.relation_info,
                 "model": self.model_function(),
                 "schema": self.table_schema,
-                "config": self.attribute_dict(),
+                "config": self.attribute_dict,
                 **model_context.jinja_globals,  # type: ignore
             }
         )
@@ -254,10 +226,11 @@ class BaseModelConfig(GeneralConfig):
                 optional_kwargs[field] = field_val
 
         return {
+            "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model_context.refs[ref] for ref in self.dependencies.refs}.union(
-                {model_context.sources[source].source_name for source in self.dependencies.sources}
+            "depends_on": {context.refs[ref] for ref in self.dependencies.refs}.union(
+                {context.sources[source].source_name for source in self.dependencies.sources}
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,
@@ -281,32 +254,3 @@ class BaseModelConfig(GeneralConfig):
     @abstractmethod
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Convert DBT model into sqlmesh Model"""
-
-    def _context_for_dependencies(
-        self, context: DbtContext, dependencies: Dependencies
-    ) -> DbtContext:
-        model_context = context.copy()
-
-        models = {}
-        seeds = {}
-        sources = {}
-
-        for ref in self.dependencies.refs:
-            if ref in context.seeds:
-                seeds[ref] = context.seeds[ref]
-            elif ref in context.models:
-                models[ref] = context.models[ref]
-            else:
-                raise ConfigError(f"Model '{ref}' was not found for model '{self.table_name}'.")
-
-        for source in self.dependencies.sources:
-            if source in context.sources:
-                sources[source] = context.sources[source]
-            else:
-                raise ConfigError(f"Source '{source}' was not found for model '{self.table_name}'.")
-
-        model_context.sources = sources
-        model_context.seeds = seeds
-        model_context.models = models
-
-        return model_context
