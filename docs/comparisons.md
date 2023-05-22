@@ -5,7 +5,7 @@
 There are many tools and frameworks in the data ecosystem. This page tries to make sense of it all.
 
 ## dbt
-[dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fanstastic tool, it has trouble scaling with data and organizational size.
+[dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fantastic tool, it has trouble scaling with data and organizational size.
 
 dbt built their product focused on simple data transformations. By default, it fully refreshes data warehouses by executing templated SQL in the correct order.
 
@@ -107,7 +107,7 @@ WHERE d.ds BETWEEN @start_ds AND @end_ds
 #### Data leakage
 dbt does not check whether the data inserted into an incremental table should be there or not. This can lead to problems and consistency issues, such as late-arriving data overriding past partitions. These problems are called "data leakage."
 
-SQLMesh wraps all queries in a subquery with a time filter under the hood to enforce that the data inserted for a particular batch is as expected and reproducible everytime.
+SQLMesh wraps all queries in a subquery with a time filter under the hood to enforce that the data inserted for a particular batch is as expected and reproducible every time.
 
 In addition, dbt only supports the 'insert/overwrite' incremental load pattern for systems that natively support it. SQLMesh enables 'insert/overwrite' on any system, because it is the most robust approach to incremental loading, while 'Append' pipelines risk data inaccuracy in the variety of scenarios where your pipelines may run more than once for a given date.
 

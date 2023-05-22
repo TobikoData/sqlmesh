@@ -3,7 +3,7 @@
 This page provides a conceptual overview of what SQLMesh does and how its components fit together.
 
 ## What SQLMesh is
-SQLMesh is a Python framework that automates everything needed to run a scaleable data transformation platform. SQLMesh works with a variety of [engines and orchestrators](../integrations/overview.md). 
+SQLMesh is a Python framework that automates everything needed to run a scalable data transformation platform. SQLMesh works with a variety of [engines and orchestrators](../integrations/overview.md). 
 
 It was created with a focus on both data and organizational scale and works regardless of your data warehouse or SQL engine's capabilities.
 

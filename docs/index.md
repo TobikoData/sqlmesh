@@ -18,7 +18,7 @@ Here are some challenges that data teams run into, especially when data sizes in
     * Validating changes to data pipelines before deploying to production is an uncertain and sometimes expensive process. Although branches can be deployed to environments, when merged to production, the code is re-run. This is wasteful and generates uncertainty because the data is regenerated.
 
 1. Silos transform data lakes to data swamps
-    * The difficulty and cost of making changes to core pipelines can lead to duplicate pipelines with minor customizations. The inability to easily make and validate changes causes contributors to follow the "path of least resistence". The proliferation of similar tables leads to additional costs, inconsistencies, and maintenance burden.
+    * The difficulty and cost of making changes to core pipelines can lead to duplicate pipelines with minor customizations. The inability to easily make and validate changes causes contributors to follow the "path of least resistance". The proliferation of similar tables leads to additional costs, inconsistencies, and maintenance burden.
 
 ## What is SQLMesh?
 SQLMesh consists of a CLI, a Python API, and a Web UI to make data pipeline development and deployment easy, efficient, and safe.
