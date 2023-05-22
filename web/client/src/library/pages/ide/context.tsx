@@ -9,6 +9,7 @@ export const EnumErrorKey = {
   Fetchdf: 'fetchdf',
   EvaluateModel: 'evaluate-model',
   RenderModel: 'render-model',
+  ColumnLineage: 'column-lineage',
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]

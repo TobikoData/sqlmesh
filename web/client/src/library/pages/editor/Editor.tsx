@@ -5,6 +5,7 @@ import Editor from '@components/editor/Editor'
 import { useStoreFileTree } from '@context/fileTree'
 import LineageFlowProvider from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
+import { EnumErrorKey, type ErrorIDE } from '../ide/context'
 
 export default function PageEditor(): JSX.Element {
   const models = useStoreContext(s => s.models)
@@ -24,8 +25,8 @@ export default function PageEditor(): JSX.Element {
     selectFile(files.get(model.path))
   }
 
-  function handleError(error?: Error): void {
-    setPreviewConsole(error?.message)
+  function handleError(error: ErrorIDE): void {
+    setPreviewConsole([EnumErrorKey.ColumnLineage, error])
   }
 
   return (

@@ -1033,6 +1033,20 @@
           "annotated": { "title": "Annotated", "type": "boolean" }
         }
       },
+      "ModelKindName": {
+        "title": "ModelKindName",
+        "enum": [
+          "INCREMENTAL_BY_TIME_RANGE",
+          "INCREMENTAL_BY_UNIQUE_KEY",
+          "FULL",
+          "VIEW",
+          "EMBEDDED",
+          "SEED",
+          "EXTERNAL"
+        ],
+        "type": "string",
+        "description": "The kind of model, determining how this data is computed and stored in the warehouse."
+      },
       "ModelsDiff": {
         "title": "ModelsDiff",
         "type": "object",
@@ -1229,8 +1243,7 @@
           "version",
           "physical_schema",
           "parents",
-          "is_materialized",
-          "is_embedded_kind"
+          "kind_name"
         ],
         "type": "object",
         "properties": {
@@ -1253,8 +1266,7 @@
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
-          "is_materialized": { "title": "Is Materialized", "type": "boolean" },
-          "is_embedded_kind": { "title": "Is Embedded Kind", "type": "boolean" }
+          "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
         },
         "additionalProperties": false
       },
