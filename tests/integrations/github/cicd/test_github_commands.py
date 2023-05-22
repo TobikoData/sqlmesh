@@ -134,20 +134,24 @@ def test_run_all_success_no_approvers(
         ("SQLMesh - Run Unit Tests", GithubCheckStatus.QUEUED, None),
         ("SQLMesh - Run Unit Tests", GithubCheckStatus.IN_PROGRESS, None),
         ("SQLMesh - Run Unit Tests", GithubCheckStatus.COMPLETED, GithubCheckConclusion.SUCCESS),
+        (
+            "SQLMesh - Has Required Approval",
+            GithubCheckStatus.COMPLETED,
+            GithubCheckConclusion.SKIPPED,
+        ),
         ("SQLMesh - PR Environment Synced", GithubCheckStatus.IN_PROGRESS, None),
         (
             "SQLMesh - PR Environment Synced",
             GithubCheckStatus.COMPLETED,
             GithubCheckConclusion.SUCCESS,
         ),
-        ("SQLMesh - Prod Environment Synced", GithubCheckStatus.IN_PROGRESS, None),
         (
             "SQLMesh - Prod Environment Synced",
             GithubCheckStatus.COMPLETED,
-            GithubCheckConclusion.SUCCESS,
+            GithubCheckConclusion.SKIPPED,
         ),
     ]
-    assert controller.deploy_to_prod.called
+    assert not controller.deploy_to_prod.called
     assert controller.update_pr_environment.called
     assert controller.update_sqlmesh_comment_info.call_args_list == [
         call(
@@ -156,8 +160,8 @@ def test_run_all_success_no_approvers(
             replace_if_exists=False,
         ),
     ]
-    assert controller.merge_pr.called
-    assert controller.delete_pr_environment.called
+    assert not controller.merge_pr.called
+    assert not controller.delete_pr_environment.called
 
 
 def test_run_all_success_with_approvers_approved_merge_delete(
@@ -392,3 +396,61 @@ def test_deploy_to_prod_failure(
     ]
     assert not controller.merge_pr.called
     assert not controller.delete_pr_environment.called
+
+
+def test_comment_command_invalid(
+    github_pr_invalid_command_controller: GithubController, mocker: MockerFixture
+):
+    controller = get_mocked_controller(github_pr_invalid_command_controller, mocker)
+    command._run_all(controller, merge=True, delete=True)
+    assert not controller._update_check.called
+    assert not controller.deploy_to_prod.called
+    assert not controller.update_pr_environment.called
+    assert not controller.update_sqlmesh_comment_info.called
+    assert not controller.merge_pr.called
+    assert not controller.delete_pr_environment.called
+
+
+def test_comment_command_deploy_prod(
+    github_pr_command_deploy_prod_controller: GithubController, mocker: MockerFixture
+):
+    controller = get_mocked_controller(github_pr_command_deploy_prod_controller, mocker)
+    command._run_all(controller, merge=True, delete=True)
+    assert [
+        (x[1]["name"], x[1]["status"], x[1]["conclusion"])
+        for x in controller._update_check.call_args_list
+    ] == [
+        ("SQLMesh - PR Environment Synced", GithubCheckStatus.QUEUED, None),
+        ("SQLMesh - Prod Environment Synced", GithubCheckStatus.QUEUED, None),
+        ("SQLMesh - Run Unit Tests", GithubCheckStatus.QUEUED, None),
+        ("SQLMesh - Run Unit Tests", GithubCheckStatus.IN_PROGRESS, None),
+        ("SQLMesh - Run Unit Tests", GithubCheckStatus.COMPLETED, GithubCheckConclusion.SUCCESS),
+        (
+            "SQLMesh - Has Required Approval",
+            GithubCheckStatus.COMPLETED,
+            GithubCheckConclusion.SKIPPED,
+        ),
+        ("SQLMesh - PR Environment Synced", GithubCheckStatus.IN_PROGRESS, None),
+        (
+            "SQLMesh - PR Environment Synced",
+            GithubCheckStatus.COMPLETED,
+            GithubCheckConclusion.SUCCESS,
+        ),
+        ("SQLMesh - Prod Environment Synced", GithubCheckStatus.IN_PROGRESS, None),
+        (
+            "SQLMesh - Prod Environment Synced",
+            GithubCheckStatus.COMPLETED,
+            GithubCheckConclusion.SUCCESS,
+        ),
+    ]
+    assert controller.deploy_to_prod.called
+    assert controller.update_pr_environment.called
+    assert controller.update_sqlmesh_comment_info.call_args_list == [
+        call(
+            value="- PR Virtual Data Environment: hello_world_2",
+            find_regex="- PR Virtual Data Environment: .*",
+            replace_if_exists=False,
+        ),
+    ]
+    assert controller.merge_pr.called
+    assert controller.delete_pr_environment.called

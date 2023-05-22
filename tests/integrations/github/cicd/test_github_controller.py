@@ -1,13 +1,19 @@
 # type: ignore
+import typing as t
 from unittest.mock import Mock, call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
-from sqlmesh.integrations.github.cicd.controller import GithubController
+from sqlmesh.integrations.github.cicd.controller import (
+    BotCommand,
+    GithubController,
+    GithubEvent,
+)
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import CICDBotError
+from tests.integrations.github.cicd.helper import get_mocked_controller
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 
@@ -129,3 +135,31 @@ def test_merge_pr(
     controller._pull_request = mocker.MagicMock()
     controller.merge_pr()
     controller._pull_request.method_calls == [call.merge()]
+
+
+def test_bot_command_parsing(
+    github_pull_request_comment_raw: t.Dict[str, t.Any], mocker: MockerFixture
+):
+    comment_raw = github_pull_request_comment_raw
+    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
+    assert controller.is_comment_triggered
+    assert controller.get_command_from_comment() == BotCommand.INVALID
+    comment_raw["comment"]["body"] = "/deploy"
+    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
+    assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
+    assert controller.get_command_from_comment("#SQLMesh") == BotCommand.INVALID
+    comment_raw["comment"]["body"] = "#SQLMesh/deploy"
+    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
+    assert controller.get_command_from_comment() == BotCommand.INVALID
+    assert controller.get_command_from_comment("#SQLMesh") == BotCommand.DEPLOY_PROD
+    comment_raw["comment"]["body"] = "Something Something /deploy"
+    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
+    assert controller.get_command_from_comment() == BotCommand.INVALID
+    assert controller.get_command_from_comment() == BotCommand.INVALID
+    comment_raw["comment"][
+        "body"
+    ] = """
+    /deploy
+    """
+    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
+    assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
