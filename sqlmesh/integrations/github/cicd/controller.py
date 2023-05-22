@@ -122,18 +122,11 @@ class BotCommand(Enum):
     @classmethod
     def from_comment_body(cls, body: str, namespace: t.Optional[str] = None) -> BotCommand:
         body = body.strip()
-        command_aliases = {
-            cls.DEPLOY_PROD: {"/deploy_prod", "/deploy-prod", "/deployprod", "/deploy"},
+        namespace = namespace.strip() if namespace else ""
+        input_to_command = {
+            namespace + "/deploy": cls.DEPLOY_PROD,
         }
-        if namespace:
-            command_aliases = {
-                command: {namespace + alias for alias in alias_values}
-                for command, alias_values in command_aliases.items()
-            }
-        for command, aliases in command_aliases.items():
-            if body in aliases:
-                return command
-        return cls.INVALID
+        return input_to_command.get(body, cls.INVALID)
 
     @property
     def is_invalid(self) -> bool:

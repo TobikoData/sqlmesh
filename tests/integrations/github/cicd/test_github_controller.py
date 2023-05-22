@@ -159,7 +159,7 @@ def test_bot_command_parsing(
     comment_raw["comment"][
         "body"
     ] = """
-    /deploy_prod
+    /deploy
     """
     controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
     assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
