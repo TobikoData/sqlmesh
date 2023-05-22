@@ -8,7 +8,8 @@ from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse
 
-import sqlmesh.core.dialect as d
+from sqlmesh.core import constants as c
+from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -62,11 +63,16 @@ class ModelMeta(PydanticModel):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
+    loader_type: str = c.SQLMESH
 
     _croniter: t.Optional[croniter] = None
     _interval_unit: t.Optional[IntervalUnit] = None
 
     _model_kind_validator = model_kind_validator
+
+    @validator("loader_type", pre=True)
+    def _loader_type_validator(cls, v: t.Any) -> str:
+        return str(v).lower()
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
