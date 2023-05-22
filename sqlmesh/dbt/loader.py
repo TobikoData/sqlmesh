@@ -120,7 +120,7 @@ class DbtLoader(Loader):
         for package in project.packages.values():
             context.variables = package.variables
             for test in package.tests.values():
-                logger.info(f"Converting {test.name} to sqlmesh format")
+                logger.info("Converting '%s' to sqlmesh format", test.name)
                 audits[test.name] = test.to_sqlmesh(context)
 
         return audits
@@ -139,7 +139,7 @@ class DbtLoader(Loader):
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
-        logger.info(f"Converting {config.model_name} to sqlmesh format")
+        logger.info("Converting '%s' to sqlmesh format", config.model_name)
         return config.to_sqlmesh(context)
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:

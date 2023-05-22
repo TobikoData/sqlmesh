@@ -12,7 +12,6 @@ from sqlglot.helper import ensure_list
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model
-from sqlmesh.core.model.meta import AuditReference
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -226,17 +225,12 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
-        audits: t.List[AuditReference] = [(test.name, {}) for test in self.tests]
-        dependencies = self.dependencies
-        for test in self.tests:
-            dependencies = dependencies.union(test.dependencies)
-
         return {
-            "audits": audits,
+            "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {context.refs[ref] for ref in dependencies.refs}.union(
-                {context.sources[source].source_name for source in dependencies.sources}
+            "depends_on": {context.refs[ref] for ref in self.dependencies.refs}.union(
+                {context.sources[source].source_name for source in self.dependencies.sources}
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,

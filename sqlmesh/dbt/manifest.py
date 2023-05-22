@@ -143,19 +143,23 @@ class ManifestHelper:
             if not test_owner:
                 if not dependencies.refs and not dependencies.sources:
                     raise ConfigError(
-                        f"Audit '{node.name}' is not associated with any models or sources"
+                        f"Audit '%s' is not associated with any models or sources", node.name
                     )
 
-                if len(dependencies.refs) == 1:
-                    test_owner = list(dependencies.refs)[0]
-                else:
-                    logger.info(
-                        f"Skipping audit '{node.name}'. Multi-owner audits not supported yet."
-                    )
-                    continue
+                test_owner = (
+                    list(dependencies.refs)[0]
+                    if dependencies.refs
+                    else list(dependencies.sources)[0]
+                )
 
-            if test_owner in dependencies.sources or not test_owner:
-                logger.info(f"Skipping audit '{node.name}'. Source audits not supported yet")
+            if test_owner in dependencies.sources:
+                logger.info(f"Skipping audit '%s'. Source audits not supported yet", node.name)
+                continue
+
+            if len(dependencies.refs) > 1:
+                logger.info(
+                    f"Skipping audit '%s'. Multi-owner audits not supported yet.", node.name
+                )
                 continue
 
             self._tests_per_package[node.package_name][node.name.lower()] = TestConfig(
