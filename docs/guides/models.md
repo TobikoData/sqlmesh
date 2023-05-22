@@ -20,7 +20,7 @@ To add a model:
             kind incremental_by_time_range (
                 time_column (ds, '%Y-%m-%d'),
             ),
-        )
+        );
 
         SELECT *
         FROM sqlmesh_example.example_incremental_model
@@ -57,7 +57,7 @@ When SQLMesh runs the `plan` command on your environment, it will show you wheth
 
 To preview changes using `plan`:
 
-1. Enter the `sqlmesh plan <environment name>` command. 
+1. Enter the `sqlmesh plan <environment name>` command.
 2. Enter `1` to classify the changes as `Breaking`, or enter `2` to classify the changes as `Non-Breaking`. In this example, the changes are classified as `Non-Breaking`:
 
 ```hl_lines="23 24"
@@ -70,14 +70,14 @@ Summary of differences against `dev`:
 │   └── sqlmesh_example.example_incremental_model
 └── Indirectly Modified:
     └── sqlmesh_example.example_full_model
----      
-+++   
-@@ -1,6 +1,7 @@         
-SELECT                
-id,              
-item_id,              
-+  1 AS new_column,         
-ds              
+---
++++
+@@ -1,6 +1,7 @@
+SELECT
+id,
+item_id,
++  1 AS new_column,
+ds
 FROM (VALUES
 (1, 1, '2020-01-01'),
 Directly Modified: sqlmesh_example.example_incremental_model
@@ -87,8 +87,8 @@ Directly Modified: sqlmesh_example.example_incremental_model
 [2] [Non-breaking] Backfill sqlmesh_example.example_incremental_model but not indirectly modified children: 2
 Models needing backfill (missing dates):
 └── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-02-17)
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history: 
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 
+Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 
 sqlmesh_example__dev.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
@@ -125,13 +125,13 @@ Summary of differences against `dev`:
 │   └── sqlmesh_example.example_incremental_model
 └── Indirectly Modified:
     └── sqlmesh_example.example_full_model
----     
-+++     
-@@ -1,7 +1,6 @@ 
+---
++++
+@@ -1,7 +1,6 @@
 
 SELECT
-id,          
-item_id,              
+id,
+item_id,
 -  1 AS new_column,
 ds
 FROM (VALUES
@@ -173,7 +173,7 @@ To manually validate your models, you can perform one or more of the following t
 
 ---
 
-Before generating a DAG, ensure that you have already installed the graphviz package. 
+Before generating a DAG, ensure that you have already installed the graphviz package.
 
 To install the package with `pip`, enter the following command:
 
@@ -218,8 +218,8 @@ To delete a model:
             └── sqlmesh_example.example_incremental_model
         Models needing backfill (missing dates):
         └── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-02-17)
-        Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history: 
-        Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 
+        Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
+        Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
         Apply - Backfill Tables [y/n]: y
 
         All model batches have been executed successfully
