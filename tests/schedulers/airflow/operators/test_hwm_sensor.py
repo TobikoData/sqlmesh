@@ -23,10 +23,15 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
         task_id="test_hwm_task",
     )
 
-    get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
+    get_snapshots_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
     )
-    get_snapshots_with_same_version_mock.return_value = [target_snapshot]
+    get_snapshots_mock.return_value = {target_snapshot.snapshot_id: target_snapshot}
+
+    get_snapshot_intervals_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
+    )
+    get_snapshot_intervals_mock.return_value = []
 
     dag_run_mock = mocker.Mock()
     dag_run_mock.data_interval_end = to_datetime("2022-01-01")
@@ -34,7 +39,8 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     context = Context(dag_run=dag_run_mock)  # type: ignore
     assert not task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot.table_info])
+    get_snapshots_mock.assert_called_once_with([target_snapshot.table_info])
+    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot.table_info])
 
 
 @pytest.mark.airflow
@@ -62,12 +68,17 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
         task_id="test_hwm_task",
     )
 
-    get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
+    get_snapshots_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
     )
-    get_snapshots_with_same_version_mock.return_value = [
-        target_snapshot_v1,
-        target_snapshot_v2,
+    get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
+
+    get_snapshot_intervals_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
+    )
+    get_snapshot_intervals_mock.return_value = [
+        target_snapshot_v1.snapshot_intervals,
+        target_snapshot_v2.snapshot_intervals,
     ]
 
     dag_run_mock = mocker.Mock()
@@ -77,7 +88,8 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
 
     assert not task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot_v1.table_info])
+    get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
+    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot_v1.table_info])
 
 
 @pytest.mark.airflow
@@ -105,12 +117,17 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
         task_id="test_hwm_task",
     )
 
-    get_snapshots_with_same_version_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots_with_same_version"
+    get_snapshots_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshots"
     )
-    get_snapshots_with_same_version_mock.return_value = [
-        target_snapshot_v1,
-        target_snapshot_v2,
+    get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
+
+    get_snapshot_intervals_mock = mocker.patch(
+        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
+    )
+    get_snapshot_intervals_mock.return_value = [
+        target_snapshot_v1.snapshot_intervals,
+        target_snapshot_v2.snapshot_intervals,
     ]
 
     dag_run_mock = mocker.Mock()
@@ -120,4 +137,5 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
 
     assert task.poke(context)
 
-    get_snapshots_with_same_version_mock.assert_called_once_with([target_snapshot_v1.table_info])
+    get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
+    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot_v1.table_info])

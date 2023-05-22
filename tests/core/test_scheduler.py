@@ -40,8 +40,7 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    orders.add_interval("2022-01-10", "2022-01-15")
-    scheduler.state_sync.add_interval(orders.snapshot_id, "2022-01-10", "2022-01-15")
+    scheduler.state_sync.add_interval(orders, "2022-01-10", "2022-01-15")
 
     assert scheduler._interval_params([orders], start_ds, end_ds) == {
         orders: [
@@ -77,8 +76,8 @@ def test_multi_version_snapshots(
         version="1",
     )
     items_a.fingerprint = SnapshotFingerprint(data_hash="data", metadata_hash="metadata")
-    items_a.add_interval("2022-01-10", "2022-01-15")
     sushi_context_fixed_date.state_sync.push_snapshots([items_a])
+    sushi_context_fixed_date.state_sync.add_interval(items_a, "2022-01-10", "2022-01-15")
 
     model = sushi_context_fixed_date.upsert_model(
         model,
@@ -91,8 +90,8 @@ def test_multi_version_snapshots(
         version="1",
     )
     items_b.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    items_b.add_interval("2022-01-20", "2022-01-25")
     sushi_context_fixed_date.state_sync.push_snapshots([items_b])
+    sushi_context_fixed_date.state_sync.add_interval(items_b, "2022-01-20", "2022-01-25")
 
     interval_params = scheduler._interval_params([items_a], start_ds, end_ds)
     assert len(interval_params) == 1

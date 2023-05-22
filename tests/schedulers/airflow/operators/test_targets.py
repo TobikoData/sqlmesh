@@ -60,9 +60,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
         is_dev=False,
     )
 
-    add_interval_mock.assert_called_once_with(
-        snapshot.snapshot_id, interval_ds, interval_ds, is_dev=False
-    )
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
 
 
 @pytest.mark.airflow
@@ -113,9 +111,7 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
         is_dev=False,
     )
 
-    add_interval_mock.assert_called_once_with(
-        snapshot.snapshot_id, interval_ds, interval_ds, is_dev=False
-    )
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
 
     get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
 

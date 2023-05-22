@@ -180,23 +180,23 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
     )
 
 
-def test_get_snapshots_with_same_version(mocker: MockerFixture, snapshot: Snapshot):
-    snapshots = common.SnapshotsResponse(snapshots=[snapshot])
+def test_get_snapshot_intervals(mocker: MockerFixture, snapshot: Snapshot):
+    intervals = common.SnapshotIntervalsResponse(snapshot_intervals=[snapshot.snapshot_intervals])
 
-    get_snapshots_response_mock = mocker.Mock()
-    get_snapshots_response_mock.status_code = 200
-    get_snapshots_response_mock.json.return_value = snapshots.dict()
-    get_snapshots_mock = mocker.patch("requests.Session.get")
-    get_snapshots_mock.return_value = get_snapshots_response_mock
+    get_snapshot_intervals_response_mock = mocker.Mock()
+    get_snapshot_intervals_response_mock.status_code = 200
+    get_snapshot_intervals_response_mock.json.return_value = intervals.dict()
+    get_snapshot_intervals_mock = mocker.patch("requests.Session.get")
+    get_snapshot_intervals_mock.return_value = get_snapshot_intervals_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
     versions = [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
-    result = client.get_snapshots_with_same_version(versions)
+    result = client.get_snapshot_intervals(versions)
 
-    assert result == [snapshot]
+    assert result == [snapshot.snapshot_intervals]
 
-    get_snapshots_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/snapshots?{snapshot_url(versions, 'versions')}"
+    get_snapshot_intervals_mock.assert_called_once_with(
+        f"http://localhost:8080/sqlmesh/api/v1/intervals?{snapshot_url(versions, 'versions')}"
     )
 
 
