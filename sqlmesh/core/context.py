@@ -848,12 +848,13 @@ class Context(BaseContext):
         The schema file contains all columns and types of external models, allowing for more robust
         lineage, validation, and optimizations.
         """
+        models = self._models or self._loader.load(self, update_schemas=False).models
         for path, config in self.configs.items():
             create_schema_file(
                 path=path / c.SCHEMA_YAML,
                 models={
                     name: model
-                    for name, model in self._models.items()
+                    for name, model in models.items()
                     if self.config_for_model(model) is config
                 },
                 adapter=self._engine_adapter,

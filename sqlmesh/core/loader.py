@@ -69,7 +69,9 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
         if external:
             if "*" in model.columns_to_types:
                 raise ConfigError(
-                    f"Can't expand SELECT * expression for model '{name}'. Projections for models that use external sources must be specified explicitly at '{model._path}'"
+                    f"Can't expand SELECT * expression for model '{name}'."
+                    " Projections for models that use external sources must be specified explicitly"
+                    " or use external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models)."
                 )
         elif model.mapping_schema:
             try:
@@ -97,7 +99,7 @@ class Loader(abc.ABC):
         self._path_mtimes: t.Dict[Path, float] = {}
         self._dag: DAG[str] = DAG()
 
-    def load(self, context: Context) -> LoadedProject:
+    def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
         """
         Loads all hooks, macros, and models in the context's path
 
@@ -128,7 +130,8 @@ class Loader(abc.ABC):
         models = self._load_models(macros, hooks, jinja_macros)
         for model in models.values():
             self._add_model_to_dag(model)
-        update_model_schemas(self._dag, models)
+        if update_schemas:
+            update_model_schemas(self._dag, models)
 
         audits = self._load_audits()
 
@@ -168,6 +171,24 @@ class Loader(abc.ABC):
     @abc.abstractmethod
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
+
+    def _load_external_models(self) -> UniqueKeyDict[str, Model]:
+        models: UniqueKeyDict = UniqueKeyDict("models")
+        for context_path, config in self._context.configs.items():
+            path = Path(context_path / c.SCHEMA_YAML)
+
+            if path.exists():
+                self._track_file(path)
+
+                with open(path, "r", encoding="utf-8") as file:
+                    for row in YAML().load(file.read()):
+                        model = create_external_model(
+                            **row,
+                            dialect=config.model_defaults.dialect,
+                            path=path,
+                        )
+                        models[model.name] = model
+        return models
 
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.graph[model.name] = set()
@@ -238,24 +259,6 @@ class SqlMeshLoader(Loader):
         models.update(self._load_external_models())
         models.update(self._load_python_models())
 
-        return models
-
-    def _load_external_models(self) -> UniqueKeyDict[str, Model]:
-        models: UniqueKeyDict = UniqueKeyDict("models")
-        for context_path, config in self._context.configs.items():
-            path = Path(context_path / c.SCHEMA_YAML)
-
-            if path.exists():
-                self._track_file(path)
-
-                with open(path, "r", encoding="utf-8") as file:
-                    for row in YAML().load(file.read()):
-                        model = create_external_model(
-                            **row,
-                            dialect=config.model_defaults.dialect,
-                            path=path,
-                        )
-                        models[model.name] = model
         return models
 
     def _load_sql_models(
