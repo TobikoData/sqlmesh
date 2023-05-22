@@ -13,6 +13,7 @@ from sqlmesh.core.model.definition import Model, _Model, expression_validator
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, raise_config_error
+from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -54,6 +55,7 @@ class Audit(AuditMeta, frozen=True):
 
     query: t.Union[exp.Subqueryable, d.Jinja]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
     _path: t.Optional[pathlib.Path] = None
 
@@ -220,6 +222,7 @@ class Audit(AuditMeta, frozen=True):
             self.dialect,
             self.macro_definitions,
             path=self._path or Path(),
+            jinja_macro_registry=self.jinja_macros,
             python_env=model.python_env,
             time_column=model.time_column,
             time_converter=model.convert_to_time_column,
