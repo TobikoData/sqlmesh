@@ -4,7 +4,7 @@
 
 ---
 
-Before getting started, ensure that you meet the [prerequsities](../prerequisites.md) for using SQLMesh.
+Before getting started, ensure that you meet the [prerequisites](../prerequisites.md) for using SQLMesh.
 
 ---
 
@@ -58,7 +58,7 @@ To create a project from the command line, follow these steps:
 
 To edit an existing project, open the project file you wish to edit in your preferred editor.
 
-If using CLI or Notebook, you can open a file in your project for editing by using the `sqlmesh` command with the `-p` varaible, and pointing to your project's path as follows:
+If using CLI or Notebook, you can open a file in your project for editing by using the `sqlmesh` command with the `-p` variable, and pointing to your project's path as follows:
 
 ```bash
 sqlmesh -p <your-project-path>

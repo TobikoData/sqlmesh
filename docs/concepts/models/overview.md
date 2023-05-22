@@ -33,7 +33,7 @@ The `SELECT` expression of a model must follow certain conventions for SQLMesh t
 ### Unique column names
 The final `SELECT` of a model's query must contain unique column names.
 
-### Explict types
+### Explicit types
 SQLMesh encourages explicit type casting in the final `SELECT` of a model's query. It is considered a best practice to prevent unexpected types in the schema of a model's table.
 
 SQLMesh uses the postgres `x::int` syntax for casting; the casts are automatically transpiled to the appropriate format for the execution engine.
@@ -55,11 +55,11 @@ This example demonstrates non-inferrable, inferrable, and explicit aliases:
 ```sql linenums="1"
 SELECT
   1, -- not inferrable
-  x + 1, -- not infererrable
-  SUM(x), -- not infererrable
+  x + 1, -- not inferrable
+  SUM(x), -- not inferrable
   x, -- inferrable as x
   x::int, -- inferrable as x
-  x + 1 AS x, -- explictly x
+  x + 1 AS x, -- explicitly x
   SUM(x) as x, -- explicitly x
 ```
 
@@ -87,7 +87,7 @@ Name is ***required*** and must be ***unique***.
 - Start is used to determine the earliest time needed to process the model. It can be an absolute date/time (`2022-01-01`), or a relative one (`1 year ago`).
 
 ### cron
-- Cron is used to schedule your model to process or refresh at a certain interval. It uses [croniter](https://github.com/kiorky/croniter) under the hood, so expressions such as `@daily` can be used. A model's `IntervalUnit` is determined implicity by the cron expression.
+- Cron is used to schedule your model to process or refresh at a certain interval. It uses [croniter](https://github.com/kiorky/croniter) under the hood, so expressions such as `@daily` can be used. A model's `IntervalUnit` is determined implicitly by the cron expression.
 
 ### storage_format
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
@@ -112,7 +112,7 @@ For models that are incremental, the following parameters can be specified in th
 - Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
 ## Macros
-Macros can be used for passing in paramaterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros.md).
+Macros can be used for passing in parameterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros.md).
 
 ## Statements
 Models can have additional statements that run before the main query. This can be useful for loading things such as [UDFs](../glossary.md#user-defined-function-udf).
