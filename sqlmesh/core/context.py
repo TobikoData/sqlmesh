@@ -27,7 +27,7 @@ Running tests on your models.
 ```python
 from sqlmesh.core.context import Context
 context = Context(path="example")
-context.run_tests()
+context.test()
 ```
 """
 from __future__ import annotations
