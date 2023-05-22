@@ -912,6 +912,11 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
     and it makes it difficult to see the progress of the plan.
     """
 
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int, int]] = {}
+        self.promotion_status: t.Tuple[int, int] = (0, 0)
+
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         super()._print(value, **kwargs)
         for captured_output in self._captured_outputs:
@@ -926,6 +931,52 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         message = f"{message} [y/n]"
         self._print(message)
         return super()._confirm("", **kwargs)
+
+    def start_snapshot_progress(
+        self, snapshot: Snapshot, total_batches: int, environment: str
+    ) -> None:
+        """Indicates that a new load progress has begun."""
+        if not self.evaluation_batch_progress.get(snapshot.name):
+            view_name = snapshot.qualified_view_name.for_environment(environment)
+            self.evaluation_batch_progress[snapshot.name] = (view_name, 0, total_batches)
+            print(f"Starting '{view_name}', Total batches: {total_batches}")
+
+    def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
+        """Update snapshot progress."""
+        view_name, loaded_batches, total_batches = self.evaluation_batch_progress[snapshot_name]
+        loaded_batches += 1
+        self.evaluation_batch_progress[snapshot_name] = (view_name, loaded_batches, total_batches)
+        finished_loading = loaded_batches == total_batches
+        status = "Loaded" if finished_loading else "Loading"
+        print(f"{status} '{view_name}', Completed Batches: {loaded_batches}/{total_batches}")
+        if finished_loading:
+            total_finished_loading = len(
+                [x for x in self.evaluation_batch_progress.values() if x[1] == x[2]]
+            )
+            total = len(self.evaluation_batch_progress)
+            print(f"Completed Loading {total_finished_loading}/{total} Models")
+
+    def stop_snapshot_progress(self, success: bool = True) -> None:
+        """Stop the load progress"""
+        self.evaluation_batch_progress = {}
+        print(f"Loading {'succeeded' if success else 'failed'}")
+
+    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+        """Indicates that a new promotion progress has begun."""
+        self.promotion_status = (0, total_tasks)
+        print(f"Virtually Updating '{environment}'")
+
+    def update_promotion_progress(self, num_tasks: int) -> None:
+        """Update promotion progress."""
+        num_promotions, total_promotions = self.promotion_status
+        num_promotions += num_tasks
+        self.promotion_status = (num_promotions, total_promotions)
+        if num_promotions % 5 == 0:
+            print(f"Virtually Updated {num_promotions}/{total_promotions}")
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        """Stop the promotion progress"""
+        print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
 
 def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
