@@ -191,6 +191,8 @@ def _janitor_task(
         )
         util.delete_dags(plan_application_dag_ids, session=session)
 
+        state_sync.compact_intervals()
+
 
 @provide_session
 def _get_plan_dag_specs(

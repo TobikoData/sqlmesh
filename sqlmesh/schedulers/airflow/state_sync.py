@@ -9,6 +9,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
+    SnapshotIntervals,
     SnapshotNameVersion,
     SnapshotNameVersionLike,
 )
@@ -91,15 +92,6 @@ class HttpStateReader(StateReader):
             return set()
         return self._client.snapshots_exist([s.snapshot_id for s in snapshot_ids])
 
-    def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotNameVersionLike]
-    ) -> t.List[Snapshot]:
-        if not snapshots:
-            return []
-        return self._client.get_snapshots_with_same_version(
-            [SnapshotNameVersion(name=s.name, version=s.version) for s in snapshots]
-        )
-
     def get_snapshots_by_models(self, *names: str) -> t.List[Snapshot]:
         """
         Get all snapshots by model name.
@@ -109,6 +101,25 @@ class HttpStateReader(StateReader):
         """
         raise NotImplementedError(
             "Getting snapshots by model names is not supported by the Airflow HTTP State Sync"
+        )
+
+    def get_snapshot_intervals(
+        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
+    ) -> t.List[SnapshotIntervals]:
+        """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.
+
+        Args:
+            snapshots: Target snapshot IDs. If not specified all intervals will be fetched.
+            current_only: Whether to only fetch intervals for snapshots provided as input as opposed
+                to fetching intervals for all snapshots that share the same version as the input ones.
+
+        Returns:
+            The list of snapshot intervals, one per unique version.
+        """
+        if not snapshots:
+            return []
+        return self._client.get_snapshot_intervals(
+            [SnapshotNameVersion(name=s.name, version=s.version) for s in snapshots]
         )
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:

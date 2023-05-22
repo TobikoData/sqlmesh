@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from collections import defaultdict
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
@@ -16,7 +15,8 @@ def create_plan_dag_spec(
     request: common.PlanApplicationRequest, state_sync: StateSync
 ) -> common.PlanDagSpec:
     new_snapshots = {s.snapshot_id: s for s in request.new_snapshots}
-    stored_snapshots = state_sync.get_snapshots(None)
+    stored_snapshots = state_sync.get_snapshots([*new_snapshots, *request.environment.snapshots])
+    all_snapshots = {**new_snapshots, **stored_snapshots}
 
     duplicated_snapshots = set(stored_snapshots).intersection(new_snapshots)
     if duplicated_snapshots:
@@ -34,47 +34,36 @@ def create_plan_dag_spec(
         end = now()
         unpaused_dt = end
 
-    snapshots_for_intervals = {**new_snapshots, **stored_snapshots}
-    all_snapshots_by_version = defaultdict(set)
-    for snapshot in snapshots_for_intervals.values():
-        all_snapshots_by_version[(snapshot.name, snapshot.version)].add(snapshot.snapshot_id)
-
-    if request.is_dev:
-        # When in development mode exclude snapshots that match the version of each
-        # paused forward-only snapshot that is a part of the plan.
-        for s in request.environment.snapshots:
-            if s.is_forward_only and snapshots_for_intervals[s.snapshot_id].is_paused:
-                previous_snapshot_ids = all_snapshots_by_version[(s.name, s.version)] - {
-                    s.snapshot_id
-                }
-                for sid in previous_snapshot_ids:
-                    snapshots_for_intervals.pop(sid)
-
     if request.restatements:
-        snapshots_for_restatement = (
-            snapshots_for_intervals.values()
-            if not request.is_dev
-            else [snapshots_for_intervals[s.snapshot_id] for s in request.environment.snapshots]
-        )
-        state_sync.remove_interval(
-            [],
-            start=request.environment.start_at,
-            end=end,
-            all_snapshots=(
-                snapshot
-                for snapshot in snapshots_for_restatement
-                if snapshot.name in request.restatements
-                and snapshot.snapshot_id not in new_snapshots
-            ),
-        )
+        snapshots_for_restatement = [
+            snapshot
+            for snapshot in all_snapshots.values()
+            if snapshot.name in request.restatements and snapshot.snapshot_id not in new_snapshots
+        ]
+        if request.is_dev:
+            # Remove intervals for target snapshots only when in dev.
+            state_sync.remove_interval(
+                [],
+                start=request.environment.start_at,
+                end=end,
+                all_snapshots=snapshots_for_restatement,
+            )
+        else:
+            # Remove intervals for target snapshots and snapshots that share the same version with target ones.
+            state_sync.remove_interval(
+                snapshots_for_restatement,
+                start=request.environment.start_at,
+                end=end,
+            )
 
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
-            request.environment.snapshots,
-            snapshots=snapshots_for_intervals,
+            all_snapshots.values(),
+            intervals=state_sync.get_snapshot_intervals(all_snapshots.values()),
             start=request.environment.start_at,
             end=end,
             latest=end,
+            is_dev=request.is_dev,
         )
     else:
         backfill_batches = {}

@@ -130,7 +130,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     ) -> None:
         with util.scoped_state_sync() as state_sync:
             state_sync.add_interval(
-                self.snapshot.snapshot_id,
+                self.snapshot,
                 self._get_start(context),
                 self._get_end(context),
                 is_dev=self.is_dev,

@@ -11,7 +11,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
-    SnapshotIdLike,
+    SnapshotIntervals,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
@@ -140,7 +140,7 @@ class Scheduler:
             is_dev=is_dev,
             **kwargs,
         )
-        self.state_sync.add_interval(snapshot.snapshot_id, start, end, is_dev=is_dev)
+        self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
         self.console.update_snapshot_progress(snapshot.name, 1)
 
     def run(
@@ -230,24 +230,13 @@ class Scheduler:
         Returns:
             A list of tuples containing all snapshots needing to be run with their associated interval params.
         """
-        all_snapshots = {s.snapshot_id: s for s in self.snapshots.values()}
-
-        # When in development mode only consider intervals of the current forward-only snapshot and ignore
-        # intervals of all snapshots with the same version that came before it.
-        same_version_snapshots = (
-            [s for s in snapshots if not s.is_forward_only or not s.is_paused]
-            if is_dev
-            else snapshots
-        )
-        stored_snapshots = self.state_sync.get_snapshots_with_same_version(same_version_snapshots)
-        all_snapshots.update({s.snapshot_id: s for s in stored_snapshots})
-
         return compute_interval_params(
             snapshots,
-            snapshots=all_snapshots,
+            intervals=self.state_sync.get_snapshot_intervals(snapshots),
             start=start or earliest_start_date(snapshots),
             end=end or now(),
             latest=latest or now(),
+            is_dev=is_dev,
         )
 
     def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
@@ -293,12 +282,13 @@ class Scheduler:
 
 
 def compute_interval_params(
-    target: t.Iterable[SnapshotIdLike],
+    snasphots: t.Iterable[Snapshot],
     *,
-    snapshots: t.Dict[SnapshotId, Snapshot],
+    intervals: t.Iterable[SnapshotIntervals],
     start: TimeLike,
     end: TimeLike,
     latest: TimeLike,
+    is_dev: bool,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -311,8 +301,8 @@ def compute_interval_params(
     with 30 days and 1 job with 10.
 
     Args:
-        target: A set of target snapshots for which intervals should be computed.
-        snapshots: A catalog of all available snapshots (including the target ones).
+        snapshots: A set of target snapshots for which intervals should be computed.
+        intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
@@ -324,8 +314,8 @@ def compute_interval_params(
 
     snapshots_to_batches = {}
 
-    for snapshot in Snapshot.merge_snapshots(target, snapshots):
-        model_start_dt = max(start_date(snapshot, snapshots.values()) or start_dt, start_dt)
+    for snapshot in Snapshot.hydrate_with_intervals_by_version(snasphots, intervals, is_dev=is_dev):
+        model_start_dt = max(start_date(snapshot, snasphots) or start_dt, start_dt)
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
             for s, e in snapshot.missing_intervals(model_start_dt, end, latest)

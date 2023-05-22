@@ -8,11 +8,11 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from sqlmesh.core import constants as c
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotNameVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import now, yesterday
+from sqlmesh.utils.date import yesterday
 from sqlmesh.utils.errors import SQLMeshError
 
 DAG_CREATION_WAIT_INTERVAL = 3
@@ -71,41 +71,6 @@ def test_apply_plan_create_backfill_promote(
     assert not airflow_client.get_environment(environment_name).snapshots  # type: ignore
 
 
-@pytest.mark.integration
-@pytest.mark.airflow_integration
-def test_mult_snapshots_same_version(airflow_client: AirflowClient, make_snapshot, random_name):
-    model_name = random_name()
-
-    snapshot = make_snapshot(_create_model(model_name), version="1")
-    snapshot.change_category = SnapshotChangeCategory.BREAKING
-    # Presetting the interval here to avoid backfill.
-    snapshot.add_interval("2022-01-01", "2022-01-01")
-    snapshot.set_unpaused_ts(now())
-
-    original_fingerprint = snapshot.fingerprint
-
-    environment_name = _random_environment_name()
-    environment = _create_environment(snapshot, name=environment_name)
-    _apply_plan_and_block(airflow_client, [snapshot], environment)
-
-    dag = _get_snapshot_dag(airflow_client, model_name, snapshot.version)
-    assert dag["is_active"]
-
-    new_fingerprint = original_fingerprint.copy(update={"data_hash": "new_snapshot"})
-
-    snapshot.fingerprint = new_fingerprint
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    environment.previous_plan_id = environment.plan_id
-    environment.plan_id = "new_plan_id"
-    _apply_plan_and_block(airflow_client, [snapshot], environment)
-
-    _validate_snapshot_identifiers_for_version(
-        airflow_client,
-        snapshot,
-        [original_fingerprint.to_identifier(), new_fingerprint.to_identifier()],
-    )
-
-
 def _apply_plan_and_block(
     airflow_client: AirflowClient,
     new_snapshots: t.List[Snapshot],
@@ -123,19 +88,6 @@ def _apply_plan_and_block(
     assert airflow_client.wait_for_dag_run_completion(
         plan_application_dag_id, plan_application_dag_run_id, DAG_RUN_POLL_INTERVAL
     )
-
-
-@retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)
-def _validate_snapshot_identifiers_for_version(
-    airflow_client: AirflowClient,
-    snapshot: Snapshot,
-    expected_identifiers: t.List[str],
-) -> None:
-    snapshots = airflow_client.get_snapshots_with_same_version(
-        [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
-    )
-    identifiers = [s.identifier for s in snapshots]
-    assert sorted(identifiers) == sorted(expected_identifiers)
 
 
 @retry(wait=wait_fixed(3), stop=stop_after_attempt(5), reraise=True)

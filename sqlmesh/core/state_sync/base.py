@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotIntervals,
     SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
@@ -65,21 +66,6 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_snapshots_with_same_version(
-        self, snapshots: t.Iterable[SnapshotNameVersionLike]
-    ) -> t.List[Snapshot]:
-        """Fetches all snapshots that share the same version as the snapshots.
-
-        The output includes the snapshots with the specified version.
-
-        Args:
-            snapshots: The collection of target name / version pairs.
-
-        Returns:
-            The list of Snapshot objects.
-        """
-
-    @abc.abstractmethod
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         """Checks if multiple snapshots exist in the state sync.
 
@@ -115,6 +101,21 @@ class StateReader(abc.ABC):
 
         Returns:
             The list of snapshots.
+        """
+
+    @abc.abstractmethod
+    def get_snapshot_intervals(
+        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
+    ) -> t.List[SnapshotIntervals]:
+        """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.
+
+        Args:
+            snapshots: Target snapshot IDs. If not specified all intervals will be fetched.
+            current_only: Whether to only fetch intervals for snapshots provided as input as opposed
+                to fetching intervals for all snapshots that share the same version as the input ones.
+
+        Returns:
+            The list of snapshot intervals, one per unique version.
         """
 
     def missing_intervals(
@@ -165,22 +166,16 @@ class StateReader(abc.ABC):
             **(self.get_snapshots(unversioned) if unversioned else {}),
         }
 
-        all_snapshots = {
-            **snapshots_by_id,
-            **{
-                snapshot.snapshot_id: snapshot
-                for snapshot in self.get_snapshots_with_same_version(
-                    snapshot for snapshot in snapshots_by_id.values() if snapshot.version
-                )
-            },
-        }
+        snapshot_intervals = self.get_snapshot_intervals(snapshots_by_id.values())
 
         missing = {}
         start_date = to_datetime(start or scheduler.earliest_start_date(snapshots_by_id.values()))
         end_date = end or now()
         restatements = set(restatements or [])
 
-        for snapshot in Snapshot.merge_snapshots(snapshots_by_id, all_snapshots):
+        for snapshot in Snapshot.hydrate_with_intervals_by_version(
+            snapshots_by_id.values(), snapshot_intervals
+        ):
             if snapshot.name in restatements:
                 snapshot.remove_interval(start_date, end_date)
             intervals = snapshot.missing_intervals(
@@ -283,7 +278,7 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def add_interval(
         self,
-        snapshot_id: SnapshotIdLike,
+        snapshot: Snapshot,
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
@@ -293,7 +288,7 @@ class StateSync(StateReader, abc.ABC):
         Snapshots must be pushed before adding intervals to them.
 
         Args:
-            snapshot_id: The snapshot like object to add an interval to.
+            snapshot: The snapshot like object to add an interval to.
             start: The start of the interval to add.
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in
@@ -370,6 +365,14 @@ class StateSync(StateReader, abc.ABC):
             snapshots: Target snapshots.
             unpaused_dt: The datetime object which indicates when target snapshots
                 were unpaused.
+        """
+
+    @abc.abstractmethod
+    def compact_intervals(self) -> None:
+        """Compacts intervals for all snapshots.
+
+        Compaction process involves merging of existing interval records into new records and
+        then deleting the old ones.
         """
 
     def migrate(self, skip_backup: bool = False) -> None:

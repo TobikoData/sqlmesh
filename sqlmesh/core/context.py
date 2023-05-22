@@ -372,7 +372,7 @@ class Context(BaseContext):
         environment = environment or c.PROD
         self.scheduler(environment=environment).run(environment, start, end, latest)
 
-        if not skip_janitor:
+        if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
     def get_model(self, name: str) -> t.Optional[Model]:
@@ -952,6 +952,8 @@ class Context(BaseContext):
 
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(expired_snapshots)
+
+        self.state_sync.compact_intervals()
 
     def _try_connection(self, connection_name: str, engine_adapter: EngineAdapter) -> None:
         connection_name = connection_name.capitalize()

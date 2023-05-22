@@ -11,6 +11,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotIntervals,
     SnapshotTableInfo,
 )
 from sqlmesh.core.user import User
@@ -85,6 +86,10 @@ class EnvironmentsResponse(PydanticModel):
 
 class SnapshotsResponse(PydanticModel):
     snapshots: t.List[Snapshot]
+
+
+class SnapshotIntervalsResponse(PydanticModel):
+    snapshot_intervals: t.List[SnapshotIntervals]
 
 
 class SnapshotIdsResponse(PydanticModel):
