@@ -168,8 +168,7 @@ class GithubEvent:
         comment = self.payload.get("comment")
         if not comment:
             return False
-        body = comment.get("body")
-        if not body:
+        if not comment.get("body"):
             return False
         return self.payload.get("action") != "deleted"
 
