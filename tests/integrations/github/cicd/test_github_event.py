@@ -26,6 +26,7 @@ def test_github_pull_request_comment(github_pull_request_comment_event: GithubEv
         github_pull_request_comment_event.pull_request_url
         == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
     )
+    assert github_pull_request_comment_event.pull_request_comment_body == "example_comment"
 
 
 def test_pull_request_synchronized_info(github_pull_request_synchronized_info: PullRequestInfo):
