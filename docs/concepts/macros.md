@@ -202,16 +202,16 @@ Macro systems use control flow operators such as `for` loops and `if` statements
 Before diving in, let's dissect a `for` loop to understand its components. `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
 
 ```python linenums="1"
-for number in [1, 2, 3]:
+for number in [4, 5, 6]:
     print(number)
 ```
 
 This loop prints the name of each number present in the brackets:
 
 ```python linenums="1"
-1
-2
-3
+4
+5
+6
 ```
 
 The first line of the example sets up the loop, doing two things:
@@ -229,10 +229,10 @@ This example accomplishes a similar task to the Python example above:
 
 ```sql linenums="1"
 SELECT
-    @EACH([1, 2, 3], number -> number)
+    @EACH([4, 5, 6], number -> number)
 FROM table
 ```
-The loop is set up by the first argument: `@EACH([1, 2, 3]` tells SQLMesh to step through the list of items in brackets.
+The loop is set up by the first argument: `@EACH([4, 5, 6]` tells SQLMesh to step through the list of items in brackets.
 
 The second argument `number -> number` tells SQLMesh what action should be taken for each item using an "anonymous" function (aka "lambda" function). The left side of the arrow states what name the code on the right side will refer to each item as, just like `for number` in the Python example.
 
@@ -246,9 +246,9 @@ Given the automatic print and comma-separation, the anonymous function `number -
 
 ```sql linenums="1"
 SELECT
-    1, 
-    2, 
-    3
+    4, 
+    5, 
+    6
 FROM table
 ```
 
