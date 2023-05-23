@@ -248,7 +248,7 @@ class BaseModelConfig(GeneralConfig):
                     hook.sql, default_dialect=self.model_dialect or model_context.dialect
                 )
             ],
-            "loader_type": "dbt",
+            "hash_raw_query": True,
             **optional_kwargs,
         }
 

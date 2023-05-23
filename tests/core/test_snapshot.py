@@ -105,7 +105,7 @@ def test_json(snapshot: Snapshot):
             },
             "source_type": "sql",
             "tags": [],
-            "loader_type": "sqlmesh",
+            "hash_raw_query": False,
         },
         "audits": [],
         "name": "name",

@@ -884,7 +884,7 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
     ]
 
     if isinstance(model, SqlModel):
-        query = model.render_query() if model.loader_type == c.SQLMESH else model.query
+        query = model.query if model.hash_raw_query else model.render_query()
         data.append(query.sql(comments=False))
 
         for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
@@ -939,9 +939,9 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         elif audit_name in audits:
             audit = audits[audit_name]
             query = (
-                audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args))
-                if model.loader_type == c.SQLMESH
-                else audit.query
+                audit.query
+                if model.hash_raw_query
+                else audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args))
             )
             metadata.extend(
                 [
