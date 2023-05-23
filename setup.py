@@ -85,6 +85,8 @@ setup(
             "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
+            # Remove once fix is ready for 4.6.0
+            "typing-extensions==4.5.0",
             "types-pytz",
             "types-requests==2.28.8",
         ],
