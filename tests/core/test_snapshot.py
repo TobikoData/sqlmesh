@@ -105,6 +105,7 @@ def test_json(snapshot: Snapshot):
             },
             "source_type": "sql",
             "tags": [],
+            "hash_raw_query": False,
         },
         "audits": [],
         "name": "name",
@@ -358,7 +359,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3593384045",
+        data_hash="1966251297",
         metadata_hash="382750147",
     )
 
@@ -441,7 +442,7 @@ def test_fingerprint_jinja_macros(model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="674398371",
+        data_hash="1957476992",
         metadata_hash="382750147",
     )
 

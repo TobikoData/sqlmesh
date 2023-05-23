@@ -8,7 +8,7 @@ from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp, maybe_parse
 
-import sqlmesh.core.dialect as d
+from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -62,6 +62,7 @@ class ModelMeta(PydanticModel):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
+    hash_raw_query: bool = False
 
     _croniter: t.Optional[croniter] = None
     _interval_unit: t.Optional[IntervalUnit] = None

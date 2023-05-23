@@ -635,11 +635,11 @@ def test_multi(mocker):
 
     context = Context(paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter)
     model = context.models["bronze.a"]
-    model.query.select("'c' AS c", copy=False)
+    context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
-    assert set(snapshot.name for snapshot in plan.directly_modified) == {"bronze.a"}
-    assert list(plan.indirectly_modified.values())[0] == {"bronze.b", "silver.c", "silver.d"}
-    assert len(plan.missing_intervals) == 1
+    assert set(snapshot.name for snapshot in plan.directly_modified) == {"bronze.a", "bronze.b"}
+    assert list(plan.indirectly_modified.values())[0] == {"silver.c", "silver.d"}
+    assert len(plan.missing_intervals) == 2
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots)
 
