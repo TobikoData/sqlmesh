@@ -50,7 +50,8 @@ USER airflow
 # Install Spark provider for Airflow
 RUN pip install apache-airflow-providers-apache-spark==4.0.1 \
                 apache-airflow-providers-databricks==4.0.1 \
-                apache-airflow-providers-github==2.2.1
+                apache-airflow-providers-github==2.2.1 \
+                apache-airflow-providers-common-sql==1.4.0
 
 # Install Deps
 USER root
