@@ -108,6 +108,8 @@ class DbtLoader(Loader):
                 }
             )
 
+        models.update(self._load_external_models())
+
         return models
 
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
