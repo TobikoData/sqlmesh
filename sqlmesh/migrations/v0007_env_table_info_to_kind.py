@@ -17,7 +17,7 @@ def migrate(state_sync):  # type: ignore
     snapshots_to_kind = {}
 
     for name, identifier, snapshot in engine_adapter.fetchall(
-        f"SELECT name, identifier, snapshot FROM {schema}._snapshots"
+        exp.select("name", "identifier", "snapshot").from_(f"{schema}._snapshots")
     ):
         snapshot = json.loads(snapshot)
         snapshots_to_kind[(name, identifier)] = snapshot["model"]["kind"]["name"]
