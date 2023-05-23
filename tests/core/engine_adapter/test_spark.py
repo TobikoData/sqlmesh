@@ -2,6 +2,7 @@
 import typing as t
 from unittest.mock import call
 
+import pandas as pd
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
@@ -87,4 +88,19 @@ def test_replace_query(mocker: MockerFixture):
 
     cursor_mock.execute.assert_called_once_with(
         "INSERT OVERWRITE TABLE test_table (a) SELECT a FROM tbl"
+    )
+
+
+def test_replace_query_pandas(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+    mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT OVERWRITE TABLE test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM VALUES (1, 4), (2, 5), (3, 6) AS test_table(a, b)"
     )

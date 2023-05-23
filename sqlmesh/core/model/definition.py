@@ -17,7 +17,6 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.engine_adapter import PySparkDataFrame
 from sqlmesh.core.hooks import HookRegistry, hook
 from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator, parse_model_name
@@ -838,6 +837,8 @@ class PythonModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[DF, None, None]:
+        from sqlmesh.core.engine_adapter import EngineAdapter
+
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         latest = to_datetime(latest or c.EPOCH)
@@ -853,17 +854,24 @@ class PythonModel(_Model):
                 if self.kind.is_incremental_by_time_range:
                     assert self.time_column
 
-                    if PySparkDataFrame is not None and isinstance(df, PySparkDataFrame):
-                        df = df.where(
+                    pandas_df = EngineAdapter.try_get_pandas_df(df)
+                    pyspark_df = EngineAdapter.try_get_pyspark_df(df)
+                    if pandas_df is not None:
+                        assert self.time_column.format, "Time column format is required."
+                        pandas_df = filter_df_by_timelike(
+                            pandas_df, self.time_column.column, self.time_column.format, start, end
+                        )
+                        yield pandas_df
+                    elif pyspark_df:
+                        pyspark_df = pyspark_df.where(
                             f"{self.time_column.column} BETWEEN {self.convert_to_time_column(start).sql('spark')} "
                             f"AND {self.convert_to_time_column(end).sql('spark')}"
                         )
+                        yield pyspark_df
                     else:
-                        assert self.time_column.format, "Time column format is required."
-                        df = filter_df_by_timelike(
-                            df, self.time_column.column, self.time_column.format, start, end
-                        )
-                yield df
+                        raise SQLMeshError("Unsupported dataframe type.")
+                else:
+                    yield df
         except Exception as e:
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")

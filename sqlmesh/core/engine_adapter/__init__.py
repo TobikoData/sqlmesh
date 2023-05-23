@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlmesh.core.engine_adapter._typing import PySparkDataFrame
 from sqlmesh.core.engine_adapter.base import (
     EngineAdapter,
     EngineAdapterWithIndexSupport,
 )
 from sqlmesh.core.engine_adapter.bigquery import BigQueryEngineAdapter
-from sqlmesh.core.engine_adapter.databricks import DatabricksSparkSessionEngineAdapter
-from sqlmesh.core.engine_adapter.databricks_api import DatabricksSQLEngineAdapter
+from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 from sqlmesh.core.engine_adapter.duckdb import DuckDBEngineAdapter
 from sqlmesh.core.engine_adapter.postgres import PostgresEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
@@ -22,7 +20,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "bigquery": BigQueryEngineAdapter,
     "duckdb": DuckDBEngineAdapter,
     "snowflake": SnowflakeEngineAdapter,
-    "databricks": DatabricksSparkSessionEngineAdapter,
+    "databricks": DatabricksEngineAdapter,
     "redshift": RedshiftEngineAdapter,
     "postgres": PostgresEngineAdapter,
     "mysql": EngineAdapterWithIndexSupport,
@@ -42,21 +40,7 @@ def create_engine_adapter(
 ) -> EngineAdapter:
     dialect = dialect.lower()
     dialect = DIALECT_ALIASES.get(dialect, dialect)
-    if dialect == "databricks":
-        try:
-            from pyspark.sql import SparkSession
-
-            spark = SparkSession.getActiveSession()
-            if spark:
-                engine_adapter: t.Optional[
-                    t.Type[EngineAdapter]
-                ] = DatabricksSparkSessionEngineAdapter
-            else:
-                engine_adapter = DatabricksSQLEngineAdapter
-        except ImportError:
-            engine_adapter = DatabricksSQLEngineAdapter
-    else:
-        engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
+    engine_adapter = DIALECT_TO_ENGINE_ADAPTER.get(dialect)
     if engine_adapter is None:
         return EngineAdapter(
             connection_factory,
