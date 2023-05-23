@@ -70,8 +70,8 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
             if "*" in model.columns_to_types:
                 raise ConfigError(
                     f"Can't expand SELECT * expression for model '{name}'."
-                    " Projections for models that use external sources must be specified explicitly"
-                    " or use external models (https://sqlmesh.readthedocs.io/en/stable/concepts/models/external_models)."
+                    " Projects from an external source must either be explicitly specified within models or added as"
+                    " external models by using the command 'sqlmesh create_external_models'."
                 )
         elif model.mapping_schema:
             try:
@@ -101,10 +101,11 @@ class Loader(abc.ABC):
 
     def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
         """
-        Loads all hooks, macros, and models in the context's path
+        Loads all hooks, macros, and models in the context's path.
 
         Args:
-            context: The context to load macros and models for
+            context: The context to load macros and models for.
+            update_schemas: Convert star projections to explicit columns.
         """
         # python files are cached by the system
         # need to manually clear here so we can reload macros
