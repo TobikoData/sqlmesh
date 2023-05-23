@@ -139,10 +139,10 @@ def test_render(sushi_context, assert_exp_eq):
             CAST(o.waiter_id AS INT) AS waiter_id, /* Waiter id */
             CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, /* Revenue from orders taken by this waiter */
             CAST(o.ds AS TEXT) AS ds /* Date */
-          FROM sushi__sqlmesh__physical_layer.sushi__orders__619968963 AS o
-          LEFT JOIN sushi__sqlmesh__physical_layer.sushi__order_items__3090566586 AS oi
+          FROM sqlmesh__sushi.sushi__orders__619968963 AS o
+          LEFT JOIN sqlmesh__sushi.sushi__order_items__3090566586 AS oi
             ON o.ds = oi.ds AND o.id = oi.order_id
-          LEFT JOIN sushi__sqlmesh__physical_layer.sushi__items__1837306384 AS i
+          LEFT JOIN sqlmesh__sushi.sushi__items__1837306384 AS i
             ON oi.ds = i.ds AND oi.item_id = i.id
           WHERE
             o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'

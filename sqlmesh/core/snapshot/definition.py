@@ -141,8 +141,6 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def physical_schema(self) -> str:
         # The physical schema here is optional to maintain backwards compatibility with
         # records stored by previous versions of SQLMesh.
-        # The 'sqlmesh' schema is an optimistic default rooted in hope that nobody overridden
-        # the physical schema in their configuration.
         return self.physical_schema_ or c.SQLMESH
 
     @property
@@ -737,7 +735,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         _, schema, _ = parse_model_name(self.name)
         if schema is None:
             schema = c.DEFAULT_SCHEMA
-        return f"{schema}__{c.SQLMESH}__physical_layer"
+        return f"{c.SQLMESH}__{schema}"
 
     @property
     def table_info(self) -> SnapshotTableInfo:

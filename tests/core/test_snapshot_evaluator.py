@@ -86,7 +86,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         parse(  # type: ignore
             """
         MODEL (
-            name test_schea.test_model,
+            name test_schema.test_model,
             kind INCREMENTAL_BY_TIME_RANGE (time_column a),
             storage_format 'parquet',
             pre [x(), 'create table hook_called'],
@@ -122,7 +122,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("test_schea__sqlmesh__physical_layer"),
+            call("sqlmesh__test_schema"),
         ]
     )
 
@@ -176,7 +176,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one(
-            f"SELECT * FROM test_schema__sqlmesh__physical_layer.test_schema__test_model__{snapshot.version}"
+            f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
     )
 
@@ -214,7 +214,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
 
-    current_table = "test_schema__sqlmesh__physical_layer.test_schema__test_model__1"
+    current_table = "sqlmesh__test_schema.test_schema__test_model__1"
 
     def columns(table_name: t.Union[str, exp.Table]) -> t.Dict[str, exp.DataType]:
         if table_name == current_table:
@@ -245,11 +245,9 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     cursor_mock.execute.assert_has_calls(
         [
+            call("""ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b"""),
             call(
-                """ALTER TABLE test_schema__sqlmesh__physical_layer.test_schema__test_model__1 DROP COLUMN b"""
-            ),
-            call(
-                """ALTER TABLE test_schema__sqlmesh__physical_layer.test_schema__test_model__1 ADD COLUMN a INT"""
+                """ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"""
             ),
         ]
     )
@@ -268,7 +266,7 @@ def test_evaluate_creation_duckdb(
         assert duck_conn.execute(
             "SELECT table_schema, table_name, table_type FROM information_schema.tables"
         ).fetchall() == [
-            ("db__sqlmesh__physical_layer", f"db__model__{version}", "BASE TABLE"),
+            ("sqlmesh__db", f"db__model__{version}", "BASE TABLE"),
             ("main", "tbl", "VIEW"),
         ]
 
@@ -281,9 +279,7 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(
-        f"SELECT * FROM db__sqlmesh__physical_layer.db__model__{version}"
-    ).fetchall() == [(1,)]
+    assert duck_conn.execute(f"SELECT * FROM sqlmesh__db.db__model__{version}").fetchall() == [(1,)]
 
     # test that existing tables work
     evaluator.evaluate(
@@ -294,9 +290,7 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(
-        f"SELECT * FROM db__sqlmesh__physical_layer.db__model__{version}"
-    ).fetchall() == [(1,)]
+    assert duck_conn.execute(f"SELECT * FROM sqlmesh__db.db__model__{version}").fetchall() == [(1,)]
 
 
 def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
@@ -323,7 +317,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     )
 
     assert duck_conn.execute(
-        f"SELECT b FROM db__sqlmesh__physical_layer.db__model__{snapshot.version}"
+        f"SELECT b FROM sqlmesh__db.db__model__{snapshot.version}"
     ).fetchall() == [(1,)]
 
 

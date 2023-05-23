@@ -113,7 +113,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "name": "test_model",
                     "previous_versions": [],
                     "version": snapshot.version,
-                    "physical_schema": "default__sqlmesh__physical_layer",
+                    "physical_schema": "sqlmesh__default",
                     "change_category": snapshot.change_category,
                     "parents": [],
                     "kind_name": "INCREMENTAL_BY_TIME_RANGE",
