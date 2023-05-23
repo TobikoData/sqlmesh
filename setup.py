@@ -79,7 +79,7 @@ setup(
             "pytest",
             "pytest-asyncio",
             "pytest-mock",
-            "pyspark",
+            "pyspark>=3.4.0",
             "pytz",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
