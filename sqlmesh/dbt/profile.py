@@ -86,7 +86,7 @@ class Profile:
     def _read_profile(
         cls, path: Path, context: DbtContext, target_name: t.Optional[str] = None
     ) -> t.Tuple[str, TargetConfig]:
-        logger.info(f"Processing profile '{path}'.")
+        logger.debug("Processing profile '%s'.", path)
         project_data = load_yaml(path).get(context.profile_name)
         if not project_data:
             raise ConfigError(f"Profile '{context.profile_name}' not found in profiles.")
