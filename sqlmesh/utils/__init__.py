@@ -160,3 +160,12 @@ def double_escape(s: str) -> str:
 
 def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
     return join_char.join(filter(None, args))
+
+
+class classproperty(property):
+    """
+    Similar to a normal property but works for class methods
+    """
+
+    def __get__(self, obj: t.Any, owner: t.Any = None) -> t.Any:
+        return classmethod(self.fget).__get__(None, owner)()  # type: ignore

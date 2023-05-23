@@ -124,7 +124,7 @@ def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
     assert (
         adapter.fetchone(
             f"""
-        SELECT id, name, price FROM sqlmesh.sushi__items__{snapshot.version} ORDER BY ds LIMIT 1
+        SELECT id, name, price FROM sqlmesh__sushi.sushi__items__{snapshot.version} ORDER BY ds LIMIT 1
     """
         )
         == (0, "Hotate", 5.99)

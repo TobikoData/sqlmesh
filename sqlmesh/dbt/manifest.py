@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 import typing as t
 from argparse import Namespace
 from collections import defaultdict
@@ -19,12 +21,17 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.test import TestConfig
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
     from dbt.contracts.graph.nodes import ManifestNode, SourceDefinition
 
+logger = logging.getLogger(__name__)
+
+TestConfigs = t.Dict[str, TestConfig]
 ModelConfigs = t.Dict[str, ModelConfig]
 SeedConfigs = t.Dict[str, SeedConfig]
 SourceConfigs = t.Dict[str, SourceConfig]
@@ -48,10 +55,15 @@ class ManifestHelper:
         self._project_name: str = ""
 
         self._is_loaded: bool = False
+        self._tests_per_package: t.Dict[str, TestConfigs] = defaultdict(dict)
         self._models_per_package: t.Dict[str, ModelConfigs] = defaultdict(dict)
         self._seeds_per_package: t.Dict[str, SeedConfigs] = defaultdict(dict)
         self._sources_per_package: t.Dict[str, SourceConfigs] = defaultdict(dict)
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
+
+    def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
+        self._load_all()
+        return self._tests_per_package[package_name or self._project_name]
 
     def models(self, package_name: t.Optional[str] = None) -> ModelConfigs:
         self._load_all()
@@ -81,6 +93,7 @@ class ManifestHelper:
     def _load_all(self) -> None:
         if self._is_loaded:
             return
+        self._load_tests()
         self._load_models_and_seeds()
         self._load_sources()
         self._load_macros()
@@ -102,7 +115,7 @@ class ManifestHelper:
     def _load_macros(self) -> None:
         for macro in self._manifest.macros.values():
             if macro.name.startswith("test_"):
-                continue
+                macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
@@ -112,16 +125,57 @@ class ManifestHelper:
                 path=Path(macro.original_file_path),
             )
 
+    def _load_tests(self) -> None:
+        for node in self._manifest.nodes.values():
+            if node.resource_type != "test":
+                continue
+
+            dependencies = Dependencies(
+                macros=_macro_references(self._manifest, node),
+                refs=_refs(node),
+                sources=_sources(node),
+            )
+            # Implicit dependencies for model test arg
+            dependencies.macros.add(MacroReference(package="dbt", name="get_where_subquery"))
+            dependencies.macros.add(MacroReference(package="dbt", name="should_store_failures"))
+
+            test_owner = _test_owner(node)
+            if not test_owner:
+                if not dependencies.refs and not dependencies.sources:
+                    raise ConfigError(
+                        f"Audit '%s' is not associated with any models or sources", node.name
+                    )
+
+                test_owner = (
+                    list(dependencies.refs)[0]
+                    if dependencies.refs
+                    else list(dependencies.sources)[0]
+                )
+
+            if test_owner in dependencies.sources:
+                logger.debug("Skipping audit '%s'. Source audits not supported yet", node.name)
+                continue
+
+            if len(dependencies.refs) > 1:
+                logger.debug(
+                    "Skipping audit '%s'. Multi-owner audits not supported yet.", node.name
+                )
+                continue
+
+            self._tests_per_package[node.package_name][node.name.lower()] = TestConfig(
+                sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
+                owner=test_owner,
+                test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
+                dependencies=dependencies,
+                **_node_base_config(node),
+            )
+
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
             if node.resource_type not in ("model", "seed"):
                 continue
 
             macro_references = _macro_references(self._manifest, node)
-
-            node_dict = node.to_dict()
-            node_dict.pop("database", None)  # picked up from the `config` attribute
-            base_config = {**_config(node), **node_dict, "path": Path(node.original_file_path)}
 
             if node.resource_type == "model":
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
@@ -131,12 +185,14 @@ class ManifestHelper:
                         refs=_refs(node),
                         sources=_sources(node),
                     ),
-                    **base_config,
+                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    **_node_base_config(node),
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
-                    **base_config,
+                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    **_node_base_config(node),
                 )
 
     @property
@@ -219,6 +275,54 @@ def _model_node_id(model_name: str, package: str) -> str:
 def _get_dbt_version() -> t.Tuple[int, int]:
     dbt_version = get_installed_version()
     return (int(dbt_version.major or "0"), int(dbt_version.minor or "0"))
+
+
+def _test_owner(node: ManifestNode) -> t.Optional[str]:
+    attached_node = getattr(node, "attached_node", None)
+    if attached_node:
+        return attached_node.split(".")[-1]
+
+    if not hasattr(node, "test_metadata"):
+        return None
+
+    model_kwarg = node.test_metadata.kwargs.get("model")
+    if not model_kwarg:
+        return None
+
+    return next((ref for ref in _refs(node) if f"'{ref}'" in model_kwarg), None) or next(
+        (
+            ".".join(source)
+            for source in node.sources or []
+            if f"'{source[0]}'" in model_kwarg and f"'{source[1]}'" in model_kwarg
+        ),
+        None,
+    )
+
+
+def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
+    node_dict = node.to_dict()
+    node_dict.pop("database", None)  # picked up from the `config` attribute
+    return {
+        **_config(node),
+        **node_dict,
+        "path": Path(node.original_file_path),
+    }
+
+
+def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[TestConfig]:
+    return [test for test in tests.values() if test.owner == node.name]
+
+
+def _convert_jinja_test_to_macro(test_jinja: str) -> str:
+    TEST_TAG_REGEX = "\s*{%\s*test\s+"
+    ENDTEST_REGEX = "{%\s*endtest\s*%}"
+    match = re.match(TEST_TAG_REGEX, test_jinja)
+    if not match:
+        # already a macro
+        return test_jinja
+
+    macro = "{% macro test_" + test_jinja[match.span()[-1] :]
+    return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
 
 
 DBT_VERSION = _get_dbt_version()

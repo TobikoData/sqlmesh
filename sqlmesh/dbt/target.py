@@ -11,7 +11,7 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionMethod,
     BigQueryPriority,
     ConnectionConfig,
-    DatabricksSQLConnectionConfig,
+    DatabricksConnectionConfig,
     DuckDBConnectionConfig,
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
@@ -310,11 +310,12 @@ class DatabricksConfig(TargetConfig):
         return "merge"
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        return DatabricksSQLConnectionConfig(
+        return DatabricksConnectionConfig(
             server_hostname=self.host,
             http_path=self.http_path,
             access_token=self.token,
             concurrent_tasks=self.threads,
+            catalog=self.catalog,
         )
 
 

@@ -9,7 +9,6 @@ from sqlglot import exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.transforms import remove_precision_parameterized_types
 
-from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
@@ -30,7 +29,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
 
 logger = logging.getLogger(__name__)
@@ -244,11 +243,9 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         table = exp.to_table(table_name)
         query: t.Union[Query, exp.Select]
-        is_pandas = isinstance(query_or_df, pd.DataFrame)
         temp_table: t.Optional[exp.Table] = None
-        if isinstance(query_or_df, DF_TYPES):
-            if not is_pandas:
-                raise SQLMeshError("BigQuery only supports pandas DataFrames")
+        df = self.try_get_pandas_df(query_or_df)
+        if df is not None:
             if columns_to_types is None:
                 raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
             if table.db is None:
@@ -256,8 +253,6 @@ class BigQueryEngineAdapter(EngineAdapter):
 
             temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
             self.client.create_table(temp_bq_table, exists_ok=False)
-
-            df = t.cast(pd.DataFrame, query_or_df)
             result = self.__load_pandas_to_table(temp_bq_table, df, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
@@ -265,7 +260,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             temp_table = self.__convert_bq_table_to_table(temp_bq_table)
             query = exp.select(*columns_to_types).from_(temp_table)
         else:
-            query = t.cast(Query, query_or_df)
+            query = t.cast("Query", query_or_df)
         columns = [
             exp.to_column(col)
             for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
@@ -290,7 +285,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             on=exp.false(),
             match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
         )
-        if is_pandas:
+        if df is not None:
             assert temp_table is not None
             self.drop_table(temp_table)
 

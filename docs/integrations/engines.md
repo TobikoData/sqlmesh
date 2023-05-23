@@ -47,35 +47,29 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Databricks
 ## Databricks - Local/Built-in Scheduler
-If your project contains Python models that use PySpark DataFrames AND you are using the built-in scheduler, then you must run plan/apply on a Databricks cluster.
-This can be done using the [Notebook magic](../reference/notebook.md) or by using the [CLI](../reference/cli.md).
-This is something we are looking into improving &mdash; please leave us feedback in [our Slack channel](https://tobikodata.com/slack) if this impacts you.
-A potential workaround until this support is added is to use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html). This will make it look like you are running on a cluster, and should theoretically work.
+SQLMesh's Databricks implementation uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
+If your project contains PySpark DataFrames in Python models then it will use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
+SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
 
-Databricks has a few options for connection types to choose from:
-### Type: databricks (Recommended)
-This type will automatically detect if you are running in an environment that already has a SparkSession defined.
-If it detects a SparkSession, then it assumes this is a Databricks SparkSession and uses that.
-If it doesn't detect a SparkSession, then it will use the connection configuration to connect to Databricks over
-the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html).
-See [databricks_sql configuration](#type--databrickssql) for the connection configuration.
+Databricks connect execution can be routed to a different cluster than the SQL Connector by setting the `databricks_connect_*` properties.
+For example this allows SQLMesh to be configured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster. 
 
-### Type: databricks_spark_session
-This connection type assumes that wherever you are running you have access to a Databricks SparkSession.
-This will simplify the required configuration to run since you will not need to provide connection configuration.
+If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook) then the only relevant configuration is `catalog` and it is optional.
 
-### Type: databricks_sql
-This connection type assumes you only need to run SQL queries against Databricks.
-If all of your models are SQL models or if Python doesn't use PySpark DataFrame, then this can be used.
-Below is the connection configuration for this type:
+Note: If using Databricks Connect please note the [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations)
 
-| Option                  | Description                                                                                                                                                                              |  Type  | Required |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `server_hostname`       | Databricks instance host name                                                                                                                                                            | string |    Y     |
-| `http_path`             | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    Y     |
-| `access_token`          | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    Y     |
-| `http_headers`          | An optional dictionary of HTTP headers that will be set on every request                                                                                                                 |  dict  |    N     |
-| `session_configuration` | An optional dictionary of Spark session parameters                                                                                                                                      |  dict  |    N     |
+| Option                               | Description                                                                                                                                                                              |  Type  | Required |
+|--------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `server_hostname`                    | Databricks instance host name                                                                                                                                                            | string |    N     |
+| `http_path`                          | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    N     |
+| `access_token`                       | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    N     |
+| `catalog`                            | The name of the catalog to use for the connection. Defaults to use Databricks cluster default (most likely `hive_metastore`).                                                            | string |    N     |
+| `http_headers`                       | SQL Connector Only: An optional dictionary of HTTP headers that will be set on every request                                                                                             |  dict  |    N     |
+| `databricks_connect_server_hostname` | Databricks Connect Only: Databricks Connect server hostname. Uses `server_hostname` if not set.                                                                                          | string |    N     |
+| `databricks_connect_access_token`    | Databricks Connect Only: Databricks Connect access token. Uses `access_token` if not set.                                                                                                | string |    N     |
+| `databricks_connect_cluster_id`      | Databricks Connect Only: Databricks Connect cluster ID. Uses `http_path` if not set. Cannot be a Databricks SQL Warehouse.                                                               | string |    N     |
+| `force_databricks_connect`           | When running locally, force the use of Databricks Connect for all model operations (so don't use SQL Connector for SQL models)                                                           |  bool  |    N     |
+| `disable_databricks_connect`         | When running locally, disable the use of Databricks Connect for all model operations (so use SQL Connector for all models)                                                               |  bool  |    N     |
 
 ## Databricks - Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.

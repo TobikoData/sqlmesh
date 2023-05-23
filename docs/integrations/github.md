@@ -29,11 +29,16 @@ on:
     types:
     - synchronize
     - opened
+  # Required if using required approvers to automate deployments
   pull_request_review:
     types:
     - edited
     - submitted
     - dismissed
+  # Required if using comments to issue commands to the bot
+  issue_comment:
+    types: 
+    - created
 # The latest commit is the one that will be used to create the PR environment and deploy to production
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -73,6 +78,12 @@ users:
 ```
 4. You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
 
+## Bot Commands
+Commands can be issued to the bot to have it run specific actions. Below are the currently supported commands:
+* `/deploy` - Deploys the changes in the PR to Production. It will run all the same checks as if you just pushed a commit except for the required approvals check since we assume we can to skip that check if you are manually deploying.
+
+See [Run All Configuration](#run-all-configuration) for the `--command_namespace` option if you want SQLMesh's commands to have a different prefix to avoid them from clashing with other bots. 
+
 ## Configuration
 ### SQLMesh Configuration
 `sqlmesh_cicd` accepts the following config:
@@ -91,6 +102,7 @@ It has two boolean flags that can be passed in to enable additional functionalit
 * `--delete` - This will delete the PR environment after deploying to production. 
     * Note: If using `--delete` then the runner will need a connection to the engine even if you are using Airflow. This is because the delete is done outside of Airflow.
     * Eventually want the SQLMesh Janitor to automatically do this cleanup which would remove the need for this flag.
+* `--command_namespace` - Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`. 
 
 ### Custom Workflow Configuration
 You can configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
@@ -121,11 +133,16 @@ on:
     types:
     - synchronize
     - opened
+  # Required if using required approvers to automate deployments
   pull_request_review:
     types:
     - edited
     - submitted
     - dismissed
+  # Required if using comments to issue commands to the bot
+  issue_comment:
+    types: 
+    - created
 # The latest commit is the one that will be used to create the PR environment and deploy to production
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -174,5 +191,5 @@ the job keeps running. Ideally we would then cancel the Airflow job as well.
 * The Airflow job could take a while and we don't need to be running the Github Action for the entire time. Ideally
 we would have Airflow tag the PR when the job is done which would trigger a follow up action to check status and 
 move to the next step if successful.
-* When using `run_all` ideally we would parallelize the tasks that can be run in parallel. One can work around this 
+* When using `run_all` ideally we could parallelize the tasks that can be run in parallel. One can work around this 
 though by using the individual commands and running them in parallel from within the workflow.

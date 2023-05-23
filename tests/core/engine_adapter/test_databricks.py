@@ -3,7 +3,7 @@ import pandas as pd
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.engine_adapter import DatabricksSQLEngineAdapter
+from sqlmesh.core.engine_adapter import DatabricksEngineAdapter
 
 
 def test_replace_query(mocker: MockerFixture):
@@ -11,7 +11,7 @@ def test_replace_query(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = DatabricksSQLEngineAdapter(lambda: connection_mock)
+    adapter = DatabricksEngineAdapter(lambda: connection_mock)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     cursor_mock.execute.assert_called_once_with(
@@ -24,7 +24,7 @@ def test_replace_query_pandas(mocker: MockerFixture):
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = DatabricksSQLEngineAdapter(lambda: connection_mock)
+    adapter = DatabricksEngineAdapter(lambda: connection_mock)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 

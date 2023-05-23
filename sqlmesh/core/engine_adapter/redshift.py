@@ -7,12 +7,11 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
-from sqlmesh.core.engine_adapter._typing import DF_TYPES, Query
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import Query, QueryOrDF
 
 
 class RedshiftEngineAdapter(BasePostgresEngineAdapter):
@@ -46,7 +45,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         underlying table without dropping the view first. This is a problem for us since we want to be able to
         swap tables out from under views. Therefore we create the view as non-binding.
         """
-        if isinstance(query_or_df, DF_TYPES):
+        if self.is_df(query_or_df):
             raise NotImplementedError(
                 "DataFrames are not supported for Redshift views because Redshift doesn't"
                 "support using `VALUES` in a `CREATE VIEW` statement."
@@ -114,7 +113,8 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
-        if not isinstance(query_or_df, pd.DataFrame):
+        df = self.try_get_pandas_df(query_or_df)
+        if df is None:
             with self.transaction():
                 self.drop_table(table_name, exists=True)
                 return self.ctas(table_name, query_or_df, columns_to_types)
@@ -132,7 +132,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 old_table.set("this", exp.to_identifier(old_table_name))
                 self.create_table(temp_table, columns_to_types, exists=False)
                 for expression in self._pandas_to_sql(
-                    query_or_df, columns_to_types, self.DEFAULT_BATCH_SIZE
+                    df, columns_to_types, self.DEFAULT_BATCH_SIZE
                 ):
                     self._insert_append_query(temp_table, expression, columns_to_types)
                 self.rename_table(target_table, old_table)
@@ -140,9 +140,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 self.drop_table(old_table)
         else:
             self.create_table(target_table, columns_to_types, exists=False)
-            for expression in self._pandas_to_sql(
-                query_or_df, columns_to_types, self.DEFAULT_BATCH_SIZE
-            ):
+            for expression in self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE):
                 self._insert_append_query(target_table, expression, columns_to_types)
 
     def _short_hash(self) -> str:

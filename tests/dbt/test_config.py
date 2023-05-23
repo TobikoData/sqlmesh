@@ -18,6 +18,7 @@ from sqlmesh.dbt.target import (
     SnowflakeConfig,
     TargetConfig,
 )
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -60,7 +61,7 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_to_sqlmesh_fields(sushi_test_project: Project):
+def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
         alias="model",
         schema="custom",
@@ -95,6 +96,47 @@ def test_to_sqlmesh_fields(sushi_test_project: Project):
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
     assert kind.batch_size == 5
     assert kind.lookback == 3
+
+
+def test_test_to_sqlmesh_fields():
+    sql = "SELECT * FROM FOO WHERE cost > 100"
+    test_config = TestConfig(
+        name="foo_test",
+        sql=sql,
+        dialect="snowflake",
+        owner="Foo",
+        column_name="cost",
+        severity="ERROR",
+        enabled=True,
+    )
+
+    context = DbtContext()
+    audit = test_config.to_sqlmesh(context)
+
+    assert audit.name == "foo_test"
+    assert audit.dialect == "snowflake"
+    assert audit.skip == False
+    assert audit.blocking == True
+    assert audit.query.sql() == sql
+
+    sql = "SELECT * FROM FOO WHERE NOT id IS NULL"
+    test_config = TestConfig(
+        name="foo_null_test",
+        sql=sql,
+        dialect="duckdb",
+        owner="Foo",
+        column_name="id",
+        severity="WARN",
+        enabled=False,
+    )
+
+    audit = test_config.to_sqlmesh(context)
+
+    assert audit.name == "foo_null_test"
+    assert audit.dialect == "duckdb"
+    assert audit.skip == True
+    assert audit.blocking == False
+    assert audit.query.sql() == sql
 
 
 def test_model_config_sql_no_config():

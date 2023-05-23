@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
 
-from pydantic import validator
+from pydantic import Field, validator
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
@@ -132,9 +132,16 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     version: str
     temp_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
+    physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
 
     def snapshot_id(self, name: str) -> SnapshotId:
         return SnapshotId(name=name, identifier=self.fingerprint.to_identifier())
+
+    @property
+    def physical_schema(self) -> str:
+        # The physical schema here is optional to maintain backwards compatibility with
+        # records stored by previous versions of SQLMesh.
+        return self.physical_schema_ or c.SQLMESH
 
     @property
     def data_version(self) -> SnapshotDataVersion:
@@ -163,7 +170,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
         )
 
     def schema_for_environment(self, environment: str) -> str:
-        schema = self.schema_name or "default"
+        schema = self.schema_name or c.DEFAULT_SCHEMA
         if environment.lower() != c.PROD:
             schema = f"{schema}__{environment}"
         return schema
@@ -174,7 +181,6 @@ class SnapshotInfoMixin(ModelKindMixin):
     temp_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
-    physical_schema: str
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
     def is_temporary_table(self, is_dev: bool) -> bool:
@@ -193,7 +199,7 @@ class SnapshotInfoMixin(ModelKindMixin):
 
     @property
     def qualified_view_name(self) -> QualifiedViewName:
-        (catalog, schema, table) = parse_model_name(self.name)
+        catalog, schema, table = parse_model_name(self.name)
         return QualifiedViewName(catalog=catalog, schema_name=schema, table=table)
 
     @property
@@ -202,6 +208,10 @@ class SnapshotInfoMixin(ModelKindMixin):
         if self.previous_versions:
             return self.previous_versions[-1]
         return None
+
+    @property
+    def physical_schema(self) -> str:
+        raise NotImplementedError
 
     @property
     def data_version(self) -> SnapshotDataVersion:
@@ -262,7 +272,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
     temp_version: t.Optional[str]
-    physical_schema: str
+    physical_schema_: str = Field(alias="physical_schema")
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory]
@@ -278,6 +288,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return self._table_name(self.version, is_dev, for_read)
 
     @property
+    def physical_schema(self) -> str:
+        return self.physical_schema_
+
+    @property
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to return self."""
         return self
@@ -289,6 +303,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
             version=self.version,
             temp_version=self.temp_version,
             change_category=self.change_category,
+            physical_schema=self.physical_schema,
         )
 
     @property
@@ -342,7 +357,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     name: str
     fingerprint: SnapshotFingerprint
-    physical_schema: str
+    physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     model: Model
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
@@ -442,7 +457,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         model: Model,
         *,
         models: t.Dict[str, Model],
-        physical_schema: str = c.SQLMESH,
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         project: str = "",
         version: t.Optional[str] = None,
@@ -472,19 +486,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             name=model.name,
             fingerprint=fingerprint_from_model(
                 model,
-                physical_schema=physical_schema,
                 models=models,
                 audits=audits,
                 cache=cache,
             ),
-            physical_schema=physical_schema,
             model=model,
             parents=tuple(
                 SnapshotId(
                     name=name,
                     identifier=fingerprint_from_model(
                         models[name],
-                        physical_schema=physical_schema,
                         models=models,
                         audits=audits,
                         cache=cache,
@@ -672,6 +683,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         if is_forward_only and self.previous_version:
             self.version = self.previous_version.data_version.version
+            self.physical_schema_ = self.previous_version.physical_schema
         else:
             self.version = self.fingerprint.to_version()
 
@@ -717,6 +729,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.version or self.fingerprint.to_version()
 
     @property
+    def physical_schema(self) -> str:
+        if self.physical_schema_ is not None:
+            return self.physical_schema_
+        _, schema, _ = parse_model_name(self.name)
+        if schema is None:
+            schema = c.DEFAULT_SCHEMA
+        return f"{c.SQLMESH}__{schema}"
+
+    @property
     def table_info(self) -> SnapshotTableInfo:
         """Helper method to get the SnapshotTableInfo from the Snapshot."""
         self._ensure_categorized()
@@ -740,6 +761,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             version=self.version,
             temp_version=self.temp_version,
             change_category=self.change_category,
+            physical_schema=self.physical_schema,
         )
 
     @property
@@ -803,7 +825,6 @@ def fingerprint_from_model(
     model: Model,
     *,
     models: t.Dict[str, Model],
-    physical_schema: str = "",
     audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
@@ -815,7 +836,6 @@ def fingerprint_from_model(
 
     Args:
         model: Model to fingerprint.
-        physical_schema: The physical_schema of the snapshot which represents where it is stored.
         models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
         audits: Available audits by name.
@@ -831,7 +851,6 @@ def fingerprint_from_model(
             fingerprint_from_model(
                 models[table],
                 models=models,
-                physical_schema=physical_schema,
                 audits=audits,
                 cache=cache,
             )
@@ -846,7 +865,7 @@ def fingerprint_from_model(
         )
 
         cache[model.name] = SnapshotFingerprint(
-            data_hash=_model_data_hash(model, physical_schema),
+            data_hash=_model_data_hash(model),
             metadata_hash=_model_metadata_hash(model, audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,
@@ -855,7 +874,7 @@ def fingerprint_from_model(
     return cache[model.name]
 
 
-def _model_data_hash(model: Model, physical_schema: str) -> str:
+def _model_data_hash(model: Model) -> str:
     def serialize_hooks(hooks: t.List[HookCall]) -> t.Iterable[str]:
         serialized = []
         for hook in hooks:
@@ -875,7 +894,6 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
         model.cron,
         model.storage_format,
         str(model.lookback),
-        physical_schema,
         *(model.partitioned_by or []),
         *(expression.sql(comments=False) for expression in model.expressions or []),
         *serialize_hooks(model.pre),
@@ -884,7 +902,8 @@ def _model_data_hash(model: Model, physical_schema: str) -> str:
     ]
 
     if isinstance(model, SqlModel):
-        data.append(model.query.sql(comments=False))
+        query = model.query if model.hash_raw_query else model.render_query()
+        data.append(query.sql(comments=False))
 
         for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
             data.append(macro_name)
@@ -937,11 +956,14 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
                 metadata.append(arg_value.sql(comments=True))
         elif audit_name in audits:
             audit = audits[audit_name]
+            query = (
+                audit.query
+                if model.hash_raw_query
+                else audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args))
+            )
             metadata.extend(
                 [
-                    audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args)).sql(
-                        comments=True
-                    ),
+                    query.sql(comments=True),
                     audit.dialect,
                     str(audit.skip),
                     str(audit.blocking),

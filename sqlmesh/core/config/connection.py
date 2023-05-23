@@ -122,16 +122,18 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    @root_validator()
+    @root_validator(pre=True)
     def _validate_authenticator(
-        cls, fields: t.Dict[str, t.Optional[str]]
+        cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        auth = fields.get("authenticator")
-        user = fields.get("user")
-        password = fields.get("password")
+        if values["type"] != "snowflake":
+            return values
+        auth = values.get("authenticator")
+        user = values.get("user")
+        password = values.get("password")
         if not auth and (not user or not password):
             raise ConfigError("User and password must be provided if using default authentication")
-        return fields
+        return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -148,106 +150,9 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         return connector.connect
 
 
-class DatabricksSQLConnectionConfig(_ConnectionConfig):
-    """
-    Configuration for the Databricks API connection. This connection is used to access the Databricks
-    when you don't have access to a SparkSession. Ex: Running Jupyter locally on your laptop to connect to a
-    Databricks cluster
-
-    Arg Source: https://github.com/databricks/databricks-sql-python/blob/main/src/databricks/sql/client.py#L39
-    Args:
-        server_hostname: Databricks instance host name.
-        http_path: Http path either to a DBSQL endpoint (e.g. /sql/1.0/endpoints/1234567890abcdef)
-                   or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)
-        access_token: Http Bearer access token, e.g. Databricks Personal Access Token.
-        http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
-        session_configuration: An optional dictionary of Spark session parameters. Defaults to None.
-               Execute the SQL command `SET -v` to get a full list of available commands.
-    """
-
-    server_hostname: str
-    http_path: str
-    access_token: str
-    http_headers: t.Optional[t.List[t.Tuple[str, str]]]
-    session_configuration: t.Optional[t.Dict[str, t.Any]]
-
-    concurrent_tasks: int = 4
-
-    type_: Literal["databricks_sql"] = Field(alias="type", default="databricks_sql")
-
-    _concurrent_tasks_validator = concurrent_tasks_validator
-    _http_headers_validator = http_headers_validator
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {
-            "server_hostname",
-            "http_path",
-            "access_token",
-            "http_headers",
-            "session_configuration",
-        }
-
-    @property
-    def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DatabricksSQLEngineAdapter
-
-    @property
-    def _connection_factory(self) -> t.Callable:
-        from databricks import sql
-
-        return sql.connect
-
-
-class DatabricksSparkSessionConnectionConfig(_ConnectionConfig):
-    """
-    Configuration for the Databricks connection. This connection is used to access the Databricks
-    when you have access to a SparkSession. Ex: Running in a Databricks notebook or cluster
-
-    Args:
-        spark_config: An optional dictionary of Spark session parameters. Defaults to None.
-    """
-
-    spark_config: t.Optional[t.Dict[str, str]] = None
-
-    concurrent_tasks: Literal[1] = 1
-
-    type_: Literal["databricks_spark_session"] = Field(
-        alias="type", default="databricks_spark_session"
-    )
-
-    @property
-    def _connection_kwargs_keys(self) -> t.Set[str]:
-        return set()
-
-    @property
-    def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.DatabricksSparkSessionEngineAdapter
-
-    @property
-    def _connection_factory(self) -> t.Callable:
-        from sqlmesh.engines.spark.db_api.spark_session import connection
-
-        return connection
-
-    @property
-    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        from pyspark import SparkConf
-        from pyspark.sql import SparkSession
-
-        spark_config = SparkConf()
-        if self.spark_config:
-            for k, v in self.spark_config.items():
-                spark_config.set(k, v)
-
-        return dict(
-            spark=SparkSession.builder.config(conf=spark_config).enableHiveSupport().getOrCreate()
-        )
-
-
 class DatabricksConnectionConfig(_ConnectionConfig):
     """
-    Databricks connection that prefers to use SparkSession if available, otherwise it will use the Databricks API.
+    Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations
 
     Arg Source: https://github.com/databricks/databricks-sql-python/blob/main/src/databricks/sql/client.py#L39
     Args:
@@ -255,50 +160,67 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         http_path: Http path either to a DBSQL endpoint (e.g. /sql/1.0/endpoints/1234567890abcdef)
                    or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)
         access_token: Http Bearer access token, e.g. Databricks Personal Access Token.
+        catalog: Default catalog to use for SQL models. Defaults to None which means it will use the default set in
+                 the Databricks cluster (most likely `hive_metastore`).
         http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
-        session_configuration: An optional dictionary of Spark session parameters. Defaults to None.
-               Execute the SQL command `SET -v` to get a full list of available commands.
-        spark_config: An optional dictionary of Spark session parameters. Defaults to None.
+        databricks_connect_server_hostname: The hostname to use when establishing a connecting using Databricks Connect.
+                   Defaults to the `server_hostname` value.
+        databricks_connect_access_token: The access token to use when establishing a connecting using Databricks Connect.
+                   Defaults to the `access_token` value.
+        databricks_connect_cluster_id: The cluster id to use when establishing a connecting using Databricks Connect.
+                   Defaults to deriving the cluster id from the `http_path` value.
+        force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.
+        disable_databricks_connect: Even if databricks connect is installed, do not use it.
     """
 
-    server_hostname: str
-    http_path: str
-    access_token: str
+    server_hostname: t.Optional[str]
+    http_path: t.Optional[str]
+    access_token: t.Optional[str]
+    catalog: t.Optional[str]
     http_headers: t.Optional[t.List[t.Tuple[str, str]]]
-    session_configuration: t.Optional[t.Dict[str, t.Any]]
-    spark_config: t.Optional[t.Dict[str, str]] = None
+    databricks_connect_server_hostname: t.Optional[str]
+    databricks_connect_access_token: t.Optional[str]
+    databricks_connect_cluster_id: t.Optional[str]
+    force_databricks_connect: bool = False
+    disable_databricks_connect: bool = False
 
-    concurrent_tasks: int = 4
+    # Concurrent tasks can cause an issue due to simultaneous updates to intervals.
+    # Bump this back up when the separate table for intervals is implemented.
+    concurrent_tasks: Literal[1] = 1
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
 
-    _has_spark_session_access: bool
+    @root_validator(pre=True)
+    def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        from sqlmesh import runtime_env
+        from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-    class Config:
-        allow_mutation = True
-
-    @property
-    def has_spark_session_access(self) -> bool:
-        if not getattr(self, "_has_spark_session_access", None):
-            try:
-                from pyspark.sql import SparkSession
-
-                spark = SparkSession.getActiveSession()
-                if spark:
-                    self._has_spark_session_access = True
-                    self.concurrent_tasks = 1
-                else:
-                    self._has_spark_session_access = False
-            except ImportError:
-                self._has_spark_session_access = False
-        return self._has_spark_session_access
+        if values["type"] != "databricks" or runtime_env.is_databricks:
+            return values
+        server_hostname, http_path, access_token = (
+            values.get("server_hostname"),
+            values.get("http_path"),
+            values.get("access_token"),
+        )
+        if not server_hostname or not http_path or not access_token:
+            raise ValueError(
+                "`server_hostname`, `http_path`, and `access_token` are required for Databricks connections when not running in a notebook"
+            )
+        if DatabricksEngineAdapter.can_access_spark_session:
+            if not values.get("databricks_connect_server_hostname"):
+                values["databricks_connect_server_hostname"] = f"https://{server_hostname}"
+            if not values.get("databricks_connect_access_token"):
+                values["databricks_connect_access_token"] = access_token
+            if not values.get("databricks_connect_cluster_id"):
+                values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+        return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        if self.has_spark_session_access:
+        if self.use_spark_session_only:
             return set()
         return {
             "server_hostname",
@@ -306,41 +228,63 @@ class DatabricksConnectionConfig(_ConnectionConfig):
             "access_token",
             "http_headers",
             "session_configuration",
+            "catalog",
         }
 
     @property
-    def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        if self.has_spark_session_access:
-            return engine_adapter.DatabricksSparkSessionEngineAdapter
-        return engine_adapter.DatabricksSQLEngineAdapter
+    def _engine_adapter(self) -> t.Type[engine_adapter.DatabricksEngineAdapter]:
+        return engine_adapter.DatabricksEngineAdapter
+
+    @property
+    def _extra_engine_config(self) -> t.Dict[str, t.Any]:
+        return {
+            k: v
+            for k, v in self.dict().items()
+            if k.startswith("databricks_connect_") or k in ("catalog", "disable_databricks_connect")
+        }
+
+    @property
+    def use_spark_session_only(self) -> bool:
+        from sqlmesh import runtime_env
+
+        return runtime_env.is_databricks or self.force_databricks_connect
 
     @property
     def _connection_factory(self) -> t.Callable:
-        if self.has_spark_session_access:
+        if self.use_spark_session_only:
             from sqlmesh.engines.spark.db_api.spark_session import connection
 
             return connection
+
         from databricks import sql
 
         return sql.connect
 
     @property
     def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
-        if self.has_spark_session_access:
-            from pyspark import SparkConf
+        from sqlmesh import runtime_env
+
+        if not self.use_spark_session_only:
+            return {}
+
+        if runtime_env.is_databricks:
             from pyspark.sql import SparkSession
 
-            spark_config = SparkConf()
-            if self.spark_config:
-                for k, v in self.spark_config.items():
-                    spark_config.set(k, v)
-
             return dict(
-                spark=SparkSession.builder.config(conf=spark_config)
-                .enableHiveSupport()
-                .getOrCreate()
+                spark=SparkSession.getActiveSession(),
+                catalog=self.catalog,
             )
-        return {}
+
+        from databricks.connect import DatabricksSession
+
+        return dict(
+            spark=DatabricksSession.builder.remote(
+                host=self.databricks_connect_server_hostname,
+                token=self.databricks_connect_access_token,
+                cluster_id=self.databricks_connect_cluster_id,
+            ).getOrCreate(),
+            catalog=self.catalog,
+        )
 
 
 class BigQueryConnectionMethod(str, Enum):
@@ -609,8 +553,6 @@ class PostgresConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
-        DatabricksSQLConnectionConfig,
-        DatabricksSparkSessionConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,

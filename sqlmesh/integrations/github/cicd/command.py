@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing as t
 
 import click
 
@@ -9,7 +10,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckStatus,
     GithubController,
 )
-from sqlmesh.utils.errors import PlanError
+from sqlmesh.utils.errors import CICDBotError, PlanError
 
 logger = logging.getLogger(__name__)
 
@@ -145,16 +146,33 @@ def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
     )
 
 
-def _run_all(controller: GithubController, merge: bool, delete: bool) -> None:
+def _run_all(
+    controller: GithubController,
+    merge: bool,
+    delete: bool,
+    command_namespace: t.Optional[str] = None,
+) -> None:
+    has_required_approval = False
+    if controller.is_comment_triggered:
+        command = controller.get_command_from_comment(command_namespace)
+        if command.is_invalid:
+            # Probably a comment unrelated to SQLMesh so we do nothing
+            return
+        elif command.is_deploy_prod:
+            has_required_approval = True
+        else:
+            raise CICDBotError(f"Unsupported command: {command}")
     controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
     controller.update_test_check(status=GithubCheckStatus.QUEUED)
     tests_passed = _run_tests(controller)
-    if controller.do_required_approval_check:
+    if not has_required_approval and controller.do_required_approval_check:
         controller.update_required_approval_check(status=GithubCheckStatus.QUEUED)
         has_required_approval = _check_required_approvers(controller)
     else:
-        has_required_approval = True
+        controller.update_required_approval_check(
+            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
+        )
     pr_environment_updated = _update_pr_environment(controller)
     if tests_passed and has_required_approval and pr_environment_updated:
         _deploy_production(
@@ -169,7 +187,14 @@ def _run_all(controller: GithubController, merge: bool, delete: bool) -> None:
 @github.command()
 @merge_option
 @delete_option
+@click.option(
+    "--command_namespace",
+    type=str,
+    help="Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`.",
+)
 @click.pass_context
-def run_all(ctx: click.Context, merge: bool, delete: bool) -> None:
+def run_all(
+    ctx: click.Context, merge: bool, delete: bool, command_namespace: t.Optional[str]
+) -> None:
     """Runs all the commands in the correct order."""
-    return _run_all(ctx.obj["github"], merge, delete)
+    return _run_all(ctx.obj["github"], merge, delete, command_namespace)

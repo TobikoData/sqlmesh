@@ -27,7 +27,7 @@ Running tests on your models.
 ```python
 from sqlmesh.core.context import Context
 context = Context(path="example")
-context.run_tests()
+context.test()
 ```
 """
 from __future__ import annotations
@@ -77,9 +77,8 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import graphviz
-    import pyspark
 
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
 
@@ -98,7 +97,7 @@ class BaseContext(abc.ABC):
         """Returns an engine adapter."""
 
     @property
-    def spark(self) -> t.Optional[pyspark.sql.SparkSession]:
+    def spark(self) -> t.Optional[PySparkSession]:
         """Returns the spark session if it exists."""
         return self.engine_adapter.spark
 
@@ -124,7 +123,7 @@ class BaseContext(abc.ABC):
         """
         return self.engine_adapter.fetchdf(query)
 
-    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> pyspark.sql.DataFrame:
+    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
 
         Args:
@@ -433,12 +432,10 @@ class Context(BaseContext):
         for model in models.values():
             if model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
-                physical_schema = snapshot.physical_schema
                 ttl = snapshot.ttl
                 project = snapshot.project
             else:
                 config = self.config_for_model(model)
-                physical_schema = config.physical_schema
                 ttl = config.snapshot_ttl
                 project = config.project
 
@@ -447,7 +444,6 @@ class Context(BaseContext):
                 models=models,
                 audits=audits,
                 cache=fingerprint_cache,
-                physical_schema=physical_schema,
                 ttl=ttl,
                 project=project,
             )
@@ -848,12 +844,13 @@ class Context(BaseContext):
         The schema file contains all columns and types of external models, allowing for more robust
         lineage, validation, and optimizations.
         """
+        models = self._models or self._loader.load(self, update_schemas=False).models
         for path, config in self.configs.items():
             create_schema_file(
                 path=path / c.SCHEMA_YAML,
                 models={
                     name: model
-                    for name, model in self._models.items()
+                    for name, model in models.items()
                     if self.config_for_model(model) is config
                 },
                 adapter=self._engine_adapter,

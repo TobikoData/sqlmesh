@@ -8,6 +8,7 @@ from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroInfo
 from sqlmesh.utils.pydantic import PydanticModel
@@ -30,6 +31,7 @@ class Package(PydanticModel):
     """Class to contain package configuration"""
 
     name: str
+    tests: t.Dict[str, TestConfig]
     sources: t.Dict[str, SourceConfig]
     seeds: t.Dict[str, SeedConfig]
     models: t.Dict[str, ModelConfig]
@@ -55,9 +57,9 @@ class PackageLoader:
         Returns:
             Package containing the configuration found within this package
         """
-        logger.info(f"Loading package at '{package_root}'.")
+        logger.debug("Loading package at '%s'.", package_root)
         project_file_path = package_root / PROJECT_FILENAME
-        logger.info(f"Processing project file '{project_file_path}'.")
+        logger.debug("Processing project file '%s'.", project_file_path)
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in '{package_root}'.")
 
@@ -67,13 +69,14 @@ class PackageLoader:
             raise ConfigError(f"Package '{package_root}' must include package name.")
 
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
-        logger.info("Processing project variables.")
+        logger.debug("Processing project variables.")
         variables = {
             var: value
             for var, value in project_yaml.get("vars", {}).items()
             if not isinstance(value, dict)
         }
 
+        tests = _fix_paths(self._context.manifest.tests(package_name), package_root)
         models = _fix_paths(self._context.manifest.models(package_name), package_root)
         seeds = _fix_paths(self._context.manifest.seeds(package_name), package_root)
         macros = _fix_paths(self._context.manifest.macros(package_name), package_root)
@@ -89,6 +92,7 @@ class PackageLoader:
 
         return Package(
             name=package_name,
+            tests=tests,
             models=models,
             sources=sources,
             seeds=seeds,
@@ -98,7 +102,7 @@ class PackageLoader:
         )
 
 
-T = t.TypeVar("T", ModelConfig, MacroConfig, SeedConfig)
+T = t.TypeVar("T", TestConfig, ModelConfig, MacroConfig, SeedConfig)
 
 
 def _fix_paths(configs: t.Dict[str, T], package_root: Path) -> t.Dict[str, T]:

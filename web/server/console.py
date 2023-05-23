@@ -81,7 +81,7 @@ class ApiConsole(TerminalConsole):
                 if isinstance(test, ModelTest):
                     messages.append(
                         {
-                            "message": f"Failure test: {test.model_name} {test.test_name}",
+                            "message": f"Failure test: {test.model.name} {test.test_name}",
                             "details": details,
                         }
                     )

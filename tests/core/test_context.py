@@ -19,7 +19,7 @@ from tests.utils.test_filesystem import create_temp_file
 def test_global_config():
     context = Context(paths="examples/sushi")
     assert context.config.dialect is None
-    assert context.config.physical_schema == "sqlmesh"
+    assert context.config.time_column_format == "%Y-%m-%d"
 
 
 def test_named_config():
@@ -41,10 +41,10 @@ def test_missing_named_config():
 
 
 def test_config_parameter():
-    config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), physical_schema="dev")
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="presto"), project="test_project")
     context = Context(paths="examples/sushi", config=config)
     assert context.config.dialect == "presto"
-    assert context.config.physical_schema == "dev"
+    assert context.config.project == "test_project"
 
 
 def test_config_not_found():
@@ -139,10 +139,10 @@ def test_render(sushi_context, assert_exp_eq):
             CAST(o.waiter_id AS INT) AS waiter_id, /* Waiter id */
             CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, /* Revenue from orders taken by this waiter */
             CAST(o.ds AS TEXT) AS ds /* Date */
-          FROM sqlmesh.sushi__orders__2048186253 AS o
-          LEFT JOIN sqlmesh.sushi__order_items__3982722653 AS oi
+          FROM sqlmesh__sushi.sushi__orders__619968963 AS o
+          LEFT JOIN sqlmesh__sushi.sushi__order_items__3090566586 AS oi
             ON o.ds = oi.ds AND o.id = oi.order_id
-          LEFT JOIN sqlmesh.sushi__items__3758356954 AS i
+          LEFT JOIN sqlmesh__sushi.sushi__items__1837306384 AS i
             ON oi.ds = i.ds AND oi.item_id = i.id
           WHERE
             o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'

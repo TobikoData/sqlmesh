@@ -152,11 +152,11 @@ def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path
 def test_load_config_multiple_config_files_in_folder(tmp_path):
     config_a_path = tmp_path / "config.yaml"
     with open(config_a_path, "w") as fd:
-        fd.write("physical_schema: schema_a")
+        fd.write("project: project_a")
 
     config_b_path = tmp_path / "config.yml"
     with open(config_b_path, "w") as fd:
-        fd.write("physical_schema: schema_b")
+        fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
         load_config_from_paths(config_a_path, config_b_path)

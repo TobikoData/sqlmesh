@@ -36,11 +36,15 @@ def cli(
     if ctx.invoked_subcommand == "version":
         return
 
+    load = True
+
     if len(paths) == 1:
         path = os.path.abspath(paths[0])
         if ctx.invoked_subcommand == "init":
             ctx.obj = path
             return
+        elif ctx.invoked_subcommand == "create_external_models":
+            load = False
 
     # Delegates the execution of the --help option to the corresponding subcommand
     if "--help" in sys.argv:
@@ -53,9 +57,10 @@ def cli(
         paths=paths,
         config=config,
         gateway=gateway,
+        load=load,
     )
 
-    if not context.models:
+    if load and not context.models:
         raise click.ClickException(
             f"`{paths}` doesn't seem to have any models... cd into the proper directory or specify the path(s) with -p."
         )
