@@ -26,7 +26,6 @@ def snapshot() -> Snapshot:
                 parse_one("@DEF(key, 'value')"),
             ],
         ),
-        physical_schema="physical_schema",
         models={},
         ttl="in 1 week",
     )
@@ -101,7 +100,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "parents": [],
                 "previous_versions": [],
                 "project": "",
-                "physical_schema": "physical_schema",
                 "updated_ts": 1665014400000,
                 "version": snapshot.version,
                 "change_category": snapshot.change_category,
@@ -113,9 +111,9 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 {
                     "fingerprint": snapshot.fingerprint.dict(),
                     "name": "test_model",
-                    "physical_schema": "physical_schema",
                     "previous_versions": [],
                     "version": snapshot.version,
+                    "physical_schema": "default__sqlmesh__physical_layer",
                     "change_category": snapshot.change_category,
                     "parents": [],
                     "kind_name": "INCREMENTAL_BY_TIME_RANGE",

@@ -432,12 +432,10 @@ class Context(BaseContext):
         for model in models.values():
             if model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
-                physical_schema = snapshot.physical_schema
                 ttl = snapshot.ttl
                 project = snapshot.project
             else:
                 config = self.config_for_model(model)
-                physical_schema = config.physical_schema
                 ttl = config.snapshot_ttl
                 project = config.project
 
@@ -446,7 +444,6 @@ class Context(BaseContext):
                 models=models,
                 audits=audits,
                 cache=fingerprint_cache,
-                physical_schema=physical_schema,
                 ttl=ttl,
                 project=project,
             )

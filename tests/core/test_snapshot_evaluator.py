@@ -101,7 +101,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         hooks=hook.get_registry(),
     )
 
-    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.create([snapshot], {})
@@ -122,7 +122,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("physical_schema"),
+            call("test_schea__sqlmesh__physical_layer"),
         ]
     )
 
@@ -137,7 +137,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
     model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
-    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     parent_snapshot = make_snapshot(
@@ -167,7 +167,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
         query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
 
-    snapshot = make_snapshot(model, physical_schema="physical_schema")
+    snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     evaluator.promote([snapshot], "test_env")
@@ -175,7 +175,9 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
-        parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),
+        parse_one(
+            f"SELECT * FROM test_schema__sqlmesh__physical_layer.test_schema__test_model__{snapshot.version}"
+        ),
     )
 
 
@@ -212,7 +214,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     connection_mock.cursor.return_value = cursor_mock
     adapter = EngineAdapter(lambda: connection_mock, "")
 
-    current_table = "physical_schema.test_schema__test_model__1"
+    current_table = "test_schema__sqlmesh__physical_layer.test_schema__test_model__1"
 
     def columns(table_name: t.Union[str, exp.Table]) -> t.Dict[str, exp.DataType]:
         if table_name == current_table:
@@ -236,15 +238,19 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
         storage_format="parquet",
         query=parse_one("SELECT c, a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
     )
-    snapshot = make_snapshot(model, physical_schema="physical_schema", version="1")
+    snapshot = make_snapshot(model, version="1")
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
     evaluator.migrate([snapshot])
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE physical_schema.test_schema__test_model__1 DROP COLUMN b"""),
-            call("""ALTER TABLE physical_schema.test_schema__test_model__1 ADD COLUMN a INT"""),
+            call(
+                """ALTER TABLE test_schema__sqlmesh__physical_layer.test_schema__test_model__1 DROP COLUMN b"""
+            ),
+            call(
+                """ALTER TABLE test_schema__sqlmesh__physical_layer.test_schema__test_model__1 ADD COLUMN a INT"""
+            ),
         ]
     )
 
@@ -262,7 +268,7 @@ def test_evaluate_creation_duckdb(
         assert duck_conn.execute(
             "SELECT table_schema, table_name, table_type FROM information_schema.tables"
         ).fetchall() == [
-            ("sqlmesh", f"db__model__{version}", "BASE TABLE"),
+            ("db__sqlmesh__physical_layer", f"db__model__{version}", "BASE TABLE"),
             ("main", "tbl", "VIEW"),
         ]
 
@@ -275,7 +281,9 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [(1,)]
+    assert duck_conn.execute(
+        f"SELECT * FROM db__sqlmesh__physical_layer.db__model__{version}"
+    ).fetchall() == [(1,)]
 
     # test that existing tables work
     evaluator.evaluate(
@@ -286,7 +294,9 @@ def test_evaluate_creation_duckdb(
         snapshots={},
     )
     assert_tables_exist()
-    assert duck_conn.execute(f"SELECT * FROM sqlmesh.db__model__{version}").fetchall() == [(1,)]
+    assert duck_conn.execute(
+        f"SELECT * FROM db__sqlmesh__physical_layer.db__model__{version}"
+    ).fetchall() == [(1,)]
 
 
 def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
@@ -312,9 +322,9 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
         snapshots={},
     )
 
-    assert duck_conn.execute(f"SELECT b FROM sqlmesh.db__model__{snapshot.version}").fetchall() == [
-        (1,)
-    ]
+    assert duck_conn.execute(
+        f"SELECT b FROM db__sqlmesh__physical_layer.db__model__{snapshot.version}"
+    ).fetchall() == [(1,)]
 
 
 def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
