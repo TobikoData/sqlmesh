@@ -57,9 +57,9 @@ class PackageLoader:
         Returns:
             Package containing the configuration found within this package
         """
-        logger.info(f"Loading package at '{package_root}'.")
+        logger.debug("Loading package at '%s'.", package_root)
         project_file_path = package_root / PROJECT_FILENAME
-        logger.info(f"Processing project file '{project_file_path}'.")
+        logger.debug("Processing project file '%s'.", project_file_path)
         if not project_file_path.exists():
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in '{package_root}'.")
 
@@ -69,7 +69,7 @@ class PackageLoader:
             raise ConfigError(f"Package '{package_root}' must include package name.")
 
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
-        logger.info("Processing project variables.")
+        logger.debug("Processing project variables.")
         variables = {
             var: value
             for var, value in project_yaml.get("vars", {}).items()

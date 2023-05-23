@@ -153,12 +153,12 @@ class ManifestHelper:
                 )
 
             if test_owner in dependencies.sources:
-                logger.info(f"Skipping audit '%s'. Source audits not supported yet", node.name)
+                logger.debug("Skipping audit '%s'. Source audits not supported yet", node.name)
                 continue
 
             if len(dependencies.refs) > 1:
-                logger.info(
-                    f"Skipping audit '%s'. Multi-owner audits not supported yet.", node.name
+                logger.debug(
+                    "Skipping audit '%s'. Multi-owner audits not supported yet.", node.name
                 )
                 continue
 
