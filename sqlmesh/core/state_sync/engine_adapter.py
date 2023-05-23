@@ -652,7 +652,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             new_snapshot.fingerprint = fingerprint_from_model(
                 model,
-                physical_schema=snapshot.physical_schema,
                 models=models,
                 audits=audits,
             )
@@ -661,7 +660,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     name=name,
                     identifier=fingerprint_from_model(
                         models[name],
-                        physical_schema=snapshot.physical_schema,
                         models=models,
                         audits=audits,
                         cache=fingerprint_cache,

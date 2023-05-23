@@ -28,7 +28,6 @@ class Config(BaseConfig):
         default_gateway: The default gateway.
         notification_targets: The notification targets to use.
         dialect: The default sql dialect of model queries. Default: same as engine dialect.
-        physical_schema: The default schema used to store materialized tables.
         project: The project name of this config. Used for multi-repo setups.
         snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
         environment_ttl: The period of time that a development environment should exist before being deleted.
@@ -47,7 +46,6 @@ class Config(BaseConfig):
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     default_gateway: str = ""
     notification_targets: t.List[NotificationTarget] = []
-    physical_schema: str = c.SQLMESH
     project: str = ""
     snapshot_ttl: str = c.DEFAULT_SNAPSHOT_TTL
     environment_ttl: t.Optional[str] = c.DEFAULT_ENVIRONMENT_TTL

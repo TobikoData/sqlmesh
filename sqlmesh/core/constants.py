@@ -38,3 +38,6 @@ MODELS = "models"
 TESTS = "tests"
 CACHE = ".cache"
 SCHEMA_YAML = "schema.yaml"
+
+
+DEFAULT_SCHEMA = "default"
