@@ -77,7 +77,6 @@ def test_json(snapshot: Snapshot):
         "created_ts": 1663891973000,
         "ttl": "in 1 week",
         "fingerprint": snapshot.fingerprint,
-        "physical_schema": "sqlmesh",
         "intervals": [],
         "dev_intervals": [],
         "model": {
@@ -359,12 +358,11 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1966251297",
+        data_hash="2044395723",
         metadata_hash="382750147",
     )
 
     assert fingerprint == original_fingerprint
-    assert fingerprint_from_model(model, physical_schema="x", models={}) != fingerprint
 
     with_parent_fingerprint = fingerprint_from_model(model, models={"parent.tbl": parent_model})
     assert with_parent_fingerprint != fingerprint
@@ -400,7 +398,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="4076055159",
+        data_hash="3834815287",
         metadata_hash="1120323454",
     )
 
@@ -442,7 +440,7 @@ def test_fingerprint_jinja_macros(model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1957476992",
+        data_hash="2646014410",
         metadata_hash="382750147",
     )
 
@@ -483,26 +481,29 @@ def test_table_name(snapshot: Snapshot):
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.previous_versions = ()
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
 
     # Mimic an indirect forward-only change.
     previous_data_version = snapshot.data_version
+    assert previous_data_version.physical_schema == "sqlmesh__default"
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="2"
     )
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__781051917__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh__default.name__781051917__temp"
+    )
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(
@@ -510,21 +511,31 @@ def test_table_name(snapshot: Snapshot):
     )
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3049392110__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3049392110__temp"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3049392110__temp"
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False)
+        == "sqlmesh__default.name__3049392110__temp"
+    )
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert (
+        snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3049392110__temp"
+    )
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3049392110__temp"
 
     # Mimic a propmoted forward-only snapshot.
     snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh.name__3049392110__temp"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh.name__3049392110__temp"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh.name__3078928823"
+    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
+    assert (
+        snapshot.table_name(is_dev=True, for_read=False)
+        == "sqlmesh__default.name__3049392110__temp"
+    )
+    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
+    assert (
+        snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3049392110__temp"
+    )
+    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
 
 
 def test_categorize_change_sql(make_snapshot):
@@ -880,3 +891,27 @@ def test_effective_from(snapshot: Snapshot):
     assert new_snapshot_different_fingerprint.intervals == [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-04")),
     ]
+
+
+def test_physical_schema(snapshot: Snapshot):
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert snapshot.physical_schema == "sqlmesh__default"
+    assert snapshot.data_version.physical_schema == "sqlmesh__default"
+    assert snapshot.table_info.physical_schema == "sqlmesh__default"
+
+    snapshot.physical_schema_ = "custom_schema"
+    assert snapshot.physical_schema == "custom_schema"
+    assert snapshot.data_version.physical_schema == "custom_schema"
+    assert snapshot.table_info.physical_schema == "custom_schema"
+
+    # Make sure the previous physical schema is preserved for forward-only snapshots.
+    new_snapshot = deepcopy(snapshot)
+    new_snapshot.previous_versions = (snapshot.data_version,)
+    new_snapshot.physical_schema_ = None
+    new_snapshot.version = None
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    assert new_snapshot.physical_schema == "custom_schema"
+    assert new_snapshot.data_version.physical_schema == "custom_schema"
+    assert new_snapshot.table_info.physical_schema == "custom_schema"

@@ -132,7 +132,6 @@ def make_snapshot() -> t.Callable:
         return Snapshot.from_model(
             model,
             **{  # type: ignore
-                "physical_schema": "sqlmesh",
                 "models": {},
                 "ttl": "in 1 week",
                 **kwargs,
