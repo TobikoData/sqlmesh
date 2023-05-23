@@ -43,9 +43,9 @@ class DbtLoader(Loader):
         self._project: t.Optional[Project] = None
         super().__init__()
 
-    def load(self, context: Context) -> LoadedProject:
+    def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
         self._project = None
-        return super().load(context)
+        return super().load(context, update_schemas)
 
     def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry, JinjaMacroRegistry]:
         macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
