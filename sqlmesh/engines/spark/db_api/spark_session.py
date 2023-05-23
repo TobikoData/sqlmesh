@@ -61,11 +61,18 @@ class SparkSessionCursor:
 
 
 class SparkSessionConnection:
-    def __init__(self, spark: SparkSession):
+    def __init__(self, spark: SparkSession, catalog: t.Optional[str] = None):
         self.spark = spark
+        self.catalog = catalog
 
     def cursor(self) -> SparkSessionCursor:
-        self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
+        try:
+            self.spark.sparkContext.setLocalProperty("spark.scheduler.pool", f"pool_{get_ident()}")
+        except NotImplementedError:
+            # Databricks Connect does not support accessing the SparkContext
+            pass
+        if self.catalog:
+            self.spark.sql(f"USE CATALOG {self.catalog}")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:
@@ -78,8 +85,8 @@ class SparkSessionConnection:
         pass
 
 
-def connection(spark: SparkSession) -> SparkSessionConnection:
-    return SparkSessionConnection(spark)
+def connection(spark: SparkSession, catalog: t.Optional[str] = None) -> SparkSessionConnection:
+    return SparkSessionConnection(spark, catalog)
 
 
 def _normalize_rows(rows: t.Sequence[Row]) -> t.List[t.Tuple]:

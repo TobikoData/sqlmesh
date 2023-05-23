@@ -3,8 +3,6 @@ from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
     ConnectionConfig,
     DatabricksConnectionConfig,
-    DatabricksSparkSessionConnectionConfig,
-    DatabricksSQLConnectionConfig,
     DuckDBConnectionConfig,
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
