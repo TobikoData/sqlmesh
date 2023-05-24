@@ -280,12 +280,16 @@ class QueryRenderer(ExpressionRenderer):
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
         schema = ensure_schema(self.schema, dialect=self._dialect)
 
-        query = query.copy()
+        query = t.cast(exp.Subqueryable, query.copy())
         lower_identities(query)
         qualify_tables(query)
 
         try:
-            if not schema.empty:
+            if schema.empty:
+                for select in query.selects:
+                    if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
+                        select.replace(exp.alias_(select, select.output_name))
+            else:
                 qualify_columns(query, schema=schema, infer_schema=False)
         except SqlglotError as ex:
             raise_config_error(

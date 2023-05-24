@@ -85,15 +85,15 @@ def test_load(assert_exp_eq):
     ]
     assert model.depends_on == {"db.other_table"}
     assert_exp_eq(
-        model.query,
+        model.render_query(),
         """
     SELECT
         TRY_CAST(1 AS INT) AS a,
         TRY_CAST(2 AS DOUBLE) AS b,
-        TRY_CAST(c AS BOOL),
+        TRY_CAST(c AS BOOL) AS c,
         TRY_CAST(1 AS INT) AS d, -- d
         TRY_CAST(2 AS DOUBLE) AS e, -- e
-        TRY_CAST(f AS BOOL), -- f
+        TRY_CAST(f AS BOOL) AS f, -- f
     FROM
         db.other_table t1
         LEFT JOIN
@@ -576,7 +576,7 @@ def test_render_query(assert_exp_eq):
         model.render_query(start="2020-10-28", end="2020-10-28"),
         """
         SELECT
-          y
+          y AS y
         FROM x AS x
         WHERE
           y <= '2020-10-28'
@@ -594,7 +594,7 @@ def test_render_query(assert_exp_eq):
           *
         FROM (
           SELECT
-            y
+            y AS y
           FROM x AS x
           WHERE
             y <= '2020-10-28'
@@ -889,7 +889,7 @@ def test_parse(assert_exp_eq):
         """
       SELECT
         CAST(id AS INT) AS id,
-        ds
+        ds AS ds
       FROM x AS x
       WHERE
         ds <= '1970-01-01' AND ds >= '1970-01-01'
