@@ -25,6 +25,7 @@ import logging
 import typing as t
 from contextlib import contextmanager
 
+import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
@@ -166,6 +167,7 @@ class SnapshotEvaluator:
             else TransactionType.DML
         ):
             for index, query_or_df in enumerate(queries_or_dfs):
+                df = self.adapter.try_get_df(query_or_df)
                 if limit and limit > 0:
                     if isinstance(query_or_df, exp.Select):
                         existing_limit = query_or_df.args.get("limit")
@@ -175,7 +177,18 @@ class SnapshotEvaluator:
                                 execute(exp.select(existing_limit.expression)).rows[0][0],
                             )
                     return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
-
+                elif (
+                    self.adapter.SUPPORTS_INSERT_OVERWRITE
+                    and snapshot.is_incremental_by_time_range
+                    and df is not None
+                ):
+                    for next_df in queries_or_dfs:
+                        query_or_df = t.cast("DF", query_or_df)
+                        query_or_df = (
+                            query_or_df.unionAll(next_df)  # type: ignore
+                            if self.adapter.is_pyspark_df(df)
+                            else pd.concat([query_or_df, next_df], ignore_index=True)  # type: ignore
+                        )
                 apply(query_or_df, index)
 
             model.run_post_hooks(
