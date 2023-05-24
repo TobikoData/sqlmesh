@@ -783,16 +783,16 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     ):
         state_sync.rollback()
 
-    mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._restore_table")
+    restore_table_spy = mocker.spy(state_sync, "_restore_table")
     state_sync._backup_state()
 
     state_sync.rollback()
-    mock.assert_any_call("sqlmesh._snapshots", "sqlmesh._snapshots_backup")
-    mock.assert_any_call("sqlmesh._environments", "sqlmesh._environments_backup")
-    mock.assert_any_call("sqlmesh._versions", "sqlmesh._versions_backup")
-    assert not state_sync.engine_adapter.table_exists("select * from sqlmesh._snapshots_backup")
-    assert not state_sync.engine_adapter.table_exists("select * from sqlmesh._environments_backup")
-    assert not state_sync.engine_adapter.table_exists("select * from sqlmesh._versions_backup")
+    restore_table_spy.assert_any_call("sqlmesh._snapshots", "sqlmesh._snapshots_backup")
+    restore_table_spy.assert_any_call("sqlmesh._environments", "sqlmesh._environments_backup")
+    restore_table_spy.assert_any_call("sqlmesh._versions", "sqlmesh._versions_backup")
+    assert not state_sync.engine_adapter.table_exists("sqlmesh._snapshots_backup")
+    assert not state_sync.engine_adapter.table_exists("sqlmesh._environments_backup")
+    assert not state_sync.engine_adapter.table_exists("sqlmesh._versions_backup")
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
