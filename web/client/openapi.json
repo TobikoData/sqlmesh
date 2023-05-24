@@ -14,8 +14,7 @@
                 "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -335,8 +334,7 @@
                 "$ref": "#/components/schemas/Body_run_plan_api_plan_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -605,7 +603,6 @@
       },
       "Body_apply_api_commands_apply_post": {
         "title": "Body_apply_api_commands_apply_post",
-        "required": ["environment"],
         "type": "object",
         "properties": {
           "environment": { "title": "Environment", "type": "string" },
@@ -637,7 +634,6 @@
       },
       "Body_run_plan_api_plan_post": {
         "title": "Body_run_plan_api_plan_post",
-        "required": ["environment"],
         "type": "object",
         "properties": {
           "environment": { "title": "Environment", "type": "string" },
@@ -1001,9 +997,27 @@
           "kind": { "title": "Kind", "type": "string" },
           "batch_size": { "title": "Batch Size", "type": "integer" },
           "cron": { "title": "Cron", "type": "string" },
-          "stamp": { "title": "Stamp", "type": "string" },
-          "start": { "title": "Start", "type": "string" },
-          "retention": { "title": "Retention", "type": "string" },
+          "stamp": {
+            "title": "Stamp",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "start": {
+            "title": "Start",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "retention": { "title": "Retention", "type": "integer" },
           "storage_format": { "title": "Storage Format", "type": "string" },
           "time_column": { "title": "Time Column", "type": "string" },
           "tags": { "title": "Tags", "type": "string" },
@@ -1201,7 +1215,8 @@
           "temp_version": { "title": "Temp Version", "type": "string" },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
-          }
+          },
+          "physical_schema": { "title": "Physical Schema", "type": "string" }
         },
         "additionalProperties": false
       },

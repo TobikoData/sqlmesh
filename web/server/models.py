@@ -36,7 +36,7 @@ class File(BaseModel):
     path: str
     extension: str = ""
     is_supported: bool = False
-    content: t.Optional[str] = ""
+    content: t.Optional[str] = None
     type: t.Optional[FileType]
 
     @validator("extension", always=True)
