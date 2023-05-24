@@ -215,7 +215,7 @@ def test_number_of_rows_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == """SELECT 1 FROM (SELECT * FROM db.test_model AS test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') AS _q_0 HAVING COUNT(*) <= 0 LIMIT 1"""
+        == """SELECT 1 AS "1" FROM (SELECT * FROM db.test_model AS test_model WHERE ds <= '1970-01-01' AND ds >= '1970-01-01') AS _q_0 HAVING COUNT(*) <= 0 LIMIT 1"""
     )
 
 

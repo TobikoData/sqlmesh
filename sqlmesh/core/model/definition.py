@@ -599,7 +599,7 @@ class SqlModel(_Model):
 
         if self._columns_to_types is None:
             self._columns_to_types = {
-                expression.alias_or_name: expression.type or exp.DataType.build("unknown")
+                expression.output_name: expression.type or exp.DataType.build("unknown")
                 for expression in self._query_renderer.render().expressions
             }
 
@@ -632,7 +632,7 @@ class SqlModel(_Model):
 
         name_counts: t.Dict[str, int] = {}
         for expression in projection_list:
-            alias = expression.alias_or_name
+            alias = expression.output_name
             if alias == "*":
                 continue
             if not alias:
