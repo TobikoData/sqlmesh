@@ -177,6 +177,11 @@ class SnapshotEvaluator:
                                 execute(exp.select(existing_limit.expression)).rows[0][0],
                             )
                     return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
+                # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
+                # if the engine supports INSERT OVERWRITE and the snapshot is incremental by time range, we risk
+                # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
+                # union all the dataframes together before writing. For pandas this could result in OOM and a potential
+                # workaround for that would be to serialize pandas to disk and then read it back with Spark.
                 elif (
                     self.adapter.SUPPORTS_INSERT_OVERWRITE
                     and snapshot.is_incremental_by_time_range
