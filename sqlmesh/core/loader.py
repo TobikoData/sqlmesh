@@ -54,7 +54,9 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
 
         for dep in model.depends_on:
             external = external or dep not in models
-            table = schema._normalize_table(schema._ensure_table(dep))
+            table = schema._normalize_table(
+                schema._ensure_table(dep, dialect=model.dialect), dialect=model.dialect
+            )
             mapping_schema = schema.find(table)
 
             if mapping_schema:
@@ -64,7 +66,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
                     {k: str(v) for k, v in mapping_schema.items()},
                 )
 
-        schema.add_table(name, model.columns_to_types)
+        schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
         if external:
             if "*" in model.columns_to_types:
@@ -129,8 +131,10 @@ class Loader(abc.ABC):
 
         macros, hooks, jinja_macros = self._load_scripts()
         models = self._load_models(macros, hooks, jinja_macros)
+
         for model in models.values():
             self._add_model_to_dag(model)
+
         if update_schemas:
             update_model_schemas(self._dag, models)
 

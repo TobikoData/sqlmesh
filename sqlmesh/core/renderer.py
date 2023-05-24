@@ -278,10 +278,12 @@ class QueryRenderer(ExpressionRenderer):
         self._query_cache[_dates(start, end, latest)] = query
 
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
-        schema = ensure_schema(self.schema)
+        schema = ensure_schema(self.schema, dialect=self._dialect)
+
         query = query.copy()
         lower_identities(query)
         qualify_tables(query)
+
         try:
             if not schema.empty:
                 qualify_columns(query, schema=schema, infer_schema=False)
@@ -290,4 +292,5 @@ class QueryRenderer(ExpressionRenderer):
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",
                 self._path,
             )
+
         return annotate_types(simplify(query), schema=schema)
