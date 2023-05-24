@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import typing as t
 from contextlib import contextmanager
+from functools import reduce
 
 import pandas as pd
 from sqlglot import exp, select
@@ -166,35 +167,34 @@ class SnapshotEvaluator:
             if model.kind.is_view or model.kind.is_full
             else TransactionType.DML
         ):
-            for index, query_or_df in enumerate(queries_or_dfs):
-                df = self.adapter.try_get_df(query_or_df)
-                if limit and limit > 0:
-                    if isinstance(query_or_df, exp.Select):
-                        existing_limit = query_or_df.args.get("limit")
-                        if existing_limit:
-                            limit = min(
-                                limit,
-                                execute(exp.select(existing_limit.expression)).rows[0][0],
-                            )
-                    return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
-                # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
-                # if the engine supports INSERT OVERWRITE and the snapshot is incremental by time range, we risk
-                # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
-                # union all the dataframes together before writing. For pandas this could result in OOM and a potential
-                # workaround for that would be to serialize pandas to disk and then read it back with Spark.
-                elif (
-                    self.adapter.SUPPORTS_INSERT_OVERWRITE
-                    and snapshot.is_incremental_by_time_range
-                    and df is not None
-                ):
-                    for next_df in queries_or_dfs:
-                        query_or_df = t.cast("DF", query_or_df)
-                        query_or_df = (
-                            query_or_df.unionAll(next_df)  # type: ignore
-                            if self.adapter.is_pyspark_df(df)
-                            else pd.concat([query_or_df, next_df], ignore_index=True)  # type: ignore
+            if limit and limit > 0:
+                query_or_df = next(queries_or_dfs)
+                if isinstance(query_or_df, exp.Select):
+                    existing_limit = query_or_df.args.get("limit")
+                    if existing_limit:
+                        limit = min(
+                            limit,
+                            execute(exp.select(existing_limit.expression)).rows[0][0],
                         )
-                apply(query_or_df, index)
+                return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
+            # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
+            # if the engine supports INSERT OVERWRITE and the snapshot is incremental by time range, we risk
+            # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
+            # union all the dataframes together before writing. For pandas this could result in OOM and a potential
+            # workaround for that would be to serialize pandas to disk and then read it back with Spark.
+            # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
+            # and not SQL expressions.
+            elif self.adapter.SUPPORTS_INSERT_OVERWRITE and snapshot.is_incremental_by_time_range:
+                query_or_df = reduce(
+                    lambda a, b: a.union_all(b)  # type: ignore
+                    if self.adapter.is_pyspark_df(a)
+                    else pd.concat([a, b], ignore_index=True),  # type: ignore
+                    queries_or_dfs,
+                )
+                apply(query_or_df, index=0)
+            else:
+                for index, query_or_df in enumerate(queries_or_dfs):
+                    apply(query_or_df, index)
 
             model.run_post_hooks(
                 context=context,
