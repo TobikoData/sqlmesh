@@ -62,10 +62,7 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         df = self.try_get_df(query_or_df)
         if self._use_spark_session and df is not None:
-            df = self._ensure_pyspark_df(df)
-            if where:
-                df = df.where(where.sql(dialect=self.dialect))
-            self._insert_pyspark_df(table_name, df, overwrite=True)
+            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=True)
         else:
             super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
 
