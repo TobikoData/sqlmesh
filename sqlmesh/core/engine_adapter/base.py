@@ -596,13 +596,38 @@ class EngineAdapter:
         where: t.Optional[exp.Condition] = None,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        if where is None:
-            raise SQLMeshError(
-                "Where condition is required when doing a delete/insert for insert/overwrite"
+        table = exp.to_table(table_name)
+        if self.SUPPORTS_INSERT_OVERWRITE:
+            df = self.try_get_pandas_df(query_or_df)
+            if df is not None:
+                query_or_df = next(
+                    pandas_to_sql(
+                        df,
+                        alias=table.alias_or_name,
+                        columns_to_types=columns_to_types,
+                    )
+                )
+            query = t.cast("Query", query_or_df)
+            if where is not None:
+                query = (
+                    exp.select("*")
+                    .from_(
+                        t.cast(exp.Subqueryable, query).subquery("_subquery", copy=False),
+                        copy=False,
+                    )
+                    .where(where)
+                )
+            self.execute(
+                exp.insert(query, table, columns=list(columns_to_types or []), overwrite=True)
             )
-        with self.transaction():
-            self.delete_from(table_name, where=where)
-            self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
+        else:
+            if where is None:
+                raise SQLMeshError(
+                    "Where condition is required when doing a delete/insert for insert/overwrite"
+                )
+            with self.transaction():
+                self.delete_from(table_name, where=where)
+                self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
 
     def update_table(
         self,
