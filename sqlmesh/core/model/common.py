@@ -4,8 +4,7 @@ import typing as t
 
 from pydantic import validator
 from sqlglot import exp, maybe_parse
-from sqlglot.expressions import split_num_words
-from sqlglot.helper import seq_get
+from sqlglot.helper import seq_get, split_num_words
 
 from sqlmesh.core.dialect import parse
 from sqlmesh.utils.errors import ConfigError

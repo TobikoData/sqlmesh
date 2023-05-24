@@ -44,7 +44,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=13.3.1",
+        "sqlglot~=14.0.0",
         "fsspec",
     ],
     extras_require={
