@@ -423,7 +423,7 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
     for chunk, is_jinja in chunks:
         if is_jinja:
             start, *_, end = chunk
-            segment = sql[start.start : end.end + 1]
+            segment = sql[start.start : end.end + 2]
             variables = [
                 exp.Literal.string(var)
                 for var in find_undeclared_variables(ENVIRONMENT.parse(segment))
