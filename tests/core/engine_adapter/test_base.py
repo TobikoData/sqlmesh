@@ -118,6 +118,45 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
     )
 
 
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.SUPPORTS_INSERT_OVERWRITE = True
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        parse_one("SELECT a, b FROM tbl"),
+        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT OVERWRITE TABLE test_table (a, b) SELECT a, b FROM tbl"
+    )
+
+
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.SUPPORTS_INSERT_OVERWRITE = True
+    df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        df,
+        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT OVERWRITE TABLE test_table (a, ds) SELECT CAST(a AS INT) AS a, CAST(ds AS TEXT) AS ds FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS test_table(a, ds)"
+    )
+
+
 def test_insert_append_query(mocker: MockerFixture):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
