@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 import functools
 import io
-import sys
-import traceback
 import typing as t
 from pathlib import Path, PurePath
 
@@ -12,12 +10,11 @@ import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_404_NOT_FOUND
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import now_timestamp
 from web.server.console import api_console
-from web.server.models import Error
+from web.server.exceptions import ApiException
 from web.server.settings import get_context
 
 R = t.TypeVar("R")
@@ -71,20 +68,9 @@ def replace_file(src: Path, dst: Path) -> None:
         except FileNotFoundError:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND)
         except OSError:
-            error_type, error_value, error_traceback = sys.exc_info()
-
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=Error(
-                    timestamp=now_timestamp(),
-                    status=HTTP_422_UNPROCESSABLE_ENTITY,
-                    message="Unable to move file",
-                    origin="API -> utils -> replace_file",
-                    description=str(error_value),
-                    type=str(error_type),
-                    traceback=traceback.format_exc(),
-                    stack=traceback.format_tb(error_traceback),
-                ).dict(),
+            raise ApiException(
+                message="Unable to move a file",
+                origin="API -> utils -> replace_file",
             )
 
 

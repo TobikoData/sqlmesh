@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import sys
-import traceback
 import typing as t
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, Body, Depends, Request, Response, status
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import make_inclusive, now_timestamp, to_ds
+from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
-from web.server.models import Error
+from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -24,21 +21,16 @@ router = APIRouter()
 async def run_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
-    environment: t.Optional[str] = Body(),
+    environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Plan/apply is already running.",
-                origin="API -> plan -> run_plan",
-            ).dict(),
+        raise ApiException(
+            message="Plan/apply is already running.",
+            origin="API -> plan -> run_plan",
         )
 
     try:
@@ -77,7 +69,7 @@ async def run_plan(
                     if interval.snapshot_name in plan.context_diff.snapshots
                     else interval.snapshot_name,
                     interval=[
-                        [to_ds(t) for t in make_inclusive(start, end)]
+                        tuple([to_ds(t) for t in make_inclusive(start, end)])
                         for start, end in interval.merged_intervals
                     ][0],
                     batches=tasks.get(interval.snapshot_name, 0),
@@ -93,20 +85,9 @@ async def run_plan(
 
         return payload
     except Exception:
-        error_type, error_value, error_traceback = sys.exc_info()
-
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Unable to run plan",
-                origin="API -> plan -> run_plan",
-                description=str(error_value),
-                type=str(error_type),
-                traceback=traceback.format_exc(),
-                stack=traceback.format_tb(error_traceback),
-            ).dict(),
+        raise ApiException(
+            message="Unable to run a plan",
+            origin="API -> plan -> run_plan",
         )
 
 
@@ -117,13 +98,8 @@ async def cancel_plan(
 ) -> None:
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Plan/apply is already running.",
-                origin="API -> plan -> cancel_plan",
-            ).dict(),
+        raise ApiException(
+            message="Plan/apply is already running.",
+            origin="API -> plan -> run_plan",
         )
     response.status_code = status.HTTP_204_NO_CONTENT

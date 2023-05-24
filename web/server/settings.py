@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
-import traceback
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from pydantic import BaseSettings
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import now_timestamp
-from web.server.models import Error, FileType
+from web.server.exceptions import ApiException
+from web.server.models import FileType
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()
@@ -73,20 +70,9 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
                 None, _get_loaded_context, settings.project_path, settings.config
             )
     except Exception:
-        error_type, error_value, error_traceback = sys.exc_info()
-
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Unable to create a context",
-                origin="API -> settings -> get_loaded_context",
-                description=str(error_value),
-                type=str(error_type),
-                traceback=traceback.format_exc(),
-                stack=traceback.format_tb(error_traceback),
-            ).dict(),
+        raise ApiException(
+            message="Unable to create a loaded context",
+            origin="API -> settings -> get_loaded_context",
         )
 
 
@@ -95,18 +81,7 @@ async def get_context(settings: Settings = Depends(get_settings)) -> Context | N
         async with get_context_lock:
             return _get_context(settings.project_path, settings.config)
     except Exception:
-        error_type, error_value, error_traceback = sys.exc_info()
-
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Unable to create a context",
-                origin="API -> settings -> get_context",
-                description=str(error_value),
-                type=str(error_type),
-                traceback=traceback.format_exc(),
-                stack=traceback.format_tb(error_traceback),
-            ).dict(),
+        raise ApiException(
+            message="Unable to create a context",
+            origin="API -> settings -> get_context",
         )

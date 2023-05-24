@@ -2,18 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
-import traceback
 import typing as t
 import unittest
-
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
-from web.server.models import Error
+from web.server.exceptions import ApiException
 from web.server.sse import Event
 
 
@@ -108,21 +104,13 @@ class ApiConsole(TerminalConsole):
 
     def log_exception(self) -> None:
         """Log an exception."""
-        error_type, error_value, error_traceback = sys.exc_info()
-
         self.queue.put_nowait(
             self._make_event(
                 event="errors",
-                data=Error(
-                    timestamp=now_timestamp(),
-                    status=HTTP_422_UNPROCESSABLE_ENTITY,
-                    message="Tasks failed to run",
+                data=ApiException(
+                    message="Tasks failed to a run",
                     origin="API -> console -> log_exception",
-                    description=str(error_value),
-                    type=str(error_type),
-                    traceback=traceback.format_exc(),
-                    stack=traceback.format_tb(error_traceback),
-                ).dict(),
+                ).to_dict(),
             )
         )
 

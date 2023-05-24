@@ -1,18 +1,27 @@
 import asyncio
 import pathlib
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
+from web.server.exceptions import ApiException
 from web.server.watcher import watch_project
 
 app = FastAPI()
 
 app.include_router(api_router, prefix="/api")
 WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
+
+
+@app.exception_handler(ApiException)
+async def handle_api_exception(_: Request, e: ApiException) -> JSONResponse:
+    return JSONResponse(
+        status_code=e.status_code,
+        content=e.to_dict(),
+    )
 
 
 @app.on_event("startup")

@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import sys
-import traceback
 import typing as t
 
-from fastapi import APIRouter, Depends, HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, Depends
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
-from sqlmesh.utils.date import now, now_timestamp, to_datetime
+from sqlmesh.utils.date import now, to_datetime
 from web.server import models
-from web.server.models import Error
+from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -29,14 +26,14 @@ def get_models(
     """Get a mapping of model names to model metadata"""
     output = []
 
-    def _get_model_type(model: Model) -> str | None:
+    def _get_model_type(model: Model) -> str:
         if model.is_sql:
             return "sql"
         if model.is_python:
             return "python"
         if model.is_seed:
             return "seed"
-        return None
+        return "external"
 
     try:
         for model in context.models.values():
@@ -90,18 +87,7 @@ def get_models(
 
         return output
     except Exception:
-        error_type, error_value, error_traceback = sys.exc_info()
-
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=Error(
-                timestamp=now_timestamp(),
-                status=HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Unable to get environments",
-                origin="API -> environments -> get_environments",
-                description=str(error_value),
-                type=str(error_type),
-                traceback=traceback.format_exc(),
-                stack=traceback.format_tb(error_traceback),
-            ).dict(),
+        raise ApiException(
+            message="Unable to get environments",
+            origin="API -> environments -> get_environments",
         )
