@@ -610,9 +610,9 @@ class EngineAdapter:
             query = t.cast("Query", query_or_df)
             if where is not None:
                 query = (
-                    exp.select("*")
+                    exp.select("*", copy=False)
                     .from_(
-                        t.cast(exp.Subqueryable, query).subquery("_subquery", copy=False),
+                        t.cast(exp.Subqueryable, query).subquery(alias="_subquery", copy=False),
                         copy=False,
                     )
                     .where(where)
