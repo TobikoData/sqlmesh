@@ -8,6 +8,7 @@ import {
   type MouseEvent,
   useMemo,
   useCallback,
+  lazy,
 } from 'react'
 import { useApiEnvironments, useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
@@ -35,6 +36,8 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
+
+const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
 
 export default function RunPlan(): JSX.Element {
   const { errors, setIsPlanOpen } = useIDE()
@@ -201,6 +204,7 @@ export default function RunPlan(): JSX.Element {
           hasChanges={hasChanges}
         />
       )}
+      <PlanSidebar />
       <ModalConfirmation
         show={showConfirmation}
         onClose={() => undefined}

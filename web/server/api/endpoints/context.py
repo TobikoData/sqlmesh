@@ -18,8 +18,6 @@ def get_api_context(
 ) -> models.Context:
     """Get the context"""
 
-    context.load()
-
     return models.Context(
         concurrent_tasks=context.concurrent_tasks,
         engine_adapter=context.engine_adapter.dialect,

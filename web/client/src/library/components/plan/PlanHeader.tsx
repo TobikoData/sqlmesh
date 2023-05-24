@@ -6,7 +6,7 @@ import { isObjectNotEmpty } from '@utils/index'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
-import ErrorsReport from '~/library/pages/ide/ErrorsReport'
+import ReportErrors from '@components/report/ReportErrors'
 
 export default function PlanHeader(): JSX.Element {
   const environment = useStoreContext(s => s.environment)
@@ -23,7 +23,7 @@ export default function PlanHeader(): JSX.Element {
           </b>
         </h4>
         <div className="px-6">
-          <ErrorsReport />
+          <ReportErrors />
         </div>
       </div>
       <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-6 ">

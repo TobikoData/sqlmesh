@@ -35,7 +35,7 @@ async def apply(
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
-            message="Plan/apply is already running.",
+            message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
 
@@ -82,10 +82,7 @@ async def evaluate(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Evaluate a model with a default limit of 1000"""
-
     try:
-        context.load()
-
         df = context.evaluate(
             options.model,
             start=options.start,
@@ -98,6 +95,7 @@ async def evaluate(
             message="Unable to evaluate a model",
             origin="API -> commands -> evaluate",
         )
+
     if not isinstance(df, pd.DataFrame):
         df = df.toPandas()
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
@@ -109,14 +107,11 @@ async def fetchdf(
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Fetches a dataframe given a sql string"""
-
     try:
-        context.load()
-
         df = context.fetchdf(sql)
     except Exception:
         raise ApiException(
-            message="Unable to fecth a dataframe from given a sql string",
+            message="Unable to fetch a dataframe from given a sql string",
             origin="API -> commands -> fetchdf",
         )
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
@@ -128,15 +123,6 @@ async def render(
     context: Context = Depends(get_loaded_context),
 ) -> models.Query:
     """Renders a model's query, optionally expanding referenced models"""
-
-    try:
-        context.load()
-    except Exception:
-        raise ApiException(
-            message="Unable to render a model query",
-            origin="API -> commands -> render",
-        )
-
     snapshot = context.snapshots.get(options.model)
 
     if not snapshot:
@@ -144,6 +130,7 @@ async def render(
             message="Unable to find a model",
             origin="API -> commands -> render",
         )
+
     try:
         rendered = context.render(
             snapshot,
@@ -152,11 +139,12 @@ async def render(
             latest=options.latest,
             expand=options.expand,
         )
-        dialect = options.dialect or context.config.dialect
-
-        return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))
     except Exception:
         raise ApiException(
             message="Unable to render a model query",
             origin="API -> commands -> render",
         )
+
+    dialect = options.dialect or context.config.dialect
+
+    return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))

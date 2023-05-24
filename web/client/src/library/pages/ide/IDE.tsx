@@ -22,8 +22,9 @@ import { Divider } from '@components/divider/Divider'
 import { Button } from '@components/button/Button'
 import Container from '@components/container/Container'
 
-const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
-const ErrorsReport = lazy(async () => await import('./ErrorsReport'))
+const ReportErrors = lazy(
+  async () => await import('../../components/report/ReportErrors'),
+)
 const RunPlan = lazy(async () => await import('./RunPlan'))
 const ActivePlan = lazy(async () => await import('./ActivePlan'))
 
@@ -131,7 +132,6 @@ export default function IDE(): JSX.Element {
 
   return (
     <Container.Page>
-      <PlanSidebar />
       <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
         <div className="px-3 flex items-center whitespace-nowrap">
           <h3 className="font-bold text-primary-500">
@@ -155,7 +155,7 @@ export default function IDE(): JSX.Element {
           <Suspense>
             {activePlan != null && <ActivePlan plan={activePlan} />}
           </Suspense>
-          <ErrorsReport />
+          <ReportErrors />
         </div>
       </div>
       <Divider />

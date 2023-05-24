@@ -34,13 +34,6 @@ def _get_context(path: str | Path, config: str) -> Context:
 
 
 @lru_cache()
-def _get_loaded_context(path: str | Path, config: str) -> Context:
-    context = _get_context(path, config)
-    context.load()
-    return context
-
-
-@lru_cache()
 def _get_path_mappings(context: Context) -> dict[Path, FileType]:
     mapping: dict[Path, FileType] = {}
     for audit in context._audits.values():
@@ -50,6 +43,13 @@ def _get_path_mappings(context: Context) -> dict[Path, FileType]:
         path = model._path.relative_to(context.path)
         mapping[path] = FileType.model
     return mapping
+
+
+@lru_cache()
+def _get_loaded_context(path: str | Path, config: str) -> Context:
+    context = _get_context(path, config)
+    context.load()
+    return context
 
 
 async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[Path, FileType]:
@@ -76,7 +76,7 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
         )
 
 
-async def get_context(settings: Settings = Depends(get_settings)) -> Context | None:
+async def get_context(settings: Settings = Depends(get_settings)) -> Context:
     try:
         async with get_context_lock:
             return _get_context(settings.project_path, settings.config)

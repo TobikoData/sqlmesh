@@ -17,7 +17,7 @@ import { EnumFileExtensions } from '@models/file'
 import CodeEditor, { useSQLMeshModelExtensions } from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
-import { DisplayError } from '~/library/pages/ide/ErrorsReport'
+import { DisplayError } from '@components/report/ReportErrors'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),

@@ -1,27 +1,24 @@
 import asyncio
+import logging
 import pathlib
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
 from web.server.exceptions import ApiException
+from web.server.settings import get_context, get_settings
 from web.server.watcher import watch_project
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 app.include_router(api_router, prefix="/api")
 WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
-
-
-@app.exception_handler(ApiException)
-async def handle_api_exception(_: Request, e: ApiException) -> JSONResponse:
-    return JSONResponse(
-        status_code=e.status_code,
-        content=e.to_dict(),
-    )
 
 
 @app.on_event("startup")
@@ -33,15 +30,36 @@ async def startup_event() -> None:
                 await listener.put(item)
             api_console.queue.task_done()
 
+    context = await get_context(get_settings())
+
     app.state.console_listeners = []
     app.state.dispatch_task = asyncio.create_task(dispatch())
-    app.state.watch_task = asyncio.create_task(watch_project(api_console.queue))
+    app.state.watch_task = asyncio.create_task(watch_project(api_console.queue, context))
 
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
     app.state.dispatch_task.cancel()
     app.state.watch_task.cancel()
+
+
+@app.exception_handler(ApiException)
+async def handle_api_exception(_: Request, e: ApiException) -> JSONResponse:
+    return JSONResponse(
+        status_code=e.status_code,
+        content=e.to_dict(),
+    )
+
+
+@app.exception_handler(Exception)
+async def handle_uncaught_exeption(_: Request, e: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        content=ApiException(
+            message=str(e),
+            origin="API -> main -> custom_exception_handler",
+        ).to_dict(),
+    )
 
 
 @app.get("/health")

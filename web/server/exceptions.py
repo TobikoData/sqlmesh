@@ -28,6 +28,9 @@ class ApiException(HTTPException):
         self.description = str(error_value) if error_value else None
         self.stack = traceback.format_tb(error_traceback) if error_traceback else None
 
+    def __str__(self) -> str:
+        return f"Summary: {self.message}\n{self.description}\n{self.traceback}"
+
     def to_dict(self) -> t.Dict[str, t.Union[str, int, t.List[str]]]:
         output: t.Dict[str, t.Union[str, int, t.List[str], None]] = {
             "status": self.status_code,

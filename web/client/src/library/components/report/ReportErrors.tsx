@@ -2,12 +2,17 @@ import { useChannelEvents } from '@api/channels'
 import { Disclosure, Popover, Transition } from '@headlessui/react'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment } from 'react'
-import { useIDE, EnumErrorKey, type ErrorIDE, type ErrorKey } from './context'
+import {
+  useIDE,
+  EnumErrorKey,
+  type ErrorIDE,
+  type ErrorKey,
+} from '../../pages/ide/context'
 import { toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
 
-export default function ErrorsReport(): JSX.Element {
+export default function ReportErrors(): JSX.Element {
   const [subscribe] = useChannelEvents()
 
   const { errors, addError } = useIDE()
@@ -173,7 +178,7 @@ export function DisplayError({
                     </div>
                   </Disclosure.Button>
                   <Disclosure.Panel className="px-2 pb-2 overflow-hidden">
-                    <pre className="font-mono w-full bg-dark-lighter rounded-lg p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
+                    <pre className="font-mono w-full bg-dark-lighter text-lighter rounded-lg p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
                       <code>{error.traceback ?? error.message}</code>
                     </pre>
                   </Disclosure.Panel>

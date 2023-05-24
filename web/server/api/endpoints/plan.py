@@ -29,13 +29,11 @@ async def run_plan(
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
-            message="Plan/apply is already running.",
+            message="Plan/apply is already running",
             origin="API -> plan -> run_plan",
         )
 
     try:
-        context.load()
-
         plan = context.plan(
             environment=environment,
             no_prompts=True,
@@ -49,46 +47,46 @@ async def run_plan(
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
         )
-
-        payload = models.ContextEnvironment(
-            environment=plan.environment.name,
-            start=plan.start,
-            end=plan.end,
-        )
-
-        if plan.context_diff.has_changes or plan.requires_backfill:
-            batches = context.scheduler().batches()
-            tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-
-            payload.backfills = [
-                models.ContextEnvironmentBackfill(
-                    model_name=interval.snapshot_name,
-                    view_name=plan.context_diff.snapshots[
-                        interval.snapshot_name
-                    ].qualified_view_name.for_environment(plan.environment.name)
-                    if interval.snapshot_name in plan.context_diff.snapshots
-                    else interval.snapshot_name,
-                    interval=[
-                        tuple([to_ds(t) for t in make_inclusive(start, end)])
-                        for start, end in interval.merged_intervals
-                    ][0],
-                    batches=tasks.get(interval.snapshot_name, 0),
-                )
-                for interval in plan.missing_intervals
-            ]
-
-            payload.changes = models.ContextEnvironmentChanges(
-                removed=plan.context_diff.removed,
-                added=plan.context_diff.added,
-                modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
-            )
-
-        return payload
     except Exception:
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",
         )
+
+    payload = models.ContextEnvironment(
+        environment=plan.environment.name,
+        start=plan.start,
+        end=plan.end,
+    )
+
+    if plan.context_diff.has_changes or plan.requires_backfill:
+        batches = context.scheduler().batches()
+        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+
+        payload.backfills = [
+            models.ContextEnvironmentBackfill(
+                model_name=interval.snapshot_name,
+                view_name=plan.context_diff.snapshots[
+                    interval.snapshot_name
+                ].qualified_view_name.for_environment(plan.environment.name)
+                if interval.snapshot_name in plan.context_diff.snapshots
+                else interval.snapshot_name,
+                interval=[
+                    tuple([to_ds(t) for t in make_inclusive(start, end)])
+                    for start, end in interval.merged_intervals
+                ][0],
+                batches=tasks.get(interval.snapshot_name, 0),
+            )
+            for interval in plan.missing_intervals
+        ]
+
+        payload.changes = models.ContextEnvironmentChanges(
+            removed=plan.context_diff.removed,
+            added=plan.context_diff.added,
+            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
+        )
+
+    return payload
 
 
 @router.post("/cancel")
@@ -99,7 +97,7 @@ async def cancel_plan(
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
         raise ApiException(
-            message="Plan/apply is already running.",
-            origin="API -> plan -> run_plan",
+            message="Plan/apply is already running",
+            origin="API -> plan -> cancel_plan",
         )
     response.status_code = status.HTTP_204_NO_CONTENT

@@ -412,7 +412,7 @@ async def test_cancel() -> None:
 def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
-    assert response.json()["message"] == "Plan/apply is already running."
+    assert response.json()["message"] == "Plan/apply is already running"
 
 
 def test_evaluate(web_sushi_context: Context) -> None:
