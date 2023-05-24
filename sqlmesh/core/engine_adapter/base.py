@@ -64,6 +64,7 @@ class EngineAdapter:
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
     SUPPORTS_INDEXES = False
+    SUPPORTS_INSERT_OVERWRITE = False
     SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
