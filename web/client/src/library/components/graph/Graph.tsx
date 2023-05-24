@@ -679,6 +679,8 @@ function ModelColumnLineage({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeOrigin={[0.5, 0.5]}
+          minZoom={0.1}
+          maxZoom={1.5}
           fitView
         >
           <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />

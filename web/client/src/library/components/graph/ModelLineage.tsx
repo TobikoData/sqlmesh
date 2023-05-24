@@ -17,7 +17,7 @@ export default function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, setLineage } = useLineageFlow()
+  const { clearActiveEdges, setLineage, models } = useLineageFlow()
 
   const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
     model.name,
@@ -25,7 +25,7 @@ export default function ModelLineage({
 
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 500),
-    [model.name],
+    [model.name, models],
   )
 
   useEffect(() => {
