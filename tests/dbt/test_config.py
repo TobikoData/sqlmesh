@@ -189,19 +189,19 @@ def test_variables(assert_exp_eq, sushi_test_project):
     # Case 2: using a defined variable without a default value
     defined_variables["foo"] = 6
     context.variables = defined_variables
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
     model_config._sql_no_config = None
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 6")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
 
     # Case 4: using an undefined variable with a default value
     del defined_variables["foo"]
     context.variables = defined_variables
 
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), "SELECT 5")
+    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 5 AS "5"')
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
