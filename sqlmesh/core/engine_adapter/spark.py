@@ -30,6 +30,7 @@ if t.TYPE_CHECKING:
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
+    SUPPORTS_INSERT_OVERWRITE = True
 
     @property
     def spark(self) -> PySparkSession:

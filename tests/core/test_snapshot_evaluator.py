@@ -14,7 +14,9 @@ from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
     ModelKindName,
+    PythonModel,
     SqlModel,
+    TimeColumn,
     load_model,
 )
 from sqlmesh.core.model.meta import IntervalUnit
@@ -26,6 +28,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.metaprogramming import Executable
 
 
 @pytest.fixture
@@ -337,3 +340,97 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
         match="Cannot audit 'db.model' because it has not been versioned yet. Apply a plan first.",
     ):
         evaluator.audit(snapshot=snapshot, snapshots={})
+
+
+@pytest.mark.parametrize(
+    "input_dfs, output_dict",
+    [
+        (
+            """pd.DataFrame({"a": [1, 2, 3], "ds": ["2023-01-01", "2023-01-02", "2023-01-03"]}),
+        pd.DataFrame({"a": [4, 5, 6], "ds": ["2023-01-04", "2023-01-05", "2023-01-06"]}),
+        pd.DataFrame({"a": [7, 8, 9], "ds": ["2023-01-07", "2023-01-08", "2023-01-09"]})""",
+            {
+                "a": {
+                    0: 1,
+                    1: 2,
+                    2: 3,
+                    3: 4,
+                    4: 5,
+                    5: 6,
+                    6: 7,
+                    7: 8,
+                    8: 9,
+                },
+                "ds": {
+                    0: "2023-01-01",
+                    1: "2023-01-02",
+                    2: "2023-01-03",
+                    3: "2023-01-04",
+                    4: "2023-01-05",
+                    5: "2023-01-06",
+                    6: "2023-01-07",
+                    7: "2023-01-08",
+                    8: "2023-01-09",
+                },
+            },
+        ),
+        (
+            """pd.DataFrame({"a": [1, 2, 3], "ds": ["2023-01-01", "2023-01-02", "2023-01-03"]})""",
+            {
+                "a": {
+                    0: 1,
+                    1: 2,
+                    2: 3,
+                },
+                "ds": {
+                    0: "2023-01-01",
+                    1: "2023-01-02",
+                    2: "2023-01-03",
+                },
+            },
+        ),
+    ],
+)
+def test_snapshot_evaluator_yield_pd(adapter_mock, make_snapshot, input_dfs, output_dict):
+    adapter_mock.is_pyspark_df.return_value = False
+    adapter_mock.SUPPORTS_INSERT_OVERWRITE = True
+    adapter_mock.try_get_df = lambda x: x
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    snapshot = make_snapshot(
+        PythonModel(
+            name="db.model",
+            entrypoint="python_func",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds", format="%Y-%m-%d")),
+            columns={
+                "a": "INT",
+                "ds": "STRING",
+            },
+            python_env={
+                "python_func": Executable(
+                    name="python_func",
+                    alias="python_func",
+                    path="test_snapshot_evaluator.py",
+                    payload=f"""import pandas as pd
+def python_func(**kwargs):
+    for df in [
+        {input_dfs}
+    ]:
+        yield df""",
+                )
+            },
+        )
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    evaluator.create([snapshot], {})
+
+    evaluator.evaluate(
+        snapshot,
+        "2023-01-01",
+        "2023-01-09",
+        "2023-01-09",
+        snapshots={},
+    )
+
+    assert adapter_mock.insert_overwrite_by_time_partition.call_args[0][1].to_dict() == output_dict
