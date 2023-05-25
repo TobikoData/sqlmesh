@@ -1,4 +1,4 @@
-import { useEffect, useCallback, lazy } from 'react'
+import { useEffect, useCallback, lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useApiModels, apiCancelModels } from '../../../api'
 import {
@@ -135,7 +135,9 @@ export default function PageIDE(): JSX.Element {
         </div>
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <RunPlan />
-          {activePlan != null && <ActivePlan plan={activePlan} />}
+          <Suspense>
+            {activePlan != null && <ActivePlan plan={activePlan} />}
+          </Suspense>
           <ReportErrors />
         </div>
       </div>
