@@ -76,7 +76,6 @@ class SQLMeshMagics(Magics):
             loaded = load_model(
                 parse(sql, default_dialect=config.dialect),
                 macros=self._context._macros,
-                hooks=self._context._hooks,
                 jinja_macros=self._context._jinja_macros,
                 path=model._path,
                 dialect=config.dialect,

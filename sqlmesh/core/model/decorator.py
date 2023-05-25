@@ -28,17 +28,16 @@ class model(registry_decorator):
 
         # Make sure that argument values are expressions in order to
         # pass validation in ModelMeta.
-        for calls_key in ("pre", "post", "audits"):
-            calls = self.kwargs.pop(calls_key, [])
-            self.kwargs[calls_key] = [
-                (call, {})
-                if isinstance(call, str)
-                else (
-                    call[0],
-                    {arg_key: exp.convert(arg_value) for arg_key, arg_value in call[1].items()},
-                )
-                for call in calls
-            ]
+        calls = self.kwargs.pop("audits", [])
+        self.kwargs["audits"] = [
+            (call, {})
+            if isinstance(call, str)
+            else (
+                call[0],
+                {arg_key: exp.convert(arg_value) for arg_key, arg_value in call[1].items()},
+            )
+            for call in calls
+        ]
 
         self.columns = {
             column_name: column_type

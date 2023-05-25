@@ -5,7 +5,7 @@ import pytest
 from dbt.exceptions import CompilationError
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.context import Context, ExecutionContext
+from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -166,16 +166,17 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
-def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
-    waiters = sushi_test_dbt_context.models[model]
-    execution_context = ExecutionContext(sushi_test_dbt_context.engine_adapter, {}, False)
+def test_hooks(capsys, sushi_test_dbt_context: Context):
+    engine_adapter = sushi_test_dbt_context.engine_adapter
+    waiters = sushi_test_dbt_context.models["sushi.waiters"]
     capsys.readouterr()
 
-    waiters.run_pre_hooks(execution_context)
+    engine_adapter.execute(waiters.render_pre_statements(engine_adapter=engine_adapter))
     assert "pre-hook" in capsys.readouterr().out
 
-    waiters.run_post_hooks(execution_context)
+    engine_adapter.execute(
+        waiters.render_post_statements(engine_adapter=sushi_test_dbt_context.engine_adapter)
+    )
     assert "post-hook" in capsys.readouterr().out
 
 

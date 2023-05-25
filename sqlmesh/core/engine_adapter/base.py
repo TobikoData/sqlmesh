@@ -766,7 +766,7 @@ class EngineAdapter:
 
     def execute(
         self,
-        sql: t.Union[str, exp.Expression],
+        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
         **kwargs: t.Any,
     ) -> None:
@@ -774,9 +774,12 @@ class EngineAdapter:
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-        sql = self._to_sql(sql, **to_sql_kwargs) if isinstance(sql, exp.Expression) else sql
-        logger.debug(f"Executing SQL:\n{sql}")
-        self.cursor.execute(sql, **kwargs)
+
+        expressions_or_strs = expressions if isinstance(expressions, list) else [expressions]
+        for e in expressions_or_strs:
+            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
+            logger.debug(f"Executing SQL:\n{sql}")
+            self.cursor.execute(sql, **kwargs)
 
     def _create_table_properties(
         self,
