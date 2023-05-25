@@ -1,3 +1,4 @@
+import { type ApiExceptionPayload } from '@api/client'
 import { createContext, type ReactNode, useState, useContext } from 'react'
 
 export const EnumErrorKey = {
@@ -14,17 +15,8 @@ export const EnumErrorKey = {
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
 
-export interface ErrorIDE {
+export interface ErrorIDE extends ApiExceptionPayload {
   key: ErrorKey
-  status: number
-  timestamp: number
-  message: string
-  type?: string
-  origin?: string
-  trigger?: string
-  description?: string
-  traceback?: string
-  stack?: string[]
 }
 
 interface IDE {

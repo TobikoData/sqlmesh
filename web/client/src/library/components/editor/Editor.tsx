@@ -109,7 +109,7 @@ function EditorEmpty(): JSX.Element {
 function EditorLoading(): JSX.Element {
   return (
     <div className="flex justify-center items-center w-full h-full">
-      <Loading className="inline-block ">
+      <Loading className="inline-block">
         <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
         <h3 className="text-xl">Starting Editor...</h3>
       </Loading>

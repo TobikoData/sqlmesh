@@ -120,7 +120,7 @@ export default function EditorPreview({
           onChange={setActiveTabIndex}
           selectedIndex={activeTabIndex}
         >
-          <Tab.List className="w-full whitespace-nowrap p-2 flex justigy-between items-center">
+          <Tab.List className="w-full whitespace-nowrap p-2 flex justify-between items-center">
             <div className="w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
               {tabs.map(tabName => (
                 <Tab

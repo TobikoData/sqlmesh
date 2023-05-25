@@ -90,7 +90,7 @@ export default function ReportErrors(): JSX.Element {
                     .map(([scope, error]) => (
                       <li
                         key={`${scope}-${error.message}`}
-                        className={clsx('mb-10')}
+                        className="mb-10"
                       >
                         <DisplayError
                           scope={scope}
@@ -117,7 +117,7 @@ export function DisplayError({
 }): JSX.Element {
   return (
     <div>
-      <div className={clsx('flex w-full')}>
+      <div className="flex w-full">
         <div className="w-[20rem]">
           <div className="flex aline-center mb-2">
             <small className="block mr-3">

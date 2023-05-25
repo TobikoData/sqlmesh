@@ -513,8 +513,10 @@
               "application/json": {
                 "schema": {
                   "title": "Response Get Models Api Models Get",
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/Model" }
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/Model" },
+                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
+                  ]
                 }
               }
             }
@@ -589,6 +591,26 @@
   },
   "components": {
     "schemas": {
+      "ApiExceptionPayload": {
+        "title": "ApiExceptionPayload",
+        "required": ["timestamp", "status", "message", "origin"],
+        "type": "object",
+        "properties": {
+          "timestamp": { "title": "Timestamp", "type": "integer" },
+          "status": { "title": "Status", "type": "integer" },
+          "message": { "title": "Message", "type": "string" },
+          "origin": { "title": "Origin", "type": "string" },
+          "trigger": { "title": "Trigger", "type": "string" },
+          "type": { "title": "Type", "type": "string" },
+          "description": { "title": "Description", "type": "string" },
+          "traceback": { "title": "Traceback", "type": "string" },
+          "stack": {
+            "title": "Stack",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
       "ApplyResponse": {
         "title": "ApplyResponse",
         "required": ["type"],

@@ -45,7 +45,7 @@ export default function PageEditor(): JSX.Element {
         <Suspense
           fallback={
             <div className="flex justify-center items-center w-full h-full">
-              <Loading className="inline-block ">
+              <Loading className="inline-block">
                 <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
                 <h3 className="text-md">Getting Files...</h3>
               </Loading>
@@ -63,7 +63,7 @@ export default function PageEditor(): JSX.Element {
           <Suspense
             fallback={
               <div className="flex justify-center items-center w-full h-full">
-                <Loading className="inline-block ">
+                <Loading className="inline-block">
                   <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
                   <h3 className="text-md">Getting Editor Ready...</h3>
                 </Loading>

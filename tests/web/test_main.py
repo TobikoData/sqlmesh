@@ -116,15 +116,14 @@ def test_get_file_invalid_path(project_tmp_path: Path) -> None:
     config = project_tmp_path / "config.py"
     config.write_text(
         """from sqlmesh.core.config import Config
-    config = Config(ignore_patterns=["*.txt"])
+config = Config(ignore_patterns=["*.txt"])
     """
     )
     foo_txt = project_tmp_path / "foo.txt"
     foo_txt.touch()
 
     response = client.get("/api/files/foo.txt")
-    assert response.status_code == 422
-    assert response.json()["message"] == "Unable to create a context"
+    assert response.status_code == 404
 
 
 def test_write_file(project_tmp_path: Path) -> None:
