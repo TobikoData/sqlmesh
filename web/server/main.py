@@ -5,7 +5,7 @@ import pathlib
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
@@ -42,17 +42,15 @@ def shutdown_event() -> None:
 
 @app.exception_handler(ApiException)
 async def handle_api_exception(_: Request, e: ApiException) -> JSONResponse:
-    return JSONResponse(
-        status_code=e.status_code,
-        content=e.to_dict(),
-    )
+    return JSONResponse(status_code=e.status_code, content=e.to_dict())
 
 
 @app.exception_handler(Exception)
 async def handle_uncaught_exeption(_: Request, e: Exception) -> JSONResponse:
     return JSONResponse(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=HTTP_500_INTERNAL_SERVER_ERROR,
         content=ApiException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
             message=str(e),
             origin="API -> main -> custom_exception_handler",
         ).to_dict(),

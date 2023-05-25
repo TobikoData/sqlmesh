@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get(
     "",
-    response_model=t.List[models.Model],
+    response_model=t.Union[t.List[models.Model], models.ApiExceptionPayload],
     response_model_exclude_unset=True,
     response_model_exclude_none=True,
 )
@@ -35,7 +35,7 @@ def get_models(
     return get_all_models(context)
 
 
-def get_all_models(context: Context = Depends(get_loaded_context)) -> t.List[models.Model]:
+def get_all_models(context: Context) -> t.List[models.Model]:
     output = []
 
     def _get_model_type(model: Model) -> str:

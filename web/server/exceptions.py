@@ -6,13 +6,14 @@ from fastapi import HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.utils.date import now_timestamp
+from web.server.models import ApiExceptionPayload
 
 
 class ApiException(HTTPException):
     def __init__(
         self,
-        message: str,
         origin: str,
+        message: str,
         status_code: int = HTTP_422_UNPROCESSABLE_ENTITY,
         trigger: t.Optional[str] = None,
     ):
@@ -32,16 +33,18 @@ class ApiException(HTTPException):
         return f"Summary: {self.message}\n{self.description}\n{self.traceback}"
 
     def to_dict(self) -> t.Dict[str, t.Union[str, int, t.List[str]]]:
-        output: t.Dict[str, t.Union[str, int, t.List[str], None]] = {
-            "status": self.status_code,
-            "timestamp": self.timestamp,
-            "message": self.message,
-            "origin": self.origin,
-            "trigger": self.trigger,
-            "type": self.type,
-            "description": self.description,
-            "traceback": self.traceback,
-            "stack": self.stack,
-        }
+        error = ApiExceptionPayload(
+            status=self.status_code,
+            timestamp=self.timestamp,
+            message=self.message,
+            origin=self.origin,
+            trigger=self.trigger,
+            type=self.type,
+            description=self.description,
+            traceback=self.traceback,
+            stack=self.stack,
+        ).dict()
 
-        return {k: v for k, v in output.items() if v is not None}
+        print(error)
+
+        return {k: v for k, v in error.items() if v is not None}

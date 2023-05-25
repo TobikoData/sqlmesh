@@ -514,7 +514,10 @@
                 "schema": {
                   "title": "Response Get Models Api Models Get",
                   "anyOf": [
-                    { "$ref": "#/components/schemas/Model" },
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Model" }
+                    },
                     { "$ref": "#/components/schemas/ApiExceptionPayload" }
                   ]
                 }

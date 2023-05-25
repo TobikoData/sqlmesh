@@ -246,3 +246,15 @@ class Query(BaseModel):
 
 class ApplyResponse(BaseModel):
     type: ApplyType
+
+
+class ApiExceptionPayload(BaseModel):
+    timestamp: int
+    status: int
+    message: str
+    origin: str
+    trigger: t.Optional[str] = None
+    type: t.Optional[str] = None
+    description: t.Optional[str] = None
+    traceback: t.Optional[str] = None
+    stack: t.Optional[t.List[str]] = None
