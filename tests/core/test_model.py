@@ -16,6 +16,7 @@ from sqlmesh.core.model import (
     SeedKind,
     SqlModel,
     TimeColumn,
+    create_external_model,
     create_seed_model,
     load_model,
     model,
@@ -1088,3 +1089,19 @@ def test_model_ctas_query():
     )
 
     assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a FROM b AS b WHERE FALSE"
+
+
+def test_is_breaking_change():
+    model = create_external_model("a", columns={"a": "int", "b": "int"})
+    assert model.is_breaking_change(create_external_model("a", columns={"a": "int"})) is False
+    assert model.is_breaking_change(create_external_model("a", columns={"a": "text"})) is None
+    assert (
+        model.is_breaking_change(create_external_model("a", columns={"a": "int", "b": "int"}))
+        is False
+    )
+    assert (
+        model.is_breaking_change(
+            create_external_model("a", columns={"a": "int", "b": "int", "c": "int"})
+        )
+        is None
+    )

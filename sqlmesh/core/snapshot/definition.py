@@ -517,7 +517,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return isinstance(other, Snapshot) and self.fingerprint == other.fingerprint
 
     def __hash__(self) -> int:
-        return hash((self.__class__, self.fingerprint))
+        return hash((self.__class__, self.name, self.fingerprint))
 
     def add_interval(self, start: TimeLike, end: TimeLike, is_dev: bool = False) -> None:
         """Add a newly processed time interval to the snapshot.
@@ -915,16 +915,14 @@ def _model_data_hash(model: Model) -> str:
                 data.append(macro.definition)
     elif isinstance(model, PythonModel):
         data.append(model.entrypoint)
-        for column_name, column_type in model.columns_to_types.items():
-            data.append(column_name)
-            data.append(str(column_type))
     elif isinstance(model, SeedModel):
         for column_name, column_hash in model.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
-        for column_name, column_type in (model.columns_to_types_ or {}).items():
-            data.append(column_name)
-            data.append(column_type.sql())
+
+    for column_name, column_type in (model.columns_to_types_ or {}).items():
+        data.append(column_name)
+        data.append(column_type.sql())
 
     if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
         data.append(model.kind.time_column.column)

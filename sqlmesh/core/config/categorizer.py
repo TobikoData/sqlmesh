@@ -27,6 +27,7 @@ class CategorizerConfig(BaseConfig):
         seed: the auto categorization mode for Seed models.
     """
 
+    external: AutoCategorizationMode = AutoCategorizationMode.FULL
     python: AutoCategorizationMode = AutoCategorizationMode.OFF
     sql: AutoCategorizationMode = AutoCategorizationMode.FULL
     seed: AutoCategorizationMode = AutoCategorizationMode.FULL
