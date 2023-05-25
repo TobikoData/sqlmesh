@@ -7,19 +7,18 @@ from watchfiles import DefaultFilter, awatch
 from sqlmesh.core import constants as c
 from web.server.api.endpoints.models import get_all_models
 from web.server.exceptions import ApiException
-from web.server.settings import get_context, get_settings
+from web.server.settings import get_loaded_context, get_settings
 from web.server.sse import Event
 
 
 async def watch_project(queue: asyncio.Queue) -> None:
-    context = await get_context(get_settings())
+    context = await get_loaded_context(get_settings())
     path = (context.path / c.MODELS).resolve()
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     watch_filter = DefaultFilter(ignore_entity_patterns=ignore_entity_patterns)
 
     async for _ in awatch(path, watch_filter=watch_filter):
         try:
-            context = await get_context(get_settings())
             context.load()
         except Exception:
             queue.put_nowait(
