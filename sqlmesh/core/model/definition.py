@@ -487,7 +487,7 @@ class _Model(ModelMeta, frozen=True):
             True if this model instance represents a breaking change, False if it's a non-breaking change
             and None if the nature of the change can't be determined.
         """
-        return None
+        raise NotImplementedError
 
     def _run_hooks(
         self,
@@ -885,6 +885,9 @@ class PythonModel(_Model):
     def is_python(self) -> bool:
         return True
 
+    def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        return None
+
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
@@ -893,6 +896,13 @@ class ExternalModel(_Model):
     """The model definition which represents an external source/table."""
 
     source_type: Literal["external"] = "external"
+
+    def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        if not isinstance(previous, ExternalModel):
+            return None
+        if not previous.columns_to_types.items() - self.columns_to_types.items():
+            return False
+        return None
 
 
 Model = Annotated[
