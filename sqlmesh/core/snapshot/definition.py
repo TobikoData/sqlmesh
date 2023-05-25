@@ -901,10 +901,6 @@ def _model_data_hash(model: Model) -> str:
         model.stamp,
     ]
 
-    for column_name, column_type in (model.columns_to_types_ or {}).items():
-        data.append(column_name)
-        data.append(column_type.sql())
-
     if isinstance(model, SqlModel):
         query = model.query if model.hash_raw_query else model.render_query()
         data.append(query.sql(comments=False))
@@ -923,6 +919,10 @@ def _model_data_hash(model: Model) -> str:
         for column_name, column_hash in model.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
+
+    for column_name, column_type in (model.columns_to_types_ or {}).items():
+        data.append(column_name)
+        data.append(column_type.sql())
 
     if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
         data.append(model.kind.time_column.column)
