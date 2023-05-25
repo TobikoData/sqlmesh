@@ -24,7 +24,6 @@ import {
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
   getModelsApiModelsGet,
-  type Model,
   type ModelLineageApiLineageModelNameGet200,
   modelLineageApiLineageModelNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
@@ -35,6 +34,7 @@ import {
   type Query,
   evaluateApiCommandsEvaluatePost,
   type EvaluateInput,
+  type Model,
 } from './client'
 import {
   useIDE,
@@ -87,7 +87,7 @@ export function useApiModels(): UseQueryResult<Model[]> {
     queryFn: async ({ signal }) => {
       removeError(EnumErrorKey.Models)
 
-      return await getModelsApiModelsGet({ signal })
+      return (await getModelsApiModelsGet({ signal })) as Model[]
     },
     cacheTime: 0,
     enabled: false,
