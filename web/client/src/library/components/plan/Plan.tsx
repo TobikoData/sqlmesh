@@ -70,7 +70,7 @@ function Plan({
 
   const [isPlanRan, seIsPlanRan] = useState(false)
 
-  const [subscribe] = useChannelEvents()
+  const subscribe = useChannelEvents()
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })

@@ -10,7 +10,6 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import get_context, get_settings
 from web.server.watcher import watch_project
 
 logger = logging.getLogger(__name__)
@@ -30,11 +29,9 @@ async def startup_event() -> None:
                 await listener.put(item)
             api_console.queue.task_done()
 
-    context = await get_context(get_settings())
-
     app.state.console_listeners = []
     app.state.dispatch_task = asyncio.create_task(dispatch())
-    app.state.watch_task = asyncio.create_task(watch_project(api_console.queue, context))
+    app.state.watch_task = asyncio.create_task(watch_project(api_console.queue))
 
 
 @app.on_event("shutdown")

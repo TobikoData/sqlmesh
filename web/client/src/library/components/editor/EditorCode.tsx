@@ -17,7 +17,7 @@ import {
 } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
-import { useApiFileByPath, useApiPlanRun, useMutationApiSaveFile } from '~/api'
+import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
   debounceSync,
@@ -256,7 +256,6 @@ export function useSQLMeshModelExtensions(
 export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   const client = useQueryClient()
 
-  const environment = useStoreContext(s => s.environment)
   const files = useStoreFileTree(s => s.files)
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
@@ -266,16 +265,6 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess: saveChangeSuccess,
   })
-
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
-
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
 
   const debouncedSaveChange = useCallback(
     debounceSync(saveChange, 1000, true),
@@ -326,8 +315,6 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
     file.update(newfile)
 
     refreshTab()
-
-    void debouncedPlanRun()
   }
 
   return [

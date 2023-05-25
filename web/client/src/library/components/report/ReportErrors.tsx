@@ -1,5 +1,6 @@
 import { useChannelEvents } from '@api/channels'
 import { Disclosure, Popover, Transition } from '@headlessui/react'
+import pluralize from 'pluralize'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment } from 'react'
 import {
@@ -13,21 +14,21 @@ import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
 
 export default function ReportErrors(): JSX.Element {
-  const [subscribe] = useChannelEvents()
+  const subscribe = useChannelEvents()
 
   const { errors, addError } = useIDE()
 
   const [isShow, setIsShow] = useState(false)
 
   useEffect(() => {
-    const unsubscribeErrors = subscribe('errors', displayErrors)
+    const unsubscribeErrors = subscribe<ErrorIDE>('errors', displayErrors)
 
     return () => {
       unsubscribeErrors?.()
     }
   }, [])
 
-  function displayErrors(data: any): void {
+  function displayErrors(data: ErrorIDE): void {
     addError(EnumErrorKey.General, data)
   }
 
@@ -55,7 +56,9 @@ export default function ReportErrors(): JSX.Element {
               )}
             >
               {hasError ? (
-                <span>{errors.size} Errors</span>
+                <span>
+                  {errors.size} {pluralize('Error', errors.size)}
+                </span>
               ) : (
                 <span>No Errors</span>
               )}

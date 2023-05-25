@@ -25,12 +25,12 @@ export default function ModelLineage({
 
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 500),
-    [model.name, fingerprint],
+    [model.name],
   )
 
   useEffect(() => {
     void debouncedGetModelLineage()
-  }, [debouncedGetModelLineage])
+  }, [fingerprint])
 
   useEffect(() => {
     if (dataLineage == null) {

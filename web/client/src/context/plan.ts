@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { isFalse, isNil, isObject } from '../utils'
 
 export const EnumPlanAction = {
   None: 'none',
@@ -60,7 +59,6 @@ interface PlanStore {
   setActivePlan: (activePlan?: PlanProgress) => void
   setState: (state: PlanState) => void
   setAction: (action: PlanAction) => void
-  updateTasks: (data: PlanProgress) => void
 }
 
 export const useStorePlan = create<PlanStore>((set, get) => ({
@@ -76,36 +74,4 @@ export const useStorePlan = create<PlanStore>((set, get) => ({
   setAction: (action: PlanAction) => {
     set(() => ({ action }))
   },
-  updateTasks: (data: PlanProgress) => {
-    const s = get()
-
-    if (isNil(data)) return
-    if (isFalse(isObject(data.tasks))) {
-      s.setState(EnumPlanState.Init)
-
-      return
-    }
-
-    const plan: PlanProgress = {
-      ok: data.ok,
-      tasks: data.tasks,
-      updated_at: data.updated_at ?? new Date().toISOString(),
-    }
-
-    s.setActivePlan(plan)
-
-    if (isFalse(data.ok)) {
-      s.setState(EnumPlanState.Failed)
-      s.setActivePlan(undefined)
-    } else if (isAllTasksCompleted(data.tasks)) {
-      s.setState(EnumPlanState.Finished)
-      s.setActivePlan(undefined)
-    } else {
-      s.setState(EnumPlanState.Applying)
-    }
-  },
 }))
-
-function isAllTasksCompleted(tasks: PlanTasks = {}): boolean {
-  return Object.values(tasks).every(t => t.completed === t.total)
-}

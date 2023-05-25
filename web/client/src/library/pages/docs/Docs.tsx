@@ -10,7 +10,7 @@ import Search from './Search'
 import SourceList from './SourceList'
 import TasksOverview from '@components/tasksOverview/TasksOverview'
 
-export default function Docs(): JSX.Element {
+export default function PageDocs(): JSX.Element {
   const location = useLocation()
   const { modelName } = useParams()
 

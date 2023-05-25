@@ -8,9 +8,13 @@ import {
   type MouseEvent,
   useMemo,
   useCallback,
-  lazy,
 } from 'react'
-import { useApiEnvironments, useApiPlanRun } from '~/api'
+import {
+  apiCancelGetEnvironments,
+  apiCancelPlanRun,
+  useApiEnvironments,
+  useApiPlanRun,
+} from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
@@ -22,6 +26,7 @@ import {
   isFalse,
   isStringEmptyOrNil,
   debounceAsync,
+  isObjectEmpty,
 } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -36,10 +41,11 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
-
-const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
+import { useQueryClient } from '@tanstack/react-query'
 
 export default function RunPlan(): JSX.Element {
+  const client = useQueryClient()
+
   const { errors, setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
@@ -48,9 +54,16 @@ export default function RunPlan(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
+  const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
+  const addSyncronizedEnvironments = useStoreContext(
+    s => s.addSyncronizedEnvironments,
+  )
+  const hasSyncronizedEnvironments = useStoreContext(
+    s => s.hasSyncronizedEnvironments,
+  )
 
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
@@ -60,7 +73,7 @@ export default function RunPlan(): JSX.Element {
   const {
     refetch: planRun,
     data: plan,
-    isLoading,
+    isFetching,
   } = useApiPlanRun(environment.name, {
     planOptions: {
       skip_tests: true,
@@ -71,7 +84,7 @@ export default function RunPlan(): JSX.Element {
     debounceAsync(getEnvironments, 1000, true),
     [getEnvironments],
   )
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
+  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
 
@@ -90,7 +103,19 @@ export default function RunPlan(): JSX.Element {
   }, [environment])
 
   useEffect(() => {
-    debouncedPlanRun().finally(() => {
+    return () => {
+      debouncedGetEnvironemnts.cancel()
+      debouncedRunPlan.cancel()
+
+      apiCancelGetEnvironments(client)
+      apiCancelPlanRun(client)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isFalse(environment.isSyncronized)) return
+
+    debouncedRunPlan().finally(() => {
       if (shouldStartPlanAutomatically) {
         startPlan()
         setShouldSartPlanAutomatically(false)
@@ -100,7 +125,7 @@ export default function RunPlan(): JSX.Element {
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
-      void debouncedPlanRun()
+      void debouncedRunPlan()
       void debouncedGetEnvironemnts()
     }
   }, [planState])
@@ -108,6 +133,20 @@ export default function RunPlan(): JSX.Element {
   useEffect(() => {
     setInitialDates(plan?.start, plan?.end)
   }, [plan])
+
+  useEffect(() => {
+    if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
+      void debouncedGetEnvironemnts().then(({ data }) => {
+        if (data == null || isObjectEmpty(data)) return
+
+        addSyncronizedEnvironments(Object.values(data))
+      })
+    }
+
+    if (hasSyncronizedEnvironments()) {
+      void debouncedRunPlan()
+    }
+  }, [models, environments])
 
   function startPlan(): void {
     setActivePlan(undefined)
@@ -143,7 +182,7 @@ export default function RunPlan(): JSX.Element {
           )}
           disabled={
             hasErrors ||
-            isLoading ||
+            isFetching ||
             planAction !== EnumPlanAction.None ||
             planState === EnumPlanState.Applying ||
             planState === EnumPlanState.Running ||
@@ -187,7 +226,7 @@ export default function RunPlan(): JSX.Element {
             environment={environment}
             disabled={
               hasErrors ||
-              isLoading ||
+              isFetching ||
               planAction !== EnumPlanAction.None ||
               planState === EnumPlanState.Applying ||
               planState === EnumPlanState.Running ||
@@ -200,11 +239,11 @@ export default function RunPlan(): JSX.Element {
         <PlanChanges
           environment={environment}
           plan={plan}
-          isLoading={isLoading}
+          isLoading={isFetching}
           hasChanges={hasChanges}
         />
       )}
-      <PlanSidebar />
+
       <ModalConfirmation
         show={showConfirmation}
         onClose={() => undefined}
@@ -237,7 +276,7 @@ export default function RunPlan(): JSX.Element {
                   }}
                   size={EnumSize.md}
                   disabled={
-                    isLoading ||
+                    isFetching ||
                     planAction !== EnumPlanAction.None ||
                     planState === EnumPlanState.Applying ||
                     planState === EnumPlanState.Cancelling
@@ -303,7 +342,7 @@ function PlanChanges({
   return (
     <span className="flex align-center pr-2 h-full w-full">
       <>
-        {environment.isInitial && (
+        {environment.isInitial && environment.isSyncronized && (
           <span
             title="New"
             className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"

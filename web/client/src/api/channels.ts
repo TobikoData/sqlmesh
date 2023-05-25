@@ -1,26 +1,25 @@
 import { isNil } from '../utils'
 
-type ChannelCallback = (data: any) => void
+type ChannelCallback<TData = any> = (data: TData) => void
 
 const SSE_CHANNEL = getEventSource('/api/events')
 
 const CHANNELS = new Map<string, Optional<() => void>>()
 
-export function useChannelEvents(): [
-  (topic: string, callback: ChannelCallback) => Optional<() => void>,
-] {
-  return [
-    (topic: string, callback: ChannelCallback) => subscribe(topic, callback),
-  ]
+export function useChannelEvents(): <TData = any>(
+  topic: string,
+  callback: ChannelCallback<TData>,
+) => Optional<() => void> {
+  return (topic, callback) => subscribe(topic, callback)
 }
 
-function subscribe(
+function subscribe<TData = any>(
   topic: string,
-  callback: ChannelCallback,
+  callback: ChannelCallback<TData>,
 ): Optional<() => void> {
   if (isNil(topic) || CHANNELS.has(topic)) return CHANNELS.get(topic)
 
-  const handler = handleChannelTopicCallback(topic, callback)
+  const handler = handleChannelTopicCallback<TData>(topic, callback)
 
   SSE_CHANNEL.addEventListener(topic, handler)
 
@@ -32,11 +31,11 @@ function subscribe(
   return CHANNELS.get(topic)
 }
 
-function handleChannelTopicCallback(
+function handleChannelTopicCallback<TData = any>(
   topic: string,
-  callback: ChannelCallback,
+  callback: ChannelCallback<TData>,
 ): (e: MessageEvent) => void {
-  return (event: MessageEvent) => {
+  return (event: MessageEvent<string>) => {
     if (isNil(topic) || isNil(callback) || isNil(event.data)) return
 
     try {
