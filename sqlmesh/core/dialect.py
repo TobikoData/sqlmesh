@@ -236,7 +236,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             value: t.Optional[exp.Expression | str]
 
             if key in table_keys:
-                value = exp.table_name(self._parse_table())
+                value = exp.table_name(self._parse_table_parts())
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
