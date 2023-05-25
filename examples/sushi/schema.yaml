@@ -1,0 +1,10 @@
+- name: raw.marketing
+  description: Table containing marketing information
+  columns:
+    customer_id: int
+    status: text
+- name: raw.demographics
+  description: Table containing demographics information
+  columns:
+    customer_id: int
+    zip: text
