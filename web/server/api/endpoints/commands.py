@@ -111,7 +111,7 @@ async def fetchdf(
         df = context.fetchdf(sql)
     except Exception:
         raise ApiException(
-            message="Unable to fetch a dataframe from given a sql string",
+            message="Unable to fetch a dataframe from the given sql string",
             origin="API -> commands -> fetchdf",
         )
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
