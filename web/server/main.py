@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import pathlib
 
 from fastapi import FastAPI, Request
@@ -11,8 +10,6 @@ from web.server.api.endpoints import api_router
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.watcher import watch_project
-
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 

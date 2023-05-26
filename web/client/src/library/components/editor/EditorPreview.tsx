@@ -111,7 +111,7 @@ export default function EditorPreview({
       {isArrayEmpty(tabs) ? (
         <div>
           <div className="flex items-center justify-center h-full">
-            No data to preview
+            No Data To Preview
           </div>
         </div>
       ) : (

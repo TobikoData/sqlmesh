@@ -33,7 +33,7 @@ class ApiException(HTTPException):
         return f"Summary: {self.message}\n{self.description}\n{self.traceback}"
 
     def to_dict(self) -> t.Dict[str, t.Union[str, int, t.List[str]]]:
-        exception = ApiExceptionPayload(
+        return ApiExceptionPayload(
             status=self.status_code,
             timestamp=self.timestamp,
             message=self.message,
@@ -43,6 +43,4 @@ class ApiException(HTTPException):
             description=self.description,
             traceback=self.traceback,
             stack=self.stack,
-        ).dict()
-
-        return {k: v for k, v in exception.items() if v is not None}
+        ).dict(exclude_none=True)
