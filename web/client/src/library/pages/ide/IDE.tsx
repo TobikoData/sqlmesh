@@ -15,11 +15,11 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreFileTree } from '@context/fileTree'
-import { Divider } from '@components/divider/Divider'
-import { Button } from '@components/button/Button'
-import Container from '@components/container/Container'
-import { EnumErrorKey, useIDE } from './context'
+import IDEProvider, { EnumErrorKey, useIDE } from './context'
 import { type Model } from '@api/client'
+import { Button } from '@components/button/Button'
+import { Divider } from '@components/divider/Divider'
+import Container from '@components/container/Container'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -114,35 +114,39 @@ export default function PageIDE(): JSX.Element {
 
   return (
     <Container.Page>
-      <PlanSidebar />
-      <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold text-primary-500">
-            <span className="inline-block">/</span>
-            {project?.name}
-          </h3>
-          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
-          <Button
-            size={EnumSize.sm}
-            variant={EnumVariant.Neutral}
-          >
-            {isActivePageEditor ? (
-              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
-            ) : (
-              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
-            )}
-          </Button>
+      <IDEProvider>
+        <PlanSidebar />
+        <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
+          <div className="px-3 flex items-center whitespace-nowrap">
+            <h3 className="font-bold text-primary-500">
+              <span className="inline-block">/</span>
+              {project?.name}
+            </h3>
+            <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Neutral}
+            >
+              {isActivePageEditor ? (
+                <Link to={EnumRoutes.IdeDocs}>Docs</Link>
+              ) : (
+                <Link to={EnumRoutes.IdeEditor}>Editor</Link>
+              )}
+            </Button>
+          </div>
+          {isActivePageEditor && (
+            <div className="px-3 flex items-center min-w-[10rem] justify-end">
+              <RunPlan />
+              <Suspense>
+                {activePlan != null && <ActivePlan plan={activePlan} />}
+              </Suspense>
+              <ReportErrors />
+            </div>
+          )}
         </div>
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          <RunPlan />
-          <Suspense>
-            {activePlan != null && <ActivePlan plan={activePlan} />}
-          </Suspense>
-          <ReportErrors />
-        </div>
-      </div>
-      <Divider />
-      <Outlet />
+        <Divider />
+        <Outlet />
+      </IDEProvider>
     </Container.Page>
   )
 }
