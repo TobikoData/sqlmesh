@@ -15,7 +15,11 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreFileTree } from '@context/fileTree'
-import IDEProvider from './context'
+import IDEProvider, { EnumErrorKey, useIDE } from './context'
+import { type Model } from '@api/client'
+import { Button } from '@components/button/Button'
+import { Divider } from '@components/divider/Divider'
+import Container from '@components/container/Container'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
