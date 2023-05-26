@@ -44,9 +44,11 @@ function CodeEditorDefault({
   type,
   content = '',
   children,
+  className,
 }: {
   type: FileExtensions
   content: string
+  className?: string
   children: (options: {
     extensions: Extension[]
     content: string
@@ -65,7 +67,7 @@ function CodeEditorDefault({
   }, [type, mode])
 
   return (
-    <div className="flex overflow-auto h-full">
+    <div className={clsx('flex w-full h-full', className)}>
       {children({ extensions, content })}
     </div>
   )
@@ -111,7 +113,6 @@ function CodeEditorSQLMesh({
   const extensions = useMemo(() => {
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
       type === EnumFileExtensions.Python && python(),
       type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
       type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
@@ -140,7 +141,7 @@ function CodeEditorSQLMesh({
   }, [content])
 
   return (
-    <div className="flex overflow-auto h-full">
+    <div className="flex w-full h-full">
       {children({ extensions, content })}
     </div>
   )

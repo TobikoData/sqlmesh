@@ -86,6 +86,7 @@ const Documentation = function Documentation({
             columns={model.columns}
             disabled={model?.type === 'python'}
             withHandles={false}
+            withSource={false}
             limit={10}
           />
         </Section>
