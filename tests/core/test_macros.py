@@ -1,3 +1,5 @@
+import typing as t
+
 import pytest
 from sqlglot import exp, parse_one
 
@@ -9,7 +11,7 @@ from sqlmesh.utils.metaprogramming import Executable
 def filter_country(
     evaluator: MacroEvaluator, expression: exp.Condition, country: str
 ) -> exp.Condition:
-    return exp.and_(expression, exp.column("country").eq(country))
+    return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
 
 
 @macro("UPPER")
