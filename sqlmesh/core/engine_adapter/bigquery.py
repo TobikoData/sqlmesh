@@ -7,6 +7,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
+from sqlglot.helper import ensure_list
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -394,8 +395,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
 
-        expressions_or_strs = expressions if isinstance(expressions, list) else [expressions]
-        for e in expressions_or_strs:
+        for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
             retry.retry_target(

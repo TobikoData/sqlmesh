@@ -17,6 +17,7 @@ import uuid
 import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
@@ -775,8 +776,7 @@ class EngineAdapter:
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
 
-        expressions_or_strs = expressions if isinstance(expressions, list) else [expressions]
-        for e in expressions_or_strs:
+        for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)

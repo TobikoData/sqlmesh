@@ -12,6 +12,7 @@ from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp, parse_one
 from sqlglot.diff import Insert, Keep
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.time import format_time
 
@@ -1023,9 +1024,9 @@ def load_model(
 
     if query is not None:
         macro_references = [
-            extract_macro_references(query.sql()),
-            *[extract_macro_references(e.sql()) for e in pre_statements],
-            *[extract_macro_references(e.sql()) for e in post_statements],
+            extract_macro_references(query.sql(dialect=dialect)),
+            *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
+            *[extract_macro_references(e.sql(dialect=dialect)) for e in post_statements],
         ]
         return create_sql_model(
             name,
@@ -1351,9 +1352,7 @@ def _python_env(
                     name = macro_func.this.name.lower()
                     used_macros[name] = macros[name]
 
-    if not isinstance(expressions, list):
-        expressions = [expressions]
-
+    expressions = ensure_list(expressions)
     for expression in expressions:
         _capture_expression_macros(expression)
 
