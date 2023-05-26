@@ -1,13 +1,13 @@
 # dbt
 
-SQLMesh has native support for reading dbt projects. 
+SQLMesh has native support for running dbt projects. 
 
 **Note:** This feature is currently under development. You can view the [development backlog](https://github.com/orgs/TobikoData/projects/1/views/3) to see what improvements are already planned. If you are interested in this feature, we encourage you to try it with your dbt projects and [submit issues](https://github.com/TobikoData/sqlmesh/issues) so we can make it more robust.
 
 ## Getting started
 ### Reading a dbt project
 
-Create a SQLMesh project from an existing dbt project by running the `init` command *within the dbt project root directory* and with the `dbt` template option:
+Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh init` command *within the dbt project root directory* and with the `dbt` template option:
 
 ```bash
 $ sqlmesh init -t dbt
@@ -26,7 +26,7 @@ Models **require** a start date for backfilling data through use of the `start` 
 
 ### Running SQLMesh
 
-Run SQLMesh as with any SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired. 
+Run SQLMesh as with a SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired. 
 
 You continue to use your dbt file and project format.
 
@@ -35,7 +35,7 @@ You continue to use your dbt file and project format.
 Consider the following when using a dbt project:
 
 * SQLMesh will detect and deploy new or modified seeds as part of running the `plan` command and applying changes - there is no separate seed command. Refer to [seed models](../concepts/models/seed_models.md) for more information.
-* The `plan` command dynamically creates environments, so environments do not need to be hardcoded into your `profiles.yml` file as targets. To get the most out of SQLMesh, point your dbt profile target at the production target, and let SQLMesh handle the rest for you.
+* The `plan` command dynamically creates environments, so environments do not need to be hardcoded into your `profiles.yml` file as targets. To get the most out of SQLMesh, point your dbt profile target at the production target and let SQLMesh handle the rest for you.
 * The term "test" has a different meaning in dbt than in SQLMesh: 
     - dbt "tests" are [audits](../concepts/audits.md) in SQLMesh.
     - SQLMesh "tests" are [unit tests](../concepts/tests.md), which test query logic before applying a SQLMesh plan.
@@ -132,7 +132,7 @@ The project is now configured to use airflow. Going forward, this also means tha
 
 ## Supported dbt jinja methods
 
-The majority of dbt jinja methods are supported, including:
+SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
 | Method      | Method              | Method       | Method
 | ------      | ------              | ------       | ------
@@ -151,7 +151,7 @@ The majority of dbt jinja methods are supported, including:
 
 ## Unsupported dbt features
 
-SQLMesh is continuously adding more dbt features. This is a list of major features that are currently unsupported, but it is not exhaustive:
+SQLMesh is continuously adding functionality to run dbt projects. This is a list of major dbt features that are currently unsupported, but it is not exhaustive:
 
 * dbt deps 
     - While SQLMesh can read dbt packages, it does not currently support managing those packages. 

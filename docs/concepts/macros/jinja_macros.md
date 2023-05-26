@@ -2,17 +2,17 @@
 
 SQLMesh supports macros from the [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) templating system. 
 
-Jinja's macro approach is pure string substitution. Unlike SQLMesh macros, they assemble SQL query text without building a semantic representation, so users must ensure SQL queries are syntactically valid (e.g., have no misplaced commas or quotes). 
+Jinja's macro approach is pure string substitution. Unlike SQLMesh macros, they assemble SQL query text without building a semantic representation. 
 
 **NOTE:** SQLMesh supports the standard Jinja function library only - it does **not** support dbt-specific jinja functions like `{{ ref() }}`. 
 
 ## Basics
 
-Jinja uses curly brace symbols `{}` to differentiate macro from non-macro text. It uses the second character after the left brace to determine what the text inside the braces will do.
+Jinja uses curly braces `{}` to differentiate macro from non-macro text. It uses the second character after the left brace to determine what the text inside the braces will do.
 
-The most used brace symbols are:
+The three curly brace symbols are:
 
-- `{{...}}` creates Jinja expressions. Expressions are replaced by text that is incorporated into the rendered SQL query. They can contain macro variables and functions.
+- `{{...}}` creates Jinja expressions. Expressions are replaced by text that is incorporated into the rendered SQL query; they can contain macro variables and functions.
 - `{%...%}` creates Jinja statements. Statements give instructions to Jinja, such as setting variable values, control flow with `if`, `for` loops, and defining macro functions.
 - `{#...#}` creates Jinja comments. These comments will not be included in the rendered SQL query.
 
@@ -48,7 +48,7 @@ Jinja variables can be string, integer, or float data types. They can also be an
 
 #### for loops
 
-For loops let you to iterate over a collection of items, allowing you to condense repetitive code and easily change the values used. 
+For loops let you iterate over a collection of items to condense repetitive code and easily change the values used by the code. 
 
 Jinja for loops begin with `{% for ... %}` and end with `{% endfor %}`. This example demonstrates creating indicator variables with `CASE WHEN` using a Jinja for loop:
 
@@ -92,11 +92,9 @@ The rendered query would be the same as before.
 
 if statements allow you to take an action (or not) based on some condition. 
 
-Jinja if statements begin with `{% if ... %}` and ends with `{% endif %}`. 
+Jinja if statements begin with `{% if ... %}` and ends with `{% endif %}`. The starting `if` statement must contain code that evaluates to `True` or `False`. For example, all of `True`, `1 + 1 == 2`, and `'a' in ['a', 'b']` evaluate to `True`.
 
-The starting `if` statement must contain code that evaluates to `True` or `False`. For example, all of `True`, `1 + 1 == 2`, and `'a' in ['a', 'b']` evaluate to `True`.
-
-For example, you might want a model to only include a column if it was being run for testing purposes. In this example, we set a variable indicating whether it's a testing run that determines whether the query includes `testing_column`:
+As an example, you might want a model to only include a column if the model was being run for testing purposes. We can do that by setting a variable indicating whether it's a testing run that determines whether the query includes `testing_column`:
 
 ```sql linenums="1"
 {% set testing = True %}
