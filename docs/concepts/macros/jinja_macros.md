@@ -118,4 +118,72 @@ FROM table
 
 ## User-defined macro functions
 
-More information to come.
+User-defined macro functions allow the same macro code to be used in multiple models. 
+
+Jinja macro functions should be placed in `.sql` files in the SQLMesh project's `macros` directory. Multiple functions can be defined in one `.sql` file, or they can be distributed across multiple files.
+
+Jinja macro functions are defined with the `{% macro %}` and `{% endmacro %}` statements. The macro function name and arguments are specified in the `{% macro %}` statement. 
+
+For example, a macro function named `print_text` that takes no arguments could be defined with:
+
+```sql linenums="1"
+{% macro print_text() %}
+text
+{% endmacro %}
+```
+
+This macro function would be called in a SQL model with `{{ print_text() }}`, which would be substituted with `text`" in the rendered query.
+
+Macro function arguments are placed in the parentheses next to the macro name. For example, this macro generates a SQL column with an alias based on the arguments `expression` and `alias`:
+
+```sql linenums="1"
+{% macro alias(expression, alias) %}
+  {{ expression }} AS {{ alias }}
+{% endmacro %}
+```
+
+We might call this macro function in a SQL query like this:
+
+```sql linenums="1"
+SELECT
+    item_id,
+    {{ alias('item_id', 'item_id2')}}
+FROM table
+```
+
+After processing, it would render to this:
+
+```sql linenums="1"
+SELECT
+    item_id,
+    item_id as item_id2
+FROM table
+```
+
+Note that both argument values are quoted in the call `alias('item_id', 'item_id2')` but are not quoted in the rendered query. During the rendering process, SQLMesh uses its semantic understanding of the query to build the rendered text - it recognizes that the first argument is a column name and that column aliases are unquoted by default.
+
+In that example, the SQL query selects the column `item_id` with the alias `item_id2`. If instead we wanted to select the *string* `'item_id'` with the name `item_id2`, we would pass the `expression` argument with double quotes around it: `"'item_id'"`:
+
+```sql linenums="1"
+SELECT
+    item_id,
+    {{ alias("'item_id'", 'item_id2')}}
+FROM table
+```
+
+After processing, it would render to this:
+
+```sql linenums="1"
+SELECT
+    item_id,
+    'item_id' as item_id2
+FROM table
+```
+
+The double quotes around `"'item_id'"` signal to SQLMesh that it is not a column name.
+
+## Mixing macro systems
+
+SQLMesh supports both Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
+
+[Predefined SQLMesh macro variables](./macro_variables.md) can be used alongside Jinja macros, but they cannot be passed as arguments to a user-defined Jinja macro function. [User-defined SQLMesh macro variables](./sqlmesh_macros.md#user-defined-variables) cannot be used in a model containing Jinja functions.

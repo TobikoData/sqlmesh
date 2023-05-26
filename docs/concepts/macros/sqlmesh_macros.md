@@ -585,11 +585,118 @@ User-defined macro functions allow the same macro code to be used in multiple mo
 SQLMesh supports user-defined macro functions written in two languages - SQL and Python: 
 
 - SQL macro functions must use the [Jinja templating system](./jinja_macros.md#user-defined-macro-functions).
-- Python macro functions use the SQLGlot library to allow more complex operations than SQLMesh macro variables and operators provide alone.
+- Python macro functions use the SQLGlot library to allow more complex operations than macro variables and operators provide alone.
 
 ### Python macro functions
 
-Python macro functions require an empty `__init__.py` file in the SQLMesh project's `macros` directory. It will be created automatically when the project scaffold is created with `sqlmesh init`.
+Python macro functions should be placed in `.py` files in the SQLMesh project's `macros` directory. Multiple functions can be defined in one `.py` file, or they can be distributed across multiple files.
+
+An empty `__init__.py` file must be present in the SQLMesh project's `macros` directory. It will be created automatically when the project scaffold is created with `sqlmesh init`.
+
+Each `.py` file containing a macro definition must import SQLMesh's `macro` decorator with `from sqlmesh import macro`.
+
+Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorators. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
+
+Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
+
+Macro functions may return a list of strings or expressions that all play the same role in the query (e.g., specifying column definitions). For example, a list containing multiple `CASE WHEN` statements would be incorporated into the query properly, but a list containing both `CASE WHEN` statements and a `WHERE` clause would not.
+
+#### Macro function basics
+
+This example demonstrates the core requirements for defining a python macro - it takes no user-supplied arguments and returns the string `text`.
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def print_text(evaluator):
+  return 'text'
+```
+
+We could use this in a SQLMesh SQL model like this:
+
+```sql linenums="1"
+SELECT
+  @print_text() as my_text
+FROM table
+```
+
+After processing, it will render to this:
+
+```sql linenums="1"
+SELECT
+  text as my_text
+FROM table
+```
+
+Note that the python function returned a string `'text'`, but the rendered query uses `text` as a column name. That is due to the function's returned text being parsed as SQL code and integrated into the query's semantic representation.
+
+The rendered query will treat `text` as a string if we double-quote the single-quoted value in the function definition as `"'text'"`:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def print_text(evaluator):
+  return "'text'"
+```
+
+When run in the same model query as before, this will render to:
+
+```sql linenums="1"
+SELECT
+  'text' as my_text
+FROM table
+```
+
+#### Returning more than one value
+
+Macro functions are a convenient way to tidy model code by creating multiple outputs from one function call. Python macro functions do this by returning a list of strings or SQLGlot expressions.
+
+For example, we might want to create indicator variables from the values in a string column. We could do that with:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def make_indicators(evaluator, string_column, string_values):
+  cases = []
+
+  for value in string_values:
+    cases.append(f"CASE WHEN {string_column} = '{value}' THEN '{value}' ELSE NULL END AS {string_column}_{value}")
+
+  return cases
+```
+
+Note that the `CASE WHEN` string includes quotes around `'{value}'`.
+
+We could call this function in a model query to create `CASE WHEN` statements for the `vehicle` column values `truck` and `bus` like this:
+
+```sql linenums="1"
+SELECT
+@make_indicators('vehicle', ['truck', 'bus'])
+FROM table
+```
+
+It would render to:
+
+```sql linenums="1"
+SELECT
+CASE WHEN vehicle = 'truck' THEN 'truck' ELSE NULL END AS vehicle_truck,
+CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
+FROM table
+```
+
+Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes around '{value}' in the function definition.
+
+#### Accessing macro variable values
 
 More information to come.
 
+#### Using SQLGlot expressions
+
+More information to come.
+
+## Mixing macro systems
+
+SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways. 
