@@ -24,6 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     categorize_change,
     fingerprint_from_model,
+    has_paused_forward_only,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -915,3 +916,13 @@ def test_physical_schema(snapshot: Snapshot):
     assert new_snapshot.physical_schema == "custom_schema"
     assert new_snapshot.data_version.physical_schema == "custom_schema"
     assert new_snapshot.table_info.physical_schema == "custom_schema"
+
+
+def test_has_paused_forward_only(snapshot: Snapshot):
+    assert not has_paused_forward_only([snapshot], [snapshot])
+
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    assert has_paused_forward_only([snapshot], [snapshot])
+
+    snapshot.set_unpaused_ts("2023-01-01")
+    assert not has_paused_forward_only([snapshot], [snapshot])
