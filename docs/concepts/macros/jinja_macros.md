@@ -4,7 +4,7 @@ SQLMesh supports macros from the [Jinja](https://jinja.palletsprojects.com/en/3.
 
 Jinja's macro approach is pure string substitution. Unlike SQLMesh macros, they assemble SQL query text without building a semantic representation. 
 
-**NOTE:** SQLMesh supports the standard Jinja function library only - it does **not** support dbt-specific jinja functions like `{{ ref() }}`. 
+**NOTE:** SQLMesh projects support the standard Jinja function library only - they do **not** support dbt-specific jinja functions like `{{ ref() }}`. dbt-specific functions are allowed in dbt projects being run with the [SQLMesh adapter](../../integrations/dbt.md).
 
 ## Basics
 
