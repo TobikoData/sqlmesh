@@ -56,8 +56,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             else None
         )
         tags = ", ".join(model.tags) if model.tags else None
-        partitioned_by = ", ".join(
-            model.partitioned_by) if model.partitioned_by else None
+        partitioned_by = ", ".join(model.partitioned_by) if model.partitioned_by else None
         lookback = model.lookback if model.lookback > 0 else None
         columns = [
             models.Column(

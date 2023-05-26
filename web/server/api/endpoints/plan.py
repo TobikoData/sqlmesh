@@ -61,8 +61,7 @@ async def run_plan(
 
     if plan.context_diff.has_changes or plan.requires_backfill:
         batches = context.scheduler().batches()
-        tasks = {snapshot.name: len(intervals)
-                 for snapshot, intervals in batches.items()}
+        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
 
         payload.backfills = [
             models.ContextEnvironmentBackfill(
@@ -73,7 +72,7 @@ async def run_plan(
                 if interval.snapshot_name in plan.context_diff.snapshots
                 else interval.snapshot_name,
                 interval=[
-                    tuple([to_ds(t) for t in make_inclusive(start, end)])
+                    tuple(to_ds(t) for t in make_inclusive(start, end))
                     for start, end in interval.merged_intervals
                 ][0],
                 batches=tasks.get(interval.snapshot_name, 0),
@@ -84,8 +83,7 @@ async def run_plan(
         payload.changes = models.ContextEnvironmentChanges(
             removed=plan.context_diff.removed,
             added=plan.context_diff.added,
-            modified=models.ModelsDiff.get_modified_snapshots(
-                plan.context_diff),
+            modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )
 
     return payload

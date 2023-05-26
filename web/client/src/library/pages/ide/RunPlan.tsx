@@ -91,14 +91,14 @@ export default function RunPlan(): JSX.Element {
   const confirmation: Confirmation | undefined = useMemo(() => {
     return environment.isDefault
       ? {
-        headline: 'Running Plan Directly On Prod Environment!',
-        description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
-        yesText: `Yes, Run ${environment.name}`,
-        noText: 'No, Cancel',
-        action() {
-          startPlan()
-        },
-      }
+          headline: 'Running Plan Directly On Prod Environment!',
+          description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
+          yesText: `Yes, Run ${environment.name}`,
+          noText: 'No, Cancel',
+          action() {
+            startPlan()
+          },
+        }
       : undefined
   }, [environment])
 
@@ -170,7 +170,7 @@ export default function RunPlan(): JSX.Element {
       className={clsx(
         'flex items-center',
         environment == null &&
-        'opacity-50 pointer-events-none cursor-not-allowed',
+          'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
       <div className="flex items-center relative">
@@ -178,7 +178,7 @@ export default function RunPlan(): JSX.Element {
           className={clsx(
             'mx-0',
             isFalse(environment.isInitial && environment.isDefault) &&
-            'rounded-none rounded-l-lg border-r',
+              'rounded-none rounded-l-lg border-r',
           )}
           disabled={
             hasErrors ||
@@ -212,12 +212,12 @@ export default function RunPlan(): JSX.Element {
             {planState === EnumPlanState.Running
               ? 'Running Plan...'
               : planState === EnumPlanState.Applying
-                ? 'Applying Plan...'
-                : planState === EnumPlanState.Cancelling
-                  ? 'Cancelling Plan...'
-                  : planAction !== EnumPlanAction.None
-                    ? 'Setting Plan...'
-                    : 'Run Plan'}
+              ? 'Applying Plan...'
+              : planState === EnumPlanState.Cancelling
+              ? 'Cancelling Plan...'
+              : planAction !== EnumPlanAction.None
+              ? 'Setting Plan...'
+              : 'Run Plan'}
           </span>
         </Button>
         {(isFalse(environment.isInitial) || isFalse(environment.isDefault)) && (
@@ -260,8 +260,9 @@ export default function RunPlan(): JSX.Element {
             </ModalConfirmation.Description>
           )}
           <div className="mt-5 pt-4">
-            <h4 className="mb-2">{`${environments.size > 1 ? 'Select or ' : ''
-              }Add Environment`}</h4>
+            <h4 className="mb-2">{`${
+              environments.size > 1 ? 'Select or ' : ''
+            }Add Environment`}</h4>
             <div className="flex items-center relative">
               {environments.size > 1 && (
                 <SelectEnvironemnt
@@ -476,7 +477,7 @@ function SelectEnvironemnt({
                           'flex justify-between items-center px-4 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
-                          'pointer-events-none cursor-default bg-secondary-10',
+                            'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
@@ -629,13 +630,13 @@ function ChangesPreview({
             className={clsx(
               'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
-              'bg-success-500 border-success-500',
+                'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
-              'bg-danger-500 border-danger-500',
+                'bg-danger-500 border-danger-500',
               type === EnumPlanChangeType.Direct &&
-              'bg-secondary-500 border-secondary-500',
+                'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
-              'bg-warning-500 border-warning-500',
+                'bg-warning-500 border-warning-500',
               type === 'metadata' && 'bg-neutral-500 border-neutral-500',
             )}
           >
