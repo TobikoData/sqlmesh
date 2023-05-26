@@ -20,7 +20,11 @@ from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import SnapshotEvaluator, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    SnapshotEvaluator,
+    SnapshotInfoLike,
+    has_paused_forward_only,
+)
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
@@ -61,7 +65,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def evaluate(self, plan: Plan) -> None:
         tasks = (
             [self._push, self._restate, self._backfill, self._promote]
-            if not plan.forward_only or plan.is_dev
+            if not has_paused_forward_only(plan.snapshots, plan.snapshots) or plan.is_dev
             else [self._push, self._restate, self._promote, self._backfill]
         )
 

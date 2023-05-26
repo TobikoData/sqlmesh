@@ -1070,3 +1070,16 @@ def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[st
         for snapshot in snapshots
         if snapshot.version and not snapshot.is_symbolic
     }
+
+
+def has_paused_forward_only(
+    targets: t.Iterable[SnapshotIdLike],
+    snapshots: t.Union[t.List[Snapshot], t.Dict[SnapshotId, Snapshot]],
+) -> bool:
+    if not isinstance(snapshots, dict):
+        snapshots = {s.snapshot_id: s for s in snapshots}
+    for target in targets:
+        target_snapshot = snapshots[target.snapshot_id]
+        if target_snapshot.is_paused and target_snapshot.is_forward_only:
+            return True
+    return False

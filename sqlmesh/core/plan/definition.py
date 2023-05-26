@@ -541,6 +541,7 @@ class Plan:
                 candidate.snapshot_id not in self.context_diff.new_snapshots
                 and promoted.is_forward_only
                 and not candidate.is_forward_only
+                and not candidate.is_indirect_non_breaking
                 and (
                     promoted.version == candidate.version
                     or candidate.data_version in promoted.previous_versions
