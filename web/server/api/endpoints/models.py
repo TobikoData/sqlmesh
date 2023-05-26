@@ -8,6 +8,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
 from sqlmesh.utils.date import now, to_datetime
 from web.server import models
+from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
@@ -15,7 +16,7 @@ router = APIRouter()
 
 @router.get(
     "",
-    response_model=t.List[models.Model],
+    response_model=t.Union[t.List[models.Model], models.ApiExceptionPayload],
     response_model_exclude_unset=True,
     response_model_exclude_none=True,
 )
@@ -23,16 +24,28 @@ def get_models(
     context: Context = Depends(get_loaded_context),
 ) -> t.List[models.Model]:
     """Get a mapping of model names to model metadata"""
+    try:
+        context.load()
+    except Exception:
+        raise ApiException(
+            message="Unable to get models",
+            origin="API -> models -> get_models",
+        )
+
+    return get_all_models(context)
+
+
+def get_all_models(context: Context) -> t.List[models.Model]:
     output = []
 
-    def _get_model_type(model: Model) -> str | None:
+    def _get_model_type(model: Model) -> str:
         if model.is_sql:
             return "sql"
         if model.is_python:
             return "python"
         if model.is_seed:
             return "seed"
-        return None
+        return "external"
 
     for model in context.models.values():
         type = _get_model_type(model)

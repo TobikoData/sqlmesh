@@ -27,9 +27,9 @@ ReactDOM.createRoot(getRootNode()).render(
       <ThemeProvider>
         <Header />
         <Divider />
-        <div className="h-full">
+        <main className="h-full overflow-hidden">
           <RouterProvider router={router} />
-        </div>
+        </main>
         <Divider />
         <Footer />
       </ThemeProvider>

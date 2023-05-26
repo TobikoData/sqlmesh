@@ -61,6 +61,7 @@ import { useLineageFlow } from './context'
 import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
+import { type ErrorIDE } from '~/library/pages/ide/context'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -261,7 +262,7 @@ const ModelColumn = memo(function ModelColumn({
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
   removeEdges: (columnId: string) => void
-  handleError?: (error: Error) => void
+  handleError?: (error: ErrorIDE) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
       [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
@@ -302,7 +303,7 @@ const ModelColumn = memo(function ModelColumn({
         })
         .catch(error => {
           setIsError(true)
-          handleError?.(error as Error)
+          handleError?.(error)
         })
         .finally(() => {
           setIsFetching(false)

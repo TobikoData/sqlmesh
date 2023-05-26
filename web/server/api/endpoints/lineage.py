@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import collections
-import traceback
 import typing as t
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlglot import exp
 from sqlglot.lineage import Node, lineage
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from sqlmesh.core.context import Context
+from web.server.exceptions import ApiException
 from web.server.models import LineageColumn
 from web.server.settings import get_loaded_context
 
@@ -71,8 +70,9 @@ async def column_lineage(
             },
         )
     except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        raise ApiException(
+            message="Unable to get a column lineage",
+            origin="API -> lineage -> column_lineage",
         )
 
     graph = {}

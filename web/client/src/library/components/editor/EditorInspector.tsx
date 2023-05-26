@@ -9,14 +9,10 @@ import {
   type RenderInputEnd,
   type EvaluateInputLatest,
   type RenderInputLatest,
-  fetchdfApiCommandsFetchdfPost,
-  renderApiCommandsRenderPost,
-  evaluateApiCommandsEvaluatePost,
 } from '~/api/client'
-import { type ResponseWithDetail } from '~/api/instance'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { isFalse, toDate, toDateFormat } from '~/utils'
+import { debounceAsync, isFalse, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -26,6 +22,8 @@ import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
 import Documentation from '@components/documentation/Documentation'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { useApiEvaluate, useApiFetchdf, useApiRender } from '@api/index'
+import { EnumErrorKey } from '~/library/pages/ide/context'
 
 interface FormModel {
   model?: string
@@ -56,11 +54,15 @@ export default function EditorInspector({
         'flex flex-col w-full h-full items-center overflow-hidden',
       )}
     >
-      {tab.file.isSQLMeshModel && model != null ? (
-        <InspectorModel
-          tab={tab}
-          model={model}
-        />
+      {tab.file.isSQLMeshModel ? (
+        <>
+          {model != null && (
+            <InspectorModel
+              tab={tab}
+              model={model}
+            />
+          )}
+        </>
       ) : (
         <InspectorSql tab={tab} />
       )}
@@ -86,53 +88,57 @@ function InspectorModel({
     limit: 1000,
   })
 
+  const { refetch: getRender } = useApiRender(
+    Object.assign(form, { model: model.name }),
+  )
+  const debouncedGetRender = debounceAsync(getRender, 1000, true)
+
+  const { refetch: getEvaluate } = useApiEvaluate(
+    Object.assign(form, { model: model.name }),
+  )
+  const debouncedGetEvaluate = debounceAsync(getEvaluate, 1000, true)
+
   const shouldEvaluate =
     tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
 
   function evaluateModel(): void {
-    setPreviewQuery(tab.file.content)
+    setPreviewQuery(undefined)
     setPreviewConsole(undefined)
     setPreviewTable(undefined)
 
-    if (model?.name != null) {
-      renderApiCommandsRenderPost({
-        ...form,
-        model: model.name,
+    debouncedGetRender({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewQuery(data?.sql)
       })
-        .then(({ sql }) => {
-          setPreviewQuery(sql)
-        })
-        .catch(error => {
-          if (isCancelledError(error)) {
-            console.log(
-              'renderApiCommandsRenderPost',
-              'Request aborted by React Query',
-            )
-          } else {
-            setPreviewConsole(error.message)
-          }
-        })
-
-      evaluateApiCommandsEvaluatePost({
-        ...form,
-        model: model.name,
-      })
-        .then((result: ResponseWithDetail | Table<any>) => {
-          setPreviewTable(
-            getTableDataFromArrowStreamResult(result as Table<any>),
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'renderApiCommandsRenderPost',
+            'Request aborted by React Query',
           )
-        })
-        .catch(error => {
-          if (isCancelledError(error)) {
-            console.log(
-              'evaluateApiCommandsEvaluatePost',
-              'Request aborted by React Query',
-            )
-          } else {
-            setPreviewConsole(error.message)
-          }
-        })
-    }
+        } else {
+          setPreviewConsole([EnumErrorKey.RenderModel, error])
+        }
+      })
+
+    debouncedGetEvaluate({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'fetchdfApiCommandsFetchdfPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.EvaluateModel, error])
+        }
+      })
   }
 
   return (
@@ -166,12 +172,12 @@ function InspectorModel({
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           className={clsx(
-            'flex flex-col w-full h-full relative px-2 overflow-hidden',
+            'flex flex-col w-full h-full relative overflow-hidden',
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
         >
           <InspectorForm>
-            <form className="my-3">
+            <form>
               {isFalse(shouldEvaluate) && (
                 <FormFieldset>
                   <Banner variant={EnumVariant.Warning}>
@@ -268,7 +274,7 @@ function InspectorModel({
         </Tab.Panel>
         <Tab.Panel
           className={clsx(
-            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
           )}
         >
           <Documentation
@@ -289,6 +295,9 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
+  const { refetch: getFetchdf, isFetching } = useApiFetchdf(tab.file.content)
+  const debouncedGetFetchdf = debounceAsync(getFetchdf, 1000, true)
+
   const [form, setForm] = useState<FormArbitrarySql>({
     limit: LIMIT,
   })
@@ -300,11 +309,11 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewConsole(undefined)
     setPreviewTable(undefined)
 
-    fetchdfApiCommandsFetchdfPost({
-      sql: tab.file.content,
+    debouncedGetFetchdf({
+      throwOnError: true,
     })
-      .then((result: ResponseWithDetail | Table<any>) => {
-        setPreviewTable(getTableDataFromArrowStreamResult(result as Table<any>))
+      .then(({ data }) => {
+        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
       })
       .catch(error => {
         if (isCancelledError(error)) {
@@ -313,7 +322,7 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
             'Request aborted by React Query',
           )
         } else {
-          setPreviewConsole(error.message)
+          setPreviewConsole([EnumErrorKey.Fetchdf, error])
         }
       })
   }
@@ -356,7 +365,7 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
         <Button
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldSendQuery)}
+          disabled={isFalse(shouldSendQuery) || isFetching}
           onClick={e => {
             e.stopPropagation()
 
@@ -375,7 +384,7 @@ function FormFieldset({
 }: {
   children: React.ReactNode
 }): JSX.Element {
-  return <fieldset className="flex my-3 px-3">{children}</fieldset>
+  return <fieldset className="flex my-3">{children}</fieldset>
 }
 
 function InspectorForm({
@@ -384,7 +393,7 @@ function InspectorForm({
   children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className="flex w-full h-full py-1 px-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
+    <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
       {children}
     </div>
   )
@@ -395,5 +404,5 @@ function InspectorActions({
 }: {
   children: React.ReactNode
 }): JSX.Element {
-  return <div className="flex w-full py-1 px-2 justify-end">{children}</div>
+  return <div className="flex w-full py-1 px-1 justify-end">{children}</div>
 }

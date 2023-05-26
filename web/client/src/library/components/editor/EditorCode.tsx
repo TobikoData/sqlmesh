@@ -17,8 +17,7 @@ import {
 } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { useColorScheme, EnumColorScheme } from '~/context/theme'
-
-import { useApiFileByPath, useApiPlanRun, useMutationApiSaveFile } from '~/api'
+import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
   debounceSync,
@@ -192,7 +191,7 @@ function CodeEditorRemoteFile({
 
   return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">
-      <Loading className="inline-block ">
+      <Loading className="inline-block">
         <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
         <h3 className="text-xl">Waiting for File...</h3>
       </Loading>
@@ -257,7 +256,6 @@ export function useSQLMeshModelExtensions(
 export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   const client = useQueryClient()
 
-  const environment = useStoreContext(s => s.environment)
   const files = useStoreFileTree(s => s.files)
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
@@ -267,16 +265,6 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   const mutationSaveFile = useMutationApiSaveFile(client, {
     onSuccess: saveChangeSuccess,
   })
-
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
-
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
 
   const debouncedSaveChange = useCallback(
     debounceSync(saveChange, 1000, true),
@@ -327,8 +315,6 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
     file.update(newfile)
 
     refreshTab()
-
-    void debouncedPlanRun()
   }
 
   return [
@@ -369,7 +355,7 @@ const CodeEditor = function CodeEditor({
     <CodeMirror
       height="100%"
       width="100%"
-      className={clsx('flex w-full h-full font-mono', className)}
+      className={clsx('flex w-full h-full font-mono text-sm', className)}
       value={content}
       extensions={extensionsAll}
       onChange={onChange}
