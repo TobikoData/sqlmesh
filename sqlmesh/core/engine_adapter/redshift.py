@@ -54,6 +54,18 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
             view_name, query_or_df, columns_to_types, replace, no_schema_binding=True
         )
 
+    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
+        """Fetches column names and types for the target table."""
+        table = exp.to_table(table_name)
+        sql = (
+            exp.select("column_name", "data_type")
+            .from_("SVV_COLUMNS")
+            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db']}'")
+        )
+        self.execute(sql)
+        resp = self.cursor.fetchall()
+        return {column: exp.DataType.build(type, dialect=self.dialect) for column, type in resp}
+
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         self.execute(query)
