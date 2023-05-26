@@ -29,9 +29,9 @@ sushi:
       host: "{{ env_var('REDSHIFT_HOST') }}"
       user: "{{ env_var('REDSHIFT_USER') }}"
       password: "{{ env_var('REDSHIFT_PASSWORD') }}"
-      port: 5439 #"{{ env_var('REDSHIFT_PORT') }}"
+      port: "{{ env_var('REDSHIFT_PORT') }}"
       dbname: "{{ env_var('REDSHIFT_DBNAME') }}"
       schema: sushi
       threads: 1
       type: redshift
-  target: redshift
+  target: in_memory
