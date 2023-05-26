@@ -250,7 +250,7 @@ class QueryRenderer(ExpressionRenderer):
                 query.set("with", with_)
 
         if mapping:
-            return exp.replace_tables(query, mapping)
+            return exp.replace_tables(t.cast(exp.Subqueryable, query), mapping)
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)

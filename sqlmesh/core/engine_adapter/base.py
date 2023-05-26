@@ -168,13 +168,12 @@ class EngineAdapter:
         """
         if not self.SUPPORTS_INDEXES:
             return
+
         expression = exp.Create(
             this=exp.Index(
                 this=exp.to_identifier(index_name),
                 table=exp.to_table(table_name),
-                columns=exp.Tuple(
-                    expressions=[exp.to_column(c) for c in columns],
-                ),
+                columns=[exp.to_column(c) for c in columns],
             ),
             kind="INDEX",
             exists=exists,
