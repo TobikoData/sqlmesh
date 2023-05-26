@@ -338,10 +338,10 @@ class Context(BaseContext):
         if self._loader.reload_needed():
             self.load()
 
-    def load(self) -> Context:
+    def load(self, update_schemas: bool = True) -> Context:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
-            project = self._loader.load(self)
+            project = self._loader.load(self, update_schemas)
             self._hooks = project.hooks
             self._macros = project.macros
             self._models = project.models
@@ -844,13 +844,15 @@ class Context(BaseContext):
         The schema file contains all columns and types of external models, allowing for more robust
         lineage, validation, and optimizations.
         """
-        models = self._models or self._loader.load(self, update_schemas=False).models
+        if not self._models:
+            self.load(update_schemas=False)
+
         for path, config in self.configs.items():
             create_schema_file(
                 path=path / c.SCHEMA_YAML,
                 models={
                     name: model
-                    for name, model in models.items()
+                    for name, model in self._models.items()
                     if self.config_for_model(model) is config
                 },
                 adapter=self._engine_adapter,
