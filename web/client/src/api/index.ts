@@ -4,6 +4,7 @@ import {
   type UseMutationResult,
   useQuery,
   useMutation,
+  isCancelledError,
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
@@ -23,12 +24,23 @@ import {
   cancelPlanApiPlanCancelPost,
   type BodyApplyApiCommandsApplyPostCategories,
   getModelsApiModelsGet,
-  type Model,
   type ModelLineageApiLineageModelNameGet200,
   modelLineageApiLineageModelNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   columnLineageApiLineageModelNameColumnNameGet,
+  fetchdfApiCommandsFetchdfPost,
+  renderApiCommandsRenderPost,
+  type RenderInput,
+  type Query,
+  evaluateApiCommandsEvaluatePost,
+  type EvaluateInput,
+  type Model,
 } from './client'
+import {
+  useIDE,
+  type ErrorIDE,
+  EnumErrorKey,
+} from '~/library/pages/ide/context'
 
 export function useApiModelLineage(
   modelName: string,
@@ -68,16 +80,32 @@ export function useApiFileByPath(path: string): UseQueryResult<File> {
 }
 
 export function useApiModels(): UseQueryResult<Model[]> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<Model[], ErrorIDE>({
     queryKey: ['/api/models'],
-    queryFn: async ({ signal }) => await getModelsApiModelsGet({ signal }),
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.Models)
+
+      return (await getModelsApiModelsGet({ signal })) as Model[]
+    },
     cacheTime: 0,
     enabled: false,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log(
+          'getEnvironmentsApiEnvironmentsGet',
+          'Request aborted by React Query',
+        )
+      } else {
+        addError(EnumErrorKey.Models, error)
+      }
+    },
   })
 }
 
 export function useApiFiles(): UseQueryResult<Directory> {
-  return useQuery({
+  return useQuery<Directory, ErrorIDE>({
     queryKey: ['/api/files'],
     queryFn: async ({ signal }) => await getFilesApiFilesGet({ signal }),
     cacheTime: 0,
@@ -86,12 +114,27 @@ export function useApiFiles(): UseQueryResult<Directory> {
 }
 
 export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>({
     queryKey: ['/api/environments'],
-    queryFn: async ({ signal }) =>
-      await getEnvironmentsApiEnvironmentsGet({ signal }),
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.Environments)
+
+      return await getEnvironmentsApiEnvironmentsGet({ signal })
+    },
     cacheTime: 0,
     enabled: false,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log(
+          'getEnvironmentsApiEnvironmentsGet',
+          'Request aborted by React Query',
+        )
+      } else {
+        addError(EnumErrorKey.Environments, error)
+      }
+    },
   })
 }
 
@@ -102,19 +145,31 @@ export function useApiPlanRun(
     planOptions?: PlanOptions
   },
 ): UseQueryResult<ContextEnvironment> {
-  return useQuery({
+  const { addError, removeError } = useIDE()
+
+  return useQuery<ContextEnvironment, ErrorIDE>({
     queryKey: ['/api/plan', environment],
-    queryFn: async ({ signal }) =>
-      await runPlanApiPlanPost(
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.RunPlan)
+
+      return await runPlanApiPlanPost(
         {
           environment,
           plan_dates: options?.planDates,
           plan_options: options?.planOptions,
         },
         { signal },
-      ),
+      )
+    },
     enabled: false,
     cacheTime: 0,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log('runPlanApiPlanPost', 'Request aborted by React Query')
+      } else {
+        addError(EnumErrorKey.RunPlan, error)
+      }
+    },
   })
 }
 
@@ -138,6 +193,38 @@ export function useApiPlanApply(
         },
         { signal },
       ),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiFetchdf(sql: string): UseQueryResult<unknown> {
+  return useQuery<unknown, ErrorIDE>({
+    queryKey: ['/api/commands/fetchd'],
+    queryFn: async ({ signal }) =>
+      await fetchdfApiCommandsFetchdfPost({ sql }, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiRender(options: RenderInput): UseQueryResult<Query> {
+  return useQuery<Query, ErrorIDE>({
+    queryKey: ['/api/commands/render'],
+    queryFn: async ({ signal }) =>
+      await renderApiCommandsRenderPost(options, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiEvaluate(
+  options: EvaluateInput,
+): UseQueryResult<unknown> {
+  return useQuery<unknown, ErrorIDE>({
+    queryKey: ['/api/commands/evaluate'],
+    queryFn: async ({ signal }) =>
+      await evaluateApiCommandsEvaluatePost(options, { signal }),
     enabled: false,
     cacheTime: 0,
   })
@@ -179,6 +266,18 @@ export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
 
   return await cancelPlanApiPlanCancelPost()
+}
+
+export function apiCancelFetchdf(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/fetchdf'] })
+}
+
+export function apiCancelRender(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/render'] })
+}
+
+export function apiCancelEvaluate(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/commands/evaluate'] })
 }
 
 export function apiCancelLineage(client: QueryClient): void {

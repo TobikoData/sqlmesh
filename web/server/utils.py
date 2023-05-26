@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import functools
 import io
-import traceback
 import typing as t
 from pathlib import Path, PurePath
 
@@ -11,10 +10,11 @@ import pandas as pd
 import pyarrow as pa  # type: ignore
 from fastapi import Depends, HTTPException
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_404_NOT_FOUND
 
 from sqlmesh.core.context import Context
 from web.server.console import api_console
+from web.server.exceptions import ApiException
 from web.server.settings import get_context
 
 R = t.TypeVar("R")
@@ -34,7 +34,7 @@ async def run_in_executor(func: t.Callable[..., R], *args: t.Any) -> R:
         try:
             return func(*args)
         except Exception as e:
-            api_console.log_exception(e)
+            api_console.log_exception()
             raise e
 
     loop = asyncio.get_running_loop()
@@ -68,8 +68,9 @@ def replace_file(src: Path, dst: Path) -> None:
         except FileNotFoundError:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND)
         except OSError:
-            raise HTTPException(
-                status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+            raise ApiException(
+                message="Unable to move a file",
+                origin="API -> utils -> replace_file",
             )
 
 

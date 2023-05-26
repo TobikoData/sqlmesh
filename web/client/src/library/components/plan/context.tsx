@@ -22,7 +22,6 @@ export const EnumPlanActions = {
   ResetPlanOptions: 'reset-plan-options',
   ResetBackfills: 'reset-backfills',
   ResetChanges: 'reset-changes',
-  ResetErrors: 'reset-errors',
   ResetTestsReport: 'reset-tests-report',
   Dates: 'dates',
   DateStart: 'date-start',
@@ -33,7 +32,6 @@ export const EnumPlanActions = {
   Changes: 'changes',
   PlanOptions: 'plan-options',
   External: 'external',
-  Errors: 'errors',
   TestsReportErrors: 'tests-report-errors',
   TestsReportMessages: 'tests-report-messages',
 } as const
@@ -120,7 +118,6 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
-  errors: string[]
   testsReportErrors?: TestReportError
   testsReportMessages?: TestReportMessage
 }
@@ -335,18 +332,6 @@ function reducer(
       })
     }
 
-    case EnumPlanActions.Errors: {
-      const { errors } = newState as PlanDetails
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'errors'>
-      >({}, plan, {
-        errors: plan.errors.concat(errors),
-      })
-    }
-
     case EnumPlanActions.TestsReportErrors: {
       return Object.assign<
         Record<string, unknown>,
@@ -364,16 +349,6 @@ function reducer(
         Pick<PlanDetails, 'testsReportMessages'>
       >({}, plan, {
         testsReportMessages: newState.testsReportMessages,
-      })
-    }
-
-    case EnumPlanActions.ResetErrors: {
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'errors'>
-      >({}, plan, {
-        errors: [],
       })
     }
 

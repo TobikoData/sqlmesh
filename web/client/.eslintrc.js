@@ -18,6 +18,7 @@ module.exports = {
     'react/jsx-uses-react': OFF,
     'react/react-in-jsx-scope': OFF,
     'no-use-before-define': OFF,
+    '@typescript-eslint/promise-function-async': OFF,
     '@typescript-eslint/no-non-null-assertion': OFF,
     '@typescript-eslint/no-use-before-define': [
       ERROR,
