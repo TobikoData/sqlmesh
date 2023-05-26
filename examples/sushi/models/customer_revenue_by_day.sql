@@ -4,7 +4,7 @@ MODEL (
   kind incremental_by_time_range (
     time_column (ds, 'YYYY-MM-dd'),
     batch_size 10,
-  ),s
+  ),
   owner jen,
   cron '@daily',
   dialect hive,
