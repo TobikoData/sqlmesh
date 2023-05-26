@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 from enum import Enum
 
@@ -11,6 +12,11 @@ from sqlglot.time import format_time
 from sqlmesh.core import dialect as d
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
+
+if sys.version_info >= (3, 9):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 
 class ModelKindMixin:
@@ -60,6 +66,16 @@ class ModelKindMixin:
     def only_latest(self) -> bool:
         """Whether or not this model only cares about latest date to render."""
         return self.is_view or self.is_full
+
+    @property
+    def depends_on_past(self) -> bool:
+        """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
+        return self.is_incremental_by_unique_key or self.is_full_with_history
+
+    @property
+    def is_time_based_load(self) -> bool:
+        """Whether or not this model has a time column which influences the load pattern used."""
+        return self.is_incremental_by_time_range or self.is_full_with_history
 
 
 class ModelKindName(str, ModelKindMixin, Enum):

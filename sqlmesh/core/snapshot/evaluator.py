@@ -115,7 +115,7 @@ class SnapshotEvaluator:
                 self.adapter.replace_query(table_name, query_or_df, columns_to_types)
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
-                if snapshot.is_incremental_by_time_range:
+                if snapshot.is_time_based_load:
                     # A model's time_column could be None but
                     # it shouldn't be for time based loads
                     assert model.time_column
