@@ -1,5 +1,4 @@
 import { createBrowserRouter } from 'react-router-dom'
-import IDEProvider from './library/pages/ide/context'
 import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
@@ -25,11 +24,7 @@ export const EnumRoutes = {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <IDEProvider>
-        <IDE />
-      </IDEProvider>
-    ),
+    element: <IDE />,
     children: [
       {
         path: 'editor',

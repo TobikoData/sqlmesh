@@ -72,7 +72,7 @@ async def run_plan(
                 if interval.snapshot_name in plan.context_diff.snapshots
                 else interval.snapshot_name,
                 interval=[
-                    tuple([to_ds(t) for t in make_inclusive(start, end)])
+                    tuple(to_ds(t) for t in make_inclusive(start, end))
                     for start, end in interval.merged_intervals
                 ][0],
                 batches=tasks.get(interval.snapshot_name, 0),
