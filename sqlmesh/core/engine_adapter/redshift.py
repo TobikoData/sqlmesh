@@ -56,11 +56,12 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
 
     def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
+        # Use Redshift's SVV_COLUMNS table, which includes columns for late-binding views.
         table = exp.to_table(table_name)
         sql = (
             exp.select("column_name", "data_type")
             .from_("SVV_COLUMNS")
-            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db']}'")
+            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.db}'")
         )
         self.execute(sql)
         resp = self.cursor.fetchall()
