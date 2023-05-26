@@ -6,7 +6,7 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -201,7 +201,7 @@ class ModelMeta(PydanticModel):
             return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
             return {
-                k: maybe_parse(data_type, into=exp.DataType, dialect=values["dialect"])
+                k: exp.DataType.build(data_type, dialect=values["dialect"])
                 for k, data_type in v.items()
             }
         return v
