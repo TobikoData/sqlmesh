@@ -194,12 +194,14 @@ class ModelMeta(PydanticModel):
         return cron
 
     @validator("columns_to_types_", pre=True)
-    def _columns_validator(cls, v: t.Any) -> t.Optional[t.Dict[str, exp.DataType]]:
+    def _columns_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
         if isinstance(v, exp.Schema):
             return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
             return {
-                k: maybe_parse(data_type, into=exp.DataType)  # type: ignore
+                k: maybe_parse(data_type, into=exp.DataType, dialect=values["dialect"])
                 for k, data_type in v.items()
             }
         return v
