@@ -1,11 +1,24 @@
 import pytest
+from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
+from sqlmesh.core.model.definition import SqlModel
+from sqlmesh.core.model.kind import (
+    FullWithHistory,
+    IncrementalByUniqueKeyKind,
+    TimeColumn,
+)
 from sqlmesh.core.scheduler import Scheduler
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotFingerprint
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotEvaluator,
+    SnapshotFingerprint,
+    SnapshotIntervals,
+)
+from sqlmesh.utils.date import to_datetime, to_timestamp
 
 
 @pytest.fixture
@@ -129,3 +142,115 @@ def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
         )
         == (0, "Hotate", 5.99)
     )
+
+
+def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot):
+    """
+    Test that when given a week of data that it batches dates together when possible but also makes sure to only
+    run future intervals when the past ones are complete.
+    """
+    start = to_datetime("2023-01-01")
+    end = to_datetime("2023-01-07")
+    unique_by_key_snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByUniqueKeyKind(unique_key=["id"]),
+            owner="owner",
+            dialect="",
+            cron="@daily",
+            start=start,
+            query=parse_one("SELECT id FROM VALUES (1), (2) AS t(id)"),
+        ),
+    )
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_snapshot_intervals.return_value = [
+        SnapshotIntervals(
+            name=unique_by_key_snapshot.name,
+            identifier=unique_by_key_snapshot.identifier,
+            version=unique_by_key_snapshot.fingerprint.to_version(),
+            intervals=[
+                (to_timestamp("2023-01-02 00:00:00"), to_timestamp("2023-01-03 00:00:00")),
+                (to_timestamp("2023-01-05 00:00:00"), to_timestamp("2023-01-06 00:00:00")),
+            ],
+            dev_intervals=[],
+        )
+    ]
+    scheduler = Scheduler(
+        snapshots=[unique_by_key_snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mock_state_sync,
+        max_workers=2,
+    )
+    batches = scheduler.batches(start, end, end, is_dev=False)
+    dag = scheduler._dag(batches)
+    assert dag.graph == {
+        # Depends on no one
+        (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
+        # Batches multiple days and depends on previous interval
+        (unique_by_key_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-05"))): {
+            (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
+        },
+        # Depends on last two intervals
+        (unique_by_key_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
+            (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (unique_by_key_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-05"))),
+        },
+    }
+
+
+def test_full_with_history_dag(mocker: MockerFixture, make_snapshot):
+    """
+    Test that we always process a day at a time and all future days rely on the previous day
+    """
+    start = to_datetime("2023-01-01")
+    end = to_datetime("2023-01-07")
+    full_with_history_snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=FullWithHistory(time_column=TimeColumn(column="ds")),
+            owner="owner",
+            dialect="",
+            cron="@daily",
+            start=start,
+            query=parse_one("SELECT id, @end_ds as ds FROM VALUES (1), (2) AS t(id)"),
+        ),
+    )
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_snapshot_intervals.return_value = [
+        SnapshotIntervals(
+            name=full_with_history_snapshot.name,
+            identifier=full_with_history_snapshot.identifier,
+            version=full_with_history_snapshot.fingerprint.to_version(),
+            intervals=[
+                (to_timestamp("2023-01-02 00:00:00"), to_timestamp("2023-01-03 00:00:00")),
+                (to_timestamp("2023-01-05 00:00:00"), to_timestamp("2023-01-06 00:00:00")),
+            ],
+            dev_intervals=[],
+        )
+    ]
+    scheduler = Scheduler(
+        snapshots=[full_with_history_snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mock_state_sync,
+        max_workers=2,
+    )
+    batches = scheduler.batches(start, end, end, is_dev=False)
+    dag = scheduler._dag(batches)
+    assert dag.graph == {
+        # Only run one day at a time and each day relies on the previous days
+        (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
+        (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))): {
+            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
+        },
+        (full_with_history_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))): {
+            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+        },
+        (full_with_history_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
+            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+            (full_with_history_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
+        },
+    }
