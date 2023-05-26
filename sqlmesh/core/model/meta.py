@@ -6,7 +6,7 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -194,12 +194,14 @@ class ModelMeta(PydanticModel):
         return cron
 
     @validator("columns_to_types_", pre=True)
-    def _columns_validator(cls, v: t.Any) -> t.Optional[t.Dict[str, exp.DataType]]:
+    def _columns_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
         if isinstance(v, exp.Schema):
             return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
             return {
-                k: maybe_parse(data_type, into=exp.DataType)  # type: ignore
+                k: exp.DataType.build(data_type, dialect=values["dialect"])
                 for k, data_type in v.items()
             }
         return v
