@@ -173,9 +173,7 @@ class ModelMeta(PydanticModel):
     @property
     def time_column(self) -> t.Optional[TimeColumn]:
         """The time column for incremental models."""
-        if hasattr(self.kind, "time_column"):
-            return self.kind.time_column
-        return None
+        return getattr(self.kind, "time_column", None)
 
     @property
     def unique_key(self) -> t.List[str]:
@@ -214,7 +212,7 @@ class ModelMeta(PydanticModel):
     @property
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
-        return self.kind.batch_size if hasattr(self.kind, "batch_size") else None
+        return getattr(self.kind, "batch_size", None)
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model
