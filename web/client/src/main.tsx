@@ -1,4 +1,4 @@
-import React, { type HTMLAttributes } from 'react'
+import React, { Suspense, type HTMLAttributes } from 'react'
 import ThemeProvider from '@context/theme'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
@@ -8,6 +8,8 @@ import Header from './library/pages/root/Header'
 import Footer from './library/pages/root/Footer'
 import { router } from './routes'
 import './index.css'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
 
@@ -28,7 +30,18 @@ ReactDOM.createRoot(getRootNode()).render(
         <Header />
         <Divider />
         <main className="h-full overflow-hidden">
-          <RouterProvider router={router} />
+          <Suspense
+            fallback={
+              <div className="flex justify-center items-center w-full h-full">
+                <Loading className="inline-block">
+                  <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                  <h3 className="text-md">Loading Page...</h3>
+                </Loading>
+              </div>
+            }
+          >
+            <RouterProvider router={router} />
+          </Suspense>
         </main>
         <Divider />
         <Footer />
