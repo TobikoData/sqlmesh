@@ -149,6 +149,7 @@ def validate_query_change(
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
     not_modified = [
@@ -243,6 +244,7 @@ def validate_model_kind_change(
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
     if kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
@@ -288,6 +290,7 @@ def test_environment_isolation(sushi_context: Context):
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
 
@@ -483,6 +486,7 @@ def setup_rebase(
             "sushi.waiter_revenue_by_day",
             "sushi.top_waiters",
             "sushi.customer_revenue_by_day",
+            "sushi.customer_revenue_lifetime",
         }
     }
     context.apply(plan)
