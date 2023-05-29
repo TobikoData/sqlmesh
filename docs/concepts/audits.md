@@ -42,7 +42,7 @@ AUDIT (
 SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
-In the example above we utilized [macros](macros.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
+In the example above we utilized [macros](./macros/overview.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
 
 The generic audit can now be applied to a model by being referenced in its definition:
 ```sql linenums="1"
