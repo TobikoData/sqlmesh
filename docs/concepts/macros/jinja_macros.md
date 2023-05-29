@@ -68,9 +68,9 @@ The example renders to this after SQLMesh processing:
 
 ```sql linenums="1"
 SELECT
-    CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END as vehicle_car,
-    CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END as vehicle_truck,
-    CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END as vehicle_bus
+    CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END AS vehicle_car,
+    CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END AS vehicle_truck,
+    CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END AS vehicle_bus
 FROM table
 ```
 
