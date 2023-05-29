@@ -92,6 +92,6 @@ You can also use advanced syntax that may not be available in your engine of cho
 Additionally, you won't have to worry about minor formatting differences such as trailing commas, as SQLGlot will remove them at parse time.
 
 ## Macros
-Although standard SQL is very powerful, complex data systems often require running SQL queries with dynamic components such as date filters. For example, you may want to change the date ranges in a `between` statement so that you can get the latest batch of data. SQLMesh provides these dates automatically through [macro variables](../macros.md#variables).
+Although standard SQL is very powerful, complex data systems often require running SQL queries with dynamic components such as date filters. For example, you may want to change the date ranges in a `between` statement so that you can get the latest batch of data. SQLMesh provides these dates automatically through [macro variables](../macros/macro_variables.md).
 
-Additionally, large queries can be difficult to read and maintain. In order to make queries more compact, SQLMesh supports a powerful [macro syntax](../macros.md) as well as [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), allowing you to write macros that make your SQL queries easier to manage.
+Additionally, large queries can be difficult to read and maintain. In order to make queries more compact, SQLMesh supports a powerful [macro syntax](../macros/overview.md) as well as [Jinja](https://jinja.palletsprojects.com/en/3.1.x/), allowing you to write macros that make your SQL queries easier to manage.

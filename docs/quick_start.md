@@ -34,7 +34,7 @@ This will create the directories and files that you can use to organize your SQL
 - ./tests
     - Unit test files. Refer to [testing](concepts/tests.md).
 - ./macros
-    - Macro files. Refer to [macros](concepts/macros.md).
+    - Macro files. Refer to [macros](concepts/macros/overview.md).
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
