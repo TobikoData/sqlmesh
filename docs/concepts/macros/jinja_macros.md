@@ -156,7 +156,7 @@ After processing, it would render to this:
 ```sql linenums="1"
 SELECT
     item_id,
-    item_id as item_id2
+    item_id AS item_id2
 FROM table
 ```
 
