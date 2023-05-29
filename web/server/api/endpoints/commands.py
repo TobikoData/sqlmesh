@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import traceback
 import typing as t
 
 import pandas as pd
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, Body, Depends, Request
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.errors import PlanError
 from web.server import models
+from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 from web.server.utils import (
     ArrowStreamingResponse,
@@ -27,7 +26,7 @@ router = APIRouter()
 async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
-    environment: t.Optional[str] = Body(),
+    environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
@@ -35,9 +34,9 @@ async def apply(
     """Apply a plan"""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Plan/apply is already running.",
+        raise ApiException(
+            message="Plan/apply is already running",
+            origin="API -> commands -> apply",
         )
 
     plan_func = functools.partial(
@@ -58,9 +57,9 @@ async def apply(
     try:
         plan = await task
     except PlanError as e:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
+        raise ApiException(
+            message=str(e),
+            origin="API -> commands -> apply",
         )
 
     if categories is not None:
@@ -92,9 +91,11 @@ async def evaluate(
             limit=options.limit,
         )
     except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        raise ApiException(
+            message="Unable to evaluate a model",
+            origin="API -> commands -> evaluate",
         )
+
     if not isinstance(df, pd.DataFrame):
         df = df.toPandas()
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
@@ -109,8 +110,9 @@ async def fetchdf(
     try:
         df = context.fetchdf(sql)
     except Exception:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=traceback.format_exc()
+        raise ApiException(
+            message="Unable to fetch a dataframe from the given sql string",
+            origin="API -> commands -> fetchdf",
         )
     return ArrowStreamingResponse(df_to_pyarrow_bytes(df))
 
@@ -124,14 +126,25 @@ async def render(
     snapshot = context.snapshots.get(options.model)
 
     if not snapshot:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Model not found.")
+        raise ApiException(
+            message="Unable to find a model",
+            origin="API -> commands -> render",
+        )
 
-    rendered = context.render(
-        snapshot,
-        start=options.start,
-        end=options.end,
-        latest=options.latest,
-        expand=options.expand,
-    )
+    try:
+        rendered = context.render(
+            snapshot,
+            start=options.start,
+            end=options.end,
+            latest=options.latest,
+            expand=options.expand,
+        )
+    except Exception:
+        raise ApiException(
+            message="Unable to render a model query",
+            origin="API -> commands -> render",
+        )
+
     dialect = options.dialect or context.config.dialect
+
     return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))

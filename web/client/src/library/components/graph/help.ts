@@ -177,11 +177,14 @@ function getNodeMap({
   const CHAR_WIDTH = 8
   const MAX_VISIBLE_COLUMNS = 5
 
-  const current = nodes.reduce(
-    (acc: Record<string, Node>, node) =>
-      Object.assign(acc, { [node.id]: node }),
-    {},
-  )
+  const current = nodes.reduce((acc: Record<string, Node>, node) => {
+    // Checking if any nodes have been removed from the graph
+    if (models.has(node.id)) {
+      acc[node.id] = node
+    }
+
+    return acc
+  }, {})
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
     const node =

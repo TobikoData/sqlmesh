@@ -1,12 +1,14 @@
 import asyncio
 import pathlib
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from web.server.api.endpoints import api_router
 from web.server.console import api_console
+from web.server.exceptions import ApiException
 from web.server.watcher import watch_project
 
 app = FastAPI()
@@ -33,6 +35,23 @@ async def startup_event() -> None:
 def shutdown_event() -> None:
     app.state.dispatch_task.cancel()
     app.state.watch_task.cancel()
+
+
+@app.exception_handler(ApiException)
+async def handle_api_exception(_: Request, e: ApiException) -> JSONResponse:
+    return JSONResponse(status_code=e.status_code, content=e.to_dict())
+
+
+@app.exception_handler(Exception)
+async def handle_uncaught_exeption(_: Request, e: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            message=str(e),
+            origin="API -> main -> custom_exception_handler",
+        ).to_dict(),
+    )
 
 
 @app.get("/health")

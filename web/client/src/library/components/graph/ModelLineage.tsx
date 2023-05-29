@@ -1,12 +1,12 @@
 import { useApiModelLineage } from '@api/index'
 import { debounceAsync } from '@utils/index'
-import { memo, useCallback, useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from './context'
 import { mergeLineageWithModels } from './help'
 
-const ModelLineage = memo(function ModelLineage({
+export default function ModelLineage({
   model,
   fingerprint,
   highlightedNodes,
@@ -17,7 +17,7 @@ const ModelLineage = memo(function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, setLineage } = useLineageFlow()
+  const { clearActiveEdges, setLineage, models } = useLineageFlow()
 
   const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
     model.name,
@@ -25,12 +25,12 @@ const ModelLineage = memo(function ModelLineage({
 
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 500),
-    [model.name, fingerprint],
+    [model.name, models],
   )
 
   useEffect(() => {
     void debouncedGetModelLineage()
-  }, [debouncedGetModelLineage])
+  }, [fingerprint])
 
   useEffect(() => {
     if (dataLineage == null) {
@@ -53,6 +53,4 @@ const ModelLineage = memo(function ModelLineage({
       className={className}
     />
   )
-})
-
-export default ModelLineage
+}

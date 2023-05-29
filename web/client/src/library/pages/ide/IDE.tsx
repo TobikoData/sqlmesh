@@ -1,83 +1,69 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useApiModels, apiCancelModels } from '../../../api'
 import {
-  useApiFiles,
-  useApiEnvironments,
-  apiCancelGetEnvironments,
-  apiCancelFiles,
-  useApiModels,
-  apiCancelModels,
-} from '../../../api'
-import { useStorePlan } from '../../../context/plan'
+  EnumPlanState,
+  type PlanProgress,
+  useStorePlan,
+  type PlanTasks,
+} from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import { isArrayEmpty, debounceAsync } from '~/utils'
+import { debounceAsync, isFalse, isObject } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import { Divider } from '@components/divider/Divider'
-import Container from '@components/container/Container'
-import RunPlan from './RunPlan'
-import ActivePlan from './ActivePlan'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
-import { Button } from '@components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
-import { useIDE } from './context'
 import { useStoreFileTree } from '@context/fileTree'
+import IDEProvider, { EnumErrorKey, useIDE } from './context'
+import { type Model } from '@api/client'
+import { Button } from '@components/button/Button'
+import { Divider } from '@components/divider/Divider'
+import Container from '@components/container/Container'
 
-export default function IDE(): JSX.Element {
+const ReportErrors = lazy(
+  async () => await import('../../components/report/ReportErrors'),
+)
+const RunPlan = lazy(async () => await import('./RunPlan'))
+const ActivePlan = lazy(async () => await import('./ActivePlan'))
+const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
+
+export default function PageIDE(): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
 
   const client = useQueryClient()
 
-  const { setIsPlanOpen } = useIDE()
+  const { removeError } = useIDE()
 
-  const addSyncronizedEnvironments = useStoreContext(
-    s => s.addSyncronizedEnvironments,
-  )
   const setModels = useStoreContext(s => s.setModels)
 
   const activePlan = useStorePlan(s => s.activePlan)
-  const updateTasks = useStorePlan(s => s.updateTasks)
+  const setState = useStorePlan(s => s.setState)
+  const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const directory = useStoreFileTree(s => s.project)
-  const setFiles = useStoreFileTree(s => s.setFiles)
-  const setProject = useStoreFileTree(s => s.setProject)
+  const project = useStoreFileTree(s => s.project)
 
-  const [subscribe] = useChannelEvents()
+  const subscribe = useChannelEvents()
 
-  const { data: dataModels, refetch: getModels } = useApiModels()
-  const { data: project, refetch: getFiles } = useApiFiles()
-  const { data: contextEnvironemnts, refetch: getEnvironments } =
-    useApiEnvironments()
+  const { refetch: getModels } = useApiModels()
 
-  const debouncedGetEnvironemnts = useCallback(
-    debounceAsync(getEnvironments, 1000, true),
-    [getEnvironments],
-  )
-  const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
-    getFiles,
-  ])
   const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
     getModels,
   ])
 
   useEffect(() => {
-    const unsubscribeTasks = subscribe('tasks', updateTasks)
-    const unsubscribeModels = subscribe('models', setModels)
+    const unsubscribeTasks = subscribe<PlanProgress>('tasks', updateTasks)
+    const unsubscribeModels = subscribe<Model[]>('models', updateModels)
 
-    void debouncedGetEnvironemnts()
-    void debouncedGetFiles()
-    void debouncedGetModels()
+    void debouncedGetModels().then(({ data }) => {
+      updateModels(data)
+    })
 
     return () => {
-      debouncedGetEnvironemnts.cancel()
-      debouncedGetFiles.cancel()
       debouncedGetModels.cancel()
 
       apiCancelModels(client)
-      apiCancelFiles(client)
-      apiCancelGetEnvironments(client)
 
       unsubscribeTasks?.()
       unsubscribeModels?.()
@@ -90,63 +76,81 @@ export default function IDE(): JSX.Element {
     }
   }, [location])
 
-  useEffect(() => {
-    if (
-      contextEnvironemnts == null ||
-      isArrayEmpty(Object.keys(contextEnvironemnts))
-    )
+  function updateModels(models?: Model[]): void {
+    removeError(EnumErrorKey.General)
+    removeError(EnumErrorKey.Models)
+    setModels(models)
+  }
+
+  function updateTasks(data?: PlanProgress): void {
+    if (data == null) return
+
+    if (isFalse(isObject(data.tasks))) {
+      setState(EnumPlanState.Init)
+
       return
+    }
 
-    addSyncronizedEnvironments(Object.values(contextEnvironemnts))
-  }, [contextEnvironemnts])
+    const plan: PlanProgress = {
+      ok: data.ok,
+      tasks: data.tasks,
+      updated_at: data.updated_at ?? new Date().toISOString(),
+    }
 
-  useEffect(() => {
-    setModels(dataModels)
-  }, [dataModels])
+    setActivePlan(plan)
 
-  useEffect(() => {
-    setFiles(directory?.allFiles ?? [])
-  }, [directory])
-
-  useEffect(() => {
-    setProject(project)
-  }, [project])
-
-  function showRunPlan(): void {
-    setIsPlanOpen(true)
+    if (isFalse(data.ok)) {
+      setState(EnumPlanState.Failed)
+      setActivePlan(undefined)
+    } else if (isAllTasksCompleted(data.tasks)) {
+      setState(EnumPlanState.Finished)
+      setActivePlan(undefined)
+    } else {
+      setState(EnumPlanState.Applying)
+    }
   }
 
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
 
   return (
     <Container.Page>
-      <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold text-primary-500">
-            <span className="inline-block">/</span>
-            {project?.name}
-          </h3>
-          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
-          <Button
-            size={EnumSize.sm}
-            variant={EnumVariant.Neutral}
-          >
-            {isActivePageEditor ? (
-              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
-            ) : (
-              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
-            )}
-          </Button>
-        </div>
-        {isActivePageEditor && (
-          <div className="px-3 flex items-center min-w-[10rem] justify-end">
-            <RunPlan showRunPlan={showRunPlan} />
-            {activePlan != null && <ActivePlan plan={activePlan} />}
+      <IDEProvider>
+        <PlanSidebar />
+        <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
+          <div className="px-3 flex items-center whitespace-nowrap">
+            <h3 className="font-bold text-primary-500">
+              <span className="inline-block">/</span>
+              {project?.name}
+            </h3>
+            <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Neutral}
+            >
+              {isActivePageEditor ? (
+                <Link to={EnumRoutes.IdeDocs}>Docs</Link>
+              ) : (
+                <Link to={EnumRoutes.IdeEditor}>Editor</Link>
+              )}
+            </Button>
           </div>
-        )}
-      </div>
-      <Divider />
-      <Outlet />
+          {isActivePageEditor && (
+            <div className="px-3 flex items-center min-w-[10rem] justify-end">
+              <RunPlan />
+              <Suspense>
+                {activePlan != null && <ActivePlan plan={activePlan} />}
+              </Suspense>
+              <ReportErrors />
+            </div>
+          )}
+        </div>
+        <Divider />
+        <Outlet />
+      </IDEProvider>
     </Container.Page>
   )
+}
+
+function isAllTasksCompleted(tasks: PlanTasks = {}): boolean {
+  return Object.values(tasks).every(t => t.completed === t.total)
 }

@@ -1,18 +1,17 @@
 import { Transition, Dialog } from '@headlessui/react'
 import { Fragment } from 'react'
 
-interface PropsModalDrawer extends React.HTMLAttributes<HTMLElement> {
-  show: boolean
-  onClose?: () => void
-  afterLeave?: () => void
-}
-
 export default function ModalDrawer({
   show,
   children,
   afterLeave,
   onClose = () => undefined,
-}: PropsModalDrawer): JSX.Element {
+}: {
+  show: boolean
+  children: React.ReactNode
+  onClose?: () => void
+  afterLeave?: () => void
+}): JSX.Element {
   return (
     <Transition
       appear

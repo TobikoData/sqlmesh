@@ -89,7 +89,7 @@ def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expressio
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
     index = self._index
-    field = self._parse_primary() or self._parse_function({}) or self._parse_id_var()
+    field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
     if isinstance(field, exp.Func):
         macro_name = field.name.upper()
@@ -98,12 +98,11 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
             return None
 
         if isinstance(field, exp.Anonymous):
-            name = field.name.upper()
-            if name == "DEF":
+            if macro_name == "DEF":
                 return self.expression(
                     MacroDef, this=field.expressions[0], expression=field.expressions[1]
                 )
-            if name == "SQL":
+            if macro_name == "SQL":
                 into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
 
@@ -256,6 +255,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
                         props = None
+
                     value = self.expression(
                         ModelKind,
                         this=kind.value,
@@ -526,7 +526,7 @@ def pandas_to_sql(
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     batch_size: int = 0,
     alias: str = "t",
-) -> t.Generator[exp.Select, None, None]:
+) -> t.Iterator[exp.Select]:
     """Convert a pandas dataframe into a VALUES sql statement.
 
     Args:

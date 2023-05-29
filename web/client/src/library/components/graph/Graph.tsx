@@ -61,6 +61,7 @@ import { useLineageFlow } from './context'
 import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
+import { type ErrorIDE } from '~/library/pages/ide/context'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -261,7 +262,7 @@ const ModelColumn = memo(function ModelColumn({
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
   removeEdges: (columnId: string) => void
-  handleError?: (error: Error) => void
+  handleError?: (error: ErrorIDE) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
       [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
@@ -302,7 +303,7 @@ const ModelColumn = memo(function ModelColumn({
         })
         .catch(error => {
           setIsError(true)
-          handleError?.(error as Error)
+          handleError?.(error)
         })
         .finally(() => {
           setIsFetching(false)
@@ -678,6 +679,8 @@ function ModelColumnLineage({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeOrigin={[0.5, 0.5]}
+          minZoom={0.1}
+          maxZoom={1.5}
           fitView
         >
           <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />

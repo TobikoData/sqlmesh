@@ -1,15 +1,16 @@
-import Container from '@components/container/Container'
-import { useStoreContext } from '@context/context'
 import { Outlet, useLocation, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { isArrayNotEmpty } from '@utils/index'
+import { useStoreContext } from '@context/context'
+import { EnumPlanApplyType, useStorePlan } from '@context/plan'
+import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import Container from '@components/container/Container'
 import SplitPane from '@components/splitPane/SplitPane'
 import Search from './Search'
 import SourceList from './SourceList'
 import TasksOverview from '@components/tasksOverview/TasksOverview'
-import { EnumPlanApplyType, useStorePlan } from '@context/plan'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 
-export default function Docs(): JSX.Element {
+export default function PageDocs(): JSX.Element {
   const location = useLocation()
   const { modelName } = useParams()
 
@@ -45,11 +46,13 @@ export default function Docs(): JSX.Element {
   return (
     <Container.Page>
       <div className="p-4 flex flex-col w-full h-full overflow-hidden">
-        <Search
-          models={filtered}
-          search={search}
-          setSearch={setSearch}
-        />
+        {isArrayNotEmpty(filtered) && (
+          <Search
+            models={filtered}
+            search={search}
+            setSearch={setSearch}
+          />
+        )}
         {activePlan != null && (
           <div className="w-full p-4">
             <TasksOverview tasks={activePlan.tasks}>
@@ -82,11 +85,13 @@ export default function Docs(): JSX.Element {
           snapOffset={0}
         >
           <div className="py-4 w-full">
-            <SourceList
-              models={models}
-              filter={filter}
-              setFilter={setFilter}
-            />
+            {models.size > 0 && (
+              <SourceList
+                models={models}
+                filter={filter}
+                setFilter={setFilter}
+              />
+            )}
           </div>
           <div className="w-full">
             <Outlet />

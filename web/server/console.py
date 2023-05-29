@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import traceback
 import typing as t
 import unittest
 
@@ -10,6 +9,7 @@ from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
+from web.server.exceptions import ApiException
 from web.server.sse import Event
 
 
@@ -102,11 +102,15 @@ class ApiConsole(TerminalConsole):
         self.queue.put_nowait(self._make_event(msg))
         self.stop_snapshot_progress()
 
-    def log_exception(self, exc: Exception) -> None:
+    def log_exception(self) -> None:
         """Log an exception."""
         self.queue.put_nowait(
             self._make_event(
-                {"details": str(exc), "traceback": traceback.format_exc()}, event="errors", ok=False
+                event="errors",
+                data=ApiException(
+                    message="Tasks failed to a run",
+                    origin="API -> console -> log_exception",
+                ).to_dict(),
             )
         )
 
