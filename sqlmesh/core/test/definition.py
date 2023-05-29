@@ -18,6 +18,7 @@ class TestError(SQLMeshError):
 
 
 class ModelTest(unittest.TestCase):
+    __test__ = False
     view_names: list[str] = []
 
     def __init__(
@@ -156,7 +157,9 @@ class SqlModelTest(ModelTest):
             engine_adapter=engine_adapter,
         )
         # For tests we just use the model name for the table reference and we don't want to expand
-        mapping = {name: _test_fixture_name(name) for name in models}
+        mapping = {
+            name: _test_fixture_name(name) for name in models.keys() | body.get("inputs", {}).keys()
+        }
         if mapping:
             self.query = exp.replace_tables(self.query, mapping)
 
@@ -174,8 +177,11 @@ class SqlModelTest(ModelTest):
                     _raise_error(
                         f"No CTE named {cte_name} found in model {self.model.name}", self.path
                     )
+                cte_query = self.ctes[cte_name].this
+                for alias, cte in self.ctes.items():
+                    cte_query = cte_query.with_(alias, cte.this)
                 expected_df = pd.DataFrame.from_records(value["rows"])
-                actual_df = self.execute(self.ctes[cte_name].this)
+                actual_df = self.execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
     def runTest(self) -> None:
