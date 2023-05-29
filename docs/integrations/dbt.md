@@ -88,7 +88,7 @@ For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja blo
 > {% endif %}
 ```
 
-`{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalents of SQLMesh's `@start_ds` and `@end_ds` predefined time macro variables. See all [predefined time variables](../concepts/macros.md#predefined-variables) available in jinja.
+`{{ start_ds }}` and `{{ end_ds }}` are the jinja equivalents of SQLMesh's `@start_ds` and `@end_ds` predefined time macro variables. See all [predefined time variables](../concepts/macros/macro_variables.md) available in jinja.
 
 ### Incremental model configuration
 
