@@ -67,12 +67,19 @@ import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { Popover, Transition } from '@headlessui/react'
+import CodeEditor, {
+  useSQLMeshModelExtensions,
+} from '@components/editor/EditorCode'
+import { EnumFileExtensions } from '@models/file'
+import { SqlMeshExpression } from '@components/editor/extensions'
+import { type Extension } from '@codemirror/state'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
   columnType,
   columnDescription,
   className,
+  expression,
   source,
   disabled = false,
 }: {
@@ -80,9 +87,24 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnType: string
   columnDescription?: string
   source?: string
+  expression?: string
   disabled?: boolean
   className?: string
 }): JSX.Element {
+  const { handleClickModel } = useLineageFlow()
+
+  const extensions = useMemo(
+    () =>
+      [expression != null && SqlMeshExpression(expression)].filter(
+        Boolean,
+      ) as Extension[],
+    [expression],
+  )
+
+  const modelExtensions = useSQLMeshModelExtensions(undefined, model => {
+    handleClickModel?.(model.name)
+  }).concat(extensions)
+
   const [isShowing, setIsShowing] = useState(false)
 
   return (
@@ -94,6 +116,9 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
           }}
           onMouseLeave={() => {
             setIsShowing(false)
+          }}
+          onClick={e => {
+            e.stopPropagation()
           }}
           className="relative flex"
         >
@@ -111,30 +136,19 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                 leaveTo="opacity-0 translate-y-1"
               >
                 <Popover.Panel className="fixed bottom-0 left-10 z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20">
-                  <div
-                    onClick={e => {
-                      e.stopPropagation()
-                    }}
-                    onMouseEnter={e => {
-                      e.stopPropagation()
-
-                      const elCiontaiter = e.target as HTMLElement
-                      const elSource = elCiontaiter.querySelector(
-                        '#source',
-                      ) as HTMLElement
-
-                      elSource != null &&
-                        elCiontaiter.scroll({
-                          top: elSource.offsetTop - 64,
-                          left: 0,
-                          behavior: 'smooth',
-                        })
-                    }}
-                    className="overflow-auto scrollbar scrollbar--vertical-md scrollbar--horizontal-md max-h-[25vh] max-w-[30rem] p-4"
-                    dangerouslySetInnerHTML={{
-                      __html: `<pre class='lineage__column-source inline-block w-full h-full'>${source}</pre>`,
-                    }}
-                  ></div>
+                  <CodeEditor.SQLMeshDialect
+                    content={source}
+                    type={EnumFileExtensions.SQL}
+                    className="scrollbar--vertical-md scrollbar--horizontal-md !h-[25vh] !max-w-[30rem]"
+                  >
+                    {({ extensions, content }) => (
+                      <CodeEditor
+                        extensions={extensions.concat(modelExtensions)}
+                        content={content}
+                        className="text-xs"
+                      />
+                    )}
+                  </CodeEditor.SQLMeshDialect>
                 </Popover.Panel>
               </Transition>
             </>
@@ -148,7 +162,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
         )}
       >
         <span>{columnName}</span>
-        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
+        <span className="inline-block text-neutral-500 dark:text-neutral-300 ml-4">
           {columnType}
         </span>
       </div>
@@ -264,13 +278,16 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             title={
               type === 'python'
                 ? 'Column lineage disabled for Python models'
-                : 'SQL Model'
+                : type === 'cte'
+                ? 'CTE'
+                : 'SQL Query'
             }
             className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
             {type === 'python' && 'Python'}
             {type === 'sql' && 'SQL'}
             {type === 'seed' && 'Seed'}
+            {type === 'cte' && 'CTE'}
           </span>
         )}
         <span
@@ -314,6 +331,7 @@ const ModelColumn = memo(function ModelColumn({
   selectManually,
   withHandles = false,
   source,
+  expression,
 }: {
   id: string
   nodeId: string
@@ -324,6 +342,7 @@ const ModelColumn = memo(function ModelColumn({
   hasRight?: boolean
   withHandles?: boolean
   source?: string
+  expression?: string
   getColumnLineage: (
     columnName: string,
   ) => Promise<
@@ -385,7 +404,9 @@ const ModelColumn = memo(function ModelColumn({
   return (
     <div
       className={clsx(
-        isActive && 'bg-secondary-10 dark:bg-primary-900',
+        isActive
+          ? 'bg-secondary-10 dark:bg-primary-900 text-secondary-500 dark:text-neutral-100'
+          : 'text-neutral-500 dark:text-neutral-100',
         withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
         className,
       )}
@@ -415,6 +436,7 @@ const ModelColumn = memo(function ModelColumn({
               columnName={column.name}
               columnType={column.type}
               disabled={disabled}
+              expression={expression}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -428,6 +450,7 @@ const ModelColumn = memo(function ModelColumn({
             columnType={column.type}
             disabled={disabled}
             source={source}
+            expression={expression}
             className={clsx(
               isError && 'text-danger-500',
               isEmpty && 'text-neutral-400 dark:text-neutral-600',
@@ -459,6 +482,7 @@ const ModelColumns = memo(function ModelColumns({
   const queryClient = useQueryClient()
 
   const {
+    models,
     connections,
     isActiveColumn,
     setConnections,
@@ -470,6 +494,7 @@ const ModelColumns = memo(function ModelColumns({
     hasActiveEdge,
     addActiveEdges,
     lineage,
+    setShouldRecalculate,
   } = useLineageFlow()
 
   const [filter, setFilter] = useState('')
@@ -520,6 +545,10 @@ const ModelColumns = memo(function ModelColumns({
     function updateColumnLineage(
       columnLineage: Record<string, Record<string, LineageColumn>> = {},
     ): void {
+      console.log()
+      setShouldRecalculate(
+        Object.keys(columnLineage).some(modelName => !models.has(modelName)),
+      )
       setLineage(lineage =>
         mergeLineageWithColumns(structuredClone(lineage), columnLineage),
       )
@@ -599,6 +628,11 @@ const ModelColumns = memo(function ModelColumns({
                   ? lineage?.[nodeId]?.columns?.[column.name]?.source
                   : undefined
               }
+              expression={
+                withSource
+                  ? lineage?.[nodeId]?.columns?.[column.name]?.expression
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -654,6 +688,11 @@ const ModelColumns = memo(function ModelColumns({
                 ? lineage?.[nodeId]?.columns?.[column.name]?.source
                 : undefined
             }
+            expression={
+              withSource
+                ? lineage?.[nodeId]?.columns?.[column.name]?.expression
+                : undefined
+            }
           />
         ))}
       </div>
@@ -689,7 +728,8 @@ function ModelColumnLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { withColumns, hasActiveEdge, models, lineage } = useLineageFlow()
+  const { withColumns, hasActiveEdge, models, lineage, shouldRecalculate } =
+    useLineageFlow()
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -706,12 +746,12 @@ function ModelColumnLineage({
       lineage,
       highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
       models,
-      nodes,
-      edges,
+      nodes: shouldRecalculate ? [] : nodes,
+      edges: shouldRecalculate ? [] : edges,
       model,
       withColumns,
     })
-  }, [lineage, models, model, withColumns])
+  }, [lineage, models, model, withColumns, shouldRecalculate])
 
   useEffect(() => {
     setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
@@ -742,9 +782,9 @@ function ModelColumnLineage({
       }
 
       const isTableSource =
-        nodesAndEdges.nodesMap[edge.source]?.data.type === 'table'
+        nodesAndEdges.nodesMap[edge.source]?.data.type === 'cte'
       const isTableTarget =
-        nodesAndEdges.nodesMap[edge.target]?.data.type === 'table'
+        nodesAndEdges.nodesMap[edge.target]?.data.type === 'cte'
 
       if (isTableSource) {
         if (isFalse(visibility.has(edge.source))) {
@@ -774,7 +814,7 @@ function ModelColumnLineage({
     setEdges(newEdges)
     setNodes(() =>
       nodes.map(node => {
-        if (node.data.type === 'table') {
+        if (node.data.type === 'cte') {
           node.hidden = visibility.get(node.id)
         }
 
@@ -869,26 +909,27 @@ function ModelNode({
   )
   const splat = data.highlightedNodes?.['*']
   const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
-  const isTable = data.type === 'table'
+  const isCTE = data.type === 'cte'
   const showColumns = withColumns && isArrayNotEmpty(columns)
+  const type = isCTE ? 'cte' : model?.type
 
   return (
     <div
       className={clsx(
         'text-xs font-semibold rounded-xl shadow-lg relative z-1',
         highlighted == null ? splat : highlighted,
-        isTable ? '' : 'text-secondary-500 dark:text-primary-100',
+        isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
       )}
     >
       <div className="drag-handle">
         <ModelNodeHeaderHandles
           id={id}
-          type={model?.type}
+          type={type}
           label={data.label}
           className={clsx(
             'py-2',
             showColumns ? 'rounded-t-lg' : 'rounded-lg',
-            isTable ? 'bg-neutral-600' : 'bg-secondary-100 dark:bg-primary-900',
+            isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
           )}
           hasLeft={sourcePosition === Position.Left}
           hasRight={targetPosition === Position.Right}
@@ -908,9 +949,7 @@ function ModelNode({
           <div
             className={clsx(
               'rounded-b-lg py-1',
-              isTable
-                ? 'bg-neutral-600'
-                : 'bg-secondary-100 dark:bg-primary-900',
+              isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
             )}
           ></div>
         </>

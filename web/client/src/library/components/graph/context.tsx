@@ -19,6 +19,8 @@ interface LineageFlow {
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
   connections: Map<string, Connections>
+  shouldRecalculate: boolean
+  setShouldRecalculate: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
   hasActiveEdge: (edge?: string | null) => boolean
   addActiveEdges: (edges: string[]) => void
@@ -55,6 +57,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   isActiveColumn: () => false,
   setConnections: () => {},
   connections: new Map(),
+  shouldRecalculate: false,
+  setShouldRecalculate: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -77,6 +81,7 @@ export default function LineageFlowProvider({
   const [connections, setConnections] = useState<Map<string, Connections>>(
     new Map(),
   )
+  const [shouldRecalculate, setShouldRecalculate] = useState(false)
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -153,6 +158,8 @@ export default function LineageFlowProvider({
         setManuallySelectedColumn,
         handleError,
         isActiveColumn,
+        shouldRecalculate,
+        setShouldRecalculate,
       }}
     >
       {children}

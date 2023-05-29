@@ -28,12 +28,7 @@ def _get_node_source(node: Node, dialect: str) -> str:
     if isinstance(node.expression, exp.Table):
         source = f"SELECT {node.name} FROM {node.expression.this}"
     else:
-        source = node.source.transform(
-            lambda n: exp.Tag(this=n, prefix='<b id="source">', postfix="</b>")
-            if n is node.expression
-            else n,
-            copy=False,
-        ).sql(pretty=True, dialect=dialect)
+        source = node.source.sql(pretty=True, dialect=dialect)
     return source
 
 
@@ -82,6 +77,7 @@ async def column_lineage(
         dialect = context.models[table].dialect if table in context.models else ""
         graph[table] = {
             column_name: LineageColumn(
+                expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
                 models=_process_downstream(node.downstream),
             )

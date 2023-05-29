@@ -77,9 +77,11 @@ function CodeEditorSQLMesh({
   type,
   content = '',
   children,
+  className,
 }: {
   type: FileExtensions
   content?: string
+  className?: string
   children: (options: {
     extensions: Extension[]
     content: string
@@ -141,7 +143,7 @@ function CodeEditorSQLMesh({
   }, [content])
 
   return (
-    <div className="flex w-full h-full">
+    <div className={clsx('flex w-full h-full', className)}>
       {children({ extensions, content })}
     </div>
   )
@@ -215,9 +217,7 @@ export function useSQLMeshModelExtensions(
   const files = useStoreFileTree(s => s.files)
 
   const extensions = useMemo(() => {
-    if (path == null) return []
-
-    const model = models.get(path)
+    const model = path == null ? undefined : models.get(path)
     const columns =
       lineage == null
         ? new Set<string>()
