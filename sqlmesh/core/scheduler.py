@@ -281,7 +281,7 @@ class Scheduler:
 
 
 def compute_interval_params(
-    snasphots: t.Iterable[Snapshot],
+    snapshots: t.Iterable[Snapshot],
     *,
     intervals: t.Iterable[SnapshotIntervals],
     start: TimeLike,
@@ -313,8 +313,8 @@ def compute_interval_params(
 
     snapshots_to_batches = {}
 
-    for snapshot in Snapshot.hydrate_with_intervals_by_version(snasphots, intervals, is_dev=is_dev):
-        model_start_dt = max(start_date(snapshot, snasphots) or start_dt, start_dt)
+    for snapshot in Snapshot.hydrate_with_intervals_by_version(snapshots, intervals, is_dev=is_dev):
+        model_start_dt = max(start_date(snapshot, snapshots) or start_dt, start_dt)
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
             for s, e in snapshot.missing_intervals(model_start_dt, end, latest)

@@ -452,7 +452,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         all_snapshots = all_snapshots or self._get_snapshots_with_same_version(snapshots)
 
         if logger.isEnabledFor(logging.INFO):
-            snapshot_ids = ", ".join(str(s.snapshot_id) for s in snapshots)
+            snapshot_ids = ", ".join(str(s.snapshot_id) for s in all_snapshots)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
         self.engine_adapter.insert_append(
@@ -782,7 +782,11 @@ def _intervals_to_df(
         [
             _interval_to_df(
                 snapshot,
-                *snapshot.inclusive_exclusive(start, end),
+                *(
+                    snapshot.get_remove_interval(start, end)
+                    if is_removed
+                    else snapshot.inclusive_exclusive(start, end)
+                ),
                 is_dev=is_dev,
                 is_removed=is_removed,
             )

@@ -1,5 +1,6 @@
 import datetime
 import typing as t
+from collections import Counter
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -7,6 +8,7 @@ from sqlglot.expressions import DataType
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import AutoCategorizationMode
+from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import (
@@ -17,14 +19,14 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
 )
-from sqlmesh.core.plan import Plan
+from sqlmesh.core.plan import Plan, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_ds, yesterday
+from sqlmesh.utils.date import TimeLike, to_date, to_ds, to_timestamp, yesterday
 
 
 @pytest.fixture(autouse=True)
@@ -656,15 +658,47 @@ def test_incremental_time_self_reference(sushi_context: Context):
     assert df.iloc[0, 0] == to_ds("1 week ago")
     df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")
     assert df.iloc[0, 0] == to_ds("yesterday")
-    results = sushi_context.engine_adapter.fetchdf(
-        "SELECT ds, count(*) FROM sushi.customer_revenue_lifetime group by 1 order by 2 desc, 1 desc"
-    ).values
+    query_get_date_and_count = "SELECT ds, count(*) AS the_count FROM sushi.customer_revenue_lifetime group by 1 order by 2 desc, 1 desc"
+    results = sushi_context.engine_adapter.fetchdf(query_get_date_and_count).to_dict()
     # Validate that both rows increase over time and all days are present
-    assert len(results) == 7
-    assert [x[0] for x in results] == [
+    assert len(results["ds"]) == 7
+    assert list(results["ds"].values()) == [
         to_ds(yesterday() - datetime.timedelta(days=x)) for x in range(7)
     ]
-    # TODO: Add a restatement test
+    plan = sushi_context.plan(
+        restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],
+        no_prompts=True,
+        start="1 week ago",
+        end="5 days ago",
+    )
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.customer_revenue_lifetime",
+            intervals=[
+                (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
+                for x in reversed(range(7))
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.customer_revenue_by_day",
+            intervals=[
+                (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
+                for x in reversed(range(5, 7))
+            ],
+        ),
+    ]
+    sushi_context.console = mocker.Mock(spec=Console)
+    plan.apply()
+    num_batch_calls = Counter(
+        [x[0][0] for x in sushi_context.console.update_snapshot_progress.call_args_list]  # type: ignore
+    )
+    # Validate that we made 7 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
+    assert num_batch_calls == {
+        "sushi.customer_revenue_lifetime": 7,
+        "sushi.customer_revenue_by_day": 1,
+    }
+    # Validate that the results are the same as before the restate
+    assert results == sushi_context.engine_adapter.fetchdf(query_get_date_and_count).to_dict()
 
 
 def initial_add(context: Context, environment: str):

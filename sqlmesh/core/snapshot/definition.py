@@ -551,13 +551,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: Start interval to remove.
             end: End interval to remove.
         """
-        interval = self.inclusive_exclusive(start, end)
+        interval = self.get_remove_interval(start, end)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
-    def inclusive_exclusive(
-        self, start: TimeLike, end: TimeLike, strict: bool = True
-    ) -> t.Tuple[int, int]:
+    def get_remove_interval(self, start: TimeLike, end: TimeLike) -> Interval:
+        """Remove an interval from the snapshot.
+
+        Args:
+            start: Start interval to remove.
+            end: End interval to remove.
+        """
+        end = now() if self.model_kind_name.depends_on_past else end
+        return self.inclusive_exclusive(start, end)
+
+    def inclusive_exclusive(self, start: TimeLike, end: TimeLike, strict: bool = True) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
@@ -621,6 +629,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         latest = make_inclusive_end(latest or now())
+        end = make_inclusive_end(now()) if self.model_kind_name.depends_on_past else end
         missing = []
 
         start_dt, end_dt = (
@@ -1034,7 +1043,9 @@ def format_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> st
 
 
 def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:
-    """Remove an interval from a list of intervals.
+    """Remove an interval from a list of intervals. Assumes that the correct start and end intervals have been
+    passed in. Use `get_remove_interval` method of `Snapshot` to get the correct start/end given the snapshot's
+    information.
 
     Args:
         intervals: A list of exclusive intervals.
