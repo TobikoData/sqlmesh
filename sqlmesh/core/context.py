@@ -366,7 +366,9 @@ class Context(BaseContext):
             skip_janitor: Whether to skip the janitor task.
         """
         environment = environment or c.PROD
-        self.scheduler(environment=environment).run(environment, start, end, latest)
+        self.scheduler(environment=environment).run(
+            environment, start, end, latest, is_restatement=False
+        )
 
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()

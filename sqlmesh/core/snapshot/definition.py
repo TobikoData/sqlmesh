@@ -609,7 +609,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 self.add_interval(start, end, is_dev=True)
 
     def missing_intervals(
-        self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
+        self,
+        start: TimeLike,
+        end: TimeLike,
+        latest: t.Optional[TimeLike] = None,
+        is_restatement: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -621,6 +625,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             latest: The date/time to use for latest (inclusive)
+            is_restatement: Whether we are checking intervals within the context of a plan restatement.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -629,7 +634,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         latest = make_inclusive_end(latest or now())
-        end = make_inclusive_end(now()) if self.model_kind_name.depends_on_past else end
+        end = (
+            make_inclusive_end(now())
+            if self.model_kind_name.depends_on_past and is_restatement
+            else end
+        )
         missing = []
 
         start_dt, end_dt = (

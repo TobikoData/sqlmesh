@@ -70,6 +70,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
+        is_restatement: bool = False,
     ) -> SnapshotToBatches:
         """Returns a list of snapshot batches to evaluate.
 
@@ -79,6 +80,7 @@ class Scheduler:
             latest: The latest datetime to use for non-incremental queries.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
+            is_restatement: Indicates if the batches are being found within the context of a restatement
         """
         validate_date_range(start, end)
 
@@ -88,6 +90,7 @@ class Scheduler:
             end,
             latest,
             is_dev=is_dev,
+            is_restatement=is_restatement,
         )
 
     def evaluate(
@@ -149,6 +152,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        is_restatement: bool = False,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -165,7 +169,7 @@ class Scheduler:
 
         is_dev = environment != c.PROD
         latest = latest or now()
-        batches = self.batches(start, end, latest, is_dev=is_dev)
+        batches = self.batches(start, end, latest, is_dev=is_dev, is_restatement=is_restatement)
         dag = self._dag(batches)
 
         visited = set()
@@ -209,6 +213,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
+        is_restatement: bool = False,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -226,6 +231,7 @@ class Scheduler:
             end: End of the interval.
             latest: The latest datetime to use for non-incremental queries.
             is_dev: Indicates whether the evaluation happens in the development mode.
+            is_restatement: Indicates if we are finding interval_params within the context of a restatement.
 
         Returns:
             A list of tuples containing all snapshots needing to be run with their associated interval params.
@@ -237,6 +243,7 @@ class Scheduler:
             end=end or now(),
             latest=latest or now(),
             is_dev=is_dev,
+            is_restatement=is_restatement,
         )
 
     def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
@@ -288,6 +295,7 @@ def compute_interval_params(
     end: TimeLike,
     latest: TimeLike,
     is_dev: bool,
+    is_restatement: bool,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -305,6 +313,7 @@ def compute_interval_params(
         start: Start of the interval.
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
+        is_restatement: Indicates if we are finding interval parameters within the context of a restatement
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
@@ -317,7 +326,9 @@ def compute_interval_params(
         model_start_dt = max(start_date(snapshot, snapshots) or start_dt, start_dt)
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
-            for s, e in snapshot.missing_intervals(model_start_dt, end, latest)
+            for s, e in snapshot.missing_intervals(
+                model_start_dt, end, latest, is_restatement=is_restatement
+            )
         ]
 
     return _batched_intervals(snapshots_to_batches)

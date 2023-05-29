@@ -229,7 +229,9 @@ def test_missing_intervals_full_history(make_snapshot):
     snapshot.add_interval(to_date("1 week ago"), to_date("1 day ago"))
     assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == []
     snapshot.remove_interval(to_date("1 week ago"), to_date("1 week ago"))
-    assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 week ago")) == [
+    assert snapshot.missing_intervals(
+        to_date("1 week ago"), to_date("1 week ago"), is_restatement=True
+    ) == [
         (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
         for x in reversed(range(7))
     ]

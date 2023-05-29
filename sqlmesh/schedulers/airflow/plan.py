@@ -64,6 +64,7 @@ def create_plan_dag_spec(
             end=end,
             latest=end,
             is_dev=request.is_dev,
+            is_restatement=bool(request.restatements),
         )
     else:
         backfill_batches = {}
