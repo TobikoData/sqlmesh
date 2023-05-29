@@ -182,8 +182,10 @@ FROM table
 
 The double quotes around `"'item_id'"` signal to SQLMesh that it is not a column name.
 
+Some SQL dialects interpret double and single quotes different. We could replace single quoted `'item_id'` with double quoted `"item_id"` in the previous example by switching the placement of quotes in the macro function call. Instead of `alias("'item_id'", 'item_id2')` we would use `alias('"item_id"', 'item_id2')`.
+
 ## Mixing macro systems
 
 SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
 
-[Predefined SQLMesh macro variables](./macro_variables.md) can be used alongside Jinja macros, but they cannot be passed as arguments to a user-defined Jinja macro function. [User-defined SQLMesh macro variables](./sqlmesh_macros.md#user-defined-variables) cannot be used in a model containing Jinja functions.
+[Predefined SQLMesh macro variables](./macro_variables.md) can be used in a query containing user-defined Jinja variables and functions. However, predefined variables passed as arguments to a user-defined Jinja macro function must use the Jinja curly brace syntax `{{ start_ds }}` instead of the SQLMesh macro `@` prefix syntax `@start_ds`. Note that curly brace syntax may require quoting to generate the equivalent of the `@` syntax.
