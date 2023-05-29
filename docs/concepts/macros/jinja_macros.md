@@ -68,9 +68,9 @@ The example renders to this after SQLMesh processing:
 
 ```sql linenums="1"
 SELECT
-    CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END as vehicle_car,
-    CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END as vehicle_truck,
-    CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END as vehicle_bus
+    CASE WHEN user_vehicle = 'car' THEN 1 ELSE 0 END AS vehicle_car,
+    CASE WHEN user_vehicle = 'truck' THEN 1 ELSE 0 END AS vehicle_truck,
+    CASE WHEN user_vehicle = 'bus' THEN 1 ELSE 0 END AS vehicle_bus
 FROM table
 ```
 
@@ -92,7 +92,7 @@ The rendered query would be the same as before.
 
 if statements allow you to take an action (or not) based on some condition. 
 
-Jinja if statements begin with `{% if ... %}` and ends with `{% endif %}`. The starting `if` statement must contain code that evaluates to `True` or `False`. For example, all of `True`, `1 + 1 == 2`, and `'a' in ['a', 'b']` evaluate to `True`.
+Jinja if statements begin with `{% if ... %}` and end with `{% endif %}`. The starting `if` statement must contain code that evaluates to `True` or `False`. For example, all of `True`, `1 + 1 == 2`, and `'a' in ['a', 'b']` evaluate to `True`.
 
 As an example, you might want a model to only include a column if the model was being run for testing purposes. We can do that by setting a variable indicating whether it's a testing run that determines whether the query includes `testing_column`:
 
@@ -156,7 +156,7 @@ After processing, it would render to this:
 ```sql linenums="1"
 SELECT
     item_id,
-    item_id as item_id2
+    item_id AS item_id2
 FROM table
 ```
 
@@ -176,7 +176,7 @@ After processing, it would render to this:
 ```sql linenums="1"
 SELECT
     item_id,
-    'item_id' as item_id2
+    'item_id' AS item_id2
 FROM table
 ```
 
@@ -184,6 +184,6 @@ The double quotes around `"'item_id'"` signal to SQLMesh that it is not a column
 
 ## Mixing macro systems
 
-SQLMesh supports both Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
+SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
 
 [Predefined SQLMesh macro variables](./macro_variables.md) can be used alongside Jinja macros, but they cannot be passed as arguments to a user-defined Jinja macro function. [User-defined SQLMesh macro variables](./sqlmesh_macros.md#user-defined-variables) cannot be used in a model containing Jinja functions.

@@ -37,7 +37,7 @@ We describe SQLMesh's predefined variables below; user-defined macro variables a
 ## Predefined Variables
 SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime. 
 
-These variables are related to time and are comprised of a combination of prefixes (start, end, latest) and postfixes (date, ds, ts, epoch, millis).
+These variables are related to time and comprise a combination of prefixes (start, end, latest) and postfixes (date, ds, ts, epoch, millis).
 
 SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01. *All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
 
