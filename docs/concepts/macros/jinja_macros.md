@@ -182,7 +182,7 @@ FROM table
 
 The double quotes around `"'item_id'"` signal to SQLMesh that it is not a column name.
 
-Some SQL dialects interpret double and single quotes different. We could replace single quoted `'item_id'` with double quoted `"item_id"` in the previous example by switching the placement of quotes in the macro function call. Instead of `alias("'item_id'", 'item_id2')` we would use `alias('"item_id"', 'item_id2')`.
+Some SQL dialects interpret double and single quotes differently. We could replace the rendered single quoted `'item_id'` with double quoted `"item_id"` in the previous example by switching the placement of quotes in the macro function call. Instead of `alias("'item_id'", 'item_id2')` we would use `alias('"item_id"', 'item_id2')`.
 
 ## Mixing macro systems
 
