@@ -184,6 +184,6 @@ The double quotes around `"'item_id'"` signal to SQLMesh that it is not a column
 
 ## Mixing macro systems
 
-SQLMesh supports both Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
+SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
 
 [Predefined SQLMesh macro variables](./macro_variables.md) can be used alongside Jinja macros, but they cannot be passed as arguments to a user-defined Jinja macro function. [User-defined SQLMesh macro variables](./sqlmesh_macros.md#user-defined-variables) cannot be used in a model containing Jinja functions.
