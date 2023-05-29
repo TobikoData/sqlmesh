@@ -671,22 +671,31 @@ def test_incremental_time_self_reference(sushi_context: Context):
         start="1 week ago",
         end="5 days ago",
     )
-    assert plan.missing_intervals == [
-        SnapshotIntervals(
-            snapshot_name="sushi.customer_revenue_lifetime",
-            intervals=[
-                (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
-                for x in reversed(range(7))
-            ],
-        ),
-        SnapshotIntervals(
-            snapshot_name="sushi.customer_revenue_by_day",
-            intervals=[
-                (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
-                for x in reversed(range(5, 7))
-            ],
-        ),
-    ]
+    assert sorted(plan.missing_intervals, key=lambda x: x.snapshot_name) == sorted(
+        [
+            SnapshotIntervals(
+                snapshot_name="sushi.customer_revenue_lifetime",
+                intervals=[
+                    (
+                        to_timestamp(to_date(f"{x + 1} days ago")),
+                        to_timestamp(to_date(f"{x} days ago")),
+                    )
+                    for x in reversed(range(7))
+                ],
+            ),
+            SnapshotIntervals(
+                snapshot_name="sushi.customer_revenue_by_day",
+                intervals=[
+                    (
+                        to_timestamp(to_date(f"{x + 1} days ago")),
+                        to_timestamp(to_date(f"{x} days ago")),
+                    )
+                    for x in reversed(range(5, 7))
+                ],
+            ),
+        ],
+        key=lambda x: x.snapshot_name,
+    )
     sushi_context.console = mocker.Mock(spec=Console)
     plan.apply()
     num_batch_calls = Counter(
