@@ -190,3 +190,10 @@ def delete_cache(project_paths: str | t.List[str]) -> None:
             rmtree(path + "/.cache")
         except FileNotFoundError:
             pass
+
+
+@pytest.fixture(autouse=True)
+def sushi_env_var(monkeypatch) -> None:
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "url")
+    monkeypatch.setenv("SLACK_API_TOKEN", "token")
+    monkeypatch.setenv("SMTP_HOST", "host")

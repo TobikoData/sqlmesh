@@ -107,6 +107,9 @@ setup(
         "redshift": [
             "redshift_connector",
         ],
+        "slack": [
+            "slack_sdk",
+        ],
         "snowflake": [
             "snowflake-connector-python[pandas,secure-local-storage]",
         ],

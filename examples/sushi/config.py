@@ -9,10 +9,24 @@ from sqlmesh.core.config import (
     GatewayConfig,
     SparkConnectionConfig,
 )
+from sqlmesh.core.notification_target import (
+    BasicSMTPNotificationTarget,
+    NotificationStatus,
+    SlackApiNotificationTarget,
+    SlackWebhookNotificationTarget,
+)
 from sqlmesh.core.user import User, UserRole
 
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+
+
+class CustomSMTPNotificationTarget(BasicSMTPNotificationTarget):
+    def notify_run_failure(self, exc: Exception) -> None:
+        with open("/home/sqlmesh/sqlmesh.log", "r", encoding="utf-8") as f:
+            msg = f"{exc}\n\n{f.read()}"
+        subject = "SQLMesh Run Failed!"
+        self.send(notification_status=NotificationStatus.FAILURE, msg=msg, subject=subject)
 
 
 # An in memory DuckDB config.
@@ -53,5 +67,33 @@ airflow_config_docker = Config(  # type: ignore
 
 required_approvers_config = Config(
     default_connection=DuckDBConnectionConfig(),
-    users=[User(username="test", roles=[UserRole.REQUIRED_APPROVER])],
+    users=[
+        User(
+            username="test",
+            roles=[UserRole.REQUIRED_APPROVER],
+            notification_targets=[
+                SlackApiNotificationTarget(
+                    notify_on=["apply_start", "audit_failure"],
+                    token=os.getenv("SLACK_API_TOKEN"),
+                    channel="UXXXXXXXXX",  # User's Slack ID
+                ),
+            ],
+        )
+    ],
+    notification_targets=[
+        SlackWebhookNotificationTarget(
+            notify_on=["apply_start", "run_start"],
+            url=os.getenv("SLACK_WEBHOOK_URL"),
+        ),
+        CustomSMTPNotificationTarget(
+            notify_on=["run_failure"],
+            host=os.getenv("SMTP_HOST"),
+            user=os.getenv("SMTP_USER"),
+            password=os.getenv("SMTP_PASSWORD"),
+            sender="sushi@example.com",
+            recipients=[
+                "team@example.com",
+            ],
+        ),
+    ],
 )
