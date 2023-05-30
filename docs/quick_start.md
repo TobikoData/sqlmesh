@@ -3,6 +3,54 @@ In this quick start guide, you'll get up and running with SQLMesh's scaffold gen
 
 Before beginning, ensure that you meet all the [prerequisites](prerequisites.md) for using SQLMesh.
 
+## Project structure
+
+This project demonstrates key SQLMesh features by walking through the standard SQLMesh workflow on a simple data pipeline. This section describes the project structure and the SQLMesh concepts you will encounter as you work through it.
+
+The project structure is a three-model pipeline with a CSV file as the only data source: 
+
+```
+┌─────────────┐
+│seed_data.csv│
+└────────────┬┘
+             │
+            ┌▼─────────────┐
+            │seed_model.sql│
+            └─────────────┬┘
+                          │
+                         ┌▼────────────────────┐
+                         │incremental_model.sql│
+                         └────────────────────┬┘
+                                              │
+                                             ┌▼─────────────┐
+                                             │full_model.sql│
+                                             └──────────────┘
+```
+
+Although the pipeline is simple, the project touches on all the primary concepts needed to use SQLMesh productively. 
+
+### Plans
+
+SQLMesh's key actions are creating and applying *plans* to *environments*. 
+
+A [SQLMesh environment](./concepts/environments.md) is an isolated namespace containing models and the data they generated. The most important environment is `prod` ("production"), which consists of the databases behind the applications your business uses to operate each day. Environments other than `prod` provide a place where you can test and preview changes to model code before they go live and affect business operations. 
+
+A [SQLMesh plan](./concepts/plans.md) contains a comparison of one environment to another and the set of changes needed to bring them into alignment. For example, if a new SQL model was added, tested, and run in the `dev` environment, it would need to be added and run in the `prod` environment to bring them into alignment. SQLMesh identifies all such changes and classifies as either breaking and non-breaking. 
+
+Breaking changes are those that invalidate data already existing in an environment. For example, if a `WHERE` clause was added to a model in the `dev` environment, existing data created by that model in the `prod` environment are now invalid because they may contain rows that would be filtered out by the new `WHERE` clause. Other changes, like adding a new column to a model in `dev`, are non-breaking because all the existing data in `prod` are still valid to use - only new data must be added to align the environments.
+
+After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan.
+
+### Model kinds
+
+A plan's actions are determined by the [kinds](./concepts/models/model_kinds.md) of models the project uses. This example project uses three model kinds:
+
+1. [`SEED` models](./concepts/models/model_kinds.md#seed) read data from CSV files stored in the SQLMesh project directory every time the model is run.
+2. [`INCREMENTAL_BY_TIME_RANGE` models](./concepts/models/model_kinds.md#incremental_by_time_range) use a date/time data column to track which time intervals are affected by a plan and process only the affected intervals when a model is run.
+3. [`FULL` models](./concepts/models/model_kinds.md#full) fully refresh (rewrite) the data associated with the model every time the model is run.
+
+
+
 ## 1. Create a SQLMesh project
 Create a project directory and navigate to it, as in the following example:
 
@@ -38,25 +86,6 @@ This will create the directories and files that you can use to organize your SQL
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
-This example project structure is a three-model pipeline with a CSV acting as a source data file: 
-
-```
-┌─────────────┐
-│seed_data.csv│
-└────────────┬┘
-             │
-            ┌▼─────────────┐
-            │seed_model.sql│
-            └─────────────┬┘
-                          │
-                         ┌▼────────────────────┐
-                         │incremental_model.sql│
-                         └────────────────────┬┘
-                                              │
-                                             ┌▼─────────────┐
-                                             │full_model.sql│
-                                             └──────────────┘
-```
 
 To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Enter `y`:
 
