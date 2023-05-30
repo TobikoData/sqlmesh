@@ -117,7 +117,7 @@ class SnapshotEvaluator:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
                 if snapshot.is_incremental_by_time_range:
                     # A model's time_column could be None but
-                    # it shouldn't be for an incremental by time range model
+                    # it shouldn't be for time based loads
                     assert model.time_column
                     self.adapter.insert_overwrite_by_time_partition(
                         table_name,
