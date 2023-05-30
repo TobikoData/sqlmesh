@@ -93,8 +93,6 @@ def test_json(snapshot: Snapshot):
             "dialect": "spark",
             "name": "name",
             "partitioned_by": [],
-            "post": [],
-            "pre": [],
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
             "jinja_macros": {
@@ -356,6 +354,7 @@ each_macro = lambda: "test"
 
 
 def test_fingerprint(model: Model, parent_model: Model):
+    original_model = deepcopy(model)
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
@@ -384,6 +383,14 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint != fingerprint_from_model(model, models={})
+
+    model = SqlModel(
+        **{**original_model.dict(), "pre_statements": [parse_one("CREATE TABLE test")]}
+    )
+    assert original_fingerprint != fingerprint_from_model(model, models={})
+
+    model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
+    assert original_fingerprint != fingerprint_from_model(model, models={})
 
 
 def test_fingerprint_seed_model():

@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -7,8 +6,8 @@ from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
-from sqlmesh.core.context import Context, ExecutionContext
-from sqlmesh.core.hooks import hook
+from sqlmesh.core.context import Context
+from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelCache,
@@ -57,7 +56,9 @@ def test_load(assert_exp_eq):
             LEFT JOIN
             db.table t2
             ON
-                t1.a = t2.a
+                t1.a = t2.a;
+
+        DROP TABLE x;
     """,
         read="spark",
     )
@@ -80,9 +81,13 @@ def test_load(assert_exp_eq):
     assert model.macro_definitions == [
         parse_one("@DEF(x, 1)"),
     ]
-    assert list(model.sql_statements) == [
+    assert list(model.pre_statements) == [
+        parse_one("@DEF(x, 1)"),
         parse_one("CACHE TABLE x AS SELECT 1"),
         parse_one("ADD JAR 's3://my_jar.jar'", read="spark"),
+    ]
+    assert list(model.post_statements) == [
+        parse_one("DROP TABLE x"),
     ]
     assert model.depends_on == {"db.other_table"}
     assert_exp_eq(
@@ -104,6 +109,24 @@ def test_load(assert_exp_eq):
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
+
+
+def test_model_multiple_select_statements():
+    # Make sure the load_model raises an exception for model with multiple select statements.
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        SELECT 1, ds;
+        SELECT 2, ds;
+        """
+    )
+    with pytest.raises(ConfigError, match=r"^Only one SELECT.*"):
+        load_model(expressions)
 
 
 @pytest.mark.parametrize(
@@ -228,7 +251,7 @@ def test_no_query():
 
     with pytest.raises(ConfigError) as ex:
         load_model(expressions, path=Path("test_location"))
-    assert "must be a SELECT" in str(ex.value)
+    assert "have a SELECT" in str(ex.value)
 
 
 def test_partition_key_is_missing_in_query():
@@ -263,7 +286,7 @@ def test_json_serde():
         storage_format="parquet",
         partitioned_by=["a"],
         query=parse_one("SELECT a FROM tbl"),
-        expressions=[
+        pre_statements=[
             parse_one("@DEF(key, 'value')"),
         ],
     )
@@ -306,15 +329,9 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     )
 
 
-def test_model_hooks():
-    @hook()
-    def foo(
-        context: ExecutionContext,
-        start: datetime,
-        end: datetime,
-        latest: datetime,
-        **kwargs,
-    ) -> None:
+def test_model_pre_post_statements():
+    @macro()
+    def foo(**kwargs) -> None:
         pass
 
     expressions = d.parse(
@@ -323,23 +340,31 @@ def test_model_hooks():
             name db.table,
             dialect spark,
             owner owner_name,
-            pre [foo(), 'create table x{{ 1 + 1 }}'],
-            post [foo(bar='x',val=@this), "drop table x2"],
         );
 
+        @foo();
+
+        CREATE TABLE x{{ 1 + 1 }};
+
         SELECT 1 AS x;
+
+        @foo(bar='x', val=@this);
+
+        DROP TABLE x2;
     """
     )
     model = load_model(expressions)
 
-    expected_pre = [("foo", {}), d.parse("create table x{{ 1 + 1 }}")[0]]
-    assert model.pre == expected_pre
+    expected_pre = [*d.parse("@foo()"), *d.parse("CREATE TABLE x{{ 1 + 1 }};")]
+    assert model.pre_statements == expected_pre
 
     expected_post = [
-        ("foo", {"bar": d.parse("'x'")[0], "val": d.parse("@this")[0]}),
-        d.parse("drop table x2")[0],
+        *d.parse("@foo(bar='x', val=@this)"),
+        *d.parse("DROP TABLE x2;"),
     ]
-    assert model.post == expected_post
+    assert model.post_statements == expected_post
+
+    assert model.query == d.parse("SELECT 1 AS x")[0]
 
 
 def test_seed_hydration():

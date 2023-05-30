@@ -25,7 +25,6 @@ def get_files(
 ) -> models.Directory:
     """Get all project files."""
     ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    hook_directory_path = Path(c.HOOKS)
     macro_directory_path = Path(c.MACROS)
     test_directory_path = Path(c.TESTS)
 
@@ -58,9 +57,7 @@ def get_files(
                     )
                 else:
                     file_type = None
-                    if is_relative_to(relative_path, hook_directory_path):
-                        file_type = models.FileType.hooks
-                    elif is_relative_to(relative_path, macro_directory_path):
+                    if is_relative_to(relative_path, macro_directory_path):
                         file_type = models.FileType.macros
                     elif is_relative_to(relative_path, test_directory_path):
                         file_type = models.FileType.tests

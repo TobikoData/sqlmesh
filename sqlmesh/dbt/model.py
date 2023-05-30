@@ -191,6 +191,10 @@ class ModelConfig(BaseModelConfig):
         expressions = d.parse(self.sql_no_config, default_dialect=dialect)
         if not expressions:
             raise ConfigError(f"Model '{self.table_name}' must have a query.")
+        if len(expressions) > 1:
+            raise ConfigError(
+                f"Unexpected number of SQL statements ({len(expressions)}) in model '{self.table_name}'."
+            )
 
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
@@ -205,11 +209,20 @@ class ModelConfig(BaseModelConfig):
 
         return create_sql_model(
             self.model_name,
-            expressions[-1],
+            expressions[0],
             dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,
-            statements=expressions[0:-1],
+            pre_statements=[
+                exp
+                for hook in self.pre_hook
+                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
+            ],
+            post_statements=[
+                exp
+                for hook in self.post_hook
+                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
+            ],
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )

@@ -132,6 +132,22 @@ SELECT UDF(x)::int AS x
 FROM y
 ```
 
+Additional statements can also be provided **after** the main query, in which case they will run after each evaluation of the SELECT query.
+
+```sql linenums="1" hl_lines="5-7"
+MODEL (
+...
+);
+
+...
+
+SELECT UDF(x)::int AS x
+FROM y;
+
+-- Cleanup statements
+DROP TABLE temp_table;
+```
+
 ## Time column
 Models that are loaded incrementally require a time column to partition data.
 

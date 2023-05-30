@@ -7,7 +7,6 @@ from pathlib import Path
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, GatewayConfig
-from sqlmesh.core.hooks import HookRegistry
 from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
@@ -47,7 +46,7 @@ class DbtLoader(Loader):
         self._project = None
         return super().load(context, update_schemas)
 
-    def _load_scripts(self) -> t.Tuple[MacroRegistry, HookRegistry, JinjaMacroRegistry]:
+    def _load_scripts(self) -> t.Tuple[MacroRegistry, JinjaMacroRegistry]:
         macro_files = list(Path(self._context.path, "macros").glob("**/*.sql"))
 
         for file in macro_files:
@@ -56,12 +55,11 @@ class DbtLoader(Loader):
         # This doesn't do anything, the actual content will be loaded from the manifest
         return (
             UniqueKeyDict("macros"),
-            UniqueKeyDict("hooks"),
             JinjaMacroRegistry(),
         )
 
     def _load_models(
-        self, macros: MacroRegistry, hooks: HookRegistry, jinja_macros: JinjaMacroRegistry
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
 

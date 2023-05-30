@@ -19,6 +19,11 @@ def upper_case(evaluator: MacroEvaluator, expression: exp.Condition) -> str:
     return f"UPPER({expression} + 1)"
 
 
+@macro("noop")
+def noop(evaluator: MacroEvaluator):
+    return None
+
+
 @pytest.fixture
 def macro_evaluator() -> MacroEvaluator:
     return MacroEvaluator(
@@ -205,3 +210,7 @@ def test_ast_correctness(macro_evaluator):
 def test_macro_functions(macro_evaluator, assert_exp_eq, sql, expected, args):
     macro_evaluator.locals = args or {}
     assert_exp_eq(macro_evaluator.transform(parse_one(sql)), expected)
+
+
+def test_macro_returns_none(macro_evaluator):
+    assert macro_evaluator.transform(parse_one("@NOOP()")) is None

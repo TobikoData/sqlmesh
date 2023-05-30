@@ -52,7 +52,6 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.hooks import hook
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.model import Model
@@ -216,7 +215,6 @@ class Context(BaseContext):
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._jinja_macros = JinjaMacroRegistry()
-        self._hooks: UniqueKeyDict[str, hook] = UniqueKeyDict("hooks")
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
         self.gateway = gateway
@@ -342,7 +340,6 @@ class Context(BaseContext):
         """Load all files in the context's path."""
         with sys_path(*self.configs):
             project = self._loader.load(self, update_schemas)
-            self._hooks = project.hooks
             self._macros = project.macros
             self._models = project.models
             self._audits = project.audits
