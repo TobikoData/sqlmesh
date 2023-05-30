@@ -798,10 +798,10 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_embedded:
+        if snapshot.is_symbolic:
             continue
-
         view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+
         assert adapter.table_exists(view_name)
         assert select_all(
             snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter
