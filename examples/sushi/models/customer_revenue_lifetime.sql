@@ -5,8 +5,9 @@
 */
 MODEL (
   name sushi.customer_revenue_lifetime,
-  kind full_with_history (
-    time_column (ds, 'YYYY-MM-dd')
+  kind incremental_by_time_range (
+    time_column (ds, 'YYYY-MM-dd'),
+    batch_size 1
   ),
   owner jen,
   cron '@daily',

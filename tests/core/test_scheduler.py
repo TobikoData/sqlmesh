@@ -6,7 +6,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.model.kind import (
-    FullWithHistory,
+    IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     TimeColumn,
 )
@@ -199,30 +199,30 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     }
 
 
-def test_full_with_history_dag(mocker: MockerFixture, make_snapshot):
+def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapshot):
     """
     Test that we always process a day at a time and all future days rely on the previous day
     """
     start = to_datetime("2023-01-01")
     end = to_datetime("2023-01-07")
-    full_with_history_snapshot: Snapshot = make_snapshot(
+    incremental_self_snapshot: Snapshot = make_snapshot(
         SqlModel(
             name="name",
-            kind=FullWithHistory(time_column=TimeColumn(column="ds")),
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), batch_size=1),
             owner="owner",
             dialect="",
             cron="@daily",
             start=start,
-            query=parse_one("SELECT id, @end_ds as ds FROM VALUES (1), (2) AS t(id)"),
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
         ),
     )
     snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
     mock_state_sync.get_snapshot_intervals.return_value = [
         SnapshotIntervals(
-            name=full_with_history_snapshot.name,
-            identifier=full_with_history_snapshot.identifier,
-            version=full_with_history_snapshot.fingerprint.to_version(),
+            name=incremental_self_snapshot.name,
+            identifier=incremental_self_snapshot.identifier,
+            version=incremental_self_snapshot.fingerprint.to_version(),
             intervals=[
                 (to_timestamp("2023-01-02 00:00:00"), to_timestamp("2023-01-03 00:00:00")),
                 (to_timestamp("2023-01-05 00:00:00"), to_timestamp("2023-01-06 00:00:00")),
@@ -231,7 +231,7 @@ def test_full_with_history_dag(mocker: MockerFixture, make_snapshot):
         )
     ]
     scheduler = Scheduler(
-        snapshots=[full_with_history_snapshot],
+        snapshots=[incremental_self_snapshot],
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mock_state_sync,
         max_workers=2,
@@ -240,17 +240,17 @@ def test_full_with_history_dag(mocker: MockerFixture, make_snapshot):
     dag = scheduler._dag(batches)
     assert dag.graph == {
         # Only run one day at a time and each day relies on the previous days
-        (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
-        (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))): {
-            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
+        (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
+        (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
         },
-        (full_with_history_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))): {
-            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
-            (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+        (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
         },
-        (full_with_history_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
-            (full_with_history_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
-            (full_with_history_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
-            (full_with_history_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
+        (incremental_self_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
         },
     }

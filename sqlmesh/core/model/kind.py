@@ -14,9 +14,9 @@ from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
-    from typing import Literal
+    pass
 else:
-    from typing_extensions import Literal
+    pass
 
 
 class ModelKindMixin:
@@ -36,10 +36,6 @@ class ModelKindMixin:
     @property
     def is_full(self) -> bool:
         return self.model_kind_name == ModelKindName.FULL
-
-    @property
-    def is_full_with_history(self) -> bool:
-        return self.model_kind_name == ModelKindName.FULL_WITH_HISTORY
 
     @property
     def is_view(self) -> bool:
@@ -72,14 +68,9 @@ class ModelKindMixin:
         return self.is_view or self.is_full
 
     @property
-    def depends_on_past(self) -> bool:
-        """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
-        return self.is_incremental_by_unique_key or self.is_full_with_history
-
-    @property
     def is_time_based_load(self) -> bool:
         """Whether or not this model has a time column which influences the load pattern used."""
-        return self.is_incremental_by_time_range or self.is_full_with_history
+        return self.is_incremental_by_time_range
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -88,7 +79,6 @@ class ModelKindName(str, ModelKindMixin, Enum):
     INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
     FULL = "FULL"
-    FULL_WITH_HISTORY = "FULL_WITH_HISTORY"
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
@@ -118,8 +108,6 @@ class ModelKind(PydanticModel, ModelKindMixin):
                     klass = IncrementalByUniqueKeyKind
                 elif name == ModelKindName.SEED:
                     klass = SeedKind
-                elif name == ModelKindName.FULL_WITH_HISTORY:
-                    klass = FullWithHistory
                 else:
                     props["name"] = ModelKindName(name)
                 return klass(**props)
@@ -131,8 +119,6 @@ class ModelKind(PydanticModel, ModelKindMixin):
                     klass = IncrementalByUniqueKeyKind
                 elif v.get("name") == ModelKindName.SEED:
                     klass = SeedKind
-                elif v.get("name") == ModelKindName.FULL_WITH_HISTORY:
-                    klass = FullWithHistory
                 else:
                     klass = ModelKind
                 return klass(**v)
@@ -297,14 +283,3 @@ class SeedKind(ModelKind):
                 ),
             ],
         )
-
-
-class FullWithHistory(ModelKind):
-    name: ModelKindName = Field(ModelKindName.FULL_WITH_HISTORY, const=True)
-    batch_size: Literal[1] = 1
-    time_column: TimeColumn
-
-    _time_column_validator = TimeColumn.field_validator()
-
-    def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
-        return super().to_expression(expressions=[self.time_column.to_property(dialect)])

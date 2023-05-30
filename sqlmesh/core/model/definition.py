@@ -406,7 +406,7 @@ class _Model(ModelMeta, frozen=True):
             return self.depends_on_ - {self.name}
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self._render_all_sql()) - {self.name}
+            self._depends_on = self._all_model_references - {self.name}
         return self._depends_on
 
     @property
@@ -448,6 +448,14 @@ class _Model(ModelMeta, frozen=True):
     @property
     def is_seed(self) -> bool:
         return False
+
+    @property
+    def has_self_reference(self) -> bool:
+        return self.name in self._all_model_references
+
+    @property
+    def _all_model_references(self) -> t.Set[str]:
+        return _find_tables(self._render_all_sql())
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
@@ -816,6 +824,10 @@ class SeedModel(_Model):
         if not seed_path.is_absolute():
             return self._path.parent / seed_path
         return seed_path
+
+    @property
+    def has_self_reference(self) -> bool:
+        return False
 
     def to_dehydrated(self) -> SeedModel:
         """Creates a dehydrated copy of this model.
