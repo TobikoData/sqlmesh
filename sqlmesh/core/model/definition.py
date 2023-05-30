@@ -405,6 +405,7 @@ class _Model(ModelMeta, frozen=True):
         """
         if self.depends_on_ is not None:
             return self.depends_on_ - {self.name}
+
         if self._depends_on is None:
             self._depends_on = _find_tables(self._render_all_sql()) - {self.name}
         return self._depends_on
