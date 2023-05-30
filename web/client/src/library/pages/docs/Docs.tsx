@@ -48,10 +48,10 @@ export default function PageDocs(): JSX.Element {
               </h3>
               <p>It should take few more seconds.</p>
               <p>
-                If it takes too long, probably, there is a problem with
-                connection.
+                If it takes too long, probably, there is a problem with API
+                response.
               </p>
-              <p>Check if server is running and refresh.</p>
+              <p>Check if the server is running and refresh.</p>
             </div>
           </div>
         </div>
