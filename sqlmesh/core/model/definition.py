@@ -104,7 +104,7 @@ class _Model(ModelMeta, frozen=True):
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
-    _has_self_reference_query: t.Optional[bool] = None
+    _depends_on_past: t.Optional[bool] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
 
     _expressions_validator = expression_validator
@@ -451,13 +451,13 @@ class _Model(ModelMeta, frozen=True):
         return False
 
     @property
-    def has_self_reference_query(self) -> bool:
-        if self._has_self_reference_query is None:
-            self._has_self_reference_query = (
+    def depends_on_past(self) -> bool:
+        if self._depends_on_past is None:
+            self._depends_on_past = (
                 self.kind.is_incremental_by_unique_key
                 or self.name in _find_tables([self.render_query()])
             )
-        return self._has_self_reference_query
+        return self._depends_on_past
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
@@ -828,7 +828,7 @@ class SeedModel(_Model):
         return seed_path
 
     @property
-    def has_self_reference_query(self) -> bool:
+    def depends_on_past(self) -> bool:
         return False
 
     def to_dehydrated(self) -> SeedModel:
