@@ -806,7 +806,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def depends_on_past(self) -> bool:
         """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
-        return self.model.has_self_reference
+        return self.model.has_self_reference_query
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:

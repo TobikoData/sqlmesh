@@ -448,7 +448,7 @@ class _Model(ModelMeta, frozen=True):
         return False
 
     @property
-    def has_self_reference(self) -> bool:
+    def has_self_reference_query(self) -> bool:
         return (
             self.name in self._query_only_model_references or self.kind.is_incremental_by_unique_key
         )
@@ -834,7 +834,7 @@ class SeedModel(_Model):
         return seed_path
 
     @property
-    def has_self_reference(self) -> bool:
+    def has_self_reference_query(self) -> bool:
         return False
 
     def to_dehydrated(self) -> SeedModel:
