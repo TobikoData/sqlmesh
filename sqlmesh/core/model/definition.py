@@ -104,6 +104,7 @@ class _Model(ModelMeta, frozen=True):
 
     _path: Path = Path()
     __all_model_references: t.Optional[t.Set[str]] = None
+    __query_only_model_references: t.Optional[t.Set[str]] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
 
     _expressions_validator = expression_validator
@@ -402,6 +403,8 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A list of all the upstream table names.
         """
+        if self.depends_on_ is not None:
+            return self.depends_on_ - {self.name}
         return self._all_model_references - {self.name}
 
     @property
@@ -446,13 +449,21 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def has_self_reference(self) -> bool:
-        return self.name in self._all_model_references or self.kind.is_incremental_by_unique_key
+        return (
+            self.name in self._query_only_model_references or self.kind.is_incremental_by_unique_key
+        )
 
     @property
     def _all_model_references(self) -> t.Set[str]:
         if self.__all_model_references is None:
             self.__all_model_references = _find_tables(self._render_all_sql())
         return self.__all_model_references
+
+    @property
+    def _query_only_model_references(self) -> t.Set[str]:
+        if self.__query_only_model_references is None:
+            self.__query_only_model_references = _find_tables([self.render_query()])
+        return self.__query_only_model_references
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
