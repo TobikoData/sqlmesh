@@ -122,7 +122,7 @@ export function DisplayError({
           <div className="flex aline-center mb-2">
             <small className="block mr-3">
               <small className="py-0.5 px-2 bg-danger-500 text-danger-100 rounded-md text-xs">
-                {error.status}
+                {error.status ?? 'UI'}
               </small>
             </small>
             <small className="block">{scope}</small>
