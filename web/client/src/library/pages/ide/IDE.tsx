@@ -1,6 +1,11 @@
 import { useEffect, useCallback, lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useApiModels, apiCancelModels } from '../../../api'
+import {
+  useApiModels,
+  apiCancelModels,
+  useApiFiles,
+  apiCancelFiles,
+} from '../../../api'
 import {
   EnumPlanState,
   type PlanProgress,
@@ -37,19 +42,28 @@ export default function PageIDE(): JSX.Element {
   const { removeError } = useIDE()
 
   const setModels = useStoreContext(s => s.setModels)
+  const setFiles = useStoreFileTree(s => s.setFiles)
 
   const activePlan = useStorePlan(s => s.activePlan)
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
   const project = useStoreFileTree(s => s.project)
+  const setProject = useStoreFileTree(s => s.setProject)
 
   const subscribe = useChannelEvents()
 
+  // We need to fetch from IDE level to make sure
+  // all pages have access to models and files
   const { refetch: getModels } = useApiModels()
+  const { refetch: getFiles } = useApiFiles()
 
   const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
     getModels,
+  ])
+
+  const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
+    getFiles,
   ])
 
   useEffect(() => {
@@ -60,9 +74,15 @@ export default function PageIDE(): JSX.Element {
       updateModels(data)
     })
 
+    void debouncedGetFiles().then(({ data }) => {
+      setProject(data)
+    })
+
     return () => {
       debouncedGetModels.cancel()
+      debouncedGetFiles.cancel()
 
+      apiCancelFiles(client)
       apiCancelModels(client)
 
       unsubscribeTasks?.()
@@ -75,6 +95,10 @@ export default function PageIDE(): JSX.Element {
       navigate(EnumRoutes.IdeEditor)
     }
   }, [location])
+
+  useEffect(() => {
+    setFiles(project?.allFiles ?? [])
+  }, [project])
 
   function updateModels(models?: Model[]): void {
     removeError(EnumErrorKey.General)
@@ -134,15 +158,13 @@ export default function PageIDE(): JSX.Element {
               )}
             </Button>
           </div>
-          {isActivePageEditor && (
-            <div className="px-3 flex items-center min-w-[10rem] justify-end">
-              <RunPlan />
-              <Suspense>
-                {activePlan != null && <ActivePlan plan={activePlan} />}
-              </Suspense>
-              <ReportErrors />
-            </div>
-          )}
+          <div className="px-3 flex items-center min-w-[10rem] justify-end">
+            <RunPlan />
+            <Suspense>
+              {activePlan != null && <ActivePlan plan={activePlan} />}
+            </Suspense>
+            <ReportErrors />
+          </div>
         </div>
         <Divider />
         <Outlet />

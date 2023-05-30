@@ -670,7 +670,12 @@ function ModelColumnLineage({
   return (
     <div className={clsx('px-2 py-1 w-full h-full', className)}>
       {isBuildingLayout ? (
-        <div>Building Lineage...</div>
+        <div className="flex justify-center items-center w-full h-full">
+          <Loading className="inline-block">
+            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+            <h3 className="text-md">Building Lineage...</h3>
+          </Loading>
+        </div>
       ) : (
         <ReactFlow
           nodes={nodes}
