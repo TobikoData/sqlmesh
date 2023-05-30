@@ -25,7 +25,6 @@ interface LineageFlow {
   hasActiveEdge: (edge?: string | null) => boolean
   addActiveEdges: (edges: string[]) => void
   removeActiveEdges: (edges: string[]) => void
-  clearActiveEdges: () => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   setLineage: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
@@ -46,7 +45,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
   removeActiveEdges: () => {},
-  clearActiveEdges: () => {},
   setActiveEdges: () => {},
   models: new Map(),
   handleClickModel: () => {},
@@ -124,10 +122,6 @@ export default function LineageFlowProvider({
     [setActiveEdges, setConnections],
   )
 
-  const clearActiveEdges = useCallback(function clearActiveEdges(): void {
-    setActiveEdges(new Map())
-  }, [])
-
   const isActiveColumn = useCallback(
     function isActive(modelName: string, columnName: string): boolean {
       return (
@@ -149,7 +143,6 @@ export default function LineageFlowProvider({
         activeEdges,
         setActiveEdges,
         addActiveEdges,
-        clearActiveEdges,
         removeActiveEdges,
         hasActiveEdge,
         models,

@@ -418,8 +418,8 @@ function hasNoModels(
 }
 
 function mergeConnections(
-  lineage: Record<string, Record<string, LineageColumn>> = {},
   connections: Map<string, Connections>,
+  lineage: Record<string, Record<string, LineageColumn>> = {},
   addActiveEdges: (edges: string[]) => void,
 ): Map<string, Connections> {
   for (const modelName in lineage) {

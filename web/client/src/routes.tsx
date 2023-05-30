@@ -4,6 +4,7 @@ import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import IDE from './library/pages/ide/IDE'
+import IDEProvider from './library/pages/ide/context'
 
 const Editor = lazy(() => import('./library/pages/editor/Editor'))
 const Docs = lazy(() => import('./library/pages/docs/Docs'))
@@ -20,7 +21,11 @@ export const EnumRoutes = {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <IDE />,
+    element: (
+      <IDEProvider>
+        <IDE />
+      </IDEProvider>
+    ),
     children: [
       {
         path: 'editor',

@@ -545,7 +545,6 @@ const ModelColumns = memo(function ModelColumns({
     function updateColumnLineage(
       columnLineage: Record<string, Record<string, LineageColumn>> = {},
     ): void {
-      console.log()
       setShouldRecalculate(
         Object.keys(columnLineage).some(modelName => !models.has(modelName)),
       )
@@ -553,7 +552,11 @@ const ModelColumns = memo(function ModelColumns({
         mergeLineageWithColumns(structuredClone(lineage), columnLineage),
       )
       setConnections(connections =>
-        mergeConnections(columnLineage, connections, addActiveEdges),
+        mergeConnections(
+          structuredClone(connections),
+          columnLineage,
+          addActiveEdges,
+        ),
       )
     },
     [addActiveEdges, setConnections],
@@ -728,8 +731,14 @@ function ModelColumnLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { withColumns, hasActiveEdge, models, lineage, shouldRecalculate } =
-    useLineageFlow()
+  const {
+    withColumns,
+    hasActiveEdge,
+    models,
+    lineage,
+    shouldRecalculate,
+    handleError,
+  } = useLineageFlow()
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -744,10 +753,10 @@ function ModelColumnLineage({
 
     return getNodesAndEdges({
       lineage,
-      highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
-      models,
       nodes: shouldRecalculate ? [] : nodes,
       edges: shouldRecalculate ? [] : edges,
+      highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
+      models,
       model,
       withColumns,
     })
@@ -756,13 +765,17 @@ function ModelColumnLineage({
   useEffect(() => {
     setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
 
-    void createGraphLayout(nodesAndEdges).then(layout => {
-      toggleEdgeAndNodes(layout.edges, layout.nodes)
+    void createGraphLayout(nodesAndEdges)
+      .then(layout => {
+        toggleEdgeAndNodes(layout.edges, layout.nodes)
 
-      setIsBuildingLayout(
-        isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
-      )
-    })
+        setIsBuildingLayout(
+          isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
+        )
+      })
+      .catch(error => {
+        handleError?.(error)
+      })
   }, [nodesAndEdges])
 
   useEffect(() => {
