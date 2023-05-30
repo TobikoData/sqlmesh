@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.model.kind import ModelKind, model_kind_validator
+from sqlmesh.core.model.kind import ModelKind
 from sqlmesh.utils.date import TimeLike
 
 
@@ -34,4 +34,4 @@ class ModelDefaultsConfig(BaseConfig):
     batch_size: t.Optional[int]
     storage_format: t.Optional[str]
 
-    _model_kind_validator = model_kind_validator
+    _model_kind_validator = ModelKind.field_validator()

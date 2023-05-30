@@ -4,6 +4,7 @@ from sqlmesh.utils.dag import DAG
 def test_downstream(sushi_context):
     assert set(sushi_context.dag.downstream("sushi.order_items")) == {
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
         "sushi.waiter_revenue_by_day",
     }

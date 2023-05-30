@@ -803,6 +803,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def model_kind_name(self) -> ModelKindName:
         return self.model.kind.name
 
+    @property
+    def depends_on_past(self) -> bool:
+        """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
+        return self.model.depends_on_past
+
     def _ensure_categorized(self) -> None:
         if not self.change_category:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been categorized yet.")
