@@ -1,5 +1,4 @@
 import typing as t
-from datetime import datetime
 from unittest.mock import call
 
 import pytest
@@ -7,9 +6,8 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse, parse_one
 
-from sqlmesh.core.context import ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
-from sqlmesh.core.hooks import hook
+from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
@@ -71,37 +69,41 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     payload = {"calls": 0}
 
-    @hook()
-    def x(
-        context: ExecutionContext,
-        start: datetime,
-        end: datetime,
-        latest: datetime,
-        **kwargs,
-    ) -> None:
-        payload = kwargs["payload"]
-        payload["calls"] += 1
+    @macro()
+    def x(evaluator, y=None) -> None:
+        if "payload" not in evaluator.locals:
+            return
 
-        if "y" in kwargs:
-            payload["y"] = kwargs["y"]
+        evaluator.locals["payload"]["calls"] += 1
+
+        if y is not None:
+            evaluator.locals["payload"]["y"] = y
 
     model = load_model(
         parse(  # type: ignore
             """
-        MODEL (
-            name test_schema.test_model,
-            kind INCREMENTAL_BY_TIME_RANGE (time_column a),
-            storage_format 'parquet',
-            pre [x(), 'create table hook_called'],
-            post [x(), x(y=['a', 2, TRUE])],
-        );
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (time_column a),
+                storage_format 'parquet',
+            );
 
-        SELECT @SQL(@REDUCE([100, 200, 300, 400], (x,y) -> x + y));
+            @x();
 
-        SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds
-        """
+            @DEF(a, 1);
+
+            CREATE TABLE hook_called;
+
+            SELECT a::int FROM tbl WHERE ds BETWEEN @start_ds and @end_ds;
+
+            @x();
+
+            @DEF(b, 2);
+
+            @x(['a', 2, TRUE]);
+            """
         ),
-        hooks=hook.get_registry(),
+        macros=macro.get_registry(),
     )
 
     snapshot = make_snapshot(model)
@@ -113,14 +115,14 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         "2020-01-01",
         "2020-01-02",
         "2020-01-02",
-        payload=payload,
         snapshots={},
+        payload=payload,
     )
 
     assert payload["calls"] == 3
     assert payload["y"] == ["a", 2, True]
 
-    execute_calls = [call(parse_one("select 1000")), call(parse_one("create table hook_called"))]
+    execute_calls = [call([parse_one("CREATE TABLE hook_called")])]
     adapter_mock.execute.assert_has_calls(execute_calls)
 
     adapter_mock.create_schema.assert_has_calls(

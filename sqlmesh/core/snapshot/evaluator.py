@@ -138,28 +138,26 @@ class SnapshotEvaluator:
                 else:
                     raise SQLMeshError(f"Unexpected SnapshotKind: {snapshot.model.kind}")
 
-        for sql_statement in model.sql_statements:
-            self.adapter.execute(sql_statement)
-
         from sqlmesh.core.context import ExecutionContext
 
-        context = ExecutionContext(self.adapter, snapshots, is_dev)
-
-        model.run_pre_hooks(
-            context=context,
+        common_render_kwargs = dict(
             start=start,
             end=end,
             latest=latest,
             **kwargs,
         )
 
-        queries_or_dfs = model.render(
-            context,
-            start=start,
-            end=end,
-            latest=latest,
+        render_statements_kwargs = dict(
             engine_adapter=self.adapter,
-            **kwargs,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            **common_render_kwargs,
+        )
+
+        pre_statements = model.render_pre_statements(**render_statements_kwargs)
+        post_statements = model.render_post_statements(**render_statements_kwargs)
+        queries_or_dfs = model.render(
+            context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
         )
 
         with self.adapter.transaction(
@@ -167,6 +165,9 @@ class SnapshotEvaluator:
             if model.kind.is_view or model.kind.is_full
             else TransactionType.DML
         ):
+            if not limit:
+                self.adapter.execute(pre_statements)
+
             if limit and limit > 0:
                 query_or_df = next(queries_or_dfs)
                 if isinstance(query_or_df, exp.Select):
@@ -196,13 +197,7 @@ class SnapshotEvaluator:
                 for index, query_or_df in enumerate(queries_or_dfs):
                     apply(query_or_df, index)
 
-            model.run_post_hooks(
-                context=context,
-                start=start,
-                end=end,
-                latest=latest,
-                **kwargs,
-            )
+            self.adapter.execute(post_statements)
             return None
 
     def promote(
@@ -396,31 +391,42 @@ class SnapshotEvaluator:
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
         }
 
-        if snapshot.is_view:
-            logger.info("Creating view '%s'", table_name)
-            self.adapter.create_view(
-                table_name,
-                snapshot.model.render_query(snapshots=parent_snapshots_by_name, is_dev=is_dev),
-            )
-        else:
-            logger.info("Creating table '%s'", table_name)
-            if snapshot.model.annotated:
-                self.adapter.create_table(
+        render_kwargs: t.Dict[str, t.Any] = dict(
+            engine_adapter=self.adapter,
+            snapshots=snapshots,
+            is_dev=is_dev,
+        )
+
+        with self.adapter.transaction(TransactionType.DDL):
+            self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
+
+            if snapshot.is_view:
+                logger.info("Creating view '%s'", table_name)
+                self.adapter.create_view(
                     table_name,
-                    columns_to_types=snapshot.model.columns_to_types,
-                    storage_format=snapshot.model.storage_format,
-                    partitioned_by=snapshot.model.partitioned_by,
-                    partition_interval_unit=snapshot.model.interval_unit(),
+                    snapshot.model.render_query(snapshots=parent_snapshots_by_name, is_dev=is_dev),
                 )
             else:
-                self.adapter.ctas(
-                    table_name,
-                    snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
-                    snapshot.model.columns_to_types,
-                    storage_format=snapshot.model.storage_format,
-                    partitioned_by=snapshot.model.partitioned_by,
-                    partition_interval_unit=snapshot.model.interval_unit(),
-                )
+                logger.info("Creating table '%s'", table_name)
+                if snapshot.model.annotated:
+                    self.adapter.create_table(
+                        table_name,
+                        columns_to_types=snapshot.model.columns_to_types,
+                        storage_format=snapshot.model.storage_format,
+                        partitioned_by=snapshot.model.partitioned_by,
+                        partition_interval_unit=snapshot.model.interval_unit(),
+                    )
+                else:
+                    self.adapter.ctas(
+                        table_name,
+                        snapshot.model.ctas_query(parent_snapshots_by_name, is_dev=is_dev),
+                        snapshot.model.columns_to_types,
+                        storage_format=snapshot.model.storage_format,
+                        partitioned_by=snapshot.model.partitioned_by,
+                        partition_interval_unit=snapshot.model.interval_unit(),
+                    )
+
+            self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
     def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         if (

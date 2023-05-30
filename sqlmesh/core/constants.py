@@ -32,7 +32,6 @@ DEFAULT_MAX_LIMIT = 1000
 """The default maximum row limit that is used when evaluating a model."""
 
 AUDITS = "audits"
-HOOKS = "hooks"
 MACROS = "macros"
 MODELS = "models"
 TESTS = "tests"
