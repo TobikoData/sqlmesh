@@ -28,9 +28,9 @@ It uses the following five step approach to accomplish this:
 
 2. Examine the placeholder values to classify them as one of the following types:
 
-- Creation of user-defined macro variables with the `@DEF` operator (see more about [user-defined macro variables](#user-defined-variables))
-- Macro variables, both [SQLMesh pre-defined](./macro_variables.md) and [user-defined](#User-defined-variables)
-- Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
+    - Creation of user-defined macro variables with the `@DEF` operator (see more about [user-defined macro variables](#user-defined-variables))
+    - Macro variables, both [SQLMesh pre-defined](./macro_variables.md) and [user-defined](#User-defined-variables)
+    - Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
 
 3. Substitute macro variable values where they are detected. In most cases, this is direct string substitution as with a templating system.
 
