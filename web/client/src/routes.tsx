@@ -5,14 +5,10 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import IDE from './library/pages/ide/IDE'
 
-const Editor = lazy(async () => await import('./library/pages/editor/Editor'))
-const Docs = lazy(async () => await import('./library/pages/docs/Docs'))
-const DocsContent = lazy(
-  async () => await import('./library/pages/docs/Content'),
-)
-const DocsWelcome = lazy(
-  async () => await import('./library/pages/docs/Welcome'),
-)
+const Editor = lazy(() => import('./library/pages/editor/Editor'))
+const Docs = lazy(() => import('./library/pages/docs/Docs'))
+const DocsContent = lazy(() => import('./library/pages/docs/Content'))
+const DocsWelcome = lazy(() => import('./library/pages/docs/Welcome'))
 
 export const EnumRoutes = {
   Ide: '/',
@@ -68,10 +64,12 @@ export const router = createBrowserRouter([
                 element: (
                   <Suspense
                     fallback={
-                      <Loading className="inline-block">
-                        <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-                        <h3 className="text-xl">Loading Content...</h3>
-                      </Loading>
+                      <div className="flex justify-center items-center w-full h-full">
+                        <Loading className="inline-block">
+                          <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                          <h3 className="text-md">Loading Content...</h3>
+                        </Loading>
+                      </div>
                     }
                   >
                     <DocsContent />
