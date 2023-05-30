@@ -201,7 +201,7 @@ class ModelMeta(PydanticModel):
             return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
             return {
-                k: exp.DataType.build(data_type, dialect=values["dialect"])
+                k: exp.DataType.build(data_type, dialect=values.get("dialect"))
                 for k, data_type in v.items()
             }
         return v
