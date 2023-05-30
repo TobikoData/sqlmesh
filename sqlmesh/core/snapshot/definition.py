@@ -571,13 +571,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
+            latest: The latest time to use for the end of the interval. Defaults to now if not provided.
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
             for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
-        latest = latest or now()
-        end = latest if for_removal and self.depends_on_past else end
+        end = latest or now() if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
