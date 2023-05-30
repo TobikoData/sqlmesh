@@ -959,7 +959,7 @@
       },
       "FileType": {
         "title": "FileType",
-        "enum": ["audit", "hooks", "macros", "model", "tests"],
+        "enum": ["audit", "macros", "model", "tests"],
         "type": "string",
         "description": "An enumeration of possible file types."
       },

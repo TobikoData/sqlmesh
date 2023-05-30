@@ -10,21 +10,21 @@ from pathlib import Path
 
 from astor import to_source
 from pydantic import Field
-from sqlglot import diff, exp
+from sqlglot import diff, exp, parse_one
 from sqlglot.diff import Insert, Keep
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.hooks import HookRegistry, hook
-from sqlmesh.core.macros import MacroEvaluator, MacroRegistry, macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator, parse_model_name
 from sqlmesh.core.model.kind import ModelKindName, SeedKind
-from sqlmesh.core.model.meta import HookCall, ModelMeta
+from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
+from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import (
@@ -40,7 +40,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
 
 if sys.version_info >= (3, 9):
@@ -94,14 +94,10 @@ class _Model(ModelMeta, frozen=True):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         partitioned_by: The partition columns, only applicable in certain engines. (eg. (ds, hour))
-        pre: Pre-hooks to run before the model executes.
-        post: Post-hooks to run after the model executes.
-        expressions: All of the expressions between the model definition and final query, used for setting certain variables or environments.
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
     """
 
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
@@ -114,12 +110,11 @@ class _Model(ModelMeta, frozen=True):
 
     def render(
         self,
-        context: ExecutionContext,
         *,
+        context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
@@ -144,7 +139,7 @@ class _Model(ModelMeta, frozen=True):
             add_incremental_filter=True,
             snapshots=context.snapshots,
             is_dev=context.is_dev,
-            engine_adapter=engine_adapter,
+            engine_adapter=context.engine_adapter,
             **kwargs,
         )
 
@@ -195,7 +190,6 @@ class _Model(ModelMeta, frozen=True):
 
         return [
             model,
-            *self.expressions,
             *python_expressions,
         ]
 
@@ -221,7 +215,6 @@ class _Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            audit_name: The name of audit if the query to render is for an audit.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
@@ -235,6 +228,72 @@ class _Model(ModelMeta, frozen=True):
                 for name, column_type in self.columns_to_types.items()
             )
         ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]))
+
+    def render_pre_statements(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        """Renders pre-statements for a model.
+
+        Pre-statements are statements that preceded the model's SELECT query.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The list of rendered expressions.
+        """
+        return []
+
+    def render_post_statements(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        """Renders post-statements for a model.
+
+        Post-statements are statements that follow after the model's SELECT query.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The list of rendered expressions.
+        """
+        return []
 
     def ctas_query(
         self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
@@ -259,42 +318,6 @@ class _Model(ModelMeta, frozen=True):
                 select.where(exp.false(), copy=False)
 
         return query
-
-    def run_pre_hooks(
-        self,
-        context: ExecutionContext,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """Runs all pre hooks.
-
-        Args:
-            context: The execution context used for running the hook.
-            start: The start date/time of the run.
-            end: The end date/time of the run.
-            latest: The latest date/time to use for the run.
-        """
-        self._run_hooks(self.pre, context=context, start=start, end=end, latest=latest, **kwargs)
-
-    def run_post_hooks(
-        self,
-        context: ExecutionContext,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        """Runs all pre hooks.
-
-        Args:
-            context: The execution context used for running the hook.
-            start: The start date/time of the run.
-            end: The end date/time of the run.
-            latest: The latest date/time to use for the run.
-        """
-        self._run_hooks(self.post, context=context, start=start, end=end, latest=latest, **kwargs)
 
     def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
         """Returns audits referenced in this model.
@@ -383,7 +406,7 @@ class _Model(ModelMeta, frozen=True):
             return self.depends_on_ - {self.name}
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self.render_query()) - {self.name}
+            self._depends_on = _find_tables(self._render_all_sql()) - {self.name}
         return self._depends_on
 
     @property
@@ -407,27 +430,8 @@ class _Model(ModelMeta, frozen=True):
         return sorted(self.python_env.items(), key=lambda x: (x[1].kind, x[0]))
 
     @property
-    def macro_definitions(self) -> t.List[d.MacroDef]:
-        """All macro definitions from the list of expressions."""
-        return [s for s in self.expressions if isinstance(s, d.MacroDef)]
-
-    @property
-    def sql_statements(self) -> t.Iterator[exp.Expression]:
-        """All sql statements from the list of expressions."""
-        rendered_statements = (
-            self._expression_renderer(s).render()
-            for s in self.expressions
-            if not isinstance(s, d.MacroDef)
-        )
-        return (statement for statement in rendered_statements if statement is not None)
-
-    @property
     def view_name(self) -> str:
         return parse_model_name(self.name)[2]
-
-    @property
-    def expressions(self) -> t.List[exp.Expression]:
-        return self.expressions_ or []
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:
@@ -489,60 +493,13 @@ class _Model(ModelMeta, frozen=True):
         """
         raise NotImplementedError
 
-    def _run_hooks(
-        self,
-        hooks: t.List[HookCall],
-        *,
-        context: ExecutionContext,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        **kwargs: t.Any,
-    ) -> None:
-        env = prepare_env(self.python_env)
-        start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
-        latest = to_datetime(latest or c.EPOCH)
-
-        macro_evaluator = MacroEvaluator()
-
-        for hook in hooks:
-            if isinstance(hook, exp.Expression):
-                rendered = self._expression_renderer(hook).render(
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    engine_adapter=context.engine_adapter,
-                    **kwargs,
-                )
-                if rendered:
-                    context.engine_adapter.execute(rendered)
-            else:
-                name, hook_kwargs = hook
-                # Evaluate SQL expressions before passing them into a Python
-                # function as arguments.
-                evaluated_hook_kwargs = {
-                    key: macro_evaluator.eval_expression(value)
-                    if isinstance(value, exp.Expression)
-                    else value
-                    for key, value in hook_kwargs.items()
-                }
-                env[name](
-                    context=context,
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    **{**kwargs, **evaluated_hook_kwargs},
-                )
-
-    def _expression_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
-        return ExpressionRenderer(
-            expression,
-            self.dialect,
-            self.macro_definitions,
-            path=self._path,
-            jinja_macro_registry=self.jinja_macros,
-            python_env=self.python_env,
-        )
+    def _render_all_sql(self) -> t.List[exp.Expression]:
+        """Renders all the SQL expressions of this model."""
+        return [
+            *self.render_pre_statements(),
+            self.render_query(),
+            *self.render_post_statements(),
+        ]
 
 
 class SqlModel(_Model):
@@ -550,15 +507,24 @@ class SqlModel(_Model):
 
     Args:
         query: The main query representing the model.
+        pre_statements: The list of SQL statements that precede the model's query.
+        post_statements: The list of SQL statements that follow after the model's query.
     """
 
     query: t.Union[exp.Subqueryable, d.Jinja]
+    pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="pre_statements"
+    )
+    post_statements_: t.Optional[t.List[exp.Expression]] = Field(
+        default=None, alias="post_statements"
+    )
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     __query_renderer: t.Optional[QueryRenderer] = None
+    __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
 
-    _query_validator = expression_validator
+    _expression_validator = expression_validator
 
     def render_query(
         self,
@@ -583,14 +549,79 @@ class SqlModel(_Model):
             **kwargs,
         )
 
+    def render_pre_statements(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        return self._render_statements(
+            self.pre_statements,
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
+    def render_post_statements(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        return self._render_statements(
+            self.post_statements,
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         result = super().render_definition(include_python=include_python)
+        result.extend(self.pre_statements)
         result.append(self.query)
+        result.extend(self.post_statements)
         return result
 
     @property
     def is_sql(self) -> bool:
         return True
+
+    @property
+    def pre_statements(self) -> t.List[exp.Expression]:
+        return self.pre_statements_ or []
+
+    @property
+    def post_statements(self) -> t.List[exp.Expression]:
+        return self.post_statements_ or []
+
+    @property
+    def macro_definitions(self) -> t.List[d.MacroDef]:
+        """All macro definitions from the list of expressions."""
+        return [
+            s for s in [*self.pre_statements, *self.post_statements] if isinstance(s, d.MacroDef)
+        ]
 
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
@@ -687,6 +718,32 @@ class SqlModel(_Model):
             )
         return self.__query_renderer
 
+    def _render_statements(
+        self,
+        statements: t.Iterable[exp.Expression],
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        rendered = [
+            self._statement_renderer(statement).render(**kwargs)
+            for statement in statements
+            if not isinstance(statement, d.MacroDef)
+        ]
+        return [r for r in rendered if r is not None]
+
+    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        expression_key = id(expression)
+        if expression_key not in self.__statement_renderers:
+            self.__statement_renderers[expression_key] = ExpressionRenderer(
+                expression,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                jinja_macro_registry=self.jinja_macros,
+                python_env=self.python_env,
+                only_latest=self.kind.only_latest,
+            )
+        return self.__statement_renderers[expression_key]
+
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
 
@@ -706,12 +763,11 @@ class SeedModel(_Model):
 
     def render(
         self,
-        context: ExecutionContext,
         *,
+        context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         self._ensure_hydrated()
@@ -829,14 +885,13 @@ class PythonModel(_Model):
 
     def render(
         self,
-        context: ExecutionContext,
         *,
+        context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> t.Generator[DF, None, None]:
+    ) -> t.Generator[QueryOrDF, None, None]:
         from sqlmesh.core.engine_adapter import EngineAdapter
 
         env = prepare_env(self.python_env)
@@ -918,13 +973,12 @@ def load_model(
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
-    hooks: t.Optional[HookRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
-    """Load a model from a parsed SQLMesh model file.
+    """Load a model from a parsed SQLMesh model SQL file.
 
     Args:
         expressions: Model, *Statements, Query.
@@ -933,8 +987,7 @@ def load_model(
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        hooks: The custom registry of hooks. If not provided the default registry will be used.
-        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
+        python_env: The custom Python environment for macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
@@ -945,14 +998,16 @@ def load_model(
 
     dialect = dialect or ""
     meta = expressions[0]
-    query = expressions[-1] if len(expressions) > 1 else None
-    statements = expressions[1:-1]
-
     if not isinstance(meta, d.Model):
         raise_config_error(
             "MODEL statement is required as the first statement in the definition",
             path,
         )
+
+    # Extract the query and any pre/post statements
+    query, pre_statements, post_statements = _extract_sql_model_select(
+        expressions[1:], jinja_macros or JinjaMacroRegistry(), dialect, path
+    )
 
     meta_fields: t.Dict[str, t.Any] = {
         "dialect": dialect,
@@ -967,33 +1022,24 @@ def load_model(
     if not name:
         raise_config_error("Model must have a name", path)
 
-    if isinstance(query, d.MacroVar):
-        if python_env is None:
-            raise_config_error("The python environment must be provided for Python models", path)
-            raise
-
-        return create_python_model(
-            name,
-            query.name,
-            python_env,
-            defaults=defaults,
-            path=path,
-            time_column_format=time_column_format,
-            **meta_fields,
-        )
-    elif query is not None:
+    if query is not None:
+        macro_references = [
+            extract_macro_references(query.sql(dialect=dialect)),
+            *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
+            *[extract_macro_references(e.sql(dialect=dialect)) for e in post_statements],
+        ]
         return create_sql_model(
             name,
             query,
-            statements=statements,
+            pre_statements=pre_statements,
+            post_statements=post_statements,
             defaults=defaults,
             path=path,
             module_path=module_path,
             time_column_format=time_column_format,
             macros=macros,
-            hooks=hooks,
             jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(
-                extract_macro_references(query.sql())
+                {r for references in macro_references for r in references}
             ),
             python_env=python_env,
             **meta_fields,
@@ -1022,13 +1068,13 @@ def create_sql_model(
     name: str,
     query: exp.Expression,
     *,
-    statements: t.Optional[t.List[exp.Expression]] = None,
+    pre_statements: t.Optional[t.List[exp.Expression]] = None,
+    post_statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     module_path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
-    hooks: t.Optional[HookRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -1039,31 +1085,32 @@ def create_sql_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         query: The model's logic in a form of a SELECT query.
-        statements: The list of all SQL statements that are not a query or a model definition.
+        pre_statements: The list of SQL statements that precede the model's query.
+        post_statements: The list of SQL statements that follow after the model's query.
         defaults: Definition default values.
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
         macros: The custom registry of macros. If not provided the default registry will be used.
-        hooks: The custom registry of hooks. If not provided the default registry will be used.
-        python_env: The custom Python environment for hooks/macros. If not provided the environment will be constructed
+        python_env: The custom Python environment for macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
     """
     if not isinstance(query, (exp.Subqueryable, d.Jinja)):
         raise_config_error(
-            "A query is required and must be a SELECT or UNION statement.",
+            "A query is required and must be a SELECT or UNION statement",
             path,
         )
 
+    pre_statements = pre_statements or []
+    post_statements = post_statements or []
+
     if not python_env:
         python_env = _python_env(
-            query,
-            _extract_hooks(kwargs),
+            [*pre_statements, query, *post_statements],
             module_path,
             macros or macro.get_registry(),
-            hooks or hook.get_registry(),
         )
 
     return _create_model(
@@ -1074,8 +1121,9 @@ def create_sql_model(
         time_column_format=time_column_format,
         python_env=python_env,
         dialect=dialect,
-        expressions=statements or [],
         query=query,
+        pre_statements=pre_statements,
+        post_statements=post_statements,
         **kwargs,
     )
 
@@ -1189,7 +1237,6 @@ def _create_model(
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
-    expressions: t.Optional[t.List[exp.Expression]] = None,
     **kwargs: t.Any,
 ) -> Model:
     _validate_model_fields(klass, {"name", *kwargs}, path)
@@ -1199,7 +1246,6 @@ def _create_model(
     try:
         model = klass(
             name=name,
-            expressions=expressions or [],
             **{
                 **(defaults or {}),
                 "dialect": dialect,
@@ -1218,6 +1264,43 @@ def _create_model(
     return t.cast(Model, model)
 
 
+def _extract_sql_model_select(
+    expressions: t.List[exp.Expression], jinja_macros: JinjaMacroRegistry, dialect: str, path: Path
+) -> t.Tuple[t.Optional[exp.Subqueryable], t.List[exp.Expression], t.List[exp.Expression]]:
+    """Extracts the SELECT query from a sequence of expressions.
+
+    Args:
+        expressions: The list of all SQL statements in the model definition.
+
+    Returns:
+        A tuple containing the extracted SELECT query, the statements before the query, and
+        the statements after the query.
+
+    Raises:
+        ConfigError: If the model definition contains more than one SELECT query.
+    """
+    query_positions = []
+    for idx, expression in enumerate(expressions):
+        # Render the expression using the macro registry if the expression is jinja.
+        if isinstance(expression, d.Jinja):
+            jinja_env = jinja_macros.build_environment(**date_dict(c.EPOCH, c.EPOCH, c.EPOCH))
+            rendered_expression = jinja_env.from_string(expression.name).render()
+            if rendered_expression is None:
+                continue
+            expression = parse_one(rendered_expression, read=dialect)
+
+        if isinstance(expression, exp.Subqueryable):
+            query_positions.append((expression, idx))
+
+    if not query_positions:
+        return None, [], []
+    elif len(query_positions) > 1:
+        raise_config_error("Only one SELECT query is allowed per model", path)
+
+    query, pos = query_positions[0]
+    return query, expressions[:pos], expressions[pos + 1 :]
+
+
 def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], path: Path) -> None:
     missing_required_fields = klass.missing_required_fields(provided_fields)
     if missing_required_fields:
@@ -1231,29 +1314,28 @@ def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], p
         raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
 
 
-def _find_tables(query: exp.Expression) -> t.Set[str]:
+def _find_tables(expressions: t.List[exp.Expression]) -> t.Set[str]:
     """Find all tables referenced in a query.
 
     Args:
-        query: The expression to find tables for.
+        expressions: The list of expressions to find tables for.
 
     Returns:
         A Set of all the table names.
     """
     return {
         exp.table_name(table)
-        for scope in traverse_scope(query)
+        for e in expressions
+        for scope in traverse_scope(e)
         for table in scope.tables
         if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
     }
 
 
 def _python_env(
-    query: exp.Expression,
-    hook_calls: t.List[HookCall],
+    expressions: t.Union[exp.Expression, t.List[exp.Expression]],
     module_path: Path,
     macros: MacroRegistry,
-    hooks: HookRegistry,
 ) -> t.Dict[str, Executable]:
     python_env: t.Dict[str, Executable] = {}
 
@@ -1270,19 +1352,9 @@ def _python_env(
                     name = macro_func.this.name.lower()
                     used_macros[name] = macros[name]
 
-    _capture_expression_macros(query)
-
-    for hook in hook_calls:
-        if isinstance(hook, exp.Expression):
-            _capture_expression_macros(hook)
-        else:
-            name = hook[0]
-            build_env(
-                hooks[name].func,
-                env=python_env,
-                name=name,
-                path=module_path,
-            )
+    expressions = ensure_list(expressions)
+    for expression in expressions:
+        _capture_expression_macros(expression)
 
     for name, macro in used_macros.items():
         if not macro.func.__module__.startswith("sqlmesh."):
@@ -1331,12 +1403,6 @@ def _parse_depends_on(model_func: str, python_env: t.Dict[str, Executable]) -> t
                 )
 
     return depends_on
-
-
-def _extract_hooks(kwargs: t.Dict[str, t.Any]) -> t.List[HookCall]:
-    return (ModelMeta._value_or_tuple_with_args_validator(kwargs.get("pre")) or []) + (
-        ModelMeta._value_or_tuple_with_args_validator(kwargs.get("post")) or []
-    )
 
 
 def _list_of_calls_to_exp(value: t.List[t.Tuple[str, t.Dict[str, t.Any]]]) -> exp.Expression:

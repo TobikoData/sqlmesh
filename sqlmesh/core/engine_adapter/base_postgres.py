@@ -88,7 +88,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
 
     def execute(
         self,
-        sql: t.Union[str, exp.Expression],
+        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
         **kwargs: t.Any,
     ) -> None:
@@ -98,7 +98,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
 
         Reference: https://www.psycopg.org/psycopg3/docs/basic/transactions.html
         """
-        super().execute(sql, ignore_unsupported_errors=ignore_unsupported_errors, **kwargs)
+        super().execute(expressions, ignore_unsupported_errors=ignore_unsupported_errors, **kwargs)
         if not self._connection_pool.is_transaction_active:
             self._connection_pool.commit()
 

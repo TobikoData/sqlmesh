@@ -8,7 +8,6 @@ from datetime import datetime
 from enum import IntEnum
 
 from pydantic import Field, validator
-from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
@@ -23,7 +22,7 @@ from sqlmesh.core.model import (
     kind,
     parse_model_name,
 )
-from sqlmesh.core.model.meta import HookCall, IntervalUnit
+from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -875,19 +874,6 @@ def fingerprint_from_model(
 
 
 def _model_data_hash(model: Model) -> str:
-    def serialize_hooks(hooks: t.List[HookCall]) -> t.Iterable[str]:
-        serialized = []
-        for hook in hooks:
-            if isinstance(hook, exp.Expression):
-                serialized.append(hook.sql())
-            else:
-                name, args = hook
-                serialized.append(
-                    f"{name}:"
-                    + ",".join(f"{k}={v.sql(comments=False)}" for k, v in sorted(args.items()))
-                )
-        return serialized
-
     data = [
         str(model.sorted_python_env),
         model.kind.name,
@@ -895,15 +881,21 @@ def _model_data_hash(model: Model) -> str:
         model.storage_format,
         str(model.lookback),
         *(model.partitioned_by or []),
-        *(expression.sql(comments=False) for expression in model.expressions or []),
-        *serialize_hooks(model.pre),
-        *serialize_hooks(model.post),
         model.stamp,
     ]
 
     if isinstance(model, SqlModel):
         query = model.query if model.hash_raw_query else model.render_query()
-        data.append(query.sql(comments=False))
+        pre_statements = (
+            model.pre_statements if model.hash_raw_query else model.render_pre_statements()
+        )
+        post_statements = (
+            model.post_statements if model.hash_raw_query else model.render_post_statements()
+        )
+        macro_defs = model.macro_definitions if model.hash_raw_query else []
+
+        for e in (query, *pre_statements, *post_statements, *macro_defs):
+            data.append(e.sql(comments=False))
 
         for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
             data.append(macro_name)
@@ -913,6 +905,7 @@ def _model_data_hash(model: Model) -> str:
             for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
                 data.append(macro_name)
                 data.append(macro.definition)
+
     elif isinstance(model, PythonModel):
         data.append(model.entrypoint)
     elif isinstance(model, SeedModel):

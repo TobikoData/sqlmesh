@@ -45,5 +45,11 @@ def parse_expression(
 
 
 expression_validator = validator(
-    "query", "expressions_", pre=True, allow_reuse=True, check_fields=False
+    "query",
+    "expressions_",
+    "pre_statements_",
+    "post_statements_",
+    pre=True,
+    allow_reuse=True,
+    check_fields=False,
 )(parse_expression)
