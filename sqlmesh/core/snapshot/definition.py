@@ -554,33 +554,30 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end: End interval to remove.
             latest: The latest time to use for the end of the interval.
         """
-        interval = self.get_restatement_interval(start, end, latest)
+        interval = self.inclusive_exclusive(start, end, latest, for_removal=True)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
-    def get_restatement_interval(
-        self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
+    def inclusive_exclusive(
+        self,
+        start: TimeLike,
+        end: TimeLike,
+        latest: t.Optional[TimeLike] = None,
+        strict: bool = True,
+        for_removal: bool = False,
     ) -> Interval:
-        """Remove an interval from the snapshot.
-
-        Args:
-            start: Start interval to remove.
-            end: End interval to remove.
-            latest: The latest time to use for the end of the interval.
-        """
-        end = latest or now() if self.depends_on_past else end
-        return self.inclusive_exclusive(start, end)
-
-    def inclusive_exclusive(self, start: TimeLike, end: TimeLike, strict: bool = True) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
+        latest = latest or now()
+        end = latest if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
@@ -640,12 +637,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         latest = make_inclusive_end(latest or now())
-        if self.name in restatements:
-            start, end = self.get_restatement_interval(start, end, latest)
         missing = []
 
         start_dt, end_dt = (
-            to_datetime(ts) for ts in self.inclusive_exclusive(start, end, strict=False)
+            to_datetime(ts)
+            for ts in self.inclusive_exclusive(
+                start, end, latest, strict=False, for_removal=self.name in restatements
+            )
         )
 
         croniter = self.model.croniter(start_dt)
