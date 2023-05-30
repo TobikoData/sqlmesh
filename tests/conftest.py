@@ -32,11 +32,6 @@ def ignore_local_config_files():
 
 
 @pytest.fixture
-def context(tmpdir) -> Context:
-    return Context(paths=str(tmpdir))
-
-
-@pytest.fixture
 def duck_conn() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
