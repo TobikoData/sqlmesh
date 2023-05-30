@@ -270,7 +270,7 @@ def test_create_directory_already_exists(project_tmp_path: Path) -> None:
 
     response = client.post("/api/directories/new_dir")
     assert response.status_code == 422
-    assert response.json() == {"detail": "Directory already exists"}
+    assert response.json()["message"] == "Directory already exists"
 
 
 def test_rename_directory(project_tmp_path: Path) -> None:
@@ -317,6 +317,7 @@ def test_rename_directory_already_exists_not_empty(project_tmp_path: Path) -> No
 
     response = client.post("/api/directories/new_dir", json={"new_path": "renamed_dir"})
     assert response.status_code == 422
+    assert response.json()["message"] == "Unable to move a file"
     assert new_dir.exists()
 
 
@@ -328,6 +329,7 @@ def test_rename_directory_to_existing_file(project_tmp_path: Path) -> None:
 
     response = client.post("/api/directories/new_dir", json={"new_path": "foo.txt"})
     assert response.status_code == 422
+    assert response.json()["message"] == "Unable to move a file"
     assert new_dir.exists()
 
 
@@ -351,7 +353,7 @@ def test_delete_directory_not_a_directory(project_tmp_path: Path) -> None:
 
     response = client.delete("/api/directories/foo.txt")
     assert response.status_code == 422
-    assert response.json() == {"detail": "Not a directory"}
+    assert response.json()["message"] == "Not a directory"
 
 
 def test_delete_directory_not_empty(project_tmp_path: Path) -> None:
@@ -378,7 +380,7 @@ def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) 
     mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 422
-    assert response.json()["detail"] == "foo"
+    assert response.json()["message"] == "foo"
 
 
 def test_plan(web_sushi_context: Context) -> None:
@@ -391,10 +393,10 @@ def test_plan(web_sushi_context: Context) -> None:
 
 
 def test_plan_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
-    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
+    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError())
     response = client.post("/api/plan", json={"environment": "dev"})
     assert response.status_code == 422
-    assert response.json()["detail"] == "foo"
+    assert response.json()["message"] == "Unable to run a plan"
 
 
 @pytest.mark.asyncio
@@ -409,7 +411,7 @@ async def test_cancel() -> None:
 def test_cancel_no_task() -> None:
     response = client.post("/api/plan/cancel")
     assert response.status_code == 422
-    assert response.json() == {"detail": "No active task found."}
+    assert response.json()["message"] == "Plan/apply is already running"
 
 
 def test_evaluate(web_sushi_context: Context) -> None:
@@ -460,7 +462,7 @@ def test_render(web_sushi_context: Context) -> None:
 def test_render_invalid_model(web_sushi_context: Context) -> None:
     response = client.post("/api/commands/render", json={"model": "foo.bar"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Model not found."}
+    assert response.json()["message"] == "Unable to find a model"
 
 
 def test_get_environments(project_context: Context) -> None:

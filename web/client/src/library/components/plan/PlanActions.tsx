@@ -45,6 +45,7 @@ export default function PlanActions({
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
+  const isNone = planAction === EnumPlanAction.None
   const isRun = planAction === EnumPlanAction.Run
   const isDone = planAction === EnumPlanAction.Done
   const isCanceling = planAction === EnumPlanAction.Cancelling
@@ -191,13 +192,14 @@ export default function PlanActions({
         )}
       </div>
       <div className="flex items-center">
-        {[
-          isProcessing,
-          isRun,
-          disabled,
-          environment.isInitial && environment.isDefault,
-          isDone,
-        ].every(isFalse) && (
+        {(isNone ||
+          [
+            isProcessing,
+            isRun,
+            disabled,
+            environment.isInitial && environment.isDefault,
+            isDone,
+          ].every(isFalse)) && (
           <Button
             onClick={handleReset}
             variant={EnumVariant.Neutral}

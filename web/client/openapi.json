@@ -14,8 +14,7 @@
                 "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -335,8 +334,7 @@
                 "$ref": "#/components/schemas/Body_run_plan_api_plan_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -515,8 +513,13 @@
               "application/json": {
                 "schema": {
                   "title": "Response Get Models Api Models Get",
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/Model" }
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Model" }
+                    },
+                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
+                  ]
                 }
               }
             }
@@ -591,6 +594,26 @@
   },
   "components": {
     "schemas": {
+      "ApiExceptionPayload": {
+        "title": "ApiExceptionPayload",
+        "required": ["timestamp", "status", "message", "origin"],
+        "type": "object",
+        "properties": {
+          "timestamp": { "title": "Timestamp", "type": "integer" },
+          "status": { "title": "Status", "type": "integer" },
+          "message": { "title": "Message", "type": "string" },
+          "origin": { "title": "Origin", "type": "string" },
+          "trigger": { "title": "Trigger", "type": "string" },
+          "type": { "title": "Type", "type": "string" },
+          "description": { "title": "Description", "type": "string" },
+          "traceback": { "title": "Traceback", "type": "string" },
+          "stack": {
+            "title": "Stack",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
       "ApplyResponse": {
         "title": "ApplyResponse",
         "required": ["type"],
@@ -605,7 +628,6 @@
       },
       "Body_apply_api_commands_apply_post": {
         "title": "Body_apply_api_commands_apply_post",
-        "required": ["environment"],
         "type": "object",
         "properties": {
           "environment": { "title": "Environment", "type": "string" },
@@ -637,7 +659,6 @@
       },
       "Body_run_plan_api_plan_post": {
         "title": "Body_run_plan_api_plan_post",
-        "required": ["environment"],
         "type": "object",
         "properties": {
           "environment": { "title": "Environment", "type": "string" },
@@ -938,7 +959,7 @@
       },
       "FileType": {
         "title": "FileType",
-        "enum": ["audit", "hooks", "macros", "model", "tests"],
+        "enum": ["audit", "macros", "model", "tests"],
         "type": "string",
         "description": "An enumeration of possible file types."
       },
@@ -1001,9 +1022,27 @@
           "kind": { "title": "Kind", "type": "string" },
           "batch_size": { "title": "Batch Size", "type": "integer" },
           "cron": { "title": "Cron", "type": "string" },
-          "stamp": { "title": "Stamp", "type": "string" },
-          "start": { "title": "Start", "type": "string" },
-          "retention": { "title": "Retention", "type": "string" },
+          "stamp": {
+            "title": "Stamp",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "start": {
+            "title": "Start",
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          },
+          "retention": { "title": "Retention", "type": "integer" },
           "storage_format": { "title": "Storage Format", "type": "string" },
           "time_column": { "title": "Time Column", "type": "string" },
           "tags": { "title": "Tags", "type": "string" },
@@ -1032,6 +1071,20 @@
           "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
           "annotated": { "title": "Annotated", "type": "boolean" }
         }
+      },
+      "ModelKindName": {
+        "title": "ModelKindName",
+        "enum": [
+          "INCREMENTAL_BY_TIME_RANGE",
+          "INCREMENTAL_BY_UNIQUE_KEY",
+          "FULL",
+          "VIEW",
+          "EMBEDDED",
+          "SEED",
+          "EXTERNAL"
+        ],
+        "type": "string",
+        "description": "The kind of model, determining how this data is computed and stored in the warehouse."
       },
       "ModelsDiff": {
         "title": "ModelsDiff",
@@ -1187,7 +1240,8 @@
           "temp_version": { "title": "Temp Version", "type": "string" },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
-          }
+          },
+          "physical_schema": { "title": "Physical Schema", "type": "string" }
         },
         "additionalProperties": false
       },
@@ -1229,8 +1283,7 @@
           "version",
           "physical_schema",
           "parents",
-          "is_materialized",
-          "is_embedded_kind"
+          "kind_name"
         ],
         "type": "object",
         "properties": {
@@ -1253,8 +1306,7 @@
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
-          "is_materialized": { "title": "Is Materialized", "type": "boolean" },
-          "is_embedded_kind": { "title": "Is Embedded Kind", "type": "boolean" }
+          "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
         },
         "additionalProperties": false
       },

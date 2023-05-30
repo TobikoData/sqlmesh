@@ -3,10 +3,11 @@ import shutil
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_404_NOT_FOUND
 
 from sqlmesh.core.context import Context
 from web.server import models
+from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_settings
 from web.server.utils import replace_file, validate_path
 
@@ -31,8 +32,9 @@ async def write_directory(
         (settings.project_path / path).mkdir(parents=True)
         return models.Directory(name=os.path.basename(path), path=path)
     except FileExistsError:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Directory already exists"
+        raise ApiException(
+            message="Directory already exists",
+            origin="API -> directories -> write_directory",
         )
 
 
@@ -49,4 +51,7 @@ async def delete_directory(
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except NotADirectoryError:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="Not a directory")
+        raise ApiException(
+            message="Not a directory",
+            origin="API -> directories -> delete_directory",
+        )

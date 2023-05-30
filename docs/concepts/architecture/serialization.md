@@ -1,6 +1,6 @@
 # Serialization
 
-SQLMesh executes Python code through [macros](../macros.md) and [Python models](../../concepts/models/python_models.md). Each Python model is stored as a standalone [snapshot](../architecture/snapshots.md), which includes all of the Python code necessary to generate it.
+SQLMesh executes Python code through [macros](../macros/overview.md) and [Python models](../../concepts/models/python_models.md). Each Python model is stored as a standalone [snapshot](../architecture/snapshots.md), which includes all of the Python code necessary to generate it.
 
 ## Serialization format
 

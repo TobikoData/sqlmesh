@@ -132,7 +132,7 @@ class TestConfig(GeneralConfig):
                 ):
                     kwargs[key] = no_braces
                 else:
-                    kwargs[key] = f'"{value}"'
+                    kwargs[key] = f'"{escape_quotes(value)}"'
             else:
                 kwargs[key] = value
 
@@ -161,3 +161,7 @@ def _remove_jinja_braces(jinja_str: str) -> str:
             cursor += 1
 
     return no_braces.strip()
+
+
+def escape_quotes(v: str) -> str:
+    return v.replace('"', '\\"')

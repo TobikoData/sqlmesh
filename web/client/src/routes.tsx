@@ -1,15 +1,14 @@
 import { createBrowserRouter } from 'react-router-dom'
-import Editor from './library/pages/editor/Editor'
-import IDEProvider from './library/pages/ide/context'
 import { Suspense, lazy } from 'react'
 import NotFound from './library/pages/root/NotFound'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import DocsWelcome from './library/pages/docs/Welcome'
-import DocsContent from './library/pages/docs/Content'
+import IDE from './library/pages/ide/IDE'
 
-const IDE = lazy(async () => await import('./library/pages/ide/IDE'))
-const Docs = lazy(async () => await import('./library/pages/docs/Docs'))
+const Editor = lazy(() => import('./library/pages/editor/Editor'))
+const Docs = lazy(() => import('./library/pages/docs/Docs'))
+const DocsContent = lazy(() => import('./library/pages/docs/Content'))
+const DocsWelcome = lazy(() => import('./library/pages/docs/Welcome'))
 
 export const EnumRoutes = {
   Ide: '/',
@@ -21,20 +20,7 @@ export const EnumRoutes = {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <Suspense
-        fallback={
-          <Loading className="inline-block ">
-            <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-            <h3 className="text-xl">Starting IDE...</h3>
-          </Loading>
-        }
-      >
-        <IDEProvider>
-          <IDE />
-        </IDEProvider>
-      </Suspense>
-    ),
+    element: <IDE />,
     children: [
       {
         path: 'editor',
@@ -42,18 +28,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'docs',
-        element: (
-          <Suspense
-            fallback={
-              <Loading className="inline-block">
-                <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-                <h3 className="text-xl">Looking...</h3>
-              </Loading>
-            }
-          >
-            <Docs />
-          </Suspense>
-        ),
+        element: <Docs />,
         children: [
           {
             path: '*',
@@ -89,10 +64,12 @@ export const router = createBrowserRouter([
                 element: (
                   <Suspense
                     fallback={
-                      <Loading className="inline-block">
-                        <Spinner className="w-5 h-5 border border-neutral-10 mr-4" />
-                        <h3 className="text-xl">Loading Content...</h3>
-                      </Loading>
+                      <div className="flex justify-center items-center w-full h-full">
+                        <Loading className="inline-block">
+                          <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                          <h3 className="text-md">Loading Content...</h3>
+                        </Loading>
+                      </div>
                     }
                   >
                     <DocsContent />

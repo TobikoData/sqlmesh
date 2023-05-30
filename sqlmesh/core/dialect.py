@@ -61,7 +61,6 @@ class DColonCast(exp.Cast):
     pass
 
 
-@t.no_type_check
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
     if self._curr is None:
         return None
@@ -73,16 +72,16 @@ def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
         comments = self._curr.comments
 
         self._advance()
-        meta = self._parse_wrapped(lambda: parser(self))
+        meta = self._parse_wrapped(lambda: t.cast(t.Callable, parser)(self))
 
         meta.comments = comments
         return meta
-    return self.__parse_statement()
+
+    return self.__parse_statement()  # type: ignore
 
 
-@t.no_type_check
-def _parse_lambda(self: Parser) -> t.Optional[exp.Expression]:
-    node = self.__parse_lambda()
+def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expression]:
+    node = self.__parse_lambda(alias=alias)  # type: ignore
     if isinstance(node, exp.Lambda):
         node.set("this", self._parse_alias(node.this))
     return node
@@ -90,22 +89,23 @@ def _parse_lambda(self: Parser) -> t.Optional[exp.Expression]:
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
     index = self._index
-    field = self._parse_primary() or self._parse_function({}) or self._parse_id_var()
+    field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
     if isinstance(field, exp.Func):
         macro_name = field.name.upper()
         if macro_name != keyword_macro and macro_name in KEYWORD_MACROS:
             self._retreat(index)
             return None
+
         if isinstance(field, exp.Anonymous):
-            name = field.name.upper()
-            if name == "DEF":
+            if macro_name == "DEF":
                 return self.expression(
                     MacroDef, this=field.expressions[0], expression=field.expressions[1]
                 )
-            if name == "SQL":
+            if macro_name == "SQL":
                 into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
+
         return self.expression(MacroFunc, this=field)
 
     if field is None:
@@ -113,6 +113,7 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
 
     if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
         return self.expression(MacroStrReplace, this=exp.Literal.string(field.this))
+
     return self.expression(MacroVar, this=field.this)
 
 
@@ -125,30 +126,28 @@ def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]
     ):
         return None
 
-    self._advance(1)
+    self._advance()
     return _parse_macro(self, keyword_macro=name)
 
 
-@t.no_type_check
-def _parse_with(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WITH")
     if not macro:
-        return self.__parse_with()
+        return self.__parse_with()  # type: ignore
 
-    macro.this.append("expressions", self.__parse_with(True))
+    macro.this.append("expressions", self.__parse_with(skip_with_token=True))  # type: ignore
     return macro
 
 
-@t.no_type_check
-def _parse_join(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.Expression]:
     index = self._index
     natural, side, kind = self._parse_join_side_and_kind()
     macro = _parse_matching_macro(self, "JOIN")
     if not macro:
         self._retreat(index)
-        return self.__parse_join()
+        return self.__parse_join()  # type: ignore
 
-    join = self.__parse_join(True)
+    join = self.__parse_join(skip_join_token=True)  # type: ignore
     if natural:
         join.set("natural", True)
     if side:
@@ -160,48 +159,46 @@ def _parse_join(self: Parser) -> t.Optional[exp.Expression]:
     return macro
 
 
-@t.no_type_check
-def _parse_where(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WHERE")
     if not macro:
-        return self.__parse_where()
+        return self.__parse_where()  # type: ignore
 
-    macro.this.append("expressions", self.__parse_where(True))
+    macro.this.append("expressions", self.__parse_where(skip_where_token=True))  # type: ignore
     return macro
 
 
-@t.no_type_check
-def _parse_group(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "GROUP_BY")
     if not macro:
-        return self.__parse_group()
+        return self.__parse_group()  # type: ignore
 
-    macro.this.append("expressions", self.__parse_group(True))
+    macro.this.append("expressions", self.__parse_group(skip_group_by_token=True))  # type: ignore
     return macro
 
 
-@t.no_type_check
-def _parse_having(self: Parser) -> t.Optional[exp.Expression]:
+def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "HAVING")
     if not macro:
-        return self.__parse_having()
+        return self.__parse_having()  # type: ignore
 
-    macro.this.append("expressions", self.__parse_having(True))
+    macro.this.append("expressions", self.__parse_having(skip_having_token=True))  # type: ignore
     return macro
 
 
-@t.no_type_check
-def _parse_order(self: Parser, this: exp.Expression = None) -> t.Optional[exp.Expression]:
+def _parse_order(
+    self: Parser, this: t.Optional[exp.Expression] = None, skip_order_token: bool = False
+) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "ORDER_BY")
     if not macro:
-        return self.__parse_order(this)
+        return self.__parse_order(this)  # type: ignore
 
-    macro.this.append("expressions", self.__parse_order(this, True))
+    macro.this.append("expressions", self.__parse_order(this, skip_order_token=True))  # type: ignore
     return macro
 
 
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
-    key = self._parse_id_var(True)
+    key = self._parse_id_var(any_token=True)
 
     if not key:
         return None
@@ -238,7 +235,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             value: t.Optional[exp.Expression | str]
 
             if key in table_keys:
-                value = exp.table_name(self._parse_table())
+                value = exp.table_name(self._parse_table_parts())
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
@@ -258,6 +255,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
                         props = None
+
                     value = self.expression(
                         ModelKind,
                         this=kind.value,
@@ -344,7 +342,7 @@ def format_model_expressions(
 
         if not isinstance(expression, exp.Alias):
             if expression.name:
-                expression = expression.replace(exp.alias_(expression.copy(), expression.name))
+                expression = expression.replace(exp.alias_(expression, expression.name))
 
         column = column or expression
         expression = expression.this
@@ -353,6 +351,7 @@ def format_model_expressions(
             this = expression.this
             if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
                 expression.replace(DColonCast(this=this, to=expression.to))
+
         column.comments = comments
         selects.append(column)
 
@@ -385,7 +384,7 @@ DIALECT_PATTERN = re.compile(
 )
 
 
-def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression]:
+def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expression]:
     """Parse a sql string.
 
     Supports parsing model definition.
@@ -437,7 +436,6 @@ def parse(sql: str, default_dialect: str | None = None) -> t.List[exp.Expression
     return expressions
 
 
-@t.no_type_check
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
     parsers = {Parser}
@@ -465,10 +463,8 @@ def extend_sqlglot() -> None:
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
                 }
             )
-            generator.WITH_SEPARATED_COMMENTS = (
-                *generator.WITH_SEPARATED_COMMENTS,
-                Model,
-            )
+
+            generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)  # type: ignore
 
     for parser in parsers:
         parser.FUNCTIONS.update(
@@ -510,7 +506,8 @@ def select_from_values(
         This method operates as a generator and yields a VALUES expression.
     """
     casted_columns = [
-        exp.alias_(exp.cast(column, to=kind), column) for column, kind in columns_to_types.items()
+        exp.alias_(exp.cast(column, to=kind), column, copy=False)
+        for column, kind in columns_to_types.items()
     ]
     batch = []
     for row in values:
@@ -529,7 +526,7 @@ def pandas_to_sql(
     columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     batch_size: int = 0,
     alias: str = "t",
-) -> t.Generator[exp.Select, None, None]:
+) -> t.Iterator[exp.Select]:
     """Convert a pandas dataframe into a VALUES sql statement.
 
     Args:

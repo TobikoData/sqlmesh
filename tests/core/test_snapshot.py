@@ -24,6 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     categorize_change,
     fingerprint_from_model,
+    has_paused_forward_only,
 )
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -92,8 +93,6 @@ def test_json(snapshot: Snapshot):
             "dialect": "spark",
             "name": "name",
             "partitioned_by": [],
-            "post": [],
-            "pre": [],
             "owner": "owner",
             "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
             "jinja_macros": {
@@ -355,6 +354,7 @@ each_macro = lambda: "test"
 
 
 def test_fingerprint(model: Model, parent_model: Model):
+    original_model = deepcopy(model)
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
@@ -383,6 +383,14 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
     assert new_fingerprint != fingerprint_from_model(model, models={})
+
+    model = SqlModel(
+        **{**original_model.dict(), "pre_statements": [parse_one("CREATE TABLE test")]}
+    )
+    assert original_fingerprint != fingerprint_from_model(model, models={})
+
+    model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
+    assert original_fingerprint != fingerprint_from_model(model, models={})
 
 
 def test_fingerprint_seed_model():
@@ -915,3 +923,13 @@ def test_physical_schema(snapshot: Snapshot):
     assert new_snapshot.physical_schema == "custom_schema"
     assert new_snapshot.data_version.physical_schema == "custom_schema"
     assert new_snapshot.table_info.physical_schema == "custom_schema"
+
+
+def test_has_paused_forward_only(snapshot: Snapshot):
+    assert not has_paused_forward_only([snapshot], [snapshot])
+
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    assert has_paused_forward_only([snapshot], [snapshot])
+
+    snapshot.set_unpaused_ts("2023-01-01")
+    assert not has_paused_forward_only([snapshot], [snapshot])

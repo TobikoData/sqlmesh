@@ -8,12 +8,12 @@ const Container = function Container({
 
 function Page({ children }: { children: React.ReactNode }): JSX.Element {
   return (
-    <main
+    <div
       className="font-sans w-full h-full flex flex-col overflow-hidden"
       tabIndex={0}
     >
       {children}
-    </main>
+    </div>
   )
 }
 

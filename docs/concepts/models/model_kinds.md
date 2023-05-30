@@ -10,7 +10,7 @@ Only missing time intervals are processed during each execution for `INCREMENTAL
 
 An `INCREMENTAL_BY_TIME_RANGE` model query must contain an expression in its SQL `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`.
 
-Refer to [Macros](../macros.md#predefined-variables) for more information.
+Refer to [Macros](../macros/macro_variables.md) for more information.
 
 This example implements an `INCREMENTAL_BY_TIME_RANGE` model by specifying the `kind` in the `MODEL` ddl and including a SQL `WHERE` clause to filter records by time range:
 ```sql linenums="1" hl_lines="3-5 12-13"

@@ -12,7 +12,12 @@ from airflow.operators.python import PythonOperator
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import PlanStatus
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotTableInfo,
+    has_paused_forward_only,
+)
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
@@ -160,7 +165,10 @@ class SnapshotDagGenerator:
             ) = self._create_promotion_demotion_tasks(plan_dag_spec)
 
             start_task >> create_start_task
-            if not plan_dag_spec.forward_only or plan_dag_spec.is_dev:
+            if (
+                not has_paused_forward_only(plan_dag_spec.promoted_snapshots, all_snapshots)
+                or plan_dag_spec.is_dev
+            ):
                 create_end_task >> backfill_start_task
                 backfill_end_task >> promote_start_task
                 latest_end_task = promote_end_task

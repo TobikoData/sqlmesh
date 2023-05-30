@@ -9,9 +9,7 @@ router = APIRouter()
 
 
 @router.get("")
-async def events(
-    request: Request,
-) -> SSEResponse:
+async def events(request: Request) -> SSEResponse:
     """SQLMesh console server sent events"""
 
     async def generator() -> t.AsyncGenerator:

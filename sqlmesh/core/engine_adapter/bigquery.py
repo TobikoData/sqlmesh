@@ -7,6 +7,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
+from sqlglot.helper import ensure_list
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
@@ -383,7 +384,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
     def execute(
         self,
-        sql: t.Union[str, exp.Expression],
+        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
         **kwargs: t.Any,
     ) -> None:
@@ -393,14 +394,16 @@ class BigQueryEngineAdapter(EngineAdapter):
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-        sql = self._to_sql(sql, **to_sql_kwargs) if isinstance(sql, exp.Expression) else sql
-        logger.debug(f"Executing SQL:\n{sql}")
-        retry.retry_target(
-            target=functools.partial(self._retryable_execute, sql=sql),
-            predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
-            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
-            deadline=self._extra_config.get("job_retry_deadline_seconds"),
-        )
+
+        for e in ensure_list(expressions):
+            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
+            logger.debug(f"Executing SQL:\n{sql}")
+            retry.retry_target(
+                target=functools.partial(self._retryable_execute, sql=sql),
+                predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
+                sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
+                deadline=self._extra_config.get("job_retry_deadline_seconds"),
+            )
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None

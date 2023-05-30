@@ -4,6 +4,7 @@ import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { createContext, useState, useContext, useCallback } from 'react'
 import { toNodeOrEdgeId } from './help'
+import { type ErrorIDE } from '~/library/pages/ide/context'
 
 export interface Connections {
   left: string[]
@@ -28,7 +29,7 @@ interface LineageFlow {
     React.SetStateAction<Record<string, Lineage> | undefined>
   >
   handleClickModel?: (modelName: string) => void
-  handleError?: (error: Error) => void
+  handleError?: (error: ErrorIDE) => void
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   setManuallySelectedColumn: React.Dispatch<
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
@@ -64,7 +65,7 @@ export default function LineageFlowProvider({
 }: {
   children: React.ReactNode
   handleClickModel?: (modelName: string) => void
-  handleError?: (error: Error) => void
+  handleError?: (error: ErrorIDE) => void
   withColumns?: boolean
 }): JSX.Element {
   const models = useStoreContext(s => s.models)

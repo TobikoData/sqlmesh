@@ -18,7 +18,6 @@ class FileType(str, enum.Enum):
     """An enumeration of possible file types."""
 
     audit = "audit"
-    hooks = "hooks"
     macros = "macros"
     model = "model"
     tests = "tests"
@@ -36,7 +35,7 @@ class File(BaseModel):
     path: str
     extension: str = ""
     is_supported: bool = False
-    content: t.Optional[str]
+    content: t.Optional[str] = None
     type: t.Optional[FileType]
 
     @validator("extension", always=True)
@@ -156,7 +155,7 @@ class ContextEnvironment(BaseModel):
     environment: str
     start: TimeLike
     end: TimeLike
-    changes: t.Optional[ContextEnvironmentChanges]
+    changes: t.Optional[ContextEnvironmentChanges] = None
     backfills: t.List[ContextEnvironmentBackfill] = []
 
 
@@ -179,9 +178,9 @@ class ModelDetails(BaseModel):
     kind: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     cron: t.Optional[str] = None
-    stamp: t.Optional[str] = None
-    start: t.Optional[str] = None
-    retention: t.Optional[str] = None
+    stamp: t.Optional[TimeLike] = None
+    start: t.Optional[TimeLike] = None
+    retention: t.Optional[int] = None
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None
@@ -246,3 +245,15 @@ class Query(BaseModel):
 
 class ApplyResponse(BaseModel):
     type: ApplyType
+
+
+class ApiExceptionPayload(BaseModel):
+    timestamp: int
+    status: int
+    message: str
+    origin: str
+    trigger: t.Optional[str] = None
+    type: t.Optional[str] = None
+    description: t.Optional[str] = None
+    traceback: t.Optional[str] = None
+    stack: t.Optional[t.List[str]] = None

@@ -22,7 +22,7 @@ def snapshot() -> Snapshot:
             storage_format="parquet",
             partitioned_by=["a"],
             query=parse_one("SELECT a, ds FROM tbl"),
-            expressions=[
+            pre_statements=[
                 parse_one("@DEF(key, 'value')"),
             ],
         ),
@@ -73,9 +73,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "audits": [],
                     "cron": "@daily",
                     "dialect": "",
-                    "expressions": ["@DEF(key, " "'value')"],
-                    "pre": [],
-                    "post": [],
+                    "pre_statements": ["@DEF(key, " "'value')"],
                     "kind": {
                         "name": "INCREMENTAL_BY_TIME_RANGE",
                         "time_column": {"column": "ds"},

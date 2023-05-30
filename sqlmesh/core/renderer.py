@@ -61,11 +61,16 @@ class ExpressionRenderer:
         self._python_env = python_env or {}
         self._only_latest = only_latest
 
+        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.Optional[exp.Expression]] = {}
+
     def render(
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        is_dev: bool = False,
+        expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
     ) -> t.Optional[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
@@ -75,10 +80,22 @@ class ExpressionRenderer:
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental models. Defaults to epoch start.
             kwargs: Additional kwargs to pass to the renderer.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
 
         Returns:
             The rendered expression.
         """
+
+        dates = _dates(start, end, latest)
+        cache_key = dates
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
         expression = self._expression
 
         render_kwargs = {
@@ -93,6 +110,7 @@ class ExpressionRenderer:
             try:
                 rendered_expression = jinja_env.from_string(expression.name).render()
                 if not rendered_expression:
+                    self._cache[cache_key] = None
                     return None
 
                 parsed_expression = parse_one(rendered_expression, read=self._dialect)
@@ -107,7 +125,6 @@ class ExpressionRenderer:
             python_env=self._python_env,
             jinja_env=jinja_env,
         )
-        macro_evaluator.locals.update(render_kwargs)
 
         for definition in self._macro_definitions:
             try:
@@ -115,12 +132,37 @@ class ExpressionRenderer:
             except MacroEvalError as ex:
                 raise_config_error(f"Failed to evaluate macro '{definition}'. {ex}", self._path)
 
+        macro_evaluator.locals.update(render_kwargs)
+
         try:
             expression = macro_evaluator.transform(expression)  # type: ignore
         except MacroEvalError as ex:
             raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
+        if expression is not None:
+            expression = _resolve_tables(
+                expression,
+                snapshots=snapshots,
+                expand=expand,
+                is_dev=is_dev,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
+
+        self._cache[cache_key] = expression
+
         return expression
+
+    def update_cache(
+        self,
+        expression: exp.Expression,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+    ) -> None:
+        self._cache[_dates(start, end, latest)] = expression
 
 
 class QueryRenderer(ExpressionRenderer):
@@ -150,7 +192,6 @@ class QueryRenderer(ExpressionRenderer):
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
-        self._query_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
         self.schema = {} if schema is None else schema
 
     def render(
@@ -158,10 +199,10 @@ class QueryRenderer(ExpressionRenderer):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        add_incremental_filter: bool = False,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
+        expand: t.Iterable[str] = tuple(),
+        add_incremental_filter: bool = False,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -176,7 +217,6 @@ class QueryRenderer(ExpressionRenderer):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            query_key: A query key used to look up a rendered query in the cache.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
@@ -184,59 +224,26 @@ class QueryRenderer(ExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        from sqlmesh.core.snapshot import to_table_mapping
+        query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
+        if not query:
+            raise ConfigError(f"Failed to render query:\n{query}")
 
-        dates = _dates(start, end, latest)
-        cache_key = dates
-
-        snapshots = snapshots or {}
-        mapping = to_table_mapping(snapshots.values(), is_dev)
-        # if a snapshot is provided but not mapped, we need to expand it or the query
-        # won't be valid
-        expand = set(expand) | {name for name in snapshots if name not in mapping}
-
-        query = self._expression
-
-        if cache_key not in self._query_cache:
-            query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
-            if not query:
-                raise ConfigError(f"Failed to render query {query}")
-
-            self._query_cache[cache_key] = query
-
-        query = self._optimize_query(self._query_cache[cache_key])
-
-        if expand:
-
-            def _expand(node: exp.Expression) -> exp.Expression:
-                if isinstance(node, exp.Table) and snapshots:
-                    name = exp.table_name(node)
-                    model = snapshots[name].model if name in snapshots else None
-                    if (
-                        name in expand
-                        and model
-                        and not model.is_seed
-                        and not model.kind.is_external
-                    ):
-                        return model.render_query(
-                            start=start,
-                            end=end,
-                            latest=latest,
-                            snapshots=snapshots,
-                            expand=expand,
-                            is_dev=is_dev,
-                            **kwargs,
-                        ).subquery(
-                            alias=node.alias or model.view_name,
-                            copy=False,
-                        )
-                return node
-
-            query = query.transform(_expand, copy=False)
+        query = self._optimize_query(query)
+        query = _resolve_tables(
+            query,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
         if add_incremental_filter and self._time_column:
+            dates = _dates(start, end, latest)
             with_ = query.args.pop("with", None)
             query = (
                 exp.select("*")
@@ -248,9 +255,6 @@ class QueryRenderer(ExpressionRenderer):
 
             if with_:
                 query.set("with", with_)
-
-        if mapping:
-            return exp.replace_tables(query, mapping)
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
@@ -267,15 +271,6 @@ class QueryRenderer(ExpressionRenderer):
         return exp.column(self._time_column.column).between(
             self._time_converter(start), self._time_converter(end)  # type: ignore
         )
-
-    def update_cache(
-        self,
-        query: exp.Expression,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-    ) -> None:
-        self._query_cache[_dates(start, end, latest)] = query
 
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
         schema = ensure_schema(self.schema, dialect=self._dialect)
@@ -298,3 +293,45 @@ class QueryRenderer(ExpressionRenderer):
             )
 
         return annotate_types(simplify(query), schema=schema)
+
+
+def _resolve_tables(
+    expression: exp.Expression,
+    *,
+    snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+    expand: t.Iterable[str] = tuple(),
+    is_dev: bool = False,
+    **render_kwargs: t.Any,
+) -> exp.Expression:
+    from sqlmesh.core.snapshot import to_table_mapping
+
+    snapshots = snapshots or {}
+    mapping = to_table_mapping(snapshots.values(), is_dev)
+    # if a snapshot is provided but not mapped, we need to expand it or the query
+    # won't be valid
+    expand = set(expand) | {name for name in snapshots if name not in mapping}
+
+    if expand:
+
+        def _expand(node: exp.Expression) -> exp.Expression:
+            if isinstance(node, exp.Table) and snapshots:
+                name = exp.table_name(node)
+                model = snapshots[name].model if name in snapshots else None
+                if name in expand and model and not model.is_seed and not model.kind.is_external:
+                    return model.render_query(
+                        snapshots=snapshots,
+                        expand=expand,
+                        is_dev=is_dev,
+                        **render_kwargs,
+                    ).subquery(
+                        alias=node.alias or model.view_name,
+                        copy=False,
+                    )
+            return node
+
+        expression = expression.transform(_expand, copy=False)
+
+    if mapping:
+        expression = exp.replace_tables(expression, mapping)
+
+    return expression

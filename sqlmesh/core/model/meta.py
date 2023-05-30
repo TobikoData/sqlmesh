@@ -6,7 +6,7 @@ from enum import Enum
 
 from croniter import croniter
 from pydantic import Field, root_validator, validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -37,7 +37,6 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
 
-HookCall = t.Union[exp.Expression, t.Tuple[str, t.Dict[str, exp.Expression]]]
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
@@ -55,8 +54,6 @@ class ModelMeta(PydanticModel):
     retention: t.Optional[int]  # not implemented yet
     storage_format: t.Optional[str]
     partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
-    pre: t.List[HookCall] = []
-    post: t.List[HookCall] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
@@ -110,65 +107,6 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("pre", "post", pre=True)
-    def _value_or_tuple_with_args_validator(cls, v: t.Any) -> t.Any:
-        def extract(v: exp.Expression) -> t.Union[exp.Expression, t.Tuple[str, t.Dict[str, str]]]:
-            kwargs = {}
-
-            if isinstance(v, exp.Anonymous):
-                func = v.name
-                args = v.expressions
-            elif not isinstance(v, d.Jinja) and isinstance(v, exp.Func):
-                func = v.sql_name()
-                args = list(v.args.values())
-            elif isinstance(v, exp.Column):
-                return v.name.lower(), {}
-            else:
-                return v
-
-            for arg in args:
-                if not isinstance(arg, exp.EQ):
-                    raise ConfigError(
-                        f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
-                    )
-                kwargs[arg.left.name] = arg.right
-            return (func.lower(), kwargs)
-
-        if isinstance(v, (exp.Tuple, exp.Array)):
-            items: t.List[t.Any] = []
-            for item in v.expressions:
-                if isinstance(item, exp.Literal):
-                    items.append(d.parse(item.this)[0])
-                elif isinstance(item, exp.Column) and isinstance(item.this, exp.Identifier):
-                    items.append(d.parse(item.this.this)[0])
-                else:
-                    items.append(extract(item))
-            return items
-        if isinstance(v, exp.Paren):
-            return [extract(v.this)]
-        if isinstance(v, exp.Expression):
-            return [extract(v)]
-        if isinstance(v, list) and v:
-            transformed = []
-            for entry in v:
-                if isinstance(entry, exp.Expression):
-                    transformed.append(extract(entry))
-                elif isinstance(entry, str):
-                    transformed.append(d.parse(entry)[0])
-                else:
-                    transformed.append(
-                        (
-                            entry[0].lower(),
-                            {
-                                key: d.parse(value)[0] if isinstance(value, str) else value
-                                for key, value in entry[1].items()
-                            },
-                        )
-                    )
-            return transformed
-
-        return v
-
     @validator("partitioned_by_", "tags", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
@@ -194,12 +132,14 @@ class ModelMeta(PydanticModel):
         return cron
 
     @validator("columns_to_types_", pre=True)
-    def _columns_validator(cls, v: t.Any) -> t.Optional[t.Dict[str, exp.DataType]]:
+    def _columns_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
         if isinstance(v, exp.Schema):
             return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
             return {
-                k: maybe_parse(data_type, into=exp.DataType)  # type: ignore
+                k: exp.DataType.build(data_type, dialect=values.get("dialect"))
                 for k, data_type in v.items()
             }
         return v

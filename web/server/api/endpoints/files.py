@@ -4,12 +4,13 @@ import os
 import typing as t
 from pathlib import Path
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from web.server import models
+from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_path_mapping, get_settings
 from web.server.utils import is_relative_to, replace_file, validate_path
 
@@ -24,7 +25,6 @@ def get_files(
 ) -> models.Directory:
     """Get all project files."""
     ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    hook_directory_path = Path(c.HOOKS)
     macro_directory_path = Path(c.MACROS)
     test_directory_path = Path(c.TESTS)
 
@@ -57,9 +57,7 @@ def get_files(
                     )
                 else:
                     file_type = None
-                    if is_relative_to(relative_path, hook_directory_path):
-                        file_type = models.FileType.hooks
-                    elif is_relative_to(relative_path, macro_directory_path):
+                    if is_relative_to(relative_path, macro_directory_path):
                         file_type = models.FileType.macros
                     elif is_relative_to(relative_path, test_directory_path):
                         file_type = models.FileType.tests
@@ -135,8 +133,11 @@ async def delete_file(
     """Delete a file."""
     try:
         (settings.project_path / path).unlink()
-        response.status_code = status.HTTP_204_NO_CONTENT
+        response.status_code = HTTP_204_NO_CONTENT
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
     except IsADirectoryError:
-        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail="File is a directory")
+        raise ApiException(
+            message="File is a directory",
+            origin="API -> files -> delete_file",
+        )

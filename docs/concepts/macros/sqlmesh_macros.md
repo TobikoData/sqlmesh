@@ -1,28 +1,24 @@
-# Macros
-
-SQL is a static language. It does not have features like variables or control flow logic (if-then) that allow SQL commands to behave differently in different situations.
-
-However, data pipelines are dynamic and need different behavior depending on context. SQL is made dynamic with *macros*. 
-
-SQLMesh supports two macro systems: SQLMesh macros and the [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) templating system. 
-
-This page describes how to use SQLMesh macros to build dynamic data pipelines.
+# SQLMesh macros
 
 ## Macro systems: two approaches
 
-SQLMesh macros behave differently than those of templating systems like [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) - this section describes how and why. 
+SQLMesh macros behave differently than those of templating systems like [Jinja](https://jinja.palletsprojects.com/en/3.1.x/). 
 
 Macro systems are based on string substitution. The macro system scans code files, identifies special characters that signify macro content, and replaces the macro elements with other text. 
 
-In a general sense, that is the entire functionality templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*. Templating systems are intentionally agnostic to the programming language being templated, and most of them work for everything from blog posts to HTML to SQL.
+In a general sense, that is the entire functionality templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*. 
 
-In contrast, SQLMesh macros are designed specifically for generating SQL code. They have *semantic understanding* of the SQL code being built by analyzing it with the Python [sqlglot](https://github.com/tobymao/sqlglot) library, and they allow use of Python code so users can tidily implement sophisticated macro logic.
+Templating systems are intentionally agnostic to the programming language being templated, and most of them work for everything from blog posts to HTML to SQL.
+
+In contrast, SQLMesh macros are designed specifically for generating SQL code. They have *semantic understanding* of the SQL code being created by analyzing it with the Python [sqlglot](https://github.com/tobymao/sqlglot) library, and they allow use of Python code so users can tidily implement sophisticated macro logic.
 
 ### SQLMesh macro approach
 
 This section describes how SQLMesh macros work under the hood. Feel free to skip over this section and return if and when it is useful. This information is **not** required to use SQLMesh macros, but it will be useful for debugging any macros exhibiting puzzling behavior. 
 
-The critical distinction between the SQLMesh macro approach and templating systems is the role string substitution plays. In templating systems, string substitution is the entire and only point. In SQLMesh, string substitution is just one step toward modifying the semantic representation of the SQL query. *SQLMesh macros work by building and modifying the semantic representation of the SQL query.*
+The critical distinction between the SQLMesh macro approach and templating systems is the role string substitution plays. In templating systems, string substitution is the entire and only point. 
+
+In SQLMesh, string substitution is just one step toward modifying the semantic representation of the SQL query. *SQLMesh macros work by building and modifying the semantic representation of the SQL query.*
 
 After processing all the non-SQL text, it uses the substituted values to modify the semantic representation of the query to its final state.
 
@@ -31,107 +27,19 @@ It uses the following five step approach to accomplish this:
 1. Parse the text with the appropriate sqlglot SQL dialect (e.g., Postgres, BigQuery, etc.). During the parsing, it detects the special macro symbol `@` to differentiate non-SQL from SQL text. The parser builds a semantic representation of the SQL code's structure, capturing non-SQL text as "placeholder" values to use in subsequent steps.
 
 2. Examine the placeholder values to classify them as one of the following types:
-- Definitions of macro variables with the `@DEF` operator (see more about [user-defined macro variables](#User-defined-variables) below)
-- Macro variables, both [SQLMesh pre-defined](#predefined-variables) and [user-defined](#User-defined-variables) with the `@DEF` operator
-- Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
+
+    - Creation of user-defined macro variables with the `@DEF` operator (see more about [user-defined macro variables](#user-defined-variables))
+    - Macro variables, both [SQLMesh pre-defined](./macro_variables.md) and [user-defined](#User-defined-variables)
+    - Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
 
 3. Substitute macro variable values where they are detected. In most cases, this is direct string substitution as with a templating system.
 
 4. Execute any macro functions and substitute the returned values.
 
-5. Modify the semantic representation of the SQL query with the substituted macro variables from (3) and macro functions from (4).
+5. Modify the semantic representation of the SQL query with the substituted variable values from (3) and functions from (4).
 
 
-## Variables
-
-The most common use case for macros is variable substitution. For example, you might have a SQL query that filters by date in the `WHERE` clause. 
-
-Instead of manually changing the date each time the model is run, you can use a macro variable to make the date dynamic. With the dynamic approach the date changes automatically based on when the query is run. 
-
-Consider this query that filters for rows where column `my_date` is after '2023-01-01':
-
-```sql linenums="1"
-SELECT *
-FROM table
-WHERE my_date > '2023-01-01'
-```
-
-To make this query's date dynamic you could use the predefined SQLMesh macro variable `@latest_ds`: 
-
-```sql linenums="1"
-SELECT *
-FROM table
-WHERE my_date > @latest_ds
-```
-
-The `@` symbol tells SQLMesh that `@latest_ds` is a macro variable that requires substitution before the SQL is executed. 
-
-The macro variable `@latest_ds` is predefined, so its value will be automatically set by SQLMesh based on when the model was last executed. If the model was last run on February 1, 2023 the resulting query would be:
-
-```sql linenums="1"
-SELECT *
-FROM table
-WHERE my_date > '2023-02-01'
-```
-
-This example used one of SQLMesh's predefined variables, but you can also create your own custom macro variables.
-
-We describe SQLMesh's predefined variables next and custom macro variables in the subsequent [User-defined Variables](#user-defined-variables) section.
-
-### Predefined Variables
-SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime. 
-
-These variables are related to time and are comprised of a combination of prefixes (start, end, latest) and postfixes (date, ds, ts, epoch, millis).
-
-Prefixes:
-
-* start - The inclusive starting interval of a model run.
-* end - The inclusive end interval of a model run.
-* latest - The most recent date SQLMesh ran the model, determined from its [snapshot](./architecture/snapshots.md).
-
-Postfixes:
-
-* date - A python date object that converts into a native SQL Date.
-* ds - A date string with the format: '%Y-%m-%d'
-* ts - An ISO 8601 datetime formatted string: '%Y-%m-%d %H:%M:%S'.
-* epoch - An integer representing seconds since epoch.
-* millis - An integer representing milliseconds since epoch.
-
-All predefined macro variables:
-
-* date
-    * @start_date
-    * @end_date
-    * @latest_date
-
-* datetime
-    * @start_dt
-    * @end_dt
-    * @latest_dt
-
-* ds
-    * @start_ds
-    * @end_ds
-    * @latest_ds
-
-* ts
-    * @start_ts
-    * @end_ts
-    * @latest_ts
-
-* epoch
-    * @start_epoch
-    * @end_epoch
-    * @latest_epoch
-
-* millis
-    * @start_millis
-    * @end_millis
-    * @latest_millis
-
-More information to come on python date objects and epoch values.
-
-### User-defined variables
+## User-defined variables
 
 Define your own macro variables with the `@DEF` macro operator. For example, you could set the macro variable `macro_var` to the value `1` with:
 
@@ -140,6 +48,7 @@ Define your own macro variables with the `@DEF` macro operator. For example, you
 ```
 
 SQLMesh has three basic requirements for using the `@DEF` operator:
+
 1. The `MODEL` statement must end with a semi-colon `;`
 2. All `@DEF` uses must come after the `MODEL` statement and before the SQL code
 3. Each `@DEF` use must end with a semi-colon `;`
@@ -186,9 +95,11 @@ GROUP BY item_id
 
 This example defines the macro variable `size` with `@DEF(size, 1)`. When the model is run, SQLMesh will substitute in the number `1` where `@size` appears in the `WHERE` clause.
 
+### User-defined variable quoting
+
 More information to come on quoting behavior when quotes are included/excluded in the value passed to `@DEF()`.
 
-## SQLMesh macro operators
+## Macro operators
 
 SQLMesh's macro system has multiple operators that allow different forms of dynamism in models.
 
@@ -198,7 +109,7 @@ Macro systems use control flow operators such as `for` loops and `if` statements
 
 This section describes how SQLMesh's control flow operators `@EACH` and `@IF` work.
 
-#### `for` loops
+#### @EACH introduction
 Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components. 
 
 `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
@@ -217,6 +128,7 @@ This for loop prints each number present in the brackets:
 ```
 
 The first line of the example sets up the loop, doing two things:
+
 1. Telling Python that code inside the loop will refer to each item as `number`
 2. Telling Python to step through the list of items in brackets
 
@@ -224,7 +136,7 @@ The second line tells Python what action should be taken for each item. In this 
 
 The loop executes one time for each item in the list, substituting in the item for the word `number` in the code. For example, the first time through the loop the code would execute as `print(4)` and the second time as `print(5)`.
 
-#### `@EACH` basics
+#### @EACH basics
 The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros.
 
 `@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently. 
@@ -243,6 +155,7 @@ The second argument `number -> number` tells SQLMesh what action should be taken
 The right side of the arrow specifies what should be done to each item in the list. `number -> number` tells `@EACH` that for each item `number` it should return that item (e.g., `1`).
 
 SQLMesh macros use their semantic understanding of SQL code to take automatic actions based on where in a SQL query macro variables are used. If `@EACH` is used in the `SELECT` clause of a SQL statement:
+
 1. It prints the item
 2. It knows fields are separated by commas in `SELECT`, so it automatically separates the printed items with commas
 
@@ -256,7 +169,7 @@ SELECT
 FROM table
 ```
 
-#### `@EACH` string substitution
+#### @EACH string substitution
 
 The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier. 
 
@@ -271,6 +184,7 @@ FROM table
 ```
 
 In this code each number is being used in two distinct ways. For example, `4` is being used:
+
 1. As a literal numeric value in `favorite_number = 4`
 2. As part of a column name in `favorite_4`
 
@@ -314,11 +228,12 @@ SELECT
 FROM table
 ```
 
-#### `@IF`
+#### @IF
 
 SQLMesh's `@IF` macro allows components of a SQL query to change based on the result of a logical condition.
 
 It includes three elements: 
+
 1. A logical condition that evaluates to `TRUE` or `FALSE`
 2. A value to return if the condition is `TRUE`
 3. A value to return if the condition is `FALSE` [optional]
@@ -328,12 +243,14 @@ These elements are specified as `@IF([logical condition], [value if TRUE], [valu
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
+
 - Equality: `=` for equals, `!=` or `<>` for not equals
 - Comparison: `<`, `>`, `<=`, `>=`, 
 - Between: `[number] BETWEEN [low number] AND [high number]`
 - Membership: `[item] IN ([comma-separated list of items])`
 
 For example, the following simple conditions are all valid SQL and evaluate to `TRUE`:
+
 - `'a' = 'a'`
 - `'a' != 'b'`
 - `0 < 1`
@@ -361,19 +278,19 @@ FROM table
 
 Note that `@IF(1 > 0, sensitive_col)` does not include the third argument specifying a value if `FALSE`, so only `col1` would be selected if the condition were `FALSE`.
 
-### Helpers
+### Helper macros
 
 SQLMesh's macro system includes two helper operators that do not directly act on the SQL query's semantic representation. Instead, they manipulate arrays of values that are used by other SQLMesh macro operators like `@EACH`.
 
 Like [`@EACH`](#each-basics), they take two arguments: an array of items in brackets `[]` and an anonymous function specifying what actions to take with the items. 
 
-#### `@FILTER`
+#### @FILTER
 
-`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or `@REDUCE`.
+`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or [`@REDUCE`](#reduce).
 
 The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition. 
 
-The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information.
+The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information about supported operators.
 
 For example, consider this `@FILTER` call:
 
@@ -384,7 +301,7 @@ For example, consider this `@FILTER` call:
 It applies the condition `x > 1` to each item in the input array `[1,2,3]` and returns `[2,3]`.
 
 
-#### `@REDUCE`
+#### @REDUCE
 
 `@REDUCE` is used to combine the items in an array. 
 
@@ -399,6 +316,7 @@ Note that even though the anonymous function takes only two arguments the input 
 Consider the anonymous function `(x, y) -> x + y`. Conceptually, only the `y` argument corresponds to items in the array; the `x` argument is a temporary value created when the function is evaluated. 
 
 For the call `@REDUCE([1,2,3,4], (x, y) -> x + y)`, the anonymous function is applied to the array in the following steps:
+
 1. Take the first two items in the array as `x` and `y`. Apply the function to them: `1 + 2` = `3`.
 2. Take the output of step (1) as `x` and the next item in the array `3` as `y`. Apply the function to them: `3 + 3` = `6`.
 3. Take the output of step (2) as `x` and the next item in the array `4` as `y`. Apply the function to them: `6 + 4` = `10`.
@@ -431,15 +349,12 @@ WHERE
 
 ### Meta Operators
 @SQL
+
 @''
 
 More information to come.
 
-## User-defined macro functions
-
-More information to come.
-
-## SQL clause operators
+### SQL clause operators
 
 SQLMesh's macro system has six operators that correspond to different clauses in SQL syntax. They are:
 
@@ -452,10 +367,10 @@ SQLMesh's macro system has six operators that correspond to different clauses in
 
 Each of these operators is used to dynamically add the code for its corresponding clause to a model's SQL query.
 
-### How SQL clause operators work
+#### How SQL clause operators work
 The SQL clause operators take a single argument that determines whether the clause is generated. 
 
-If the argument is True the clause code is generated, if False the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
+If the argument is `TRUE` the clause code is generated, if `FALSE` the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
 
 Each SQL clause operator may only be used once in a query, but any common table expressions or subqueries may contain their own single use of the operator as well.
 
@@ -478,11 +393,11 @@ SELECT
   count(distinct id) AS num_orders,
 FROM
     sqlmesh_example.incremental_model
-@WHERE(True) item_id > @size
+@WHERE(TRUE) item_id > @size
 GROUP BY item_id
 ```
 
-The `@WHERE` argument is set to `True`, so the WHERE code is included in the rendered model:
+The `@WHERE` argument is set to `TRUE`, so the WHERE code is included in the rendered model:
 
 ```sql linenums="1"
 SELECT
@@ -494,9 +409,9 @@ WHERE item_id > 1
 GROUP BY item_id
 ```
 
-If the `@WHERE` argument were instead set to `False` the `WHERE` clause would be omitted from the query.
+If the `@WHERE` argument were instead set to `FALSE` the `WHERE` clause would be omitted from the query.
 
-These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by Python. 
+These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL engine. 
 
 For example, the `WHERE` clause will be included in this query because 1 less than 2:
 
@@ -544,7 +459,7 @@ FROM
 GROUP BY item_id
 ```
 
-The argument to `@WHERE` will be "1 < 2" as in the previous example after the macro variables `left_number` and `right_number` are substituted in.
+The argument to `@WHERE` will be "1 < 2" as in the previous hard-coded example after the macro variables `left_number` and `right_number` are substituted in.
 
 ### SQL clause operator examples
 
@@ -557,7 +472,7 @@ SELECT *
 FROM all_cities
 ```
 
-#### `@WITH` operator
+#### @WITH operator
 
 The `@WITH` operator is used to create [common table expressions](https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL#Common_table_expression), or "CTEs."
 
@@ -577,7 +492,7 @@ select *
 FROM all_cities
 ```
 
-#### `@JOIN` operator
+#### @JOIN operator
 
 The `@JOIN` operator specifies joins between tables or other SQL objects; it supports different join types (e.g., INNER, OUTER, CROSS, etc.).
 
@@ -599,7 +514,7 @@ LEFT OUTER JOIN country
 
 The `@JOIN` operator recognizes that `LEFT OUTER` is a component of the `JOIN` specification and will omit it if the `@JOIN` argument evaluates to False.
 
-#### `@WHERE` operator
+#### @WHERE operator
 
 The `@WHERE` operator adds a filtering `WHERE` clause(s) to the query when its argument evaluates to True.
 
@@ -617,7 +532,7 @@ FROM all_cities
 WHERE city_name = 'Toronto'
 ```
 
-#### `@GROUP_BY` operator
+#### @GROUP_BY operator
 
 ```sql linenums="1"
 SELECT *
@@ -633,7 +548,7 @@ FROM all_cities
 GROUP BY city_id
 ```
 
-#### `@HAVING` operator
+#### @HAVING operator
 
 ```sql linenums="1"
 SELECT 
@@ -653,7 +568,7 @@ GROUP BY city_id
 HAVING population > 1000
 ```
 
-#### `@ORDER_BY` operator
+#### @ORDER_BY operator
 
 ```sql linenums="1"
 SELECT *
@@ -669,27 +584,125 @@ FROM all_cities
 ORDER BY city_pop
 ```
 
+## User-defined macro functions
 
+User-defined macro functions allow the same macro code to be used in multiple models. 
 
-## Jinja
-[Jinja](https://jinja.palletsprojects.com/en/3.1.x/) is a popular templating tool for creating dynamic SQL and is supported by SQLMesh, but there are some drawbacks which lead for us to create our own macro system.
+SQLMesh supports user-defined macro functions written in two languages - SQL and Python: 
 
-* Jinja is not valid SQL and not parseable.
-```sql linenums="1"
--- templating allows for arbitrary string replacements which is not feasible to parse
-SE{{ 'lect' }} x {{ 'AS ' + var }}
-FROM {{ 'table CROSS JOIN z' }}
+- SQL macro functions must use the [Jinja templating system](./jinja_macros.md#user-defined-macro-functions).
+- Python macro functions use the SQLGlot library to allow more complex operations than macro variables and operators provide alone.
+
+### Python macro functions
+
+Python macro functions should be placed in `.py` files in the SQLMesh project's `macros` directory. Multiple functions can be defined in one `.py` file, or they can be distributed across multiple files.
+
+An empty `__init__.py` file must be present in the SQLMesh project's `macros` directory. It will be created automatically when the project scaffold is created with `sqlmesh init`.
+
+Each `.py` file containing a macro definition must import SQLMesh's `macro` decorator with `from sqlmesh import macro`.
+
+Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorators. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
+
+Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
+
+Macro functions may return a list of strings or expressions that all play the same role in the query (e.g., specifying column definitions). For example, a list containing multiple `CASE WHEN` statements would be incorporated into the query properly, but a list containing both `CASE WHEN` statements and a `WHERE` clause would not.
+
+#### Macro function basics
+
+This example demonstrates the core requirements for defining a python macro - it takes no user-supplied arguments and returns the string `text`.
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def print_text(evaluator):
+  return 'text'
 ```
 
-* Jinja is verbose and difficult to debug.
-```sql linenums="1"
-TBD example with multiple for loops with trailing or leading comma
-```
-* No concepts of types. Easy to miss quotes.
+We could use this in a SQLMesh SQL model like this:
 
 ```sql linenums="1"
-SELECT *
+SELECT
+  @print_text() as my_text
 FROM table
-WHERE ds BETWEEN '{{ start_ds }}' and '{{ end_ds }}'  -- quotes are needed
-WHERE ds BETWEEN {{ start_ds }} and {{ end_ds }}  -- error because ds is a string
 ```
+
+After processing, it will render to this:
+
+```sql linenums="1"
+SELECT
+  text as my_text
+FROM table
+```
+
+Note that the python function returned a string `'text'`, but the rendered query uses `text` as a column name. That is due to the function's returned text being parsed as SQL code and integrated into the query's semantic representation.
+
+The rendered query will treat `text` as a string if we double-quote the single-quoted value in the function definition as `"'text'"`:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def print_text(evaluator):
+  return "'text'"
+```
+
+When run in the same model query as before, this will render to:
+
+```sql linenums="1"
+SELECT
+  'text' as my_text
+FROM table
+```
+
+#### Returning more than one value
+
+Macro functions are a convenient way to tidy model code by creating multiple outputs from one function call. Python macro functions do this by returning a list of strings or SQLGlot expressions.
+
+For example, we might want to create indicator variables from the values in a string column. We could do that with:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro() 
+def make_indicators(evaluator, string_column, string_values):
+  cases = []
+
+  for value in string_values:
+    cases.append(f"CASE WHEN {string_column} = '{value}' THEN '{value}' ELSE NULL END AS {string_column}_{value}")
+
+  return cases
+```
+
+Note that the `CASE WHEN` string includes quotes around `'{value}'`.
+
+We could call this function in a model query to create `CASE WHEN` statements for the `vehicle` column values `truck` and `bus` like this:
+
+```sql linenums="1"
+SELECT
+@make_indicators('vehicle', ['truck', 'bus'])
+FROM table
+```
+
+It would render to:
+
+```sql linenums="1"
+SELECT
+CASE WHEN vehicle = 'truck' THEN 'truck' ELSE NULL END AS vehicle_truck,
+CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
+FROM table
+```
+
+Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes around `'{value}'` in the function definition.
+
+#### Accessing macro variable values
+
+More information to come.
+
+#### Using SQLGlot expressions
+
+More information to come.
+
+## Mixing macro systems
+
+SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways. 

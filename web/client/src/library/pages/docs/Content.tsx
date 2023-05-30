@@ -7,6 +7,7 @@ import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import LineageFlowProvider from '@components/graph/context'
+import { type ErrorIDE } from '../ide/context'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
@@ -28,7 +29,7 @@ export default function Content(): JSX.Element {
     )
   }
 
-  function handleError(error?: Error): void {
+  function handleError(error: ErrorIDE): void {
     console.log(error?.message)
   }
 

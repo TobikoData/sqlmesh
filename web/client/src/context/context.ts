@@ -31,6 +31,7 @@ interface ContextStore {
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
   addSyncronizedEnvironments: (environments: Environment[]) => void
+  hasSyncronizedEnvironments: () => boolean
   setInitialDates: (
     initialStartDate?: ContextEnvironmentStart,
     initialEndDate?: ContextEnvironmentEnd,
@@ -176,5 +177,12 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         environments: new Set(environments),
       }
     })
+  },
+  hasSyncronizedEnvironments() {
+    const s = get()
+
+    return Array.from(s.environments).some(
+      ({ type }) => type === EnumRelativeLocation.Syncronized,
+    )
   },
 }))
