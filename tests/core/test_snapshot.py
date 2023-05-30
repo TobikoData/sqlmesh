@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
     create_seed_model,
     load_model,
 )
-from sqlmesh.core.model.kind import FullWithHistory, TimeColumn
+from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -214,23 +214,23 @@ def test_missing_intervals(snapshot: Snapshot):
     ]
 
 
-def test_missing_intervals_full_history(make_snapshot):
+def test_incremental_time_self_reference(make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
             name="name",
-            kind=FullWithHistory(time_column=TimeColumn(column="ds")),
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), batch_size=1),
             owner="owner",
             dialect="",
             cron="@daily",
             start="1 week ago",
-            query=parse_one("SELECT id, @end_ds as ds FROM VALUES (1), (2) AS t(id)"),
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
         )
     )
     snapshot.add_interval(to_date("1 week ago"), to_date("1 day ago"))
     assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == []
     snapshot.remove_interval(to_date("1 week ago"), to_date("1 week ago"))
     assert snapshot.missing_intervals(
-        to_date("1 week ago"), to_date("1 week ago"), is_restatement=True
+        to_date("1 week ago"), to_date("1 week ago"), restatements={"name"}
     ) == [
         (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
         for x in reversed(range(7))

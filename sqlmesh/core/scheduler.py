@@ -70,7 +70,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-        is_restatement: bool = False,
+        restatements: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
         """Returns a list of snapshot batches to evaluate.
 
@@ -80,8 +80,9 @@ class Scheduler:
             latest: The latest datetime to use for non-incremental queries.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
-            is_restatement: Indicates if the batches are being found within the context of a restatement
+            restatements: A set of snapshot names being restated.
         """
+        restatements = restatements or set()
         validate_date_range(start, end)
 
         return self._interval_params(
@@ -90,7 +91,7 @@ class Scheduler:
             end,
             latest,
             is_dev=is_dev,
-            is_restatement=is_restatement,
+            restatements=restatements,
         )
 
     def evaluate(
@@ -152,7 +153,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
-        is_restatement: bool = False,
+        restatements: t.Optional[t.Set[str]] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -161,15 +162,17 @@ class Scheduler:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
+            restatements: A set of snapshots to restate.
 
         Returns:
             True if the execution was successful and False otherwise.
         """
+        restatements = restatements or set()
         validate_date_range(start, end)
 
         is_dev = environment != c.PROD
         latest = latest or now()
-        batches = self.batches(start, end, latest, is_dev=is_dev, is_restatement=is_restatement)
+        batches = self.batches(start, end, latest, is_dev=is_dev, restatements=restatements)
         dag = self._dag(batches)
 
         visited = set()
@@ -213,7 +216,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-        is_restatement: bool = False,
+        restatements: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -231,7 +234,7 @@ class Scheduler:
             end: End of the interval.
             latest: The latest datetime to use for non-incremental queries.
             is_dev: Indicates whether the evaluation happens in the development mode.
-            is_restatement: Indicates if we are finding interval_params within the context of a restatement.
+            restatements: A set of snapshots to restate.
 
         Returns:
             A list of tuples containing all snapshots needing to be run with their associated interval params.
@@ -243,7 +246,7 @@ class Scheduler:
             end=end or now(),
             latest=latest or now(),
             is_dev=is_dev,
-            is_restatement=is_restatement,
+            restatements=restatements,
         )
 
     def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
@@ -295,7 +298,7 @@ def compute_interval_params(
     end: TimeLike,
     latest: TimeLike,
     is_dev: bool,
-    is_restatement: bool,
+    restatements: t.Optional[t.Set[str]] = None,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -313,11 +316,12 @@ def compute_interval_params(
         start: Start of the interval.
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
-        is_restatement: Indicates if we are finding interval parameters within the context of a restatement
+        restatements: A set of snapshot names being restated
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
     """
+    restatements = restatements or set()
     start_dt = to_datetime(start)
 
     snapshots_to_batches = {}
@@ -327,7 +331,7 @@ def compute_interval_params(
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
             for s, e in snapshot.missing_intervals(
-                model_start_dt, end, latest, is_restatement=is_restatement
+                model_start_dt, end, latest, restatements=restatements
             )
         ]
 

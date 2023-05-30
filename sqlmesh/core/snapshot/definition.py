@@ -562,7 +562,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: Start interval to remove.
             end: End interval to remove.
         """
-        end = now() if self.model_kind_name.depends_on_past else end
+        end = now() if self.depends_on_past else end
         return self.inclusive_exclusive(start, end)
 
     def inclusive_exclusive(self, start: TimeLike, end: TimeLike, strict: bool = True) -> Interval:
@@ -613,7 +613,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         latest: t.Optional[TimeLike] = None,
-        is_restatement: bool = False,
+        restatements: t.Optional[t.Set[str]] = None,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -625,19 +625,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             latest: The date/time to use for latest (inclusive)
-            is_restatement: Whether we are checking intervals within the context of a plan restatement.
+            restatements: A set of snapshot names being restated
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        restatements = restatements or set()
         if self.is_symbolic or (self.is_seed and self.intervals):
             return []
 
         latest = make_inclusive_end(latest or now())
         end = (
-            make_inclusive_end(now())
-            if self.model_kind_name.depends_on_past and is_restatement
-            else end
+            make_inclusive_end(now()) if self.depends_on_past and self.name in restatements else end
         )
         missing = []
 

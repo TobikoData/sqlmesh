@@ -93,7 +93,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             console=self.console,
         )
         is_run_successful = scheduler.run(
-            plan.environment_name, plan.start, plan.end, is_restatement=bool(plan.restatements)
+            plan.environment_name, plan.start, plan.end, restatements=plan.restatements
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")

@@ -653,7 +653,7 @@ def test_multi(mocker):
 
 @pytest.mark.integration
 @pytest.mark.core_integration
-def test_incremental_time_self_reference(sushi_context: Context):
+def test_incremental_time_self_reference(mocker: MockerFixture, sushi_context: Context):
     df = sushi_context.engine_adapter.fetchdf("SELECT MIN(ds) FROM sushi.customer_revenue_lifetime")
     assert df.iloc[0, 0] == to_ds("1 week ago")
     df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")

@@ -176,8 +176,7 @@ class StateReader(abc.ABC):
         for snapshot in Snapshot.hydrate_with_intervals_by_version(
             snapshots_by_id.values(), snapshot_intervals
         ):
-            is_restatement = snapshot.name in restatements
-            if is_restatement:
+            if snapshot.name in restatements:
                 snapshot.remove_interval(start_date, end_date)
             intervals = snapshot.missing_intervals(
                 max(
@@ -188,7 +187,7 @@ class StateReader(abc.ABC):
                 ),
                 end_date,
                 latest=latest,
-                is_restatement=is_restatement,
+                restatements=restatements,
             )
             if intervals:
                 missing[snapshot] = intervals
