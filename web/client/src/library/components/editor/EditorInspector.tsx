@@ -171,6 +171,7 @@ function InspectorModel({
       </Tab.List>
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
+          unmount={false}
           className={clsx(
             'flex flex-col w-full h-full relative overflow-hidden',
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
@@ -273,6 +274,7 @@ function InspectorModel({
           </InspectorActions>
         </Tab.Panel>
         <Tab.Panel
+          unmount={false}
           className={clsx(
             'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
           )}
