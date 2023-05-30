@@ -755,9 +755,9 @@ FROM table
 
 #### Using SQLGlot expressions
 
-SQLMesh will automatically parse strings returned by Python macro functions into [SQLGlot](https://github.com/tobymao/sqlglot) expressions so they can be incorporated into a model's semantic representation. Functions can also return SQLGlot expressions directly.
+SQLMesh automatically parses strings returned by Python macro functions into [SQLGlot](https://github.com/tobymao/sqlglot) expressions so they can be incorporated into the model query's semantic representation. Functions can also return SQLGlot expressions directly.
 
-For example, consider writing a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this:
+For example, consider a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this, where the function arguments are substituted into a Python f-string:
 
 ```python linenums="1"
 from sqlmesh import macro
@@ -785,7 +785,7 @@ FROM table
 WHERE a BETWEEN 1 and 3
 ```
 
-Alternatively, the function could return a [SQLGLot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py) equivalent to that string by using SQLGlot's methods for building semantic representations:
+Alternatively, the function could return a [SQLGLot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py) equivalent to that string by using SQLGlot's expression methods for building semantic representations:
 
 ```python linenums="1"
 from sqlmesh import macro
@@ -801,10 +801,12 @@ A critical difference between the string and expression versions of `between_whe
 SELECT
 a
 FROM table
-WHERE @between_where(a, 1, 3)
+WHERE @between_where(a, 1, 3) -- column name `a` is not quoted in the function call
 ```
 
-That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097). Column expressions are sub-classes of the [Condition class](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L666), so they have builder methods like [`between`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L769).
+That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097). 
+
+Column expressions are sub-classes of the [Condition class](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L666), so they have builder methods like [`between`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L769) and [`like`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L779).
 
 ## Mixing macro systems
 
