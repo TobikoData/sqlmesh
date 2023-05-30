@@ -31,6 +31,10 @@ export const router = createBrowserRouter([
         element: <Docs />,
         children: [
           {
+            index: true,
+            element: <DocsWelcome />,
+          },
+          {
             path: '*',
             element: (
               <NotFound
@@ -40,12 +44,12 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            index: true,
-            element: <DocsWelcome />,
-          },
-          {
             path: 'models',
             children: [
+              {
+                index: true,
+                element: <DocsWelcome />,
+              },
               {
                 path: '*',
                 element: (
@@ -54,10 +58,6 @@ export const router = createBrowserRouter([
                     message="Back To Docs"
                   />
                 ),
-              },
-              {
-                index: true,
-                element: <DocsWelcome />,
               },
               {
                 path: ':modelName',

@@ -8,8 +8,8 @@ import { Suspense, lazy, useCallback } from 'react'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 
-const FileTree = lazy(async () => await import('@components/fileTree/FileTree'))
-const Editor = lazy(async () => await import('@components/editor/Editor'))
+const FileTree = lazy(() => import('@components/fileTree/FileTree'))
+const Editor = lazy(() => import('@components/editor/Editor'))
 
 export default function PageEditor(): JSX.Element {
   const models = useStoreContext(s => s.models)

@@ -109,10 +109,8 @@ export default function EditorPreview({
       )}
     >
       {isArrayEmpty(tabs) ? (
-        <div>
-          <div className="flex items-center justify-center h-full">
-            No Data To Preview
-          </div>
+        <div className="flex justify-center items-center w-full h-full">
+          <h3 className="text-md">No Data To Preview</h3>
         </div>
       ) : (
         <Tab.Group
