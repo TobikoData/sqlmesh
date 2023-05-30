@@ -782,7 +782,11 @@ def _intervals_to_df(
         [
             _interval_to_df(
                 snapshot,
-                *snapshot.inclusive_exclusive(start, end, for_removal=is_removed),
+                *(
+                    snapshot.get_restatement_interval(start, end)
+                    if is_removed
+                    else snapshot.inclusive_exclusive(start, end)
+                ),
                 is_dev=is_dev,
                 is_removed=is_removed,
             )
