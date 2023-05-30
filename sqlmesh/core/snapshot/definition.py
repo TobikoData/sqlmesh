@@ -551,31 +551,25 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: Start interval to remove.
             end: End interval to remove.
         """
-        interval = self.get_remove_interval(start, end)
+        interval = self.inclusive_exclusive(start, end, strict=False, for_removal=True)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
-    def get_remove_interval(self, start: TimeLike, end: TimeLike) -> Interval:
-        """Remove an interval from the snapshot.
-
-        Args:
-            start: Start interval to remove.
-            end: End interval to remove.
-        """
-        end = now() if self.depends_on_past else end
-        return self.inclusive_exclusive(start, end)
-
-    def inclusive_exclusive(self, start: TimeLike, end: TimeLike, strict: bool = True) -> Interval:
+    def inclusive_exclusive(
+        self, start: TimeLike, end: TimeLike, strict: bool = True, for_removal: bool = False
+    ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            for_removal: Indicates if the interval is being calculated as a removal instead of an add.
 
         Returns:
             A [start, end) pair.
         """
+        end = now() if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
@@ -635,9 +629,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         latest = make_inclusive_end(latest or now())
-        end = (
-            make_inclusive_end(now()) if self.depends_on_past and self.name in restatements else end
-        )
+        end = latest if self.depends_on_past and self.name in restatements else end
         missing = []
 
         start_dt, end_dt = (
