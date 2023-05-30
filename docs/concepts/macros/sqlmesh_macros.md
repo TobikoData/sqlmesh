@@ -27,6 +27,7 @@ It uses the following five step approach to accomplish this:
 1. Parse the text with the appropriate sqlglot SQL dialect (e.g., Postgres, BigQuery, etc.). During the parsing, it detects the special macro symbol `@` to differentiate non-SQL from SQL text. The parser builds a semantic representation of the SQL code's structure, capturing non-SQL text as "placeholder" values to use in subsequent steps.
 
 2. Examine the placeholder values to classify them as one of the following types:
+
 - Creation of user-defined macro variables with the `@DEF` operator (see more about [user-defined macro variables](#user-defined-variables))
 - Macro variables, both [SQLMesh pre-defined](./macro_variables.md) and [user-defined](#User-defined-variables)
 - Macro functions, both [SQLMesh's](#sqlmesh-macro-operators) and [user-defined](#user-defined-macro-functions)
@@ -154,6 +155,7 @@ The second argument `number -> number` tells SQLMesh what action should be taken
 The right side of the arrow specifies what should be done to each item in the list. `number -> number` tells `@EACH` that for each item `number` it should return that item (e.g., `1`).
 
 SQLMesh macros use their semantic understanding of SQL code to take automatic actions based on where in a SQL query macro variables are used. If `@EACH` is used in the `SELECT` clause of a SQL statement:
+
 1. It prints the item
 2. It knows fields are separated by commas in `SELECT`, so it automatically separates the printed items with commas
 
@@ -182,6 +184,7 @@ FROM table
 ```
 
 In this code each number is being used in two distinct ways. For example, `4` is being used:
+
 1. As a literal numeric value in `favorite_number = 4`
 2. As part of a column name in `favorite_4`
 
@@ -230,6 +233,7 @@ FROM table
 SQLMesh's `@IF` macro allows components of a SQL query to change based on the result of a logical condition.
 
 It includes three elements: 
+
 1. A logical condition that evaluates to `TRUE` or `FALSE`
 2. A value to return if the condition is `TRUE`
 3. A value to return if the condition is `FALSE` [optional]
@@ -239,12 +243,14 @@ These elements are specified as `@IF([logical condition], [value if TRUE], [valu
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
+
 - Equality: `=` for equals, `!=` or `<>` for not equals
 - Comparison: `<`, `>`, `<=`, `>=`, 
 - Between: `[number] BETWEEN [low number] AND [high number]`
 - Membership: `[item] IN ([comma-separated list of items])`
 
 For example, the following simple conditions are all valid SQL and evaluate to `TRUE`:
+
 - `'a' = 'a'`
 - `'a' != 'b'`
 - `0 < 1`
@@ -280,11 +286,11 @@ Like [`@EACH`](#each-basics), they take two arguments: an array of items in brac
 
 #### @FILTER
 
-`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or `@REDUCE`.
+`@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or [`@REDUCE`](#reduce).
 
 The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition. 
 
-The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information.
+The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information about supported operators.
 
 For example, consider this `@FILTER` call:
 
@@ -364,7 +370,7 @@ Each of these operators is used to dynamically add the code for its correspondin
 #### How SQL clause operators work
 The SQL clause operators take a single argument that determines whether the clause is generated. 
 
-If the argument is True the clause code is generated, if False the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
+If the argument is `TRUE` the clause code is generated, if `FALSE` the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
 
 Each SQL clause operator may only be used once in a query, but any common table expressions or subqueries may contain their own single use of the operator as well.
 
@@ -387,11 +393,11 @@ SELECT
   count(distinct id) AS num_orders,
 FROM
     sqlmesh_example.incremental_model
-@WHERE(True) item_id > @size
+@WHERE(TRUE) item_id > @size
 GROUP BY item_id
 ```
 
-The `@WHERE` argument is set to `True`, so the WHERE code is included in the rendered model:
+The `@WHERE` argument is set to `TRUE`, so the WHERE code is included in the rendered model:
 
 ```sql linenums="1"
 SELECT
@@ -403,9 +409,9 @@ WHERE item_id > 1
 GROUP BY item_id
 ```
 
-If the `@WHERE` argument were instead set to `False` the `WHERE` clause would be omitted from the query.
+If the `@WHERE` argument were instead set to `FALSE` the `WHERE` clause would be omitted from the query.
 
-These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by Python. 
+These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL engine. 
 
 For example, the `WHERE` clause will be included in this query because 1 less than 2:
 
@@ -453,7 +459,7 @@ FROM
 GROUP BY item_id
 ```
 
-The argument to `@WHERE` will be "1 < 2" as in the previous example after the macro variables `left_number` and `right_number` are substituted in.
+The argument to `@WHERE` will be "1 < 2" as in the previous hard-coded example after the macro variables `left_number` and `right_number` are substituted in.
 
 ### SQL clause operator examples
 
@@ -687,7 +693,7 @@ CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
 FROM table
 ```
 
-Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes around '{value}' in the function definition.
+Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes around `'{value}'` in the function definition.
 
 #### Accessing macro variable values
 
