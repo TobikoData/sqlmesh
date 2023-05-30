@@ -454,8 +454,8 @@ class _Model(ModelMeta, frozen=True):
     def has_self_reference_query(self) -> bool:
         if self._has_self_reference_query is None:
             self._has_self_reference_query = (
-                self.name in _find_tables([self.render_query()])
-                or self.kind.is_incremental_by_unique_key
+                self.kind.is_incremental_by_unique_key
+                or self.name in _find_tables([self.render_query()])
             )
         return self._has_self_reference_query
 
