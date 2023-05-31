@@ -274,11 +274,11 @@ class QueryRenderer(ExpressionRenderer):
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
-        query_ = t.cast(exp.Subqueryable, query.copy())
+        query = t.cast(exp.Subqueryable, query.copy())
 
         try:
             qualify(
-                query_,
+                query,
                 dialect=self._dialect,
                 schema=schema,
                 infer_schema=False,
@@ -288,19 +288,19 @@ class QueryRenderer(ExpressionRenderer):
             )
 
             if schema.empty:
-                for select in query_.selects:
+                for select in query.selects:
                     if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
                         select.replace(exp.alias_(select, select.output_name))
 
             # Ensure that any alias added in the above loop are properly quoted
-            quote_identifiers(query_, dialect=self._dialect)
+            quote_identifiers(query, dialect=self._dialect)
         except SqlglotError as ex:
             raise_config_error(
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",
                 self._path,
             )
 
-        return annotate_types(simplify(query_), schema=schema)
+        return annotate_types(simplify(query), schema=schema)
 
 
 def _resolve_tables(
