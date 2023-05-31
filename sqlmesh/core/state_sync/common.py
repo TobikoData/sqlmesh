@@ -49,21 +49,6 @@ class CommonStateSyncMixin(StateSync):
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self._get_environment(environment)
 
-    def get_snapshots_by_models(
-        self, *names: str, lock_for_update: bool = False
-    ) -> t.List[Snapshot]:
-        """
-        Get all snapshots by model name.
-
-        Returns:
-            The list of snapshots.
-        """
-        return [
-            snapshot
-            for snapshot in self._get_snapshots(lock_for_update=lock_for_update).values()
-            if snapshot.name in names
-        ]
-
     @transactional()
     def promote(
         self, environment: Environment, no_gaps: bool = False

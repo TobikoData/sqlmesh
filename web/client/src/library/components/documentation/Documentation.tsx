@@ -7,10 +7,9 @@ import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
 import { isFalse, isString, isTrue, toDateFormat } from '@utils/index'
 import clsx from 'clsx'
-import { useNavigate } from 'react-router-dom'
-import { EnumRoutes } from '~/routes'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
+import { useLineageFlow } from '@components/graph/context'
 
 const Documentation = function Documentation({
   model,
@@ -27,12 +26,10 @@ const Documentation = function Documentation({
   withDescription?: boolean
   withColumns?: boolean
 }): JSX.Element {
-  const navigate = useNavigate()
+  const { handleClickModel } = useLineageFlow()
 
   const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
-    navigate(
-      `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(model.name)}`,
-    )
+    handleClickModel?.(model.name)
   })
 
   return (
@@ -86,6 +83,7 @@ const Documentation = function Documentation({
             columns={model.columns}
             disabled={model?.type === 'python'}
             withHandles={false}
+            withSource={false}
             limit={10}
           />
         </Section>

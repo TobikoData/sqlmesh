@@ -159,17 +159,20 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.restatements:
             return
 
-        all_snapshots = (
-            [s for s in plan.snapshots if s.name in plan.restatements]
-            if plan.is_dev
-            else self.state_sync.get_snapshots_by_models(*plan.restatements)
-        )
-        self.state_sync.remove_interval(
-            [],
-            start=plan.start,
-            end=plan.end,
-            all_snapshots=all_snapshots,
-        )
+        target_snapshots = [s for s in plan.snapshots if s.name in plan.restatements]
+        if plan.is_dev:
+            self.state_sync.remove_interval(
+                [],
+                start=plan.start,
+                end=plan.end,
+                all_snapshots=target_snapshots,
+            )
+        else:
+            self.state_sync.remove_interval(
+                target_snapshots,
+                start=plan.start,
+                end=plan.end,
+            )
 
 
 class AirflowPlanEvaluator(PlanEvaluator):

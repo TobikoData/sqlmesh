@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language'
-import { type Extension } from '@codemirror/state'
+import { RangeSetBuilder, type Extension } from '@codemirror/state'
 import {
   ViewPlugin,
   type DecorationSet,
@@ -126,6 +126,53 @@ export function HoverTooltip(
     },
     { hoverTime: 50 },
   )
+}
+
+export function SqlMeshExpression(expression: string): Extension {
+  return ViewPlugin.fromClass(
+    class SqlMeshModelView {
+      decorations: DecorationSet = Decoration.set([])
+
+      constructor(readonly view: EditorView) {
+        this.decorations = markExpressionLine(expression, view)
+      }
+
+      update(viewUpdate: ViewUpdate): void {
+        this.decorations = markExpressionLine(expression, viewUpdate.view)
+      }
+    },
+    {
+      decorations: value => value.decorations,
+    },
+  )
+}
+
+function markExpressionLine(
+  expression: string,
+  view: EditorView,
+): DecorationSet {
+  const mark = Decoration.line({
+    attributes: {
+      id: expression,
+      class: 'sqlmesh-expression',
+    },
+  })
+
+  const builder = new RangeSetBuilder<Decoration>()
+
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = view.state.doc.lineAt(pos)
+
+      if (line.text.includes(expression)) {
+        builder.add(line.from, line.from, mark)
+      }
+
+      pos = line.to + 1
+    }
+  }
+
+  return builder.finish()
 }
 
 function getDecorations(

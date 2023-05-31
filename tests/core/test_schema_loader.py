@@ -1,10 +1,16 @@
-import pandas as pd
-from sqlglot import exp
+from pathlib import Path
 
+import pandas as pd
+from pytest_mock.plugin import MockerFixture
+from ruamel.yaml import YAML
+from sqlglot import exp, parse_one
+
+from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import SqlModel, load_model
+from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 
 
@@ -84,3 +90,25 @@ def test_create_external_models(tmpdir, assert_exp_eq):
         FROM sushi.raw_fruits AS raw_fruits
         """,
     )
+
+
+def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
+    engine_adapter_mock = mocker.Mock()
+    engine_adapter_mock.columns.return_value = {
+        "a": exp.DataType.build("bigint"),
+        "b": exp.DataType.build("text"),
+    }
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.models_exist.return_value = {"model_b"}
+
+    model = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
+
+    schema_file = tmp_path / c.SCHEMA_YAML
+    create_schema_file(schema_file, {"a": model}, engine_adapter_mock, state_reader_mock, "")
+
+    with open(schema_file, "r") as fd:
+        schema = YAML().load(fd)
+
+    assert len(schema) == 1
+    assert schema[0]["name"] == "tbl_c"
