@@ -941,7 +941,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         str(model.batch_size) if model.batch_size is not None else None,
         json.dumps(model.mapping_schema, sort_keys=True),
         *model.tags,
-        *model.primary_key
+        *model.grain,
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):

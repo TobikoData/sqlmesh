@@ -1468,7 +1468,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": lambda value: (
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
     ),
-    "primary_key": lambda value: (
+    "grain": lambda value: (
         exp.to_column(value[0]) if len(value) == 1 else exp.Tuple(expressions=exp.to_column(value))
-    )
+    ),
 }

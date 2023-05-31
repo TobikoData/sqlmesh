@@ -4,7 +4,8 @@ MODEL (
   owner jen,
   audits (
     unique_values(columns=[waiter_id])
-  )
+  ),
+  grain waiter_id
 );
 
 SELECT

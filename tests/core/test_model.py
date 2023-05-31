@@ -38,7 +38,7 @@ def test_load(assert_exp_eq):
                 time_column a,
             ),
             tags [tag_foo, tag_bar],
-            primary_key [a, b],
+            grain [a, b],
         );
 
         @DEF(x, 1);
@@ -110,7 +110,7 @@ def test_load(assert_exp_eq):
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
-    assert model.primary_key == ["a", "b"]
+    assert model.grain == ["a", "b"]
 
 
 def test_model_multiple_select_statements():

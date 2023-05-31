@@ -91,7 +91,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     },
                     "source_type": "sql",
                     "tags": [],
-                    "primary_key": [],
+                    "grain": [],
                     "hash_raw_query": False,
                 },
                 "audits": [],
