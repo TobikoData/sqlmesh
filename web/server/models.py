@@ -184,6 +184,7 @@ class ModelDetails(BaseModel):
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None
+    primary_key: t.Optional[str] = None
     partitioned_by: t.Optional[str] = None
     lookback: t.Optional[int] = None
     cron_prev: t.Optional[TimeLike] = None

@@ -57,6 +57,7 @@ class ModelMeta(PydanticModel):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
+    primary_key: t.List[str] = []
     hash_raw_query: bool = False
 
     _croniter: t.Optional[croniter] = None
@@ -105,7 +106,7 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("partitioned_by_", "tags", pre=True)
+    @validator("partitioned_by_", "tags", "primary_key", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]
