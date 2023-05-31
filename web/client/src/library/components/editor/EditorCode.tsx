@@ -1,77 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
 import { type KeyBinding, keymap } from '@codemirror/view'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { type Extension } from '@codemirror/state'
-import { type Column, type File } from '~/api/client'
 import { useStoreFileTree } from '~/context/fileTree'
-import {
-  events,
-  SqlMeshModel,
-  HoverTooltip,
-  useSqlMeshExtension,
-  findModel,
-  findColumn,
-} from './extensions'
-import { dracula, tomorrow } from 'thememirror'
-import { useColorScheme, EnumColorScheme } from '~/context/theme'
-import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
-import {
-  debounceAsync,
-  debounceSync,
-  isNil,
-  isStringEmptyOrNil,
-  isStringNotEmpty,
-} from '~/utils'
-import { isCancelledError, useQueryClient } from '@tanstack/react-query'
+import { useSqlMeshExtension } from './extensions'
+import { useApiFileByPath } from '~/api'
+import { debounceAsync, isFalse, isStringNotEmpty } from '~/utils'
+import { isCancelledError } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
-  EnumFileExtensions,
   type ModelFile,
   type FileExtensions,
+  EnumFileExtensions,
 } from '@models/file'
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { sql } from '@codemirror/lang-sql'
-import { useLineageFlow } from '@components/graph/context'
-
-function CodeEditorDefault({
-  type,
-  content = '',
-  children,
-  className,
-}: {
-  type: FileExtensions
-  content: string
-  className?: string
-  children: (options: {
-    extensions: Extension[]
-    content: string
-  }) => JSX.Element
-}): JSX.Element {
-  const { mode } = useColorScheme()
-
-  const extensions = useMemo(() => {
-    return [
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.Python && python(),
-      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.SQL && sql(),
-    ].filter(Boolean) as Extension[]
-  }, [type, mode])
-
-  return (
-    <div className={clsx('flex w-full h-full', className)}>
-      {children({ extensions, content })}
-    </div>
-  )
-}
+import { useDefaultExtensions, useSQLMeshModelKeymaps } from './hooks'
 
 function CodeEditorSQLMesh({
   type,
@@ -87,9 +33,9 @@ function CodeEditorSQLMesh({
     content: string
   }) => JSX.Element
 }): JSX.Element {
-  const { mode } = useColorScheme()
-
   const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
+
+  const extensionsDefault = useDefaultExtensions(type)
 
   const models = useStoreContext(s => s.models)
 
@@ -114,13 +60,13 @@ function CodeEditorSQLMesh({
 
   const extensions = useMemo(() => {
     return [
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.Python && python(),
-      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
+      ...extensionsDefault,
+      type === EnumFileExtensions.SQL &&
       SqlMeshDialect(models, dialectOptions, dialectsTitles),
-    ].filter(Boolean) as Extension[]
-  }, [mode, dialectsTitles, dialectOptions])
+    ]
+      .filter(Boolean)
+      .flat() as Extension[]
+  }, [type, dialectsTitles, dialectOptions])
 
   useEffect(() => {
     return () => {
@@ -208,131 +154,6 @@ function CodeEditorRemoteFile({
   )
 }
 
-export function useSQLMeshModelExtensions(
-  path?: string,
-  handleModelClick?: (model: ModelSQLMeshModel) => void,
-  handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
-): Extension[] {
-  const { models, lineage } = useLineageFlow()
-  const files = useStoreFileTree(s => s.files)
-
-  const extensions = useMemo(() => {
-    const model = path == null ? undefined : models.get(path)
-    const columns =
-      lineage == null
-        ? new Set<string>()
-        : new Set(
-            Object.keys(lineage)
-              .map(modelName => models.get(modelName)?.columns.map(c => c.name))
-              .flat()
-              .filter(Boolean) as string[],
-          )
-
-    return [
-      HoverTooltip(models),
-      handleModelClick != null &&
-        events(event => {
-          const model = findModel(event, models)
-
-          if (model == null) return
-
-          handleModelClick(model)
-        }),
-      handleModelColumn != null &&
-        model != null &&
-        events(event => {
-          const column = findColumn(event, model)
-
-          if (column == null) return
-
-          handleModelColumn(model, column)
-        }),
-      model != null && SqlMeshModel(models, model, columns),
-    ].filter(Boolean) as Extension[]
-  }, [path, models, files])
-
-  return extensions
-}
-
-export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
-  const client = useQueryClient()
-
-  const files = useStoreFileTree(s => s.files)
-  const refreshTab = useStoreEditor(s => s.refreshTab)
-
-  const { refetch: getFileContent } = useApiFileByPath(path)
-  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
-
-  const mutationSaveFile = useMutationApiSaveFile(client, {
-    onSuccess: saveChangeSuccess,
-  })
-
-  const debouncedSaveChange = useCallback(
-    debounceSync(saveChange, 1000, true),
-    [path],
-  )
-
-  useEffect(() => {
-    const file = files.get(path)
-
-    if (file == null) return
-
-    if (isStringEmptyOrNil(file.content)) {
-      debouncedGetFileContent({
-        throwOnError: true,
-      })
-        .then(({ data }) => {
-          file.update(data)
-        })
-        .catch(error => {
-          if (isCancelledError(error)) {
-            console.log('getFileContent', 'Request aborted by React Query')
-          } else {
-            console.log('getFileContent', error)
-          }
-        })
-        .finally(() => {
-          refreshTab()
-        })
-    }
-  }, [path])
-
-  function saveChange(): void {
-    const file = files.get(path)
-
-    if (file == null) return
-
-    mutationSaveFile.mutate({
-      path: file.path,
-      body: { content: file.content },
-    })
-  }
-
-  function saveChangeSuccess(newfile: File): void {
-    const file = files.get(path)
-
-    if (newfile == null || file == null) return
-
-    file.update(newfile)
-
-    refreshTab()
-  }
-
-  return [
-    {
-      mac: 'Cmd-s',
-      win: 'Ctrl-s',
-      linux: 'Ctrl-s',
-      preventDefault: true,
-      run() {
-        debouncedSaveChange()
-
-        return true
-      },
-    },
-  ]
-}
-
 const CodeEditor = function CodeEditor({
   keymaps = [],
   extensions = [],
@@ -346,7 +167,10 @@ const CodeEditor = function CodeEditor({
   onChange?: (value: string) => void
   className?: string
 }): JSX.Element {
-  const extensionKeymap = useMemo(() => keymap.of([...keymaps]), [keymaps])
+  const extensionKeymap = useMemo(
+    () => keymap.of([...keymaps].flat()),
+    [keymaps],
+  )
   const extensionsAll = useMemo(
     () => [...extensions, extensionKeymap],
     [extensionKeymap, extensions],
@@ -365,7 +189,6 @@ const CodeEditor = function CodeEditor({
   )
 }
 
-CodeEditor.Default = CodeEditorDefault
 CodeEditor.SQLMeshDialect = CodeEditorSQLMesh
 CodeEditor.RemoteFile = CodeEditorRemoteFile
 

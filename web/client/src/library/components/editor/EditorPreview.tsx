@@ -14,12 +14,13 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
 import { EnumFileExtensions } from '@models/file'
-import CodeEditor, { useSQLMeshModelExtensions } from './EditorCode'
+import CodeEditor from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
 import { DisplayError } from '@components/report/ReportErrors'
 import TableDiff from '@components/table/TableDiff'
 import TabList from '@components/tab/Tab'
+import { useSQLMeshModelExtensions } from './hooks'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -164,9 +165,9 @@ export default function EditorPreview({
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(
-                                      header.column.columnDef.header,
-                                      header.getContext(),
-                                    )}
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
                               </th>
                             ))}
                           </tr>
@@ -200,9 +201,9 @@ export default function EditorPreview({
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(
-                                      header.column.columnDef.footer,
-                                      header.getContext(),
-                                    )}
+                                    header.column.columnDef.footer,
+                                    header.getContext(),
+                                  )}
                               </th>
                             ))}
                           </tr>

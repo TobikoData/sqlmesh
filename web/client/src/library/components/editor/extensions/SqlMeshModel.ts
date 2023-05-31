@@ -1,0 +1,37 @@
+import { type Extension } from '@codemirror/state'
+import {
+  ViewPlugin,
+  type DecorationSet,
+  Decoration,
+  type EditorView,
+  type ViewUpdate,
+} from '@codemirror/view'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { getDecorations } from './help'
+
+export default function SqlMeshModel(
+  models: Map<string, ModelSQLMeshModel>,
+  model: ModelSQLMeshModel,
+  columns: Set<string>,
+): Extension {
+  return ViewPlugin.fromClass(
+    class SqlMeshModelView {
+      decorations: DecorationSet = Decoration.set([])
+      constructor(readonly view: EditorView) {
+        this.decorations = getDecorations(models, view, model, columns)
+      }
+
+      update(viewUpdate: ViewUpdate): void {
+        this.decorations = getDecorations(
+          models,
+          viewUpdate.view,
+          model,
+          columns,
+        )
+      }
+    },
+    {
+      decorations: value => value.decorations,
+    },
+  )
+}
