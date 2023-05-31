@@ -32,6 +32,10 @@ def load_config_from_paths(
 
         extension = path.name.split(".")[-1].lower()
         if extension in ("yml", "yaml"):
+            if config_name != "config":
+                raise ConfigError(
+                    f"YAML configs do not support multiple configs. Use Python instead."
+                )
             next_config = load_config_from_yaml(path)
         elif extension == "py":
             next_config = load_config_from_python_module(path, config_name=config_name)
