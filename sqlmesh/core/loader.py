@@ -53,7 +53,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
 
         for dep in model.depends_on:
             external = external or dep not in models
-            table = exp.maybe_parse(dep, into=exp.Table, dialect=model.dialect)
+            table = exp.to_table(dep, dialect=model.dialect)
             mapping_schema = schema.find(table)
 
             if mapping_schema:
