@@ -292,7 +292,7 @@ class QueryRenderer(ExpressionRenderer):
                     if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
                         select.replace(exp.alias_(select, select.output_name))
 
-            # Ensure that any alias added in the above loop are properly quoted
+            # Ensure that any aliases added in the above loop are properly quoted
             quote_identifiers(query, dialect=self._dialect)
         except SqlglotError as ex:
             raise_config_error(
