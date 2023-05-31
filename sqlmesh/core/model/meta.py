@@ -7,6 +7,7 @@ from enum import Enum
 from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -41,9 +42,9 @@ AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
+    dialect: str = ""
     name: str
     kind: ModelKind = ModelKind(name=ModelKindName.VIEW)
-    dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
     description: t.Optional[str]
@@ -64,6 +65,11 @@ class ModelMeta(PydanticModel):
     _interval_unit: t.Optional[IntervalUnit] = None
 
     _model_kind_validator = ModelKind.field_validator()
+
+    @validator("name", pre=True)
+    def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
+        table = exp.to_table(v, dialect=values.get("dialect"))
+        return exp.table_name(normalize_identifiers(table, dialect=values.get("dialect")))
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:

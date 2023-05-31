@@ -1047,6 +1047,51 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
 
+def test_case_sensitivity(assert_exp_eq):
+    context = Context(config=Config())
+
+    source = load_model(
+        d.parse(
+            """
+            MODEL (name example.source, kind EMBEDDED, dialect snowflake);
+
+            SELECT "id", "name", "payload" FROM db.schema."table"
+            """
+        ),
+    )
+
+    downstream = load_model(
+        d.parse(
+            """
+            MODEL (name example.model, kind FULL, dialect snowflake);
+
+            SELECT JSON_EXTRACT_PATH_TEXT("payload", 'field') AS "new_field", * FROM example.source
+            """
+        )
+    )
+
+    context.upsert_model(source)
+    context.upsert_model(downstream)
+
+    assert_exp_eq(
+        context.render("example.model"),
+        """
+        SELECT
+          JSON_EXTRACT_PATH_TEXT("SOURCE"."payload", 'field') AS "new_field",
+          "SOURCE"."id" AS "id",
+          "SOURCE"."name" AS "name",
+          "SOURCE"."payload" AS "payload"
+        FROM (
+          SELECT
+            "id" AS "id",
+            "name" AS "name",
+            "payload" AS "payload"
+          FROM "DB"."SCHEMA"."table" AS "table"
+        ) AS "SOURCE"
+        """,
+    )
+
+
 def test_batch_size_validation():
     expressions = parse(
         """

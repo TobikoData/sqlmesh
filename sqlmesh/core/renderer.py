@@ -7,9 +7,8 @@ from pathlib import Path
 from sqlglot import exp, parse_one
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
-from sqlglot.optimizer.lower_identities import lower_identities
-from sqlglot.optimizer.qualify_columns import qualify_columns
-from sqlglot.optimizer.qualify_tables import qualify_tables
+from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import ensure_schema
 
@@ -273,26 +272,35 @@ class QueryRenderer(ExpressionRenderer):
         )
 
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
-        schema = ensure_schema(self.schema, dialect=self._dialect)
-
-        query = t.cast(exp.Subqueryable, query.copy())
-        lower_identities(query)
-        qualify_tables(query)
+        # We don't want to normalize names in the schema because that's handled by the optimizer
+        schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
+        query_ = t.cast(exp.Subqueryable, query.copy())
 
         try:
+            qualify(
+                query_,
+                dialect=self._dialect,
+                schema=schema,
+                infer_schema=False,
+                validate_qualify_columns=False,
+                qualify_columns=not schema.empty,
+                quote_identifiers=False,
+            )
+
             if schema.empty:
-                for select in query.selects:
+                for select in query_.selects:
                     if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
                         select.replace(exp.alias_(select, select.output_name))
-            else:
-                qualify_columns(query, schema=schema, infer_schema=False)
+
+            # Ensure that any alias added in the above loop are properly quoted
+            quote_identifiers(query_, dialect=self._dialect)
         except SqlglotError as ex:
             raise_config_error(
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",
                 self._path,
             )
 
-        return annotate_types(simplify(query), schema=schema)
+        return annotate_types(simplify(query_), schema=schema)
 
 
 def _resolve_tables(
