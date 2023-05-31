@@ -27,7 +27,7 @@ def test_data_diff(sushi_context):
     assert schema_diff.added == [("z", exp.DataType.build("int"))]
     assert schema_diff.removed == []
 
-    summary_diff = diff.summary_diff()
-    assert summary_diff.s_count == 2529
-    assert summary_diff.t_count == 2901
-    assert summary_diff.sample.shape == (20, 7)
+    row_diff = diff.row_diff()
+    assert row_diff.source_count == 2299
+    assert row_diff.target_count == 2675
+    assert row_diff.sample.shape == (20, 7)

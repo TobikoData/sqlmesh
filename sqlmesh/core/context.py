@@ -791,7 +791,7 @@ class Context(BaseContext):
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
-            self.console.show_summary_diff(table_diff.summary_diff())
+            self.console.show_row_diff(table_diff.row_diff())
         return table_diff
 
     def get_dag(self, format: str = "svg") -> graphviz.Digraph:

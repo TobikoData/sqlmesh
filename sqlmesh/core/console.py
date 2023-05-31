@@ -24,7 +24,7 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan
-    from sqlmesh.core.table_diff import SchemaDiff, SummaryDiff
+    from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -128,7 +128,7 @@ class Console(abc.ABC):
         """Show table schema diff"""
 
     @abc.abstractmethod
-    def show_summary_diff(self, summary_diff: SummaryDiff) -> None:
+    def show_row_diff(self, row_diff: RowDiff) -> None:
         """Show table summary diff"""
 
 
@@ -481,11 +481,11 @@ class TerminalConsole(Console):
 
         self.console.print(tree)
 
-    def show_summary_diff(self, summary_diff: SummaryDiff) -> None:
+    def show_row_diff(self, row_diff: RowDiff) -> None:
         self.console.print(
-            f"[bold]Row Count:[/bold] {summary_diff.source}: {summary_diff.s_count}, {summary_diff.target}: {summary_diff.t_count} -- {summary_diff.count_pct_change}%"
+            f"[bold]Row Count:[/bold] {row_diff.source}: {row_diff.source_count}, {row_diff.target}: {row_diff.target_count} -- {row_diff.count_pct_change}%"
         )
-        self.console.print(summary_diff.sample.to_string(index=False))
+        self.console.print(row_diff.sample.to_string(index=False))
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool

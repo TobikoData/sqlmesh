@@ -44,7 +44,7 @@ class SchemaDiff(PydanticModel, frozen=True):
         return modified
 
 
-class SummaryDiff(PydanticModel, frozen=True):
+class RowDiff(PydanticModel, frozen=True):
     """Summary statistics and a sample dataframe."""
 
     source: str
@@ -100,7 +100,7 @@ class TableDiff:
 
         self._source_schema: t.Optional[t.Dict[str, exp.DataType]] = None
         self._target_schema: t.Optional[t.Dict[str, exp.DataType]] = None
-        self._summary_diff: t.Optional[SummaryDiff] = None
+        self._row_diff: t.Optional[RowDiff] = None
 
     @property
     def source_schema(self) -> t.Dict[str, exp.DataType]:
@@ -122,8 +122,8 @@ class TableDiff:
             target_schema=self.target_schema,
         )
 
-    def summary_diff(self) -> SummaryDiff:
-        if self._summary_diff is None:
+    def row_diff(self) -> RowDiff:
+        if self._row_diff is None:
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
             t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in self.target_schema}
 
@@ -147,12 +147,12 @@ class TableDiff:
                 exp.select(
                     *s_selects.values(),
                     *t_selects.values(),
-                    exp.func(
-                        "IF", exp.and_(*(c.not_().is_(exp.Null()) for c in s_index)), 1, 0
-                    ).as_("s_exists"),
-                    exp.func(
-                        "IF", exp.and_(*(c.not_().is_(exp.Null()) for c in t_index)), 1, 0
-                    ).as_("t_exists"),
+                    exp.func("IF", exp.or_(*(c.not_().is_(exp.Null()) for c in s_index)), 1, 0).as_(
+                        "s_exists"
+                    ),
+                    exp.func("IF", exp.or_(*(c.not_().is_(exp.Null()) for c in t_index)), 1, 0).as_(
+                        "t_exists"
+                    ),
                     *comparisons,
                 )
                 .from_(exp.alias_(self.source, "s"))
@@ -186,10 +186,10 @@ class TableDiff:
                     .limit(self.limit)
                 )
 
-                self._summary_diff = SummaryDiff(
+                self._row_diff = RowDiff(
                     source=self.source,
                     target=self.target,
                     stats=self.adapter.fetchdf(summary_query).iloc[0].to_dict(),
                     sample=self.adapter.fetchdf(sample_query),
                 )
-        return self._summary_diff
+        return self._row_diff
