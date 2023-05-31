@@ -484,13 +484,13 @@ def test_get_environments(project_context: Context) -> None:
 
 def test_get_lineage(web_sushi_context: Context) -> None:
     response = client.get("/api/lineage/sushi.waiters/ds")
-    assert response.status_code == 200
 
+    assert response.status_code == 200
     assert response.json() == {
         "sushi.waiters": {
             "ds": {
                 "source": """SELECT DISTINCT
-  <b>CAST(o.ds AS TEXT) AS ds</b>
+  CAST(o.ds AS TEXT) AS ds
 FROM (
   SELECT
     CAST(NULL AS INT) AS id,
@@ -504,12 +504,14 @@ FROM (
 ) AS o /* source: sushi.orders */
 WHERE
   o.ds <= '1970-01-01' AND o.ds >= '1970-01-01'""",
+                "expression": "CAST(o.ds AS TEXT) AS ds",
                 "models": {"sushi.orders": ["ds"]},
             }
         },
         "sushi.orders": {
             "ds": {
-                "source": "SELECT\n  <b>CAST(NULL AS TEXT) AS ds</b>\nFROM (VALUES\n  (1)) AS t(dummy)",
+                "source": "SELECT\n  CAST(NULL AS TEXT) AS ds\nFROM (VALUES\n  (1)) AS t(dummy)",
+                "expression": "CAST(NULL AS TEXT) AS ds",
                 "models": {},
             }
         },

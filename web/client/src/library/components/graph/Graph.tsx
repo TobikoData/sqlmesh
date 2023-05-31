@@ -5,6 +5,7 @@ import React, {
   useState,
   useCallback,
   memo,
+  Fragment,
 } from 'react'
 import ReactFlow, {
   Controls,
@@ -42,7 +43,10 @@ import {
   isTrue,
 } from '../../../utils'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { ArrowRightCircleIcon } from '@heroicons/react/24/solid'
+import {
+  ArrowRightCircleIcon,
+  InformationCircleIcon,
+} from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import {
   type Column,
@@ -62,24 +66,103 @@ import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
+import { Popover, Transition } from '@headlessui/react'
+import CodeEditor, {
+  useSQLMeshModelExtensions,
+} from '@components/editor/EditorCode'
+import { EnumFileExtensions } from '@models/file'
+import { SqlMeshExpression } from '@components/editor/extensions'
+import { type Extension } from '@codemirror/state'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
   columnType,
   columnDescription,
   className,
+  expression,
+  source,
+  disabled = false,
 }: {
   columnName: string
   columnType: string
   columnDescription?: string
+  source?: string
+  expression?: string
   disabled?: boolean
   className?: string
 }): JSX.Element {
+  const { handleClickModel } = useLineageFlow()
+
+  const extensions = useMemo(
+    () =>
+      [expression != null && SqlMeshExpression(expression)].filter(
+        Boolean,
+      ) as Extension[],
+    [expression],
+  )
+
+  const modelExtensions = useSQLMeshModelExtensions(undefined, model => {
+    handleClickModel?.(model.name)
+  }).concat(extensions)
+
+  const [isShowing, setIsShowing] = useState(false)
+
   return (
-    <div className={clsx('w-full items-center', className)}>
-      <div className="w-full flex justify-between items-center">
+    <div className={clsx('flex w-full items-center relative', className)}>
+      {source != null && (
+        <Popover
+          onMouseEnter={() => {
+            setIsShowing(true)
+          }}
+          onMouseLeave={() => {
+            setIsShowing(false)
+          }}
+          onClick={e => {
+            e.stopPropagation()
+          }}
+          className="relative flex"
+        >
+          {() => (
+            <>
+              <InformationCircleIcon className="text-secondary-500 dark:text-primary-500 inline-block mr-3 w-4 h-4" />
+              <Transition
+                show={isShowing}
+                as={Fragment}
+                enter="transition ease-out duration-200"
+                enterFrom="opacity-0 translate-y-1"
+                enterTo="opacity-100 translate-y-0"
+                leave="transition ease-in duration-150"
+                leaveFrom="opacity-100 translate-y-0"
+                leaveTo="opacity-0 translate-y-1"
+              >
+                <Popover.Panel className="fixed bottom-0 left-10 z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20">
+                  <CodeEditor.SQLMeshDialect
+                    content={source}
+                    type={EnumFileExtensions.SQL}
+                    className="scrollbar--vertical-md scrollbar--horizontal-md !h-[25vh] !max-w-[30rem]"
+                  >
+                    {({ extensions, content }) => (
+                      <CodeEditor
+                        extensions={extensions.concat(modelExtensions)}
+                        content={content}
+                        className="text-xs"
+                      />
+                    )}
+                  </CodeEditor.SQLMeshDialect>
+                </Popover.Panel>
+              </Transition>
+            </>
+          )}
+        </Popover>
+      )}
+      <div
+        className={clsx(
+          'w-full flex justify-between items-center',
+          disabled && 'opacity-50',
+        )}
+      >
         <span>{columnName}</span>
-        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-4">
+        <span className="inline-block text-neutral-500 dark:text-neutral-300 ml-4">
           {columnType}
         </span>
       </div>
@@ -195,13 +278,16 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             title={
               type === 'python'
                 ? 'Column lineage disabled for Python models'
-                : 'SQL Model'
+                : type === 'cte'
+                ? 'CTE'
+                : 'SQL Query'
             }
             className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
             {type === 'python' && 'Python'}
             {type === 'sql' && 'SQL'}
             {type === 'seed' && 'Seed'}
+            {type === 'cte' && 'CTE'}
           </span>
         )}
         <span
@@ -244,6 +330,8 @@ const ModelColumn = memo(function ModelColumn({
   removeEdges,
   selectManually,
   withHandles = false,
+  source,
+  expression,
 }: {
   id: string
   nodeId: string
@@ -253,6 +341,8 @@ const ModelColumn = memo(function ModelColumn({
   hasLeft?: boolean
   hasRight?: boolean
   withHandles?: boolean
+  source?: string
+  expression?: string
   getColumnLineage: (
     columnName: string,
   ) => Promise<
@@ -314,7 +404,9 @@ const ModelColumn = memo(function ModelColumn({
   return (
     <div
       className={clsx(
-        isActive && 'bg-secondary-10 dark:bg-primary-900',
+        isActive
+          ? 'bg-secondary-10 dark:bg-primary-900 text-secondary-500 dark:text-neutral-100'
+          : 'text-neutral-500 dark:text-neutral-100',
         withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
         className,
       )}
@@ -323,7 +415,7 @@ const ModelColumn = memo(function ModelColumn({
       <div
         className={clsx(
           'flex w-full items-center',
-          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           className,
         )}
       >
@@ -344,6 +436,8 @@ const ModelColumn = memo(function ModelColumn({
               columnName={column.name}
               columnType={column.type}
               disabled={disabled}
+              expression={expression}
+              source={source}
               className={clsx(
                 isError && 'text-danger-500',
                 isEmpty && 'text-neutral-400 dark:text-neutral-600',
@@ -355,6 +449,8 @@ const ModelColumn = memo(function ModelColumn({
             columnName={column.name}
             columnType={column.type}
             disabled={disabled}
+            source={source}
+            expression={expression}
             className={clsx(
               isError && 'text-danger-500',
               isEmpty && 'text-neutral-400 dark:text-neutral-600',
@@ -373,6 +469,7 @@ const ModelColumns = memo(function ModelColumns({
   className,
   limit = 5,
   withHandles = false,
+  withSource = false,
 }: {
   nodeId: string
   columns: Column[]
@@ -380,10 +477,12 @@ const ModelColumns = memo(function ModelColumns({
   className?: string
   limit?: number
   withHandles?: boolean
+  withSource?: boolean
 }): JSX.Element {
   const queryClient = useQueryClient()
 
   const {
+    models,
     connections,
     isActiveColumn,
     setConnections,
@@ -394,6 +493,8 @@ const ModelColumns = memo(function ModelColumns({
     removeActiveEdges,
     hasActiveEdge,
     addActiveEdges,
+    lineage,
+    setShouldRecalculate,
   } = useLineageFlow()
 
   const [filter, setFilter] = useState('')
@@ -444,11 +545,18 @@ const ModelColumns = memo(function ModelColumns({
     function updateColumnLineage(
       columnLineage: Record<string, Record<string, LineageColumn>> = {},
     ): void {
+      setShouldRecalculate(
+        Object.keys(columnLineage).some(modelName => !models.has(modelName)),
+      )
       setLineage(lineage =>
         mergeLineageWithColumns(structuredClone(lineage), columnLineage),
       )
       setConnections(connections =>
-        mergeConnections(columnLineage, connections, addActiveEdges),
+        mergeConnections(
+          structuredClone(connections),
+          columnLineage,
+          addActiveEdges,
+        ),
       )
     },
     [addActiveEdges, setConnections],
@@ -518,6 +626,16 @@ const ModelColumns = memo(function ModelColumns({
                   : undefined
               }
               withHandles={withHandles}
+              source={
+                withSource
+                  ? lineage?.[nodeId]?.columns?.[column.name]?.source
+                  : undefined
+              }
+              expression={
+                withSource
+                  ? lineage?.[nodeId]?.columns?.[column.name]?.expression
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -568,6 +686,16 @@ const ModelColumns = memo(function ModelColumns({
                 : 'opacity-0 h-0 overflow-hidden',
             )}
             withHandles={withHandles}
+            source={
+              withSource
+                ? lineage?.[nodeId]?.columns?.[column.name]?.source
+                : undefined
+            }
+            expression={
+              withSource
+                ? lineage?.[nodeId]?.columns?.[column.name]?.expression
+                : undefined
+            }
           />
         ))}
       </div>
@@ -603,7 +731,14 @@ function ModelColumnLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { withColumns, hasActiveEdge, models, lineage } = useLineageFlow()
+  const {
+    withColumns,
+    hasActiveEdge,
+    models,
+    lineage,
+    shouldRecalculate,
+    handleError,
+  } = useLineageFlow()
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -611,53 +746,95 @@ function ModelColumnLineage({
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 
-  const toggleEdge = useCallback(
-    function toggleEdge(edges: Edge[] = []): Edge[] {
-      return edges.map(edge => {
-        if (edge.sourceHandle == null && edge.targetHandle == null) {
-          edge.hidden = false
-        } else {
-          edge.hidden = isFalse(
-            hasActiveEdge(edge.sourceHandle) &&
-              hasActiveEdge(edge.targetHandle),
-          )
-        }
-
-        return edge
-      })
-    },
-    [hasActiveEdge],
-  )
-
-  useEffect(() => {
-    setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
-
+  const nodesAndEdges = useMemo(() => {
     const highlightedNodesDefault = {
       'border-4 border-brand-500': [model.name],
     }
 
-    const nodesAndEdges = getNodesAndEdges({
+    return getNodesAndEdges({
       lineage,
+      nodes: shouldRecalculate ? [] : nodes,
+      edges: shouldRecalculate ? [] : edges,
       highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
       models,
-      nodes,
-      edges,
       model,
       withColumns,
     })
-
-    void createGraphLayout(nodesAndEdges).then(layout => {
-      setNodes(layout.nodes)
-      setEdges(toggleEdge(layout.edges))
-      setIsBuildingLayout(
-        isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
-      )
-    })
-  }, [model.name, models, highlightedNodes, lineage])
+  }, [lineage, models, model, withColumns, shouldRecalculate])
 
   useEffect(() => {
-    setEdges(toggleEdge(edges))
-  }, [toggleEdge])
+    setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
+
+    void createGraphLayout(nodesAndEdges)
+      .then(layout => {
+        toggleEdgeAndNodes(layout.edges, layout.nodes)
+
+        setIsBuildingLayout(
+          isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
+        )
+      })
+      .catch(error => {
+        handleError?.(error)
+      })
+  }, [nodesAndEdges])
+
+  useEffect(() => {
+    toggleEdgeAndNodes(edges, nodes)
+  }, [hasActiveEdge])
+
+  function toggleEdgeAndNodes(edges: Edge[] = [], nodes: Node[] = []): void {
+    const visibility = new Map<string, boolean>()
+
+    const newEdges = edges.map(edge => {
+      if (edge.sourceHandle == null && edge.targetHandle == null) {
+        edge.hidden = false
+      } else {
+        edge.hidden = isFalse(
+          hasActiveEdge(edge.sourceHandle) && hasActiveEdge(edge.targetHandle),
+        )
+      }
+
+      const isTableSource =
+        nodesAndEdges.nodesMap[edge.source]?.data.type === 'cte'
+      const isTableTarget =
+        nodesAndEdges.nodesMap[edge.target]?.data.type === 'cte'
+
+      if (isTableSource) {
+        if (isFalse(visibility.has(edge.source))) {
+          visibility.set(edge.source, true)
+        }
+
+        visibility.set(
+          edge.source,
+          isFalse(visibility.get(edge.source)) ? false : edge.hidden,
+        )
+      }
+
+      if (isTableTarget) {
+        if (isFalse(visibility.has(edge.target))) {
+          visibility.set(edge.target, true)
+        }
+
+        visibility.set(
+          edge.target,
+          isFalse(visibility.get(edge.target)) ? false : edge.hidden,
+        )
+      }
+
+      return edge
+    })
+
+    setEdges(newEdges)
+    setNodes(() =>
+      nodes.map(node => {
+        if (node.data.type === 'cte') {
+          node.hidden = visibility.get(node.id)
+        }
+
+        return node
+      }),
+    )
+  }
 
   function onNodesChange(changes: NodeChange[]): void {
     setNodes(applyNodeChanges(changes, nodes))
@@ -745,26 +922,27 @@ function ModelNode({
   )
   const splat = data.highlightedNodes?.['*']
   const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
-  const isTable = data.type === 'table'
+  const isCTE = data.type === 'cte'
   const showColumns = withColumns && isArrayNotEmpty(columns)
+  const type = isCTE ? 'cte' : model?.type
 
   return (
     <div
       className={clsx(
         'text-xs font-semibold rounded-xl shadow-lg relative z-1',
         highlighted == null ? splat : highlighted,
-        isTable ? '' : 'text-secondary-500 dark:text-primary-100',
+        isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
       )}
     >
       <div className="drag-handle">
         <ModelNodeHeaderHandles
           id={id}
-          type={model?.type}
+          type={type}
           label={data.label}
           className={clsx(
             'py-2',
             showColumns ? 'rounded-t-lg' : 'rounded-lg',
-            isTable ? 'bg-neutral-600' : 'bg-secondary-100 dark:bg-primary-900',
+            isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
           )}
           hasLeft={sourcePosition === Position.Left}
           hasRight={targetPosition === Position.Right}
@@ -779,13 +957,12 @@ function ModelNode({
             columns={columns}
             disabled={model?.type === 'python' || data.type !== 'model'}
             withHandles={true}
+            withSource={true}
           />
           <div
             className={clsx(
               'rounded-b-lg py-1',
-              isTable
-                ? 'bg-neutral-600'
-                : 'bg-secondary-100 dark:bg-primary-900',
+              isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
             )}
           ></div>
         </>

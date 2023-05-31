@@ -189,7 +189,10 @@ function getNodeMap({
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
     const node =
       current[label] ??
-      createGraphNode({ label, type: models.has(label) ? 'model' : 'table' })
+      createGraphNode({
+        label,
+        type: models.has(label) ? 'model' : 'cte',
+      })
     const columnsCount = withColumns
       ? models.get(label)?.columns?.length ?? 0
       : 0
@@ -197,8 +200,8 @@ function getNodeMap({
     const maxWidth = getNodeMaxWidth(label, columnsCount === 0)
     const maxHeight = getNodeMaxHeight(columnsCount)
 
-    node.data.width = NODE_BALANCE_SPACE + maxWidth
-    node.data.height = NODE_BALANCE_SPACE + maxHeight
+    node.data.width = NODE_BALANCE_SPACE + maxWidth + NODE_BALANCE_SPACE
+    node.data.height = NODE_BALANCE_SPACE + maxHeight + NODE_BALANCE_SPACE
     node.data.highlightedNodes = highlightedNodes
     node.data.isInteractive = model.name !== label && models.has(label)
 
@@ -266,14 +269,13 @@ function repositionNodes(
 
 function createGraphNode(
   data: GraphNodeData,
-  type: string = 'model',
   position: XYPosition = { x: 0, y: 0 },
   hidden: boolean = false,
 ): Node {
   return {
     id: data.label,
     dragHandle: '.drag-handle',
-    type,
+    type: 'model',
     position,
     hidden,
     data,
@@ -361,6 +363,7 @@ function mergeLineageWithColumns(
 
       // New Column Lineage delivers fresh data, so we can just assign it
       currentLineageModel.columns[columnName] = {
+        expression: newLineageModelColumn.expression,
         source: newLineageModelColumn.source,
         models: {},
       }
@@ -415,8 +418,8 @@ function hasNoModels(
 }
 
 function mergeConnections(
-  lineage: Record<string, Record<string, LineageColumn>> = {},
   connections: Map<string, Connections>,
+  lineage: Record<string, Record<string, LineageColumn>> = {},
   addActiveEdges: (edges: string[]) => void,
 ): Map<string, Connections> {
   for (const modelName in lineage) {

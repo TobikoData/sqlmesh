@@ -235,7 +235,8 @@ class PlanOptions(BaseModel):
 
 
 class LineageColumn(BaseModel):
-    source: t.Optional[str]
+    source: t.Optional[str] = None
+    expression: t.Optional[str] = None
     models: t.Optional[t.Dict[str, t.List[str]]]
 
 
