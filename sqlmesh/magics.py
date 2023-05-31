@@ -379,6 +379,60 @@ class SQLMeshMagics(Magics):
         """Create a schema file containing external model schemas."""
         self._context.create_external_models()
 
+    @magic_arguments()
+    @argument(
+        "--source",
+        "-s",
+        type=str,
+        required=True,
+        help="The source environment or table.",
+    )
+    @argument(
+        "--target",
+        "-t",
+        type=str,
+        required=True,
+        help="The target environment or table.",
+    )
+    @argument(
+        "--on",
+        type=str,
+        nargs="+",
+        required=True,
+        help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
+    )
+    @argument(
+        "--model",
+        type=str,
+        help="The model to diff against when source and target are environments and not tables.",
+    )
+    @argument(
+        "--where",
+        type=str,
+        help="An optional where statement to filter results.",
+    )
+    @argument(
+        "--limit",
+        type=int,
+        help="The limit of the sample dataframe.",
+    )
+    @line_magic
+    def table_diff(self, line: str) -> None:
+        """Show the diff between two tables.
+
+        Can either be two tables or two environments and a model.
+        """
+        args = parse_argstring(self.table_diff, line)
+
+        self._context.table_diff(
+            source=args.source,
+            target=args.target,
+            on=args.on,
+            model_or_snapshot=args.model,
+            where=args.where,
+            limit=args.limit,
+        )
+
     @property
     def _shell(self) -> t.Any:
         # Make mypy happy.

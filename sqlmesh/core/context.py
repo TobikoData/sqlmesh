@@ -775,9 +775,9 @@ class Context(BaseContext):
             target_env = self.state_reader.get_environment(target)
 
             if not source_env:
-                raise SQLMeshError(f"Could not find environment '{source_env}'")
+                raise SQLMeshError(f"Could not find environment '{source}'")
             if not target_env:
-                raise SQLMeshError(f"Could not find environment '{target_env}')")
+                raise SQLMeshError(f"Could not find environment '{target}')")
 
             source = next(
                 snapshot for snapshot in source_env.snapshots if snapshot.name == model.name
