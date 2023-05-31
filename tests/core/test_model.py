@@ -511,11 +511,11 @@ def test_render_definition():
     expressions = parse(
         """
         MODEL (
+            dialect spark,
             name db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (a, 'yyyymmdd')
             ),
-            dialect spark,
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,
@@ -1151,7 +1151,7 @@ def test_model_ctas_query():
         read="bigquery",
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == "SELECT 1 AS a"
+    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == 'SELECT 1 AS "a"'
 
     expressions = parse(
         """
@@ -1160,7 +1160,10 @@ def test_model_ctas_query():
         """
     )
 
-    assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a FROM b AS b WHERE FALSE"
+    assert (
+        load_model(expressions).ctas_query({}).sql()
+        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+    )
 
 
 def test_is_breaking_change():

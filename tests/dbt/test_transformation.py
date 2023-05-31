@@ -104,6 +104,7 @@ def test_model_kind():
 
 def test_model_columns():
     model = ModelConfig(
+        alias="test",
         target_schema="foo",
         table_name="bar",
         sql="SELECT * FROM baz",
