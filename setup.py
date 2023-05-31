@@ -107,7 +107,7 @@ setup(
             "redshift_connector",
         ],
         "snowflake": [
-            "snowflake-connector-python[pandas]",
+            "snowflake-connector-python[pandas,secure-local-storage]",
         ],
         "web": [
             "fastapi==0.95.2",
