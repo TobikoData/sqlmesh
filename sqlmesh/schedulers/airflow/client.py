@@ -35,6 +35,7 @@ ENVIRONMENTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/environments"
 SNAPSHOTS_PATH = f"{common.SQLMESH_API_BASE_PATH}/snapshots"
 SEEDS_PATH = f"{common.SQLMESH_API_BASE_PATH}/seeds"
 INTERVALS_PATH = f"{common.SQLMESH_API_BASE_PATH}/intervals"
+MODELS_PATH = f"{common.SQLMESH_API_BASE_PATH}/models"
 VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 
 
@@ -103,6 +104,14 @@ class AirflowClient:
             common.SnapshotIdsResponse.parse_obj(
                 self._get(SNAPSHOTS_PATH, "check_existence", ids=_list_to_json(snapshot_ids))
             ).snapshot_ids
+        )
+
+    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        flags = ["exclude_external"] if exclude_external else []
+        return set(
+            common.ExistingModelsResponse.parse_obj(
+                self._get(MODELS_PATH, *flags, names=",".join(names))
+            ).names
         )
 
     def get_snapshot_intervals(

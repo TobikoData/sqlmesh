@@ -853,6 +853,7 @@ class Context(BaseContext):
                     if self.config_for_model(model) is config
                 },
                 adapter=self._engine_adapter,
+                state_reader=self.state_reader,
                 dialect=config.model_defaults.dialect,
                 max_workers=self.concurrent_tasks,
             )
