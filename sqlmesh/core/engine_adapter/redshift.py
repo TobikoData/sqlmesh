@@ -8,6 +8,7 @@ from sqlglot import exp
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -65,6 +66,8 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         )
         self.execute(sql)
         resp = self.cursor.fetchall()
+        if not resp:
+            SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
         return {column: exp.DataType.build(type, dialect=self.dialect) for column, type in resp}
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:

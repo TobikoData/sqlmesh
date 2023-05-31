@@ -10,6 +10,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     TransactionType,
 )
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -27,6 +28,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
         )
         self.execute(sql)
         resp = self.cursor.fetchall()
+        if not resp:
+            SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
             for column_name, data_type in resp
