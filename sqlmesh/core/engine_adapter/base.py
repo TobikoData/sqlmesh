@@ -781,6 +781,29 @@ class EngineAdapter:
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
+    @contextlib.contextmanager
+    def temp_table(self, query_or_df: QueryOrDF, name: str = "diff") -> t.Iterator[exp.Table]:
+        """A context manager for working a temp table.
+
+        The table will be created with a random guid and cleaned up after the block.
+
+        Args:
+            query_or_df: The query or df to create a temp table for.
+            name: The base name of the temp table.
+
+        Yields:
+            The table expression
+        """
+
+        with self.transaction(TransactionType.DDL):
+            table = self._get_temp_table(name)
+            self.ctas(table, query_or_df)
+
+            try:
+                yield table
+            finally:
+                self.drop_table(table)
+
     def _create_table_properties(
         self,
         storage_format: t.Optional[str] = None,

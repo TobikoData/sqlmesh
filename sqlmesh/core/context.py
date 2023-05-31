@@ -66,16 +66,23 @@ from sqlmesh.core.snapshot import (
     to_table_mapping,
 )
 from sqlmesh.core.state_sync import StateReader, StateSync
+from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
-from sqlmesh.utils.errors import ConfigError, MissingDependencyError, PlanError
+from sqlmesh.utils.errors import (
+    ConfigError,
+    MissingDependencyError,
+    PlanError,
+    SQLMeshError,
+)
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
     import graphviz
+    from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
 
@@ -252,6 +259,12 @@ class Context(BaseContext):
         """Returns an engine adapter."""
         return self._engine_adapter
 
+    def execution_context(self, is_dev: bool = False) -> ExecutionContext:
+        """Returns an execution context."""
+        return ExecutionContext(
+            engine_adapter=self._engine_adapter, snapshots=self.snapshots, is_dev=is_dev
+        )
+
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:
         """Update or insert a model.
 
@@ -371,9 +384,76 @@ class Context(BaseContext):
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
-    def get_model(self, name: str) -> t.Optional[Model]:
-        """Returns a model with the given name or None if a model with such name doesn't exist."""
-        return self._models.get(name)
+    @t.overload
+    def get_model(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True] = True
+    ) -> Model:
+        ...
+
+    @t.overload
+    def get_model(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[False] = False
+    ) -> t.Optional[Model]:
+        ...
+
+    def get_model(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
+    ) -> t.Optional[Model]:
+        """Returns a model with the given name or None if a model with such name doesn't exist.
+
+        Args:
+            model_or_snapshot: A model name, model, or snapshot.
+            raise_if_missing: Raises an error if a model is not found.
+
+        Returns:
+            The expected model.
+        """
+        if isinstance(model_or_snapshot, str):
+            model = self._models.get(model_or_snapshot)
+        elif isinstance(model_or_snapshot, Snapshot):
+            model = model_or_snapshot.model
+        else:
+            model = model_or_snapshot
+
+        if raise_if_missing and not model:
+            raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
+        return model
+
+    @t.overload
+    def get_snapshot(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True]
+    ) -> Snapshot:
+        ...
+
+    @t.overload
+    def get_snapshot(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[False]
+    ) -> t.Optional[Snapshot]:
+        ...
+
+    def get_snapshot(
+        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
+    ) -> t.Optional[Snapshot]:
+        """Returns a snapshot with the given name or None if a snapshot with such name doesn't exist.
+
+        Args:
+            model_or_snapshot: A model name, model, or snapshot.
+            raise_if_missing: Raises an error if a snapshot is not found.
+
+        Returns:
+            The expected snapshot.
+        """
+        if isinstance(model_or_snapshot, str):
+            snapshot = self.snapshots.get(model_or_snapshot)
+        elif isinstance(model_or_snapshot, Snapshot):
+            snapshot = model_or_snapshot
+        else:
+            snapshot = self.snapshots.get(model_or_snapshot.name)
+
+        if raise_if_missing and not snapshot:
+            raise SQLMeshError(f"Cannot find snapshot for '{model_or_snapshot}'")
+
+        return snapshot
 
     def config_for_path(self, path: Path) -> Config:
         for config_path, config in self.configs.items():
@@ -478,18 +558,17 @@ class Context(BaseContext):
         """
         latest = latest or yesterday_ds()
 
-        if isinstance(model_or_snapshot, str):
-            model = self._models[model_or_snapshot]
-        elif isinstance(model_or_snapshot, Snapshot):
-            model = model_or_snapshot.model
-        else:
-            model = model_or_snapshot
+        model = self.get_model(model_or_snapshot, raise_if_missing=True)
 
         expand = self.dag.upstream(model.name) if expand is True else expand or []
 
         if model.is_seed:
-            df = next(model.render(self, start=start, end=end, latest=latest, **kwargs))
-            return next(pandas_to_sql(df, model.columns_to_types))
+            df = next(
+                model.render(
+                    context=self.execution_context(), start=start, end=end, latest=latest, **kwargs
+                )
+            )
+            return next(pandas_to_sql(t.cast(pd.DataFrame, df), model.columns_to_types))
 
         return model.render_query(
             start=start,
@@ -520,12 +599,7 @@ class Context(BaseContext):
             latest: The latest time used for non incremental datasets.
             limit: A limit applied to the model.
         """
-        if isinstance(model_or_snapshot, str):
-            snapshot = self.snapshots[model_or_snapshot]
-        elif isinstance(model_or_snapshot, Snapshot):
-            snapshot = model_or_snapshot
-        else:
-            snapshot = self.snapshots[model_or_snapshot.name]
+        snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
 
         df = self.snapshot_evaluator.evaluate(
             snapshot,
@@ -670,6 +744,55 @@ class Context(BaseContext):
         self.console.show_model_difference_summary(
             self._context_diff(environment or c.PROD), detailed
         )
+
+    def table_diff(
+        self,
+        source: str,
+        target: str,
+        on: t.List[str] | exp.Condition,
+        model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
+        where: t.Optional[str | exp.Condition] = None,
+        limit: int = 20,
+        show: bool = True,
+    ) -> TableDiff:
+        """Show a diff between two tables.
+
+        Args:
+            source: The source environment or table.
+            target: The target environment or table.
+            on: The join condition, table aliases must be "s" and "t" for source and target.
+            model_or_snapshot: The model or snapshot to use when environments are passed in.
+            where: An optional where statement to filter results.
+            limit: The limit of the sample dataframe.
+            show: Show the table diff in the console.
+
+        Returns:
+            The TableDiff object containing schema and summary differences.
+        """
+        if model_or_snapshot:
+            model = self.get_model(model_or_snapshot, raise_if_missing=True)
+            source_env = self.state_reader.get_environment(source)
+            target_env = self.state_reader.get_environment(target)
+
+            if not source_env:
+                raise SQLMeshError(f"Could not find environment '{source}'")
+            if not target_env:
+                raise SQLMeshError(f"Could not find environment '{target}')")
+
+            source = next(
+                snapshot for snapshot in source_env.snapshots if snapshot.name == model.name
+            ).table_name()
+            target = next(
+                snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
+            ).table_name()
+
+        table_diff = TableDiff(
+            adapter=self._engine_adapter, source=source, target=target, on=on, where=where
+        )
+        if show:
+            self.console.show_schema_diff(table_diff.schema_diff())
+            self.console.show_row_diff(table_diff.row_diff())
+        return table_diff
 
     def get_dag(self, format: str = "svg") -> graphviz.Digraph:
         """Gets a graphviz dag.
