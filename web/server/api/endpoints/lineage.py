@@ -28,26 +28,16 @@ def _get_node_source(node: Node, dialect: str) -> str:
     if isinstance(node.expression, exp.Table):
         source = f"SELECT {node.name} FROM {node.expression.this}"
     else:
-        source = node.source.transform(
-            lambda n: exp.Tag(this=n, prefix="<b>", postfix="</b>") if n is node.expression else n,
-            copy=False,
-        ).sql(pretty=True, dialect=dialect)
+        source = node.source.sql(pretty=True, dialect=dialect)
     return source
 
 
-def _process_downstream(
-    downstream: t.List[Node], node_column: str, cache_column_names: t.Dict[str, str]
-) -> t.Dict[str, t.List[str]]:
+def _process_downstream(downstream: t.List[Node]) -> t.Dict[str, t.List[str]]:
     """Aggregate a list of downstream nodes by table/source"""
     graph = collections.defaultdict(list)
     for node in downstream:
         column = exp.to_column(node.name).name
-        table = _get_table(node)
-        if not column:
-            continue
-        if not table:
-            cache_column_names[column] = node_column
-            continue
+        table = _get_table(node) or node.name
         graph[table].append(column)
     return graph
 
@@ -77,23 +67,17 @@ async def column_lineage(
 
     graph = {}
     table = model_name
-    cache_column_names: t.Dict[str, str] = {}
 
     for i, node in enumerate(node.walk()):
         if i > 0:
-            table = _get_table(node) or model_name
+            table = _get_table(node) or node.name
             column_name = exp.to_column(node.name).name
-        if column_name in cache_column_names:
-            column_name = cache_column_names[column_name]
         dialect = context.models[table].dialect if table in context.models else ""
         graph[table] = {
             column_name: LineageColumn(
+                expression=node.expression.sql(pretty=True, dialect=dialect),
                 source=_get_node_source(node=node, dialect=dialect),
-                models=_process_downstream(
-                    node.downstream,
-                    column_name,
-                    cache_column_names,
-                ),
+                models=_process_downstream(node.downstream),
             )
         }
     return graph

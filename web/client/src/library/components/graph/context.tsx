@@ -19,11 +19,12 @@ interface LineageFlow {
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
   connections: Map<string, Connections>
+  shouldRecalculate: boolean
+  setShouldRecalculate: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
   hasActiveEdge: (edge?: string | null) => boolean
   addActiveEdges: (edges: string[]) => void
   removeActiveEdges: (edges: string[]) => void
-  clearActiveEdges: () => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   setLineage: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
@@ -44,7 +45,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
   removeActiveEdges: () => {},
-  clearActiveEdges: () => {},
   setActiveEdges: () => {},
   models: new Map(),
   handleClickModel: () => {},
@@ -55,6 +55,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   isActiveColumn: () => false,
   setConnections: () => {},
   connections: new Map(),
+  shouldRecalculate: false,
+  setShouldRecalculate: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -77,6 +79,7 @@ export default function LineageFlowProvider({
   const [connections, setConnections] = useState<Map<string, Connections>>(
     new Map(),
   )
+  const [shouldRecalculate, setShouldRecalculate] = useState(false)
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -119,10 +122,6 @@ export default function LineageFlowProvider({
     [setActiveEdges, setConnections],
   )
 
-  const clearActiveEdges = useCallback(function clearActiveEdges(): void {
-    setActiveEdges(new Map())
-  }, [])
-
   const isActiveColumn = useCallback(
     function isActive(modelName: string, columnName: string): boolean {
       return (
@@ -144,7 +143,6 @@ export default function LineageFlowProvider({
         activeEdges,
         setActiveEdges,
         addActiveEdges,
-        clearActiveEdges,
         removeActiveEdges,
         hasActiveEdge,
         models,
@@ -153,6 +151,8 @@ export default function LineageFlowProvider({
         setManuallySelectedColumn,
         handleError,
         isActiveColumn,
+        shouldRecalculate,
+        setShouldRecalculate,
       }}
     >
       {children}
