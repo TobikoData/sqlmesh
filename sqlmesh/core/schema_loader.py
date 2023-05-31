@@ -41,7 +41,8 @@ def create_schema_file(
     existing_models = state_reader.models_exist(external_tables, exclude_external=True)
     if existing_models:
         logger.warning(
-            "The following models already exist and can't be converted to external: %s",
+            "The following models already exist and can't be converted to external: %s."
+            "Perhaps these models have been removed, while downstream models that reference them weren't updated accordingly",
             ", ".join(existing_models),
         )
         external_tables -= existing_models
