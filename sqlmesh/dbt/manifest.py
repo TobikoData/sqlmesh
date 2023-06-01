@@ -61,6 +61,8 @@ class ManifestHelper:
         self._sources_per_package: t.Dict[str, SourceConfigs] = defaultdict(dict)
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
 
+        self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
+
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
         return self._tests_per_package[package_name or self._project_name]
@@ -109,7 +111,7 @@ class ManifestHelper:
                 **source_dict,
             )
             self._sources_per_package[source.package_name][
-                source_config.source_name
+                source_config.config_name
             ] = source_config
 
     def _load_macros(self) -> None:
@@ -162,13 +164,15 @@ class ManifestHelper:
                 )
                 continue
 
-            self._tests_per_package[node.package_name][node.name.lower()] = TestConfig(
+            test = TestConfig(
                 sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
                 owner=test_owner,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
                 **_node_base_config(node),
             )
+            self._tests_per_package[node.package_name][node.name.lower()] = test
+            self._tests_by_owner[test_owner].append(test)
 
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
@@ -176,6 +180,10 @@ class ManifestHelper:
                 continue
 
             macro_references = _macro_references(self._manifest, node)
+            tests = (
+                self._tests_by_owner[node.name]
+                + self._tests_by_owner[f"{node.package_name}.{node.name}"]
+            )
 
             if node.resource_type == "model":
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
@@ -185,13 +193,13 @@ class ManifestHelper:
                         refs=_refs(node),
                         sources=_sources(node),
                     ),
-                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    tests=tests,
                     **_node_base_config(node),
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
-                    tests=_tests_for_node(node, self._tests_per_package[node.package_name]),
+                    tests=tests,
                     **_node_base_config(node),
                 )
 
@@ -259,9 +267,9 @@ def _macro_references(
 
 def _refs(node: ManifestNode) -> t.Set[str]:
     if DBT_VERSION >= (1, 5):
-        return {r.name for r in node.refs}  # type: ignore
+        return {f"{r.package}.{r.name}" if r.package else r.name for r in node.refs}  # type: ignore
     else:
-        return {r[1] if len(r) > 1 else r[0] for r in node.refs}  # type: ignore
+        return {".".join(r) for r in node.refs}  # type: ignore
 
 
 def _sources(node: ManifestNode) -> t.Set[str]:
@@ -307,10 +315,6 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
         **node_dict,
         "path": Path(node.original_file_path),
     }
-
-
-def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[TestConfig]:
-    return [test for test in tests.values() if test.owner == node.name]
 
 
 def _convert_jinja_test_to_macro(test_jinja: str) -> str:

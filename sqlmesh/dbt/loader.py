@@ -99,7 +99,7 @@ class DbtLoader(Loader):
 
             models.update(
                 {
-                    model.model_name: cache.get_or_load_model(
+                    model.sql_name: cache.get_or_load_model(
                         model.path, lambda: self._to_sqlmesh(model, context)
                     )
                     for model in package_models.values()
@@ -139,7 +139,7 @@ class DbtLoader(Loader):
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
-        logger.debug("Converting '%s' to sqlmesh format", config.model_name)
+        logger.debug("Converting '%s' to sqlmesh format", config.sql_name)
         return config.to_sqlmesh(context)
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:

@@ -26,8 +26,8 @@ from sqlmesh.utils.errors import ConfigError, MacroEvalError
 
 
 def test_model_name():
-    assert ModelConfig(schema="foo", path="models/bar.sql").model_name == "foo.bar"
-    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").model_name == "foo.baz"
+    assert ModelConfig(schema="foo", path="models/bar.sql").sql_name == "foo.bar"
+    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").sql_name == "foo.baz"
 
 
 def test_model_kind():
@@ -139,7 +139,8 @@ def test_model_columns():
 
 def test_seed_columns():
     seed = SeedConfig(
-        model_name="foo",
+        name="foo",
+        package="package",
         path=Path("examples/sushi_dbt/seeds/waiter_names.csv"),
         columns={
             "address": ColumnConfig(
@@ -195,13 +196,23 @@ def test_project_name_jinja(sushi_test_project: Project):
 
 
 def test_schema_jinja(sushi_test_project: Project):
-    model_config = ModelConfig(schema="sushi", sql="SELECT 1 AS one FROM {{ schema }}")
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        sql="SELECT 1 AS one FROM {{ schema }}",
+    )
     context = sushi_test_project.context
     model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):
-    model_config = ModelConfig(alias="test", sql="SELECT 1 AS one FROM {{ this.identifier }}")
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        alias="test",
+        sql="SELECT 1 AS one FROM {{ this.identifier }}",
+    )
     context = sushi_test_project.context
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
