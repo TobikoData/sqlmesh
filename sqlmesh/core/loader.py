@@ -70,8 +70,8 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
             if "*" in model.columns_to_types:
                 raise ConfigError(
                     f"Can't expand SELECT * expression for model '{name}'."
-                    " Projections from an external source must be explicitly specified within"
-                    " models or add source tables as external models by using the command"
+                    " Either specify external source projections expliticly or"
+                    ' add source tables as "external models" using the command'
                     " 'sqlmesh create_external_models'."
                 )
         elif model.mapping_schema:
