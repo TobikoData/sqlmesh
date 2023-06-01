@@ -14,7 +14,7 @@ from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
 if t.TYPE_CHECKING:
     from jinja2 import Environment
 
-    from sqlmesh.dbt.basemodel import BaseModelConfig, Dependencies
+    from sqlmesh.dbt.basemodel import Dependencies
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -41,7 +41,7 @@ class DbtContext:
     _models: t.Dict[str, ModelConfig] = field(default_factory=dict)
     _seeds: t.Dict[str, SeedConfig] = field(default_factory=dict)
     _sources: t.Dict[str, SourceConfig] = field(default_factory=dict)
-    _refs: t.Dict[str, str] = field(default_factory=dict)
+    _refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = field(default_factory=dict)
 
     _target: t.Optional[TargetConfig] = None
 
@@ -128,20 +128,13 @@ class DbtContext:
         self._sources.update(sources)
         self._jinja_environment = None
 
-    def model_for_ref(self, ref: str) -> t.Optional[BaseModelConfig]:
-        for model in {**self._seeds, **self._models}.values():  # type: ignore
-            if ref in (model.name, model.config_name):
-                return model
-
-        return None
-
     @property
-    def refs(self) -> t.Dict[str, str]:
+    def refs(self) -> t.Dict[str, t.Union[ModelConfig, SeedConfig]]:
         if not self._refs:
             # Refs can be called with or without package name.
             for model in {**self._seeds, **self._models}.values():  # type: ignore
-                self._refs[model.name] = model.model_name
-                self._refs[model.config_name] = model.model_name
+                self._refs[model.name] = model
+                self._refs[model.config_name] = model
         return self._refs
 
     @property
@@ -173,10 +166,9 @@ class DbtContext:
 
     @property
     def jinja_globals(self) -> t.Dict[str, JinjaGlobalAttribute]:
-        refs: t.Dict[str, t.Union[ModelConfig, SeedConfig]] = {**self.models, **self.seeds}
         output: t.Dict[str, JinjaGlobalAttribute] = {
             "vars": AttributeDict(self.variables),
-            "refs": AttributeDict({k: v.relation_info for k, v in refs.items()}),
+            "refs": AttributeDict({k: v.relation_info for k, v in self.refs.items()}),
             "sources": AttributeDict({k: v.relation_info for k, v in self.sources.items()}),
         }
         if self.project_name is not None:
@@ -196,7 +188,7 @@ class DbtContext:
         sources = {}
 
         for ref in dependencies.refs:
-            model = self.model_for_ref(ref)
+            model = self.refs.get(ref)
             if model:
                 if isinstance(model, SeedConfig):
                     seeds[ref] = t.cast(SeedConfig, model)
@@ -214,5 +206,6 @@ class DbtContext:
         dependency_context.sources = sources
         dependency_context.seeds = seeds
         dependency_context.models = models
+        dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context

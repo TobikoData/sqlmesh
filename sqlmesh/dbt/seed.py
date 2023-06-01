@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import sys
 import typing as t
 
 from sqlmesh.core.model import Model, SeedKind, create_seed_model
 from sqlmesh.dbt.basemodel import BaseModelConfig
-
-if sys.version_info >= (3, 9):
-    pass
-else:
-    pass
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
