@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import ast
+import logging
 import sys
 import types
 import typing as t
 from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
+from textwrap import indent
 
 from astor import to_source
 from pydantic import Field
@@ -47,6 +49,8 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
+
+logger = logging.getLogger(__name__)
 
 
 class _Model(ModelMeta, frozen=True):
@@ -552,7 +556,7 @@ class SqlModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
-        return self._query_renderer.render(
+        query = self._query_renderer.render(
             start=start,
             end=end,
             latest=latest,
@@ -562,6 +566,11 @@ class SqlModel(_Model):
             engine_adapter=engine_adapter,
             **kwargs,
         )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
+            )
+        return query
 
     def render_pre_statements(
         self,
