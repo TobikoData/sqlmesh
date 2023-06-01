@@ -14,7 +14,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
+from sqlmesh.utils.errors import MagicError, MissingContextException
 from sqlmesh.utils.yaml import dumps as yaml_dumps
 from sqlmesh.utils.yaml import load as yaml_load
 
@@ -66,10 +66,7 @@ class SQLMeshMagics(Magics):
     def model(self, line: str, sql: t.Optional[str] = None) -> None:
         """Renders the model and automatically fills in an editable cell with the model definition."""
         args = parse_argstring(self.model, line)
-        model = self._context.get_model(t.cast(str, args.model))
-
-        if not model:
-            raise SQLMeshError(f"Cannot find {model}")
+        model = self._context.get_model(args.model, raise_if_missing=True)
 
         if sql:
             config = self._context.config_for_model(model)
@@ -142,13 +139,16 @@ class SQLMeshMagics(Magics):
                     f"Test found that does not have `model` defined: {model_test_metadata.path}"
                 )
             tests[model][model_test_metadata.test_name] = model_test_metadata
+
+        model = self._context.get_model(args.model, raise_if_missing=True)
+
         if args.ls:
             # TODO: Provide better UI for displaying tests
-            for test_name in tests[args.model]:
+            for test_name in tests[model.name]:
                 self._context.console.log_status_update(test_name)
             return
 
-        test = tests[args.model][args.test_name]
+        test = tests[model.name][args.test_name]
         test_def = yaml_load(test_def_raw) if test_def_raw else test.body
         test_def_output = yaml_dumps(test_def)
 

@@ -282,13 +282,13 @@ class Context(BaseContext):
         Returns:
             A new instance of the updated or inserted model.
         """
-        if isinstance(model, str):
-            model = self._models[model]
+        model = self.get_model(model)
+        path = model._path
 
-        path = model._path  # type: ignore
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
         model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
         model._path = path
+
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
@@ -423,6 +423,7 @@ class Context(BaseContext):
 
         if raise_if_missing and not model:
             raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
+
         return model
 
     @t.overload
@@ -915,7 +916,9 @@ class Context(BaseContext):
         """
 
         snapshots = (
-            [self.snapshots[model] for model in models] if models else self.snapshots.values()
+            [self.get_snapshot(model, raise_if_missing=True) for model in models]
+            if models
+            else self.snapshots.values()
         )
 
         num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
@@ -949,6 +952,7 @@ class Context(BaseContext):
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
+
         self.console.log_status_update("Done.")
 
     def migrate(self) -> None:
