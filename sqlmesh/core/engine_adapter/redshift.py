@@ -18,6 +18,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
+    COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
 
     @property
     def cursor(self) -> t.Any:
@@ -53,19 +54,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         return super().create_view(
             view_name, query_or_df, columns_to_types, replace, no_schema_binding=True
         )
-
-    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
-        """Fetches column names and types for the target table."""
-        # Use Redshift's SVV_COLUMNS table, which includes columns for late-binding views.
-        table = exp.to_table(table_name)
-        sql = (
-            exp.select("column_name", "data_type")
-            .from_("SVV_COLUMNS")
-            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.db}'")
-        )
-        self.execute(sql)
-        resp = self.cursor.fetchall()
-        return {column: exp.DataType.build(type, dialect=self.dialect) for column, type in resp}
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
