@@ -2,55 +2,51 @@ test_customer_revenue_by_day:
   model: sushi.customer_revenue_by_day
   inputs:
     sushi.orders:
-      rows:
-        - id: 1
-          customer_id: 1
-          waiter_id: 1
-          start_ts: 2022-01-01 01:59:00
-          end_ts: 2022-01-01 02:29:00
-          ds: 2022-01-01
-        - id: 2
-          customer_id: 1
-          waiter_id: 2
-          start_ts: 2022-01-01 03:59:00
-          end_ts: 2022-01-01 03:29:00
-          ds: 2022-01-01
+      - id: 1
+        customer_id: 1
+        waiter_id: 1
+        start_ts: 2022-01-01 01:59:00
+        end_ts: 2022-01-01 02:29:00
+        ds: 2022-01-01
+      - id: 2
+        customer_id: 1
+        waiter_id: 2
+        start_ts: 2022-01-01 03:59:00
+        end_ts: 2022-01-01 03:29:00
+        ds: 2022-01-01
     sushi.order_items:
-      rows:
-        - id: 1
-          order_id: 1
-          item_id: 1
-          quantity: 2
-          ds: 2022-01-01
-        - id: 2
-          order_id: 1
-          item_id: 2
-          quantity: 3
-          ds: 2022-01-01
-        - id: 3
-          order_id: 2
-          item_id: 1
-          quantity: 4
-          ds: 2022-01-01
-        - id: 4
-          order_id: 2
-          item_id: 2
-          quantity: 5
-          ds: 2022-01-01
+      - id: 1
+        order_id: 1
+        item_id: 1
+        quantity: 2
+        ds: 2022-01-01
+      - id: 2
+        order_id: 1
+        item_id: 2
+        quantity: 3
+        ds: 2022-01-01
+      - id: 3
+        order_id: 2
+        item_id: 1
+        quantity: 4
+        ds: 2022-01-01
+      - id: 4
+        order_id: 2
+        item_id: 2
+        quantity: 5
+        ds: 2022-01-01
     sushi.items:
-      rows:
-        - id: 1
-          name: maguro
-          price: 1.23
-          ds: 2022-01-01
-        - id: 2
-          name: ika
-          price: 2.34
-          ds: 2022-01-01
+      - id: 1
+        name: maguro
+        price: 1.23
+        ds: 2022-01-01
+      - id: 2
+        name: ika
+        price: 2.34
+        ds: 2022-01-01
   outputs:
     ctes:
       order_total:
-        rows:
         - order_id: 1
           total: 9.48
           ds: 2022-01-01
@@ -58,7 +54,6 @@ test_customer_revenue_by_day:
           total: 16.62
           ds: 2022-01-01
     query:
-      rows:
       - customer_id: 1
         revenue: 26.1
         ds: '2022-01-01'
