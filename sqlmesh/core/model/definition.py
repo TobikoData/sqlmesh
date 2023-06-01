@@ -1459,14 +1459,20 @@ def _is_udtf(expr: exp.Expression) -> bool:
     )
 
 
+def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
+    return (
+        exp.to_identifier(values[0])
+        if len(values) == 1
+        else exp.Tuple(expressions=[exp.to_identifier(v) for v in values])
+    )
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
-    "partitioned_by_": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
+    "partitioned_by_": _single_value_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=value),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
@@ -1474,10 +1480,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
-    "tags": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
-    "grain": lambda value: (
-        exp.to_column(value[0]) if len(value) == 1 else exp.Tuple(expressions=exp.to_column(value))
-    ),
+    "tags": _single_value_or_tuple,
+    "grain": _single_value_or_tuple,
 }
