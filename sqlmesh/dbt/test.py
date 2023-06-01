@@ -9,13 +9,7 @@ from pydantic import Field, validator
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.audit import Audit
-from sqlmesh.dbt.common import (
-    Dependencies,
-    GeneralConfig,
-    SqlStr,
-    context_for_dependencies,
-    extract_jinja_config,
-)
+from sqlmesh.dbt.common import Dependencies, GeneralConfig, SqlStr, extract_jinja_config
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -93,7 +87,7 @@ class TestConfig(GeneralConfig):
         Returns:
             SQLMesh Audit for this test
         """
-        test_context = context_for_dependencies(context, self.dependencies)
+        test_context = context.context_for_dependencies(self.dependencies)
 
         jinja_macros = test_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(

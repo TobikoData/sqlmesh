@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import ast
+import logging
 import sys
 import types
 import typing as t
 from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
+from textwrap import indent
 
 from astor import to_source
 from pydantic import Field
@@ -47,6 +49,8 @@ if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
 else:
     from typing_extensions import Annotated, Literal
+
+logger = logging.getLogger(__name__)
 
 
 class _Model(ModelMeta, frozen=True):
@@ -552,7 +556,7 @@ class SqlModel(_Model):
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
-        return self._query_renderer.render(
+        query = self._query_renderer.render(
             start=start,
             end=end,
             latest=latest,
@@ -562,6 +566,11 @@ class SqlModel(_Model):
             engine_adapter=engine_adapter,
             **kwargs,
         )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
+            )
+        return query
 
     def render_pre_statements(
         self,
@@ -1450,14 +1459,20 @@ def _is_udtf(expr: exp.Expression) -> bool:
     )
 
 
+def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
+    return (
+        exp.to_identifier(values[0])
+        if len(values) == 1
+        else exp.Tuple(expressions=[exp.to_identifier(v) for v in values])
+    )
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
-    "partitioned_by_": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
+    "partitioned_by_": _single_value_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=value),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
@@ -1465,10 +1480,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "columns_to_types_": lambda value: exp.Schema(
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
-    "tags": lambda value: (
-        exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
-    ),
-    "grain": lambda value: (
-        exp.to_column(value[0]) if len(value) == 1 else exp.Tuple(expressions=exp.to_column(value))
-    ),
+    "tags": _single_value_or_tuple,
+    "grain": _single_value_or_tuple,
 }

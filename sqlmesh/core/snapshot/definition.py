@@ -544,30 +544,40 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         else:
             self.intervals = merged_intervals
 
-    def remove_interval(self, start: TimeLike, end: TimeLike) -> None:
+    def remove_interval(
+        self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
+    ) -> None:
         """Remove an interval from the snapshot.
 
         Args:
             start: Start interval to remove.
             end: End interval to remove.
+            latest: The latest time to use for the end of the interval.
         """
-        interval = self.inclusive_exclusive(start, end)
+        interval = self.inclusive_exclusive(start, end, latest, for_removal=True)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
     def inclusive_exclusive(
-        self, start: TimeLike, end: TimeLike, strict: bool = True
-    ) -> t.Tuple[int, int]:
+        self,
+        start: TimeLike,
+        end: TimeLike,
+        latest: t.Optional[TimeLike] = None,
+        strict: bool = True,
+        for_removal: bool = False,
+    ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
+            latest: The latest time to use for the end of the interval. Defaults to now if not provided.
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
-
+            for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
+        end = latest or now() if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
@@ -601,7 +611,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 self.add_interval(start, end, is_dev=True)
 
     def missing_intervals(
-        self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
+        self,
+        start: TimeLike,
+        end: TimeLike,
+        latest: t.Optional[TimeLike] = None,
+        restatements: t.Optional[t.Set[str]] = None,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -613,10 +627,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             latest: The date/time to use for latest (inclusive)
+            restatements: A set of snapshot names being restated
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        restatements = restatements or set()
         if self.is_symbolic or (self.is_seed and self.intervals):
             return []
 
@@ -624,7 +640,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         missing = []
 
         start_dt, end_dt = (
-            to_datetime(ts) for ts in self.inclusive_exclusive(start, end, strict=False)
+            to_datetime(ts)
+            for ts in self.inclusive_exclusive(
+                start, end, latest, strict=False, for_removal=self.name in restatements
+            )
         )
 
         croniter = self.model.croniter(start_dt)
@@ -1035,7 +1054,9 @@ def format_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> st
 
 
 def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:
-    """Remove an interval from a list of intervals.
+    """Remove an interval from a list of intervals. Assumes that the correct start and end intervals have been
+    passed in. Use `get_remove_interval` method of `Snapshot` to get the correct start/end given the snapshot's
+    information.
 
     Args:
         intervals: A list of exclusive intervals.

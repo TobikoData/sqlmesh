@@ -12,6 +12,8 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils.errors import SQLMeshError
 
+Row = t.Dict[str, t.Any]
+
 
 class TestError(SQLMeshError):
     """Test error"""
@@ -55,7 +57,9 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        inputs = {name: table["rows"] for name, table in self.body.get("inputs", {}).items()}
+        inputs = {
+            name: self._get_rows(table) for name, table in self.body.get("inputs", {}).items()
+        }
 
         for table, rows in inputs.items():
             df = pd.DataFrame.from_records(rows)  # noqa
@@ -128,6 +132,18 @@ class ModelTest(unittest.TestCase):
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path}:{self.body.lc.line})"  # type: ignore
 
+    def _get_rows(self, table: list[Row] | dict[str, list[Row]]) -> list[Row]:
+        """Get a list of rows for input and output table data.
+
+        Input and output table data might be a list of rows or it might be a dictionary
+        with a "rows" key.
+        """
+        if isinstance(table, dict):
+            if "rows" not in table:
+                _raise_error("Incomplete test, missing row data for table", self.path)
+            return table["rows"]
+        return table
+
 
 class SqlModelTest(ModelTest):
     def __init__(
@@ -180,7 +196,7 @@ class SqlModelTest(ModelTest):
                 cte_query = self.ctes[cte_name].this
                 for alias, cte in self.ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
-                expected_df = pd.DataFrame.from_records(value["rows"])
+                expected_df = pd.DataFrame.from_records(self._get_rows(value))
                 actual_df = self.execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
@@ -188,8 +204,8 @@ class SqlModelTest(ModelTest):
         self.test_ctes()
 
         # Test model query
-        if "rows" in self.body["outputs"].get("query", {}):
-            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"]["rows"])
+        if "query" in self.body["outputs"]:
+            expected_df = pd.DataFrame.from_records(self._get_rows(self.body["outputs"]["query"]))
             actual_df = self.execute(self.query)
             self.assert_equal(expected_df, actual_df)
 
@@ -224,8 +240,8 @@ class PythonModelTest(ModelTest):
         )
 
     def runTest(self) -> None:
-        if "rows" in self.body["outputs"].get("query", {}):
-            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"]["rows"])
+        if "query" in self.body["outputs"]:
+            expected_df = pd.DataFrame.from_records(self._get_rows(self.body["outputs"]["query"]))
             actual_df = next(
                 self.model.render(
                     context=self.context,
