@@ -228,6 +228,8 @@ SELECT
 FROM table
 ```
 
+More information to come on using macro variables as part of a column name.
+
 #### @IF
 
 SQLMesh's `@IF` macro allows components of a SQL query to change based on the result of a logical condition.
@@ -601,7 +603,7 @@ An empty `__init__.py` file must be present in the SQLMesh project's `macros` di
 
 Each `.py` file containing a macro definition must import SQLMesh's `macro` decorator with `from sqlmesh import macro`.
 
-Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorators. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
+Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorator. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
 
 Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
 
@@ -614,7 +616,7 @@ This example demonstrates the core requirements for defining a python macro - it
 ```python linenums="1"
 from sqlmesh import macro
 
-@macro() 
+@macro() # Note parentheses at end of `@macro()` decorator
 def print_text(evaluator):
   return 'text'
 ```
@@ -693,15 +695,118 @@ CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
 FROM table
 ```
 
-Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes around `'{value}'` in the function definition.
+Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, so `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes in `'{value}'` in the function definition.
 
 #### Accessing macro variable values
 
-More information to come.
+Both predefined and user-defined macro variables can be accessed within a Python macro function. 
+
+The first argument to every macro function, the macro evaluation context `evaluator`, contains macro variable values in its `locals` attribute. `evaluator.locals` is a dictionary whose key:value pairs are macro variables names and the associated values.
+
+For example, a function could access the predefined `latest_epoch` variable containing the epoch the model was last run like this:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def get_latest_epoch(evaluator):
+    return evaluator.locals['latest_epoch']
+```
+
+The function would return the `latest_epoch` value when called in a model query:
+
+```sql linenums="1"
+SELECT
+  @get_latest_epoch() as latest_epoch
+FROM table
+```
+
+The same approach works for user-defined macro variables, where the key `"latest_epoch"` would be replaced with the name of the user-defined variable to be accessed.
+
+One downside of that approach to accessing user-defined variables is that the name of the variable is hard-coded into the function. A more flexible approach is to pass the name of the macro variable as a function argument:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def get_macro_var(evaluator, macro_var):
+    return evaluator.locals[macro_var]
+```
+
+We could define a macro variable `my_macro_var` with a value of 1 and pass it to the `get_macro_var` function like this:
+
+```sql linenums="1"
+MODEL (...);
+
+@DEF(my_macro_var, 1); -- Define macro variable 'my_macro_var'
+
+SELECT
+  @get_macro_var('my_macro_var') as macro_var_value -- Access my_macro_var value from Python macro function
+FROM table
+```
+
+The model query would render to:
+
+```sql linenums="1"
+SELECT
+  1 as macro_var_value
+FROM table
+```
 
 #### Using SQLGlot expressions
 
-More information to come.
+SQLMesh automatically parses strings returned by Python macro functions into [SQLGlot](https://github.com/tobymao/sqlglot) expressions so they can be incorporated into the model query's semantic representation. Functions can also return SQLGlot expressions directly.
+
+For example, consider a macro function that uses the `BETWEEN` operator in the predicate of a `WHERE` clause. A function returning the predicate as a string might look like this, where the function arguments are substituted into a Python f-string:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def between_where(evaluator, column_name, low_val, high_val):
+    return f"{column_name} BETWEEN {low_val} AND {high_val}"
+```
+
+The function could then be called in a query:
+
+```sql linenums="1"
+SELECT
+a
+FROM table
+WHERE @between_where('a', 1, 3)
+```
+
+And it would render to:
+
+```sql linenums="1"
+SELECT
+a
+FROM table
+WHERE a BETWEEN 1 and 3
+```
+
+Alternatively, the function could return a [SQLGLot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py) equivalent to that string by using SQLGlot's expression methods for building semantic representations:
+
+```python linenums="1"
+from sqlmesh import macro
+
+@macro()
+def between_where(evaluator, column, low_val, high_val):
+    return column.between(low_val, high_val)
+```
+
+A critical difference between the string and expression versions of `between_where()` is that the string version takes the column name as a quoted *string*, while the expression version does not:
+
+```sql linenums="1"
+SELECT
+a
+FROM table
+WHERE @between_where(a, 1, 3) -- column name `a` is not quoted in the function call
+```
+
+That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097). 
+
+Column expressions are sub-classes of the [Condition class](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L666), so they have builder methods like [`between`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L769) and [`like`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L779).
 
 ## Mixing macro systems
 
