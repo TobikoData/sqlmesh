@@ -3,7 +3,8 @@ MODEL (
   kind FULL,
   owner jen,
   cron '@daily',
-  tags (pii, fact)
+  tags (pii, fact),
+  grain customer_id,
 );
 
 CREATE SCHEMA IF NOT EXISTS raw;
