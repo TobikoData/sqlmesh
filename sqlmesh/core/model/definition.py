@@ -348,8 +348,12 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A unified text diff showing additions and deletions.
         """
-        meta_a, *statements_a, query_a = self.render_definition()
-        meta_b, *statements_b, query_b = other.render_definition()
+        meta_a, *statements_a = self.render_definition()
+        meta_b, *statements_b = other.render_definition()
+
+        query_a = statements_a.pop() if statements_a else None
+        query_b = statements_b.pop() if statements_b else None
+
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),
@@ -1463,5 +1467,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "tags": lambda value: (
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
+    ),
+    "grain": lambda value: (
+        exp.to_column(value[0]) if len(value) == 1 else exp.Tuple(expressions=exp.to_column(value))
     ),
 }

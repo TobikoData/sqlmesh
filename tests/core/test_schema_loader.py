@@ -1,22 +1,23 @@
-import os
+from pathlib import Path
 
 import pandas as pd
-import pytest
-from sqlglot import exp
+from pytest_mock.plugin import MockerFixture
+from ruamel.yaml import YAML
+from sqlglot import exp, parse_one
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import SqlModel, load_model
+from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 
 
-@pytest.fixture(autouse=True)
-def cleanup(sushi_context):
-    yield
-    os.remove(sushi_context.path / c.SCHEMA_YAML)
+def test_create_external_models(tmpdir, assert_exp_eq):
+    config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
+    context = Context(paths=[tmpdir], config=config)
 
-
-def test_create_external_models(sushi_context, assert_exp_eq):
     fruits = pd.DataFrame(
         [
             {"id": 1, "name": "apple"},
@@ -24,7 +25,8 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         ]
     )
 
-    cursor = sushi_context.engine_adapter.cursor
+    cursor = context.engine_adapter.cursor
+    cursor.execute("CREATE SCHEMA sushi")
     cursor.execute("CREATE TABLE sushi.raw_fruits AS SELECT * FROM fruits")
 
     model = load_model(
@@ -40,12 +42,12 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         )
     )
 
-    sushi_context.upsert_model(model)
-    sushi_context.create_external_models()
-    assert sushi_context.models["sushi.fruits"].columns_to_types == {
+    context.upsert_model(model)
+    context.create_external_models()
+    assert context.models["sushi.fruits"].columns_to_types == {
         "name": exp.DataType.build("UNKNOWN")
     }
-    sushi_context.load()
+    context.load()
 
     model = load_model(
         parse(
@@ -60,8 +62,8 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         )
     )
 
-    sushi_context.upsert_model(model)
-    raw_fruits = sushi_context.models["sushi.raw_fruits"]
+    context.upsert_model(model)
+    raw_fruits = context.models["sushi.raw_fruits"]
     assert raw_fruits.kind.is_symbolic
     assert raw_fruits.kind.is_external
     assert raw_fruits.columns_to_types == {
@@ -69,10 +71,10 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         "name": exp.DataType.build("VARCHAR"),
     }
 
-    snapshot = sushi_context.snapshots["sushi.raw_fruits"]
+    snapshot = context.snapshots["sushi.raw_fruits"]
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    fruits = sushi_context.models["sushi.fruits"]
+    fruits = context.models["sushi.fruits"]
     assert not fruits.kind.is_symbolic
     assert not fruits.kind.is_external
     assert fruits.columns_to_types == {
@@ -80,7 +82,7 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         "name": exp.DataType.build("VARCHAR"),
     }
     assert_exp_eq(
-        fruits.render_query(snapshots=sushi_context.snapshots),
+        fruits.render_query(snapshots=context.snapshots),
         """
         SELECT
           raw_fruits.id AS id,
@@ -88,3 +90,25 @@ def test_create_external_models(sushi_context, assert_exp_eq):
         FROM sushi.raw_fruits AS raw_fruits
         """,
     )
+
+
+def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
+    engine_adapter_mock = mocker.Mock()
+    engine_adapter_mock.columns.return_value = {
+        "a": exp.DataType.build("bigint"),
+        "b": exp.DataType.build("text"),
+    }
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.models_exist.return_value = {"model_b"}
+
+    model = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
+
+    schema_file = tmp_path / c.SCHEMA_YAML
+    create_schema_file(schema_file, {"a": model}, engine_adapter_mock, state_reader_mock, "")
+
+    with open(schema_file, "r") as fd:
+        schema = YAML().load(fd)
+
+    assert len(schema) == 1
+    assert schema[0]["name"] == "tbl_c"

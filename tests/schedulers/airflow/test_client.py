@@ -91,6 +91,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     },
                     "source_type": "sql",
                     "tags": [],
+                    "grain": [],
                     "hash_raw_query": False,
                 },
                 "audits": [],
@@ -174,6 +175,27 @@ def test_snapshots_exist(mocker: MockerFixture, snapshot: Snapshot):
 
     snapshots_exist_mock.assert_called_once_with(
         f"http://localhost:8080/sqlmesh/api/v1/snapshots?check_existence&{snapshot_url([snapshot.snapshot_id])}"
+    )
+
+
+def test_models_exist(mocker: MockerFixture, snapshot: Snapshot):
+    model_names = ["model_a", "model_b"]
+
+    models_exist_response_mock = mocker.Mock()
+    models_exist_response_mock.status_code = 200
+    models_exist_response_mock.json.return_value = common.ExistingModelsResponse(
+        names=model_names
+    ).dict()
+    models_exist_mock = mocker.patch("requests.Session.get")
+    models_exist_mock.return_value = models_exist_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    result = client.models_exist(model_names, exclude_external=True)
+
+    assert result == set(model_names)
+
+    models_exist_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/models?exclude_external&names=model_a%2Cmodel_b"
     )
 
 

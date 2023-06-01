@@ -7,6 +7,10 @@
     height: 0.2rem;
   }
 
+  .scrollbar--horizontal-md::-webkit-scrollbar {
+    height: 0.4rem;
+  }
+
   .scrollbar--vertical::-webkit-scrollbar {
     width: 0.2rem;
   }

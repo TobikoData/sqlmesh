@@ -44,9 +44,11 @@ function CodeEditorDefault({
   type,
   content = '',
   children,
+  className,
 }: {
   type: FileExtensions
   content: string
+  className?: string
   children: (options: {
     extensions: Extension[]
     content: string
@@ -65,7 +67,7 @@ function CodeEditorDefault({
   }, [type, mode])
 
   return (
-    <div className="flex overflow-auto h-full">
+    <div className={clsx('flex w-full h-full', className)}>
       {children({ extensions, content })}
     </div>
   )
@@ -75,9 +77,11 @@ function CodeEditorSQLMesh({
   type,
   content = '',
   children,
+  className,
 }: {
   type: FileExtensions
   content?: string
+  className?: string
   children: (options: {
     extensions: Extension[]
     content: string
@@ -111,7 +115,6 @@ function CodeEditorSQLMesh({
   const extensions = useMemo(() => {
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
       type === EnumFileExtensions.Python && python(),
       type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
       type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
@@ -140,7 +143,7 @@ function CodeEditorSQLMesh({
   }, [content])
 
   return (
-    <div className="flex overflow-auto h-full">
+    <div className={clsx('flex w-full h-full', className)}>
       {children({ extensions, content })}
     </div>
   )
@@ -214,9 +217,7 @@ export function useSQLMeshModelExtensions(
   const files = useStoreFileTree(s => s.files)
 
   const extensions = useMemo(() => {
-    if (path == null) return []
-
-    const model = models.get(path)
+    const model = path == null ? undefined : models.get(path)
     const columns =
       lineage == null
         ? new Set<string>()

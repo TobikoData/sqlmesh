@@ -7,10 +7,9 @@ import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
 import { isFalse, isString, isTrue, toDateFormat } from '@utils/index'
 import clsx from 'clsx'
-import { useNavigate } from 'react-router-dom'
-import { EnumRoutes } from '~/routes'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
+import { useLineageFlow } from '@components/graph/context'
 
 const Documentation = function Documentation({
   model,
@@ -27,12 +26,10 @@ const Documentation = function Documentation({
   withDescription?: boolean
   withColumns?: boolean
 }): JSX.Element {
-  const navigate = useNavigate()
+  const { handleClickModel } = useLineageFlow()
 
   const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
-    navigate(
-      `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(model.name)}`,
-    )
+    handleClickModel?.(model.name)
   })
 
   return (
@@ -86,6 +83,7 @@ const Documentation = function Documentation({
             columns={model.columns}
             disabled={model?.type === 'python'}
             withHandles={false}
+            withSource={false}
             limit={10}
           />
         </Section>
@@ -132,6 +130,7 @@ const Documentation = function Documentation({
                   </Tab.List>
                   <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
                     <Tab.Panel
+                      unmount={false}
                       className={clsx(
                         'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
@@ -151,6 +150,7 @@ const Documentation = function Documentation({
                       </CodeEditor.SQLMeshDialect>
                     </Tab.Panel>
                     <Tab.Panel
+                      unmount={false}
                       className={clsx(
                         'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                       )}

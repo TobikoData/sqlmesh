@@ -16,7 +16,8 @@ MODEL (
     customer_id INT,
     revenue DOUBLE,
     ds STRING
-  )
+  ),
+  grain [customer_id, ds],
 );
 
 WITH order_total AS (

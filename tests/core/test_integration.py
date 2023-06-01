@@ -632,13 +632,15 @@ def test_auto_categorization(sushi_context: Context):
 @pytest.mark.integration
 @pytest.mark.core_integration
 def test_multi(mocker):
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], config="memory")
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     context._new_state_sync().reset()
     plan = context.plan()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
-    context = Context(paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter)
+    context = Context(
+        paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter, gateway="memory"
+    )
     model = context.models["bronze.a"]
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
@@ -798,10 +800,10 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_embedded:
+        if snapshot.is_symbolic:
             continue
-
         view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+
         assert adapter.table_exists(view_name)
         assert select_all(
             snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter

@@ -103,6 +103,7 @@ def test_json(snapshot: Snapshot):
             },
             "source_type": "sql",
             "tags": [],
+            "grain": [],
             "hash_raw_query": False,
         },
         "audits": [],

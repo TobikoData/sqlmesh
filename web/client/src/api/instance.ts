@@ -65,7 +65,6 @@ export async function fetchAPI<T = any, B extends object = any>(
     })
       .then(async response => {
         const headerContentType = response.headers.get('Content-Type')
-
         if (headerContentType == null)
           return { ok: false, message: 'Empty response' }
         if (response.status >= 400) {
@@ -75,10 +74,10 @@ export async function fetchAPI<T = any, B extends object = any>(
             json.status = json.status ?? response.status
 
             throw json
-          } catch (error) {
+          } catch (error: any) {
             throw {
               message: response.statusText,
-              status: response.status,
+              ...error,
             } as unknown as Error
           }
         }
