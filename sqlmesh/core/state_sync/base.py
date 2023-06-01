@@ -181,7 +181,7 @@ class StateReader(abc.ABC):
             snapshots_by_id.values(), snapshot_intervals
         ):
             if snapshot.name in restatements:
-                snapshot.remove_interval(start_date, end_date)
+                snapshot.remove_interval(start_date, end_date, latest)
             intervals = snapshot.missing_intervals(
                 max(
                     start_date,
@@ -191,6 +191,7 @@ class StateReader(abc.ABC):
                 ),
                 end_date,
                 latest=latest,
+                restatements=restatements,
             )
             if intervals:
                 missing[snapshot] = intervals

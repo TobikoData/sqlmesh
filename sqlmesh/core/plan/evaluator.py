@@ -92,7 +92,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             max_workers=self.backfill_concurrent_tasks,
             console=self.console,
         )
-        is_run_successful = scheduler.run(plan.environment_name, plan.start, plan.end)
+        is_run_successful = scheduler.run(
+            plan.environment_name, plan.start, plan.end, restatements=plan.restatements
+        )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
 
