@@ -152,13 +152,13 @@ class ModelConfig(BaseModelConfig):
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
                     raise ConfigError(
-                        f"{self.model_name}: SQLMesh IncrementalByUniqueKey is not compatible with '{strategy}'"
+                        f"{self.sql_name}: SQLMesh IncrementalByUniqueKey is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
             raise ConfigError(
-                f"{self.model_name}: Incremental materialization requires either a "
+                f"{self.sql_name}: Incremental materialization requires either a "
                 f"time_column {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or a "
                 f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(['none']))}) configuration."
             )
@@ -205,10 +205,10 @@ class ModelConfig(BaseModelConfig):
                 optional_kwargs[field] = field_val
 
         if not context.target:
-            raise ConfigError(f"Target required to load '{self.model_name}' into SQLMesh.")
+            raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")
 
         return create_sql_model(
-            self.model_name,
+            self.sql_name,
             expressions[0],
             dialect=dialect,
             kind=self.model_kind(context.target),

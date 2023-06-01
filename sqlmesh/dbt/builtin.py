@@ -152,11 +152,9 @@ def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
 
 
 def generate_ref(refs: t.Dict[str, t.Any]) -> t.Callable:
-
-    # TODO suport package name
     def ref(package: str, name: t.Optional[str] = None) -> t.Optional[BaseRelation]:
-        name = name or package
-        relation_info = refs.get(name)
+        ref_name = f"{package}.{name}" if name else package
+        relation_info = refs.get(ref_name)
         if relation_info is None:
             return None
 

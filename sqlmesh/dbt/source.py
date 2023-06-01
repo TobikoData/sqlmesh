@@ -14,8 +14,8 @@ from sqlmesh.utils import AttributeDict
 class SourceConfig(GeneralConfig):
     """
     Args:
-        config_name: The schema.table_name names declared in source config
-        name: The name of the source or table
+        name: The name of the table
+        source_name: The name of the source that defines the table
         database: Name of the database where the table is stored. By default, the project's target database is used.
         schema: The scehma name as stored in the database. If not specified, the source name is used.
         identifier: The table name as stored in the database. If not specified, the source table name is used
@@ -28,11 +28,9 @@ class SourceConfig(GeneralConfig):
         columns: Columns within the source
     """
 
-    # sqlmesh fields
-    config_name: str = ""
-
     # DBT configuration fields
-    name: t.Optional[str] = None
+    name: str = ""
+    source_name_: str = Field("", alias="source_name")
     database: t.Optional[str] = None
     schema_: t.Optional[str] = Field(None, alias="schema")
     identifier: t.Optional[str] = None
@@ -54,7 +52,11 @@ class SourceConfig(GeneralConfig):
         return self.identifier or self.name
 
     @property
-    def source_name(self) -> str:
+    def config_name(self) -> str:
+        return f"{self.source_name_}.{self.name}"
+
+    @property
+    def sql_name(self) -> str:
         return ".".join(part for part in (self.schema_, self.table_name) if part)
 
     @property
