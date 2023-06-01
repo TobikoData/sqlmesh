@@ -603,7 +603,7 @@ An empty `__init__.py` file must be present in the SQLMesh project's `macros` di
 
 Each `.py` file containing a macro definition must import SQLMesh's `macro` decorator with `from sqlmesh import macro`.
 
-Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorators. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
+Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorator. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
 
 Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
 
@@ -616,7 +616,7 @@ This example demonstrates the core requirements for defining a python macro - it
 ```python linenums="1"
 from sqlmesh import macro
 
-@macro() 
+@macro() # Note parentheses at end of `@macro()` decorator
 def print_text(evaluator):
   return 'text'
 ```
