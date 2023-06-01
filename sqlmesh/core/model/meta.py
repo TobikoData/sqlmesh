@@ -148,14 +148,19 @@ class ModelMeta(PydanticModel):
         return v
 
     @validator("depends_on_", pre=True)
-    def _depends_on_validator(cls, v: t.Any) -> t.Optional[t.Set[str]]:
+    def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
+        dialect = values.get("dialect")
+
         if isinstance(v, (exp.Array, exp.Tuple)):
             return {
-                exp.table_name(table.name if table.is_string else table.sql())
+                d.normalize_table(
+                    table.name if table.is_string else table.sql(dialect=dialect), dialect=dialect
+                )
                 for table in v.expressions
             }
         if isinstance(v, exp.Expression):
-            return {exp.table_name(v.sql())}
+            return {d.normalize_table(v.sql(dialect=dialect), dialect=dialect)}
+
         return v
 
     @validator("start", pre=True)
