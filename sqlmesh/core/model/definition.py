@@ -8,6 +8,7 @@ import typing as t
 from difflib import unified_diff
 from itertools import zip_longest
 from pathlib import Path
+from textwrap import indent
 
 from astor import to_source
 from pydantic import Field
@@ -27,7 +28,6 @@ from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
-from sqlmesh.utils.formatting import indent
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -568,7 +568,7 @@ class SqlModel(_Model):
         )
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True))}"
+                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
             )
         return query
 
