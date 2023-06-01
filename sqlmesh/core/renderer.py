@@ -258,7 +258,7 @@ class QueryRenderer(ExpressionRenderer):
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
-        return t.cast(exp.Subqueryable, query)
+        return t.cast(exp.Subqueryable, quote_identifiers(query, dialect=self._dialect))
 
     def time_column_filter(self, start: TimeLike, end: TimeLike) -> exp.Between:
         """Returns a between statement with the properly formatted time column."""
@@ -291,9 +291,6 @@ class QueryRenderer(ExpressionRenderer):
                 for select in query.selects:
                     if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
                         select.replace(exp.alias_(select, select.output_name))
-
-            # Ensure that any aliases added in the above loop are properly quoted
-            quote_identifiers(query, dialect=self._dialect)
         except SqlglotError as ex:
             raise_config_error(
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",

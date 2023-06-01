@@ -6,6 +6,7 @@ from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
@@ -1048,26 +1049,29 @@ def test_star_expansion(assert_exp_eq) -> None:
 
 
 def test_case_sensitivity(assert_exp_eq):
-    context = Context(config=Config())
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
+    context = Context(config=config)
 
     source = load_model(
         d.parse(
             """
-            MODEL (name example.source, kind EMBEDDED, dialect snowflake);
+            MODEL (name example.source, kind EMBEDDED);
 
             SELECT "id", "name", "payload" FROM db.schema."table"
             """
         ),
+        dialect="snowflake",
     )
 
     downstream = load_model(
         d.parse(
             """
-            MODEL (name example.model, kind FULL, dialect snowflake);
+            MODEL (name example.model, kind FULL);
 
             SELECT JSON_EXTRACT_PATH_TEXT("payload", 'field') AS "new_field", * FROM example.source
             """
-        )
+        ),
+        dialect="snowflake",
     )
 
     context.upsert_model(source)

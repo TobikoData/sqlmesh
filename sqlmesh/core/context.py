@@ -49,7 +49,12 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse
+from sqlmesh.core.dialect import (
+    format_model_expressions,
+    normalize_table,
+    pandas_to_sql,
+    parse,
+)
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
@@ -409,7 +414,8 @@ class Context(BaseContext):
             The expected model.
         """
         if isinstance(model_or_snapshot, str):
-            model = self._models.get(model_or_snapshot)
+            normalized_name = normalize_table(model_or_snapshot, dialect=self.config.dialect)
+            model = self._models.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             model = model_or_snapshot.model
         else:
@@ -444,7 +450,8 @@ class Context(BaseContext):
             The expected snapshot.
         """
         if isinstance(model_or_snapshot, str):
-            snapshot = self.snapshots.get(model_or_snapshot)
+            normalized_name = normalize_table(model_or_snapshot, dialect=self.config.dialect)
+            snapshot = self.snapshots.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             snapshot = model_or_snapshot
         else:
