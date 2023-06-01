@@ -19,7 +19,7 @@ from sqlmesh.utils.yaml import load
 T = t.TypeVar("T", bound="GeneralConfig")
 
 if t.TYPE_CHECKING:
-    from sqlmesh.dbt.context import DbtContext
+    pass
 
 PROJECT_FILENAME = "dbt_project.yml"
 
@@ -177,34 +177,6 @@ class Dependencies(PydanticModel):
             out["macros"] = [macro.dict() for macro in self.macros]
 
         return out
-
-
-def context_for_dependencies(context: DbtContext, dependencies: Dependencies) -> DbtContext:
-    dependency_context = context.copy()
-
-    models = {}
-    seeds = {}
-    sources = {}
-
-    for ref in dependencies.refs:
-        if ref in context.seeds:
-            seeds[ref] = context.seeds[ref]
-        elif ref in context.models:
-            models[ref] = context.models[ref]
-        else:
-            raise ConfigError(f"Model '{ref}' was not found.")
-
-    for source in dependencies.sources:
-        if source in context.sources:
-            sources[source] = context.sources[source]
-        else:
-            raise ConfigError(f"Source '{source}' was not found.")
-
-    dependency_context.sources = sources
-    dependency_context.seeds = seeds
-    dependency_context.models = models
-
-    return dependency_context
 
 
 def extract_jinja_config(input: str) -> t.Tuple[str, str]:

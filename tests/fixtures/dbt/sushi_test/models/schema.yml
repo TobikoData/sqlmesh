@@ -7,7 +7,7 @@ models:
   - name: waiter_revenue_by_day
 
 sources:
-  - name: raw
+  - name: streaming
     schema: raw
     tables:
       - name: items

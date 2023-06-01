@@ -109,7 +109,7 @@ class ManifestHelper:
                 **source_dict,
             )
             self._sources_per_package[source.package_name][
-                source_config.source_name
+                source_config.config_name
             ] = source_config
 
     def _load_macros(self) -> None:
@@ -259,9 +259,9 @@ def _macro_references(
 
 def _refs(node: ManifestNode) -> t.Set[str]:
     if DBT_VERSION >= (1, 5):
-        return {r.name for r in node.refs}  # type: ignore
+        return {f"{r.package}.{r.name}" if r.package else r.name for r in node.refs}  # type: ignore
     else:
-        return {r[1] if len(r) > 1 else r[0] for r in node.refs}  # type: ignore
+        return {".".join(r) for r in node.refs}  # type: ignore
 
 
 def _sources(node: ManifestNode) -> t.Set[str]:
@@ -310,7 +310,11 @@ def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
 
 
 def _tests_for_node(node: ManifestNode, tests: t.Dict[str, TestConfig]) -> t.List[TestConfig]:
-    return [test for test in tests.values() if test.owner == node.name]
+    return [
+        test
+        for test in tests.values()
+        if test.owner in (node.name, f"{node.package_name}.{node.name}")
+    ]
 
 
 def _convert_jinja_test_to_macro(test_jinja: str) -> str:

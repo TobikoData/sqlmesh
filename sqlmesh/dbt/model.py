@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 
 from pydantic import validator
@@ -19,6 +20,11 @@ from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+
+if sys.version_info >= (3, 9):
+    pass
+else:
+    pass
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext

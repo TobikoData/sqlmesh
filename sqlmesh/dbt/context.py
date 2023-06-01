@@ -14,6 +14,7 @@ from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
 if t.TYPE_CHECKING:
     from jinja2 import Environment
 
+    from sqlmesh.dbt.basemodel import BaseModelConfig, Dependencies
     from sqlmesh.dbt.model import ModelConfig
     from sqlmesh.dbt.seed import SeedConfig
     from sqlmesh.dbt.source import SourceConfig
@@ -127,10 +128,20 @@ class DbtContext:
         self._sources.update(sources)
         self._jinja_environment = None
 
+    def model_for_ref(self, ref: str) -> t.Optional[BaseModelConfig]:
+        for model in {**self._seeds, **self._models}.values():  # type: ignore
+            if ref in (model.name, model.config_name):
+                return model
+
+        return None
+
     @property
     def refs(self) -> t.Dict[str, str]:
         if not self._refs:
-            self._refs = {k: v.model_name for k, v in {**self._seeds, **self._models}.items()}  # type: ignore
+            # Refs can be called with or without package name.
+            for model in {**self._seeds, **self._models}.values():  # type: ignore
+                self._refs[model.name] = model.model_name
+                self._refs[model.config_name] = model.model_name
         return self._refs
 
     @property
@@ -173,3 +184,35 @@ class DbtContext:
         if self._target is not None:
             output["target"] = self._target.attribute_dict()
         return output
+
+    def context_for_dependencies(self, dependencies: Dependencies) -> DbtContext:
+        from sqlmesh.dbt.model import ModelConfig
+        from sqlmesh.dbt.seed import SeedConfig
+
+        dependency_context = self.copy()
+
+        models = {}
+        seeds = {}
+        sources = {}
+
+        for ref in dependencies.refs:
+            model = self.model_for_ref(ref)
+            if model:
+                if isinstance(model, SeedConfig):
+                    seeds[ref] = t.cast(SeedConfig, model)
+                else:
+                    models[ref] = t.cast(ModelConfig, model)
+            else:
+                raise ConfigError(f"Model '{ref}' was not found.")
+
+        for source in dependencies.sources:
+            if source in self.sources:
+                sources[source] = self.sources[source]
+            else:
+                raise ConfigError(f"Source '{source}' was not found.")
+
+        dependency_context.sources = sources
+        dependency_context.seeds = seeds
+        dependency_context.models = models
+
+        return dependency_context

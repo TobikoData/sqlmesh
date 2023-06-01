@@ -22,7 +22,6 @@ from sqlmesh.dbt.common import (
     GeneralConfig,
     QuotingConfig,
     SqlStr,
-    context_for_dependencies,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
@@ -66,6 +65,8 @@ class BaseModelConfig(GeneralConfig):
             (eg. 'parquet')
         path: The file path of the model
         dependencies: The macro, source, var, and ref dependencies used to execute the model and its hooks
+        name: Name of the model.
+        package_name: Name of the package that defines the model.
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
@@ -85,6 +86,8 @@ class BaseModelConfig(GeneralConfig):
     dependencies: Dependencies = Dependencies()
 
     # DBT configuration fields
+    name: str = ""
+    package_name: str = ""
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
@@ -163,6 +166,13 @@ class BaseModelConfig(GeneralConfig):
         return self.alias or self.path.stem
 
     @property
+    def config_name(self) -> str:
+        """
+        Get the model's config name (package_name.name)
+        """
+        return f"{self.package_name}.{self.name}"
+
+    @property
     def model_name(self) -> str:
         """
         Get the sqlmesh model name
@@ -206,7 +216,7 @@ class BaseModelConfig(GeneralConfig):
 
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
-        model_context = context_for_dependencies(context, self.dependencies)
+        model_context = context.context_for_dependencies(self.dependencies)
         jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
         jinja_macros.global_objs.update(
             {

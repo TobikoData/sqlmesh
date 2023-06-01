@@ -63,6 +63,8 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
 
 def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     model_config = ModelConfig(
+        name="name",
+        package_name="package",
         alias="model",
         schema="custom",
         database="database",
@@ -223,9 +225,9 @@ def test_variables(assert_exp_eq, sushi_test_project):
 def test_source_config(sushi_test_project: Project):
     source_configs = sushi_test_project.packages["sushi"].sources
     assert set(source_configs) == {
-        "raw.items",
-        "raw.orders",
-        "raw.order_items",
+        "streaming.items",
+        "streaming.orders",
+        "streaming.order_items",
     }
 
     expected_config = {
@@ -233,11 +235,11 @@ def test_source_config(sushi_test_project: Project):
         "identifier": "order_items",
     }
     actual_config = {
-        k: getattr(source_configs["raw.order_items"], k) for k, v in expected_config.items()
+        k: getattr(source_configs["streaming.order_items"], k) for k, v in expected_config.items()
     }
     assert actual_config == expected_config
 
-    assert source_configs["raw.order_items"].source_name == "raw.order_items"
+    assert source_configs["streaming.order_items"].source_name == "raw.order_items"
 
 
 def test_seed_config(sushi_test_project: Project):
