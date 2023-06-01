@@ -134,7 +134,7 @@ FROM y
 
 Additional statements can also be provided **after** the main query, in which case they will run after each evaluation of the SELECT query.
 
-```sql linenums="1" hl_lines="5-7"
+```sql linenums="1" hl_lines="10-11"
 MODEL (
 ...
 );
