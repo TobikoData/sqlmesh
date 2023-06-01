@@ -18,9 +18,6 @@ from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
 
-if t.TYPE_CHECKING:
-    pass
-
 PROJECT_FILENAME = "dbt_project.yml"
 
 JINJA_ONLY = {
