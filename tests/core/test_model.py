@@ -1063,10 +1063,11 @@ def test_case_sensitivity(assert_exp_eq):
         dialect="snowflake",
     )
 
+    # Ensure that when manually specifying dependencies, they're normalized correctly
     downstream = load_model(
         d.parse(
             """
-            MODEL (name example.model, kind FULL);
+            MODEL (name example.model, kind FULL, depends_on [ExAmPlE.SoUrCe]);
 
             SELECT JSON_EXTRACT_PATH_TEXT("payload", 'field') AS "new_field", * FROM example.source
             """
