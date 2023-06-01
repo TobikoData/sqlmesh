@@ -26,8 +26,8 @@ from sqlmesh.utils.errors import ConfigError, MacroEvalError
 
 
 def test_model_name():
-    assert ModelConfig(schema="foo", path="models/bar.sql").model_name == "foo.bar"
-    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").model_name == "foo.baz"
+    assert ModelConfig(schema="foo", path="models/bar.sql").sql_name == "foo.bar"
+    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").sql_name == "foo.baz"
 
 
 def test_model_kind():

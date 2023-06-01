@@ -173,7 +173,7 @@ class BaseModelConfig(GeneralConfig):
         return f"{self.package_name}.{self.name}"
 
     @property
-    def model_name(self) -> str:
+    def sql_name(self) -> str:
         """
         Get the sqlmesh model name
 
@@ -238,10 +238,8 @@ class BaseModelConfig(GeneralConfig):
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {
-                model_context.refs[ref].model_name for ref in self.dependencies.refs
-            }.union(
-                {model_context.sources[source].source_name for source in self.dependencies.sources}
+            "depends_on": {model.sql_name for model in model_context.refs.values()}.union(
+                {source.sql_name for source in model_context.sources.values()}
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,

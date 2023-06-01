@@ -56,7 +56,7 @@ class SourceConfig(GeneralConfig):
         return f"{self.source_name_}.{self.name}"
 
     @property
-    def source_name(self) -> str:
+    def sql_name(self) -> str:
         return ".".join(part for part in (self.schema_, self.table_name) if part)
 
     @property

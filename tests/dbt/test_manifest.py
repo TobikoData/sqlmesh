@@ -56,6 +56,6 @@ def test_manifest_helper():
 
     assert helper.seeds()["waiter_names"].path == Path("seeds/waiter_names.csv")
 
-    assert helper.sources()["streaming.items"].source_name == "raw.items"
-    assert helper.sources()["streaming.orders"].source_name == "raw.orders"
-    assert helper.sources()["streaming.order_items"].source_name == "raw.order_items"
+    assert helper.sources()["streaming.items"].sql_name == "raw.items"
+    assert helper.sources()["streaming.orders"].sql_name == "raw.orders"
+    assert helper.sources()["streaming.order_items"].sql_name == "raw.order_items"

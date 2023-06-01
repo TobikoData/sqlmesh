@@ -239,7 +239,7 @@ def test_source_config(sushi_test_project: Project):
     }
     assert actual_config == expected_config
 
-    assert source_configs["streaming.order_items"].source_name == "raw.order_items"
+    assert source_configs["streaming.order_items"].sql_name == "raw.order_items"
 
 
 def test_seed_config(sushi_test_project: Project):
@@ -254,7 +254,7 @@ def test_seed_config(sushi_test_project: Project):
     actual_config = {k: getattr(raw_items_seed, k) for k, v in expected_config.items()}
     assert actual_config == expected_config
 
-    assert raw_items_seed.model_name == "sushi.waiter_names"
+    assert raw_items_seed.sql_name == "sushi.waiter_names"
 
 
 def test_quoting():
