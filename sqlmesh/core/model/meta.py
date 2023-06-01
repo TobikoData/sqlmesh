@@ -67,7 +67,7 @@ class ModelMeta(PydanticModel):
 
     @validator("name", pre=True)
     def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
-        return d.normalize_table(v, dialect=values.get("dialect"))
+        return d.normalize_model_name(v, dialect=values.get("dialect"))
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -153,13 +153,13 @@ class ModelMeta(PydanticModel):
 
         if isinstance(v, (exp.Array, exp.Tuple)):
             return {
-                d.normalize_table(
+                d.normalize_model_name(
                     table.name if table.is_string else table.sql(dialect=dialect), dialect=dialect
                 )
                 for table in v.expressions
             }
         if isinstance(v, exp.Expression):
-            return {d.normalize_table(v.sql(dialect=dialect), dialect=dialect)}
+            return {d.normalize_model_name(v.sql(dialect=dialect), dialect=dialect)}
 
         return v
 

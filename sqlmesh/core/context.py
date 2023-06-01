@@ -51,7 +51,7 @@ from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
     format_model_expressions,
-    normalize_table,
+    normalize_model_name,
     pandas_to_sql,
     parse,
 )
@@ -282,7 +282,7 @@ class Context(BaseContext):
         Returns:
             A new instance of the updated or inserted model.
         """
-        model = self.get_model(model)
+        model = self.get_model(model, raise_if_missing=True)
         path = model._path
 
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
@@ -414,7 +414,7 @@ class Context(BaseContext):
             The expected model.
         """
         if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_table(model_or_snapshot, dialect=self.config.dialect)
+            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
             model = self._models.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             model = model_or_snapshot.model
@@ -451,7 +451,7 @@ class Context(BaseContext):
             The expected snapshot.
         """
         if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_table(model_or_snapshot, dialect=self.config.dialect)
+            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
             snapshot = self.snapshots.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             snapshot = model_or_snapshot
